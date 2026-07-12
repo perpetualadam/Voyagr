@@ -272,6 +272,54 @@
         return TI().effectiveRoundaboutExitCountFromSteps(rt().getCurrentRouteSteps(), stepIndex);
     }
 
+    function refineManeuverDirectionForRoute(type, direction, maneuver) {
+        const roadClass = maneuver && (maneuver.road_class || rt().routeGeometry().inferRoadClassFromManeuver(maneuver));
+        return TI().refineManeuverDirection(type, direction, roadClass);
+    }
+
+    function buildTurnDisplayInstruction(turnInfo) {
+        if (!turnInfo) return 'Continue on current road';
+        return TI().buildTurnDisplayInstruction(
+            turnInfo.direction,
+            turnInfo.instruction,
+            turnInfo.valhallaType,
+            turnInfo.roundabout_exit_count
+        );
+    }
+
+    function detectUpcomingTurn(userLat, userLon) {
+        const RG = rt().routeGeometry();
+        const tick = TI().buildDetectUpcomingTurnTickPlan({
+            routeInProgress: rt().getRouteInProgress(),
+            routePolyline: rt().getRoutePolyline(),
+            routeSteps: rt().getCurrentRouteSteps(),
+            userLat: userLat,
+            userLon: userLon,
+            lastTurnDetectRouteVertexIndex: rt().getLastTurnDetectRouteVertexIndex(),
+            snapToRoutePolyline: (lat, lon, poly, idx) => RG.snapToRoutePolyline(lat, lon, poly, idx),
+            distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters.bind(RG),
+            bearing: RG.bearing.bind(RG),
+            getManeuverStreetLabel: rt().call.getManeuverStreetLabel,
+            resolveRoadClass: (step) => step.road_class || RG.inferRoadClassFromManeuver(step),
+            effectiveRoundaboutExitCountFromSteps: TI().effectiveRoundaboutExitCountFromSteps,
+        });
+        if (tick.action === 'skip') return null;
+
+        const apply = TI().buildDetectUpcomingTurnStateApplyPlan(tick);
+        if (apply.action === 'skip') return null;
+
+        if (apply.statePatch.lastTurnDetectRouteVertexIndex != null) {
+            rt().setLastTurnDetectRouteVertexIndex(apply.statePatch.lastTurnDetectRouteVertexIndex);
+        }
+        if (apply.statePatch.currentStepIndex != null) {
+            rt().setCurrentStepIndex(apply.statePatch.currentStepIndex);
+        }
+        if (apply.persistRoute) rt().call.schedulePersistRoute();
+        if (apply.logLine) console.log(apply.logLine);
+
+        return apply.turnInfo;
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
@@ -290,6 +338,9 @@
         updateTurnWidgetFromPosition: updateTurnWidgetFromPosition,
         getFollowingManeuver: getFollowingManeuver,
         effectiveRoundaboutExitCount: effectiveRoundaboutExitCount,
+        refineManeuverDirectionForRoute: refineManeuverDirectionForRoute,
+        buildTurnDisplayInstruction: buildTurnDisplayInstruction,
+        detectUpcomingTurn: detectUpcomingTurn,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

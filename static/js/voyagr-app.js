@@ -4614,27 +4614,9 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
  * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
  */
 function refineManeuverDirectionForRoute(type, direction, maneuver) {
-    const roadClass = maneuver && (maneuver.road_class || _routeGeometry().inferRoadClassFromManeuver(maneuver));
-    return _turnInstructions().refineManeuverDirection(type, direction, roadClass);
+    return VoyagrTurnInstructionWidgetOrchestration.refineManeuverDirectionForRoute(type, direction, maneuver);
 }
 
-/** Widget instruction line — exit/keep/roundabout phrasing over raw engine text when clearer. */
-function buildTurnDisplayInstruction(turnInfo) {
-    if (!turnInfo) return 'Continue on current road';
-    return _turnInstructions().buildTurnDisplayInstruction(
-        turnInfo.direction,
-        turnInfo.instruction,
-        turnInfo.valhallaType,
-        turnInfo.roundabout_exit_count
-    );
-}
-
-
-/**
- * Find the first announceable maneuver AFTER the given step index, plus the along-route
- * gap (m) from that step to it. Used to surface the upcoming maneuver in advance.
- * @returns {{ direction, valhallaType, streetName, gapMeters, index, maneuver } | null}
- */
 function getFollowingManeuver(currentIndex) {
     return VoyagrTurnInstructionWidgetOrchestration.getFollowingManeuver(currentIndex);
 }
@@ -4646,45 +4628,12 @@ function effectiveRoundaboutExitCount(stepIndex) {
 // ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml live in
 // modules/navigation/turn-instructions.js — call _turnInstructions() directly.
 
-/**
- * detectUpcomingTurn function
- * @function detectUpcomingTurn
- * @param {*} userLat - Parameter description
- * @param {*} userLon - Parameter description
- * @returns {*} Return value description
- */
+function buildTurnDisplayInstruction(turnInfo) {
+    return VoyagrTurnInstructionWidgetOrchestration.buildTurnDisplayInstruction(turnInfo);
+}
+
 function detectUpcomingTurn(userLat, userLon) {
-    const TI = _turnInstructions();
-    const RG = _routeGeometry();
-    const tick = TI.buildDetectUpcomingTurnTickPlan({
-        routeInProgress,
-        routePolyline,
-        routeSteps: currentRouteSteps,
-        userLat,
-        userLon,
-        lastTurnDetectRouteVertexIndex,
-        snapToRoutePolyline: (lat, lon, poly, idx) => RG.snapToRoutePolyline(lat, lon, poly, idx),
-        distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters.bind(RG),
-        bearing: RG.bearing.bind(RG),
-        getManeuverStreetLabel,
-        resolveRoadClass: (step) => step.road_class || RG.inferRoadClassFromManeuver(step),
-        effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
-    });
-    if (tick.action === 'skip') return null;
-
-    const apply = TI.buildDetectUpcomingTurnStateApplyPlan(tick);
-    if (apply.action === 'skip') return null;
-
-    if (apply.statePatch.lastTurnDetectRouteVertexIndex != null) {
-        lastTurnDetectRouteVertexIndex = apply.statePatch.lastTurnDetectRouteVertexIndex;
-    }
-    if (apply.statePatch.currentStepIndex != null) {
-        currentStepIndex = apply.statePatch.currentStepIndex;
-    }
-    if (apply.persistRoute) schedulePersistRoute();
-    if (apply.logLine) console.log(apply.logLine);
-
-    return apply.turnInfo;
+    return VoyagrTurnInstructionWidgetOrchestration.detectUpcomingTurn(userLat, userLon);
 }
 
 // ===== VEHICLE ROUTING ORCHESTRATION =====
@@ -5079,11 +5028,6 @@ let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
     driverPerspectiveEnabled || buildings3DEnabled
 );
 
-let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
-    localStorage.getItem('mapView3DEnabled'),
-    driverPerspectiveEnabled || buildings3DEnabled
-);
-
 // ===== MAP VIEW 3D ORCHESTRATION =====
 // Orchestration lives in static/js/app/map-view-3d-orchestration.js (bound at file end).
 
@@ -5161,8 +5105,11 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
         getRouteInProgress: () => routeInProgress,
         getCurrentRouteSteps: () => currentRouteSteps,
         getCurrentStepIndex: () => currentStepIndex,
+        setCurrentStepIndex: (val) => { currentStepIndex = val; },
         getRoutePolyline: () => routePolyline,
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
+        getLastTurnDetectRouteVertexIndex: () => lastTurnDetectRouteVertexIndex,
+        setLastTurnDetectRouteVertexIndex: (val) => { lastTurnDetectRouteVertexIndex = val; },
         getMap: () => map,
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
@@ -5170,6 +5117,7 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
             detectUpcomingTurn,
             updateARInstruction,
             showStatus,
+            schedulePersistRoute,
             getCurrentRoadDisplayName: () => VoyagrRoadNameOrchestration.getCurrentRoadDisplayName(),
             getManeuverStreetLabel,
         },
@@ -5586,430 +5534,116 @@ async function geocodeLocations(startAddress, endAddress) {
 function pickLocationFromMap(field) { VoyagrGeocodingOrchestration.pickLocationFromMap(field); }
 function getAutocompleteDropdown(fieldId) { return VoyagrGeocodingOrchestration.getAutocompleteDropdown(fieldId); }
 
-// ===== TURN-BY-TURN NAVIGATION FUNCTIONS =====
-function applyNavStartRuntimeFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
+// ===== NAVIGATION LIFECYCLE ORCHESTRATION =====
+// Orchestration lives in static/js/app/navigation-lifecycle-orchestration.js (bound at file end).
 
-    if (apply.resetVoiceOnStart) {
-        resetVoiceAnnouncementStateForNewRoute();
-    }
-
-    routeInProgress = apply.routeInProgress;
-    currentStepIndex = apply.currentStepIndex;
-    currentRouteSteps = apply.maneuvers;
-
-    if (apply.resetSessionCounters) {
-        lastTurnDetectRouteVertexIndex = 0;
-        routeJoinConfirmedForDeviation = false;
-        resetVehicleMarkerDisplayState();
-        resetNavigationArrivalState();
-        _navTraveledMeters = 0;
-        _navOdometerLastGeo = null;
-        _navStartedAt = Date.now();
-        lastETAAnnouncementTime = Date.now();
-        lastAnnouncedETA = null;
-        lastNavTrafficFetchAt = 0;
-        initialETAMovementRetries = 0;
-    }
-
-    if (apply.createEmptyEtaSnapshot) {
-        window.navETASnapshot = _eta().createEmptyNavETASnapshot();
-    }
+function getNavigationLifecycleOrchestrationRuntime() {
+    return {
+        mapControls: () => _mapControls(),
+        routeSelection: () => _routeSelection(),
+        routeGeometry: () => _routeGeometry(),
+        turnInstructions: () => _turnInstructions(),
+        eta: () => _eta(),
+        toggleUI: () => _toggleUI(),
+        deviceEnvironment: () => _deviceEnvironment(),
+        getRouteOptions: () => routeOptions,
+        getSelectedRouteIndex: () => selectedRouteIndex,
+        getRouteInProgress: () => routeInProgress,
+        setRouteInProgress: (val) => { routeInProgress = val; },
+        getRouteJoinConfirmedForDeviation: () => routeJoinConfirmedForDeviation,
+        setRouteJoinConfirmedForDeviation: (val) => { routeJoinConfirmedForDeviation = val; },
+        getCurrentStepIndex: () => currentStepIndex,
+        setCurrentStepIndex: (val) => { currentStepIndex = val; },
+        getCurrentRouteSteps: () => currentRouteSteps,
+        setCurrentRouteSteps: (val) => { currentRouteSteps = val; },
+        getRoutePolyline: () => routePolyline,
+        setRoutePolyline: (val) => { routePolyline = val; },
+        getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
+        setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
+        getLastTurnDetectRouteVertexIndex: () => lastTurnDetectRouteVertexIndex,
+        setLastTurnDetectRouteVertexIndex: (val) => { lastTurnDetectRouteVertexIndex = val; },
+        getMap: () => map,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getIsTrackingActive: () => isTrackingActive,
+        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
+        getMapFollowingActive: () => mapFollowingActive,
+        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getJourneyOverviewActive: () => journeyOverviewActive,
+        setJourneyOverviewActive: (val) => { journeyOverviewActive = val; },
+        getSavedMapState: () => savedMapState,
+        setSavedMapState: (val) => { savedMapState = val; },
+        getArModeActive: () => arModeActive,
+        getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
+        getUpdatePending: () => updatePending,
+        setNavTraveledMeters: (val) => { _navTraveledMeters = val; },
+        setNavOdometerLastGeo: (val) => { _navOdometerLastGeo = val; },
+        setNavStartedAt: (val) => { _navStartedAt = val; },
+        setLastETAAnnouncementTime: (val) => { lastETAAnnouncementTime = val; },
+        setLastAnnouncedETA: (val) => { lastAnnouncedETA = val; },
+        setLastNavTrafficFetchAt: (val) => { lastNavTrafficFetchAt = val; },
+        setInitialETAMovementRetries: (val) => { initialETAMovementRetries = val; },
+        call: {
+            resetVoiceAnnouncementStateForNewRoute,
+            resetVehicleMarkerDisplayState,
+            resetNavigationArrivalState,
+            decodePolyline,
+            persistActiveRoute,
+            precacheRouteTiles,
+            primeVehicleMarkerOnRoute,
+            showStatus,
+            applyZoomFollowButtonUi,
+            updateRoadReportFabVisibility,
+            updateRecenterButtonVisibility,
+            updateSpeedWidgetVisibility,
+            startGPSTracking,
+            applyLiveNavigationCamera,
+            startLiveDataRefresh,
+            updateETACalculation,
+            scheduleInitialETAAnnouncement,
+            startAutoTrafficUpdates,
+            startRouteTrafficUpdates,
+            showTurnInstructionWidget,
+            updateTurnWidgetFromPosition,
+            updateTurnInstructionDisplay,
+            showJourneySummaryBar,
+            updateNavigationFabVisibility,
+            voyagrShowMapIconHint,
+            sendNotification,
+            speakMessage,
+            showVolumeHintForNavigation,
+            clearRerouteFailureRetries,
+            clearPersistedRoute,
+            stopGPSTracking,
+            hideRoadNameBar,
+            stopLiveDataRefresh,
+            clearInitialETAAnnouncement,
+            stopAutoTrafficUpdates,
+            stopRouteTrafficUpdates,
+            hideTurnInstructionWidget,
+            hideJourneySummaryBar,
+            stopARMode,
+            applyDriverPerspective,
+            saveAppState,
+            buildTraveledJourneyRoute,
+            persistCompletedTrip,
+            showJourneySummary,
+            getTrafficSettingsSnapshot: () => VoyagrTrafficOrchestration.getTrafficSettingsSnapshot(),
+            shouldUsePitchedDrivingCamera,
+            convertDistance,
+            getDistanceUnit,
+        },
+    };
 }
 
-function applyNavStartPolylineFromPlan(execute, stateInit) {
-    if (!execute || !execute.shouldInit) return false;
-
-    try {
-        if (execute.usePersistedPolyline && execute.persistedPolyline) {
-            routePolyline = execute.persistedPolyline;
-            console.log(
-                execute.polylineDecodeLogPrefix,
-                routePolyline.length,
-                execute.persistedPolylineLogSuffix
-            );
-        } else {
-            routePolyline = decodePolyline(execute.geometry, execute.navPrecision);
-            console.log(
-                execute.polylineDecodeLogPrefix,
-                routePolyline.length,
-                'points',
-                `(precision ${execute.navPrecision})`
-            );
-        }
-        console.log(stateInit.maneuversLogPrefix, currentRouteSteps.length, 'steps');
-
-        if (execute.persistActiveRoute) persistActiveRoute();
-        if (execute.precacheTiles) precacheRouteTiles(routePolyline);
-
-        if (!routePolyline || routePolyline.length === 0) {
-            console.error(execute.emptyPolylineErrorLog);
-            showStatus(execute.invalidGeometryStatusMessage, 'error');
-            return false;
-        }
-
-        if (execute.primeVehicleWhenPositionKnown && currentLat != null && currentLon != null) {
-            primeVehicleMarkerOnRoute(currentLat, currentLon);
-        } else if (execute.resetSnappedIndexWhenNoPosition) {
-            lastSnappedRouteIndex = 0;
-        }
-        return true;
-    } catch (e) {
-        console.error(execute.decodeGeometryErrorLogPrefix, e);
-        showStatus(execute.decodeGeometryErrorStatusMessage, 'error');
-        return false;
-    }
-}
-
-function applyNavStartWakeLockFromPlan(MC, stateInit, wakeLockApiAvailable) {
-    const wakeLockExecute = MC.buildNavStartWakeLockExecutePlan(!!wakeLockApiAvailable, stateInit);
-    if (!wakeLockExecute.shouldRequest) {
-        if (wakeLockExecute.unsupportedLog) console.log(wakeLockExecute.unsupportedLog);
-        return;
-    }
-
-    navigator.wakeLock.request(wakeLockExecute.lockType)
-        .then((wakeLock) => {
-            window[wakeLockExecute.windowProperty] = wakeLock;
-            console.log(wakeLockExecute.acquireLog);
-            showStatus(wakeLockExecute.successStatusMessage, wakeLockExecute.successStatusType);
-
-            wakeLock.addEventListener('release', () => {
-                console.log(wakeLockExecute.releaseLog);
-            });
-        })
-        .catch((err) => {
-            console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
-        });
-}
-
-function applyNavStartFabDomFromPlan(fabExecute) {
-    if (!fabExecute || !fabExecute.shouldApply) return;
-
-    mapFollowingActive = fabExecute.mapFollowingActive;
-    (fabExecute.elementDisplays || []).forEach(({ id, display }) => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = display;
-    });
-    const zoomFollowBtn = document.getElementById('zoomFollowToggle');
-    if (zoomFollowBtn && fabExecute.applyZoomFollowButton) {
-        applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
-    }
-    const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
-    if (driverPerspectiveBtn && fabExecute.applyDriverPerspectiveToggle) {
-        _toggleUI().applyToggleButton(driverPerspectiveBtn, fabExecute.applyDriverPerspectiveToggle);
-    }
-    if (fabExecute.updateRoadReportFab) updateRoadReportFabVisibility();
-    if (fabExecute.updateRecenterButton) updateRecenterButtonVisibility();
-    if (fabExecute.updateSpeedWidget) updateSpeedWidgetVisibility();
-}
-
-function applyNavStartServicesFromPlan(services) {
-    if (!services) return;
-
-    const lifecycle = services.lifecycle || {};
-    if (lifecycle.startGpsIfInactive) startGPSTracking();
-
-    const driverViewSchedule = services.driverViewSchedule;
-    if (driverViewSchedule && driverViewSchedule.shouldSchedule) {
-        setTimeout(() => {
-            const when = driverViewSchedule.applyWhenReady;
-            if (!when.hasMap || !when.hasPosition) return;
-            if (when.zoomAndFollowEnabled && when.mapFollowingActive) {
-                applyLiveNavigationCamera();
-            }
-        }, driverViewSchedule.delayMs);
-    }
-
-    if (lifecycle.startLiveDataRefresh) startLiveDataRefresh();
-    if (lifecycle.updateEta) void updateETACalculation();
-    if (lifecycle.scheduleInitialEtaAnnouncement) scheduleInitialETAAnnouncement();
-
-    if (lifecycle.startAutoTraffic) {
-        startAutoTrafficUpdates();
-        console.log(lifecycle.autoTrafficLogMessage);
-    }
-    if (lifecycle.startRouteTraffic) {
-        startRouteTrafficUpdates();
-        console.log(lifecycle.routeTrafficLogMessage);
-    }
-
-    applyNavStartFabDomFromPlan(services.fabExecute);
-
-    if (lifecycle.showTurnWidget) {
-        const turnExecute = _turnInstructions().buildNavStartTurnWidgetExecutePlan({
-            currentLat,
-            currentLon,
-            steps: currentRouteSteps,
-            stepIndex: currentStepIndex,
-            polyline: routePolyline,
-            haversineDistanceMeters: _routeGeometry().haversineDistanceMeters,
-            resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
-        });
-        if (turnExecute.shouldShowWidget) {
-            showTurnInstructionWidget();
-            if (turnExecute.updateFromGps) {
-                updateTurnWidgetFromPosition(currentLat, currentLon);
-            } else if (turnExecute.initFromRoute) {
-                const turnInit = _turnInstructions().buildNavStartTurnInstructionInit(
-                    turnExecute.steps,
-                    turnExecute.stepIndex,
-                    turnExecute.polyline,
-                    {
-                        haversineDistanceMeters: turnExecute.haversineDistanceMeters,
-                        resolveRoadClass: turnExecute.resolveRoadClass,
-                    }
-                );
-                if (turnInit) {
-                    updateTurnInstructionDisplay(turnInit);
-                }
-            }
-        }
-    }
-
-    if (lifecycle.showJourneySummaryBar) showJourneySummaryBar();
-    if (lifecycle.updateNavFabVisibility) updateNavigationFabVisibility();
-    try {
-        voyagrShowMapIconHint(lifecycle.showMapIconHint);
-    } catch (_hintErr) {
-        /* ignore */
-    }
-
-    const navStartFeedback = services.userFeedback;
-    if (navStartFeedback) {
-        sendNotification(
-            navStartFeedback.notificationTitle,
-            navStartFeedback.notificationBody,
-            'success'
-        );
-        if (navStartFeedback.speakMessage) {
-            speakMessage(navStartFeedback.speakMessage);
-        }
-        showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
-    }
-
-    const volumeHintSchedule = _deviceEnvironment().buildNavStartVolumeHintSchedulePlan({
-        delayMs: services.volumeHintDelayMs,
-    });
-    try {
-        if (volumeHintSchedule.shouldSchedule) {
-            setTimeout(() => {
-                try {
-                    showVolumeHintForNavigation();
-                } catch (e) {
-                    console.warn(volumeHintSchedule.errorLogPrefix, e);
-                }
-            }, volumeHintSchedule.delayMs);
-        }
-    } catch (e) {
-        console.warn(volumeHintSchedule.scheduleErrorLogPrefix, e);
-    }
-}
-
-function applyNavStopRuntimeFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    routeInProgress = apply.routeInProgress;
-    routeJoinConfirmedForDeviation = apply.routeJoinConfirmedForDeviation;
-    if (apply.clearRerouteFailureRetries) clearRerouteFailureRetries();
-    currentStepIndex = apply.currentStepIndex;
-    if (apply.clearRouteSteps) currentRouteSteps = [];
-    if (apply.resetVehicleMarker) resetVehicleMarkerDisplayState();
-    if (apply.clearPersistedRoute) clearPersistedRoute();
-    mapFollowingActive = apply.mapFollowingActive;
-    journeyOverviewActive = apply.journeyOverviewActive;
-    savedMapState = apply.savedMapState;
-    initialETAMovementRetries = apply.initialETAMovementRetries;
-}
-
-function applyNavStopWakeLockReleaseFromPlan(lifecycle) {
-    if (!lifecycle || !lifecycle.releaseWakeLock || !window.screenWakeLock) return;
-
-    window.screenWakeLock.release()
-        .then(() => {
-            console.log(lifecycle.wakeLockReleaseLog);
-            window.screenWakeLock = null;
-        })
-        .catch((err) => {
-            console.log(lifecycle.wakeLockReleaseErrorLogPrefix, err);
-        });
-}
-
-function applyNavStopFabDomFromPlan(fabExecute) {
-    if (!fabExecute || !fabExecute.shouldApply) return;
-
-    (fabExecute.elementDisplays || []).forEach(({ id, display }) => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = display;
-    });
-    if (fabExecute.updateRoadReportFab) updateRoadReportFabVisibility();
-    if (fabExecute.updateNavFabVisibility) updateNavigationFabVisibility();
-    if (fabExecute.updateSpeedWidget) updateSpeedWidgetVisibility();
-    if (fabExecute.hideTurnWidget) hideTurnInstructionWidget();
-    if (fabExecute.hideJourneySummaryBar) hideJourneySummaryBar();
-}
-
-function applyNavStopServicesFromPlan(services, wasRouteInProgress) {
-    if (!services) return false;
-
-    const lifecycle = services.lifecycle || {};
-    if (lifecycle.resetNavigationArrival) resetNavigationArrivalState();
-
-    const traveled = services.traveledSummary;
-    if (traveled && traveled.shouldBuild && window.lastCalculatedRoute && wasRouteInProgress) {
-        const summaryRoute = buildTraveledJourneyRoute(window.lastCalculatedRoute);
-        if (traveled.persistCompletedTrip) void persistCompletedTrip(summaryRoute);
-        if (traveled.showJourneySummary) showJourneySummary(summaryRoute);
-    }
-
-    if (lifecycle.stopGpsTracking) stopGPSTracking();
-    if (lifecycle.hideRoadNameBar) hideRoadNameBar();
-
-    applyNavStopWakeLockReleaseFromPlan(lifecycle);
-
-    if (lifecycle.stopLiveDataRefresh) stopLiveDataRefresh();
-    if (lifecycle.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
-
-    if (lifecycle.stopAutoTraffic) {
-        stopAutoTrafficUpdates();
-        console.log(lifecycle.autoTrafficStopLog);
-    }
-    if (lifecycle.stopRouteTraffic) {
-        stopRouteTrafficUpdates();
-        console.log(lifecycle.routeTrafficStopLog);
-    }
-
-    applyNavStopFabDomFromPlan(services.fabExecute);
-
-    if (lifecycle.stopArModeIfActive && arModeActive) {
-        stopARMode();
-    }
-
-    const pitch = services.mapPitchReset;
-    if (pitch && pitch.shouldApply && map) {
-        if (pitch.driverPerspectiveEnabled) {
-            applyDriverPerspective();
-        } else {
-            map.easeTo({ pitch: pitch.pitch, bearing: pitch.bearing, duration: pitch.durationMs });
-        }
-    }
-
-    const pwa = services.pwaUpdate;
-    if (pwa && pwa.shouldApply && updatePending) {
-        showStatus(pwa.statusMessage, 'success');
-        saveAppState();
-        setTimeout(() => {
-            window.location.reload();
-        }, pwa.reloadDelayMs);
-        return true;
-    }
-
-    const feedback = services.userFeedback;
-    if (feedback) {
-        showStatus(feedback.statusMessage, feedback.statusType || 'info');
-        if (feedback.notification) {
-            sendNotification(feedback.notification.title, feedback.notification.body, 'info');
-        }
-    }
-    return false;
-}
-
-/**
- * startTurnByTurnNavigation function
- * @function startTurnByTurnNavigation
- * @param {*} routeData - Route payload (`geometry`, `maneuvers`, …)
- * @param {{ resumeStepIndex?: number, fromPersistedResume?: boolean }|null} [navStartOpts] - Optional resume / offline tweaks
- */
 function startTurnByTurnNavigation(routeData, navStartOpts = null) {
-    const MC = _mapControls();
-    const mergedRoute = _routeSelection().mergeNavigationRouteFromSelected(
-        routeData, routeOptions, selectedRouteIndex
-    );
-    const entry = MC.buildNavStartEntryOrchestrationPlan(mergedRoute, navStartOpts);
-    if (!entry.shouldStart) {
-        showStatus(entry.errorStatusMessage, 'error');
-        return;
-    }
-    routeData = entry.routeData;
-
-    if (entry.mergeLastCalculatedRoute) {
-        window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
-    }
-
-    const stateInit = entry.stateInit;
-    applyNavStartRuntimeFromPlan(MC.buildNavStartRuntimeApplyPlan(stateInit));
-
-    const polylineOk = applyNavStartPolylineFromPlan(
-        MC.buildNavStartPolylineInitExecutePlan(stateInit),
-        stateInit
-    );
-    if (!polylineOk) return;
-
-    applyNavStartWakeLockFromPlan(MC, stateInit, 'wakeLock' in navigator);
-
-    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
-    applyNavStartServicesFromPlan(MC.buildNavStartServicesOrchestrationPlan({
-        stateInit,
-        isTrackingActive,
-        autoTrafficUpdateEnabled: traffic.autoTrafficUpdateEnabled,
-        routeTrafficEnabled: traffic.routeTrafficEnabled,
-        hasMap: !!map,
-        hasPosition: currentLat != null && currentLon != null,
-        zoomAndFollowEnabled,
-        mapFollowingActive,
-        driverPerspectiveActive: shouldUsePitchedDrivingCamera(),
-        wakeLockApiAvailable: 'wakeLock' in navigator,
-    }));
+    return VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(routeData, navStartOpts);
 }
-
-/**
- * stopTurnByTurnNavigation function
- * @function stopTurnByTurnNavigation
- * @returns {*} Return value description
- */
 function stopTurnByTurnNavigation() {
-    const MC = _mapControls();
-    const entry = MC.buildNavStopEntryOrchestrationPlan({
-        routeInProgress,
-        isTrackingActive,
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        hasWakeLock: !!window.screenWakeLock,
-        arModeActive,
-        driverPerspectiveEnabled,
-        updatePending,
-    });
-    if (!entry.shouldStop) {
-        if (entry.updateNavFabOnly) updateNavigationFabVisibility();
-        return;
-    }
-
-    applyNavStopRuntimeFromPlan(MC.buildNavStopRuntimeApplyPlan(entry.stateReset));
-    if (applyNavStopServicesFromPlan(entry.services, entry.wasRouteInProgress)) return;
+    return VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation();
 }
-/**
- * updateTurnGuidance function
- * @function updateTurnGuidance
- * @param {*} userLat - Parameter description
- * @param {*} userLon - Parameter description
- * @returns {*} Return value description
- */
 function updateTurnGuidance(userLat, userLon) {
-    if (!routeInProgress || !routePolyline || routePolyline.length === 0) return;
-
-    const progress = _routeGeometry().buildVertexDestinationProgress(userLat, userLon, routePolyline);
-
-    const turnInfo = document.getElementById('turnInfo');
-    if (turnInfo) {
-        const distanceKm = progress.distanceToEndMeters / 1000;
-        turnInfo.innerHTML = _eta().buildDestinationProgressPanelHtml(
-            convertDistance(distanceKm),
-            getDistanceUnit(),
-            progress.progressPercent
-        );
-    }
-
-    // REMOVED: Redundant generic "Turn ahead" announcement
-    // Turn announcements are now handled properly by announceUpcomingTurn() with specific directions
+    return VoyagrNavigationLifecycleOrchestration.updateTurnGuidance(userLat, userLon);
 }
 
 // ===== POI SEARCH ORCHESTRATION =====
@@ -6337,6 +5971,7 @@ VoyagrRecentDestinationsOrchestration.bind(getRecentDestinationsOrchestrationRun
 VoyagrMapView3DOrchestration.bind(getMapView3DOrchestrationRuntime());
 VoyagrArNavigationOrchestration.bind(getArNavigationOrchestrationRuntime());
 VoyagrTurnInstructionWidgetOrchestration.bind(getTurnInstructionWidgetOrchestrationRuntime());
+VoyagrNavigationLifecycleOrchestration.bind(getNavigationLifecycleOrchestrationRuntime());
 VoyagrTabNavigationOrchestration.bind(getTabNavigationOrchestrationRuntime());
 VoyagrDriverCameraOrchestration.bind(getDriverCameraOrchestrationRuntime());
 VoyagrPwaLifecycleOrchestration.bind(getPwaLifecycleOrchestrationRuntime());
