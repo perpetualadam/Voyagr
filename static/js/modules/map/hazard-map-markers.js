@@ -340,6 +340,21 @@
     }
 
     /**
+     * Entry orchestration plan for displayHazardMarkers handler.
+     * @param {Object} [opts]
+     * @param {Array<Object>} [opts.hazards]
+     * @param {Object} [opts.markerOpts]
+     * @returns {Object}
+     */
+    function buildDisplayHazardMarkersEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        var displayPlan = buildDisplayHazardMarkersPlan(opts.hazards, opts.markerOpts);
+        return {
+            execute: buildDisplayHazardMarkersExecutePlan(displayPlan),
+        };
+    }
+
+    /**
      * Execute plan for clearing hazard markers from the map.
      * @param {Object} clearPlan - from buildClearHazardMarkersPlan
      * @returns {Object}
@@ -369,6 +384,7 @@
         buildDisplayHazardMarkersPlan: buildDisplayHazardMarkersPlan,
         buildClearHazardMarkersPlan: buildClearHazardMarkersPlan,
         buildDisplayHazardMarkersExecutePlan: buildDisplayHazardMarkersExecutePlan,
+        buildDisplayHazardMarkersEntryOrchestrationPlan: buildDisplayHazardMarkersEntryOrchestrationPlan,
         buildClearHazardMarkersExecutePlan: buildClearHazardMarkersExecutePlan,
         buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };

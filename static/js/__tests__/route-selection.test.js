@@ -57,6 +57,26 @@ describe('route comparison and selection helpers', () => {
         expect(d.durationMinutes).toBe(25);
     });
 
+    test('buildTripInfoDomApplyPlan and update-from-route orchestration', () => {
+        const dom = RS.buildTripInfoDomApplyPlan(
+            RS.buildTripInfoDisplayValues(
+                { distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 1, caz_cost: 0.5 },
+                { distanceText: '6.2', distUnit: 'mi', currencySymbol: '£' }
+            )
+        );
+        expect(dom.shouldApply).toBe(true);
+        expect(dom.distanceText).toBe('6.2 mi');
+        expect(dom.costLogPayload.fuelCost).toBe('4.00');
+
+        const orch = RS.buildTripInfoUpdateFromRouteOrchestrationPlan(
+            { distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 1, caz_cost: 0 },
+            { distanceText: '6.2', distUnit: 'mi', currencySymbol: '£' }
+        );
+        expect(orch.shouldUpdate).toBe(true);
+        expect(orch.apply.distanceId).toBe('distance');
+        expect(RS.buildTripInfoUpdateFromRouteOrchestrationPlan(null, {}).shouldUpdate).toBe(false);
+    });
+
     test('buildTripInfoApplyPlan hides panel when distance or time missing', () => {
         expect(RS.buildTripInfoApplyPlan(null, 30, 5, 2, {}, () => 30)).toEqual({ visible: false });
         expect(RS.buildTripInfoApplyPlan(10, null, 5, 2, {}, () => 30)).toEqual({ visible: false });
@@ -640,6 +660,30 @@ describe('route comparison modal helpers', () => {
             statusMessage: 'showing',
             statusType: 'info',
         }).displayAllRoutes).toBe(true);
+    });
+
+    test('buildSelectRouteEntryOrchestrationPlan and buildUseRouteEntryOrchestrationPlan', () => {
+        const routes = [
+            { name: 'Fast', maneuvers: [1, 2], polyline: [[51.5, -0.1], [51.6, -0.2]] },
+            { name: 'Scenic', maneuvers: [1] },
+        ];
+        const select = RS.buildSelectRouteEntryOrchestrationPlan({
+            index: 0,
+            routeOptions: routes,
+            lastRouteApiResponse: { success: true },
+        });
+        expect(select.shouldSelect).toBe(true);
+        expect(select.apply.shouldApply).toBe(true);
+
+        const use = RS.buildUseRouteEntryOrchestrationPlan({
+            index: 0,
+            routeOptions: routes,
+            routeTrafficEnabled: true,
+        });
+        expect(use.shouldUse).toBe(true);
+        expect(use.apply.previewTraffic).toBe(true);
+        expect(RS.buildUseRouteEntryOrchestrationPlan({ index: 9, routeOptions: routes }).shouldUse)
+            .toBe(false);
     });
 
     test('buildShowRouteComparisonRequestOrchestrationPlan and API result execute', () => {

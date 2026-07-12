@@ -99,5 +99,10 @@ describe('dom-helpers', () => {
         expect(Dom.buildToggleBottomSheetCollectPlan({ isExpanded: true }).collapse).toBe(true);
         expect(Dom.buildCollapseBottomSheetForRoutePreviewExecutePlan().handleTitle)
             .toContain('Swipe up');
+
+        const preview = Dom.buildCollapseBottomSheetForRoutePreviewOrchestrationPlan();
+        expect(preview.apply.shouldApply).toBe(true);
+        expect(preview.apply.bottomSheetId).toBe(Dom.BOTTOM_SHEET_ID);
+        expect(preview.apply.collapse).toBe(true);
     });
 });
