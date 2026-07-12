@@ -40,13 +40,20 @@ let bottomSheetStartY = 0;
 let bottomSheetCurrentY = 0;
 let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapsed)
 
-// ===== RECENT DESTINATIONS (local history; works without auth) =====
-function loadRecentDestinations() {
-    return _recentDestinations().loadRecentDestinations();
+// ===== RECENT DESTINATIONS ORCHESTRATION =====
+// Orchestration lives in static/js/app/recent-destinations-orchestration.js (bound at file end).
+
+function getRecentDestinationsOrchestrationRuntime() {
+    return {
+        recentDestinations: () => _recentDestinations(),
+    };
 }
 
+function loadRecentDestinations() {
+    return VoyagrRecentDestinationsOrchestration.loadRecentDestinations();
+}
 function recordRecentDestination(label, lat, lon, kind) {
-    return _recentDestinations().recordRecentDestination(label, lat, lon, kind);
+    return VoyagrRecentDestinationsOrchestration.recordRecentDestination(label, lat, lon, kind);
 }
 
 // ===== DEBUG SCROLL FUNCTION =====
@@ -5079,227 +5086,74 @@ let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
     driverPerspectiveEnabled || buildings3DEnabled
 );
 
-/** Reflect the current 2D/3D state on the master toggle and the two granular toggles. */
-function syncMapView3DToggleUI() {
-    const TU = _toggleUI();
-    const plan = _mapView3D().buildSyncMapView3DToggleUIPlan({
-        mapView3DEnabled,
-        driverPerspectiveEnabled,
-        buildings3DEnabled,
-    });
-    if (!plan.shouldApply) return;
+let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
+    localStorage.getItem('mapView3DEnabled'),
+    driverPerspectiveEnabled || buildings3DEnabled
+);
 
-    const master = document.getElementById(plan.masterToggleId);
-    if (master) {
-        TU.applyToggleButton(master, plan.mapView3DEnabled);
-        if (plan.clearMasterInactiveStylesWhenOff && !plan.mapView3DEnabled) {
-            master.style.background = '';
-            master.style.borderColor = '';
-        }
-    }
-    TU.applyToggleButton(document.getElementById(plan.driverPerspectiveToggleId), plan.driverPerspectiveEnabled);
-    TU.applyToggleButton(document.getElementById(plan.buildings3DToggleId), plan.buildings3DEnabled);
+// ===== MAP VIEW 3D ORCHESTRATION =====
+// Orchestration lives in static/js/app/map-view-3d-orchestration.js (bound at file end).
+
+function getMapView3DOrchestrationRuntime() {
+    return {
+        mapView3D: () => _mapView3D(),
+        toggleUI: () => _toggleUI(),
+        getMapView3DEnabled: () => mapView3DEnabled,
+        setMapView3DEnabled: (val) => { mapView3DEnabled = val; },
+        getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
+        setDriverPerspectiveEnabled: (val) => { driverPerspectiveEnabled = val; },
+        getBuildings3DEnabled: () => buildings3DEnabled,
+        setBuildings3DEnabled: (val) => { buildings3DEnabled = val; },
+        getBuildings3DHeightMultiplier: () => buildings3DHeightMultiplier,
+        getBuildings3DOpacity: () => buildings3DOpacity,
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        call: {
+            applyDriverPerspective,
+            showStatus,
+            saveAllSettings,
+        },
+    };
 }
 
-/** Apply a 2D/3D scene preset by driving the existing tilt + buildings machinery. */
-function setMapView3D(enabled) {
-    const execute = _mapView3D().buildSetMapView3DExecutePlan(enabled, {
-        heightMultiplier: buildings3DHeightMultiplier,
-        opacity: buildings3DOpacity,
-    });
-    if (!execute.shouldApply) return;
-
-    mapView3DEnabled = execute.mapView3DEnabled;
-    localStorage.setItem(execute.mapViewStorageKey, execute.mapViewStorageValue);
-
-    driverPerspectiveEnabled = execute.driverPerspectiveEnabled;
-    localStorage.setItem(execute.driverPerspectiveStorageKey, execute.driverPerspectiveStorageValue);
-    if (map && execute.applyDriverPerspective) applyDriverPerspective();
-
-    buildings3DEnabled = execute.buildings3DEnabled;
-    localStorage.setItem(execute.buildings3DStorageKey, execute.buildings3DStorageValue);
-    if (map && typeof MapLibreHelpers !== 'undefined') {
-        if (execute.mapBuildingsAction === 'add3DBuildings') {
-            MapLibreHelpers.add3DBuildings(map, {
-                heightMultiplier: execute.heightMultiplier,
-                opacity: execute.opacity,
-            });
-        } else {
-            MapLibreHelpers.remove3DBuildings(map);
-        }
-    }
-
-    if (execute.syncToggleUI) syncMapView3DToggleUI();
-}
-
-/** Toggle between 2D and 3D map view (Settings → AR & 3D View). */
-function toggleMapView3D() {
-    const MV = _mapView3D();
-    const collected = MV.buildToggleMapView3DCollectPlan({ currentlyEnabled: mapView3DEnabled });
-    const execute = MV.buildToggleMapView3DExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    setMapView3D(execute.enabled);
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings && typeof saveAllSettings === 'function') saveAllSettings();
-}
-
-/**
- * Keep the 2D/3D master in sync when a granular toggle (camera tilt or 3D buildings)
- * is changed on its own. The scene reads as "3D" if either aspect is on.
- */
+function syncMapView3DToggleUI() { VoyagrMapView3DOrchestration.syncMapView3DToggleUI(); }
+function setMapView3D(enabled) { VoyagrMapView3DOrchestration.setMapView3D(enabled); }
+function toggleMapView3D() { VoyagrMapView3DOrchestration.toggleMapView3D(); }
 function _recomputeMapView3DFromGranular() {
-    const execute = _mapView3D().buildRecomputeMapView3DFromGranularExecutePlan({
-        driverPerspectiveEnabled,
-        buildings3DEnabled,
-    });
-    if (!execute.shouldApply) return;
-
-    mapView3DEnabled = execute.mapView3DEnabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.syncToggleUI) syncMapView3DToggleUI();
+    return VoyagrMapView3DOrchestration.recomputeMapView3DFromGranular();
 }
 
-// ===== AR NAVIGATION MODE =====
-let arNavigator = null;
+// ===== AR NAVIGATION ORCHESTRATION =====
+// Orchestration lives in static/js/app/ar-navigation-orchestration.js (bound at file end).
+
 let arModeActive = false;
-let isAREnabled = false; // Global flag for preference
+let isAREnabled = false;
 
-/**
- * Toggle AR Setting (from Preferences)
- */
-function toggleARSetting() {
-    const MC = _mapControls();
-    const TU = _toggleUI();
-    const collected = MC.buildToggleARSettingCollectPlan({ currentlyEnabled: isAREnabled });
-    const execute = MC.buildToggleARSettingExecutePlan({
-        enabled: collected.enabled,
-        arModeActive,
-    });
-    const btn = document.getElementById(execute.toggleId);
-    if (!btn) return;
-
-    isAREnabled = execute.enabled;
-    TU.applyToggleButton(btn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
-    MC.writeAREnabledToStorage(localStorage, isAREnabled);
-
-    if (execute.updateFabVisibility) updateARButtonVisibility();
-
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.stopArModeIfDisabling) stopARMode();
+function getArNavigationOrchestrationRuntime() {
+    return {
+        mapControls: () => _mapControls(),
+        toggleUI: () => _toggleUI(),
+        turnInstructions: () => _turnInstructions(),
+        getIsAREnabled: () => isAREnabled,
+        setIsAREnabled: (val) => { isAREnabled = val; },
+        getArModeActive: () => arModeActive,
+        setArModeActive: (val) => { arModeActive = val; },
+        getRouteInProgress: () => routeInProgress,
+        getCurrentRouteSteps: () => currentRouteSteps,
+        getCurrentStepIndex: () => currentStepIndex,
+        getNextManeuverDistance: () => nextManeuverDistance,
+        call: {
+            showStatus,
+        },
+    };
 }
 
-/**
- * Update AR FAB Visibility based on settings and route state
- */
-function updateARButtonVisibility() {
-    const MC = _mapControls();
-    const arFab = document.getElementById(MC.AR_MODE_FAB_ID);
-    if (!arFab) return;
-
-    const hasRoute = window.lastCalculatedRoute !== null;
-    const display = MC.getARFabVisibilityDisplay(isAREnabled, hasRoute, routeInProgress);
-    arFab.style.display = display.display;
-    if (display.textContent != null) {
-        arFab.textContent = display.textContent;
-    }
-}
-
-
-/**
- * Toggle AR navigation mode
- * Uses WebXR if available, falls back to camera overlay
- */
-async function toggleARMode() {
-    const MC = _mapControls();
-    const TU = _toggleUI();
-    const entry = MC.buildToggleARModeEntryPlan({ arModeActive });
-    const toggleBtn = document.getElementById(entry.toggleId);
-
-    if (entry.shouldStop) {
-        await stopARMode();
-        if (entry.applyToggleOff) MC.applyARModeToggleButton(toggleBtn, false, TU);
-        return;
-    }
-
-    try {
-        const { ARNavigator } = await import(entry.moduleImportPath);
-
-        if (!arNavigator) {
-            arNavigator = new ARNavigator({
-                onError: (err) => {
-                    showStatus(`AR Error: ${err.message}`, 'error');
-                },
-                onStatusChange: (status) => {
-                    console.log('[AR] Status:', status);
-                    updateARButtonState(status);
-                },
-            });
-        }
-
-        showStatus(entry.startingStatusMessage, entry.startingStatusType);
-
-        const result = await arNavigator.start();
-        const resultPlan = MC.buildToggleARModeStartResultPlan(result);
-
-        if (resultPlan.shouldApply) {
-            arModeActive = resultPlan.arModeActive;
-            if (resultPlan.applyToggleOn) MC.applyARModeToggleButton(toggleBtn, true, TU);
-            showStatus(resultPlan.statusMessage, resultPlan.statusType);
-
-            if (resultPlan.syncCurrentInstruction && currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
-                const step = currentRouteSteps[currentStepIndex];
-                arNavigator.updateInstruction({
-                    instruction: step.instruction,
-                    direction: _turnInstructions().maneuverTypeToARDirectionKey(step.type),
-                    distance: nextManeuverDistance,
-                });
-            }
-        } else {
-            showStatus(resultPlan.statusMessage, resultPlan.statusType);
-        }
-    } catch (err) {
-        console.error(entry.loadErrorLogPrefix, err);
-        showStatus(entry.loadErrorStatusMessage, 'error');
-    }
-}
-
-/**
- * Stop AR mode
- */
-async function stopARMode() {
-    if (arNavigator) {
-        await arNavigator.stop();
-    }
-    const execute = _mapControls().buildStopARModeExecutePlan();
-    arModeActive = execute.arModeActive;
-    _mapControls().applyARModeToggleButton(
-        document.getElementById(execute.toggleId),
-        false,
-        _toggleUI()
-    );
-    if (execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
-}
-
-/**
- * Update AR button visual state
- */
-function updateARButtonState(status) {
-    _mapControls().applyARModeButtonState(document.getElementById('arModeBtn'), status);
-}
-
-/**
- * Update AR overlay with current navigation instruction
- */
-function updateARInstruction(turnInfo) {
-    if (!arModeActive || !arNavigator) return;
-
-    arNavigator.updateInstruction({
-        instruction: turnInfo?.instruction || 'Follow route',
-        direction: turnInfo?.direction || 'straight',
-        distance: turnInfo?.distance || 0
-    });
-}
+function toggleARSetting() { VoyagrArNavigationOrchestration.toggleARSetting(); }
+function updateARButtonVisibility() { VoyagrArNavigationOrchestration.updateARButtonVisibility(); }
+async function toggleARMode() { return VoyagrArNavigationOrchestration.toggleARMode(); }
+async function stopARMode() { return VoyagrArNavigationOrchestration.stopARMode(); }
+function updateARButtonState(status) { VoyagrArNavigationOrchestration.updateARButtonState(status); }
+function updateARInstruction(turnInfo) { VoyagrArNavigationOrchestration.updateARInstruction(turnInfo); }
 
 // ===== TURN INSTRUCTION WIDGET =====
 let instructionsPanelExpanded = false;
@@ -6726,6 +6580,9 @@ VoyagrFormClearOrchestration.bind(getFormClearOrchestrationRuntime());
 VoyagrMapHintsOrchestration.bind(getMapHintsOrchestrationRuntime());
 VoyagrDarkModeOrchestration.bind(getDarkModeOrchestrationRuntime());
 VoyagrRoadReportOrchestration.bind(getRoadReportOrchestrationRuntime());
+VoyagrRecentDestinationsOrchestration.bind(getRecentDestinationsOrchestrationRuntime());
+VoyagrMapView3DOrchestration.bind(getMapView3DOrchestrationRuntime());
+VoyagrArNavigationOrchestration.bind(getArNavigationOrchestrationRuntime());
 VoyagrTabNavigationOrchestration.bind(getTabNavigationOrchestrationRuntime());
 VoyagrDriverCameraOrchestration.bind(getDriverCameraOrchestrationRuntime());
 VoyagrPwaLifecycleOrchestration.bind(getPwaLifecycleOrchestrationRuntime());
