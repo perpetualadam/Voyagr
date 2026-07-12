@@ -3927,413 +3927,65 @@ function startNavigation() {
     if (plan.collapseBottomSheet) collapseBottomSheet();
 }
 
-// ===== ROUTE PREVIEW FEATURE =====
-/**
- * Apply a new route during active navigation without touching preview DOM, bottom sheet, or tabs.
- * Uses the same matching logic as calculateRoute in-nav path; does not restart turn-by-turn (updateRouteOnMap syncs geometry/steps).
- * @param {Object} routeData - API route payload or single route object
- */
-function applyRouteUpdateDuringNavigation(routeData) {
-    const RS = _routeSelection();
-    const activeRoute = pickActiveRouteDuringNavigation(routeData.routes, routeData);
-    const plan = RS.buildRouteUpdateDuringNavigationExecutePlan(
-        activeRoute,
-        routeData,
-        window.lastCalculatedRoute
-    );
-
-    console.log(plan.entryLogMessage);
-
-    if (!plan.shouldExecute) {
-        showStatus(plan.errorStatusMessage, 'error');
-        return;
-    }
-
-    if (plan.updateRouteOnMap) {
-        updateRouteOnMap(plan.activeRoute);
-    }
-
-    if (plan.patchLastCalculatedRoute) {
-        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-    }
-
-    showStatus(plan.statusMessage, plan.statusType);
-}
-
-/**
- * Mount the route comparison modal from a pure DOM apply plan.
- * @param {Object} domPlan - from buildRouteComparisonModalDomApplyPlan
- * @returns {HTMLElement|null}
- */
-function applyRouteComparisonModalFromPlan(domPlan) {
-    const plan = _routeSelection().buildRouteComparisonModalExecutePlan(domPlan);
-    if (!plan.shouldExecute) return null;
-    if (plan.removeExisting) {
-        const existing = document.getElementById(plan.modalId);
-        if (existing) existing.remove();
-    }
-    const modal = document.createElement('div');
-    modal.id = plan.modalId;
-    modal.style.cssText = plan.overlayStyle;
-    modal.innerHTML = plan.innerHtml;
-    if (plan.dismissOnOverlayClick) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
-    }
-    document.body.appendChild(modal);
-    return modal;
-}
-
-/**
- * Apply alternative-route preview cards from a pure DOM apply plan.
- * @param {Object} domPlan - from buildAlternativeRoutesPreviewDomApplyPlan
- */
-function applyAlternativeRoutesPreviewDomFromPlan(domPlan) {
-    const executePlan = _routeSelection().buildAlternativeRoutesPreviewDomExecutePlan(domPlan);
-    if (!executePlan.shouldExecute) return;
-
-    const container = document.getElementById(executePlan.listContainerId);
-    const parentContainer = document.getElementById(executePlan.parentContainerId);
-    if (!parentContainer || !container) return;
-
-    if (!executePlan.showContainer) {
-        parentContainer.style.display = executePlan.containerDisplay;
-        return;
-    }
-
-    container.innerHTML = '';
-    executePlan.cardPlans.forEach((plan, index) => {
-        const div = document.createElement('div');
-        div.style.cssText = plan.containerStyle;
-        div.innerHTML = plan.html;
-        div.onmouseover = () => {
-            div.style.borderColor = plan.hoverStyle.borderColor;
-            div.style.background = plan.hoverStyle.background;
-        };
-        div.onmouseout = () => {
-            div.style.borderColor = plan.restStyle.borderColor;
-            div.style.background = plan.restStyle.background;
-        };
-        div.onclick = () => {
-            selectRoute(index);
-            useRoute(index);
-        };
-        container.appendChild(div);
-    });
-
-    parentContainer.style.display = executePlan.containerDisplay;
-}
-
-/**
- * Run post-preview UI actions (tab, sheet, traffic) from a pure plan.
- * @param {Object} afterPlan - from buildRoutePreviewAfterDisplayPlan
- */
-function applyRoutePreviewAfterDisplayFromPlan(afterPlan) {
-    const plan = _routeSelection().buildRoutePreviewAfterDisplayExecutePlan(afterPlan);
-    if (!plan.shouldExecute) return;
-
-    if (plan.switchToPreviewTab) {
-        switchTab('routePreview');
-    }
-    if (plan.expandBottomSheet) {
-        expandBottomSheet();
-    }
-    if (plan.addTrafficLayer) {
-        addTrafficLayer();
-    }
-    if (plan.previewTraffic && routeOptions && routeOptions.length > 0) {
-        const previewPolyline = routeOptions[plan.previewPolylineRouteIndex || 0].polyline;
-        if (previewPolyline && previewPolyline.length > 0) {
-            routePolyline = previewPolyline;
-            if (plan.previewTrafficLogMessage) console.log(plan.previewTrafficLogMessage);
-            fetchAndDisplayRouteTraffic();
-        }
-    }
-}
-
-function collectShowRoutePreviewInput(routeData, skipMapDisplay) {
-    const RS = _routeSelection();
-    const previewRoute = RS.resolvePreviewRoute(routeData, selectedRouteIndex);
-    return {
-        routeData,
-        skipMapDisplay,
-        routeInProgress,
-        selectedRouteIndex,
-        currencySymbol: getCurrencySymbol(),
-        distanceText: convertDistance(RS.resolvePreviewDistanceKm(routeData, previewRoute)) + ' ' + getDistanceUnit(),
-        startLabel: document.getElementById('start').value,
-        endLabel: document.getElementById('end').value,
-        routingMode: currentRoutingMode,
-        vehicleType: currentVehicleType,
-        distanceUnit: distanceUnit,
-        preferencesApplied: localStorage.getItem('pref_cameras') !== 'false',
-        routeOptionsCount: routeOptions ? routeOptions.length : 0,
-        routeOptions,
-        showTrafficEnabled,
-        hasTrafficLayer: !!trafficLayer,
-        routeTrafficEnabled: VoyagrTrafficOrchestration.getTrafficSettingsSnapshot().routeTrafficEnabled,
-    };
-}
-
-function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.delegateToNavUpdate) {
-            applyRouteUpdateDuringNavigation(routeData);
-            return;
-        }
-        if (apply && apply.errorStatusMessage) {
-            showStatus(apply.errorStatusMessage, 'error');
-        }
-        if (apply && apply.errorLogMessage) console.error(apply.errorLogMessage);
-        return;
-    }
-
-    const RS = _routeSelection();
-    if (apply.entryLogMessage) {
-        console.log(apply.entryLogMessage, routeData, 'skipMapDisplay:', skipMapDisplay);
-    }
-    console.log('[Route Preview] Currency:', apply.panelInput.currencySymbol, 'Distance Unit:', getDistanceUnit());
-
-    const panelPlan = RS.buildRoutePreviewPanelApplyPlan(apply.panelInput);
-    const domPlan = RS.buildRoutePreviewPanelDomApplyPlan(panelPlan);
-    applyRoutePreviewPanelDomFromPlan(domPlan);
-    console.log('[Cost] Route preview costs:', domPlan.costLog);
-
-    if (apply.showAlternativeRoutesWhenMultiple && domPlan.previewAlternativeRoutesContainer.showAlternativeRoutes) {
-        showAlternativeRoutesInPreview();
-        if (apply.alternativeRoutesLogMessage) console.log(apply.alternativeRoutesLogMessage);
-    }
-
-    if (apply.showMapRoutes && domPlan.showMapRoutes) {
-        displayAllRoutesOnMap();
-        if (apply.mapRoutesLogMessage) console.log(apply.mapRoutesLogMessage);
-    }
-
-    if (apply.switchTabLogMessage) console.log(apply.switchTabLogMessage);
-    applyRoutePreviewAfterDisplayFromPlan(RS.buildRoutePreviewAfterDisplayPlan(apply.afterDisplayInput));
-
-    if (apply.successLogMessage) console.log(apply.successLogMessage);
-    showStatus(domPlan.statusMessage, 'success');
-}
-
-/**
- * showRoutePreview function
- * @function showRoutePreview
- * @param {*} routeData - Route data to display in preview
- * @param {boolean} skipMapDisplay - If true, skip displayAllRoutesOnMap (used when selecting a specific route)
- * @returns {*} Return value description
- */
+// ===== ROUTE PREVIEW ORCHESTRATION =====
 function showRoutePreview(routeData, skipMapDisplay = false) {
-    const orch = _routeSelection().buildShowRoutePreviewOrchestrationPlan(
-        collectShowRoutePreviewInput(routeData, skipMapDisplay)
-    );
-    applyShowRoutePreviewFromPlan(orch.apply, routeData, skipMapDisplay);
+    VoyagrRoutePreviewOrchestration.showRoutePreview(routeData, skipMapDisplay);
+}
+function showAlternativeRoutesInPreview() { VoyagrRoutePreviewOrchestration.showAlternativeRoutesInPreview(); }
+function showRouteComparison() { return VoyagrRoutePreviewOrchestration.showRouteComparison(); }
+function overviewRoute() { VoyagrRoutePreviewOrchestration.overviewRoute(); }
+function startNavigationFromPreview() { VoyagrRoutePreviewOrchestration.startNavigationFromPreview(); }
+function applyRouteUpdateDuringNavigation(routeData) {
+    VoyagrRoutePreviewOrchestration.applyRouteUpdateDuringNavigation(routeData);
+}
+function updateTripInfo(distance, time, fuelCost, tollCost) {
+    VoyagrRoutePreviewOrchestration.updateTripInfo(distance, time, fuelCost, tollCost);
 }
 
-function collectShowAlternativeRoutesPreviewInput() {
+function getRoutePreviewOrchestrationRuntime() {
     return {
-        routeCount: routeOptions ? routeOptions.length : 0,
-        routeOptions,
-        routeColors: routeColors(),
-        currencySymbol: getCurrencySymbol(),
-        distUnit: getDistanceUnit(),
-        fuelUnit: currentVehicleType === 'electric' ? 'kWh' : 'L',
-        convertDistance,
+        routeSelection: () => _routeSelection(),
+        routingRequest: () => _routingRequest(),
+        routeSharing: () => _routeSharing(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRouteOptions: () => routeOptions,
+        setRouteOptions: (val) => { routeOptions = val; },
+        getSelectedRouteIndex: () => selectedRouteIndex,
+        setSelectedRouteIndex: (val) => { selectedRouteIndex = val; },
+        getRoutePolyline: () => routePolyline,
+        setRoutePolyline: (val) => { routePolyline = val; },
+        getRouteInProgress: () => routeInProgress,
+        getCurrentRoutingMode: () => currentRoutingMode,
+        getCurrentVehicleType: () => currentVehicleType,
+        getDistanceUnitValue: () => distanceUnit,
+        getShowTrafficEnabled: () => showTrafficEnabled,
+        getTrafficLayer: () => trafficLayer,
+        call: {
+            showStatus,
+            switchTab,
+            expandBottomSheet,
+            addTrafficLayer,
+            fetchAndDisplayRouteTraffic,
+            displayAllRoutesOnMap,
+            selectRoute,
+            useRoute,
+            pickActiveRouteDuringNavigation,
+            updateRouteOnMap,
+            decodePolyline,
+            convertDistance,
+            getDistanceUnit,
+            getCurrencySymbol,
+            syncLastCalculatedRouteFromSelection,
+            startTurnByTurnNavigation,
+            collapseBottomSheet,
+            applyTripInfoDomFromPlan,
+            routeColors,
+            getTrafficSettingsSnapshot: () => VoyagrTrafficOrchestration.getTrafficSettingsSnapshot(),
+        },
     };
 }
 
-/**
- * showAlternativeRoutesInPreview function
- * @function showAlternativeRoutesInPreview
- * @returns {*} Return value description
- */
-function showAlternativeRoutesInPreview() {
-    const orch = _routeSelection().buildShowAlternativeRoutesPreviewEntryOrchestrationPlan(
-        collectShowAlternativeRoutesPreviewInput()
-    );
-    if (!orch.shouldShow) return;
-    applyAlternativeRoutesPreviewDomFromPlan(orch.apply);
-}
-
-function collectShowRouteComparisonInput() {
-    return {
-        routeCount: routeOptions ? routeOptions.length : 0,
-        routeOptions,
-        currencySymbol: getCurrencySymbol(),
-        distUnit: getDistanceUnit(),
-        convertDistance,
-    };
-}
-
-function applyShowRouteComparisonEntryFromPlan(apply) {
-    if (!apply) return false;
-    if (apply.entryLogMessage) console.log(apply.entryLogMessage);
-    (apply.debugLogs || []).forEach((log) => console.log(log.prefix, log.value));
-    if (!apply.shouldProceed) {
-        if (apply.errorLogMessage) console.error(apply.errorLogMessage, apply.routeCount);
-        if (apply.errorStatusMessage) showStatus(apply.errorStatusMessage, 'error');
-        return false;
-    }
-    if (apply.singleRouteWarning) {
-        if (apply.singleRouteLogMessage) console.warn(apply.singleRouteLogMessage);
-        if (apply.singleRouteStatusMessage) showStatus(apply.singleRouteStatusMessage, 'info');
-    }
-    return true;
-}
-
-async function applyShowRouteComparisonFetchHttpResponse(response) {
-    const RR = _routingRequest();
-    const RS = _routeSelection();
-    const contentType = response.headers.get('content-type');
-    const plan = RS.buildShowRouteComparisonFetchHttpResponsePlan({
-        status: response.status,
-        ok: response.ok,
-        contentType,
-        isJson: RR.isRouteApiJsonContentType(contentType),
-    });
-
-    console.log(plan.statusLogPrefix, response.status);
-
-    if (plan.action === 'reject_non_json') {
-        const text = await response.text();
-        console.error(plan.nonJsonErrorLogPrefix, plan.contentType);
-        console.error(plan.responseTextLogPrefix, text.substring(0, 200));
-        throw new Error(RR.buildNonJsonRouteApiErrorMessage(plan.status, text));
-    }
-
-    if (plan.action === 'reject_http_error') {
-        const text = await response.text();
-        throw new Error(RR.parseRouteApiErrorMessage(plan.status, text));
-    }
-
-    return response.json();
-}
-
-function applyShowRouteComparisonSuccessFromPlan(successApply) {
-    if (!successApply || !successApply.shouldApply) {
-        if (successApply && successApply.errorLogMessage) {
-            console.error(successApply.errorLogMessage, ...(successApply.errorLogArgs || []));
-        }
-        if (successApply && successApply.errorStatusMessage) {
-            showStatus(successApply.errorStatusMessage, 'error');
-        }
-        return;
-    }
-    applyRouteComparisonModalFromPlan(successApply.domApplyPlan);
-    showStatus(successApply.successStatusMessage, 'success');
-}
-
-async function showRouteComparison() {
-    const RS = _routeSelection();
-    const input = collectShowRouteComparisonInput();
-    const orch = RS.buildShowRouteComparisonOrchestrationPlan(input.routeCount);
-    if (!applyShowRouteComparisonEntryFromPlan(
-        RS.buildShowRouteComparisonEntryApplyPlan(orch, input)
-    )) return;
-
-    try {
-        const requestOrch = RS.buildShowRouteComparisonRequestOrchestrationPlan(input.routeOptions);
-        console.log(orch.routesLogPrefix, requestOrch.routesForComparison);
-
-        const fetchPlan = requestOrch.fetchPlan;
-        const response = await fetch(fetchPlan.apiPath, {
-            method: fetchPlan.method,
-            headers: fetchPlan.headers,
-            body: JSON.stringify(fetchPlan.body),
-        });
-
-        const data = await applyShowRouteComparisonFetchHttpResponse(response);
-        const successPlan = RS.buildShowRouteComparisonApiResultExecutePlan(data, {
-            currencySymbol: input.currencySymbol,
-            distUnit: input.distUnit,
-            convertDistance: input.convertDistance,
-        });
-
-        if (successPlan.responseLogPrefix) console.log(successPlan.responseLogPrefix, data);
-
-        applyShowRouteComparisonSuccessFromPlan(
-            RS.buildShowRouteComparisonSuccessApplyPlan(successPlan)
-        );
-    } catch (error) {
-        const errExecute = RS.buildShowRouteComparisonErrorExecutePlan(error);
-        showStatus(errExecute.statusMessage, 'error');
-        console.error(errExecute.errorLogPrefix, ...(errExecute.logArgs || []));
-    }
-}
-
-function applyRouteOverviewFromPlan(apply) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.statusMessage) showStatus(apply.statusMessage, apply.statusType);
-        if (apply && apply.errorLogMessage) console.error(apply.errorLogMessage);
-        return;
-    }
-
-    try {
-        MapLibreHelpers.fitMapBounds(map, apply.routePath, apply.fitBounds);
-        showStatus(apply.statusMessage, apply.statusType);
-        if (apply.successLogPrefix) {
-            console.log(apply.successLogPrefix, apply.routePath.length, 'points');
-        }
-    } catch (error) {
-        showStatus((apply.catchErrorStatusPrefix || '') + error.message, 'error');
-        if (apply.catchErrorLogPrefix) console.error(apply.catchErrorLogPrefix, error);
-    }
-}
-
-/**
- * overviewRoute function
- * @function overviewRoute
- * @returns {*} Return value description
- */
-function overviewRoute() {
-    const RS = _routeSelection();
-    const orch = RS.buildRouteOverviewOrchestrationPlan(window.lastCalculatedRoute, decodePolyline);
-    applyRouteOverviewFromPlan(RS.buildRouteOverviewApplyPlan(orch));
-}
-
-function collectStartNavigationFromPreviewInput() {
-    return {
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        noRouteMessage: 'No route available',
-        syncFromSelection: true,
-        selectedRouteIndex,
-    };
-}
-
-function applyStartNavigationFromPreviewFromPlan(apply) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.errorStatusMessage) showStatus(apply.errorStatusMessage, 'error');
-        return;
-    }
-
-    if (apply.syncFromSelection) {
-        syncLastCalculatedRouteFromSelection(apply.selectedRouteIndex);
-    }
-
-    apply.hideStartNavButtonIds.forEach((id) => {
-        const btn = document.getElementById(id);
-        if (btn) btn.style.display = 'none';
-    });
-
-    startTurnByTurnNavigation(window.lastCalculatedRoute);
-
-    if (apply.collapseBottomSheet) collapseBottomSheet();
-}
-
-/**
- * startNavigationFromPreview function
- * @function startNavigationFromPreview
- * @returns {*} Return value description
- */
-function startNavigationFromPreview() {
-    const input = collectStartNavigationFromPreviewInput();
-    const orch = _routeSelection().buildStartNavigationOrchestrationPlan(
-        input.lastCalculatedRoute,
-        input
-    );
-    applyStartNavigationFromPreviewFromPlan(orch.apply);
-}
 
 // ===== PARKING INTEGRATION FEATURE =====
 // Orchestration lives in static/js/app/parking-orchestration.js (bound at file end).
@@ -8413,86 +8065,6 @@ function collapseBottomSheet() {
 }
 
 
-/**
- * Apply route preview panel DOM patches from a pure DOM apply plan.
- * @param {Object} domPlan - from buildRoutePreviewPanelDomApplyPlan
- */
-function applyRoutePreviewPanelDomFromPlan(domPlan) {
-    const executePlan = _routeSelection().buildRoutePreviewPanelDomExecutePlan(domPlan);
-    if (!executePlan.shouldExecute) return;
-
-    const ids = executePlan.elementIds;
-    const patches = executePlan.patches;
-
-    const previewDistanceEl = document.getElementById(ids.previewDistance);
-    if (previewDistanceEl && patches.previewDistance) {
-        previewDistanceEl.dataset.km = patches.previewDistance.datasetKm;
-        previewDistanceEl.textContent = patches.previewDistance.textContent;
-    }
-
-    const setText = (id, text) => {
-        const el = document.getElementById(id);
-        if (el && text != null) el.textContent = text;
-    };
-    setText(ids.previewDuration, patches.previewDuration && patches.previewDuration.textContent);
-    setText(ids.previewRoute, patches.previewRoute && patches.previewRoute.textContent);
-    setText(ids.previewFuelCost, patches.previewFuelCost && patches.previewFuelCost.textContent);
-    setText(ids.previewTollCost, patches.previewTollCost && patches.previewTollCost.textContent);
-    setText(ids.previewCAZCost, patches.previewCAZCost && patches.previewCAZCost.textContent);
-    setText(ids.previewTotalCost, patches.previewTotalCost && patches.previewTotalCost.textContent);
-    setText(ids.previewRoutingMode, patches.previewRoutingMode && patches.previewRoutingMode.textContent);
-    setText(ids.previewVehicleType, patches.previewVehicleType && patches.previewVehicleType.textContent);
-
-    const fuelLitresEl = document.getElementById(ids.previewFuelLitres);
-    if (fuelLitresEl && patches.previewFuelLitres) {
-        if (patches.previewFuelLitres.visible) {
-            fuelLitresEl.textContent = patches.previewFuelLitres.textContent;
-            fuelLitresEl.style.display = patches.previewFuelLitres.display;
-        } else {
-            fuelLitresEl.style.display = patches.previewFuelLitres.display;
-        }
-    }
-
-    const cazStatusContainer = document.getElementById(ids.cazStatusContainer);
-    if (cazStatusContainer && patches.cazStatusContainer) {
-        if (patches.cazStatusContainer.visible) {
-            cazStatusContainer.innerHTML = patches.cazStatusContainer.innerHtml;
-            cazStatusContainer.style.display = patches.cazStatusContainer.display;
-        } else {
-            cazStatusContainer.style.display = patches.cazStatusContainer.display;
-        }
-    }
-
-    const hazardContainer = document.getElementById(ids.hazardInfoContainer);
-    if (hazardContainer && patches.hazardInfoContainer) {
-        const plan = patches.hazardInfoContainer;
-        const hazardTitleEl = hazardContainer.querySelector('h4');
-        const hazardCountLabel = hazardContainer.querySelector('[data-hazard-count-label]');
-        const penaltyRow = hazardContainer.querySelector('#previewHazardPenalty')?.closest('div');
-        const countEl = document.getElementById('previewHazardCount');
-        const penaltyEl = document.getElementById('previewHazardPenalty');
-        if (plan.visible && countEl) {
-            countEl.textContent = plan.count;
-            if (hazardCountLabel) hazardCountLabel.textContent = plan.countLabel;
-            if (hazardTitleEl) hazardTitleEl.textContent = plan.title;
-            if (penaltyRow) penaltyRow.style.display = plan.penaltyRowDisplay;
-            if (penaltyEl && plan.penaltyText) {
-                penaltyEl.textContent = plan.penaltyText;
-            }
-            hazardContainer.style.background = plan.containerBackground;
-            hazardContainer.style.borderLeftColor = plan.containerBorderLeftColor;
-            hazardContainer.style.display = plan.containerDisplay;
-        } else {
-            hazardContainer.style.display = plan.containerDisplay;
-        }
-    }
-
-    const altContainer = document.getElementById(ids.previewAlternativeRoutesContainer);
-    if (altContainer && patches.previewAlternativeRoutesContainer
-        && patches.previewAlternativeRoutesContainer.display != null) {
-        altContainer.style.display = patches.previewAlternativeRoutesContainer.display;
-    }
-}
 
 // Turn announcement variables
 let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
@@ -9764,47 +9336,6 @@ function loadPreferences() {
     VoyagrLegacyPreferencesOrchestration.loadPreferences();
 }
 
-// Update trip info display
-/**
- * updateTripInfo function
- * @function updateTripInfo
- * @param {*} distance - Parameter description (can be string like "8.64 km" or number)
- * @param {*} time - Parameter description
- * @param {*} fuelCost - Parameter description
- * @param {*} tollCost - Parameter description
- * @returns {*} Return value description
- */
-function updateTripInfo(distance, time, fuelCost, tollCost) {
-    const tripInfo = document.getElementById('tripInfo');
-    const plan = _routeSelection().buildTripInfoApplyPlan(
-        distance,
-        time,
-        fuelCost,
-        tollCost,
-        {
-            distanceText: convertDistance(parseFloat(distance) || 0),
-            distUnit: getDistanceUnit(),
-            currencySymbol: getCurrencySymbol(),
-        },
-        _routeSharing().parseSharedRouteDurationMinutes
-    );
-    if (!plan.visible || !tripInfo) return;
-
-    applyTripInfoDomFromPlan(_routeSelection().buildTripInfoDomApplyPlan(plan.display));
-    if (plan.dashFuel) {
-        const fuelEl = document.getElementById('fuelCost');
-        if (fuelEl) fuelEl.textContent = '-';
-    }
-    if (plan.dashToll) {
-        const tollEl = document.getElementById('tollCost');
-        if (tollEl) tollEl.textContent = '-';
-    }
-    tripInfo.classList.add('show');
-    if (plan.showAlongRouteSearch) {
-        const alongRouteBtn = document.getElementById('alongRouteSearch');
-        if (alongRouteBtn) alongRouteBtn.style.display = 'block';
-    }
-}
 
 // Update clearForm to also hide trip info
 const originalClearForm = clearForm;
@@ -9909,6 +9440,7 @@ VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
+VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
