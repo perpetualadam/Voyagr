@@ -4034,125 +4034,28 @@ function recalculateRouteWithPreferences() {
     );
 }
 
-// ===== ROUTE SAVING FUNCTIONS =====
-function collectSaveCurrentRouteInput() {
-    return _routeSharing().buildCollectSaveCurrentRouteInputPlan({
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        routeName: document.getElementById('routeName')?.value,
-        startLabel: document.getElementById('start')?.value,
-        endLabel: document.getElementById('end')?.value,
-    });
-}
+// ===== ROUTE SAVING ORCHESTRATION =====
+// Orchestration lives in static/js/app/route-saving-orchestration.js (bound at file end).
 
-function applySaveCurrentRouteFromPlan(execute) {
-    if (!execute || !execute.shouldSave) {
-        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
-        return;
-    }
-
-    let savedRoutes = JSON.parse(localStorage.getItem(execute.storageKey) || '[]');
-    savedRoutes.push(execute.savedRoute);
-    localStorage.setItem(execute.storageKey, JSON.stringify(savedRoutes));
-    if (execute.persistProfile) persistActiveProfile();
-
-    if (execute.clearRouteNameInput) {
-        const routeNameInput = document.getElementById(execute.routeNameInputId);
-        if (routeNameInput) routeNameInput.value = '';
-    }
-
-    showStatus(execute.successStatusMessage, 'success');
-    if (execute.reloadList) loadSavedRoutes();
-}
-
-/**
- * saveCurrentRoute function
- * @function saveCurrentRoute
- * @returns {*} Return value description
- */
-function saveCurrentRoute() {
-    const RS = _routeSharing();
-    applySaveCurrentRouteFromPlan(
-        RS.buildSaveCurrentRouteEntryOrchestrationPlan(collectSaveCurrentRouteInput()).execute
-    );
-}
-
-function collectLoadSavedRoutesFmt() {
+function getRouteSavingOrchestrationRuntime() {
     return {
-        convertDistance,
-        currencySymbol: getCurrencySymbol(),
-        distUnit: getDistanceUnit(),
+        routeSharing: () => _routeSharing(),
+        getLastCalculatedRoute: () => window.lastCalculatedRoute,
+        call: {
+            showStatus,
+            switchTab,
+            persistActiveProfile,
+            convertDistance,
+            getCurrencySymbol,
+            getDistanceUnit,
+        },
     };
 }
 
-function applyLoadSavedRoutesFromPlan(execute) {
-    if (!execute || !execute.shouldRender) return;
-    const savedRoutesList = document.getElementById(execute.listContainerId);
-    if (!savedRoutesList) return;
-    savedRoutesList.innerHTML = execute.listHtml;
-}
-
-/**
- * loadSavedRoutes function
- * @function loadSavedRoutes
- * @returns {*} Return value description
- */
-function loadSavedRoutes() {
-    const RS = _routeSharing();
-    const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
-    applyLoadSavedRoutesFromPlan(
-        RS.buildLoadSavedRoutesEntryOrchestrationPlan(savedRoutes, collectLoadSavedRoutesFmt()).execute
-    );
-}
-
-function applyUseSavedRouteFromPlan(plan) {
-    if (!plan || !plan.ok) return;
-
-    const startEl = document.getElementById('start');
-    const endEl = document.getElementById('end');
-    if (startEl) startEl.value = plan.startLabel;
-    if (endEl) endEl.value = plan.endLabel;
-    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-    showStatus(plan.successStatusMessage, 'success');
-    switchTab(plan.switchTab);
-}
-
-/**
- * useSavedRoute function
- * @function useSavedRoute
- * @param {*} routeId - Parameter description
- * @returns {*} Return value description
- */
-function useSavedRoute(routeId) {
-    const RS = _routeSharing();
-    const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
-    applyUseSavedRouteFromPlan(
-        RS.buildUseSavedRouteEntryOrchestrationPlan(routeId, savedRoutes).plan
-    );
-}
-
-function applyDeleteSavedRouteFromPlan(execute) {
-    if (!execute || !execute.shouldPersist) return;
-
-    localStorage.setItem(execute.storageKey, JSON.stringify(execute.nextRoutes));
-    if (execute.persistProfile) persistActiveProfile();
-    showStatus(execute.successStatusMessage, 'success');
-    if (execute.reloadList) loadSavedRoutes();
-}
-
-/**
- * deleteSavedRoute function
- * @function deleteSavedRoute
- * @param {*} routeId - Parameter description
- * @returns {*} Return value description
- */
-function deleteSavedRoute(routeId) {
-    const RS = _routeSharing();
-    const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
-    const entry = RS.buildDeleteSavedRouteEntryOrchestrationPlan(routeId, savedRoutes);
-    if (!confirm(entry.deletePlan.confirmMessage)) return;
-    applyDeleteSavedRouteFromPlan(entry.execute);
-}
-
+function saveCurrentRoute() { VoyagrRouteSavingOrchestration.saveCurrentRoute(); }
+function loadSavedRoutes() { VoyagrRouteSavingOrchestration.loadSavedRoutes(); }
+function useSavedRoute(routeId) { VoyagrRouteSavingOrchestration.useSavedRoute(routeId); }
+function deleteSavedRoute(routeId) { VoyagrRouteSavingOrchestration.deleteSavedRoute(routeId); }
 
 /**
  * setupMapClickHandler function
@@ -7267,6 +7170,7 @@ function getGpsOrchestrationRuntime() {
             updateSpeedWidgetVisibility,
             updateRoadReportFabVisibility,
             hasUserStartedMoving,
+            getSpeedLimitFetchState: () => VoyagrSpeedWidgetOrchestration.getSpeedLimitFetchState(),
         },
     };
 }
@@ -7501,77 +7405,10 @@ function clearForm() {
 // ===== PHASE 2 FEATURES: SEARCH HISTORY & FAVORITES =====
 
 /**
- * Fill a location field's autocomplete with recent (local) + server search history when the
- * query is short. Shared by the Start and Destination inputs (and the "show history" affordance)
- * so both fields offer the same "pick a previous location" experience from one code path.
- * @param {HTMLElement} dropdown - The field's autocomplete dropdown (#autocompleteStart / #autocompleteEnd).
- * @param {string} [fieldId='end'] - Which input the chosen suggestion populates ('start' | 'end').
- */
-async function renderEndDestinationSuggestions(dropdown, fieldId = 'end') {
-    if (!dropdown) return;
-
-    const SA = _searchAutocomplete();
-    const recent = loadRecentDestinations();
-    dropdown.innerHTML = '';
-
-    const appendSectionTitle = (text) => {
-        dropdown.insertAdjacentHTML('beforeend', SA.buildAutocompleteSectionTitleHtml(text));
-    };
-
-    if (recent.length) {
-        appendSectionTitle('Recent locations');
-        recent.forEach((item) => {
-            const div = document.createElement('div');
-            div.className = 'autocomplete-item';
-            div.innerHTML = SA.buildRecentDestinationItemHtml(item, { escapeHtml });
-            div.onclick = () => selectAutocompleteResult(fieldId, item.lat, item.lon, item.label);
-            dropdown.appendChild(div);
-        });
-    }
-
-    let serverCount = 0;
-    try {
-        const { res, data } = await fetchJsonWithAuth('/api/search-history');
-        if (res.status !== 401 && data.success && data.history && data.history.length > 0) {
-            appendSectionTitle('Saved searches');
-            data.history.forEach((item) => {
-                const built = SA.buildServerSearchHistoryItemHtml(item, { escapeHtml });
-                const div = document.createElement('div');
-                div.className = 'autocomplete-item';
-                div.innerHTML = built.html;
-                if (built.hasCoords) {
-                    div.onclick = () => selectAutocompleteResult(fieldId, built.lat, built.lon, item.result_name || item.query);
-                } else {
-                    div.onclick = () => {
-                        const fieldInput = document.getElementById(fieldId);
-                        if (fieldInput) fieldInput.value = item.query || '';
-                        dropdown.classList.remove('show');
-                    };
-                }
-                dropdown.appendChild(div);
-                serverCount++;
-            });
-        }
-    } catch (e) {
-        console.error('[Search history]', e);
-    }
-
-    if (!recent.length && serverCount === 0) {
-        dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml();
-    }
-    dropdown.classList.add('show');
+async function renderEndDestinationSuggestions(dropdown, fieldId) {
+    return VoyagrGeocodingOrchestration.renderEndDestinationSuggestions(dropdown, fieldId);
 }
-
-/**
- * showSearchHistory function
- * @function showSearchHistory
- * @returns {*} Return value description
- */
-function showSearchHistory() {
-    const dropdown = getAutocompleteDropdown('end');
-    if (!dropdown) return;
-    renderEndDestinationSuggestions(dropdown).catch((e) => console.error('Error loading search history:', e));
-}
+function showSearchHistory() { VoyagrGeocodingOrchestration.showSearchHistory(); }
 
 // Add search to history
 /**
@@ -7946,35 +7783,10 @@ let currentGpsSpeedKmh = 0;
 let currentSpeedLimitMph = null;
 let lastDetectedRoadType = null;
 let lastSpeedLimitRegion = 'uk';
-let _speedLimitFetchState = null;
 let _lastActiveManeuverIdx = -1;
-function _getSpeedLimitFetchState() {
-    const SL = _speedLimitWidget();
-    if (!_speedLimitFetchState && SL) {
-        _speedLimitFetchState = SL.createFetchState();
-    }
-    return _speedLimitFetchState;
-}
-// Goals:
-//   1. Hide sub-noise readings while genuinely stationary (GPS can drift to 0.2-0.5 m/s
-//      while parked, which used to flicker the widget between 0 and 1 mph).
-//   2. Smooth high-frequency jitter while moving without adding visible lag.
-//   3. Snap straight to new value when the change is large (hard brake / acceleration)
-//      so the widget stays responsive when it matters.
-//   4. Fall back to derived speed (dx/dt between successive fixes) when the device does
-//      not report `coords.speed` — common on some Android browsers.
-/** Hard ceiling for plausible road-vehicle speeds (clamp sensor + Δfix estimates). */
-const MAX_DISPLAY_GPS_SPEED_MPH = 185.0;
-
 let _smoothedSpeedMph = 0;
 let _smoothedSpeedInitAt = 0;
-/** Tracks last sane raw mph accepted by coord-sample tick for outlier rejection. */
 let _lastGoodRawPickMph = 0;
-/**
- * Count of consecutive displacement-derived speed samples while the device keeps
- * reporting coords.speed === 0. Once high enough we stop treating the device as
- * "parked" and use a lower noise floor so the speedometer wakes up faster.
- */
 let _consecutiveDisplacementMoves = 0;
 
 /** Unit-tested speed/GPS helpers (modules/navigation/speed-gps.js). */
@@ -8156,304 +7968,81 @@ function _bestTimeLeave() { return VoyagrModules.bestTimeLeave(); }
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
 
-/**
- * Smooth a raw mph reading to reduce GPS jitter without sacrificing responsiveness.
- * Treats very small values as "stationary" (dead-band) and snaps through the EMA
- * when the delta is large (real acceleration / braking).
- *
- * @param {number} rawMph - Latest mph value to fold in.
- * @returns {number} Smoothed mph value to show in the widget.
- */
-function smoothGpsSpeedMph(rawMph) {
-    const SG = _speedGps();
-    const r = SG.stepSmoothGpsSpeedMph(
-        { smoothedMph: _smoothedSpeedMph, initAt: _smoothedSpeedInitAt },
-        rawMph,
-        Date.now()
-    );
-    _smoothedSpeedMph = r.state.smoothedMph;
-    _smoothedSpeedInitAt = r.state.initAt;
-    return r.value;
-}
+// ===== SPEED WIDGET ORCHESTRATION =====
+// Orchestration lives in static/js/app/speed-widget-orchestration.js (bound at file end).
 
-/**
- * updateSpeedWidget function
- * @function updateSpeedWidget
- * @param {number} currentSpeedInMph - Current GPS speed in MPH (always MPH internally)
- * @param {number|null} [speedLimitInMph] - Posted limit in MPH when known
- * @returns {void}
- */
-function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
-    const widget = document.getElementById('speedWidget');
-    if (!widget) return;
-
-    currentGpsSpeedMph = currentSpeedInMph;
-    currentGpsSpeedKmh = currentSpeedInMph * 1.609344;
-
-    const SG = _speedGps();
-    const SL = _speedLimitWidget();
-    const displaySpeedUnit = getSpeedUnit();
-    const gpsDisplay = SL.formatSpeedForWidget(currentSpeedInMph, speedUnit, SG);
-
-    const speedValueEl = document.getElementById('speedValue');
-    const speedUnitEl = document.getElementById('speedUnitDisplay');
-    if (speedValueEl) {
-        speedValueEl.textContent = String(SL.sanitizeWidgetDisplayNumber(gpsDisplay.value));
-    }
-    if (speedUnitEl) speedUnitEl.textContent = gpsDisplay.unitLabel;
-
-    const limitValueEl = document.getElementById('speedLimitValue');
-    const limitUnitEl = document.getElementById('speedLimitUnit');
-    if (limitValueEl && limitUnitEl) {
-        const resolvedLimit = (speedLimitInMph !== null && speedLimitInMph > 0)
-            ? speedLimitInMph
-            : null;
-
-        if (resolvedLimit !== null && resolvedLimit > 0) {
-            currentSpeedLimitMph = resolvedLimit;
-            const limitDisplay = SL.formatSpeedForWidget(resolvedLimit, speedUnit, SG);
-            limitValueEl.textContent = String(SL.sanitizeWidgetDisplayNumber(limitDisplay.value));
-            limitUnitEl.textContent = limitDisplay.unitLabel;
-            widget.style.borderLeft = '4px solid #4285F4';
-        } else {
-            limitValueEl.textContent = '…';
-            limitUnitEl.textContent = displaySpeedUnit;
-            widget.style.borderLeft = '4px solid #999';
-        }
-    }
-
-    updateSpeedWidgetVisibility();
-}
-
-/**
- * Consolidated function to manage speed widget visibility
- * Shows widget when: tracking is active OR navigation is in progress AND widget is enabled
- * @returns {void}
- */
-let _lastSpeedWidgetVisible = null; // Track to avoid redundant DOM writes
-function updateSpeedWidgetVisibility() {
-    const widget = document.getElementById('speedWidget');
-    if (!widget) return;
-
-    const shouldShow = (isTrackingActive || routeInProgress) && speedWidgetEnabled;
-    // Only update DOM if state actually changed
-    if (shouldShow !== _lastSpeedWidgetVisible) {
-        widget.style.display = shouldShow ? 'block' : 'none';
-        _lastSpeedWidgetVisible = shouldShow;
-        console.log('[Speed Widget]', shouldShow ? 'Visible' : 'Hidden', '(tracking:', isTrackingActive, 'route:', routeInProgress, ')');
-    }
-}
-
-/**
- * Map a snapped polyline vertex index to the Valhalla maneuver describing the edge
- * the driver is currently traversing.
- *
- * Valhalla maneuver i describes the road segment from `begin_shape_index[i]` (inclusive)
- * to `begin_shape_index[i+1]` (exclusive). `currentStepIndex` tracks the *upcoming*
- * maneuver (the next turn). Picking the maneuver by snapped vertex fixes turn display
- * for the road currently under the wheels.
- *
- * @param {number} snappedIndex - Index into `routePolyline` of the snapped GPS position.
- * @returns {number} Index into `currentRouteSteps`, or -1 if not available.
- */
-
-/**
- * Get the road class for a specific maneuver, falling back to instruction-text inference.
- *
- * @param {Object|null} step - A Valhalla maneuver object (or null).
- * @returns {string|null} Road class string, or null when nothing useful could be inferred.
- */
-// inferRoadClassFromManeuver / inferRoadClassFromStreetNames — call _routeGeometry() at use sites.
-
-/**
- * Get current road type from route data or default to safe value.
- *
- * @param {number} [maneuverIdxOverride] - Optional maneuver index. When supplied, the road
- *   class is taken from that maneuver rather than from `currentStepIndex`.
- * @param {number} [gpsSpeedMph] - Optional GPS speed hint when route metadata is missing.
- * @returns {string} Road type (motorway, primary, residential, unknown, etc.)
- */
-function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
-    return _routeGeometry().resolveCurrentRoadType({
-        maneuverIdxOverride,
-        gpsSpeedMph,
-        currentRouteSteps,
-        currentStepIndex,
-        lastDetectedRoadType,
-    });
-}
-
-/**
- * Best street label for a Valhalla maneuver. `preferCurrentRoad` reads begin_street_names
- * (the edge being driven) instead of street_names (the road after the maneuver).
- * @param {object|null} maneuver
- * @param {boolean} [preferCurrentRoad=false]
- * @returns {string}
- */
-function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
-    const SG = _speedGps();
-    if (SG) return SG.getManeuverStreetLabel(maneuver, preferCurrentRoad);
-    return '';
-}
-
-/**
- * Normalize a Valhalla maneuver speed_limit field to mph.
- * @param {number} rawSl
- * @param {string|null} roadClass
- * @param {number} gpsSpeedMph
- * @returns {number|null}
- */
-function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
-    const SG = _speedGps();
-    if (SG) return SG.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
-    return null;
-}
-
-/**
- * Apply speed-limit fetch outcome state and widget updates from a pure apply plan.
- * @param {Object} outcomeApply
- */
-function applySpeedLimitFetchOutcomeFromPlan(outcomeApply) {
-    if (!outcomeApply || outcomeApply.action !== 'apply') return;
-
-    const patch = outcomeApply.statePatch || {};
-    if (patch.lastDetectedRoadType) lastDetectedRoadType = patch.lastDetectedRoadType;
-    if (patch.lastSpeedLimitRegion) lastSpeedLimitRegion = patch.lastSpeedLimitRegion;
-
-    const state = _getSpeedLimitFetchState();
-    if (patch.currentLimitMph != null && state) {
-        state.currentLimitMph = patch.currentLimitMph;
-    }
-    if (patch.currentSpeedLimitMph != null) {
-        currentSpeedLimitMph = patch.currentSpeedLimitMph;
-    }
-
-    if (outcomeApply.widgetUpdate) {
-        updateSpeedWidget(
-            outcomeApply.widgetUpdate.displaySpeedMph,
-            outcomeApply.widgetUpdate.shownLimit
-        );
-    }
-
-    if (outcomeApply.cacheHint) {
-        void cacheSpeedLimit(
-            outcomeApply.cacheHint.lat,
-            outcomeApply.cacheHint.lon,
-            outcomeApply.cacheHint.limitMph,
-            outcomeApply.cacheHint.source || 'api'
-        );
-    }
-}
-
-/**
- * Fetch posted speed limit for current GPS position (throttled, offline cache fallback).
- */
-function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', valhallaSpeedLimit = null, headingDeg = null) {
-    const SL = _speedLimitWidget();
-    const SG = _speedGps();
-    const state = _getSpeedLimitFetchState();
-    if (!SL || !state) return;
-
-    const tick = SL.buildSpeedLimitFetchTickPlan({
-        lat,
-        lon,
-        roadType,
-        valhallaSpeedLimit,
-        headingDeg,
-        now: Date.now(),
-        fetchState: state,
-        calculateDistance: calculateDistanceMeters,
-        currentSpeedMph,
-        currentGpsSpeedMph: currentGpsSpeedMph,
-        lastDetectedRoadType,
-        lastSpeedLimitRegion,
-    });
-    if (tick.action === 'skip') return;
-
-    const apply = SL.buildSpeedLimitFetchStateApplyPlan(tick);
-    if (apply.action === 'skip') return;
-
-    state.inFlight = apply.statePatch.inFlight;
-    state.lastFetchAt = apply.statePatch.lastFetchAt;
-    state.lastPosition = apply.statePatch.lastPosition;
-    state.seq = apply.statePatch.seq;
-    const mySeq = apply.fetch.seq;
-    const ctx = apply.context;
-
-    const acceptIfFresh = (outcomeApply) => {
-        if (!outcomeApply || outcomeApply.action !== 'apply') return;
-        if (mySeq < state.appliedSeq) return;
-        state.appliedSeq = mySeq;
-        applySpeedLimitFetchOutcomeFromPlan(outcomeApply);
-    };
-
-    fetch(apply.fetch.url)
-        .then((response) => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        })
-        .then((data) => {
-            acceptIfFresh(SL.buildSpeedLimitApiSuccessApplyPlan({
-                data,
-                lat: ctx.lat,
-                lon: ctx.lon,
-                roadType: ctx.roadType,
-                valhallaSpeedLimit: ctx.valhallaSpeedLimit,
-                currentSpeedMph: ctx.currentSpeedMph,
-                currentGpsSpeedMph: ctx.currentGpsSpeedMph,
-                lastSpeedLimitRegion: ctx.lastSpeedLimitRegion,
-                speedGpsModule: SG,
-            }));
-        })
-        .catch(async () => {
-            let cachedLimitMph = null;
-            if (_voyagrIsOffline || !navigator.onLine) {
-                try {
-                    const cached = await getCachedSpeedLimit(lat, lon);
-                    cachedLimitMph = SL.readCachedLimitMph(cached, Date.now());
-                } catch (_) { /* ignore */ }
+function getSpeedWidgetOrchestrationRuntime() {
+    return {
+        speedGps: () => _speedGps(),
+        speedLimitWidget: () => _speedLimitWidget(),
+        routeGeometry: () => _routeGeometry(),
+        toggleUI: () => _toggleUI(),
+        getSpeedUnit: () => speedUnit,
+        getIsTrackingActive: () => isTrackingActive,
+        getRouteInProgress: () => routeInProgress,
+        getCurrentRouteSteps: () => currentRouteSteps,
+        getCurrentStepIndex: () => currentStepIndex,
+        getIsOffline: () => _voyagrIsOffline,
+        g: (key) => {
+            switch (key) {
+            case 'speedWidgetEnabled': return speedWidgetEnabled;
+            case 'currentGpsSpeedMph': return currentGpsSpeedMph;
+            case 'currentGpsSpeedKmh': return currentGpsSpeedKmh;
+            case 'currentSpeedLimitMph': return currentSpeedLimitMph;
+            case 'lastDetectedRoadType': return lastDetectedRoadType;
+            case 'lastSpeedLimitRegion': return lastSpeedLimitRegion;
+            case '_smoothedSpeedMph': return _smoothedSpeedMph;
+            case '_smoothedSpeedInitAt': return _smoothedSpeedInitAt;
+            default: return undefined;
             }
-            acceptIfFresh(SL.buildSpeedLimitFetchFallbackApplyPlan({
-                cachedLimitMph,
-                valhallaSpeedLimit: ctx.valhallaSpeedLimit,
-                roadType: ctx.roadType,
-                lastDetectedRoadType: ctx.lastDetectedRoadType,
-                lastSpeedLimitRegion: ctx.lastSpeedLimitRegion,
-                currentGpsSpeedMph: ctx.currentGpsSpeedMph,
-            }));
-        })
-        .finally(() => {
-            state.inFlight = false;
-        });
+        },
+        s: (key, val) => {
+            switch (key) {
+            case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
+            case 'currentGpsSpeedMph': currentGpsSpeedMph = val; break;
+            case 'currentGpsSpeedKmh': currentGpsSpeedKmh = val; break;
+            case 'currentSpeedLimitMph': currentSpeedLimitMph = val; break;
+            case 'lastDetectedRoadType': lastDetectedRoadType = val; break;
+            case 'lastSpeedLimitRegion': lastSpeedLimitRegion = val; break;
+            case '_smoothedSpeedMph': _smoothedSpeedMph = val; break;
+            case '_smoothedSpeedInitAt': _smoothedSpeedInitAt = val; break;
+            default: break;
+            }
+        },
+        call: {
+            getSpeedUnit,
+            calculateDistanceMeters,
+            cacheSpeedLimit,
+            getCachedSpeedLimit,
+            saveAllSettings,
+        },
+    };
 }
 
-/**
- * Sync the settings toggle and map widget visibility with speedWidgetEnabled.
- */
-function applySpeedWidgetToggleUi() {
-    const toggle = document.getElementById('speedWidgetToggle');
-    _toggleUI().applyLabeledToggleButton(toggle, speedWidgetEnabled);
-    _lastSpeedWidgetVisible = null;
-    updateSpeedWidgetVisibility();
+function smoothGpsSpeedMph(rawMph) { return VoyagrSpeedWidgetOrchestration.smoothGpsSpeedMph(rawMph); }
+function updateSpeedWidget(currentSpeedInMph, speedLimitInMph) {
+    return VoyagrSpeedWidgetOrchestration.updateSpeedWidget(currentSpeedInMph, speedLimitInMph);
 }
-
-/**
- * toggleSpeedWidget function
- * @function toggleSpeedWidget
- * @returns {*} Return value description
- */
-function toggleSpeedWidget() {
-    speedWidgetEnabled = !speedWidgetEnabled;
-    localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled ? 'true' : 'false');
-    applySpeedWidgetToggleUi();
-    saveAllSettings();
+function updateSpeedWidgetVisibility() { VoyagrSpeedWidgetOrchestration.updateSpeedWidgetVisibility(); }
+function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
+    return VoyagrSpeedWidgetOrchestration.getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph);
 }
-
-/**
- * toggleZoomAndFollow function
- * @function toggleZoomAndFollow
- * @returns {*} Return value description
- */
+function getManeuverStreetLabel(maneuver, preferCurrentRoad) {
+    return VoyagrSpeedWidgetOrchestration.getManeuverStreetLabel(maneuver, preferCurrentRoad);
+}
+function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
+    return VoyagrSpeedWidgetOrchestration.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
+}
+function applySpeedLimitFetchOutcomeFromPlan(outcomeApply) {
+    VoyagrSpeedWidgetOrchestration.applySpeedLimitFetchOutcomeFromPlan(outcomeApply);
+}
+function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
+    return VoyagrSpeedWidgetOrchestration.fetchSpeedLimitThrottled(
+        lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg
+    );
+}
+function applySpeedWidgetToggleUi() { VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(); }
+function toggleSpeedWidget() { VoyagrSpeedWidgetOrchestration.toggleSpeedWidget(); }
 function toggleZoomAndFollow() {
     const MC = _mapControls();
     const orch = MC.buildToggleZoomAndFollowOrchestrationPlan({
@@ -11130,12 +10719,6 @@ const ZOOM_LEVELS = {
 const TURN_ZOOM_THRESHOLD = 500;    // Zoom in when within 500m of turn
 const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
 
-// ===== GEOCODING FEATURE =====
-let geocodingCache = {};
-const GEOCODING_CACHE_KEY = 'voyagr_geocoding_cache';
-// Privacy: use server-side proxy endpoints (which can point to self-hosted Nominatim)
-const NOMINATIM_API = '/api/geocode';
-const NOMINATIM_REVERSE_API = '/api/reverse-geocode';
 let isGeocoding = false;
 
 // Initialize Web Speech API
@@ -12499,422 +12082,49 @@ function updateAutoGpsLocation() {
         }
     );
 }
-/**
- * pickLocationFromMap function
- * @function pickLocationFromMap
- * @param {*} field - Parameter description
- * @returns {*} Return value description
- */
-function pickLocationFromMap(field) {
-    const execute = _geocodingLocations().buildPickLocationFromMapExecutePlan(field);
-    if (!execute.shouldPick) return;
+// ===== GEOCODING ORCHESTRATION =====
+// Orchestration lives in static/js/app/geocoding-orchestration.js (bound at file end).
 
-    mapPickerMode = execute.mapPickerMode;
-    if (execute.collapseBottomSheet) collapseBottomSheet();
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-// ===== GEOCODING FUNCTIONS =====
-/**
- * initGeocodeCache function
- * @function initGeocodeCache
- * @returns {*} Return value description
- */
-function initGeocodeCache() {
-    try {
-        const cached = localStorage.getItem(GEOCODING_CACHE_KEY);
-        if (cached) {
-            geocodingCache = JSON.parse(cached);
-            console.log('[Geocoding] Cache loaded with', Object.keys(geocodingCache).length, 'entries');
-        }
-    } catch (e) {
-        console.log('[Geocoding] Cache load error:', e);
-        geocodingCache = {};
-    }
-}
-
-/**
- * saveGeocodeCache function
- * @function saveGeocodeCache
- * @returns {*} Return value description
- */
-function saveGeocodeCache() {
-    try {
-        localStorage.setItem(GEOCODING_CACHE_KEY, JSON.stringify(geocodingCache));
-    } catch (e) {
-        console.log('[Geocoding] Cache save error:', e);
-    }
-}
-
-let autocompleteTimeout = null;
-let autocompleteCache = {};
-
-function getAutocompleteDropdown(fieldId) {
-    const mapping = {
-        'start': 'autocompleteStart',
-        'end': 'autocompleteEnd',
-        'viaPointAddress': 'autocompleteViaPoint',
-        'stopAddress': 'autocompleteStop'
+function getGeocodingOrchestrationRuntime() {
+    return {
+        geocodingLocations: () => _geocodingLocations(),
+        searchAutocomplete: () => _searchAutocomplete(),
+        getAutoGpsEnabled: () => autoGpsEnabled,
+        g: (key) => {
+            switch (key) {
+            case 'mapPickerMode': return mapPickerMode;
+            case 'isGeocoding': return isGeocoding;
+            default: return undefined;
+            }
+        },
+        s: (key, val) => {
+            switch (key) {
+            case 'mapPickerMode': mapPickerMode = val; break;
+            case 'isGeocoding': isGeocoding = val; break;
+            default: break;
+            }
+        },
+        call: {
+            showStatus,
+            collapseBottomSheet,
+            addViaPoint,
+            addStop,
+            recordRecentDestination,
+            fetchJsonWithAuth,
+            loadRecentDestinations,
+            escapeHtml,
+        },
     };
-    return document.getElementById(mapping[fieldId] || `autocomplete_${fieldId}`);
 }
 
-async function showAutocomplete(fieldId) {
-    const SA = _searchAutocomplete();
-    const input = document.getElementById(fieldId);
-    const dropdown = getAutocompleteDropdown(fieldId);
-    if (!input || !dropdown) return;
-
-    // Live GPS owns the start field; don't run search or wipe dataset coords on focus/input.
-    if (fieldId === 'start' && autoGpsEnabled) {
-        dropdown.classList.remove('show');
-        return;
-    }
-
-    const query = input.value.trim();
-
-    if (input.dataset.lat || input.dataset.lon) {
-        console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
-        delete input.dataset.lat;
-        delete input.dataset.lon;
-        delete input.dataset.displayName;
-    }
-
-    if (autocompleteTimeout) {
-        clearTimeout(autocompleteTimeout);
-    }
-
-    if (!query || query.length < 2) {
-        // Start and Destination both offer "pick a previous location" when empty. (The Start
-        // field only reaches here when auto-GPS is off — the guard above hands the field to
-        // live GPS otherwise.)
-        if (fieldId === 'end' || fieldId === 'start') {
-            const histEl = document.getElementById('searchHistoryDropdown');
-            if (histEl) {
-                histEl.classList.remove('show');
-                histEl.innerHTML = '';
-            }
-            dropdown.innerHTML = SA.buildAutocompleteLoadingHtml(SA.AUTOCOMPLETE_LOADING_RECENT_TEXT);
-            dropdown.classList.add('show');
-            renderEndDestinationSuggestions(dropdown, fieldId).catch((err) => {
-                console.error('[Recent locations]', err);
-                dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml(SA.AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE);
-            });
-            return;
-        }
-        dropdown.classList.remove('show');
-        return;
-    }
-
-    dropdown.innerHTML = SA.buildAutocompleteLoadingHtml(SA.AUTOCOMPLETE_SEARCHING_TEXT);
-    dropdown.classList.add('show');
-
-    autocompleteTimeout = setTimeout(async () => {
-        try {
-            if (autocompleteCache[query]) {
-                displayAutocompleteResults(fieldId, autocompleteCache[query]);
-                return;
-            }
-
-            const response = await fetch(
-                `${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
-                {
-                    headers: {
-                        'User-Agent': 'Voyagr-PWA/1.0'
-                    }
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-
-            const results = await response.json();
-
-            autocompleteCache[query] = results;
-
-            displayAutocompleteResults(fieldId, results);
-        } catch (error) {
-            console.error('[Autocomplete] Error:', error);
-            dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml(SA.AUTOCOMPLETE_SEARCH_FAILED_MESSAGE);
-        }
-    }, 300); // 300ms debounce
-}
-/**
- * displayAutocompleteResults function
- * @function displayAutocompleteResults
- * @param {*} fieldId - Parameter description
- * @param {*} results - Parameter description
- * @returns {*} Return value description
- */
-function displayAutocompleteResults(fieldId, results) {
-    const SA = _searchAutocomplete();
-    const dropdown = getAutocompleteDropdown(fieldId);
-    if (!dropdown) return;
-
-    if (!results || results.length === 0) {
-        dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml('No results found');
-        return;
-    }
-
-    dropdown.innerHTML = '';
-
-    results.forEach((result) => {
-        const icon = SA.getLocationIcon(result);
-        const name = SA.resolveGeocodeResultDisplayName(result);
-        const shortAddress = SA.resolveGeocodeResultShortAddress(result);
-        const lat = parseFloat(result.lat);
-        const lon = parseFloat(result.lon);
-
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-
-        const item = document.createElement('div');
-        item.className = 'autocomplete-item';
-        item.innerHTML = SA.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
-        item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name);
-
-        dropdown.appendChild(item);
-    });
-}
-/**
- * selectAutocompleteResult function
- * @function selectAutocompleteResult
- * @param {*} fieldId - Parameter description
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @param {*} name - Parameter description
- * @returns {*} Return value description
- */
-function selectAutocompleteResult(fieldId, lat, lon, name) {
-    const input = document.getElementById(fieldId);
-    const dropdown = getAutocompleteDropdown(fieldId);
-
-    if (fieldId === 'viaPointAddress') {
-        addViaPoint(lat, lon, name);
-        if (input) input.value = '';
-        if (dropdown) dropdown.classList.remove('show');
-        return;
-    }
-    if (fieldId === 'stopAddress') {
-        addStop(lat, lon, name);
-        if (input) input.value = '';
-        if (dropdown) dropdown.classList.remove('show');
-        return;
-    }
-
-    input.value = name;
-    input.dataset.lat = lat;
-    input.dataset.lon = lon;
-    input.dataset.displayName = name;
-
-    if (dropdown) dropdown.classList.remove('show');
-
-    // Save the chosen place for either endpoint so it can be re-picked from the recent
-    // locations list in the Start or Destination field next time.
-    if (fieldId === 'end' || fieldId === 'start') {
-        recordRecentDestination(name, lat, lon, 'search');
-    }
-
-    showStatus(`✅ Selected: ${name}`, 'success');
-
-    console.log(`[Autocomplete] Selected ${fieldId}: ${name} (${lat}, ${lon})`);
-}
-
-function collectGeocodePlusCodeDecodeState(trimmed) {
-    const GL = _geocodingLocations();
-    const runtime = GL.buildGeocodePlusCodeRuntimePlan({
-        plusCodesEnabledStorage: localStorage.getItem('googlePlusCodesEnabled'),
-        hasPlusCodeService: typeof GooglePlusCodesService !== 'undefined',
-    });
-    const state = {
-        plusCodesEnabled: runtime.plusCodesEnabled,
-        hasPlusCodeService: runtime.hasPlusCodeService,
-        trimmed,
-        isValidCode: false,
-        decoded: null,
-        errorMessage: null,
-    };
-
-    if (runtime.plusCodesEnabled && runtime.hasPlusCodeService) {
-        try {
-            const service = new GooglePlusCodesService();
-            if (service.isValidCode(trimmed)) {
-                state.isValidCode = true;
-                state.decoded = service.decode(trimmed);
-            }
-        } catch (error) {
-            state.errorMessage = error.message;
-            console.log('[Geocoding] Plus Code decode error:', error.message);
-        }
-    }
-
-    return GL.buildGeocodePlusCodeDecodeStatePlan(state);
-}
-
-async function geocodeAddress(address) {
-    const GL = _geocodingLocations();
-    let lookup = GL.buildGeocodeAddressLookupPlan({
-        address,
-        cache: geocodingCache,
-        nominatimBaseUrl: NOMINATIM_API,
-        limit: 8,
-    });
-    let orch = GL.buildGeocodeAddressOrchestrationPlan(lookup);
-
-    if (orch.branch === 'empty') {
-        return null;
-    }
-
-    if (orch.branch === 'resolve') {
-        const resolve = GL.buildGeocodeAddressResolveExecutePlan(orch);
-        console.log(resolve.resolveLogPrefix, resolve.trimmed);
-        return resolve.result;
-    }
-
-    const trimmedAddress = orch.trimmed;
-    const plusPlan = GL.buildGeocodePlusCodeLookupPlan(
-        collectGeocodePlusCodeDecodeState(trimmedAddress)
-    );
-    if (plusPlan.action === 'resolve') {
-        const plusLog = GL.buildGeocodePlusCodeResolveLogPlan(trimmedAddress);
-        console.log(plusLog.detectLogMessage, trimmedAddress);
-        console.log(plusLog.decodeLogPrefix, plusPlan.result.lat, plusPlan.result.lon);
-        return plusPlan.result;
-    }
-
-    lookup = GL.buildGeocodeAddressLookupPlan({
-        address: trimmedAddress,
-        cache: geocodingCache,
-        nominatimBaseUrl: NOMINATIM_API,
-        limit: 8,
-    });
-    orch = GL.buildGeocodeAddressOrchestrationPlan(lookup);
-    if (orch.branch === 'resolve') {
-        const resolve = GL.buildGeocodeAddressResolveExecutePlan(orch);
-        console.log('[Geocoding] Cache hit for:', resolve.trimmed);
-        return resolve.result;
-    }
-
-    try {
-        const fetchPlan = GL.buildGeocodeNominatimFetchRequestPlan(lookup);
-        console.log('[Geocoding] Fetching:', fetchPlan.trimmed);
-        const response = await fetch(fetchPlan.url, {
-            headers: fetchPlan.headers,
-        });
-
-        if (!response.ok) {
-            const httpErr = GL.buildGeocodeHttpErrorPlan(response.status);
-            throw new Error(httpErr.errorMessage);
-        }
-
-        const outcome = GL.buildGeocodeNominatimResponsePlan(
-            GL.parseNominatimFetchPayload(await response.json()),
-            fetchPlan.trimmed
-        );
-        if (!outcome.ok) {
-            if (outcome.branch === 'api_error') {
-                throw new Error(outcome.errorMessage);
-            }
-            const empty = GL.buildGeocodeNominatimEmptyExecutePlan(outcome);
-            console.log(empty.emptyLogPrefix, empty.trimmed);
-            return null;
-        }
-
-        const success = GL.buildGeocodeNominatimSuccessExecutePlan(outcome, fetchPlan);
-        geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, success.cacheKey, success.cacheEntry);
-        saveGeocodeCache();
-
-        console.log(success.successLogPrefix, success.trimmed, '→', success.result.lat, success.result.lon);
-        return success.result;
-    } catch (error) {
-        const fetchErr = GL.buildGeocodeAddressFetchErrorExecutePlan(error.message);
-        console.log(fetchErr.errorLogPrefix, fetchErr.errorMessage);
-        return null;
-    }
-}
-
-async function resolveGeocodeEndpoint(GL, endpointPlan, which, fallbackAddress) {
-    const resolvePlan = GL.buildGeocodeEndpointResolveExecutePlan(which, endpointPlan);
-    if (resolvePlan.useStored) {
-        console.log(resolvePlan.storedLogPrefix, resolvePlan.storedResult);
-        return { ok: true, result: resolvePlan.storedResult };
-    }
-
-    const result = await geocodeAddress(resolvePlan.fetchAddress);
-    if (!result) {
-        return {
-            ok: false,
-            failure: GL.buildGeocodeEndpointFailurePlan(which, fallbackAddress),
-        };
-    }
-    return { ok: true, result };
-}
-
+function initGeocodeCache() { VoyagrGeocodingOrchestration.initGeocodeCache(); }
+async function showAutocomplete(fieldId) { return VoyagrGeocodingOrchestration.showAutocomplete(fieldId); }
+async function geocodeAddress(address) { return VoyagrGeocodingOrchestration.geocodeAddress(address); }
 async function geocodeLocations(startAddress, endAddress) {
-    const GL = _geocodingLocations();
-    const orch = GL.buildGeocodeLocationsOrchestrationPlan();
-    if (orch.setGeocodingFlag) isGeocoding = true;
-
-    const startInput = document.getElementById(orch.startInputId);
-    const endInput = document.getElementById(orch.endInputId);
-    const pairPlans = GL.buildGeocodeLocationsInputPlan({
-        startStored: GL.readStoredLocationFromDataset(startInput?.dataset, startAddress),
-        startAddress,
-        endStored: GL.readStoredLocationFromDataset(endInput?.dataset, endAddress),
-        endAddress,
-    });
-    showStatus(pairPlans.loadingStatusMessage, 'loading');
-
-    try {
-        const startResolved = await resolveGeocodeEndpoint(GL, pairPlans.startPlan, 'start', startAddress);
-        if (!startResolved.ok) {
-            return applyGeocodeEndpointFailureFromPlan(
-                GL.buildGeocodeEndpointFailureApplyPlan(
-                    GL.buildGeocodeEndpointFailureExecutePlan(startResolved.failure)
-                )
-            );
-        }
-
-        const endResolved = await resolveGeocodeEndpoint(GL, pairPlans.endPlan, 'end', endAddress);
-        if (!endResolved.ok) {
-            return applyGeocodeEndpointFailureFromPlan(
-                GL.buildGeocodeEndpointFailureApplyPlan(
-                    GL.buildGeocodeEndpointFailureExecutePlan(endResolved.failure)
-                )
-            );
-        }
-
-        return applyGeocodePairOutcomeFromPlan(
-            GL.buildGeocodePairOutcomeApplyPlan(
-                GL.buildGeocodePairOutcomeExecutePlan(
-                    GL.buildGeocodePairSuccessOutcomePlan(startResolved.result, endResolved.result)
-                )
-            )
-        );
-    } catch (error) {
-        const execute = GL.buildGeocodePairOutcomeExecutePlan(
-            GL.buildGeocodePairErrorOutcomePlan(error.message)
-        );
-        if (execute.errorLogPrefix) console.log(execute.errorLogPrefix, error);
-        return applyGeocodePairOutcomeFromPlan(
-            GL.buildGeocodePairOutcomeApplyPlan(execute)
-        );
-    }
+    return VoyagrGeocodingOrchestration.geocodeLocations(startAddress, endAddress);
 }
-
-function applyGeocodeEndpointFailureFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return null;
-    showStatus(apply.statusMessage, apply.statusType);
-    if (apply.clearGeocodingFlag) isGeocoding = false;
-    return apply.returnValue;
-}
-
-function applyGeocodePairOutcomeFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return null;
-    showStatus(apply.statusMessage, apply.statusType);
-    if (apply.clearGeocodingFlag) isGeocoding = false;
-    return apply.returnValue;
-}
+function pickLocationFromMap(field) { VoyagrGeocodingOrchestration.pickLocationFromMap(field); }
+function getAutocompleteDropdown(fieldId) { return VoyagrGeocodingOrchestration.getAutocompleteDropdown(fieldId); }
 
 // ===== TURN-BY-TURN NAVIGATION FUNCTIONS =====
 function applyNavStartRuntimeFromPlan(apply) {
@@ -14744,6 +13954,9 @@ VoyagrPorcupineOrchestration.bind(getPorcupineOrchestrationRuntime());
 VoyagrGpsOrchestration.bind(getGpsOrchestrationRuntime());
 VoyagrLiveDataRefreshOrchestration.bind(getLiveDataRefreshOrchestrationRuntime());
 VoyagrTripHistoryOrchestration.bind(getTripHistoryOrchestrationRuntime());
+VoyagrRouteSavingOrchestration.bind(getRouteSavingOrchestrationRuntime());
+VoyagrGeocodingOrchestration.bind(getGeocodingOrchestrationRuntime());
+VoyagrSpeedWidgetOrchestration.bind(getSpeedWidgetOrchestrationRuntime());
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict

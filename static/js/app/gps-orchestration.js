@@ -194,7 +194,7 @@
             rt().s('_lastActiveManeuverIdx',  resetPlan.newLastActiveManeuverIdx);
         }
 
-        const state = _getSpeedLimitFetchState();
+        const state = rt().call.getSpeedLimitFetchState();
         if (state) {
             if (resetPlan.resetFetchTimestamps) {
                 state.lastFetchAt = 0;
