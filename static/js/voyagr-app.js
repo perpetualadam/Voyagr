@@ -5283,6 +5283,31 @@ window.addEventListener('load', () => {
     initPhase3Features();
 });
 
+// ===== PHASE 3 FEATURES ORCHESTRATION =====
+// Orchestration lives in static/js/app/phase3-features-orchestration.js (bound at file end).
+
+function getPhase3FeaturesOrchestrationRuntime() {
+    return {
+        phase3Features: () => _phase3Features(),
+        gestureControl: () => _gestureControl(),
+        mapControls: () => _mapControls(),
+        toggleUI: () => _toggleUI(),
+        setGestureEnabled: (val) => { gestureEnabled = val; },
+        setGestureSensitivity: (val) => { gestureSensitivity = val; },
+        setGestureAction: (val) => { gestureAction = val; },
+        setIsAREnabled: (val) => { isAREnabled = val; },
+        call: {
+            updateBatteryStatus,
+            loadMLPredictions,
+            handleDeviceMotion,
+        },
+    };
+}
+
+function initPhase3Features() {
+    VoyagrPhase3FeaturesOrchestration.initPhase3Features();
+}
+
 // ===== PHASE 3 FEATURES: GESTURE CONTROL =====
 
 let lastAcceleration = { x: 0, y: 0, z: 0 };
@@ -5292,90 +5317,6 @@ let gestureEnabled = true;
 let gestureSensitivity = 'medium';
 let gestureAction = 'recalculate';
 
-function applyGestureSettingsFromApiPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-    const TU = _toggleUI();
-    gestureEnabled = execute.enabled;
-    gestureSensitivity = execute.sensitivity;
-    gestureAction = execute.action;
-
-    const toggle = document.getElementById(execute.toggle.id);
-    if (toggle) TU.applyToggleButton(toggle, execute.toggle.enabled);
-
-    const sensitivityEl = document.getElementById(execute.sensitivitySelect.id);
-    if (sensitivityEl) sensitivityEl.value = execute.sensitivitySelect.value;
-
-    const actionEl = document.getElementById(execute.actionSelect.id);
-    if (actionEl) actionEl.value = execute.actionSelect.value;
-
-    const settingsPanel = document.getElementById(execute.settingsPanel.id);
-    if (settingsPanel) settingsPanel.style.display = execute.settingsPanel.display;
-
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.addDeviceMotionListener) {
-        window.addEventListener('devicemotion', handleDeviceMotion);
-    }
-}
-
-/**
- * initPhase3Features function
- * @function initPhase3Features
- * @returns {*} Return value description
- */
-function initPhase3Features() {
-    const P3 = _phase3Features();
-    const orch = P3.buildInitPhase3FeaturesOrchestrationPlan();
-    if (window[orch.initFlagProperty]) {
-        return;
-    }
-    window[orch.initFlagProperty] = true;
-
-    if (orch.loadGestureFromApi) {
-        const GC = _gestureControl();
-        const fetchPlan = GC.buildLoadGestureSettingsFetchPlan();
-        fetch(fetchPlan.url)
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.success) {
-                    applyGestureSettingsFromApiPlan(
-                        GC.buildApplyGestureSettingsFromApiExecutePlan(data.settings, {
-                            hasDeviceMotion: 'DeviceMotionEvent' in window,
-                        })
-                    );
-                }
-            })
-            .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
-    }
-
-    if (orch.initBatteryMonitoring) {
-        const batteryPlan = P3.buildInitBatteryMonitoringPlan({
-            hasGetBattery: 'getBattery' in navigator,
-        });
-        if (batteryPlan.shouldInit) {
-            navigator.getBattery().then((battery) => {
-                updateBatteryStatus(battery);
-                (batteryPlan.listeners || []).forEach((eventName) => {
-                    battery.addEventListener(eventName, () => updateBatteryStatus(battery));
-                });
-            });
-        }
-    }
-
-    if (orch.loadMlPredictions) loadMLPredictions();
-
-    if (orch.loadArSetting) {
-        const arExecute = P3.buildLoadArSettingExecutePlan();
-        const MC = _mapControls();
-        const TU = _toggleUI();
-        if (arExecute.shouldApply) {
-            isAREnabled = MC.isAREnabledInStorage(localStorage);
-            const arToggleBtn = document.getElementById(arExecute.toggleId);
-            if (arToggleBtn) {
-                TU.applyToggleButton(arToggleBtn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
-            }
-        }
-    }
-}
 /**
  * handleDeviceMotion function
  * @function handleDeviceMotion
@@ -5531,8 +5472,7 @@ function updateBatteryStatus(battery) {
     const BS = _batterySaving();
     const level = Math.round(battery.level * 100);
 
-    // Update battery level for adaptive refresh intervals (no visible widget)
-    currentBatteryLevel = battery.level;
+    VoyagrBatteryMonitoringOrchestration.setCurrentBatteryLevel(battery.level);
 
     const autoEnable = BS.buildBatteryAutoEnablePlan({
         levelPercent: level,
@@ -6196,8 +6136,7 @@ window.addEventListener('load', () => {
     }
 });
 
-// ===== PHASE 3: Initialize battery monitoring =====
-initBatteryMonitoring();
+// ===== PHASE 3: Initialize battery monitoring (bound at file end) =====
 
 // ===== GPS TRACKING SYSTEM =====
 // Variables initialized at the top level
@@ -6886,8 +6825,6 @@ let updatePending = false;
 let appStateBeforeReload = null;
 
 // ===== BATTERY-AWARE REFRESH (PHASE 3) =====
-let currentBatteryLevel = 1.0;
-let batteryStatusMonitor = null;
 
 // ===== VOICE CONTROL ORCHESTRATION =====
 // Orchestration lives in static/js/app/voice-control-orchestration.js (bound at file end).
@@ -6965,71 +6902,35 @@ const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
 
 let isGeocoding = false;
 
-/**
- * setupMapMoveHandler function
- * @function setupMapMoveHandler
- * @returns {void}
- */
-function setupMapMoveHandler() {
-    const MC = _mapControls();
-    const setup = MC.buildMapMoveHandlerSetupPlan({ hasMap: !!map });
-    if (!setup.shouldBind) {
-        if (setup.deferLogMessage) console.log(setup.deferLogMessage);
-        return;
-    }
+// ===== MAP EXPLORE ORCHESTRATION =====
+// Orchestration lives in static/js/app/map-explore-orchestration.js (bound at file end).
 
-    map.on(setup.eventName, () => {
-        const sync = MC.buildMapCenterSyncExecutePlan({
-            routeInProgress,
-            isTrackingActive,
-            center: map.getCenter(),
-        });
-        if (sync.shouldSync) {
-            currentLat = sync.lat;
-            currentLon = sync.lng;
-        }
-    });
+function getMapExploreOrchestrationRuntime() {
+    return {
+        mapControls: () => _mapControls(),
+        getMap: () => map,
+        getRouteInProgress: () => routeInProgress,
+        getIsTrackingActive: () => isTrackingActive,
+        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
+        setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
+        getMapFollowingActive: () => mapFollowingActive,
+        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getCurrentLat: () => currentLat,
+        setCurrentLat: (val) => { currentLat = val; },
+        getCurrentLon: () => currentLon,
+        setCurrentLon: (val) => { currentLon = val; },
+        call: {
+            updateRecenterButtonVisibility,
+        },
+    };
+}
+
+function setupMapMoveHandler() {
+    VoyagrMapExploreOrchestration.setupMapMoveHandler();
 }
 
 function setupMapExploreHandlers() {
-    const MC = _mapControls();
-    const setup = MC.buildMapExploreHandlersSetupPlan({
-        hasMap: !!map,
-        alreadyInitialized: !!window[MC.MAP_EXPLORE_HANDLERS_FLAG],
-    });
-    if (!setup.shouldBind) {
-        if (setup.deferLogMessage) console.log(setup.deferLogMessage);
-        return;
-    }
-    if (setup.markInitialized) {
-        window[setup.initializedFlagProperty] = true;
-    }
-
-    const onUserMapGesture = (e) => {
-        const gesture = MC.buildMapExploreGestureExecutePlan({
-            hasOriginalEvent: !!(e && e.originalEvent),
-            routeInProgress,
-            isTrackingActive,
-            zoomAndFollowEnabled,
-            mapFollowingActive,
-        });
-        if (!gesture.shouldReact) return;
-        if (gesture.pauseMapFollowing) {
-            mapFollowingActive = false;
-            console.log(gesture.pauseFollowLogMessage);
-        }
-        if (gesture.updateRecenterVisibility) {
-            updateRecenterButtonVisibility();
-        }
-    };
-
-    setup.gestureEvents.forEach((eventName) => map.on(eventName, onUserMapGesture));
-    map.on(setup.moveEndEvent, () => {
-        const moveEnd = MC.buildMapExploreMoveEndExecutePlan();
-        if (moveEnd.updateRecenterVisibility) {
-            updateRecenterButtonVisibility();
-        }
-    });
+    VoyagrMapExploreOrchestration.setupMapExploreHandlers();
 }
 
 // Initialize voice recognition on page load
@@ -7091,7 +6992,7 @@ function getLiveDataRefreshOrchestrationRuntime() {
         liveDataRefresh: () => _liveDataRefresh(),
         eta: () => _eta(),
         getRouteInProgress: () => routeInProgress,
-        getCurrentBatteryLevel: () => currentBatteryLevel,
+        getCurrentBatteryLevel: () => VoyagrBatteryMonitoringOrchestration.getCurrentBatteryLevel(),
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
@@ -7344,53 +7245,20 @@ function getAdaptiveRefreshInterval(baseInterval) {
     return VoyagrLiveDataRefreshOrchestration.getAdaptiveRefreshInterval(baseInterval);
 }
 
-/**
- * initBatteryMonitoring function
- * @function initBatteryMonitoring
- * @returns {*} Return value description
- */
+// ===== BATTERY MONITORING ORCHESTRATION =====
+// Orchestration lives in static/js/app/battery-monitoring-orchestration.js (bound at file end).
+
+function getBatteryMonitoringOrchestrationRuntime() {
+    return {
+        getRouteInProgress: () => routeInProgress,
+        call: {
+            sendNotification,
+        },
+    };
+}
+
 function initBatteryMonitoring() {
-    // Ensure we only attach battery listeners once per page load
-    if (window.__voyagrBatteryMonitoringInitialized) {
-        return;
-    }
-    window.__voyagrBatteryMonitoringInitialized = true;
-
-    // Monitor battery status for adaptive refresh intervals
-    if ('getBattery' in navigator) {
-        navigator.getBattery().then(battery => {
-            currentBatteryLevel = battery.level;
-            console.log('[Battery] Initial level:', (currentBatteryLevel * 100).toFixed(0) + '%');
-
-            battery.addEventListener('levelchange', () => {
-                currentBatteryLevel = battery.level;
-                console.log('[Battery] Level changed:', (currentBatteryLevel * 100).toFixed(0) + '%');
-
-                // If battery drops below 30%, notify user
-                if (currentBatteryLevel < 0.30 && routeInProgress) {
-                    sendNotification('🔋 Low Battery',
-                        `Battery at ${(currentBatteryLevel * 100).toFixed(0)}%. Refresh intervals adjusted.`,
-                        'warning');
-                }
-            });
-
-            battery.addEventListener('chargingtimechange', () => {
-                console.log('[Battery] Charging time changed');
-            });
-
-            battery.addEventListener('dischargingtimechange', () => {
-                console.log('[Battery] Discharging time changed');
-            });
-
-            battery.addEventListener('chargingchange', () => {
-                console.log('[Battery] Charging status changed:', battery.charging ? 'charging' : 'discharging');
-            });
-        }).catch(e => {
-            console.log('[Battery] API error:', e);
-        });
-    } else {
-        console.log('[Battery] Battery Status API not supported');
-    }
+    VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 }
 
 // ===== LOCATION FUNCTIONS =====
@@ -8444,12 +8312,17 @@ VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRunti
 VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
 VoyagrSettingsOrchestration.bind(getSettingsOrchestrationRuntime());
 VoyagrVoiceControlOrchestration.bind(getVoiceControlOrchestrationRuntime());
+VoyagrMapExploreOrchestration.bind(getMapExploreOrchestrationRuntime());
+VoyagrBatteryMonitoringOrchestration.bind(getBatteryMonitoringOrchestrationRuntime());
+VoyagrPhase3FeaturesOrchestration.bind(getPhase3FeaturesOrchestrationRuntime());
 VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
+
+VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 
 
 
