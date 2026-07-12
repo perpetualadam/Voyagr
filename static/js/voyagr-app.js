@@ -6585,18 +6585,17 @@ async function getRouteTrafficAhead(forceFresh = false) {
  */
 async function checkTrafficAndReroute() {
     const TC = _trafficChange();
-    const preflight = TC.buildCheckTrafficAndReroutePreflightPlan({
+    const entry = TC.buildCheckTrafficAndRerouteEntryOrchestrationPlan({
         routeInProgress,
         currentLat,
         currentLon,
     });
-    if (!preflight.shouldCheck) return;
+    if (!entry.preflight.shouldCheck) return;
 
-    const applyBase = TC.buildCheckTrafficAndRerouteApplyPlan({});
-    console.log(applyBase.samplingLogMessage);
+    console.log(entry.applyBase.samplingLogMessage);
 
     try {
-        const flow = await getRouteTrafficAhead(preflight.forceFresh);
+        const flow = await getRouteTrafficAhead(entry.preflight.forceFresh);
         lastTrafficUpdateTime = Date.now();
 
         const orch = TC.buildCheckTrafficAndRerouteOrchestrationPlan({
@@ -6619,7 +6618,7 @@ async function checkTrafficAndReroute() {
             );
         }
     } catch (error) {
-        console.error(applyBase.errorLogPrefix, error);
+        console.error(entry.applyBase.errorLogPrefix, error);
     }
 }
 
@@ -6642,6 +6641,15 @@ function applyTriggerTrafficBasedRerouteAcceptFromPlan(apply) {
     }
 }
 
+function collectTriggerTrafficBasedRerouteInput(changeType, avoidPoints) {
+    return {
+        destination: resolveNavigationDestination(),
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        changeType,
+        avoidPoints,
+    };
+}
+
 /**
  * Trigger a reroute that actively avoids the congested/closed segments (Lever A).
  * @param {string} changeType - 'severe' | 'congestion'
@@ -6650,12 +6658,9 @@ function applyTriggerTrafficBasedRerouteAcceptFromPlan(apply) {
  */
 async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measuredDelayMin = 0) {
     const TC = _trafficChange();
-    const entry = TC.buildTriggerTrafficBasedRerouteEntryOrchestrationPlan({
-        destination: resolveNavigationDestination(),
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        changeType,
-        avoidPoints,
-    });
+    const entry = TC.buildTriggerTrafficBasedRerouteEntryOrchestrationPlan(
+        collectTriggerTrafficBasedRerouteInput(changeType, avoidPoints)
+    );
     if (!entry.shouldReroute) {
         console.log(entry.blockedLog.logMessage);
         return;
@@ -6695,10 +6700,10 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
  * Manual traffic update button handler
  */
 async function manualTrafficUpdate() {
-    const orch = _trafficChange().buildManualTrafficUpdateOrchestrationPlan();
-    showStatus(orch.startStatus.statusMessage, orch.startStatus.statusType);
+    const entry = _trafficChange().buildManualTrafficUpdateEntryOrchestrationPlan();
+    showStatus(entry.startStatus.statusMessage, entry.startStatus.statusType);
     await checkTrafficAndReroute();
-    showStatus(orch.completeStatus.statusMessage, orch.completeStatus.statusType);
+    showStatus(entry.completeStatus.statusMessage, entry.completeStatus.statusType);
 }
 
 /**
@@ -8163,7 +8168,6 @@ function loadVoicePreferences() {
 }
 
 // ----- Picovoice Porcupine wake word (browser / PWA). -----
-const VOYAGR_PORCUPINE_WAKE_STORAGE_KEY = 'voyagrPorcupineWakeEnabled';
 let porcupineWakePipelineRunning = false;
 let porcupineWakeResumeAfterVoice = false;
 let _porcupineWakeWorker = null;
@@ -8171,9 +8175,9 @@ let _porcupineWakeBridgeEngine = null;
 let _porcupineWakeStarting = false;
 let _porcupineWakeLastDetectionMs = 0;
 
-function picovoiceClientConfigured() {
+function collectPicovoiceClientConfigInput() {
     const PW = _porcupineWake();
-    return PW.isPicovoiceClientConfigured({
+    return PW.buildCollectPicovoiceClientConfigInputPlan({
         assetsOk: !!(typeof window !== 'undefined' && window.VoyagrPicovoiceWebAssetsOk),
         accessKey: typeof window !== 'undefined' ? window.PICOVOICE_ACCESS_KEY : '',
         hasPorcupineWeb: typeof PorcupineWeb !== 'undefined',
@@ -8181,15 +8185,23 @@ function picovoiceClientConfigured() {
     });
 }
 
-function loadPorcupineWakeUi() {
+function picovoiceClientConfigured() {
+    return _porcupineWake().isPicovoiceClientConfigured(collectPicovoiceClientConfigInput());
+}
+
+function collectLoadPorcupineWakeUiInput() {
     const PW = _porcupineWake();
-    const TU = _toggleUI();
-    const execute = PW.buildLoadPorcupineWakeUiExecutePlan({
+    return {
         configured: picovoiceClientConfigured(),
         enabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
-    });
-    if (!execute.shouldApply) return;
+    };
+}
 
+function applyLoadPorcupineWakeUiFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+
+    const PW = _porcupineWake();
+    const TU = _toggleUI();
     const row = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.row);
     const help = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.help);
     const toggle = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
@@ -8207,19 +8219,17 @@ function loadPorcupineWakeUi() {
     }
 }
 
-function togglePorcupineWakeWord() {
+function loadPorcupineWakeUi() {
     const PW = _porcupineWake();
-    const TU = _toggleUI();
-    const button = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
-    if (!button || !picovoiceClientConfigured()) return;
+    applyLoadPorcupineWakeUiFromPlan(
+        PW.buildLoadPorcupineWakeUiEntryOrchestrationPlan(collectLoadPorcupineWakeUiInput()).execute
+    );
+}
 
-    const collected = PW.buildTogglePorcupineWakeWordCollectPlan({
-        currentEnabled: button.classList.contains('active'),
-    });
-    const execute = PW.buildTogglePorcupineWakeWordExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
+function applyTogglePorcupineWakeWordFromPlan(execute, button) {
+    if (!execute || !execute.shouldApply || !button) return;
 
-    TU.applyLabeledToggleButton(button, execute.toggle.enabled);
+    _toggleUI().applyLabeledToggleButton(button, execute.toggle.enabled);
     localStorage.setItem(execute.storageKey, execute.storageValue);
     if (execute.clearResumeAfterVoice) porcupineWakeResumeAfterVoice = false;
     if (execute.startPipeline) void startPorcupineWakePipeline();
@@ -8228,13 +8238,33 @@ function togglePorcupineWakeWord() {
     if (execute.saveAllSettings) saveAllSettings();
 }
 
-function maybeResumePorcupineWakeAfterVoice() {
+function togglePorcupineWakeWord() {
     const PW = _porcupineWake();
-    const resume = PW.buildPorcupineResumeAfterVoicePlan({
+    const button = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
+    if (!button || !picovoiceClientConfigured()) return;
+
+    applyTogglePorcupineWakeWordFromPlan(
+        PW.buildTogglePorcupineWakeWordEntryOrchestrationPlan(
+            button.classList.contains('active')
+        ).execute,
+        button
+    );
+}
+
+function collectPorcupineResumeAfterVoiceInput() {
+    const PW = _porcupineWake();
+    return {
         resumeFlag: porcupineWakeResumeAfterVoice,
         storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
         configured: picovoiceClientConfigured(),
-    });
+    };
+}
+
+function maybeResumePorcupineWakeAfterVoice() {
+    const PW = _porcupineWake();
+    const resume = PW.buildPorcupineResumeAfterVoiceEntryOrchestrationPlan(
+        collectPorcupineResumeAfterVoiceInput()
+    ).resume;
     if (resume.clearResumeFlag) porcupineWakeResumeAfterVoice = false;
     if (resume.shouldResume) void startPorcupineWakePipeline();
 }
@@ -8296,14 +8326,16 @@ async function stopPorcupineWakePipeline() {
 
 async function startPorcupineWakePipeline() {
     const PW = _porcupineWake();
-    const preflight = PW.buildPorcupinePipelinePreflightPlan({
-        configured: picovoiceClientConfigured(),
-        storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
-        pipelineRunning: porcupineWakePipelineRunning,
-        starting: _porcupineWakeStarting,
-        protocol: typeof location !== 'undefined' ? location.protocol : '',
-        hostname: typeof location !== 'undefined' ? location.hostname : '',
-    });
+    const preflight = PW.buildPorcupinePipelinePreflightPlan(
+        PW.buildCollectPorcupinePipelinePreflightInputPlan({
+            configured: picovoiceClientConfigured(),
+            storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
+            pipelineRunning: porcupineWakePipelineRunning,
+            starting: _porcupineWakeStarting,
+            protocol: typeof location !== 'undefined' ? location.protocol : '',
+            hostname: typeof location !== 'undefined' ? location.hostname : '',
+        })
+    );
     if (!preflight.shouldStart) {
         if (preflight.reason === 'needs_https') {
             console.warn(preflight.warningLog);
@@ -8380,7 +8412,7 @@ async function startPorcupineWakePipeline() {
 
 async function onPorcupineWakeHotword() {
     const PW = _porcupineWake();
-    const execute = PW.buildPorcupineWakeHotwordExecutePlan();
+    const execute = PW.buildPorcupineWakeHotwordEntryOrchestrationPlan().execute;
     if (execute.setResumeAfterVoice) porcupineWakeResumeAfterVoice = true;
     if (execute.stopPipeline) await stopPorcupineWakePipeline();
     if (execute.speakMessage) speakMessage(execute.speakMessage, execute.speakPriority);
@@ -8427,11 +8459,12 @@ function toggleVoiceAnnouncements() {
     );
 }
 
-async function resolveParkingDestinationCoords(lastRoute, endInput) {
+function collectResolveParkingDestinationInput(lastRoute, endInput) {
     const MP = _multimodalParking();
-    const idx = routeOptions && routeOptions.length > 0
-        ? Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1))
-        : 0;
+    const idx = MP.buildResolveParkingDestinationSelectedRouteIndexPlan(
+        routeOptions && routeOptions.length,
+        selectedRouteIndex
+    );
     const endEl = document.getElementById('end');
     let endElementCoords = null;
     if (endEl && endEl.dataset.lat && endEl.dataset.lon) {
@@ -8442,21 +8475,29 @@ async function resolveParkingDestinationCoords(lastRoute, endInput) {
         }
     }
 
-    let resolved = MP.resolveParkingDestinationCoordsFromSources({
+    return MP.buildCollectResolveParkingDestinationInputPlan({
         lastRoute: lastRoute || {},
         selectedRouteOption: routeOptions && routeOptions[idx],
         endElementCoords,
         endInput,
-    }, decodePolyline);
+    });
+}
+
+async function resolveParkingDestinationCoords(lastRoute, endInput) {
+    const MP = _multimodalParking();
+    const sources = collectResolveParkingDestinationInput(lastRoute, endInput);
+
+    let resolved = MP.resolveParkingDestinationCoordsFromSources(sources, decodePolyline);
 
     if (resolved.needsGeocode && endInput && typeof geocodeLocations === 'function') {
         const geocoded = await geocodeLocations('', endInput);
-        resolved = MP.resolveParkingDestinationCoordsFromSources({
-            lastRoute: lastRoute || {},
-            selectedRouteOption: routeOptions && routeOptions[idx],
-            endElementCoords,
-            geocodedEnd: geocoded && geocoded.end,
-        }, decodePolyline);
+        resolved = MP.resolveParkingDestinationCoordsFromSources(
+            MP.buildCollectResolveParkingDestinationInputPlan({
+                ...sources,
+                geocodedEnd: geocoded && geocoded.end,
+            }),
+            decodePolyline
+        );
     }
 
     return resolved.coords || null;
@@ -8490,27 +8531,33 @@ function showParkingEmptyState(message) {
     scrollParkingResultsIntoView();
 }
 
+function collectFindParkingNearDestinationInput() {
+    return {
+        lastRoute: window.lastCalculatedRoute,
+        endInput: document.getElementById('end')?.value || '',
+    };
+}
+
 async function findParkingNearDestination() {
     console.log('[Parking] findParkingNearDestination called');
     console.log('[Parking] lastCalculatedRoute:', window.lastCalculatedRoute);
 
-    if (!window.lastCalculatedRoute) {
-        console.error('[Parking] No route calculated');
-        showStatus('Calculate a route first, then tap Find Parking', 'error');
+    const MP = _multimodalParking();
+    const input = collectFindParkingNearDestinationInput();
+    const entry = MP.buildFindParkingNearDestinationEntryOrchestrationPlan(
+        input.lastRoute,
+        input.endInput
+    );
+    if (!entry.preflight.ok) {
+        console.error('[Parking]', entry.preflight.errorStatusMessage);
+        showStatus(entry.preflight.errorStatusMessage, entry.preflight.errorStatusType);
         return;
     }
 
-    const endInput = document.getElementById('end').value;
-    if (!endInput) {
-        console.error('[Parking] No destination entered');
-        showStatus('Please enter a destination first', 'error');
-        return;
-    }
-
-    showStatus('🔍 Searching for parking near destination...', 'loading');
+    showStatus(entry.preflight.loadingStatusMessage, entry.preflight.loadingStatusType);
 
     try {
-        const endCoords = await resolveParkingDestinationCoords(window.lastCalculatedRoute, endInput);
+        const endCoords = await resolveParkingDestinationCoords(input.lastRoute, input.endInput);
         console.log('[Parking] End coordinates:', endCoords);
 
         if (!endCoords || isNaN(endCoords.lat) || isNaN(endCoords.lon)) {

@@ -97,6 +97,20 @@ describe('traffic reroute dispatch plans', () => {
             .toBe(true);
     });
 
+    test('traffic reroute entry orchestration plans bundle preflight and status', () => {
+        const checkEntry = TC.buildCheckTrafficAndRerouteEntryOrchestrationPlan({
+            routeInProgress: true,
+            currentLat: 51.5,
+            currentLon: -0.1,
+        });
+        expect(checkEntry.preflight.shouldCheck).toBe(true);
+        expect(checkEntry.applyBase.samplingLogMessage).toContain('Sampling');
+
+        const manualEntry = TC.buildManualTrafficUpdateEntryOrchestrationPlan();
+        expect(manualEntry.startStatus.statusMessage).toContain('Updating');
+        expect(manualEntry.completeStatus.statusMessage).toContain('updated');
+    });
+
     test('buildTrafficSampleResponseDispatchPlan skips simulated traffic', () => {
         expect(TC.buildTrafficSampleResponseDispatchPlan(null).action).toBe('none');
         expect(TC.buildTrafficSampleResponseDispatchPlan({ source: 'simulated' }).action)
