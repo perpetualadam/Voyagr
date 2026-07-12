@@ -40,7 +40,7 @@
      * @returns {string}
      */
     function buildOfflineBannerInnerHtml() {
-        return '<span>📡</span><span>You\'re offline — GPS & cached map tiles still work</span>';
+        return '<span>📡</span><span>You\'re offline — GPS, voice guidance & cached map tiles still work</span>';
     }
 
     /**

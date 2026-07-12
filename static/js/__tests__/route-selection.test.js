@@ -37,6 +37,18 @@ describe('route-selection module', () => {
         expect(out.geometry).toBe('encoded');
         expect(out.maneuvers).toHaveLength(1);
     });
+
+    test('buildRoutePayloadFromPersisted keeps route hazards for offline voice warnings', () => {
+        const out = RS.buildRoutePayloadFromPersisted({
+            polyline: [[51.5, -0.1], [51.6, -0.2]],
+            steps: [{ type: 8 }],
+            routeData: {
+                hazards: [{ lat: 51.55, lon: -0.15, type: 'camera_speed' }],
+            },
+        }, jest.fn(() => 'encoded'));
+        expect(out.hazards).toHaveLength(1);
+        expect(out.hazards[0].type).toBe('camera_speed');
+    });
 });
 
 describe('route comparison and selection helpers', () => {

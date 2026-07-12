@@ -15,6 +15,7 @@ describe('offline-navigation module', () => {
     test('buildOfflineBannerInnerHtml includes offline message', () => {
         const html = OFF.buildOfflineBannerInnerHtml();
         expect(html).toContain('offline');
+        expect(html).toContain('voice guidance');
         expect(html).toContain('📡');
     });
 
