@@ -1725,7 +1725,8 @@ h1 {
 }
 
 .theme-preview.dark {
-    background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+    background: linear-gradient(135deg, #1e2430 0%, #0c0c0c 55%, #141820 100%);
+    border: 1px solid #2a3040;
 }
 
 .ml-predictions-section {

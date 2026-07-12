@@ -12,7 +12,7 @@
     var MAP_THEME_STYLE_PATHS = {
         standard: '/map/styles/liberty/style.json',
         satellite: '/static/map/styles/satellite/style.json',
-        dark: '/map/styles/positron/style.json',
+        dark: '/static/map/styles/dark/style.json',
     };
 
     /**

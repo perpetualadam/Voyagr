@@ -237,6 +237,12 @@ function initializeMap() {
     // Minimal style so `new Map` returns immediately (map non-null after initializeMap).
     // Real vector/raster style is fetched asynchronously and applied via setStyle — avoids
     // blocking the main thread on a synchronous XHR.
+    const mapTheme =
+        typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+    const bootstrapBackgroundColor =
+        mapTheme === 'dark' ? '#0c0c0c' : mapTheme === 'satellite' ? '#0d1114' : '#d4dbe8';
     const VOYAGR_BOOTSTRAP_STYLE = {
         version: 8,
         name: 'voyagr-bootstrap',
@@ -245,20 +251,16 @@ function initializeMap() {
             {
                 id: 'voyagr-bootstrap-bg',
                 type: 'background',
-                paint: { 'background-color': '#d4dbe8' }
+                paint: { 'background-color': bootstrapBackgroundColor }
             }
         ]
     };
 
-    const mapTheme =
-        typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
-            : 'standard';
     let VECTOR_STYLE_PATH;
     if (mapTheme === 'satellite') {
         VECTOR_STYLE_PATH = '/static/map/styles/satellite/style.json';
     } else if (mapTheme === 'dark') {
-        VECTOR_STYLE_PATH = '/map/styles/positron/style.json';
+        VECTOR_STYLE_PATH = '/static/map/styles/dark/style.json';
     } else {
         VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
     }

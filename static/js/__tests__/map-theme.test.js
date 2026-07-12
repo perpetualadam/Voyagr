@@ -23,6 +23,12 @@ describe('map-theme module', () => {
         expect(plan.chosenUrl).toBe('https://app.test/fallback/style.json');
     });
 
+    test('dark map theme uses Voyagr dark style not light Positron', () => {
+        expect(MT.MAP_THEME_STYLE_PATHS.dark).toBe('/static/map/styles/dark/style.json');
+        const plan = MT.buildMapThemeStyleUrlsPlan({ theme: 'dark' });
+        expect(plan.chosenPath).toBe('/static/map/styles/dark/style.json');
+    });
+
     test('buildSetMapThemeExecutePlan skips reload when theme unchanged', () => {
         const execute = MT.buildSetMapThemeExecutePlan({
             themeOrEvent: 'standard',
