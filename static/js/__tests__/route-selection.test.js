@@ -1611,6 +1611,16 @@ describe('route overview and single-route display plans', () => {
             .toBe(false);
     });
 
+    test('buildRecalculateRouteWithPreferencesEntryOrchestrationPlan bundles execute plan', () => {
+        const entry = RS.buildRecalculateRouteWithPreferencesEntryOrchestrationPlan({
+            destination: 'London',
+        });
+        expect(entry.execute.shouldRecalculate).toBe(true);
+        expect(entry.execute.switchTab).toBe('navigation');
+        expect(RS.buildRecalculateRouteWithPreferencesEntryOrchestrationPlan(null).execute.shouldRecalculate)
+            .toBe(false);
+    });
+
     test('buildStartNavigationExecutePlan hides nav buttons and collapses sheet', () => {
         const execute = RS.buildStartNavigationExecutePlan({ destination: 'London' });
         expect(execute.shouldStart).toBe(true);
@@ -1768,6 +1778,32 @@ describe('route overview and single-route display plans', () => {
             isStyleLoaded: false,
             waitForIdleIfStyleNotLoaded: false,
         }).action).toBe('skip');
+    });
+
+    test('buildBringRoutesToTopRetryStepApplyPlan bundles attempt logs and outcome', () => {
+        const execute = RS.buildBringRoutesToTopExecutePlan(
+            [{ id: 'route-layer-0' }],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }]
+        );
+        const step = RS.buildBringRoutesToTopRetryStepApplyPlan(execute, 0, {
+            'route-layer-0': true,
+        });
+        expect(step.shouldAttempt).toBe(true);
+        expect(step.layerMoves).toHaveLength(1);
+        expect(step.outcome.action).toBe('success');
+    });
+
+    test('buildBringRoutesToTopStartupScheduleApplyPlan gates skip startup', () => {
+        const execute = RS.buildBringRoutesToTopExecutePlan(
+            [{ id: 'route-layer-0' }],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }]
+        );
+        expect(RS.buildBringRoutesToTopStartupScheduleApplyPlan(execute, {
+            isStyleLoaded: true,
+        }).shouldSchedule).toBe(true);
+        expect(RS.buildBringRoutesToTopStartupScheduleApplyPlan(execute, {
+            isStyleLoaded: false,
+        }).startup.action).toBe('wait_idle');
     });
 
     test('buildBringRoutesToTopLayerPresencePlan tracks missing layer ids', () => {
