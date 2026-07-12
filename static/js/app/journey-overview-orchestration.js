@@ -6,12 +6,30 @@
     'use strict';
 
     var runtime = null;
+    var journeyOverviewActive = false;
+    var savedMapState = null;
 
     function rt() {
         if (!runtime) {
             throw new Error('[JourneyOverview] Orchestration runtime not bound');
         }
         return runtime;
+    }
+
+    function getJourneyOverviewActive() {
+        return journeyOverviewActive;
+    }
+
+    function setJourneyOverviewActive(val) {
+        journeyOverviewActive = !!val;
+    }
+
+    function getSavedMapState() {
+        return savedMapState;
+    }
+
+    function setSavedMapState(val) {
+        savedMapState = val;
     }
 
     function applyJourneyOverviewButtonUi(btn, overviewActive) {
@@ -25,9 +43,9 @@
     function exitJourneyOverviewForRecenter() {
         var MC = rt().mapControls();
         var exit = MC.buildRecenterJourneyOverviewExitPlan();
-        rt().setJourneyOverviewActive(exit.journeyOverviewActive);
+        setJourneyOverviewActive(exit.journeyOverviewActive);
         applyJourneyOverviewButtonUi(document.getElementById(exit.journeyBtnId), false);
-        if (exit.clearSavedMapState) rt().setSavedMapState(null);
+        if (exit.clearSavedMapState) setSavedMapState(null);
     }
 
     function toggleJourneyOverview() {
@@ -36,7 +54,7 @@
         var preflight = MC.buildToggleJourneyOverviewPreflightPlan({
             routeInProgress: rt().getRouteInProgress(),
             routePolylineLength: routePolyline ? routePolyline.length : 0,
-            journeyOverviewActive: rt().getJourneyOverviewActive(),
+            journeyOverviewActive: getJourneyOverviewActive(),
         });
         if (!preflight.shouldToggle) {
             rt().call.showStatus(preflight.statusMessage, preflight.statusType);
@@ -61,7 +79,7 @@
                 routePolyline: routePolyline,
             });
 
-            rt().setSavedMapState(activate.saveMapState);
+            setSavedMapState(activate.saveMapState);
             rt().setMapFollowingActive(activate.mapFollowingActive);
             if (activate.fitBounds) {
                 mapLibre.fitMapBounds(
@@ -70,7 +88,7 @@
                     { padding: activate.fitBounds.padding }
                 );
             }
-            rt().setJourneyOverviewActive(activate.journeyOverviewActive);
+            setJourneyOverviewActive(activate.journeyOverviewActive);
             applyJourneyOverviewButtonUi(btn, activate.overviewButtonActive);
             rt().call.showStatus(activate.statusMessage, activate.statusType);
             console.log(activate.logMessage);
@@ -80,9 +98,9 @@
 
         var deactivate = MC.buildToggleJourneyOverviewDeactivatePlan({
             zoomAndFollowEnabled: rt().getZoomAndFollowEnabled(),
-            savedMapState: rt().getSavedMapState(),
+            savedMapState: getSavedMapState(),
         });
-        rt().setJourneyOverviewActive(deactivate.journeyOverviewActive);
+        setJourneyOverviewActive(deactivate.journeyOverviewActive);
         if (deactivate.restoreMapFollowing) {
             rt().setMapFollowingActive(true);
         }
@@ -90,7 +108,7 @@
             map.flyTo(deactivate.flyTo);
         }
         if (deactivate.clearSavedMapState) {
-            rt().setSavedMapState(null);
+            setSavedMapState(null);
         }
         applyJourneyOverviewButtonUi(btn, deactivate.overviewButtonActive);
         rt().call.showStatus(deactivate.statusMessage, deactivate.statusType);
@@ -104,6 +122,10 @@
 
     var api = {
         bind: bind,
+        getJourneyOverviewActive: getJourneyOverviewActive,
+        setJourneyOverviewActive: setJourneyOverviewActive,
+        getSavedMapState: getSavedMapState,
+        setSavedMapState: setSavedMapState,
         toggleJourneyOverview: toggleJourneyOverview,
         applyJourneyOverviewButtonUi: applyJourneyOverviewButtonUi,
         exitJourneyOverviewForRecenter: exitJourneyOverviewForRecenter,

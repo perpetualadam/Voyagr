@@ -1865,7 +1865,7 @@ function getMapRecenterOrchestrationRuntime() {
         getCurrentLon: () => currentLon,
         getRouteInProgress: () => routeInProgress,
         getIsTrackingActive: () => isTrackingActive,
-        getJourneyOverviewActive: () => journeyOverviewActive,
+        getJourneyOverviewActive: () => VoyagrJourneyOverviewOrchestration.getJourneyOverviewActive(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
         getMapFollowingActive: () => mapFollowingActive,
@@ -1892,10 +1892,6 @@ function applyZoomFollowButtonUi(btn, enabled) {
 function updateRecenterButtonVisibility() { VoyagrMapRecenterOrchestration.updateRecenterButtonVisibility(); }
 function recenterOnVehicle() { VoyagrMapRecenterOrchestration.recenterOnVehicle(); }
 
-// Journey Overview state
-let journeyOverviewActive = false;
-let savedMapState = null;
-
 // ===== JOURNEY OVERVIEW ORCHESTRATION =====
 // Orchestration lives in static/js/app/journey-overview-orchestration.js (bound at file end).
 
@@ -1907,10 +1903,6 @@ function getJourneyOverviewOrchestrationRuntime() {
         getRouteInProgress: () => routeInProgress,
         getRoutePolyline: () => routePolyline,
         getRouteOptions: () => routeOptions,
-        getJourneyOverviewActive: () => journeyOverviewActive,
-        setJourneyOverviewActive: (val) => { journeyOverviewActive = val; },
-        getSavedMapState: () => savedMapState,
-        setSavedMapState: (val) => { savedMapState = val; },
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
@@ -2825,10 +2817,10 @@ function getNavigationLifecycleOrchestrationRuntime() {
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
-        getJourneyOverviewActive: () => journeyOverviewActive,
-        setJourneyOverviewActive: (val) => { journeyOverviewActive = val; },
-        getSavedMapState: () => savedMapState,
-        setSavedMapState: (val) => { savedMapState = val; },
+        getJourneyOverviewActive: () => VoyagrJourneyOverviewOrchestration.getJourneyOverviewActive(),
+        setJourneyOverviewActive: (val) => VoyagrJourneyOverviewOrchestration.setJourneyOverviewActive(val),
+        getSavedMapState: () => VoyagrJourneyOverviewOrchestration.getSavedMapState(),
+        setSavedMapState: (val) => VoyagrJourneyOverviewOrchestration.setSavedMapState(val),
         getArModeActive: () => arModeActive,
         getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
         getUpdatePending: () => updatePending,
