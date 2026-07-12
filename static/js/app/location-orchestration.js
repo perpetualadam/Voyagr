@@ -82,6 +82,68 @@
         );
     }
 
+    function swapStartAndDestination() {
+        const startInput = document.getElementById('start');
+        const endInput = document.getElementById('end');
+
+        if (!startInput || !endInput) {
+            rt().call.showStatus('Error: Location inputs not found', 'error');
+            return;
+        }
+
+        const startValue = startInput.value;
+        const startLat = startInput.dataset.lat;
+        const startLon = startInput.dataset.lon;
+        const startDisplayName = startInput.dataset.displayName;
+
+        const endValue = endInput.value;
+        const endLat = endInput.dataset.lat;
+        const endLon = endInput.dataset.lon;
+        const endDisplayName = endInput.dataset.displayName;
+
+        startInput.value = endValue || '';
+        startInput.dataset.lat = endLat || '';
+        startInput.dataset.lon = endLon || '';
+        startInput.dataset.displayName = endDisplayName || '';
+
+        endInput.value = startValue || '';
+        endInput.dataset.lat = startLat || '';
+        endInput.dataset.lon = startLon || '';
+        endInput.dataset.displayName = startDisplayName || '';
+
+        const startMarker = rt().getStartMarker();
+        const endMarker = rt().getEndMarker();
+        if (startMarker && endMarker) {
+            const startLatLng = startMarker.getLatLng();
+            const endLatLng = endMarker.getLatLng();
+            startMarker.setLatLng(endLatLng);
+            endMarker.setLatLng(startLatLng);
+        }
+
+        const swapBtn = document.getElementById('swapLocationsBtn');
+        if (swapBtn) {
+            const domHelpers = rt().domHelpers();
+            swapBtn.style.background = domHelpers.SWAP_LOCATIONS_FLASH_STYLE.background;
+            swapBtn.style.borderColor = domHelpers.SWAP_LOCATIONS_FLASH_STYLE.borderColor;
+            setTimeout(() => {
+                swapBtn.style.background = domHelpers.SWAP_LOCATIONS_REST_STYLE.background;
+                swapBtn.style.borderColor = domHelpers.SWAP_LOCATIONS_REST_STYLE.borderColor;
+            }, domHelpers.SWAP_LOCATIONS_FLASH_MS);
+        }
+
+        rt().call.showStatus('🔄 Start and destination swapped', 'success');
+
+        const hasStart = startInput.value && startInput.dataset.lat && startInput.dataset.lon;
+        const hasEnd = endInput.value && endInput.dataset.lat && endInput.dataset.lon;
+
+        if (hasStart && hasEnd && rt().getRouteLayer()) {
+            console.log('[Swap] Recalculating route after swap...');
+            setTimeout(() => {
+                rt().call.calculateRoute();
+            }, 100);
+        }
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
@@ -90,6 +152,7 @@
         bind: bind,
         getCurrentLocation: getCurrentLocation,
         setCurrentLocation: setCurrentLocation,
+        swapStartAndDestination: swapStartAndDestination,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

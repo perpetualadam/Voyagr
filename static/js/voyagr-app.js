@@ -462,111 +462,36 @@ function loadUnitPreferences() {
     applyDomSelectsFromPlan(execute.selects);
 }
 
-// Update distance unit
-/**
- * updateDistanceUnit function
- * @function updateDistanceUnit
- * @returns {*} Return value description
- */
-function updateDistanceUnit() {
-    const U = _units();
-    const execute = U.buildDistanceUnitChangeExecutePlan(
-        document.getElementById('distanceUnit')?.value
-    );
-    if (!execute.shouldChange) return;
+// ===== UNITS PREFERENCES ORCHESTRATION =====
+// Orchestration lives in static/js/app/units-preferences-orchestration.js (bound at file end).
 
-    distanceUnit = execute.newUnit;
-    localStorage.setItem(execute.storageKey, execute.newUnit);
-    if (execute.saveBackend) saveUnitSettingsToBackend();
-    if (execute.updateDisplays) updateAllDistanceDisplays();
-    if (execute.saveSettings) saveAllSettings();
-    showStatus(execute.statusMessage, execute.statusType);
+function getUnitsPreferencesOrchestrationRuntime() {
+    return {
+        units: () => _units(),
+        getDistanceUnit: () => distanceUnit,
+        setDistanceUnit: (val) => { distanceUnit = val; },
+        getCurrencyUnit: () => currencyUnit,
+        setCurrencyUnit: (val) => { currencyUnit = val; },
+        getSpeedUnit: () => speedUnit,
+        setSpeedUnit: (val) => { speedUnit = val; },
+        getTemperatureUnit: () => temperatureUnit,
+        setTemperatureUnit: (val) => { temperatureUnit = val; },
+        call: {
+            updateAllDistanceDisplays,
+            updateAllCostDisplays,
+            updateAllSpeedDisplays,
+            updateAllTemperatureDisplays,
+            saveAllSettings,
+            showStatus,
+        },
+    };
 }
 
-// Update currency unit
-/**
- * updateCurrencyUnit function
- * @function updateCurrencyUnit
- * @returns {*} Return value description
- */
-function updateCurrencyUnit() {
-    const U = _units();
-    const execute = U.buildCurrencyUnitChangeExecutePlan(
-        document.getElementById('currencyUnit')?.value
-    );
-    if (!execute.shouldChange) return;
-
-    currencyUnit = execute.newUnit;
-    localStorage.setItem(execute.storageKey, execute.newUnit);
-    if (execute.saveBackend) saveUnitSettingsToBackend();
-    if (execute.updateDisplays) updateAllCostDisplays();
-    if (execute.saveSettings) saveAllSettings();
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-// Update speed unit
-/**
- * updateSpeedUnit function
- * @function updateSpeedUnit
- * @returns {*} Return value description
- */
-function updateSpeedUnit() {
-    const U = _units();
-    const execute = U.buildSpeedUnitChangeExecutePlan(
-        document.getElementById('speedUnit')?.value
-    );
-    if (!execute.shouldChange) return;
-
-    speedUnit = execute.newUnit;
-    localStorage.setItem(execute.storageKey, execute.newUnit);
-    if (execute.saveBackend) saveUnitSettingsToBackend();
-    if (execute.updateDisplays) updateAllSpeedDisplays();
-    if (execute.saveSettings) saveAllSettings();
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-// Update temperature unit
-/**
- * updateTemperatureUnit function
- * @function updateTemperatureUnit
- * @returns {*} Return value description
- */
-function updateTemperatureUnit() {
-    const U = _units();
-    const execute = U.buildTemperatureUnitChangeExecutePlan(
-        document.getElementById('temperatureUnit')?.value
-    );
-    if (!execute.shouldChange) return;
-
-    temperatureUnit = execute.newUnit;
-    localStorage.setItem(execute.storageKey, execute.newUnit);
-    if (execute.saveBackend) saveUnitSettingsToBackend();
-    if (execute.updateDisplays) updateAllTemperatureDisplays();
-    if (execute.saveSettings) saveAllSettings();
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-// Save unit settings to backend
-/**
- * saveUnitSettingsToBackend function
- * @function saveUnitSettingsToBackend
- * @returns {*} Return value description
- */
-function saveUnitSettingsToBackend() {
-    const request = _units().buildSaveUnitSettingsBackendRequestPlan({
-        distanceUnit,
-        currencyUnit,
-        speedUnit,
-        temperatureUnit,
-    });
-    if (!request.shouldSave) return;
-
-    fetch(request.apiPath, {
-        method: request.method,
-        headers: request.headers,
-        body: JSON.stringify(request.body),
-    }).catch((error) => console.error(request.errorLogPrefix, error));
-}
+function updateDistanceUnit() { VoyagrUnitsPreferencesOrchestration.updateDistanceUnit(); }
+function updateCurrencyUnit() { VoyagrUnitsPreferencesOrchestration.updateCurrencyUnit(); }
+function updateSpeedUnit() { VoyagrUnitsPreferencesOrchestration.updateSpeedUnit(); }
+function updateTemperatureUnit() { VoyagrUnitsPreferencesOrchestration.updateTemperatureUnit(); }
+function saveUnitSettingsToBackend() { VoyagrUnitsPreferencesOrchestration.saveUnitSettingsToBackend(); }
 
 // ===== COMPREHENSIVE PERSISTENT SETTINGS SYSTEM =====
 
@@ -5256,26 +5181,23 @@ function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban')
     applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, currentLat, currentLon);
 }
 
-/**
- * toggleSmartZoom function
- * @function toggleSmartZoom
- * @returns {*} Return value description
- */
-function toggleSmartZoom() {
-    const SZ = _smartZoom();
-    const TU = _toggleUI();
-    const collected = SZ.buildToggleSmartZoomCollectPlan({ currentlyEnabled: smartZoomEnabled });
-    const execute = SZ.buildToggleSmartZoomExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
+// ===== SMART ZOOM ORCHESTRATION =====
+// Orchestration lives in static/js/app/smart-zoom-orchestration.js (bound at file end).
 
-    smartZoomEnabled = execute.enabled;
-    const btn = document.getElementById(execute.toggle.id);
-    if (btn) TU.applyToggleButton(btn, execute.toggle.enabled);
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.saveAllSettings) saveAllSettings();
-    showStatus(execute.statusMessage, execute.statusType);
-    console.log(execute.logMessage, smartZoomEnabled);
+function getSmartZoomOrchestrationRuntime() {
+    return {
+        smartZoom: () => _smartZoom(),
+        toggleUI: () => _toggleUI(),
+        getSmartZoomEnabled: () => smartZoomEnabled,
+        setSmartZoomEnabled: (val) => { smartZoomEnabled = val; },
+        call: {
+            saveAllSettings,
+            showStatus,
+        },
+    };
 }
+
+function toggleSmartZoom() { VoyagrSmartZoomOrchestration.toggleSmartZoom(); }
 
 // Initialize Phase 2 features on page load
 window.addEventListener('load', () => {
@@ -7078,10 +7000,13 @@ function initBatteryMonitoring() {
 
 function getLocationOrchestrationRuntime() {
     return {
+        domHelpers: () => _domHelpers(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
         getStartMarker: () => startMarker,
         setStartMarker: (val) => { startMarker = val; },
+        getEndMarker: () => endMarker,
+        getRouteLayer: () => routeLayer,
         getCurrentLat: () => currentLat,
         setCurrentLat: (val) => { currentLat = val; },
         getCurrentLon: () => currentLon,
@@ -7089,83 +7014,14 @@ function getLocationOrchestrationRuntime() {
         getZoomAnimationDuration: () => ZOOM_ANIMATION_DURATION,
         call: {
             showStatus,
+            calculateRoute,
         },
     };
 }
 
 function getCurrentLocation() { VoyagrLocationOrchestration.getCurrentLocation(); }
 function setCurrentLocation(field) { VoyagrLocationOrchestration.setCurrentLocation(field); }
-
-/**
- * Swap start and destination locations
- * @function swapStartAndDestination
- * @returns {void}
- */
-function swapStartAndDestination() {
-    const startInput = document.getElementById('start');
-    const endInput = document.getElementById('end');
-
-    if (!startInput || !endInput) {
-        showStatus('Error: Location inputs not found', 'error');
-        return;
-    }
-
-    // Store start values
-    const startValue = startInput.value;
-    const startLat = startInput.dataset.lat;
-    const startLon = startInput.dataset.lon;
-    const startDisplayName = startInput.dataset.displayName;
-
-    // Store end values
-    const endValue = endInput.value;
-    const endLat = endInput.dataset.lat;
-    const endLon = endInput.dataset.lon;
-    const endDisplayName = endInput.dataset.displayName;
-
-    // Swap values
-    startInput.value = endValue || '';
-    startInput.dataset.lat = endLat || '';
-    startInput.dataset.lon = endLon || '';
-    startInput.dataset.displayName = endDisplayName || '';
-
-    endInput.value = startValue || '';
-    endInput.dataset.lat = startLat || '';
-    endInput.dataset.lon = startLon || '';
-    endInput.dataset.displayName = startDisplayName || '';
-
-    // Swap markers on the map if they exist
-    if (startMarker && endMarker) {
-        const startLatLng = startMarker.getLatLng();
-        const endLatLng = endMarker.getLatLng();
-        startMarker.setLatLng(endLatLng);
-        endMarker.setLatLng(startLatLng);
-    }
-
-    // Visual feedback on the button
-    const swapBtn = document.getElementById('swapLocationsBtn');
-    if (swapBtn) {
-        const DH = _domHelpers();
-        swapBtn.style.background = DH.SWAP_LOCATIONS_FLASH_STYLE.background;
-        swapBtn.style.borderColor = DH.SWAP_LOCATIONS_FLASH_STYLE.borderColor;
-        setTimeout(() => {
-            swapBtn.style.background = DH.SWAP_LOCATIONS_REST_STYLE.background;
-            swapBtn.style.borderColor = DH.SWAP_LOCATIONS_REST_STYLE.borderColor;
-        }, DH.SWAP_LOCATIONS_FLASH_MS);
-    }
-
-    showStatus('🔄 Start and destination swapped', 'success');
-
-    // Recalculate route if both locations have coordinates and a route exists
-    const hasStart = startInput.value && startInput.dataset.lat && startInput.dataset.lon;
-    const hasEnd = endInput.value && endInput.dataset.lat && endInput.dataset.lon;
-
-    if (hasStart && hasEnd && routeLayer) {
-        console.log('[Swap] Recalculating route after swap...');
-        setTimeout(() => {
-            calculateRoute();
-        }, 100);
-    }
-}
+function swapStartAndDestination() { VoyagrLocationOrchestration.swapStartAndDestination(); }
 
 // ===== AUTO GPS LOCATION FEATURE =====
 /**
@@ -8073,6 +7929,8 @@ VoyagrBatteryMonitoringOrchestration.bind(getBatteryMonitoringOrchestrationRunti
 VoyagrPhase3FeaturesOrchestration.bind(getPhase3FeaturesOrchestrationRuntime());
 VoyagrGestureControlOrchestration.bind(getGestureControlOrchestrationRuntime());
 VoyagrBatterySavingOrchestration.bind(getBatterySavingOrchestrationRuntime());
+VoyagrUnitsPreferencesOrchestration.bind(getUnitsPreferencesOrchestrationRuntime());
+VoyagrSmartZoomOrchestration.bind(getSmartZoomOrchestrationRuntime());
 VoyagrLocationOrchestration.bind(getLocationOrchestrationRuntime());
 VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
