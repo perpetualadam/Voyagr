@@ -2050,130 +2050,47 @@ function updateAllTemperatureDisplays() {
     if (execute.shouldLog) console.log(execute.logMessage);
 }
 
-// ===== TRIP HISTORY FUNCTIONS =====
-let allTrips = [];
+// ===== TRIP HISTORY ORCHESTRATION =====
+// Orchestration lives in static/js/app/trip-history-orchestration.js (bound at file end).
 
-const VOYAGR_LOCAL_TRIPS_KEY = 'voyagrLocalTrips';
-const MAX_LOCAL_TRIPS = 50;
-
-function loadRawLocalTrips() {
-    try {
-        const raw = localStorage.getItem(VOYAGR_LOCAL_TRIPS_KEY);
-        if (!raw) return [];
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-        return [];
-    }
-}
-
-function saveRawLocalTrips(entries) {
-    try {
-        localStorage.setItem(VOYAGR_LOCAL_TRIPS_KEY, JSON.stringify(entries));
-    } catch (e) {
-        console.warn('[TripHistory] localStorage save failed:', e);
-    }
-}
-
-/**
- * Build a completed-trip payload from the active route + form fields.
- * @returns {object|null}
- */
-function buildCompletedTripRecord(route) {
-    const startEl = document.getElementById('start');
-    const endEl = document.getElementById('end');
-    return _tripHistory().buildCompletedTripRecord({
-        route,
-        startEl: startEl ? {
-            value: startEl.value,
-            lat: startEl.dataset.lat,
-            lon: startEl.dataset.lon,
-        } : null,
-        endEl: endEl ? {
-            value: endEl.value,
-            lat: endEl.dataset.lat,
-            lon: endEl.dataset.lon,
-        } : null,
-        routePolyline: typeof routePolyline !== 'undefined' ? routePolyline : null,
-        routingMode: typeof currentRoutingMode !== 'undefined' ? currentRoutingMode : 'auto',
-    });
-}
-
-function updateLocalTripServerId(localId, serverTripId) {
-    const raw = loadRawLocalTrips();
-    const idx = raw.findIndex((e) => e.localId === localId);
-    if (idx >= 0) {
-        raw[idx].serverId = serverTripId;
-        saveRawLocalTrips(raw);
-    }
-}
-
-/**
- * Save journey to device; POST to server when signed in.
- */
-async function persistCompletedTrip(route) {
-    const base = buildCompletedTripRecord(route);
-    if (!base) {
-        console.warn('[TripHistory] Could not build trip record — not saved');
-        return;
-    }
-
-    const localId = Date.now();
-    const entry = {
-        localId,
-        serverId: null,
-        ...base
+function getTripHistoryOrchestrationRuntime() {
+    return {
+        tripHistory: () => _tripHistory(),
+        html: () => _html(),
+        getRoutePolyline: () => routePolyline,
+        getCurrentRoutingMode: () => currentRoutingMode,
+        call: {
+            getSupabaseAccessToken,
+            fetchJsonWithAuth,
+            convertDistance,
+            getDistanceUnit,
+            getCurrencySymbol,
+            showStatus,
+            switchTab,
+            calculateRoute,
+        },
     };
-    const raw = loadRawLocalTrips();
-    raw.unshift(entry);
-    saveRawLocalTrips(raw.slice(0, MAX_LOCAL_TRIPS));
-
-    const token = await getSupabaseAccessToken();
-    if (!token) {
-        console.log('[TripHistory] Saved on device only (not signed in)');
-        return;
-    }
-
-    try {
-        const { res, data } = await fetchJsonWithAuth('/api/trip-history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                start_lat: base.start_lat,
-                start_lon: base.start_lon,
-                end_lat: base.end_lat,
-                end_lon: base.end_lon,
-                start_address: base.start_address,
-                end_address: base.end_address,
-                distance_km: base.distance_km,
-                duration_minutes: base.duration_minutes,
-                fuel_cost: base.fuel_cost,
-                toll_cost: base.toll_cost,
-                caz_cost: base.caz_cost,
-                routing_mode: base.routing_mode
-            })
-        });
-        if (res.ok && data && data.success && data.trip_id) {
-            updateLocalTripServerId(localId, data.trip_id);
-            console.log('[TripHistory] Synced to account, trip_id:', data.trip_id);
-        }
-    } catch (e) {
-        console.warn('[TripHistory] Server save failed (trip remains on device):', e);
-    }
 }
 
-// mergeServerAndLocalTrips — call _tripHistory() at use sites.
-
-function removeLocalTripByLocalId(localId) {
-    const raw = loadRawLocalTrips().filter((e) => e.localId !== localId);
-    saveRawLocalTrips(raw);
+function loadTripHistory() {
+    return VoyagrTripHistoryOrchestration.loadTripHistory();
 }
 
-function removeLocalTripByServerId(serverId) {
-    const raw = loadRawLocalTrips().filter((e) => e.serverId !== serverId);
-    saveRawLocalTrips(raw);
+async function persistCompletedTrip(route) {
+    return VoyagrTripHistoryOrchestration.persistCompletedTrip(route);
 }
 
+function displayTripHistory(trips) {
+    return VoyagrTripHistoryOrchestration.displayTripHistory(trips);
+}
+
+async function recalculateTrip(tripId) {
+    return VoyagrTripHistoryOrchestration.recalculateTrip(tripId);
+}
+
+async function deleteTripHistory(tripId) {
+    return VoyagrTripHistoryOrchestration.deleteTripHistory(tripId);
+}
 
 async function getSupabaseAccessToken() {
     try {
@@ -2200,217 +2117,6 @@ async function fetchJsonWithAuth(url, options = {}) {
     const contentType = res.headers.get('content-type') || '';
     const data = contentType.includes('application/json') ? await res.json() : await res.text();
     return { res, data };
-}
-
-async function loadTripHistory() {
-    const TH = _tripHistory();
-    const entry = TH.buildLoadTripHistoryEntryOrchestrationPlan();
-    const orch = entry.orch;
-    try {
-        const { res, data } = await fetchJsonWithAuth(orch.apiPath);
-        const response = TH.buildLoadTripHistoryResponseExecutePlan(res, data);
-
-        if (response.action === 'auth') {
-            applyLoadTripHistoryAuthOutcomeFromPlan(orch);
-            return;
-        }
-
-        applyLoadTripHistorySuccessOutcomeFromPlan(response.serverTrips);
-    } catch (error) {
-        applyLoadTripHistoryFetchErrorFromPlan(
-            TH.buildLoadTripHistoryFetchErrorExecutePlan(orch),
-            error
-        );
-    }
-}
-
-function applyTripHistoryAuthBannerFromPlan(auth, orch) {
-    const TH = _tripHistory();
-    const list = document.getElementById(orch.listContainerId);
-    const mount = TH.buildLoadTripHistoryAuthBannerMountExecutePlan(auth, {
-        listHasChildren: !!(list && list.firstChild),
-    });
-    if (!mount.shouldMount || !list) return;
-    const banner = document.createElement('div');
-    banner.style.cssText = mount.bannerStyle;
-    banner.textContent = mount.bannerText;
-    list.insertBefore(banner, list.firstChild);
-}
-
-function applyTripHistoryErrorListFromPlan(dom) {
-    if (!dom || !dom.shouldApply) return;
-    const list = document.getElementById(dom.listContainerId);
-    if (list) list.innerHTML = dom.listInnerHtml;
-}
-
-function collectDisplayTripHistoryFmt() {
-    return {
-        escapeHtml: _html().escapeHtml,
-        convertDistance: convertDistance,
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    };
-}
-
-function applyDisplayTripHistoryFromPlan(execute) {
-    if (!execute || !execute.shouldRender) return;
-
-    const listContainer = document.getElementById('tripHistoryList');
-    if (!listContainer) return;
-
-    const TH = _tripHistory();
-    if (execute.listInnerHtml) {
-        listContainer.innerHTML = execute.listInnerHtml;
-    } else if (execute.rows) {
-        listContainer.innerHTML = execute.rows.map((row) =>
-            TH.buildTripHistoryRowHtml(row.trip, row.display)
-        ).join('');
-    }
-
-    if (execute.bindSearch) bindTripHistorySearch();
-}
-
-function applyLoadTripHistoryAuthOutcomeFromPlan(orch) {
-    const TH = _tripHistory();
-    allTrips = TH.mergeServerAndLocalTrips([], loadRawLocalTrips());
-    displayTripHistory(allTrips);
-    const auth = TH.buildLoadTripHistoryAuthExecutePlan(allTrips);
-    applyTripHistoryAuthBannerFromPlan(auth, orch);
-    if (auth.bindSearch) bindTripHistorySearch();
-}
-
-function applyLoadTripHistorySuccessOutcomeFromPlan(serverTrips) {
-    const TH = _tripHistory();
-    allTrips = TH.mergeServerAndLocalTrips(serverTrips || [], loadRawLocalTrips());
-    displayTripHistory(allTrips);
-}
-
-function applyLoadTripHistoryErrorOutcomeFromPlan(errorEntry) {
-    if (!errorEntry || !errorEntry.dom) return;
-    const dom = errorEntry.dom;
-    if (dom.clearAllTrips) allTrips = [];
-    applyTripHistoryErrorListFromPlan(dom);
-    if (dom.bindSearch) bindTripHistorySearch();
-}
-
-function applyLoadTripHistoryFetchErrorFromPlan(errorExecute, error) {
-    if (errorExecute && errorExecute.errorLogPrefix) {
-        console.error(errorExecute.errorLogPrefix, error);
-    }
-    applyLoadTripHistoryErrorOutcomeFromPlan(errorExecute && errorExecute.errorEntry);
-}
-
-/**
- * Filter trips list when user types in trip search (safe for numeric/string timestamps).
- */
-function bindTripHistorySearch() {
-    const TH = _tripHistory();
-    const execute = TH.buildBindTripHistorySearchExecutePlan();
-    if (!execute.shouldBind) return;
-
-    const input = document.getElementById(execute.searchInputId);
-    if (!input) return;
-
-    input.oninput = (e) => {
-        const filter = TH.buildTripHistorySearchFilterPlan(e.target.value);
-        if (filter.showAll) {
-            displayTripHistory(allTrips);
-            return;
-        }
-        displayTripHistory(TH.filterTripsBySearch(allTrips, filter.searchTerm));
-    };
-}
-
-/**
- * displayTripHistory function
- * @function displayTripHistory
- * @param {*} trips - Parameter description
- * @returns {*} Return value description
- */
-function displayTripHistory(trips) {
-    applyDisplayTripHistoryFromPlan(
-        _tripHistory().buildDisplayTripHistoryEntryOrchestrationPlan(
-            trips,
-            collectDisplayTripHistoryFmt()
-        ).execute
-    );
-}
-
-function applyRecalculateTripDomFromPlan(dom) {
-    if (!dom || !dom.shouldApply) return;
-    (dom.inputPatches || []).forEach(({ id, property, value }) => {
-        const el = document.getElementById(id);
-        if (el) el[property] = value;
-    });
-    if (dom.switchTab) switchTab(dom.switchTab);
-    if (dom.scheduleCalculateRoute) {
-        setTimeout(() => calculateRoute(), dom.calculateDelayMs);
-    }
-    showStatus(dom.statusMessage, dom.statusType);
-}
-
-function applyDeleteTripHistoryOutcomeFromPlan(dom, nextTrips) {
-    if (!dom || !dom.shouldApply) return;
-    if (dom.refreshTripList && nextTrips) {
-        allTrips = nextTrips;
-        displayTripHistory(allTrips);
-    }
-    showStatus(dom.statusMessage, dom.statusType);
-}
-
-async function recalculateTrip(tripId) {
-    applyRecalculateTripDomFromPlan(
-        _tripHistory().buildRecalculateTripEntryOrchestrationPlan(tripId, allTrips).apply
-    );
-}
-
-function applyDeleteTripHistoryFetchErrorFromPlan(errorExecute, error) {
-    if (errorExecute && errorExecute.errorLogPrefix) {
-        console.error(errorExecute.errorLogPrefix, error);
-    }
-    if (errorExecute && errorExecute.statusMessage) {
-        showStatus(errorExecute.statusMessage, errorExecute.statusType);
-    }
-}
-
-async function deleteTripHistory(tripId) {
-    const TH = _tripHistory();
-    const entry = TH.buildDeleteTripHistoryEntryOrchestrationPlan(tripId);
-    const orch = entry.orch;
-    if (!confirm(orch.confirmMessage)) return;
-
-    const localEntry = TH.buildDeleteTripHistoryLocalEntryOrchestrationPlan(orch, allTrips);
-    if (localEntry.localExecute.shouldDeleteLocal) {
-        removeLocalTripByLocalId(localEntry.localExecute.localId);
-        applyDeleteTripHistoryOutcomeFromPlan(localEntry.apply, localEntry.nextTrips);
-        return;
-    }
-
-    try {
-        const token = await getSupabaseAccessToken();
-        const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        const response = await fetch(orch.apiPath, {
-            method: 'DELETE',
-            headers,
-        });
-        const data = await response.json();
-        const serverEntry = TH.buildDeleteTripHistoryServerResponseEntryOrchestrationPlan(
-            data,
-            tripId,
-            allTrips
-        );
-
-        if (serverEntry.execute.shouldRemove) {
-            removeLocalTripByServerId(tripId);
-        }
-        applyDeleteTripHistoryOutcomeFromPlan(serverEntry.apply, serverEntry.nextTrips);
-    } catch (error) {
-        applyDeleteTripHistoryFetchErrorFromPlan(
-            TH.buildDeleteTripHistoryFetchErrorExecutePlan(),
-            error
-        );
-    }
 }
 
 // ===== ROUTE COMPARISON FUNCTIONS =====
@@ -7581,6 +7287,9 @@ function computeBaseNavigationETAMinutes() { return VoyagrGpsOrchestration.compu
 function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent) {
     VoyagrGpsOrchestration.renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent);
 }
+async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, forceFetch) {
+    return VoyagrGpsOrchestration.refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, forceFetch);
+}
 function getNavigationRemainingDistanceMeters(lat, lon) {
     return VoyagrGpsOrchestration.getNavigationRemainingDistanceMeters(lat, lon);
 }
@@ -11322,12 +11031,6 @@ let notificationQueue = [];
 let lastNotificationTime = 0;
 const NOTIFICATION_THROTTLE_MS = 3000; // Prevent notification spam
 
-// ===== LIVE DATA REFRESH SYSTEM (PHASE 1) =====
-let trafficRefreshInterval = null;
-let etaRefreshInterval = null;
-let weatherRefreshInterval = null;
-let hazardRefreshInterval = null;
-
 // ===== PWA AUTO-RELOAD SYSTEM (PHASE 2) =====
 let updatePending = false;
 let appStateBeforeReload = null;
@@ -12225,259 +11928,65 @@ window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
 /** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
 
-// ===== PHASE 1: LIVE DATA REFRESH FUNCTIONS =====
-/**
- * startLiveDataRefresh function
- * @function startLiveDataRefresh
- * @returns {*} Return value description
- */
-function startLiveDataRefresh() {
-    const LDR = _liveDataRefresh();
-    const execute = LDR.buildStartLiveDataRefreshExecutePlan({
-        routeInProgress,
-        batteryLevel: currentBatteryLevel,
-        hasBatteryApi: 'getBattery' in navigator,
-    });
-    if (!execute.shouldStart) return;
+// ===== LIVE DATA REFRESH ORCHESTRATION =====
+// Orchestration lives in static/js/app/live-data-refresh-orchestration.js (bound at file end).
 
-    if (execute.stopExistingFirst) stopLiveDataRefresh();
-
-    trafficRefreshInterval = setInterval(() => {
-        refreshTrafficData();
-    }, execute.intervals.traffic);
-
-    etaRefreshInterval = setInterval(() => {
-        updateETACalculation().then(() => announceETAIfNeeded());
-    }, execute.intervals.eta);
-
-    weatherRefreshInterval = setInterval(() => {
-        refreshWeatherData();
-    }, execute.intervals.weather);
-
-    hazardRefreshInterval = setInterval(() => {
-        if (currentLat && currentLon) {
-            processNavigationHazardAlerts(currentLat, currentLon);
-        }
-    }, execute.intervals.hazard);
-
-    console.log(execute.startLogMessage);
-}
-
-/**
- * stopLiveDataRefresh function
- * @function stopLiveDataRefresh
- * @returns {*} Return value description
- */
-function stopLiveDataRefresh() {
-    const execute = _liveDataRefresh().buildStopLiveDataRefreshExecutePlan();
-    if (!execute.shouldStop) return;
-
-    clearInterval(trafficRefreshInterval);
-    clearInterval(etaRefreshInterval);
-    clearInterval(weatherRefreshInterval);
-    clearInterval(hazardRefreshInterval);
-    console.log(execute.stopLogMessage);
-}
-
-/**
- * refreshTrafficData function
- * @function refreshTrafficData
- * @returns {*} Return value description
- */
-function refreshTrafficData() {
-    const LDR = _liveDataRefresh();
-    const preflight = LDR.buildRefreshTrafficDataPreflightPlan({
-        routeInProgress,
-        lat: currentLat,
-        lon: currentLon,
-    });
-    if (!preflight.shouldFetch) return;
-
-    fetch(preflight.url)
-        .then((r) => r.json())
-        .then((data) => {
-            const notify = LDR.buildRefreshTrafficDataNotificationPlan(data);
-            if (notify.shouldNotify) {
-                sendNotification(
-                    notify.notification.title,
-                    notify.notification.message,
-                    notify.notification.type
-                );
+function getLiveDataRefreshOrchestrationRuntime() {
+    return {
+        liveDataRefresh: () => _liveDataRefresh(),
+        eta: () => _eta(),
+        getRouteInProgress: () => routeInProgress,
+        getCurrentBatteryLevel: () => currentBatteryLevel,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getLastCalculatedRoute: () => window.lastCalculatedRoute,
+        getRoutePolyline: () => routePolyline,
+        getCurrentRoutingMode: () => currentRoutingMode,
+        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        g: (key) => {
+            switch (key) {
+            case 'lastETAAnnouncementTime': return lastETAAnnouncementTime;
+            case 'lastAnnouncedETA': return lastAnnouncedETA;
+            case 'initialETAMovementRetries': return initialETAMovementRetries;
+            case 'initialETAAnnouncementTimeoutId': return initialETAAnnouncementTimeoutId;
+            default: return undefined;
             }
-        })
-        .catch((e) => console.log(preflight.errorLogPrefix, e));
-}
-
-/**
- * updateETACalculation function
- * @function updateETACalculation
- * @returns {Promise<void>}
- */
-async function updateETACalculation() {
-    const ETA = _eta();
-    const base = computeBaseNavigationETAMinutes();
-    const tick = ETA.buildUpdateETACalculationTickPlan({
-        routeInProgress,
-        hasRoute: !!window.lastCalculatedRoute,
-        hasPolyline: !!routePolyline,
-        baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
-        progressPercent: base ? base.progressPercent : null,
-        applyTrafficAware: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
-        trafficLevel: window.navETASnapshot.trafficLevel,
-        congestionPercent: window.navETASnapshot.congestionPercent,
-    });
-    if (tick.action !== 'update') {
-        if (tick.warnLog) console.warn(tick.warnLog);
-        return;
-    }
-
-    const renderPanel = () => {
-        const adjusted = tick.applyTrafficAware
-            ? applyTrafficRatioToBaseRemaining(tick.timeRemainingMinutes)
-            : null;
-        renderTurnInfoETAPanel(
-            tick.timeRemainingMinutes,
-            adjusted,
-            tick.progressPercent,
-            tick.trafficLevel,
-            tick.congestionPercent
-        );
+        },
+        s: (key, val) => {
+            switch (key) {
+            case 'lastETAAnnouncementTime': lastETAAnnouncementTime = val; break;
+            case 'lastAnnouncedETA': lastAnnouncedETA = val; break;
+            case 'initialETAMovementRetries': initialETAMovementRetries = val; break;
+            case 'initialETAAnnouncementTimeoutId': initialETAAnnouncementTimeoutId = val; break;
+            default: break;
+            }
+        },
+        call: {
+            sendNotification,
+            speakMessage,
+            processNavigationHazardAlerts,
+            computeBaseNavigationETAMinutes,
+            applyTrafficRatioToBaseRemaining,
+            renderTurnInfoETAPanel,
+            refreshNavTrafficETAIfDue,
+            hasUserStartedMoving,
+        },
     };
-
-    renderPanel();
-    await refreshNavTrafficETAIfDue(tick.timeRemainingMinutes, tick.progressPercent, false);
-    renderPanel();
 }
 
-/**
- * announceETAIfNeeded function
- * @function announceETAIfNeeded
- * @returns {*} Return value description
- * FIX: Added movement detection to prevent incorrect ETA announcements before journey starts
- */
-function announceETAIfNeeded() {
-    const ETA = _eta();
-    const base = computeBaseNavigationETAMinutes();
-    const tick = ETA.buildAnnounceETAIfNeededPlan({
-        routeInProgress,
-        hasRoute: !!window.lastCalculatedRoute,
-        voiceEnabled: voiceAnnouncementsEnabled,
-        now: Date.now(),
-        lastETAAnnouncementTime,
-        baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
-        applyTrafficRatio: applyTrafficRatioToBaseRemaining,
-    });
-    if (tick.action !== 'announce') {
-        if (tick.warnLog) console.warn(tick.warnLog);
-        return;
-    }
-
-    const eta = new Date(tick.etaMs);
-    const message = ETA.buildETAVoiceMessage(tick.timeRemainingMinutes, eta);
-    console.log(`${tick.logPrefix} ${message}`);
-    speakMessage(message);
-    lastETAAnnouncementTime = tick.updateLastETAAnnouncementTime;
-    lastAnnouncedETA = eta;
-}
-
+function startLiveDataRefresh() { VoyagrLiveDataRefreshOrchestration.startLiveDataRefresh(); }
+function stopLiveDataRefresh() { VoyagrLiveDataRefreshOrchestration.stopLiveDataRefresh(); }
+function refreshTrafficData() { VoyagrLiveDataRefreshOrchestration.refreshTrafficData(); }
+async function updateETACalculation() { return VoyagrLiveDataRefreshOrchestration.updateETACalculation(); }
+function announceETAIfNeeded() { VoyagrLiveDataRefreshOrchestration.announceETAIfNeeded(); }
 async function speakInitialETAAnnouncement() {
-    const ETA = _eta();
-    const movement = ETA.buildInitialETAMovementDeferPlan({
-        hasStartedMoving: hasUserStartedMoving(),
-        retries: initialETAMovementRetries,
-    });
-    if (movement.action === 'defer') {
-        initialETAMovementRetries = movement.retries;
-        if (initialETAAnnouncementTimeoutId) {
-            clearTimeout(initialETAAnnouncementTimeoutId);
-            initialETAAnnouncementTimeoutId = null;
-        }
-        initialETAAnnouncementTimeoutId = setTimeout(() => {
-            initialETAAnnouncementTimeoutId = null;
-            void speakInitialETAAnnouncement();
-        }, movement.retryDelayMs);
-        console.log(movement.logMessage);
-        return;
-    }
-    if (movement.action === 'skip') {
-        console.log(movement.logMessage);
-        return;
-    }
-
-    const base = computeBaseNavigationETAMinutes();
-    const execute = ETA.buildInitialETAAnnouncementExecutePlan({
-        routeInProgress,
-        hasRoute: !!window.lastCalculatedRoute,
-        voiceEnabled: voiceAnnouncementsEnabled,
-        baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
-        applyTrafficRatio: applyTrafficRatioToBaseRemaining,
-        refreshTrafficIfDue: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode)
-            && currentLat != null
-            && currentLon != null,
-        now: Date.now(),
-    });
-    if (!execute.shouldAnnounce) return;
-
-    if (execute.resetMovementRetries) initialETAMovementRetries = 0;
-    if (execute.refreshTrafficIfDue && base) {
-        await refreshNavTrafficETAIfDue(base.timeRemainingMinutes, base.progressPercent, true);
-    }
-
-    const eta = new Date(execute.etaMs);
-    const message = ETA.buildETAVoiceMessage(execute.timeRemainingMinutes, eta);
-    console.log(`${execute.logPrefix} ${message}`);
-    speakMessage(message);
-    lastETAAnnouncementTime = execute.updateLastETAAnnouncementTime;
-    lastAnnouncedETA = eta;
+    return VoyagrLiveDataRefreshOrchestration.speakInitialETAAnnouncement();
 }
-
 function scheduleInitialETAAnnouncement() {
-    const schedule = _eta().buildScheduleInitialETAAnnouncementPlan();
-    if (!schedule.shouldSchedule) return;
-    if (schedule.clearExisting && initialETAAnnouncementTimeoutId) {
-        clearTimeout(initialETAAnnouncementTimeoutId);
-        initialETAAnnouncementTimeoutId = null;
-    }
-    initialETAAnnouncementTimeoutId = setTimeout(() => {
-        initialETAAnnouncementTimeoutId = null;
-        speakInitialETAAnnouncement();
-    }, schedule.delayMs);
+    VoyagrLiveDataRefreshOrchestration.scheduleInitialETAAnnouncement();
 }
-
-function clearInitialETAAnnouncement() {
-    if (initialETAAnnouncementTimeoutId) {
-        clearTimeout(initialETAAnnouncementTimeoutId);
-        initialETAAnnouncementTimeoutId = null;
-    }
-}
-
-/**
- * refreshWeatherData function
- * @function refreshWeatherData
- * @returns {*} Return value description
- */
-function refreshWeatherData() {
-    const LDR = _liveDataRefresh();
-    const preflight = LDR.buildRefreshWeatherDataPreflightPlan({
-        lat: currentLat,
-        lon: currentLon,
-    });
-    if (!preflight.shouldFetch) return;
-
-    fetch(preflight.url)
-        .then((r) => r.json())
-        .then((data) => {
-            const notify = LDR.buildRefreshWeatherDataNotificationPlan(data);
-            if (notify.shouldNotify) {
-                sendNotification(
-                    notify.notification.title,
-                    notify.notification.message,
-                    notify.notification.type
-                );
-            }
-        })
-        .catch((e) => console.log(preflight.errorLogPrefix, e));
-}
+function clearInitialETAAnnouncement() { VoyagrLiveDataRefreshOrchestration.clearInitialETAAnnouncement(); }
+function refreshWeatherData() { VoyagrLiveDataRefreshOrchestration.refreshWeatherData(); }
 
 // ===== PHASE 2: PWA AUTO-RELOAD FUNCTIONS =====
 
@@ -12677,11 +12186,7 @@ document.addEventListener('DOMContentLoaded', displayPWAVersion);
  * @returns {*} Return value description
  */
 function getAdaptiveRefreshInterval(baseInterval) {
-    return _liveDataRefresh().buildAdaptiveRefreshIntervalPlan(
-        baseInterval,
-        currentBatteryLevel,
-        'getBattery' in navigator
-    ).intervalMs;
+    return VoyagrLiveDataRefreshOrchestration.getAdaptiveRefreshInterval(baseInterval);
 }
 
 /**
@@ -15237,6 +14742,8 @@ VoyagrParkingOrchestration.bind(getParkingOrchestrationRuntime());
 VoyagrTrafficOrchestration.bind(getTrafficOrchestrationRuntime());
 VoyagrPorcupineOrchestration.bind(getPorcupineOrchestrationRuntime());
 VoyagrGpsOrchestration.bind(getGpsOrchestrationRuntime());
+VoyagrLiveDataRefreshOrchestration.bind(getLiveDataRefreshOrchestrationRuntime());
+VoyagrTripHistoryOrchestration.bind(getTripHistoryOrchestrationRuntime());
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict

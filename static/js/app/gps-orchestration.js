@@ -1619,6 +1619,7 @@
         clearRerouteFailureRetries: clearRerouteFailureRetries,
         ensureDefaultTrafficAwareRouting: ensureDefaultTrafficAwareRouting,
         applyTrafficRatioToBaseRemaining: applyTrafficRatioToBaseRemaining,
+        refreshNavTrafficETAIfDue: refreshNavTrafficETAIfDue,
         computeBaseNavigationETAMinutes: computeBaseNavigationETAMinutes,
         renderTurnInfoETAPanel: renderTurnInfoETAPanel,
         getNavigationRemainingDistanceMeters: getNavigationRemainingDistanceMeters,
