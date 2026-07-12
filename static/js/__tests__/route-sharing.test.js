@@ -265,11 +265,24 @@ describe('route-sharing module', () => {
         expect(execute.successStatusType).toBe('success');
     });
 
+    test('buildCopyShareLinkEntryOrchestrationPlan wraps copy execute plan', () => {
+        const entry = RS.buildCopyShareLinkEntryOrchestrationPlan();
+        expect(entry.execute.shouldCopy).toBe(true);
+        expect(entry.execute.shareLinkInputId).toBe('shareLink');
+    });
+
     test('buildDownloadQrCodeExecutePlan requires generated image URL', () => {
         expect(RS.buildDownloadQrCodeExecutePlan(null).shouldDownload).toBe(false);
         const execute = RS.buildDownloadQrCodeExecutePlan('https://example.com/qr.png');
         expect(execute.shouldDownload).toBe(true);
         expect(execute.downloadFileName).toBe('route-qr-code.png');
+    });
+
+    test('buildDownloadQrCodeEntryOrchestrationPlan passes QR image URL through', () => {
+        expect(RS.buildDownloadQrCodeEntryOrchestrationPlan(null).execute.shouldDownload).toBe(false);
+        const entry = RS.buildDownloadQrCodeEntryOrchestrationPlan('https://example.com/qr.png');
+        expect(entry.execute.shouldDownload).toBe(true);
+        expect(entry.execute.imageUrl).toBe('https://example.com/qr.png');
     });
 
     test('buildShareViaWhatsAppExecutePlan and email execute plan open share URLs', () => {
@@ -292,6 +305,26 @@ describe('route-sharing module', () => {
         expect(email.shouldShare).toBe(true);
         expect(email.mailtoUrl).toContain(encodeURIComponent('My route'));
         expect(RS.buildShareViaWhatsAppExecutePlan({ ok: false }).shouldShare).toBe(false);
+    });
+
+    test('buildShareViaWhatsAppEntryOrchestrationPlan rejects missing route', () => {
+        const entry = RS.buildShareViaWhatsAppEntryOrchestrationPlan(null, {});
+        expect(entry.execute.shouldShare).toBe(false);
+        expect(entry.execute.errorStatusMessage).toBe('No route calculated yet');
+    });
+
+    test('buildShareViaEmailEntryOrchestrationPlan builds mailto execute plan', () => {
+        const route = { distance_km: 5, time: '10 min', cost: 2 };
+        const fmt = {
+            startLabel: 'A',
+            endLabel: 'B',
+            distanceText: '5 km',
+            distUnit: 'km',
+            currencySymbol: '£',
+        };
+        const entry = RS.buildShareViaEmailEntryOrchestrationPlan(route, fmt);
+        expect(entry.execute.shouldShare).toBe(true);
+        expect(entry.execute.mailtoUrl).toContain('mailto:?subject=');
     });
 
     test('buildGenerateQrCodeDomExecutePlan mounts QR image metadata', () => {

@@ -329,6 +329,43 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for expandBottomSheet handler.
+     * @returns {Object}
+     */
+    function buildExpandBottomSheetEntryOrchestrationPlan() {
+        return {
+            execute: buildExpandBottomSheetExecutePlan(),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for collapseBottomSheet handler.
+     * @returns {Object}
+     */
+    function buildCollapseBottomSheetEntryOrchestrationPlan() {
+        return {
+            execute: buildCollapseBottomSheetExecutePlan(),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for toggleBottomSheet handler.
+     * @param {boolean} isExpanded
+     * @returns {Object}
+     */
+    function buildToggleBottomSheetEntryOrchestrationPlan(isExpanded) {
+        var collected = buildToggleBottomSheetCollectPlan({ isExpanded: isExpanded });
+        return {
+            collected: collected,
+            execute: collected.expand
+                ? buildExpandBottomSheetExecutePlan()
+                : collected.collapse
+                  ? buildCollapseBottomSheetExecutePlan()
+                  : null,
+        };
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -351,6 +388,9 @@
         buildExpandBottomSheetExecutePlan: buildExpandBottomSheetExecutePlan,
         buildCollapseBottomSheetExecutePlan: buildCollapseBottomSheetExecutePlan,
         buildToggleBottomSheetCollectPlan: buildToggleBottomSheetCollectPlan,
+        buildExpandBottomSheetEntryOrchestrationPlan: buildExpandBottomSheetEntryOrchestrationPlan,
+        buildCollapseBottomSheetEntryOrchestrationPlan: buildCollapseBottomSheetEntryOrchestrationPlan,
+        buildToggleBottomSheetEntryOrchestrationPlan: buildToggleBottomSheetEntryOrchestrationPlan,
         buildCollapseBottomSheetForRoutePreviewExecutePlan: buildCollapseBottomSheetForRoutePreviewExecutePlan,
         buildCollapseBottomSheetForRoutePreviewApplyPlan: buildCollapseBottomSheetForRoutePreviewApplyPlan,
         buildCollapseBottomSheetForRoutePreviewOrchestrationPlan:

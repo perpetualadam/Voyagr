@@ -3875,14 +3875,15 @@ function generateQRCode() {
     );
 }
 
-/**
- * copyShareLink function
- * @function copyShareLink
- * @returns {*} Return value description
- */
-function copyShareLink() {
-    const execute = _routeSharing().buildCopyShareLinkExecutePlan();
-    if (!execute.shouldCopy) return;
+function collectShareChannelInput() {
+    return {
+        route: window.lastCalculatedRoute,
+        fmt: buildRouteShareFormatInput(),
+    };
+}
+
+function applyCopyShareLinkFromPlan(execute) {
+    if (!execute || !execute.shouldCopy) return;
 
     const shareLink = document.getElementById(execute.shareLinkInputId);
     if (!shareLink) return;
@@ -3892,14 +3893,21 @@ function copyShareLink() {
 }
 
 /**
- * downloadQRCode function
- * @function downloadQRCode
+ * copyShareLink function
+ * @function copyShareLink
  * @returns {*} Return value description
  */
-function downloadQRCode() {
-    const execute = _routeSharing().buildDownloadQrCodeExecutePlan(window.qrImageUrl);
-    if (!execute.shouldDownload) {
-        showStatus(execute.errorStatusMessage, execute.errorStatusType);
+function copyShareLink() {
+    applyCopyShareLinkFromPlan(
+        _routeSharing().buildCopyShareLinkEntryOrchestrationPlan().execute
+    );
+}
+
+function applyDownloadQrCodeFromPlan(execute) {
+    if (!execute || !execute.shouldDownload) {
+        if (execute && execute.errorStatusMessage) {
+            showStatus(execute.errorStatusMessage, execute.errorStatusType);
+        }
         return;
     }
 
@@ -3912,21 +3920,49 @@ function downloadQRCode() {
 }
 
 /**
+ * downloadQRCode function
+ * @function downloadQRCode
+ * @returns {*} Return value description
+ */
+function downloadQRCode() {
+    applyDownloadQrCodeFromPlan(
+        _routeSharing().buildDownloadQrCodeEntryOrchestrationPlan(window.qrImageUrl).execute
+    );
+}
+
+function applyShareViaWhatsAppFromPlan(execute) {
+    if (!execute || !execute.shouldShare) {
+        if (execute && execute.errorStatusMessage) {
+            showStatus(execute.errorStatusMessage, execute.errorStatusType);
+        }
+        return;
+    }
+
+    window.open(execute.openUrl, execute.openInNewTab ? '_blank' : '_self');
+    showStatus(execute.statusMessage, execute.statusType);
+}
+
+/**
  * shareViaWhatsApp function
  * @function shareViaWhatsApp
  * @returns {*} Return value description
  */
 function shareViaWhatsApp() {
-    const RS = _routeSharing();
-    const execute = RS.buildShareViaWhatsAppExecutePlan(
-        RS.buildShareViaWhatsAppPlan(window.lastCalculatedRoute, buildRouteShareFormatInput())
+    const input = collectShareChannelInput();
+    applyShareViaWhatsAppFromPlan(
+        _routeSharing().buildShareViaWhatsAppEntryOrchestrationPlan(input.route, input.fmt).execute
     );
-    if (!execute.shouldShare) {
-        showStatus(execute.errorStatusMessage, execute.errorStatusType);
+}
+
+function applyShareViaEmailFromPlan(execute) {
+    if (!execute || !execute.shouldShare) {
+        if (execute && execute.errorStatusMessage) {
+            showStatus(execute.errorStatusMessage, execute.errorStatusType);
+        }
         return;
     }
 
-    window.open(execute.openUrl, execute.openInNewTab ? '_blank' : '_self');
+    window.location.href = execute.mailtoUrl;
     showStatus(execute.statusMessage, execute.statusType);
 }
 
@@ -3936,17 +3972,10 @@ function shareViaWhatsApp() {
  * @returns {*} Return value description
  */
 function shareViaEmail() {
-    const RS = _routeSharing();
-    const execute = RS.buildShareViaEmailExecutePlan(
-        RS.buildShareViaEmailPlan(window.lastCalculatedRoute, buildRouteShareFormatInput())
+    const input = collectShareChannelInput();
+    applyShareViaEmailFromPlan(
+        _routeSharing().buildShareViaEmailEntryOrchestrationPlan(input.route, input.fmt).execute
     );
-    if (!execute.shouldShare) {
-        showStatus(execute.errorStatusMessage, execute.errorStatusType);
-        return;
-    }
-
-    window.location.href = execute.mailtoUrl;
-    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // ===== ROUTE ANALYTICS FUNCTIONS =====
@@ -5213,10 +5242,9 @@ function displayAllRouteHazards() {
  * Toggle bottom sheet state
  */
 function toggleBottomSheet() {
-    const DH = _domHelpers();
-    const collected = DH.buildToggleBottomSheetCollectPlan({ isExpanded: bottomSheetIsExpanded });
-    if (collected.collapse) collapseBottomSheet();
-    else if (collected.expand) expandBottomSheet();
+    applyBottomSheetStateFromPlan(
+        _domHelpers().buildToggleBottomSheetEntryOrchestrationPlan(bottomSheetIsExpanded).execute
+    );
 }
 
 // ===== TOMTOM TRAFFIC FLOW LAYER =====
@@ -12980,7 +13008,9 @@ function applyBottomSheetStateFromPlan(execute) {
  * @returns {*} Return value description
  */
 function expandBottomSheet() {
-    applyBottomSheetStateFromPlan(_domHelpers().buildExpandBottomSheetExecutePlan());
+    applyBottomSheetStateFromPlan(
+        _domHelpers().buildExpandBottomSheetEntryOrchestrationPlan().execute
+    );
 }
 
 /**
@@ -12989,7 +13019,9 @@ function expandBottomSheet() {
  * @returns {*} Return value description
  */
 function collapseBottomSheet() {
-    applyBottomSheetStateFromPlan(_domHelpers().buildCollapseBottomSheetExecutePlan());
+    applyBottomSheetStateFromPlan(
+        _domHelpers().buildCollapseBottomSheetEntryOrchestrationPlan().execute
+    );
 }
 
 // ===== GPS TRACKING FUNCTIONS =====

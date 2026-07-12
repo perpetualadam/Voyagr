@@ -917,6 +917,16 @@
     }
 
     /**
+     * Entry orchestration plan for copyShareLink handler.
+     * @returns {Object}
+     */
+    function buildCopyShareLinkEntryOrchestrationPlan() {
+        return {
+            execute: buildCopyShareLinkExecutePlan(),
+        };
+    }
+
+    /**
      * Execute plan for downloading the generated QR code image.
      * @param {string|null|undefined} qrImageUrl
      * @returns {Object}
@@ -935,6 +945,41 @@
             downloadFileName: 'route-qr-code.png',
             successStatusMessage: 'QR code downloaded!',
             successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Entry orchestration plan for downloadQRCode handler.
+     * @param {string|null|undefined} qrImageUrl
+     * @returns {Object}
+     */
+    function buildDownloadQrCodeEntryOrchestrationPlan(qrImageUrl) {
+        return {
+            execute: buildDownloadQrCodeExecutePlan(qrImageUrl),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for shareViaWhatsApp handler.
+     * @param {Object|null|undefined} route
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildShareViaWhatsAppEntryOrchestrationPlan(route, fmt) {
+        return {
+            execute: buildShareViaWhatsAppExecutePlan(buildShareViaWhatsAppPlan(route, fmt)),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for shareViaEmail handler.
+     * @param {Object|null|undefined} route
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildShareViaEmailEntryOrchestrationPlan(route, fmt) {
+        return {
+            execute: buildShareViaEmailExecutePlan(buildShareViaEmailPlan(route, fmt)),
         };
     }
 
@@ -984,7 +1029,11 @@
         buildLoadSharedRouteFromUrlExecutePlan: buildLoadSharedRouteFromUrlExecutePlan,
         buildLoadSharedRouteFromUrlEntryOrchestrationPlan: buildLoadSharedRouteFromUrlEntryOrchestrationPlan,
         buildCopyShareLinkExecutePlan: buildCopyShareLinkExecutePlan,
+        buildCopyShareLinkEntryOrchestrationPlan: buildCopyShareLinkEntryOrchestrationPlan,
         buildDownloadQrCodeExecutePlan: buildDownloadQrCodeExecutePlan,
+        buildDownloadQrCodeEntryOrchestrationPlan: buildDownloadQrCodeEntryOrchestrationPlan,
+        buildShareViaWhatsAppEntryOrchestrationPlan: buildShareViaWhatsAppEntryOrchestrationPlan,
+        buildShareViaEmailEntryOrchestrationPlan: buildShareViaEmailEntryOrchestrationPlan,
         QR_CODE_IMAGE_SIZE_PX: QR_CODE_IMAGE_SIZE_PX,
         buildQrCodeImageUrl: buildQrCodeImageUrl,
         getQrCodeImageStyleCssText: getQrCodeImageStyleCssText,

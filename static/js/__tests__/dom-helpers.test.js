@@ -105,4 +105,20 @@ describe('dom-helpers', () => {
         expect(preview.apply.bottomSheetId).toBe(Dom.BOTTOM_SHEET_ID);
         expect(preview.apply.collapse).toBe(true);
     });
+
+    test('buildExpandBottomSheetEntryOrchestrationPlan and toggle entry plan', () => {
+        const expand = Dom.buildExpandBottomSheetEntryOrchestrationPlan();
+        expect(expand.execute.setExpandedState).toBe(true);
+
+        const collapse = Dom.buildCollapseBottomSheetEntryOrchestrationPlan();
+        expect(collapse.execute.setExpandedState).toBe(false);
+
+        const toggleExpand = Dom.buildToggleBottomSheetEntryOrchestrationPlan(false);
+        expect(toggleExpand.collected.expand).toBe(true);
+        expect(toggleExpand.execute.setExpandedState).toBe(true);
+
+        const toggleCollapse = Dom.buildToggleBottomSheetEntryOrchestrationPlan(true);
+        expect(toggleCollapse.collected.collapse).toBe(true);
+        expect(toggleCollapse.execute.setExpandedState).toBe(false);
+    });
 });
