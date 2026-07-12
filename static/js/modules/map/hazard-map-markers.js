@@ -78,12 +78,19 @@
         return (styleMap && styleMap[typeKey]) || DEFAULT_HAZARD_MARKER_CONFIG;
     }
 
+    function buildHazardMarkerBoxShadow(darkBasemap) {
+        return darkBasemap
+            ? '0 0 0 2px rgba(255,255,255,0.45), 0 2px 10px rgba(0,0,0,0.75);'
+            : '0 2px 6px rgba(0,0,0,0.3);';
+    }
+
     /**
      * @param {Object} config
      * @param {string} svg
+     * @param {boolean} [darkBasemap]
      * @returns {string}
      */
-    function buildHazardSvgMarkerHtml(config, svg) {
+    function buildHazardSvgMarkerHtml(config, svg, darkBasemap) {
         config = config || {};
         return (
             '<div style="' +
@@ -96,7 +103,7 @@
                 'align-items: center;' +
                 'justify-content: center;' +
                 'font-size: 12px;' +
-                'box-shadow: 0 2px 6px rgba(0,0,0,0.3);' +
+                'box-shadow: ' + buildHazardMarkerBoxShadow(!!darkBasemap) + ';' +
                 'cursor: pointer;' +
             '">' + (svg || '') + '</div>'
         );
@@ -104,9 +111,10 @@
 
     /**
      * @param {Object} config
+     * @param {boolean} [darkBasemap]
      * @returns {string}
      */
-    function buildHazardEmojiMarkerHtml(config) {
+    function buildHazardEmojiMarkerHtml(config, darkBasemap) {
         config = config || {};
         return (
             '<div style="' +
@@ -119,7 +127,7 @@
                 'align-items: center;' +
                 'justify-content: center;' +
                 'font-size: 14px;' +
-                'box-shadow: 0 2px 6px rgba(0,0,0,0.3);' +
+                'box-shadow: ' + buildHazardMarkerBoxShadow(!!darkBasemap) + ';' +
                 'cursor: pointer;' +
             '">' + (config.emoji || '⚠️') + '</div>'
         );
@@ -270,11 +278,11 @@
                 markerIconSize = opts.osmTrafficLightIconSize || HAZARD_MARKER_ICON_SIZE;
                 popupIcon = opts.osmTrafficLightPopupIcon || opts.osmTrafficLightPillHtml;
             } else if (config.svg) {
-                markerHtml = buildHazardSvgMarkerHtml(config, config.svg);
+                markerHtml = buildHazardSvgMarkerHtml(config, config.svg, opts.darkBasemap);
                 markerIconSize = HAZARD_MARKER_ICON_SIZE;
                 popupIcon = config.svg;
             } else {
-                markerHtml = buildHazardEmojiMarkerHtml(config);
+                markerHtml = buildHazardEmojiMarkerHtml(config, opts.darkBasemap);
                 markerIconSize = HAZARD_MARKER_ICON_SIZE;
                 popupIcon = buildHazardPopupEmojiIconHtml(config.emoji);
             }

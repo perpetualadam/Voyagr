@@ -6,6 +6,7 @@
     'use strict';
 
     var SETTINGS_STORAGE_KEY = 'voyagr_all_settings';
+    var UI_THEME_STORAGE_KEY = 'ui_theme';
 
     var SETTINGS_SNAPSHOT_KEYS = [
         'unit_distance',
@@ -17,6 +18,7 @@
         'routePreferences',
         'hazardPreferences',
         'mapTheme',
+        'uiTheme',
         'smartZoomEnabled',
         'showCamerasEnabled',
         'showOsmTrafficLightsEnabled',
@@ -63,6 +65,7 @@
             routePreferences: input.routePreferences || {},
             hazardPreferences: input.hazardPreferences || {},
             mapTheme: input.mapTheme,
+            uiTheme: input.uiTheme,
             smartZoomEnabled: input.smartZoomEnabled,
             showCamerasEnabled: input.showCamerasEnabled,
             showOsmTrafficLightsEnabled: input.showOsmTrafficLightsEnabled,
@@ -97,6 +100,7 @@
             routePreferences: formState.routePreferences || {},
             hazardPreferences: formState.hazardPreferences || {},
             mapTheme: formState.mapTheme != null ? formState.mapTheme : 'standard',
+            uiTheme: formState.uiTheme != null ? formState.uiTheme : 'light',
             smartZoomEnabled: runtime.smartZoomEnabled,
             showCamerasEnabled: runtime.showCamerasEnabled,
             showOsmTrafficLightsEnabled: runtime.showOsmTrafficLightsEnabled,
@@ -242,6 +246,7 @@
             parkingPreferences: fragments.parkingPreferences || {},
             multiDropPreferences: fragments.multiDropPreferences || {},
             mapTheme: fragments.mapTheme != null ? fragments.mapTheme : 'standard',
+            uiTheme: fragments.uiTheme != null ? fragments.uiTheme : 'light',
         };
     }
 
@@ -302,6 +307,9 @@
 
         if (settings.mapTheme) {
             localStoragePatches.mapTheme = settings.mapTheme;
+        }
+        if (settings.uiTheme) {
+            localStoragePatches[UI_THEME_STORAGE_KEY] = settings.uiTheme;
         }
         if (settings.smartZoomEnabled !== undefined) {
             runtime.smartZoomEnabled = settings.smartZoomEnabled;
@@ -998,6 +1006,7 @@
             routePreferences: o.routePreferences,
             parkingPreferences: parkingPrefs,
             mapTheme: o.mapTheme || 'standard',
+            uiTheme: o.uiTheme || 'light',
             parkingParseErrorLog: '[Settings] Error parsing parking preferences:',
         };
     }
@@ -1106,6 +1115,7 @@
                 pricePreference: parkingPrefs.pricePreference || 'any',
             },
             mapTheme: input.mapTheme || 'standard',
+            uiTheme: input.uiTheme || 'light',
             toggleButtons: {
                 smartZoom: !!input.smartZoomEnabled,
                 autoTrafficUpdate: !!input.autoTrafficUpdateEnabled,
@@ -1125,7 +1135,7 @@
             sideEffects: {
                 loadPreferences: true,
                 setMapTheme: true,
-                initializeDarkMode: true,
+                applyUiTheme: true,
                 updateThemeButtons: true,
                 applySpeedWidgetToggleUi: true,
             },
@@ -1151,6 +1161,7 @@
             routePreferences: stored.routePreferences,
             parkingPreferences: stored.parkingPreferences,
             mapTheme: stored.mapTheme != null ? stored.mapTheme : 'standard',
+            uiTheme: stored.uiTheme != null ? stored.uiTheme : 'light',
             smartZoomEnabled: runtime.smartZoomEnabled,
             autoTrafficUpdateEnabled: runtime.autoTrafficUpdateEnabled,
             autoRerouteOnDeviationEnabled: runtime.autoRerouteOnDeviationEnabled,
@@ -1212,12 +1223,14 @@
             detourLabel: uiPlan.detourLabel,
             routingMode: uiPlan.routingMode,
             mapTheme: uiPlan.mapTheme,
+            uiTheme: uiPlan.uiTheme,
             sideEffects: uiPlan.sideEffects || {},
         };
     }
 
     var api = {
         SETTINGS_STORAGE_KEY: SETTINGS_STORAGE_KEY,
+        UI_THEME_STORAGE_KEY: UI_THEME_STORAGE_KEY,
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsSavePlan: buildSettingsSavePlan,

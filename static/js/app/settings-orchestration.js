@@ -31,6 +31,7 @@
                 parkingPreferences: rt().call.collectParkingPreferencesFormState(),
                 multiDropPreferences: rt().call.collectMultiDropFormState(),
                 mapTheme: localStorage.getItem('mapTheme') || 'standard',
+                uiTheme: localStorage.getItem('ui_theme') || 'light',
             })
         );
     }
@@ -260,7 +261,11 @@
         applyStandardTogglesFromPlan(domPlan.standardToggles, toggleUi);
         applyLabeledTogglesFromPlan(domPlan.labeledToggles, toggleUi);
 
-        if (side.initializeDarkMode) rt().call.initializeDarkMode();
+        if (side.applyUiTheme && domPlan.uiTheme) {
+            rt().call.applyTheme(domPlan.uiTheme);
+        } else if (side.initializeDarkMode) {
+            rt().call.initializeDarkMode();
+        }
         if (side.updateThemeButtons) rt().call.updateThemeButtons();
         if (domPlan.detourLabel) {
             root.VoyagrRoutePreferencesOrchestration.applyDetourLabelFromPlan(domPlan.detourLabel);
@@ -298,6 +303,7 @@
             routePreferences: RP().getRoutePreferences(localStorage),
             parkingPreferences: parkingPrefs,
             mapTheme: localStorage.getItem('mapTheme') || 'standard',
+            uiTheme: localStorage.getItem('ui_theme') || 'light',
         });
     }
 

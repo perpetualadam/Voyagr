@@ -1,6 +1,8 @@
 /**
  * Tests for modules/navigation/route-selection.js
  */
+const MT = require('../modules/map/map-theme.js');
+global.VoyagrMapTheme = MT;
 const RS = require('../modules/navigation/route-selection.js');
 
 describe('route-selection module', () => {
@@ -1343,6 +1345,12 @@ describe('route preview panel and in-nav dispatch helpers', () => {
 });
 
 describe('navigation route polyline style', () => {
+    test('buildNavActiveRoutePolylineStyle uses dark outline on dark basemap', () => {
+        const style = RS.buildNavActiveRoutePolylineStyle('#2563EB', 'dark');
+        expect(style.outlineColor).toBe('#0c1220');
+        expect(style.weight).toBeGreaterThan(8);
+    });
+
     test('buildNavActiveRoutePolylineStyle uses nav color with outline', () => {
         const style = RS.buildNavActiveRoutePolylineStyle('#2563EB');
         expect(style.color).toBe('#2563EB');

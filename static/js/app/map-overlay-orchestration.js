@@ -76,6 +76,11 @@
         var HM = rt().hazardMapMarkers();
         var styleMap = HM.getHazardMarkerStyleMap();
         var CAM = rt().cameraMapMarkers();
+        var mapTheme = typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+        var MT = root.VoyagrMapTheme;
+        var darkBasemap = !!(MT && typeof MT.isDarkMapTheme === 'function' && MT.isDarkMapTheme(mapTheme));
         var specs = CAM.buildCameraMarkersMountSpecs(collect.items, styleMap, {
             normalizeBucket: function (bucket) { return HM.normalizeCameraHazardTypeForMarker(bucket); },
             markerClassName: collect.markerClassName,
@@ -83,6 +88,7 @@
             popupSvgSize: collect.popupSvgSize,
             iconSize: collect.iconSize,
             iconAnchor: collect.iconAnchor,
+            darkBasemap: darkBasemap,
         });
 
         specs.forEach(function (spec) {
@@ -366,6 +372,27 @@
         console.log(execute.initLogMessage);
     }
 
+    function configureRoadLabelsForMapTheme() {
+        var map = rt().getMap();
+        if (!map || !rt().getMapLibreHelpers()) return;
+        var mapTheme = typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+        var MT = root.VoyagrMapTheme;
+        var labelPaint = MT && typeof MT.buildRoadLabelPaintPlan === 'function'
+            ? MT.buildRoadLabelPaintPlan(mapTheme)
+            : { textColor: '#1a1a1a', textHaloColor: '#ffffff', textHaloWidth: 1.5, textSize: 12 };
+        rt().getMapLibreHelpers().configureRoadLabels(map, {
+            enabled: rt().getRoadLabelsEnabled(),
+            minZoom: 10,
+            maxZoom: 22,
+            textColor: labelPaint.textColor,
+            textHaloColor: labelPaint.textHaloColor,
+            textHaloWidth: labelPaint.textHaloWidth,
+            textSize: labelPaint.textSize,
+        });
+    }
+
     function initializeRoadLabels() {
         var map = rt().getMap();
         var MLT = rt().mapLayerToggles();
@@ -382,7 +409,7 @@
 
         var toggle = document.getElementById(execute.toggleId);
         TU().applyToggleButton(toggle, execute.roadLabelsEnabled, execute.toggleInactiveStyles);
-        rt().getMapLibreHelpers().toggleRoadLabels(map, execute.roadLabelsEnabled);
+        configureRoadLabelsForMapTheme();
 
         console.log(execute.initLogMessage);
     }

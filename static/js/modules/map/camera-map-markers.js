@@ -22,8 +22,11 @@
      * @param {string} svgForMarker
      * @returns {string}
      */
-    function buildCameraMarkerHtml(config, svgForMarker) {
+    function buildCameraMarkerHtml(config, svgForMarker, darkBasemap) {
         config = config || {};
+        var shadow = darkBasemap
+            ? '0 0 0 2px rgba(255,255,255,0.45), 0 2px 10px rgba(0,0,0,0.75);'
+            : '0 4px 10px rgba(0,0,0,0.4);';
         return (
             '<div style="' +
                 'background: ' + (config.bgColor || '#fff') + ';' +
@@ -34,7 +37,7 @@
                 'display: flex;' +
                 'align-items: center;' +
                 'justify-content: center;' +
-                'box-shadow: 0 4px 10px rgba(0,0,0,0.4);' +
+                'box-shadow: ' + shadow + ';' +
                 'cursor: pointer;' +
                 'transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);' +
             '">' + (svgForMarker || '') + '</div>'
@@ -96,7 +99,7 @@
                 lat: camera.lat,
                 lon: camera.lon,
                 className: opts.markerClassName,
-                html: buildCameraMarkerHtml(config, svgForMarker),
+                html: buildCameraMarkerHtml(config, svgForMarker, opts.darkBasemap),
                 iconSize: opts.iconSize,
                 iconAnchor: opts.iconAnchor,
                 popup: buildCameraMarkerPopupHtml(config, svgForPopup, camera.description),

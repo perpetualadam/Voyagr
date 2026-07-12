@@ -243,9 +243,13 @@
         console.log(execute.polylineLogPrefix + ' ' + routePolyline.length + ' points');
 
         if (execute.mountActiveNavRoute) {
+            var mapTheme = typeof localStorage !== 'undefined'
+                ? localStorage.getItem('mapTheme') || 'standard'
+                : 'standard';
             var mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
                 routePolyline: routePolyline,
                 navRouteColor: rt().call.navActiveRouteColor(),
+                mapTheme: mapTheme,
             });
             rt().setRouteLayer(
                 rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style)
@@ -261,7 +265,13 @@
     }
 
     function getNavActiveRoutePolylineOptions() {
-        return rt().routeSelection().buildNavActiveRoutePolylineStyle(rt().call.navActiveRouteColor());
+        var mapTheme = typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+        return rt().routeSelection().buildNavActiveRoutePolylineStyle(
+            rt().call.navActiveRouteColor(),
+            mapTheme
+        );
     }
 
     function redrawNavigationRouteLayer(reason) {
@@ -277,9 +287,13 @@
             if (routeLayer && typeof routeLayer.remove === 'function') {
                 routeLayer.remove();
             }
+            var mapTheme = typeof localStorage !== 'undefined'
+                ? localStorage.getItem('mapTheme') || 'standard'
+                : 'standard';
             var mount = RS.buildNavActiveRouteLayerMountPlan({
                 routePolyline: rt().getRoutePolyline(),
                 navRouteColor: rt().call.navActiveRouteColor(),
+                mapTheme: mapTheme,
             });
             rt().setRouteLayer(
                 rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style)

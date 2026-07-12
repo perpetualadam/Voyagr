@@ -25,10 +25,30 @@
     function RS() { return rt().routeSelection(); }
 
     function routeColors() {
+        var mapTheme = typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+        var MT = root.VoyagrMapTheme;
+        if (MT && typeof MT.buildRouteDisplayContrastPlan === 'function') {
+            var contrast = MT.buildRouteDisplayContrastPlan(mapTheme);
+            if (contrast.darkBasemap && contrast.routeColors) {
+                return contrast.routeColors;
+            }
+        }
         return RS().ROUTE_COLORS;
     }
 
     function navActiveRouteColor() {
+        var mapTheme = typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+        var MT = root.VoyagrMapTheme;
+        if (MT && typeof MT.buildRouteDisplayContrastPlan === 'function') {
+            var contrast = MT.buildRouteDisplayContrastPlan(mapTheme);
+            if (contrast.darkBasemap && contrast.navRouteColor) {
+                return contrast.navRouteColor;
+            }
+        }
         return RS().NAV_ACTIVE_ROUTE_COLOR;
     }
 
@@ -438,10 +458,15 @@ function applyDoAddRouteLayersFromPlan(apply) {
 function collectDoAddRouteLayersInput() {
     const map = rt().getMap();
     const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
+    const mapTheme = typeof localStorage !== 'undefined'
+        ? localStorage.getItem('mapTheme') || 'standard'
+        : 'standard';
     return {
         routeOptions: getRouteOptions(),
         selectedRouteIndex: getSelectedRouteIndex(),
         styleLayers: style && style.layers ? style.layers : [],
+        mapTheme: mapTheme,
+        routeColors: routeColors(),
         showTrafficEnabled: rt().getShowTrafficEnabled(),
         hasTrafficLayer: !!rt().getTrafficLayer(),
         mountedLayerCount: allRouteLayers.length,

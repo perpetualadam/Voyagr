@@ -48,7 +48,17 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260709c" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260712dark2" />
+    <script>
+    (function () {
+        try {
+            var theme = localStorage.getItem('ui_theme') || 'light';
+            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var useDark = theme === 'dark' || (theme === 'auto' && prefersDark);
+            if (useDark) document.documentElement.classList.add('dark-mode');
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -75,7 +85,7 @@
     <script defer src="/static/js/modules/navigation/trip-history.js?v=20260712aacg"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260711zzzw"></script>
-    <script defer src="/static/js/modules/navigation/route-selection.js?v=20260712aacq"></script>
+    <script defer src="/static/js/modules/navigation/route-selection.js?v=20260712dark2"></script>
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20260712aack"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20260711zb"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
@@ -85,7 +95,7 @@
     <script defer src="/static/js/modules/navigation/search-autocomplete.js?v=20260711s"></script>
     <script defer src="/static/js/modules/navigation/geocoding-locations.js?v=20260712aaaq"></script>
     <script defer src="/static/js/modules/navigation/route-progress.js?v=20260712aaba"></script>
-    <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20260712aacm"></script>
+    <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20260712dark2"></script>
     <script defer src="/static/js/modules/ui/device-environment.js?v=20260711zzzu"></script>
     <script defer src="/static/js/modules/navigation/favorites.js?v=20260711y"></script>
     <script defer src="/static/js/modules/navigation/caz-info.js?v=20260711s"></script>
@@ -96,7 +106,7 @@
     <script defer src="/static/js/modules/map/map-layer-toggles.js?v=20260711zzzr"></script>
     <script defer src="/static/js/modules/map/map-overlay-toggles.js?v=20260711zzzp"></script>
     <script defer src="/static/js/modules/map/map-view-3d.js?v=20260711zzzl"></script>
-    <script defer src="/static/js/modules/map/map-theme.js?v=20260712dark1"></script>
+    <script defer src="/static/js/modules/map/map-theme.js?v=20260712dark2"></script>
     <script defer src="/static/js/modules/map/camera-map-markers.js?v=20260711zzzv"></script>
     <script defer src="/static/js/modules/map/hazard-map-markers.js?v=20260712aabd"></script>
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
@@ -124,13 +134,13 @@
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260711zzzj"></script>
     <script defer src="/static/js/modules/navigation/google-plus-codes-prefs.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/voyagr-modules.js?v=20260712aaab"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20260712dark1"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20260712dark2"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
     <script defer src="/static/js/app/parking-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20260712ab38"></script>
+    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20260712dark2"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20260712ab45"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/gps-orchestration.js?v=20260712aacp"></script>
@@ -153,9 +163,9 @@
     <script defer src="/static/js/app/mobile-pwa-orchestration.js?v=20260712aaeq"></script>
     <script defer src="/static/js/app/hazard-preferences-orchestration.js?v=20260712aaer"></script>
     <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
-    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20260712ab43"></script>
+    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20260712dark2"></script>
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20260712ab47"></script>
-    <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712cam502"></script>
+    <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712dark2"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260712aaew"></script>
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20260712ab21"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260712ab43"></script>
@@ -179,7 +189,7 @@
     <script defer src="/static/js/app/vehicle-routing-orchestration.js?v=20260712ab56"></script>
     <script defer src="/static/js/app/form-clear-orchestration.js?v=20260712ab09"></script>
     <script defer src="/static/js/app/map-hints-orchestration.js?v=20260712ab0a"></script>
-    <script defer src="/static/js/app/dark-mode-orchestration.js?v=20260712ab0c"></script>
+    <script defer src="/static/js/app/dark-mode-orchestration.js?v=20260712dark2"></script>
     <script defer src="/static/js/app/road-report-orchestration.js?v=20260712ab0c"></script>
     <script defer src="/static/js/app/service-worker-orchestration.js?v=20260712ab45"></script>
     <script defer src="/static/js/app/pwa-lifecycle-orchestration.js?v=20260712ab0e"></script>
@@ -191,7 +201,7 @@
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712ab12"></script>
     <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20260712ab13"></script>
-    <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712ab18"></script>
+    <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712dark2"></script>
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20260712ab58"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260712ab32"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20260712ab53"></script>

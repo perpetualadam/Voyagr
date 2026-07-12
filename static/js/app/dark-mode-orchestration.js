@@ -19,18 +19,28 @@
 
     function theme() { return rt().theme(); }
 
+    function setDarkModeDomClass(useDark) {
+        var className = 'dark-mode';
+        var html = document.documentElement;
+        var body = document.body;
+        if (html) {
+            if (useDark) html.classList.add(className);
+            else html.classList.remove(className);
+        }
+        if (body) {
+            if (useDark) body.classList.add(className);
+            else body.classList.remove(className);
+        }
+    }
+
     function applyTheme(themeName) {
-        const body = document.body;
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const useDark = theme().shouldUseDarkMode(themeName, prefersDark);
 
-        if (useDark) {
-            body.classList.add('dark-mode');
-            console.log('[Dark Mode] Applied', themeName === 'auto' ? 'auto theme (system prefers dark)' : 'dark theme');
-        } else {
-            body.classList.remove('dark-mode');
-            console.log('[Dark Mode] Applied', themeName === 'auto' ? 'auto theme (system prefers light)' : 'light theme');
-        }
+        setDarkModeDomClass(useDark);
+        console.log('[Dark Mode] Applied', themeName === 'auto'
+            ? (useDark ? 'auto theme (system prefers dark)' : 'auto theme (system prefers light)')
+            : (useDark ? 'dark theme' : 'light theme'));
 
         currentTheme = themeName;
         localStorage.setItem('ui_theme', themeName);
@@ -46,6 +56,7 @@
     function toggleDarkMode() {
         const newTheme = theme().toggleBetweenLightAndDark(currentTheme);
         applyTheme(newTheme);
+        updateThemeButtons();
         rt().call.showStatus('🌙 Theme changed to ' + newTheme + ' mode', 'success');
     }
 

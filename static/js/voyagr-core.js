@@ -503,14 +503,20 @@ function initializeMap() {
             }
 
             if (window.MapLibreHelpers) {
+                var mapTheme = typeof localStorage !== 'undefined'
+                    ? localStorage.getItem('mapTheme') || 'standard'
+                    : 'standard';
+                var labelPaint = (typeof VoyagrMapTheme !== 'undefined' && VoyagrMapTheme.buildRoadLabelPaintPlan)
+                    ? VoyagrMapTheme.buildRoadLabelPaintPlan(mapTheme)
+                    : { textColor: '#1a1a1a', textHaloColor: '#ffffff', textHaloWidth: 1.5, textSize: 12 };
                 MapLibreHelpers.configureRoadLabels(map, {
                     enabled: true,
                     minZoom: 10,
                     maxZoom: 22,
-                    textColor: '#000000',
-                    textHaloColor: '#ffffff',
-                    textHaloWidth: 1.5,
-                    textSize: 12
+                    textColor: labelPaint.textColor,
+                    textHaloColor: labelPaint.textHaloColor,
+                    textHaloWidth: labelPaint.textHaloWidth,
+                    textSize: labelPaint.textSize,
                 });
                 MapLibreHelpers.setRoadLabelZoomFilters(map, {
                     motorwayMinZoom: 4,

@@ -86,6 +86,7 @@ function getDarkModeOrchestrationRuntime() {
         call: {
             showStatus,
             saveAllSettings,
+            applyTheme,
         },
     };
 }

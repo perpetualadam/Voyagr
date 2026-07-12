@@ -29,6 +29,19 @@ describe('map-theme module', () => {
         expect(plan.chosenPath).toBe('/static/map/styles/dark/style.json');
     });
 
+    test('buildRoadLabelPaintPlan uses light text on dark basemap', () => {
+        const dark = MT.buildRoadLabelPaintPlan('dark');
+        expect(dark.textColor).toBe('#dde4f0');
+        const light = MT.buildRoadLabelPaintPlan('standard');
+        expect(light.textColor).toBe('#1a1a1a');
+    });
+
+    test('buildRouteDisplayContrastPlan brightens routes on dark basemap', () => {
+        const contrast = MT.buildRouteDisplayContrastPlan('dark');
+        expect(contrast.darkBasemap).toBe(true);
+        expect(contrast.routeColors[0]).toBe('#5B9EFF');
+    });
+
     test('buildSetMapThemeExecutePlan skips reload when theme unchanged', () => {
         const execute = MT.buildSetMapThemeExecutePlan({
             themeOrEvent: 'standard',

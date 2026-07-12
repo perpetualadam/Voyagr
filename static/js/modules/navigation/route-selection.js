@@ -17,6 +17,18 @@
     /** Active navigation / reroute line — matches ROUTE_COLORS[0]. */
     var NAV_ACTIVE_ROUTE_COLOR = '#2563EB';
 
+    /**
+     * @param {string} [mapTheme]
+     * @returns {Object}
+     */
+    function resolveRouteContrastPlan(mapTheme) {
+        var MT = root.VoyagrMapTheme;
+        if (MT && typeof MT.buildRouteDisplayContrastPlan === 'function') {
+            return MT.buildRouteDisplayContrastPlan(mapTheme);
+        }
+        return { darkBasemap: false };
+    }
+
     var ROUTE_COMPARISON_MODAL_ID = 'routeComparisonModal';
 
     /**
@@ -63,13 +75,18 @@
      * @param {number} index
      * @param {number} selectedRouteIndex
      * @param {string[]} [routeColors]
+     * @param {string} [mapTheme]
      * @returns {{ color: string, weight: number, opacity: number }}
      */
-    function buildRouteLayerStyle(index, selectedRouteIndex, routeColors) {
+    function buildRouteLayerStyle(index, selectedRouteIndex, routeColors, mapTheme) {
+        var contrast = resolveRouteContrastPlan(mapTheme);
+        var colors = contrast.darkBasemap ? contrast.routeColors : (routeColors || ROUTE_COLORS);
+        var weightBoost = contrast.darkBasemap ? (contrast.routeWeightBoost || 0) : 0;
+        var baseWeight = (index === selectedRouteIndex) ? 10 : (index === 0 ? 8 : 6);
         return {
-            color: resolveRouteColor(index, routeColors),
-            weight: (index === selectedRouteIndex) ? 10 : (index === 0 ? 8 : 6),
-            opacity: (index === selectedRouteIndex) ? 1.0 : 0.85,
+            color: resolveRouteColor(index, colors),
+            weight: baseWeight + weightBoost,
+            opacity: contrast.darkBasemap ? (contrast.routeOpacity || 1.0) : ((index === selectedRouteIndex) ? 1.0 : 0.85),
         };
     }
 
@@ -145,6 +162,7 @@
      * @param {number} selectedRouteIndex
      * @param {Object} [opts]
      * @param {string[]} [opts.routeColors]
+     * @param {string} [opts.mapTheme]
      * @returns {Object}
      */
     function buildRouteLayerMountPlan(route, index, selectedRouteIndex, opts) {
@@ -159,7 +177,7 @@
             polylinePointCount: polylinePoints.length,
             lngLatCoords: lngLatCoords,
             geoJsonFeature: buildRouteLineGeoJsonFeature(lngLatCoords),
-            style: buildRouteLayerStyle(index, selectedRouteIndex, opts.routeColors),
+            style: buildRouteLayerStyle(index, selectedRouteIndex, opts.routeColors, opts.mapTheme),
             valid: lngLatCoords.length >= 2,
         };
     }
@@ -2824,9 +2842,23 @@
     /**
      * MapLibre polyline style for the active navigation route line.
      * @param {string} [color]
+     * @param {string} [mapTheme]
      * @returns {Object}
      */
-    function buildNavActiveRoutePolylineStyle(color) {
+    function buildNavActiveRoutePolylineStyle(color, mapTheme) {
+        var contrast = resolveRouteContrastPlan(mapTheme);
+        if (contrast.darkBasemap) {
+            var nav = contrast.navPolyline || {};
+            return {
+                color: color || contrast.navRouteColor || NAV_ACTIVE_ROUTE_COLOR,
+                weight: nav.weight || 9,
+                opacity: 0.98,
+                outline: true,
+                outlineColor: nav.outlineColor || '#0c1220',
+                outlineWeight: nav.outlineWeight || 13,
+                outlineOpacity: nav.outlineOpacity != null ? nav.outlineOpacity : 0.95,
+            };
+        }
         return {
             color: color || NAV_ACTIVE_ROUTE_COLOR,
             weight: 8,
@@ -2862,7 +2894,7 @@
         return {
             valid: polyline.length >= 2,
             polyline: polyline,
-            style: buildNavActiveRoutePolylineStyle(opts.navRouteColor),
+            style: buildNavActiveRoutePolylineStyle(opts.navRouteColor, opts.mapTheme),
         };
     }
 
@@ -3590,12 +3622,16 @@
      * @param {Array<Object>} [styleLayers]
      * @returns {{ beforeId: string|undefined, layers: Array<Object> }}
      */
-    function buildDoAddRouteLayersBatchPlan(routeOptions, selectedRouteIndex, styleLayers) {
+    function buildDoAddRouteLayersBatchPlan(routeOptions, selectedRouteIndex, styleLayers, opts) {
+        opts = opts || {};
         var routes = routeOptions || [];
         var beforeId = findFirstTextSymbolLayerId(styleLayers);
         var layers = [];
         for (var i = routes.length - 1; i >= 0; i--) {
-            var mountPlan = buildRouteLayerMountPlan(routes[i], i, selectedRouteIndex);
+            var mountPlan = buildRouteLayerMountPlan(routes[i], i, selectedRouteIndex, {
+                routeColors: opts.routeColors,
+                mapTheme: opts.mapTheme,
+            });
             var applyPlan = buildRouteLayerMapLibreApplyPlan(mountPlan, beforeId);
             applyPlan.routeIndex = i;
             layers.push(applyPlan);
@@ -3653,6 +3689,8 @@
             routeOptions: input.routeOptions || [],
             selectedRouteIndex: input.selectedRouteIndex != null ? input.selectedRouteIndex : 0,
             styleLayers: input.styleLayers || [],
+            mapTheme: input.mapTheme,
+            routeColors: input.routeColors,
             showTrafficEnabled: !!input.showTrafficEnabled,
             hasTrafficLayer: !!input.hasTrafficLayer,
             mountedLayerCount: input.mountedLayerCount != null ? input.mountedLayerCount : 0,
@@ -3669,7 +3707,11 @@
         var batch = buildDoAddRouteLayersBatchPlan(
             orch.routeOptions,
             orch.selectedRouteIndex,
-            orch.styleLayers
+            orch.styleLayers,
+            {
+                mapTheme: orch.mapTheme,
+                routeColors: orch.routeColors,
+            }
         );
         var sideEffects = buildAllRoutesMapSideEffectsPlan(orch.routeOptions, {
             showTrafficEnabled: orch.showTrafficEnabled,
@@ -3717,6 +3759,8 @@
                 routeOptions: opts.routeOptions,
                 selectedRouteIndex: opts.selectedRouteIndex,
                 styleLayers: opts.styleLayers,
+                mapTheme: opts.mapTheme,
+                routeColors: opts.routeColors,
                 showTrafficEnabled: opts.showTrafficEnabled,
                 hasTrafficLayer: opts.hasTrafficLayer,
                 mountedLayerCount: opts.mountedLayerCount,
