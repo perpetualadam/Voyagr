@@ -713,6 +713,107 @@
     }
 
     /**
+     * Collect start/end input values for calculateRoute preflight.
+     * @param {Object} [opts]
+     * @param {HTMLElement|null|undefined} [opts.startInput]
+     * @param {HTMLElement|null|undefined} [opts.endInput]
+     * @returns {Object}
+     */
+    function buildCalculateRouteInputCollectPlan(opts) {
+        opts = opts || {};
+        var startInput = opts.startInput;
+        var endInput = opts.endInput;
+        var start = startInput && startInput.value ? String(startInput.value).trim() : '';
+        var end = endInput && endInput.value ? String(endInput.value).trim() : '';
+        return {
+            startInput: startInput,
+            endInput: endInput,
+            start: start,
+            end: end,
+            hasStartInput: !!startInput,
+            hasEndInput: !!endInput,
+            debugLogs: [
+                { prefix: '[calculateRoute] Start:', value: start },
+                { prefix: '[calculateRoute] End:', value: end },
+                { prefix: '[calculateRoute] Start dataset:', value: startInput && startInput.dataset },
+                { prefix: '[calculateRoute] End dataset:', value: endInput && endInput.dataset },
+            ],
+        };
+    }
+
+    /**
+     * Orchestration plan for calculateRoute preflight validation.
+     * @param {Object} [collect] - from buildCalculateRouteInputCollectPlan
+     * @param {boolean} [isGeocoding]
+     * @returns {Object}
+     */
+    function buildCalculateRoutePreflightOrchestrationPlan(collect, isGeocoding) {
+        collect = collect || {};
+        var preflight = buildCalculateRoutePreflightPlan({
+            hasStartInput: collect.hasStartInput,
+            hasEndInput: collect.hasEndInput,
+            start: collect.start,
+            end: collect.end,
+            isGeocoding: !!isGeocoding,
+        });
+        return {
+            collect: collect,
+            preflight: preflight,
+            execute: buildCalculateRoutePreflightExecutePlan(preflight),
+            entryLogMessage: '[calculateRoute] START - Function called',
+            geocodeCallLogMessage: '[calculateRoute] Calling geocodeLocations...',
+        };
+    }
+
+    /**
+     * Execute plan for calculateRoute loading UI after geocoding succeeds.
+     * @returns {Object}
+     */
+    function buildCalculateRouteLoadingExecutePlan() {
+        return {
+            shouldShowLoading: true,
+            statusMessage: '📍 Calculating route...',
+            statusType: 'loading',
+            showRouteProgressBar: true,
+        };
+    }
+
+    /**
+     * Fetch plan for calculateRoute /api/route request.
+     * @param {Object} [routePlan] - from buildCalculateRouteApiPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteFetchPlan(routePlan) {
+        routePlan = routePlan || {};
+        return {
+            apiPath: '/api/route',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: routePlan.requestBody,
+            requestLog: buildCalculateRouteApiRequestLogPlan(routePlan),
+            responseStatusLogPrefix: '[calculateRoute] API response status:',
+            nonJsonErrorLogPrefix: '[calculateRoute] Non-JSON response received:',
+            responseTextLogPrefix: '[calculateRoute] Response text:',
+        };
+    }
+
+    /**
+     * Apply plan when calculateRoute fetch throws.
+     * @param {Error|Object} [error]
+     * @returns {Object}
+     */
+    function buildCalculateRouteFetchErrorApplyPlan(error) {
+        error = error || {};
+        return {
+            shouldApply: true,
+            statusMessage: 'Error: ' + (error.message || 'unknown'),
+            statusType: 'error',
+            hideRouteProgressBar: true,
+            logPrefix: '[Route] Fetch error:',
+        };
+    }
+
+    /**
      * Execute plan for calculateRoute preflight logging and status side effects.
      * @param {Object} preflight - from buildCalculateRoutePreflightPlan
      * @returns {Object}
@@ -806,6 +907,11 @@
         buildRouteApiResultPlan: buildRouteApiResultPlan,
         buildCalculateRouteDispatchPlan: buildCalculateRouteDispatchPlan,
         buildCalculateRoutePreflightPlan: buildCalculateRoutePreflightPlan,
+        buildCalculateRouteInputCollectPlan: buildCalculateRouteInputCollectPlan,
+        buildCalculateRoutePreflightOrchestrationPlan: buildCalculateRoutePreflightOrchestrationPlan,
+        buildCalculateRouteLoadingExecutePlan: buildCalculateRouteLoadingExecutePlan,
+        buildCalculateRouteFetchPlan: buildCalculateRouteFetchPlan,
+        buildCalculateRouteFetchErrorApplyPlan: buildCalculateRouteFetchErrorApplyPlan,
         buildCalculateRoutePreflightExecutePlan: buildCalculateRoutePreflightExecutePlan,
         buildCalculateRouteApiRequestLogPlan: buildCalculateRouteApiRequestLogPlan,
         buildCalculateRouteResponseExecutePlan: buildCalculateRouteResponseExecutePlan,

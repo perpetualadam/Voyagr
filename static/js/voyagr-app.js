@@ -2696,17 +2696,14 @@ function applyDoAddRouteLayersBatchFromPlan(executePlan) {
 }
 
 function doAddRouteLayers() {
-    const RS = _routeSelection();
-    const execute = RS.buildDoAddRouteLayersExecutePlan(
-        RS.buildDoAddRouteLayersOrchestrationPlan({
-            routeOptions,
-            selectedRouteIndex,
-            styleLayers: map.getStyle().layers,
-            showTrafficEnabled,
-            hasTrafficLayer: !!trafficLayer,
-            mountedLayerCount: allRouteLayers.length,
-        })
-    );
+    const execute = _routeSelection().buildDoAddRouteLayersEntryOrchestrationPlan({
+        routeOptions,
+        selectedRouteIndex,
+        styleLayers: map.getStyle().layers,
+        showTrafficEnabled,
+        hasTrafficLayer: !!trafficLayer,
+        mountedLayerCount: allRouteLayers.length,
+    });
     if (!execute.shouldExecute) return;
 
     applyDoAddRouteLayersBatchFromPlan(execute.batchExecute);
@@ -2721,19 +2718,19 @@ function doAddRouteLayers() {
  */
 function bringRoutesToTop() {
     const RS = _routeSelection();
-    const orch = RS.buildBringRoutesToTopOrchestrationPlan(allRouteLayers?.length || 0);
-    const plan = RS.buildBringRoutesToTopExecutePlan(
-        allRouteLayers,
-        map && map.getStyle ? map.getStyle().layers : null
-    );
+    const entry = RS.buildBringRoutesToTopEntryOrchestrationPlan({
+        layerCount: allRouteLayers?.length || 0,
+        layerDescriptors: allRouteLayers,
+        styleLayers: map && map.getStyle ? map.getStyle().layers : null,
+    });
 
-    console.log(orch.entryLogPrefix, orch.layerCount);
+    console.log(entry.orch.entryLogPrefix, entry.orch.layerCount);
 
     if (!map) {
-        console.warn(orch.mapMissingLogMessage);
+        console.warn(entry.orch.mapMissingLogMessage);
         return;
     }
-    applyBringRoutesToTopFromPlan(plan);
+    applyBringRoutesToTopFromPlan(entry.execute);
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -3511,24 +3508,6 @@ function useRoute(index) {
  * @param {boolean} [includeGeometry=true]
  * @returns {{ shareLink: string, encodedRoute: string }|null}
  */
-function buildEncodedShareLink(includeGeometry) {
-    const RS = _routeSharing();
-    const plan = RS.buildEncodedShareLinkPlan(
-        RS.buildEncodedShareLinkInputPlan({
-            route: window.lastCalculatedRoute,
-            startLabel: document.getElementById('start')?.value,
-            endLabel: document.getElementById('end')?.value,
-            origin: window.location.origin,
-            includeGeometry,
-        })
-    );
-    if (!plan.ok) return null;
-    return {
-        shareLink: plan.shareLink,
-        encodedRoute: plan.encodedRoute,
-    };
-}
-
 function buildEncodedShareLinkPlan(includeGeometry) {
     const RS = _routeSharing();
     return RS.buildEncodedShareLinkPlan(
@@ -3540,6 +3519,15 @@ function buildEncodedShareLinkPlan(includeGeometry) {
             includeGeometry,
         })
     );
+}
+
+function buildEncodedShareLink(includeGeometry) {
+    const plan = buildEncodedShareLinkPlan(includeGeometry);
+    if (!plan.ok) return null;
+    return {
+        shareLink: plan.shareLink,
+        encodedRoute: plan.encodedRoute,
+    };
 }
 
 function buildRouteShareFormatInput() {
@@ -4649,27 +4637,20 @@ function applyCalculateRouteIdlePreviewOutcome(data, labels) {
 }
 
 async function calculateRoute() {
-    console.log('[calculateRoute] START - Function called');
-
+    const RR = _routingRequest();
     const startInput = document.getElementById('start');
     const endInput = document.getElementById('end');
-    const start = startInput?.value ? startInput.value.trim() : '';
-    const end = endInput?.value ? endInput.value.trim() : '';
+    const preflightOrch = RR.buildCalculateRoutePreflightOrchestrationPlan(
+        RR.buildCalculateRouteInputCollectPlan({ startInput, endInput }),
+        isGeocoding
+    );
 
-    const preflight = _routingRequest().buildCalculateRoutePreflightPlan({
-        hasStartInput: !!startInput,
-        hasEndInput: !!endInput,
-        start,
-        end,
-        isGeocoding,
+    console.log(preflightOrch.entryLogMessage);
+    (preflightOrch.collect.debugLogs || []).forEach(({ prefix, value }) => {
+        console.log(prefix, value);
     });
-    const preflightExecute = _routingRequest().buildCalculateRoutePreflightExecutePlan(preflight);
 
-    console.log('[calculateRoute] Start:', start);
-    console.log('[calculateRoute] End:', end);
-    console.log('[calculateRoute] Start dataset:', startInput?.dataset);
-    console.log('[calculateRoute] End dataset:', endInput?.dataset);
-
+    const preflightExecute = preflightOrch.execute;
     if (!preflightExecute.shouldProceed) {
         showStatus(preflightExecute.statusMessage, preflightExecute.statusType);
         if (preflightExecute.missingInputsLogMessage) {
@@ -4680,13 +4661,13 @@ async function calculateRoute() {
         return;
     }
 
-    console.log('[calculateRoute] Calling geocodeLocations...');
+    const { start, end } = preflightOrch.collect;
+    console.log(preflightOrch.geocodeCallLogMessage);
 
-    // Geocode locations if needed
     let geocodedResult = await geocodeLocations(start, end);
     if (!geocodedResult) {
         console.error('[calculateRoute] ERROR: geocodeLocations returned null');
-        return; // Error already shown by geocodeLocations
+        return;
     }
 
     const geocodedStart = geocodedResult.start;
@@ -4695,12 +4676,14 @@ async function calculateRoute() {
     console.log('[calculateRoute] Geocoded start:', geocodedStart);
     console.log('[calculateRoute] Geocoded end:', geocodedEnd);
 
-    showStatus('📍 Calculating route...', 'loading');
+    const loading = RR.buildCalculateRouteLoadingExecutePlan();
+    if (loading.shouldShowLoading) {
+        showStatus(loading.statusMessage, loading.statusType);
+    }
+    if (loading.showRouteProgressBar) {
+        showRouteProgressBar();
+    }
 
-    // Show route calculation progress bar
-    showRouteProgressBar();
-
-    const RR = _routingRequest();
     const routePlan = RR.buildCalculateRouteApiPlan({
         storage: localStorage,
         geocodedStart: geocodedStart,
@@ -4718,42 +4701,38 @@ async function calculateRoute() {
         currentLat: currentLat,
         currentLon: currentLon,
     });
-    const requestBody = routePlan.requestBody;
-    const requestLog = RR.buildCalculateRouteApiRequestLogPlan(routePlan);
+    const fetchPlan = RR.buildCalculateRouteFetchPlan(routePlan);
 
-    console.log(requestLog.requestLogPrefix, requestBody);
-    console.log(requestLog.viaPointsLogMessage);
-    console.log(requestLog.multiDropLogMessage);
+    console.log(fetchPlan.requestLog.requestLogPrefix, fetchPlan.body);
+    console.log(fetchPlan.requestLog.viaPointsLogMessage);
+    console.log(fetchPlan.requestLog.multiDropLogMessage);
 
-    fetch('/api/route', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
+    fetch(fetchPlan.apiPath, {
+        method: fetchPlan.method,
+        headers: fetchPlan.headers,
+        body: JSON.stringify(fetchPlan.body),
     })
         .then(response => {
-            console.log('[calculateRoute] API response status:', response.status);
+            console.log(fetchPlan.responseStatusLogPrefix, response.status);
 
             const contentType = response.headers.get('content-type');
-            if (!_routingRequest().isRouteApiJsonContentType(contentType)) {
-                console.error('[calculateRoute] Non-JSON response received:', contentType);
+            if (!RR.isRouteApiJsonContentType(contentType)) {
+                console.error(fetchPlan.nonJsonErrorLogPrefix, contentType);
                 return response.text().then(text => {
-                    console.error('[calculateRoute] Response text:', text.substring(0, 200));
-                    throw new Error(_routingRequest().buildNonJsonRouteApiErrorMessage(response.status, text));
+                    console.error(fetchPlan.responseTextLogPrefix, text.substring(0, 200));
+                    throw new Error(RR.buildNonJsonRouteApiErrorMessage(response.status, text));
                 });
             }
 
             if (!response.ok) {
                 return response.text().then(text => {
-                    throw new Error(_routingRequest().parseRouteApiErrorMessage(response.status, text));
+                    throw new Error(RR.parseRouteApiErrorMessage(response.status, text));
                 });
             }
 
             return response.json();
         })
         .then(data => {
-            const RR = _routingRequest();
             const responsePlan = RR.buildCalculateRouteResponseExecutePlan(data, routeInProgress);
             console.log(responsePlan.responseLogPrefix, responsePlan.responseLogMeta);
 
@@ -4783,9 +4762,10 @@ async function calculateRoute() {
             applyCalculateRouteIdlePreviewOutcome(data, { geocodedStart, geocodedEnd, start, end });
         })
         .catch(error => {
-            showStatus('Error: ' + error.message, 'error');
-            console.error('[Route] Fetch error:', error);
-            hideRouteProgressBar();
+            const errApply = RR.buildCalculateRouteFetchErrorApplyPlan(error);
+            showStatus(errApply.statusMessage, errApply.statusType);
+            console.error(errApply.logPrefix, error);
+            if (errApply.hideRouteProgressBar) hideRouteProgressBar();
         });
 }
 
@@ -5642,9 +5622,8 @@ function toggleRouteTraffic() {
 /**
  * Clear all route traffic edge layers from the map
  */
-function clearRouteTrafficLayers() {
-    const RTF = _routeTrafficFlow();
-    const plan = RTF.buildClearRouteTrafficLayersApplyPlan(routeTrafficLayers);
+function applyClearRouteTrafficLayersFromPlan(plan) {
+    if (!plan) return;
 
     plan.layers.forEach((spec) => {
         const layer = routeTrafficLayers[spec.index];
@@ -5663,6 +5642,12 @@ function clearRouteTrafficLayers() {
     if (plan.shouldClear || plan.resetLayersArray) {
         console.log(plan.logMessage);
     }
+}
+
+function clearRouteTrafficLayers() {
+    applyClearRouteTrafficLayersFromPlan(
+        _routeTrafficFlow().buildClearRouteTrafficLayersApplyPlan(routeTrafficLayers)
+    );
 }
 
 /**

@@ -1183,6 +1183,27 @@ describe('route overview and single-route display plans', () => {
         expect(RS.buildBringRoutesToTopOrchestrationPlan(2).layerCount).toBe(2);
     });
 
+    test('buildDoAddRouteLayersEntryOrchestrationPlan and buildBringRoutesToTopEntryOrchestrationPlan', () => {
+        const layers = RS.buildDoAddRouteLayersEntryOrchestrationPlan({
+            routeOptions: [{ polyline: [[51, -0.1], [51.1, -0.2]] }],
+            selectedRouteIndex: 0,
+            styleLayers: [],
+            showTrafficEnabled: false,
+            hasTrafficLayer: false,
+            mountedLayerCount: 0,
+        });
+        expect(layers.shouldExecute).toBe(true);
+
+        const bringTop = RS.buildBringRoutesToTopEntryOrchestrationPlan({
+            layerCount: 2,
+            layerDescriptors: [{ id: 'route-layer-0' }],
+            styleLayers: [{ id: 'road-label', type: 'symbol' }],
+        });
+        expect(bringTop.orch.layerCount).toBe(2);
+        expect(bringTop.execute.shouldExecute).toBe(true);
+        expect(bringTop.requiresMap).toBe(true);
+    });
+
     test('buildRecalculateRouteWithPreferencesExecutePlan schedules delayed recalc', () => {
         const execute = RS.buildRecalculateRouteWithPreferencesExecutePlan({
             ok: true,

@@ -2960,6 +2960,43 @@
     }
 
     /**
+     * Entry orchestration plan for doAddRouteLayers from runtime map state.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildDoAddRouteLayersEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        return buildDoAddRouteLayersExecutePlan(
+            buildDoAddRouteLayersOrchestrationPlan({
+                routeOptions: opts.routeOptions,
+                selectedRouteIndex: opts.selectedRouteIndex,
+                styleLayers: opts.styleLayers,
+                showTrafficEnabled: opts.showTrafficEnabled,
+                hasTrafficLayer: opts.hasTrafficLayer,
+                mountedLayerCount: opts.mountedLayerCount,
+            })
+        );
+    }
+
+    /**
+     * Entry orchestration plan for bringRoutesToTop.
+     * @param {Object} [opts]
+     * @param {number} [opts.layerCount]
+     * @param {Array<{ id?: string }>} [opts.layerDescriptors]
+     * @param {Array<Object>} [opts.styleLayers]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        var layerCount = opts.layerCount || 0;
+        return {
+            orch: buildBringRoutesToTopOrchestrationPlan(layerCount),
+            execute: buildBringRoutesToTopExecutePlan(opts.layerDescriptors, opts.styleLayers),
+            requiresMap: true,
+        };
+    }
+
+    /**
      * Orchestration plan for bringRoutesToTop entry logging.
      * @param {number} [layerCount]
      * @returns {Object}
@@ -3496,7 +3533,9 @@
         buildDoAddRouteLayersBatchExecutePlan: buildDoAddRouteLayersBatchExecutePlan,
         buildDoAddRouteLayersOrchestrationPlan: buildDoAddRouteLayersOrchestrationPlan,
         buildDoAddRouteLayersExecutePlan: buildDoAddRouteLayersExecutePlan,
+        buildDoAddRouteLayersEntryOrchestrationPlan: buildDoAddRouteLayersEntryOrchestrationPlan,
         buildBringRoutesToTopOrchestrationPlan: buildBringRoutesToTopOrchestrationPlan,
+        buildBringRoutesToTopEntryOrchestrationPlan: buildBringRoutesToTopEntryOrchestrationPlan,
         buildBringRoutesToTopAttemptLogPlan: buildBringRoutesToTopAttemptLogPlan,
         buildBringRoutesToTopLayerMoveLogPlan: buildBringRoutesToTopLayerMoveLogPlan,
         buildBringRoutesToTopLayerPresencePlan: buildBringRoutesToTopLayerPresencePlan,

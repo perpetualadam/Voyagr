@@ -536,6 +536,51 @@ describe('buildCalculateRouteApiRequestLogPlan', () => {
     });
 });
 
+describe('buildCalculateRoute entry orchestration helpers', () => {
+    test('buildCalculateRouteInputCollectPlan trims start and end values', () => {
+        const collect = RR.buildCalculateRouteInputCollectPlan({
+            startInput: { value: '  Home  ', dataset: { lat: '1' } },
+            endInput: { value: 'Work' },
+        });
+        expect(collect.start).toBe('Home');
+        expect(collect.end).toBe('Work');
+        expect(collect.debugLogs).toHaveLength(4);
+    });
+
+    test('buildCalculateRoutePreflightOrchestrationPlan gates geocoding busy state', () => {
+        const collect = RR.buildCalculateRouteInputCollectPlan({
+            startInput: { value: 'A' },
+            endInput: { value: 'B' },
+        });
+        const busy = RR.buildCalculateRoutePreflightOrchestrationPlan(collect, true);
+        expect(busy.execute.shouldProceed).toBe(false);
+        expect(busy.geocodeCallLogMessage).toContain('geocodeLocations');
+
+        const ok = RR.buildCalculateRoutePreflightOrchestrationPlan(collect, false);
+        expect(ok.execute.shouldProceed).toBe(true);
+    });
+
+    test('buildCalculateRouteFetchPlan and fetch error apply plan', () => {
+        const fetchPlan = RR.buildCalculateRouteFetchPlan({
+            requestBody: { start: '1,2', end: '3,4' },
+            viaPointsCount: 1,
+            stopsCount: 0,
+        });
+        expect(fetchPlan.apiPath).toBe('/api/route');
+        expect(fetchPlan.body.start).toBe('1,2');
+
+        const err = RR.buildCalculateRouteFetchErrorApplyPlan(new Error('network'));
+        expect(err.statusMessage).toContain('network');
+        expect(err.hideRouteProgressBar).toBe(true);
+    });
+
+    test('buildCalculateRouteLoadingExecutePlan shows loading UI', () => {
+        const loading = RR.buildCalculateRouteLoadingExecutePlan();
+        expect(loading.showRouteProgressBar).toBe(true);
+        expect(loading.statusMessage).toContain('Calculating');
+    });
+});
+
 describe('buildCalculateRouteResponseExecutePlan', () => {
     test('routes idle success to idle_preview branch', () => {
         const plan = RR.buildCalculateRouteResponseExecutePlan(
