@@ -3004,15 +3004,25 @@ function displayAllRouteHazards() {
     );
 }
 
-// ===== BOTTOM SHEET CONTROL =====
+// ===== BOTTOM SHEET ORCHESTRATION =====
+function toggleBottomSheet() { VoyagrBottomSheetOrchestration.toggleBottomSheet(); }
+function expandBottomSheet() { VoyagrBottomSheetOrchestration.expandBottomSheet(); }
+function collapseBottomSheet() { VoyagrBottomSheetOrchestration.collapseBottomSheet(); }
+function initBottomSheet() { VoyagrBottomSheetOrchestration.initBottomSheet(); }
+function syncBottomSheetOverlapFabs() { VoyagrBottomSheetOrchestration.syncBottomSheetOverlapFabs(); }
+function applyBottomSheetStateFromPlan(execute) { VoyagrBottomSheetOrchestration.applyBottomSheetStateFromPlan(execute); }
 
-/**
- * Toggle bottom sheet state
- */
-function toggleBottomSheet() {
-    applyBottomSheetStateFromPlan(
-        _domHelpers().buildToggleBottomSheetEntryOrchestrationPlan(bottomSheetIsExpanded).execute
-    );
+function getBottomSheetOrchestrationRuntime() {
+    return {
+        domHelpers: () => _domHelpers(),
+        getBottomSheetStartY: () => bottomSheetStartY,
+        setBottomSheetStartY: (val) => { bottomSheetStartY = val; },
+        getBottomSheetCurrentY: () => bottomSheetCurrentY,
+        setBottomSheetCurrentY: (val) => { bottomSheetCurrentY = val; },
+        getBottomSheetIsExpanded: () => bottomSheetIsExpanded,
+        setBottomSheetIsExpanded: (val) => { bottomSheetIsExpanded = val; },
+        getRouteInProgress: () => routeInProgress,
+    };
 }
 
 // ===== MAP LAYER STATE (orchestration in map-layers-orchestration.js) =====
@@ -6156,32 +6166,6 @@ function toggleMLPredictions() {
 // Warm Picovoice vendor bundles after idle load (optional offline wake).
 
 /** Hide map-stack FABs while the bottom sheet is fully expanded (peek mode keeps them visible). */
-function syncBottomSheetOverlapFabs() {
-    const DH = _domHelpers();
-    const bottomSheet = document.getElementById(DH.BOTTOM_SHEET_ID);
-    const execute = DH.buildBottomSheetOverlapFabDisplayPlan({
-        sheetExpanded: !!(bottomSheet && bottomSheet.classList.contains(DH.BOTTOM_SHEET_EXPANDED_CLASS)),
-        routeInProgress,
-    });
-    if (!execute.shouldApply) return;
-
-    (execute.alwaysHideWhenExpanded || []).forEach(({ id, action }) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (action === 'hide') {
-            el.style.display = 'none';
-        } else {
-            el.style.removeProperty('display');
-        }
-    });
-
-    (execute.navFabDisplays || []).forEach(({ id, display }) => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = display;
-    });
-}
-
-/** Road-report FAB: always available unless the bottom sheet is covering map controls. */
 function updateRoadReportFabVisibility() {
     syncBottomSheetOverlapFabs();
 }
@@ -7839,233 +7823,6 @@ window.addEventListener('load', () => {
     console.log('[Init] All settings loaded and applied successfully');
 });
 
-function applyBottomSheetDragVisualFromPlan(feedback, bottomSheetEl) {
-    if (!feedback || !feedback.shouldApplyTransform || !bottomSheetEl) return;
-    bottomSheetEl.style.transform = `translateY(${feedback.transformTranslateY}px)`;
-}
-
-function applyBottomSheetDragFinishFromPlan(entry) {
-    if (!entry) return;
-
-    const bottomSheet = document.getElementById('bottomSheet');
-    if (!bottomSheet) return;
-
-    (entry.clearInlineStyles || []).forEach((prop) => {
-        bottomSheet.style[prop] = '';
-    });
-
-    if (entry.shouldCollapse) {
-        collapseBottomSheet();
-        if (entry.collapseLogMessage) console.log(entry.collapseLogMessage);
-    } else if (entry.shouldExpand) {
-        expandBottomSheet();
-        if (entry.expandLogMessage) console.log(entry.expandLogMessage);
-    }
-}
-
-function applyBottomSheetDragStartFromPlan(execute, bottomSheetEl) {
-    if (!execute || !execute.shouldDisableTransition || !bottomSheetEl) return;
-    bottomSheetEl.style.transition = execute.transitionValue;
-}
-
-function applyBottomSheetClickToggleFromPlan(entry) {
-    if (!entry || !entry.shouldToggle) return;
-    if (entry.logMessage != null) console.log(entry.logMessage, entry.logState);
-    if (entry.action === 'collapse') collapseBottomSheet();
-    else if (entry.action === 'expand') expandBottomSheet();
-}
-
-function applyBottomSheetBodyClickExpandFromPlan(entry) {
-    if (!entry || !entry.shouldExpand) return;
-    if (entry.logMessage) console.log(entry.logMessage);
-    expandBottomSheet();
-}
-
-function applyBottomSheetFocusExpandBindingFromPlan(binding) {
-    if (!binding || !binding.shouldBind) return;
-
-    binding.inputIds.forEach((inputId) => {
-        const input = document.getElementById(inputId);
-        if (input) input.addEventListener('focus', expandBottomSheet);
-    });
-}
-
-// ===== BOTTOM SHEET FUNCTIONALITY =====
-/**
- * initBottomSheet function
- * @function initBottomSheet
- * @returns {*} Return value description
- */
-function initBottomSheet() {
-    const DH = _domHelpers();
-    const bottomSheet = document.getElementById('bottomSheet');
-    const handle = document.querySelector('.bottom-sheet-handle');
-    const header = document.querySelector('.bottom-sheet-header');
-    const initPlan = DH.buildBottomSheetFullInitOrchestrationPlan(!!bottomSheet, !!handle);
-    let isDragging = false;
-
-    console.log(initPlan.initLogMessage, { bottomSheet, handle, header });
-
-    if (!initPlan.shouldInit) {
-        console.error(initPlan.missingElementsErrorLog);
-        return;
-    }
-
-    const applyDragVisual = (diff) => {
-        applyBottomSheetDragVisualFromPlan(
-            DH.buildBottomSheetDragVisualEntryOrchestrationPlan({
-                diff,
-                isExpanded: bottomSheetIsExpanded,
-                previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
-            }).feedback,
-            bottomSheet
-        );
-    };
-
-    const finishDrag = (diff) => {
-        applyBottomSheetDragFinishFromPlan(
-            DH.buildBottomSheetDragFinishEntryOrchestrationPlan(diff, bottomSheetIsExpanded, {
-                thresholdPx: initPlan.dragThresholdPx,
-                collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
-                expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
-            })
-        );
-    };
-
-    handle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        applyBottomSheetClickToggleFromPlan(
-            DH.buildBottomSheetHandleClickEntryOrchestrationPlan(bottomSheetIsExpanded, {
-                handleClickLogMessage: initPlan.handleClickLogMessage,
-            })
-        );
-    });
-
-    if (header) {
-        header.addEventListener('click', (e) => {
-            const entry = DH.buildBottomSheetHeaderClickEntryOrchestrationPlan(
-                !!DH.closest(e.target, initPlan.headerButtonIgnoreSelector),
-                bottomSheetIsExpanded
-            );
-            if (!entry.shouldToggle) return;
-            e.stopPropagation();
-            applyBottomSheetClickToggleFromPlan(entry);
-        });
-    }
-
-    bottomSheet.addEventListener('click', (e) => {
-        applyBottomSheetBodyClickExpandFromPlan(
-            DH.buildBottomSheetBodyClickEntryOrchestrationPlan(
-                !!DH.closest(e.target, initPlan.contentSelector),
-                bottomSheetIsExpanded,
-                { sheetExpandClickLogMessage: initPlan.sheetExpandClickLogMessage }
-            )
-        );
-    });
-
-    handle.addEventListener('touchstart', (e) => {
-        isDragging = true;
-        bottomSheetStartY = e.touches[0].clientY;
-        bottomSheetCurrentY = bottomSheetStartY;
-        applyBottomSheetDragStartFromPlan(DH.buildBottomSheetDragStartExecutePlan(), bottomSheet);
-    }, { passive: true });
-
-    handle.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        bottomSheetCurrentY = e.touches[0].clientY;
-        applyDragVisual(bottomSheetCurrentY - bottomSheetStartY);
-    }, { passive: true });
-
-    handle.addEventListener('touchend', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        finishDrag(bottomSheetCurrentY - bottomSheetStartY);
-    }, { passive: true });
-
-    handle.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        bottomSheetStartY = e.clientY;
-        bottomSheetCurrentY = bottomSheetStartY;
-        applyBottomSheetDragStartFromPlan(DH.buildBottomSheetDragStartExecutePlan(), bottomSheet);
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        bottomSheetCurrentY = e.clientY;
-        applyDragVisual(bottomSheetCurrentY - bottomSheetStartY);
-    });
-
-    document.addEventListener('mouseup', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        finishDrag(bottomSheetCurrentY - bottomSheetStartY);
-    });
-
-    applyBottomSheetFocusExpandBindingFromPlan(
-        DH.buildBottomSheetFocusExpandBindingPlan(initPlan.focusExpandInputIds)
-    );
-
-    syncBottomSheetOverlapFabs();
-}
-
-function applyBottomSheetStateFromPlan(execute) {
-    const DH = _domHelpers();
-    if (!execute || !execute.shouldApply) return;
-
-    const bottomSheet = document.getElementById(execute.bottomSheetId || DH.BOTTOM_SHEET_ID);
-    if (!bottomSheet) return;
-
-    if (execute.expandLogMessage) console.log(execute.expandLogMessage);
-    if (execute.collapseLogMessage) console.log(execute.collapseLogMessage);
-
-    (execute.clearInlineStyles || []).forEach((prop) => {
-        bottomSheet.style[prop] = '';
-    });
-
-    if (execute.setExpandedState) {
-        bottomSheet.classList.add(execute.expandedClass || DH.BOTTOM_SHEET_EXPANDED_CLASS);
-        bottomSheet.setAttribute('aria-expanded', execute.ariaExpanded || 'true');
-        bottomSheetIsExpanded = true;
-        if (execute.expandedLogMessage) {
-            console.log(execute.expandedLogMessage, bottomSheet.className);
-        }
-    } else if (execute.setExpandedState === false) {
-        bottomSheet.classList.remove(execute.expandedClass || DH.BOTTOM_SHEET_EXPANDED_CLASS);
-        bottomSheet.setAttribute('aria-expanded', execute.ariaExpanded || 'false');
-        bottomSheetIsExpanded = false;
-        if (execute.resetContentScroll && execute.contentSelector) {
-            const content = bottomSheet.querySelector(execute.contentSelector);
-            if (content) content.scrollTop = 0;
-        }
-    }
-
-    if (execute.syncOverlapFabs) syncBottomSheetOverlapFabs();
-}
-
-/**
- * expandBottomSheet function
- * @function expandBottomSheet
- * @returns {*} Return value description
- */
-function expandBottomSheet() {
-    applyBottomSheetStateFromPlan(
-        _domHelpers().buildExpandBottomSheetEntryOrchestrationPlan().execute
-    );
-}
-
-/**
- * collapseBottomSheet function
- * @function collapseBottomSheet
- * @returns {*} Return value description
- */
-function collapseBottomSheet() {
-    applyBottomSheetStateFromPlan(
-        _domHelpers().buildCollapseBottomSheetEntryOrchestrationPlan().execute
-    );
-}
-
-
-
 // Turn announcement variables
 let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
 const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
@@ -9440,6 +9197,7 @@ VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
+VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
