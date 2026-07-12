@@ -13,6 +13,7 @@ from typing import Any, Dict, List
 
 from voyagr.services.routing.optimised_route import (
     SHORTEST_ROUTE_NAME,
+    is_primary_optimised_route,
     routes_are_distinct,
 )
 
@@ -63,12 +64,16 @@ def dedupe_similar_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Drop secondary routes that are too similar to an already-kept option.
 
-    The first route (Fastest / primary) is always retained.
+    The first route (Fastest / primary) and any ⚡ Optimised options are always
+    retained — Optimised is the primary camera-avoidance product route.
     """
     if len(routes) <= 1:
         return routes
     kept: List[Dict[str, Any]] = [routes[0]]
     for route in routes[1:]:
+        if is_primary_optimised_route(route):
+            kept.append(route)
+            continue
         if all(routes_are_distinct(route, existing) for existing in kept):
             kept.append(route)
     for idx, route in enumerate(kept):
@@ -92,6 +97,9 @@ def filter_routes_by_max_detour(
 
     kept: List[Dict[str, Any]] = [routes[0]]
     for route in routes[1:]:
+        if is_primary_optimised_route(route):
+            kept.append(route)
+            continue
         dur = _duration_minutes(route)
         if dur <= 0:
             kept.append(route)
@@ -103,6 +111,24 @@ def filter_routes_by_max_detour(
     for idx, route in enumerate(kept):
         route['id'] = idx + 1
     return kept
+
+
+def pin_optimised_route_first(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Move ⚡ Optimised (GraphHopper/Valhalla) to the top of the option list."""
+    if not routes:
+        return routes
+    optimised_idx = next(
+        (i for i, r in enumerate(routes) if is_primary_optimised_route(r)),
+        None,
+    )
+    if optimised_idx is None or optimised_idx == 0:
+        return routes
+    ordered = [routes[optimised_idx]] + [
+        r for i, r in enumerate(routes) if i != optimised_idx
+    ]
+    for idx, route in enumerate(ordered):
+        route['id'] = idx + 1
+    return ordered
 
 
 def finalize_route_variety(

@@ -44,12 +44,32 @@ class TestMergeGraphhopperOptimisedRoute(unittest.TestCase):
         out = merge_graphhopper_optimised_route(routes, ctx)
         self.assertEqual(len(out), 1)
 
-    @patch('voyagr.services.routing.enrichment.graphhopper_qualifies_as_optimised', return_value=False)
-    def test_warns_when_gh_success_but_hazard_avoidance_off(self, _qual):
-        routes = [{'name': 'Fastest', 'id': 1}]
-        ctx = _ctx(graphhopper_route={'success': True}, enable_hazard_avoidance=False)
+    @patch('voyagr.services.routing.route_entries.build_graphhopper_optimised_route_entry')
+    @patch('voyagr.services.routing.enrichment.graphhopper_qualifies_as_optimised', return_value=True)
+    def test_merges_when_gh_success_even_if_hazard_avoidance_flag_off(self, _qual, mock_build):
+        mock_build.return_value = {
+            'id': 0, 'name': '⚡ Optimised', 'source': 'GraphHopper',
+            'hazard_count': 1, 'distance_km': 10.0, 'maneuvers': [],
+        }
+        routes = [{'name': 'Fastest', 'id': 1, 'hazard_count': 3}]
+        ctx = _ctx(graphhopper_route={'success': True, 'custom_model_applied': True},
+                   enable_hazard_avoidance=False)
         out = merge_graphhopper_optimised_route(routes, ctx)
-        self.assertEqual(out, routes)
+        self.assertEqual(out[0]['name'], '⚡ Optimised')
+
+    @patch('voyagr.services.routing.route_entries.build_graphhopper_optimised_route_entry')
+    @patch('voyagr.services.routing.enrichment.graphhopper_qualifies_as_optimised', return_value=True)
+    def test_keeps_optimised_when_more_cameras_than_baseline(self, _qual, mock_build):
+        mock_build.return_value = {
+            'id': 0, 'name': '⚡ Optimised', 'source': 'GraphHopper',
+            'hazard_count': 12, 'distance_km': 10.0, 'maneuvers': [],
+        }
+        routes = [{'name': 'Fastest', 'id': 1, 'hazard_count': 3}]
+        ctx = _ctx(graphhopper_route={'success': True, 'custom_model_applied': True})
+        out = merge_graphhopper_optimised_route(routes, ctx)
+        self.assertEqual(out[0]['name'], '⚡ Optimised')
+        self.assertEqual(len(out), 2)
+        self.assertTrue(out[0].get('routing_preferences_limited'))
 
 
 class TestEnsureKwargsCompatibility(unittest.TestCase):

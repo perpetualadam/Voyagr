@@ -120,15 +120,15 @@ def merge_graphhopper_optimised_route(
     from voyagr.services.routing.route_entries import build_graphhopper_optimised_route_entry
 
     gh = ctx.graphhopper_route
-    if not (gh and gh.get('success') and ctx.enable_hazard_avoidance):
-        if gh and gh.get('success') and ctx.avoid_cameras:
+    if not (gh and gh.get('success')):
+        return routes
+
+    if not graphhopper_qualifies_as_optimised(gh, avoid_cameras=ctx.avoid_cameras):
+        if ctx.avoid_cameras:
             logger.warning(
                 '[GRAPHHOPPER] Skipping unfiltered route as Optimised '
                 '(custom model not applied); will use Valhalla exclude_locations'
             )
-        return routes
-
-    if not graphhopper_qualifies_as_optimised(gh, avoid_cameras=ctx.avoid_cameras):
         return routes
 
     try:
@@ -160,11 +160,11 @@ def merge_graphhopper_optimised_route(
         gh_baseline = baseline_camera_hazard_count(routes)
         if gh_hazard_count > gh_baseline:
             logger.warning(
-                '[GRAPHHOPPER] Skipping Optimised (%s): %d cameras vs baseline %d '
-                '(Valhalla exclusions work better)',
+                '[GRAPHHOPPER] Optimised (%s) has %d cameras vs baseline %d — '
+                'keeping as primary option anyway',
                 log_label, gh_hazard_count, gh_baseline,
             )
-            return routes
+            gh_route_entry['routing_preferences_limited'] = True
 
         routes = [r for r in routes if not is_primary_optimised_route(r)]
         routes.insert(0, gh_route_entry)
@@ -196,7 +196,7 @@ def apply_valhalla_route_enrichment(
     Full post-Valhalla enrichment: optional GH Optimised, ensure Optimised/Scenic/Shortest,
     camera proximity scores, hazard-penalty reorder + id renumber.
     """
-    from voyagr.services.routing.route_variety import finalize_route_variety
+    from voyagr.services.routing.route_variety import finalize_route_variety, pin_optimised_route_first
     import voyagr_web as vw
 
     ensure_kw = _ensure_kwargs(ctx)
@@ -229,5 +229,6 @@ def apply_valhalla_route_enrichment(
         for idx, route in enumerate(routes):
             route['id'] = idx + 1
 
+    routes = pin_optimised_route_first(routes)
     routes = finalize_route_variety(routes, max_detour_percent=ctx.max_detour)
     return routes

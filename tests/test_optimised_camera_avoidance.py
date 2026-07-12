@@ -187,7 +187,19 @@ class TestOptimisedRouteQualification:
             route, graphhopper_route=None, baseline_hazard_count=5, avoid_cameras=True,
         ) is True
 
-    def test_rejects_optimised_with_more_cameras_than_baseline(self):
+    def test_rejects_valhalla_optimised_with_more_cameras_than_baseline(self):
+        route = {
+            'name': PRIMARY_OPTIMISED_NAME,
+            'source': 'Valhalla',
+            'hazard_count': 10,
+            'camera_exclusions_applied': True,
+        }
+        gh = {'success': True, 'custom_model_applied': True}
+        assert optimised_route_entry_qualifies(
+            route, graphhopper_route=gh, baseline_hazard_count=5, avoid_cameras=True,
+        ) is False
+
+    def test_keeps_graphhopper_optimised_even_with_more_cameras_than_baseline(self):
         route = {
             'name': PRIMARY_OPTIMISED_NAME,
             'source': 'GraphHopper',
@@ -196,9 +208,9 @@ class TestOptimisedRouteQualification:
         gh = {'success': True, 'custom_model_applied': True}
         assert optimised_route_entry_qualifies(
             route, graphhopper_route=gh, baseline_hazard_count=5, avoid_cameras=True,
-        ) is False
+        ) is True
 
-    def test_prune_drops_weak_optimised(self):
+    def test_prune_drops_weak_valhalla_optimised(self):
         routes = [
             {'name': 'Fastest', 'hazard_count': 3},
             {'name': PRIMARY_OPTIMISED_NAME, 'source': 'Valhalla', 'hazard_count': 8},
@@ -208,3 +220,14 @@ class TestOptimisedRouteQualification:
         )
         assert len(pruned) == 1
         assert pruned[0]['name'] == 'Fastest'
+
+    def test_prune_keeps_graphhopper_optimised(self):
+        routes = [
+            {'name': 'Fastest', 'hazard_count': 3},
+            {'name': PRIMARY_OPTIMISED_NAME, 'source': 'GraphHopper', 'hazard_count': 10},
+        ]
+        gh = {'success': True, 'custom_model_applied': True}
+        pruned = prune_non_qualifying_optimised_routes(
+            routes, graphhopper_route=gh, avoid_cameras=True,
+        )
+        assert len(pruned) == 2

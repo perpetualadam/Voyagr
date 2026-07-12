@@ -9,8 +9,10 @@ from voyagr.services.routing.route_variety import (
     dedupe_similar_routes,
     filter_routes_by_max_detour,
     finalize_route_variety,
+    pin_optimised_route_first,
     should_append_distinct_valhalla_route_types,
 )
+from voyagr.services.routing.optimised_route import PRIMARY_OPTIMISED_NAME
 
 COORDS_A = [(51.50, -0.12), (51.51, -0.11), (51.52, -0.10)]
 COORDS_B = [(51.50, -0.12), (51.51, -0.15), (51.52, -0.18)]
@@ -50,6 +52,36 @@ class TestRouteVariety(unittest.TestCase):
         self.assertEqual(out[1]['name'], 'Balanced')
         self.assertEqual(out[0]['id'], 1)
         self.assertEqual(out[1]['id'], 2)
+
+    def test_dedupe_keeps_optimised_even_when_similar(self):
+        routes = [
+            _route('Fastest', SHAPE_A, route_id=1),
+            {'id': 2, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 10},
+        ]
+        out = dedupe_similar_routes(routes)
+        assert len(out) == 2
+        assert out[1]['name'] == PRIMARY_OPTIMISED_NAME
+
+    def test_max_detour_keeps_optimised_even_when_slow(self):
+        routes = [
+            _route('Fastest', SHAPE_A, duration=10, route_id=1),
+            {'id': 2, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_B,
+             'geometry_precision': 6, 'distance_km': 8.0, 'duration_minutes': 50},
+        ]
+        out = filter_routes_by_max_detour(routes, 20)
+        assert len(out) == 2
+
+    def test_pin_optimised_route_first(self):
+        routes = [
+            _route('Fastest', SHAPE_A, route_id=1),
+            _route('Alternate', SHAPE_B, route_id=2, distance=7.0),
+            {'id': 3, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_B,
+             'geometry_precision': 6, 'distance_km': 7.5, 'duration_minutes': 12},
+        ]
+        out = pin_optimised_route_first(routes)
+        assert out[0]['name'] == PRIMARY_OPTIMISED_NAME
+        assert out[0]['id'] == 1
 
     def test_filter_routes_by_max_detour(self):
         routes = [

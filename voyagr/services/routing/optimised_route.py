@@ -572,13 +572,12 @@ def optimised_route_entry_qualifies(
     if not is_primary_optimised_route(route):
         return True
 
-    if int(route.get('hazard_count') or 0) > baseline_hazard_count:
-        return False
-
     source = route.get('source')
     if source == 'GraphHopper':
         return graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=True)
     if source == 'Valhalla':
+        if int(route.get('hazard_count') or 0) > baseline_hazard_count:
+            return False
         return bool(route.get('camera_exclusions_applied'))
     return False
 
