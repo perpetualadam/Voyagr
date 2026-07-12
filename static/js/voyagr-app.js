@@ -227,95 +227,24 @@ window.addEventListener('resize', () => {
     }
 });
 
-// ===== DARK MODE FUNCTIONS =====
-let currentTheme = localStorage.getItem('ui_theme') || 'light';
+// ===== DARK MODE ORCHESTRATION =====
+// Orchestration lives in static/js/app/dark-mode-orchestration.js (bound at file end).
 
-/**
- * initializeDarkMode function
- * @function initializeDarkMode
- * @returns {*} Return value description
- */
-function initializeDarkMode() {
-    const savedTheme = localStorage.getItem('ui_theme') || 'light';
-    currentTheme = savedTheme;
-    applyTheme(savedTheme);
-    console.log('[Dark Mode] Initialized with theme:', savedTheme);
-}
-/**
- * applyTheme function
- * @function applyTheme
- * @param {*} theme - Parameter description
- * @returns {*} Return value description
- */
-function applyTheme(theme) {
-    const body = document.body;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const useDark = _theme().shouldUseDarkMode(theme, prefersDark);
-
-    if (useDark) {
-        body.classList.add('dark-mode');
-        console.log('[Dark Mode] Applied', theme === 'auto' ? 'auto theme (system prefers dark)' : 'dark theme');
-    } else {
-        body.classList.remove('dark-mode');
-        console.log('[Dark Mode] Applied', theme === 'auto' ? 'auto theme (system prefers light)' : 'light theme');
-    }
-
-    currentTheme = theme;
-    localStorage.setItem('ui_theme', theme);
+function getDarkModeOrchestrationRuntime() {
+    return {
+        theme: () => _theme(),
+        call: {
+            showStatus,
+            saveAllSettings,
+        },
+    };
 }
 
-/**
- * toggleDarkMode function
- * @function toggleDarkMode
- * @returns {*} Return value description
- */
-function toggleDarkMode() {
-    const newTheme = _theme().toggleBetweenLightAndDark(currentTheme);
-    applyTheme(newTheme);
-    showStatus(`🌙 Theme changed to ${newTheme} mode`, 'success');
-}
-/**
- * setTheme function
- * @function setTheme
- * @param {*} theme - Parameter description
- * @returns {*} Return value description
- */
-function setTheme(theme) {
-    applyTheme(theme);
-    updateThemeButtons();  // Update button states to show which theme is active
-    saveAllSettings();  // Save theme preference
-    showStatus(`🎨 Theme changed to ${theme} mode`, 'success');
-}
-
-if (window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        if (currentTheme === 'auto') {
-            applyTheme('auto');
-            console.log('[Dark Mode] System theme changed, reapplying auto theme');
-        }
-    });
-}
-
-/**
- * updateThemeButtons function
- * @function updateThemeButtons
- * @returns {*} Return value description
- */
-function updateThemeButtons() {
-    const lightBtn = document.getElementById('themeLight');
-    const darkBtn = document.getElementById('themeDark');
-    const autoBtn = document.getElementById('themeAuto');
-
-    if (lightBtn) lightBtn.classList.remove('active');
-    if (darkBtn) darkBtn.classList.remove('active');
-    if (autoBtn) autoBtn.classList.remove('active');
-
-    const activeId = _theme().activeThemeButtonId(currentTheme);
-    const activeBtn = activeId ? document.getElementById(activeId) : null;
-    if (activeBtn) activeBtn.classList.add('active');
-
-    console.log('[Dark Mode] Theme buttons updated for theme:', currentTheme);
-}
+function initializeDarkMode() { VoyagrDarkModeOrchestration.initializeDarkMode(); }
+function applyTheme(theme) { VoyagrDarkModeOrchestration.applyTheme(theme); }
+function toggleDarkMode() { VoyagrDarkModeOrchestration.toggleDarkMode(); }
+function setTheme(theme) { VoyagrDarkModeOrchestration.setTheme(theme); }
+function updateThemeButtons() { VoyagrDarkModeOrchestration.updateThemeButtons(); }
 
 // Track previous tab for back navigation
 let previousTab = 'navigation';
@@ -5277,63 +5206,23 @@ function initMobileMapIconHints() {
     VoyagrMapHintsOrchestration.initMobileMapIconHints();
 }
 
-function openRoadReportModal() {
-    const execute = _roadReport().buildOpenRoadReportModalExecutePlan();
-    if (!execute.shouldOpen) return;
-    const m = document.getElementById(execute.modalId);
-    if (!m) return;
-    const notes = document.getElementById(execute.notesId);
-    if (notes && execute.clearNotes) notes.value = '';
-    m.style.display = execute.modalDisplay;
+// ===== ROAD REPORT ORCHESTRATION =====
+// Orchestration lives in static/js/app/road-report-orchestration.js (bound at file end).
+
+function getRoadReportOrchestrationRuntime() {
+    return {
+        roadReport: () => _roadReport(),
+        getCurrentLat: () => (typeof currentLat !== 'undefined' ? currentLat : null),
+        getCurrentLon: () => (typeof currentLon !== 'undefined' ? currentLon : null),
+        call: {
+            showStatus,
+        },
+    };
 }
 
-function closeRoadReportModal() {
-    const execute = _roadReport().buildCloseRoadReportModalExecutePlan();
-    if (!execute.shouldClose) return;
-    const m = document.getElementById(execute.modalId);
-    if (m) m.style.display = execute.modalDisplay;
-}
-
-async function submitRoadReport() {
-    const RR = _roadReport();
-    const collected = RR.buildSubmitRoadReportCollectPlan({
-        lat: typeof currentLat !== 'undefined' ? currentLat : null,
-        lon: typeof currentLon !== 'undefined' ? currentLon : null,
-    });
-    if (!collected.hasGpsFix) {
-        const fetchPlan = RR.buildSubmitRoadReportFetchPlan();
-        showStatus(fetchPlan.gpsRequiredStatusMessage, fetchPlan.gpsRequiredStatusType);
-        return;
-    }
-
-    const typeEl = document.getElementById(RR.ROAD_REPORT_TYPE_ID);
-    const hazard_type = typeEl ? typeEl.value : 'other';
-    const description = (document.getElementById(RR.ROAD_REPORT_NOTES_ID)
-        && document.getElementById(RR.ROAD_REPORT_NOTES_ID).value) || '';
-    const fetchPlan = RR.buildSubmitRoadReportFetchPlan({
-        lat: collected.lat,
-        lon: collected.lon,
-        hazardType: hazard_type,
-        description,
-    });
-
-    try {
-        const r = await fetch(fetchPlan.url, {
-            method: fetchPlan.method,
-            headers: fetchPlan.headers,
-            body: JSON.stringify(fetchPlan.body),
-        });
-        const data = await r.json();
-        if (data.success) {
-            showStatus(fetchPlan.successStatusMessage, fetchPlan.successStatusType);
-            if (fetchPlan.closeModalOnSuccess) closeRoadReportModal();
-        } else {
-            showStatus(data.error || fetchPlan.errorStatusPrefix, 'error');
-        }
-    } catch (e) {
-        showStatus(fetchPlan.errorStatusPrefix + ': ' + e.message, 'error');
-    }
-}
+function openRoadReportModal() { VoyagrRoadReportOrchestration.openRoadReportModal(); }
+function closeRoadReportModal() { VoyagrRoadReportOrchestration.closeRoadReportModal(); }
+async function submitRoadReport() { return VoyagrRoadReportOrchestration.submitRoadReport(); }
 
 // PWA Service Worker Registration
 let _swUpdateInFlight = false;
@@ -7447,6 +7336,8 @@ VoyagrSmartZoomOrchestration.bind(getSmartZoomOrchestrationRuntime());
 VoyagrMapThemeOrchestration.bind(getMapThemeOrchestrationRuntime());
 VoyagrFormClearOrchestration.bind(getFormClearOrchestrationRuntime());
 VoyagrMapHintsOrchestration.bind(getMapHintsOrchestrationRuntime());
+VoyagrDarkModeOrchestration.bind(getDarkModeOrchestrationRuntime());
+VoyagrRoadReportOrchestration.bind(getRoadReportOrchestrationRuntime());
 VoyagrMlPredictionsOrchestration.bind(getMlPredictionsOrchestrationRuntime());
 VoyagrVehicleRoutingOrchestration.bind(getVehicleRoutingOrchestrationRuntime());
 VoyagrAutoGpsOrchestration.bind(getAutoGpsOrchestrationRuntime());
