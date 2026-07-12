@@ -928,32 +928,6 @@ function displayHazardMarkers(hazards) { VoyagrHazardMapOrchestration.displayHaz
 function clearHazardMarkers() { VoyagrHazardMapOrchestration.clearHazardMarkers(); }
 function displayAllRouteHazards() { VoyagrHazardMapOrchestration.displayAllRouteHazards(); }
 
-function applyCollapseBottomSheetForRoutePreviewFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    const bottomSheet = document.getElementById(apply.bottomSheetId);
-    if (!bottomSheet) return;
-
-    (apply.clearInlineStyles || []).forEach((prop) => {
-        bottomSheet.style[prop] = '';
-    });
-    if (apply.collapse) collapseBottomSheet();
-
-    const handle = bottomSheet.querySelector(apply.handleSelector);
-    if (handle && apply.handleTitle) handle.title = apply.handleTitle;
-    if (apply.logMessage) console.log(apply.logMessage);
-}
-
-/**
- * Collapse bottom sheet to show map with route preview
- * Uses the standard collapse mechanism instead of inline styles
- */
-function collapseBottomSheetForRoutePreview() {
-    applyCollapseBottomSheetForRoutePreviewFromPlan(
-        _domHelpers().buildCollapseBottomSheetForRoutePreviewOrchestrationPlan().apply
-    );
-}
-
 // ===== BOTTOM SHEET ORCHESTRATION =====
 function toggleBottomSheet() { VoyagrBottomSheetOrchestration.toggleBottomSheet(); }
 function expandBottomSheet() { VoyagrBottomSheetOrchestration.expandBottomSheet(); }
@@ -961,6 +935,8 @@ function collapseBottomSheet() { VoyagrBottomSheetOrchestration.collapseBottomSh
 function initBottomSheet() { VoyagrBottomSheetOrchestration.initBottomSheet(); }
 function syncBottomSheetOverlapFabs() { VoyagrBottomSheetOrchestration.syncBottomSheetOverlapFabs(); }
 function applyBottomSheetStateFromPlan(execute) { VoyagrBottomSheetOrchestration.applyBottomSheetStateFromPlan(execute); }
+
+function collapseBottomSheetForRoutePreview() { VoyagrBottomSheetOrchestration.collapseBottomSheetForRoutePreview(); }
 
 function getBottomSheetOrchestrationRuntime() {
     return {
@@ -2193,11 +2169,7 @@ function _poiSearch() { return VoyagrModules.poiSearch(); }
 function _routingRequest() { return VoyagrModules.routingRequest(); }
 
 function applyZoomFollowButtonUi(btn, enabled) {
-    const plan = _mapControls().buildZoomFollowButtonUiExecutePlan(enabled);
-    if (!btn || !plan.shouldApply) return;
-    btn.classList.toggle('active', plan.active);
-    btn.style.background = plan.background;
-    btn.innerHTML = plan.innerHtml;
+    VoyagrMapRecenterOrchestration.applyZoomFollowButtonUi(btn, enabled);
 }
 
 /** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
@@ -2290,45 +2262,6 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaS
 }
 function applySpeedWidgetToggleUi() { VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(); }
 function toggleSpeedWidget() { VoyagrSpeedWidgetOrchestration.toggleSpeedWidget(); }
-function toggleZoomAndFollow() {
-    const MC = _mapControls();
-    const orch = MC.buildToggleZoomAndFollowOrchestrationPlan({
-        currentEnabled: zoomAndFollowEnabled,
-    });
-    zoomAndFollowEnabled = orch.nextEnabled;
-    applyZoomFollowButtonUi(document.getElementById(orch.toggleButtonId), zoomAndFollowEnabled);
-    localStorage.setItem(orch.storageKey, orch.storageValue);
-
-    if (orch.action === 'enable') {
-        const execute = MC.buildToggleZoomAndFollowEnabledExecutePlan({
-            hasMap: !!map,
-            currentLat,
-            currentLon,
-        });
-        mapFollowingActive = execute.mapFollowingActive;
-        showStatus(execute.statusMessage, execute.statusType);
-        console.log(execute.logMessage);
-        if (execute.flyTo) {
-            map.flyTo(execute.flyTo);
-        }
-    } else {
-        const execute = MC.buildToggleZoomAndFollowDisabledExecutePlan();
-        mapFollowingActive = execute.mapFollowingActive;
-        showStatus(execute.statusMessage, execute.statusType);
-        console.log(execute.logMessage);
-    }
-
-    if (orch.updateRecenterVisibility) {
-        updateRecenterButtonVisibility();
-    }
-}
-
-/**
- * Snap GPS position to the active route polyline when navigation is in progress.
- * @param {number} lat
- * @param {number} lon
- * @returns {Object|null}
- */
 function resolveGpsRouteSnapForTick(lat, lon) {
     const RG = _routeGeometry();
     const plan = RG.buildGpsRouteSnapTickPlan({
@@ -2360,115 +2293,42 @@ function getVehicleDisplayCoordinates() {
     });
 }
 
-function metersMapCenterFromVehicle() {
-    if (!map || currentLat == null || currentLon == null) return 0;
-    const center = map.getCenter();
-    const vehicle = getVehicleDisplayCoordinates();
-    return calculateDistanceMeters(vehicle.lat, vehicle.lon, center.lat, center.lng);
+// ===== MAP RECENTER ORCHESTRATION =====
+// Orchestration lives in static/js/app/map-recenter-orchestration.js (bound at file end).
+
+function getMapRecenterOrchestrationRuntime() {
+    return {
+        mapControls: () => _mapControls(),
+        routeGeometry: () => _routeGeometry(),
+        cameraPitch: () => _cameraPitch(),
+        getMap: () => map,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getRouteInProgress: () => routeInProgress,
+        getIsTrackingActive: () => isTrackingActive,
+        getJourneyOverviewActive: () => journeyOverviewActive,
+        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
+        setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
+        getMapFollowingActive: () => mapFollowingActive,
+        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getCurrentUserMarker: () => currentUserMarker,
+        getZoomLevels: () => ZOOM_LEVELS,
+        getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
+        call: {
+            showStatus,
+            getVehicleDisplayCoordinates,
+            calculateDistanceMeters,
+            getCurrentRoadType,
+            shouldTiltDrivingCamera,
+            shouldUsePitchedDrivingCamera,
+            exitJourneyOverviewForRecenter: () => VoyagrJourneyOverviewOrchestration.exitJourneyOverviewForRecenter(),
+        },
+    };
 }
 
-function shouldShowRecenterVehicleButton() {
-    const MC = _mapControls();
-    const plan = MC.buildShouldShowRecenterVehicleButtonPlan({
-        hasMap: !!map,
-        currentLat,
-        currentLon,
-        routeInProgress,
-        isTrackingActive,
-        journeyOverviewActive,
-        zoomAndFollowEnabled,
-        mapFollowingActive,
-        distanceFromCenterM: metersMapCenterFromVehicle(),
-        minDistanceM: MC.RECENTER_MIN_DISTANCE_M,
-    });
-    return plan.shouldShow;
-}
-
-function applyRecenterButtonVisibilityFromPlan(execute) {
-    if (!execute || !execute.shouldUpdate) return;
-    const btn = document.getElementById(execute.buttonId);
-    if (btn) btn.style.display = execute.display;
-}
-
-function updateRecenterButtonVisibility() {
-    applyRecenterButtonVisibilityFromPlan(
-        _mapControls().buildRecenterButtonVisibilityExecutePlan(shouldShowRecenterVehicleButton())
-    );
-}
-
-function recenterOnVehicle() {
-    const MC = _mapControls();
-    const { lat, lon } = getVehicleDisplayCoordinates();
-    const preflight = MC.buildRecenterOnVehiclePreflightPlan({
-        hasMap: !!map,
-        currentLat,
-        currentLon,
-        displayLat: lat,
-        displayLon: lon,
-        journeyOverviewActive,
-        routeInProgress,
-    });
-    if (!preflight.shouldRecenter) {
-        showStatus(preflight.statusMessage, preflight.statusType);
-        return;
-    }
-
-    if (preflight.exitJourneyOverview) {
-        VoyagrJourneyOverviewOrchestration.exitJourneyOverviewForRecenter();
-    }
-
-    if (preflight.routeInProgress) {
-        mapFollowingActive = true;
-        const speedMps = currentUserMarker && Number.isFinite(currentUserMarker.speed)
-            ? currentUserMarker.speed
-            : 0;
-        const speedMph = speedMps * 2.23694;
-        const followInput = MC.buildRecenterNavigationFollowInputPlan({
-            lat,
-            lon,
-            speedMph,
-            roadType: getCurrentRoadType(undefined, speedMph),
-            heading: (currentUserMarker && Number.isFinite(currentUserMarker.heading))
-                ? currentUserMarker.heading
-                : map.getBearing(),
-            mapBearing: map.getBearing(),
-            shouldTilt: shouldTiltDrivingCamera(),
-            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
-            viewportHeight: window.innerHeight,
-            viewportWidth: window.innerWidth,
-        });
-        const followCamera = _cameraPitch().buildNavigationFollowCameraPlan(
-            Object.assign({}, followInput, {
-                computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
-                    spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-                ),
-            })
-        );
-        const complete = MC.buildRecenterNavigationCompletePlan();
-
-        if (complete.setLastFollowCenterGeo) {
-            window.__voyagrLastFollowCenterGeo = { lat, lon };
-        }
-        if (complete.setLastFollowEaseAt) {
-            window.__voyagrLastFollowEaseAt = Date.now();
-        }
-        if (followCamera.easeTo) {
-            map.easeTo(followCamera.easeTo);
-        }
-        showStatus(complete.statusMessage, complete.statusType);
-    } else {
-        const tracking = MC.buildRecenterTrackingEasePlan({
-            lat,
-            lon,
-            currentZoom: map.getZoom(),
-        });
-        mapFollowingActive = tracking.mapFollowingActive;
-        map.easeTo(tracking.easeTo);
-        showStatus(tracking.statusMessage, tracking.statusType);
-    }
-
-    updateRecenterButtonVisibility();
-}
+function toggleZoomAndFollow() { VoyagrMapRecenterOrchestration.toggleZoomAndFollow(); }
+function updateRecenterButtonVisibility() { VoyagrMapRecenterOrchestration.updateRecenterButtonVisibility(); }
+function recenterOnVehicle() { VoyagrMapRecenterOrchestration.recenterOnVehicle(); }
 
 // Journey Overview state
 let journeyOverviewActive = false;
@@ -3895,6 +3755,7 @@ VoyagrHazardMapOrchestration.bind(getHazardMapOrchestrationRuntime());
 VoyagrCalculateRouteOrchestration.bind(getCalculateRouteOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
 VoyagrJourneyOverviewOrchestration.bind(getJourneyOverviewOrchestrationRuntime());
+VoyagrMapRecenterOrchestration.bind(getMapRecenterOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
 
 VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();

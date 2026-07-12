@@ -256,12 +256,35 @@
         syncBottomSheetOverlapFabs();
     }
 
+    function applyCollapseBottomSheetForRoutePreviewFromPlan(apply) {
+        if (!apply || !apply.shouldApply) return;
+
+        var bottomSheet = document.getElementById(apply.bottomSheetId);
+        if (!bottomSheet) return;
+
+        (apply.clearInlineStyles || []).forEach(function (prop) {
+            bottomSheet.style[prop] = '';
+        });
+        if (apply.collapse) collapseBottomSheet();
+
+        var handle = bottomSheet.querySelector(apply.handleSelector);
+        if (handle && apply.handleTitle) handle.title = apply.handleTitle;
+        if (apply.logMessage) console.log(apply.logMessage);
+    }
+
+    function collapseBottomSheetForRoutePreview() {
+        applyCollapseBottomSheetForRoutePreviewFromPlan(
+            DH().buildCollapseBottomSheetForRoutePreviewOrchestrationPlan().apply
+        );
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
 
     var api = {
         bind: bind,
+        collapseBottomSheetForRoutePreview: collapseBottomSheetForRoutePreview,
         applyBottomSheetDragVisualFromPlan: applyBottomSheetDragVisualFromPlan,
         applyBottomSheetDragFinishFromPlan: applyBottomSheetDragFinishFromPlan,
         applyBottomSheetDragStartFromPlan: applyBottomSheetDragStartFromPlan,
