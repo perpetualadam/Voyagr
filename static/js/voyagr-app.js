@@ -4887,6 +4887,7 @@ function detectUpcomingTurn(userLat, userLon) {
 function getVehicleRoutingOrchestrationRuntime() {
     return {
         getVehicleIcons: () => vehicleIcons,
+        getVehicleIconEmojis: () => vehicleIconEmojis,
         getCurrentVehicleType: () => currentVehicleType,
         setCurrentVehicleType: (val) => { currentVehicleType = val; },
         getCurrentRoutingMode: () => currentRoutingMode,
@@ -4894,87 +4895,22 @@ function getVehicleRoutingOrchestrationRuntime() {
         getCurrentUserMarker: () => currentUserMarker,
         setCurrentUserMarker: (val) => { currentUserMarker = val; },
         setCurrentUserMarkerIcon: (val) => { currentUserMarkerIcon = val; },
+        getMap: () => map,
+        vehicleMarker: () => _vehicleMarker(),
+        getMapLibreHelpers: () => MapLibreHelpers,
         call: {
             saveAllSettings,
             showStatus,
+            convertSpeed,
+            getSpeedUnit,
         },
     };
 }
 
 function updateVehicleType() { VoyagrVehicleRoutingOrchestration.updateVehicleType(); }
 function setRoutingMode(mode) { VoyagrVehicleRoutingOrchestration.setRoutingMode(mode); }
-
-/**
- * createVehicleMarker function
- * @function createVehicleMarker
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @param {*} speed - Parameter description
- * @param {*} accuracy - Parameter description
- * @param {*} heading - Parameter description (optional, in degrees 0-360)
- * @returns {*} Return value description
- */
 function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
-    const iconEmoji = vehicleIconEmojis[currentRoutingMode] || vehicleIconEmojis[currentVehicleType] || '🚗';
-    const safeHeading = Number.isFinite(heading) ? heading : 0;
-    const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
-    const accuracyLabel = safeAccuracy != null ? `±${safeAccuracy.toFixed(0)}m` : '—';
-
-    // Create a div element for the marker with an inline SVG arrowhead.
-    // Larger size for better visibility in 3D aerial view
-    const markerDiv = document.createElement('div');
-    markerDiv.style.width = '60px';
-    markerDiv.style.height = '60px';
-    markerDiv.style.display = 'flex';
-    markerDiv.style.alignItems = 'center';
-    markerDiv.style.justifyContent = 'center';
-    markerDiv.style.position = 'relative';
-
-    const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
-    const rot = ((safeHeading - mapBr) % 360 + 360) % 360;
-    markerDiv.style.transform = `rotate(${rot}deg)`;
-    markerDiv.style.transition = 'transform 0.3s ease-out';
-
-    // 3D effect: Add layered shadows for depth perception
-    markerDiv.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))';
-
-    // Enable 3D transforms
-    markerDiv.style.transformStyle = 'preserve-3d';
-
-    // Inline directional arrowhead (Starfleet-delta style). Drawn pointing "up" (north / 0°);
-    // the heading rotation applied to markerDiv turns it to face the direction of travel.
-    // It is a self-contained SVG (no external file fetch that can fail / 404, which is why the
-    // old <img>-based icon could vanish) and carries NO text/numbers/symbols, so it can never
-    // be mistaken for a regulatory road sign.
-    markerDiv.innerHTML = _vehicleMarker().buildVehicleArrowSvg();
-
-    // Create custom marker with MapLibre
-    const speedKmh = Number.isFinite(speed) ? (speed * 3.6).toFixed(1) : '0.0';
-    const speedUnit = getSpeedUnit();
-    const displaySpeed = convertSpeed(speedKmh);
-
-    const marker = MapLibreHelpers.createMarker(lat, lon, {
-        html: markerDiv.outerHTML,
-        iconSize: [60, 60],
-        iconAnchor: [30, 30],
-        className: 'vehicle-marker-icon',
-        rotationAlignment: 'map',
-        pitchAlignment: 'map',
-        popup: _vehicleMarker().buildVehicleMarkerPopupHtml({
-            iconEmoji,
-            displaySpeed,
-            speedUnit,
-            headingDegrees: Math.round(safeHeading),
-            accuracyLabel,
-        })
-    });
-
-    // Store heading and speed for later updates
-    marker.heading = safeHeading;
-    marker.speed = Number.isFinite(speed) ? speed : 0;
-    marker.accuracy = safeAccuracy;
-
-    return marker;
+    return VoyagrVehicleRoutingOrchestration.createVehicleMarker(lat, lon, speed, accuracy, heading);
 }
 
 // ===== SMART ZOOM FUNCTIONALITY =====
@@ -5224,91 +5160,26 @@ function openRoadReportModal() { VoyagrRoadReportOrchestration.openRoadReportMod
 function closeRoadReportModal() { VoyagrRoadReportOrchestration.closeRoadReportModal(); }
 async function submitRoadReport() { return VoyagrRoadReportOrchestration.submitRoadReport(); }
 
-// PWA Service Worker Registration
-let _swUpdateInFlight = false;
-let _swUpdateBackoffUntil = 0;
+// ===== SERVICE WORKER ORCHESTRATION =====
+// Orchestration lives in static/js/app/service-worker-orchestration.js (bound at file end).
+
+function getServiceWorkerOrchestrationRuntime() {
+    return {
+        pwaInstall: () => _pwaInstall(),
+        getRouteInProgress: () => routeInProgress,
+        getUpdatePending: () => updatePending,
+        setUpdatePending: (val) => { updatePending = val; },
+        call: {
+            showStatus,
+            saveAppState,
+            scheduleAppReload,
+            warmPicovoiceStaticCache,
+        },
+    };
+}
 
 async function safeServiceWorkerUpdate(registration, reason) {
-    const PWA = _pwaInstall();
-    const preflight = PWA.buildServiceWorkerUpdatePreflightPlan({
-        hasRegistration: !!registration,
-        hasServiceWorker: 'serviceWorker' in navigator,
-        isOnline: navigator.onLine,
-        updateInFlight: _swUpdateInFlight,
-        backoffUntil: _swUpdateBackoffUntil,
-        installing: !!(registration && registration.installing),
-    });
-    if (!preflight.shouldUpdate) return;
-
-    _swUpdateInFlight = true;
-    try {
-        await registration.update();
-    } catch (e) {
-        const apply = PWA.buildServiceWorkerUpdateErrorApplyPlan();
-        _swUpdateBackoffUntil = apply.backoffUntil;
-        console.debug(apply.logPrefix, e && e.name, reason || '');
-    } finally {
-        _swUpdateInFlight = false;
-    }
-}
-
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        const PWA = _pwaInstall();
-        const regPlan = PWA.buildServiceWorkerRegistrationExecutePlan();
-        navigator.serviceWorker.register(regPlan.scriptPath)
-            .then(registration => {
-                console.log(regPlan.successLogPrefix, registration);
-
-                setInterval(() => {
-                    void safeServiceWorkerUpdate(registration, 'periodic');
-                }, regPlan.periodicUpdateIntervalMs);
-
-                document.addEventListener('visibilitychange', () => {
-                    if (document.visibilityState === 'visible') {
-                        void safeServiceWorkerUpdate(registration, 'visible');
-                    }
-                });
-
-                const scheduleWarm = (cb) => {
-                    if (regPlan.preferIdleCallback && typeof requestIdleCallback === 'function') {
-                        requestIdleCallback(cb, { timeout: regPlan.picovoiceIdleTimeoutMs });
-                    } else {
-                        setTimeout(cb, regPlan.picovoiceWarmDelayMs);
-                    }
-                };
-                scheduleWarm(warmPicovoiceStaticCache);
-            })
-            .catch(error => {
-                console.log(regPlan.failureLogPrefix, error);
-            });
-    });
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-        const change = _pwaInstall().buildServiceWorkerControllerChangePlan({ routeInProgress });
-        console.log(change.logMessage);
-
-        if (change.action === 'defer') {
-            if (change.setUpdatePending) updatePending = true;
-            showStatus(change.statusMessage, change.statusType);
-        } else if (change.action === 'reload') {
-            showStatus(change.statusMessage, change.statusType);
-            if (change.saveAppState) saveAppState();
-            scheduleAppReload(change.reloadReason, change.reloadDelayMs);
-        }
-    });
-}
-
-// Request notification permission
-if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-}
-
-// Request persistent storage
-if (navigator.storage && navigator.storage.persist) {
-    navigator.storage.persist().then(persistent => {
-        console.log('[PWA] Persistent storage:', persistent ? 'granted' : 'denied');
-    });
+    return VoyagrServiceWorkerOrchestration.safeServiceWorkerUpdate(registration, reason);
 }
 
 // ===== OFFLINE NAVIGATION ORCHESTRATION =====
@@ -7338,6 +7209,7 @@ VoyagrFormClearOrchestration.bind(getFormClearOrchestrationRuntime());
 VoyagrMapHintsOrchestration.bind(getMapHintsOrchestrationRuntime());
 VoyagrDarkModeOrchestration.bind(getDarkModeOrchestrationRuntime());
 VoyagrRoadReportOrchestration.bind(getRoadReportOrchestrationRuntime());
+VoyagrServiceWorkerOrchestration.bind(getServiceWorkerOrchestrationRuntime());
 VoyagrMlPredictionsOrchestration.bind(getMlPredictionsOrchestrationRuntime());
 VoyagrVehicleRoutingOrchestration.bind(getVehicleRoutingOrchestrationRuntime());
 VoyagrAutoGpsOrchestration.bind(getAutoGpsOrchestrationRuntime());

@@ -69,6 +69,60 @@
         rt().call.showStatus(modeNames[mode] + ' mode', 'info');
     }
 
+    function createVehicleMarker(lat, lon, speed, accuracy, heading) {
+        if (heading === undefined) heading = 0;
+        const vehicleIconEmojis = rt().getVehicleIconEmojis();
+        const iconEmoji = vehicleIconEmojis[rt().getCurrentRoutingMode()]
+            || vehicleIconEmojis[rt().getCurrentVehicleType()]
+            || '🚗';
+        const safeHeading = Number.isFinite(heading) ? heading : 0;
+        const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
+        const accuracyLabel = safeAccuracy != null ? '±' + safeAccuracy.toFixed(0) + 'm' : '—';
+
+        const markerDiv = document.createElement('div');
+        markerDiv.style.width = '60px';
+        markerDiv.style.height = '60px';
+        markerDiv.style.display = 'flex';
+        markerDiv.style.alignItems = 'center';
+        markerDiv.style.justifyContent = 'center';
+        markerDiv.style.position = 'relative';
+
+        const map = rt().getMap();
+        const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
+        const rot = ((safeHeading - mapBr) % 360 + 360) % 360;
+        markerDiv.style.transform = 'rotate(' + rot + 'deg)';
+        markerDiv.style.transition = 'transform 0.3s ease-out';
+        markerDiv.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))';
+        markerDiv.style.transformStyle = 'preserve-3d';
+        markerDiv.innerHTML = rt().vehicleMarker().buildVehicleArrowSvg();
+
+        const speedKmh = Number.isFinite(speed) ? (speed * 3.6).toFixed(1) : '0.0';
+        const speedUnit = rt().call.getSpeedUnit();
+        const displaySpeed = rt().call.convertSpeed(speedKmh);
+
+        const marker = rt().getMapLibreHelpers().createMarker(lat, lon, {
+            html: markerDiv.outerHTML,
+            iconSize: [60, 60],
+            iconAnchor: [30, 30],
+            className: 'vehicle-marker-icon',
+            rotationAlignment: 'map',
+            pitchAlignment: 'map',
+            popup: rt().vehicleMarker().buildVehicleMarkerPopupHtml({
+                iconEmoji: iconEmoji,
+                displaySpeed: displaySpeed,
+                speedUnit: speedUnit,
+                headingDegrees: Math.round(safeHeading),
+                accuracyLabel: accuracyLabel,
+            }),
+        });
+
+        marker.heading = safeHeading;
+        marker.speed = Number.isFinite(speed) ? speed : 0;
+        marker.accuracy = safeAccuracy;
+
+        return marker;
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
@@ -78,6 +132,7 @@
         updateVehicleType: updateVehicleType,
         setRoutingMode: setRoutingMode,
         updateUserMarkerIcon: updateUserMarkerIcon,
+        createVehicleMarker: createVehicleMarker,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
