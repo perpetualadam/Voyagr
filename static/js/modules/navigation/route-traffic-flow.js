@@ -782,6 +782,19 @@
     }
 
     /**
+     * Pipeline plan bundling response parse and result apply after fetch.
+     * @param {Object|null} data
+     * @returns {Object}
+     */
+    function buildFetchAndDisplayRouteTrafficResultPipelinePlan(data) {
+        var response = buildFetchAndDisplayRouteTrafficResponsePlan(data);
+        return {
+            response: response,
+            resultApply: buildFetchAndDisplayRouteTrafficResultApplyPlan(response),
+        };
+    }
+
+    /**
      * Apply plan for mounting displayed route-traffic edge polylines.
      * @param {Object} [orch] - from buildRouteTrafficEdgesDisplayOrchestrationPlan
      * @returns {Object}
@@ -837,6 +850,7 @@
         buildFetchAndDisplayRouteTrafficOrchestrationPlan: buildFetchAndDisplayRouteTrafficOrchestrationPlan,
         buildFetchAndDisplayRouteTrafficResponsePlan: buildFetchAndDisplayRouteTrafficResponsePlan,
         buildFetchAndDisplayRouteTrafficResultApplyPlan: buildFetchAndDisplayRouteTrafficResultApplyPlan,
+        buildFetchAndDisplayRouteTrafficResultPipelinePlan: buildFetchAndDisplayRouteTrafficResultPipelinePlan,
         buildDisplayRouteTrafficEdgesMountApplyPlan: buildDisplayRouteTrafficEdgesMountApplyPlan,
         ROUTE_TRAFFIC_ENABLED_STORAGE_KEY: ROUTE_TRAFFIC_ENABLED_STORAGE_KEY,
         ROUTE_TRAFFIC_TOGGLE_ID: ROUTE_TRAFFIC_TOGGLE_ID,

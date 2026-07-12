@@ -124,6 +124,13 @@ describe('waypoints module', () => {
         expect(W.buildRouteDragMarkerDragEndDispatchPlan('bad', null).shouldAddViaPoint).toBe(false);
     });
 
+    test('buildRouteDragMarkerEntryOrchestrationPlan wraps apply plan', () => {
+        const entry = W.buildRouteDragMarkerEntryOrchestrationPlan(51.5, -0.1, 3);
+        expect(entry.apply.shouldMount).toBe(true);
+        expect(entry.apply.routeIndex).toBe(3);
+        expect(entry.apply.registerInRouteDragMarkers).toBe(true);
+    });
+
     test('buildDraggedViaPointAddPlan prepares via point and recalc status', () => {
         const plan = W.buildDraggedViaPointAddPlan(51.5, -0.1, 2);
         expect(plan.viaPoint.name).toBe('Drag point 3');

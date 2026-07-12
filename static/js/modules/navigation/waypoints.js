@@ -519,6 +519,19 @@
     }
 
     /**
+     * Entry orchestration plan for mounting one route drag marker.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} routeIndex
+     * @returns {Object}
+     */
+    function buildRouteDragMarkerEntryOrchestrationPlan(lat, lon, routeIndex) {
+        return {
+            apply: buildRouteDragMarkerApplyPlan(lat, lon, routeIndex),
+        };
+    }
+
+    /**
      * Execute plan for clearing route drag markers.
      * @returns {Object}
      */
@@ -1660,6 +1673,7 @@
         buildRouteEditEnableOrchestrationPlan: buildRouteEditEnableOrchestrationPlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
         buildRouteDragMarkerApplyPlan: buildRouteDragMarkerApplyPlan,
+        buildRouteDragMarkerEntryOrchestrationPlan: buildRouteDragMarkerEntryOrchestrationPlan,
         buildRouteDragMarkerDragEndDispatchPlan: buildRouteDragMarkerDragEndDispatchPlan,
         buildClearRouteDragMarkersExecutePlan: buildClearRouteDragMarkersExecutePlan,
         buildClearRouteDragMarkersApplyPlan: buildClearRouteDragMarkersApplyPlan,

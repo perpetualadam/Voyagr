@@ -902,6 +902,42 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(orch.execute.shouldExecute).toBe(true);
         expect(orch.mapApplyInput).toBeTruthy();
         expect(orch.idleUiApplyPlan.showStartNavButtons).toBe(true);
+        expect(orch.postMapApply.shouldApply).toBe(true);
+        expect(orch.postMapApply.routeOptionsApply.shouldBuild).toBe(true);
+    });
+
+    test('buildCalculateRouteIdlePreviewPostMapApplyPlan gates on execute failure', () => {
+        const fail = RS.buildCalculateRouteIdlePreviewPostMapApplyPlan({
+            shouldExecute: false,
+            errorStatusMessage: 'bad preview',
+            hideRouteProgressBarOnError: true,
+        });
+        expect(fail.shouldApply).toBe(false);
+        expect(fail.hideRouteProgressBarOnError).toBe(true);
+
+        const ok = RS.buildCalculateRouteIdlePreviewPostMapApplyPlan({
+            shouldExecute: true,
+            tripInfo: { distance: '10 km', displayTime: '20 min', fuelCost: '£5', tollCost: '£0' },
+            statusMessage: 'Route ready',
+            lastCalculatedRoutePatch: { distance_km: 10 },
+            routePath: [[51.5, -0.1]],
+            routesCount: 2,
+            multiRouteLogMessage: '[Route API] Received 2 routes',
+            loadedRoutesLogPrefix: '[Route Comparison] Loaded ',
+        });
+        expect(ok.shouldApply).toBe(true);
+        expect(ok.routeOptionsApply.multiRouteLogMessage).toContain('Received 2 routes');
+        expect(ok.routeOptionsApply.logRouteNames).toBe(true);
+    });
+
+    test('buildCalculateRouteIdlePreviewRouteOptionsApplyPlan uses fallback log for single route', () => {
+        const fallback = RS.buildCalculateRouteIdlePreviewRouteOptionsApplyPlan({
+            fallbackRouteLogMessage: '[Route Comparison] Using single route (fallback)',
+            routePath: [[1, 2]],
+        });
+        expect(fallback.shouldBuild).toBe(true);
+        expect(fallback.fallbackRouteLogMessage).toContain('fallback');
+        expect(fallback.logRouteNames).toBe(false);
     });
 
     test('buildCalculateRouteInNavRerouteOrchestrationPlan and parse error apply', () => {

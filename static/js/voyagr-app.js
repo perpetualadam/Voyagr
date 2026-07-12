@@ -2762,9 +2762,8 @@ function enableRouteEditing() {
 /**
  * Add a draggable marker for route editing
  */
-function addRouteDragMarker(lat, lon, routeIndex) {
-    const apply = _waypoints().buildRouteDragMarkerApplyPlan(lat, lon, routeIndex);
-    if (!apply.shouldMount) return;
+function applyRouteDragMarkerFromPlan(apply) {
+    if (!apply || !apply.shouldMount) return;
 
     const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
         className: apply.markerMount.className,
@@ -2797,6 +2796,12 @@ function addRouteDragMarker(lat, lon, routeIndex) {
     }
 
     if (apply.registerInRouteDragMarkers) routeDragMarkers.push(marker);
+}
+
+function addRouteDragMarker(lat, lon, routeIndex) {
+    applyRouteDragMarkerFromPlan(
+        _waypoints().buildRouteDragMarkerEntryOrchestrationPlan(lat, lon, routeIndex).apply
+    );
 }
 
 /**
@@ -4557,52 +4562,64 @@ function applyRoutePreviewMapFromPlan(plan) {
  * @param {Object} data
  * @param {{ geocodedStart: string, geocodedEnd: string, start: string, end: string }} labels
  */
-function applyCalculateRouteIdlePreviewFromPlan(orch, data) {
-    const RS = _routeSelection();
-    const plan = orch.execute;
+function applyCalculateRouteIdlePreviewErrorFromPlan(postMap) {
+    if (!postMap || postMap.shouldApply) return false;
+    showStatus(postMap.errorStatusMessage, 'error');
+    if (postMap.hideRouteProgressBarOnError) hideRouteProgressBar();
+    return true;
+}
 
-    if (!plan.shouldExecute) {
-        showStatus(plan.errorStatusMessage, 'error');
-        if (plan.hideRouteProgressBarOnError) hideRouteProgressBar();
+function applyCalculateRouteIdlePreviewRouteOptionsFromPlan(routeOpts, data) {
+    if (!routeOpts || !routeOpts.shouldBuild) return;
+
+    const RS = _routeSelection();
+    if (routeOpts.multiRouteLogMessage) {
+        console.log(routeOpts.multiRouteLogMessage);
+        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routeOpts.routePath);
+        console.log(
+            routeOpts.loadedRoutesLogPrefix + routeOptions.length + ' real routes from ' + data.source + ':',
+            routeOptions.map((r) => r.name)
+        );
         return;
     }
+
+    routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routeOpts.routePath);
+    if (routeOpts.fallbackRouteLogMessage) console.log(routeOpts.fallbackRouteLogMessage);
+}
+
+function applyCalculateRouteIdlePreviewPostMapFromPlan(postMap, data, idleUiApplyPlan) {
+    if (!postMap || !postMap.shouldApply) return;
+
+    if (postMap.multiDropStopLogMessage) console.log(postMap.multiDropStopLogMessage);
+    updateTripInfo(
+        postMap.tripInfo.distance,
+        postMap.tripInfo.displayTime,
+        postMap.tripInfo.fuelCost,
+        postMap.tripInfo.tollCost
+    );
+    showStatus(postMap.statusMessage, 'success');
+
+    if (postMap.showMultiDropLegs) displayMultiDropLegs(data);
+    if (postMap.storeLastRouteApiResponse) window.lastRouteApiResponse = data;
+    window.lastCalculatedRoute = postMap.lastCalculatedRoutePatch;
+    if (postMap.durationLogMessage) console.log(postMap.durationLogMessage);
+    if (postMap.displayPrimaryHazards) displayHazardMarkers(postMap.primaryHazards);
+
+    applyCalculateRouteIdlePreviewRouteOptionsFromPlan(postMap.routeOptionsApply, data);
+    applyCalculateRouteIdleUiFromPlan(idleUiApplyPlan, data);
+}
+
+function applyCalculateRouteIdlePreviewFromPlan(orch, data) {
+    const postMap = orch.postMapApply
+        || _routeSelection().buildCalculateRouteIdlePreviewPostMapApplyPlan(orch.execute);
+    if (applyCalculateRouteIdlePreviewErrorFromPlan(postMap)) return;
 
     const mapApplied = applyRoutePreviewMapFromPlan(
         _previewMarker().buildRoutePreviewMapApplyPlan(orch.mapApplyInput)
     );
     if (!mapApplied) return;
 
-    if (plan.multiDropStopLogMessage) console.log(plan.multiDropStopLogMessage);
-    updateTripInfo(
-        plan.tripInfo.distance,
-        plan.tripInfo.displayTime,
-        plan.tripInfo.fuelCost,
-        plan.tripInfo.tollCost
-    );
-    showStatus(plan.statusMessage, 'success');
-
-    if (plan.showMultiDropLegs) {
-        displayMultiDropLegs(data);
-    }
-
-    if (plan.storeLastRouteApiResponse) window.lastRouteApiResponse = data;
-    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-    if (plan.durationLogMessage) console.log(plan.durationLogMessage);
-
-    if (plan.displayPrimaryHazards) {
-        displayHazardMarkers(plan.primaryHazards);
-    }
-
-    if (plan.multiRouteLogMessage) {
-        console.log(plan.multiRouteLogMessage);
-        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
-        console.log(plan.loadedRoutesLogPrefix + routeOptions.length + ' real routes from ' + data.source + ':', routeOptions.map(r => r.name));
-    } else {
-        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
-        if (plan.fallbackRouteLogMessage) console.log(plan.fallbackRouteLogMessage);
-    }
-
-    applyCalculateRouteIdleUiFromPlan(orch.idleUiApplyPlan, data);
+    applyCalculateRouteIdlePreviewPostMapFromPlan(postMap, data, orch.idleUiApplyPlan);
 }
 
 function applyCalculateRouteIdlePreviewOutcome(data, labels) {
@@ -5649,6 +5666,16 @@ function clearRouteTrafficLayers() {
     );
 }
 
+function applyFetchAndDisplayRouteTrafficResultFromPlan(result) {
+    if (!result) return;
+    if (result.shouldDisplay) {
+        displayRouteTrafficEdges(result.segments);
+        console.log(result.displayLogMessage);
+    } else if (result.debugMessage) {
+        console.debug(result.debugMessage);
+    }
+}
+
 /**
  * Fetch traffic data for route and display colored edges
  */
@@ -5667,15 +5694,9 @@ async function fetchAndDisplayRouteTraffic() {
 
     try {
         const data = await fetchRouteTrafficFlowPayload(routePolyline, orchestration.sampleInterval);
-        const result = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan(
-            RTF.buildFetchAndDisplayRouteTrafficResponsePlan(data)
+        applyFetchAndDisplayRouteTrafficResultFromPlan(
+            RTF.buildFetchAndDisplayRouteTrafficResultPipelinePlan(data).resultApply
         );
-        if (result.shouldDisplay) {
-            displayRouteTrafficEdges(result.segments);
-            console.log(result.displayLogMessage);
-        } else if (result.debugMessage) {
-            console.debug(result.debugMessage);
-        }
     } catch (error) {
         const errPrefix = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan({}).errorDebugPrefix;
         console.debug(errPrefix, error);

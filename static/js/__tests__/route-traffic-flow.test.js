@@ -323,6 +323,14 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(result.shouldDisplay).toBe(true);
         expect(result.displayLogMessage).toBe('displayed');
 
+        const pipeline = RTF.buildFetchAndDisplayRouteTrafficResultPipelinePlan({
+            success: true,
+            segments: [{ traffic_level: 'green', start: [51.5, -0.1], end: [51.6, -0.2] }],
+            source: 'TomTom',
+        });
+        expect(pipeline.resultApply.shouldDisplay).toBe(true);
+        expect(pipeline.response.action).toBe('display');
+
         const orch = RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
             segments: [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
             polyline,

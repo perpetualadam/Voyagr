@@ -1694,6 +1694,62 @@
     }
 
     /**
+     * Apply plan for building route comparison options after idle preview.
+     * @param {Object} [execute] - from buildCalculateRouteIdlePreviewExecutePlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdlePreviewRouteOptionsApplyPlan(execute) {
+        execute = execute || {};
+        if (execute.multiRouteLogMessage) {
+            return {
+                shouldBuild: true,
+                multiRouteLogMessage: execute.multiRouteLogMessage,
+                loadedRoutesLogPrefix: execute.loadedRoutesLogPrefix,
+                logRouteNames: true,
+                fallbackRouteLogMessage: null,
+                routePath: execute.routePath,
+            };
+        }
+        return {
+            shouldBuild: true,
+            multiRouteLogMessage: null,
+            loadedRoutesLogPrefix: null,
+            logRouteNames: false,
+            fallbackRouteLogMessage: execute.fallbackRouteLogMessage,
+            routePath: execute.routePath,
+        };
+    }
+
+    /**
+     * Post-map apply plan for idle calculateRoute preview outcome side effects.
+     * @param {Object} [execute] - from buildCalculateRouteIdlePreviewExecutePlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdlePreviewPostMapApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldExecute) {
+            return {
+                shouldApply: false,
+                errorStatusMessage: execute.errorStatusMessage,
+                hideRouteProgressBarOnError: !!execute.hideRouteProgressBarOnError,
+            };
+        }
+        return {
+            shouldApply: true,
+            multiDropStopLogMessage: execute.multiDropStopLogMessage,
+            tripInfo: execute.tripInfo,
+            statusMessage: execute.statusMessage,
+            showMultiDropLegs: !!execute.showMultiDropLegs,
+            storeLastRouteApiResponse: !!execute.storeLastRouteApiResponse,
+            lastCalculatedRoutePatch: execute.lastCalculatedRoutePatch,
+            durationLogMessage: execute.durationLogMessage,
+            displayPrimaryHazards: !!execute.displayPrimaryHazards,
+            primaryHazards: execute.primaryHazards,
+            routeOptionsApply: buildCalculateRouteIdlePreviewRouteOptionsApplyPlan(execute),
+        };
+    }
+
+    /**
      * Orchestration plan for idle calculateRoute preview outcome assembly.
      * @param {Object} [o]
      * @param {Object} [o.input] - passed to buildRoutePreviewSuccessInputPlan
@@ -1712,6 +1768,7 @@
             execute: execute,
             idleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan(previewPlan),
             mapApplyInput: buildCalculateRouteIdlePreviewMapApplyInput(execute),
+            postMapApply: buildCalculateRouteIdlePreviewPostMapApplyPlan(execute),
         };
     }
 
@@ -3617,6 +3674,8 @@
         buildRoutePreviewSuccessInputPlan: buildRoutePreviewSuccessInputPlan,
         buildRoutePreviewSuccessPlan: buildRoutePreviewSuccessPlan,
         buildCalculateRouteIdlePreviewExecutePlan: buildCalculateRouteIdlePreviewExecutePlan,
+        buildCalculateRouteIdlePreviewRouteOptionsApplyPlan: buildCalculateRouteIdlePreviewRouteOptionsApplyPlan,
+        buildCalculateRouteIdlePreviewPostMapApplyPlan: buildCalculateRouteIdlePreviewPostMapApplyPlan,
         buildCalculateRouteIdlePreviewOrchestrationPlan: buildCalculateRouteIdlePreviewOrchestrationPlan,
         buildCalculateRouteIdlePreviewMapApplyInput: buildCalculateRouteIdlePreviewMapApplyInput,
         buildCalculateRouteInNavRerouteOrchestrationPlan: buildCalculateRouteInNavRerouteOrchestrationPlan,
