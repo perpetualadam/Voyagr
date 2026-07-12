@@ -1302,6 +1302,24 @@
     }
 
     /**
+     * Apply plan for starting waypoint list drag reordering.
+     * @param {Object|null|undefined} target - DOM event target with dataset
+     * @returns {Object}
+     */
+    function buildWaypointDragStartApplyPlan(target) {
+        var plan = buildWaypointDragEventContextPlan(target).dragStartPlan;
+        if (!plan.shouldDrag) {
+            return { shouldDrag: false };
+        }
+        return {
+            shouldDrag: true,
+            dragState: plan.dragState,
+            itemOpacity: plan.itemOpacity,
+            dataTransferEffect: plan.dataTransferEffect,
+        };
+    }
+
+    /**
      * Reset plan for waypoint item opacity after drag ends.
      * @returns {Object}
      */
@@ -1313,6 +1331,19 @@
     }
 
     /**
+     * Apply plan for resetting waypoint item opacity after drag ends.
+     * @returns {Object}
+     */
+    function buildWaypointDragOpacityResetApplyPlan() {
+        var plan = buildWaypointDragOpacityResetPlan();
+        return {
+            shouldReset: true,
+            selector: plan.selector,
+            opacity: plan.opacity,
+        };
+    }
+
+    /**
      * Drag-over plan for waypoint list reordering.
      * @returns {Object}
      */
@@ -1320,6 +1351,19 @@
         return {
             preventDefault: true,
             dropEffect: 'move',
+        };
+    }
+
+    /**
+     * Apply plan for drag-over events on waypoint list items.
+     * @returns {Object}
+     */
+    function buildWaypointDragOverApplyPlan() {
+        var plan = buildWaypointDragOverPlan();
+        return {
+            shouldHandle: true,
+            preventDefault: plan.preventDefault,
+            dropEffect: plan.dropEffect,
         };
     }
 
@@ -1635,11 +1679,14 @@
         buildWaypointsListDomApplyPlan: buildWaypointsListDomApplyPlan,
         buildWaypointsListUpdateApplyPlan: buildWaypointsListUpdateApplyPlan,
         buildWaypointDragStartPlan: buildWaypointDragStartPlan,
+        buildWaypointDragStartApplyPlan: buildWaypointDragStartApplyPlan,
         buildWaypointDragEventContextPlan: buildWaypointDragEventContextPlan,
         buildWaypointDragOverPlan: buildWaypointDragOverPlan,
+        buildWaypointDragOverApplyPlan: buildWaypointDragOverApplyPlan,
         buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
         buildWaypointDropApplyPlan: buildWaypointDropApplyPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
+        buildWaypointDragOpacityResetApplyPlan: buildWaypointDragOpacityResetApplyPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
         buildMultiDropLegLayerMapLibreApplyPlan: buildMultiDropLegLayerMapLibreApplyPlan,
         buildMultiDropLegsMapExecutePlan: buildMultiDropLegsMapExecutePlan,

@@ -3205,19 +3205,17 @@ function updateWaypointsList() {
 let _draggedWaypoint = null;
 
 function onWaypointDragStart(e) {
-    const WP = _waypoints();
-    const ctx = WP.buildWaypointDragEventContextPlan(e.target);
-    const plan = ctx.dragStartPlan;
-    if (!plan.shouldDrag) return;
-    _draggedWaypoint = plan.dragState;
-    e.target.style.opacity = plan.itemOpacity;
-    e.dataTransfer.effectAllowed = plan.dataTransferEffect;
+    const apply = _waypoints().buildWaypointDragStartApplyPlan(e.target);
+    if (!apply.shouldDrag) return;
+    _draggedWaypoint = apply.dragState;
+    e.target.style.opacity = apply.itemOpacity;
+    e.dataTransfer.effectAllowed = apply.dataTransferEffect;
 }
 
 function onWaypointDragOver(e) {
-    const plan = _waypoints().buildWaypointDragOverPlan();
-    if (plan.preventDefault) e.preventDefault();
-    e.dataTransfer.dropEffect = plan.dropEffect;
+    const apply = _waypoints().buildWaypointDragOverApplyPlan();
+    if (apply.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = apply.dropEffect;
 }
 
 function onWaypointDrop(e) {
@@ -3250,8 +3248,10 @@ function onWaypointDrop(e) {
 
     if (apply.clearDragState) _draggedWaypoint = null;
     if (apply.resetOpacity) {
-        const resetPlan = WP.buildWaypointDragOpacityResetPlan();
-        document.querySelectorAll(resetPlan.selector).forEach(el => el.style.opacity = resetPlan.opacity);
+        const resetApply = WP.buildWaypointDragOpacityResetApplyPlan();
+        document.querySelectorAll(resetApply.selector).forEach(
+            el => el.style.opacity = resetApply.opacity
+        );
     }
 }
 
@@ -3379,29 +3379,27 @@ function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
  */
 function selectRoute(index) {
     const RS = _routeSelection();
-    const dispatch = RS.buildSelectRouteDispatchPlan(index, routeOptions);
-    if (!dispatch.shouldSelect) return;
-
-    selectedRouteIndex = dispatch.selectedRouteIndex;
-
-    if (dispatch.displaySingleRoute) displaySingleRoute(index);
-    if (dispatch.displayRouteComparison) displayRouteComparison();
-
-    syncLastCalculatedRouteFromSelection(index);
-    const selectedRoute = routeOptions[index];
-    console.log(
-        `${dispatch.logPrefix} "${dispatch.routeName}" with ${dispatch.maneuverCount} maneuvers`
-    );
-
-    updateTripInfoFromRouteOption(selectedRoute);
-
-    const preview = RS.buildSelectRoutePreviewPayloadPlan(
-        routeOptions,
+    const orch = RS.buildSelectRouteOrchestrationPlan(
         index,
+        routeOptions,
         window.lastRouteApiResponse
     );
-    if (preview.shouldPreview) {
-        showRoutePreview(preview.previewPayload, true);
+    if (!orch.shouldSelect) return;
+
+    selectedRouteIndex = orch.selectedRouteIndex;
+
+    if (orch.dispatch.displaySingleRoute) displaySingleRoute(index);
+    if (orch.dispatch.displayRouteComparison) displayRouteComparison();
+
+    syncLastCalculatedRouteFromSelection(index);
+    console.log(
+        `${orch.dispatch.logPrefix} "${orch.dispatch.routeName}" with ${orch.dispatch.maneuverCount} maneuvers`
+    );
+
+    updateTripInfoFromRouteOption(orch.selectedRoute);
+
+    if (orch.preview.shouldPreview) {
+        showRoutePreview(orch.preview.previewPayload, true);
     }
 }
 
@@ -3458,26 +3456,24 @@ function updateTripInfoFromRouteOption(route) {
  */
 function displaySingleRoute(index) {
     const RS = _routeSelection();
-    const displayPlan = RS.buildSingleRouteMapDisplayPlan(routeOptions && routeOptions[index], index, {
-        routeColors: routeColors(),
-        showTrafficEnabled,
-        routeTrafficEnabled,
-        hasTrafficLayer: !!trafficLayer,
-        trafficLightsEnabled: window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled(),
-        trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
-            || typeof plotTrafficLightsOnRoute === 'function',
+    const orch = RS.buildDisplaySingleRouteOrchestrationPlan(index, routeOptions, {
+        displayOpts: {
+            routeColors: routeColors(),
+            showTrafficEnabled,
+            routeTrafficEnabled,
+            hasTrafficLayer: !!trafficLayer,
+            trafficLightsEnabled: window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled(),
+            trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
+                || typeof plotTrafficLightsOnRoute === 'function',
+        },
     });
-    const plan = RS.buildSingleRouteMapDisplayExecutePlan(displayPlan);
 
-    console.log(`[Routes] displaySingleRoute(${index}) - clearing all existing routes`);
+    console.log(orch.entryLogMessage);
 
-    if (!plan.shouldExecute) return;
+    if (!orch.shouldExecute) return;
 
-    clearRouteLayerHandlesFromPlan({
-        clearRouteLayerHandle: true,
-        clearAllRouteLayerHandles: true,
-    });
-    applySingleRouteMapDisplayFromPlan(plan);
+    clearRouteLayerHandlesFromPlan(orch.preClear);
+    applySingleRouteMapDisplayFromPlan(orch.execute);
 }
 
 /**
@@ -5603,27 +5599,34 @@ let routeTrafficUpdateInterval = null;
 
 // Traffic level colors moved to route-traffic-flow.js (TRAFFIC_COLORS).
 
+function applyRouteTrafficToggleFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+    const TU = _toggleUI();
+    routeTrafficEnabled = execute.nextEnabled;
+    if (execute.useWriteBoolPref) {
+        TU.writeBoolPref(execute.storageKey, routeTrafficEnabled);
+    }
+    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.fetchRouteTraffic) {
+        fetchAndDisplayRouteTraffic();
+    } else if (execute.clearLayersOnDisable) {
+        clearRouteTrafficLayers();
+    }
+    if (execute.saveAllSettings) saveAllSettings();
+}
+
 /**
  * Toggle route traffic edge display on/off
  */
 function toggleRouteTraffic() {
-    const RTF = _routeTrafficFlow();
-    const plan = RTF.buildRouteTrafficTogglePlan(routeTrafficEnabled);
-    routeTrafficEnabled = plan.nextEnabled;
-
-    const toggle = document.getElementById(plan.toggleElementId);
-    if (plan.useWriteBoolPref) {
-        _toggleUI().writeBoolPref(plan.storageKey, routeTrafficEnabled);
-    }
-    _toggleUI().applyToggleButton(toggle, routeTrafficEnabled);
-
-    showStatus(plan.statusMessage, plan.statusType);
-    if (plan.fetchIfRouteInProgress && routeInProgress && routePolyline) {
-        fetchAndDisplayRouteTraffic();
-    } else if (plan.clearLayersOnDisable) {
-        clearRouteTrafficLayers();
-    }
-    if (plan.saveAllSettings) saveAllSettings();
+    applyRouteTrafficToggleFromPlan(
+        _routeTrafficFlow().buildRouteTrafficToggleExecutePlan(
+            routeTrafficEnabled,
+            routeInProgress,
+            !!(routePolyline && routePolyline.length > 0)
+        )
+    );
 }
 
 /**
@@ -5962,15 +5965,16 @@ function toggleAutoRerouteOnDeviation() {
  */
 function startAutoTrafficUpdates() {
     const TC = _trafficChange();
-    const plan = TC.buildStartAutoTrafficUpdatesDispatchPlan({
+    const orch = TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
         autoTrafficUpdateEnabled,
         trafficUpdateInterval,
     });
-    if (!plan.shouldStart) return;
+    if (!orch.shouldStart) return;
 
-    console.log(plan.logMessage);
+    const dispatch = orch.dispatch;
+    console.log(dispatch.logMessage);
 
-    if (plan.immediateCheck) checkTrafficAndReroute();
+    if (dispatch.immediateCheck) checkTrafficAndReroute();
 
     trafficUpdateInterval = setInterval(() => {
         const tick = TC.buildAutoTrafficIntervalTickPlan({
@@ -5978,7 +5982,7 @@ function startAutoTrafficUpdates() {
             autoTrafficUpdateEnabled,
         });
         if (tick.shouldCheck) checkTrafficAndReroute();
-    }, plan.intervalMs);
+    }, dispatch.intervalMs);
 }
 
 /**
@@ -5986,11 +5990,12 @@ function startAutoTrafficUpdates() {
  */
 function stopAutoTrafficUpdates() {
     const TC = _trafficChange();
-    const plan = TC.buildStopAutoTrafficUpdatesDispatchPlan(trafficUpdateInterval);
-    if (!plan.shouldStop) return;
-    clearInterval(trafficUpdateInterval);
-    trafficUpdateInterval = null;
-    console.log(plan.logMessage);
+    const orch = TC.buildStopAutoTrafficUpdatesOrchestrationPlan(trafficUpdateInterval);
+    if (!orch.shouldStop) return;
+
+    if (orch.clearInterval) clearInterval(trafficUpdateInterval);
+    if (orch.resetIntervalHandle) trafficUpdateInterval = null;
+    console.log(orch.dispatch.logMessage);
 }
 
 // Shared along-route traffic sampler (Levers A + B). Samples live TomTom flow on the

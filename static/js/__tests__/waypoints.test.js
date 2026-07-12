@@ -376,6 +376,22 @@ describe('waypoints module', () => {
         expect(W.buildWaypointDragStartPlan('', NaN).shouldDrag).toBe(false);
     });
 
+    test('buildWaypointDragStartApplyPlan wraps drag start DOM effects', () => {
+        const apply = W.buildWaypointDragStartApplyPlan({ dataset: { type: 'via', index: '0' } });
+        expect(apply.shouldDrag).toBe(true);
+        expect(apply.itemOpacity).toBe('0.5');
+        expect(W.buildWaypointDragStartApplyPlan(null).shouldDrag).toBe(false);
+    });
+
+    test('buildWaypointDragOverApplyPlan and opacity reset apply plan', () => {
+        const over = W.buildWaypointDragOverApplyPlan();
+        expect(over.shouldHandle).toBe(true);
+        expect(over.dropEffect).toBe('move');
+        const reset = W.buildWaypointDragOpacityResetApplyPlan();
+        expect(reset.shouldReset).toBe(true);
+        expect(reset.selector).toBe('.waypoint-item');
+    });
+
     test('buildWaypointDragEventContextPlan reads dataset from event target', () => {
         const ctx = W.buildWaypointDragEventContextPlan({
             dataset: { type: 'stop', index: '2' },

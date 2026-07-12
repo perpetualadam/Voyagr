@@ -623,6 +623,36 @@
     }
 
     /**
+     * Execute plan for toggling route-traffic edge display.
+     * @param {boolean} currentEnabled
+     * @param {boolean} [routeInProgress]
+     * @param {boolean} [hasRoutePolyline]
+     * @returns {Object}
+     */
+    function buildRouteTrafficToggleExecutePlan(currentEnabled, routeInProgress, hasRoutePolyline) {
+        var plan = buildRouteTrafficTogglePlan(currentEnabled);
+        return {
+            shouldApply: true,
+            nextEnabled: plan.nextEnabled,
+            storageKey: plan.storageKey,
+            useWriteBoolPref: plan.useWriteBoolPref,
+            toggle: {
+                id: plan.toggleElementId,
+                enabled: plan.nextEnabled,
+            },
+            fetchRouteTraffic: !!(
+                plan.fetchIfRouteInProgress &&
+                routeInProgress &&
+                hasRoutePolyline
+            ),
+            clearLayersOnDisable: plan.clearLayersOnDisable,
+            saveAllSettings: plan.saveAllSettings,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+        };
+    }
+
+    /**
      * Apply plan for clearing route-traffic edge layers from the map.
      * @param {Array<Object>} layers
      * @returns {Object}
@@ -722,6 +752,7 @@
         buildRouteTrafficIntervalTickPlan: buildRouteTrafficIntervalTickPlan,
         buildStopRouteTrafficUpdatesDispatchPlan: buildStopRouteTrafficUpdatesDispatchPlan,
         buildRouteTrafficTogglePlan: buildRouteTrafficTogglePlan,
+        buildRouteTrafficToggleExecutePlan: buildRouteTrafficToggleExecutePlan,
         buildClearRouteTrafficLayersApplyPlan: buildClearRouteTrafficLayersApplyPlan,
         buildFetchAndDisplayRouteTrafficOrchestrationPlan: buildFetchAndDisplayRouteTrafficOrchestrationPlan,
         buildFetchAndDisplayRouteTrafficResponsePlan: buildFetchAndDisplayRouteTrafficResponsePlan,

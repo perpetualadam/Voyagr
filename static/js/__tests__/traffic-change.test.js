@@ -188,6 +188,27 @@ describe('auto traffic interval dispatch plans', () => {
         expect(TC.buildStopAutoTrafficUpdatesDispatchPlan({}).shouldStop).toBe(true);
     });
 
+    test('buildStartAutoTrafficUpdatesOrchestrationPlan wraps dispatch plan', () => {
+        expect(TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
+            autoTrafficUpdateEnabled: false,
+            trafficUpdateInterval: null,
+        }).shouldStart).toBe(false);
+        const orch = TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
+            autoTrafficUpdateEnabled: true,
+            trafficUpdateInterval: null,
+        });
+        expect(orch.shouldStart).toBe(true);
+        expect(orch.dispatch.immediateCheck).toBe(true);
+    });
+
+    test('buildStopAutoTrafficUpdatesOrchestrationPlan clears active interval', () => {
+        expect(TC.buildStopAutoTrafficUpdatesOrchestrationPlan(null).shouldStop).toBe(false);
+        const orch = TC.buildStopAutoTrafficUpdatesOrchestrationPlan({});
+        expect(orch.shouldStop).toBe(true);
+        expect(orch.clearInterval).toBe(true);
+        expect(orch.resetIntervalHandle).toBe(true);
+    });
+
     test('buildManualTrafficUpdateStatusPlan maps start and complete phases', () => {
         expect(TC.buildManualTrafficUpdateStatusPlan('start').statusMessage).toContain('Updating');
         expect(TC.buildManualTrafficUpdateStatusPlan('complete').statusType).toBe('success');

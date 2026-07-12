@@ -265,6 +265,37 @@
     }
 
     /**
+     * Orchestration plan for starting automatic traffic updates during navigation.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildStartAutoTrafficUpdatesOrchestrationPlan(opts) {
+        var dispatch = buildStartAutoTrafficUpdatesDispatchPlan(opts);
+        if (!dispatch.shouldStart) {
+            return { shouldStart: false };
+        }
+        return {
+            shouldStart: true,
+            dispatch: dispatch,
+        };
+    }
+
+    /**
+     * Orchestration plan for stopping automatic traffic updates.
+     * @param {*} [trafficUpdateInterval]
+     * @returns {Object}
+     */
+    function buildStopAutoTrafficUpdatesOrchestrationPlan(trafficUpdateInterval) {
+        var dispatch = buildStopAutoTrafficUpdatesDispatchPlan(trafficUpdateInterval);
+        return {
+            shouldStop: dispatch.shouldStop,
+            dispatch: dispatch,
+            clearInterval: dispatch.shouldStop,
+            resetIntervalHandle: dispatch.shouldStop,
+        };
+    }
+
+    /**
      * Status plan for manual traffic update button handler.
      * @param {string} phase - 'start' | 'complete'
      * @returns {Object}
@@ -759,8 +790,10 @@
         buildTrafficRerouteApiResponseDispatchPlan: buildTrafficRerouteApiResponseDispatchPlan,
         buildTrafficRerouteAcceptancePlan: buildTrafficRerouteAcceptancePlan,
         buildStartAutoTrafficUpdatesDispatchPlan: buildStartAutoTrafficUpdatesDispatchPlan,
+        buildStartAutoTrafficUpdatesOrchestrationPlan: buildStartAutoTrafficUpdatesOrchestrationPlan,
         buildAutoTrafficIntervalTickPlan: buildAutoTrafficIntervalTickPlan,
         buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
+        buildStopAutoTrafficUpdatesOrchestrationPlan: buildStopAutoTrafficUpdatesOrchestrationPlan,
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
         buildUpdateTrafficConditionsOrchestrationPlan: buildUpdateTrafficConditionsOrchestrationPlan,
         buildUpdateTrafficConditionsResponseDispatchPlan: buildUpdateTrafficConditionsResponseDispatchPlan,

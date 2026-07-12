@@ -877,6 +877,26 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(RS.buildSelectRouteDispatchPlan(9, [{ name: 'A' }]).shouldSelect).toBe(false);
     });
 
+    test('buildSelectRouteOrchestrationPlan bundles dispatch and preview', () => {
+        const orch = RS.buildSelectRouteOrchestrationPlan(0, [
+            { name: 'Fastest', maneuvers: [1] },
+        ], { success: true });
+        expect(orch.shouldSelect).toBe(true);
+        expect(orch.dispatch.routeName).toBe('Fastest');
+        expect(orch.preview.shouldPreview).toBe(true);
+        expect(RS.buildSelectRouteOrchestrationPlan(2, [{ name: 'A' }], null).shouldSelect)
+            .toBe(false);
+    });
+
+    test('buildDisplaySingleRouteOrchestrationPlan wraps execute and pre-clear', () => {
+        const orch = RS.buildDisplaySingleRouteOrchestrationPlan(0, [
+            { name: 'Fastest', polyline: [[51.5, -0.1], [51.6, -0.2]], hazards: [] },
+        ], { displayOpts: { routeColors: ['#000'] } });
+        expect(orch.shouldExecute).toBe(true);
+        expect(orch.preClear.clearAllRouteLayerHandles).toBe(true);
+        expect(orch.entryLogMessage).toContain('displaySingleRoute(0)');
+    });
+
     test('buildRouteComparisonModalExecutePlan wraps DOM mount fields', () => {
         const execute = RS.buildRouteComparisonModalExecutePlan({
             action: 'mount',

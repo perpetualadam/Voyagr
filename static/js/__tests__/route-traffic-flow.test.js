@@ -257,6 +257,16 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(enable.saveAllSettings).toBe(true);
     });
 
+    test('buildRouteTrafficToggleExecutePlan gates fetch on route progress and polyline', () => {
+        const enable = RTF.buildRouteTrafficToggleExecutePlan(false, true, true);
+        expect(enable.shouldApply).toBe(true);
+        expect(enable.fetchRouteTraffic).toBe(true);
+        expect(RTF.buildRouteTrafficToggleExecutePlan(false, false, true).fetchRouteTraffic)
+            .toBe(false);
+        const disable = RTF.buildRouteTrafficToggleExecutePlan(true, true, true);
+        expect(disable.clearLayersOnDisable).toBe(true);
+    });
+
     test('buildClearRouteTrafficLayersApplyPlan maps layer removal strategies', () => {
         const plan = RTF.buildClearRouteTrafficLayersApplyPlan([
             { remove: function () {} },

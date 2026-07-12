@@ -641,6 +641,60 @@
     }
 
     /**
+     * Orchestration plan for selecting an alternative route.
+     * @param {number} index
+     * @param {Array<Object>} routeOptions
+     * @param {Object|null|undefined} lastRouteApiResponse
+     * @returns {Object}
+     */
+    function buildSelectRouteOrchestrationPlan(index, routeOptions, lastRouteApiResponse) {
+        var dispatch = buildSelectRouteDispatchPlan(index, routeOptions);
+        if (!dispatch.shouldSelect) {
+            return {
+                shouldSelect: false,
+                selectedRouteIndex: dispatch.selectedRouteIndex,
+            };
+        }
+        return {
+            shouldSelect: true,
+            selectedRouteIndex: dispatch.selectedRouteIndex,
+            dispatch: dispatch,
+            preview: buildSelectRoutePreviewPayloadPlan(
+                routeOptions,
+                index,
+                lastRouteApiResponse
+            ),
+            selectedRoute: routeOptions[index],
+        };
+    }
+
+    /**
+     * Orchestration plan for displaying a single selected route on the map.
+     * @param {number} index
+     * @param {Array<Object>} routeOptions
+     * @param {Object} [runtime]
+     * @returns {Object}
+     */
+    function buildDisplaySingleRouteOrchestrationPlan(index, routeOptions, runtime) {
+        runtime = runtime || {};
+        var displayPlan = buildSingleRouteMapDisplayPlan(
+            routeOptions && routeOptions[index],
+            index,
+            runtime.displayOpts || {}
+        );
+        var execute = buildSingleRouteMapDisplayExecutePlan(displayPlan);
+        return {
+            shouldExecute: execute.shouldExecute,
+            entryLogMessage: '[Routes] displaySingleRoute(' + index + ') - clearing all existing routes',
+            preClear: {
+                clearRouteLayerHandle: true,
+                clearAllRouteLayerHandles: true,
+            },
+            execute: execute,
+        };
+    }
+
+    /**
      * Post-panel UI plan after route preview values are written to the DOM.
      * @param {Object} opts
      * @returns {Object}
@@ -3206,6 +3260,8 @@
         buildShowRouteComparisonErrorExecutePlan: buildShowRouteComparisonErrorExecutePlan,
         buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
         buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
+        buildSelectRouteOrchestrationPlan: buildSelectRouteOrchestrationPlan,
+        buildDisplaySingleRouteOrchestrationPlan: buildDisplaySingleRouteOrchestrationPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,
