@@ -1431,8 +1431,8 @@ function getGpsOrchestrationRuntime() {
             routingRequest: () => _routingRequest(),
         },
         consts: {
-            ZOOM_LEVELS,
-            TURN_ZOOM_THRESHOLD,
+            ZOOM_LEVELS: VoyagrSmartZoomOrchestration.getZoomLevels(),
+            TURN_ZOOM_THRESHOLD: VoyagrSmartZoomOrchestration.getTurnZoomThreshold(),
             TURN_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getTurnAnnouncementDistances(),
             EXIT_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getExitAnnouncementDistances(),
             KEEP_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getKeepAnnouncementDistances(),
@@ -1555,7 +1555,7 @@ function getFormClearOrchestrationRuntime() {
         getStartMarker: () => VoyagrCalculateRouteOrchestration.getStartMarker(),
         getEndMarker: () => VoyagrCalculateRouteOrchestration.getEndMarker(),
         getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
-        getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
+        getZoomAnimationDurationMs: () => VoyagrSmartZoomOrchestration.getZoomAnimationDurationMs(),
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         call: {
             clearParkingSelection,
@@ -1747,8 +1747,8 @@ function getMapRecenterOrchestrationRuntime() {
         getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
         setMapFollowingActive: (val) => VoyagrMapRecenterOrchestration.setMapFollowingActive(val),
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
-        getZoomLevels: () => ZOOM_LEVELS,
-        getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
+        getZoomLevels: () => VoyagrSmartZoomOrchestration.getZoomLevels(),
+        getTurnZoomThreshold: () => VoyagrSmartZoomOrchestration.getTurnZoomThreshold(),
         call: {
             showStatus,
             getVehicleDisplayCoordinates,
@@ -1796,8 +1796,8 @@ function toggleJourneyOverview() { VoyagrJourneyOverviewOrchestration.toggleJour
 
 function getVehicleRoutingOrchestrationRuntime() {
     return {
-        getVehicleIcons: () => vehicleIcons,
-        getVehicleIconEmojis: () => vehicleIconEmojis,
+        getVehicleIcons: () => VoyagrVehicleRoutingOrchestration.getVehicleIcons(),
+        getVehicleIconEmojis: () => VoyagrVehicleRoutingOrchestration.getVehicleIconEmojis(),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
         setCurrentVehicleType: (val) => VoyagrVehicleRoutingOrchestration.setCurrentVehicleType(val),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
@@ -1839,9 +1839,9 @@ function getSmartZoomOrchestrationRuntime() {
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getLastTurnZoomApplied: () => VoyagrSmartZoomOrchestration.getLastTurnZoomApplied(),
         setLastTurnZoomApplied: (val) => VoyagrSmartZoomOrchestration.setLastTurnZoomApplied(val),
-        getZoomLevels: () => ZOOM_LEVELS,
-        getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
-        getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
+        getZoomLevels: () => VoyagrSmartZoomOrchestration.getZoomLevels(),
+        getTurnZoomThreshold: () => VoyagrSmartZoomOrchestration.getTurnZoomThreshold(),
+        getZoomAnimationDurationMs: () => VoyagrSmartZoomOrchestration.getZoomAnimationDurationMs(),
         getMap: () => map,
         getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
         getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
@@ -2288,40 +2288,8 @@ function processVoiceCommand(command) { VoyagrVoiceControlOrchestration.processV
 function handleVoiceAction(data) { VoyagrVoiceControlOrchestration.handleVoiceAction(data); }
 
 // Current position lives in static/js/app/location-orchestration.js (bound at file end).
-// Vehicle type and routing mode live in static/js/app/vehicle-routing-orchestration.js.
-
-// Vehicle icon mapping - now using custom SVG icons
-const vehicleIcons = {
-    'petrol_diesel': '/static/images/vehicles/car-aerial.svg',
-    'electric': '/static/images/vehicles/electric-aerial.svg',
-    'motorcycle': '/static/images/vehicles/motorcycle-aerial.svg',
-    'truck': '/static/images/vehicles/truck-aerial.svg',
-    'van': '/static/images/vehicles/van-aerial.svg',
-    'bicycle': '/static/images/vehicles/bicycle-aerial.svg',
-    'pedestrian': '/static/images/vehicles/pedestrian-aerial.svg'
-};
-
-// Vehicle icon emoji mapping (for display purposes only)
-const vehicleIconEmojis = {
-    'petrol_diesel': '🚗',
-    'electric': '⚡',
-    'motorcycle': '🏍️',
-    'truck': '🚚',
-    'van': '🚐',
-    'bicycle': '🚴',
-    'pedestrian': '🚶'
-};
-
-// Variables initialized at the top level
-const ZOOM_LEVELS = {
-    'motorway_high_speed': 14,      // > 100 km/h
-    'main_road_medium_speed': 15,   // 50-100 km/h
-    'urban_low_speed': 16,          // 20-50 km/h
-    'parking_very_low_speed': 17,   // < 20 km/h
-    'turn_ahead': 18                 // Upcoming turn
-};
-const TURN_ZOOM_THRESHOLD = 500;    // Zoom in when within 500m of turn
-const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
+// Vehicle type, routing mode, and icon maps live in vehicle-routing-orchestration.js.
+// Zoom level constants live in smart-zoom-orchestration.js.
 
 // ===== MAP EXPLORE ORCHESTRATION =====
 // Orchestration lives in static/js/app/map-explore-orchestration.js (bound at file end).
@@ -2493,7 +2461,7 @@ function getLocationOrchestrationRuntime() {
         setCurrentLat: (val) => VoyagrLocationOrchestration.setCurrentLat(val),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         setCurrentLon: (val) => VoyagrLocationOrchestration.setCurrentLon(val),
-        getZoomAnimationDuration: () => ZOOM_ANIMATION_DURATION,
+        getZoomAnimationDuration: () => VoyagrSmartZoomOrchestration.getZoomAnimationDuration(),
         call: {
             showStatus,
             calculateRoute,

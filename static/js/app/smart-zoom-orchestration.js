@@ -15,6 +15,21 @@
             ? true
             : localStorage.getItem('smartZoomEnabled') === '1'));
 
+    var ZOOM_LEVELS = {
+        'motorway_high_speed': 14,
+        'main_road_medium_speed': 15,
+        'urban_low_speed': 16,
+        'parking_very_low_speed': 17,
+        'turn_ahead': 18
+    };
+    var TURN_ZOOM_THRESHOLD = 500;
+    var ZOOM_ANIMATION_DURATION = 0.5;
+
+    function getZoomLevels() { return ZOOM_LEVELS; }
+    function getTurnZoomThreshold() { return TURN_ZOOM_THRESHOLD; }
+    function getZoomAnimationDuration() { return ZOOM_ANIMATION_DURATION; }
+    function getZoomAnimationDurationMs() { return ZOOM_ANIMATION_DURATION * 1000; }
+
     function getSmartZoomEnabled() { return smartZoomEnabled; }
     function setSmartZoomEnabled(val) { smartZoomEnabled = !!val; }
     function getLastZoomLevel() { return lastZoomLevel; }
@@ -77,10 +92,10 @@
                 : null,
             usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
             shouldTilt: rt().call.shouldTiltDrivingCamera(),
-            zoomAnimationDurationMs: rt().getZoomAnimationDurationMs(),
-            turnZoomThreshold: rt().getTurnZoomThreshold(),
+            zoomAnimationDurationMs: getZoomAnimationDurationMs(),
+            turnZoomThreshold: getTurnZoomThreshold(),
             computeSmartZoom: (spd, dist, rtName) => rt().routeGeometry().calculateSmartZoom(
-                spd, dist, rtName, rt().getZoomLevels(), rt().getTurnZoomThreshold()
+                spd, dist, rtName, getZoomLevels(), getTurnZoomThreshold()
             ),
         });
 
@@ -119,6 +134,10 @@
         setLastZoomLevel: setLastZoomLevel,
         getLastTurnZoomApplied: getLastTurnZoomApplied,
         setLastTurnZoomApplied: setLastTurnZoomApplied,
+        getZoomLevels: getZoomLevels,
+        getTurnZoomThreshold: getTurnZoomThreshold,
+        getZoomAnimationDuration: getZoomAnimationDuration,
+        getZoomAnimationDurationMs: getZoomAnimationDurationMs,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

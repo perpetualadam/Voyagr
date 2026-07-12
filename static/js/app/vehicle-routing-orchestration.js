@@ -10,6 +10,29 @@
     var currentVehicleType = localStorage.getItem('vehicleType') || 'petrol_diesel';
     var currentRoutingMode = localStorage.getItem('routingMode') || 'auto';
 
+    var vehicleIcons = {
+        'petrol_diesel': '/static/images/vehicles/car-aerial.svg',
+        'electric': '/static/images/vehicles/electric-aerial.svg',
+        'motorcycle': '/static/images/vehicles/motorcycle-aerial.svg',
+        'truck': '/static/images/vehicles/truck-aerial.svg',
+        'van': '/static/images/vehicles/van-aerial.svg',
+        'bicycle': '/static/images/vehicles/bicycle-aerial.svg',
+        'pedestrian': '/static/images/vehicles/pedestrian-aerial.svg'
+    };
+
+    var vehicleIconEmojis = {
+        'petrol_diesel': '🚗',
+        'electric': '⚡',
+        'motorcycle': '🏍️',
+        'truck': '🚚',
+        'van': '🚐',
+        'bicycle': '🚴',
+        'pedestrian': '🚶'
+    };
+
+    function getVehicleIcons() { return vehicleIcons; }
+    function getVehicleIconEmojis() { return vehicleIconEmojis; }
+
     function getCurrentVehicleType() { return currentVehicleType; }
     function setCurrentVehicleType(val) { currentVehicleType = val; }
     function getCurrentRoutingMode() { return currentRoutingMode; }
@@ -23,10 +46,9 @@
     }
 
     function updateUserMarkerIcon() {
-        const vehicleIcons = rt().getVehicleIcons();
-        const iconPath = vehicleIcons[getCurrentRoutingMode()]
-            || vehicleIcons[getCurrentVehicleType()]
-            || vehicleIcons.petrol_diesel;
+        const iconPath = getVehicleIcons()[getCurrentRoutingMode()]
+            || getVehicleIcons()[getCurrentVehicleType()]
+            || getVehicleIcons().petrol_diesel;
 
         const currentUserMarker = rt().getCurrentUserMarker();
         if (currentUserMarker) {
@@ -79,9 +101,8 @@
 
     function createVehicleMarker(lat, lon, speed, accuracy, heading) {
         if (heading === undefined) heading = 0;
-        const vehicleIconEmojis = rt().getVehicleIconEmojis();
-        const iconEmoji = vehicleIconEmojis[getCurrentRoutingMode()]
-            || vehicleIconEmojis[getCurrentVehicleType()]
+        const iconEmoji = getVehicleIconEmojis()[getCurrentRoutingMode()]
+            || getVehicleIconEmojis()[getCurrentVehicleType()]
             || '🚗';
         const safeHeading = Number.isFinite(heading) ? heading : 0;
         const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
@@ -145,6 +166,8 @@
         setCurrentVehicleType: setCurrentVehicleType,
         getCurrentRoutingMode: getCurrentRoutingMode,
         setCurrentRoutingMode: setCurrentRoutingMode,
+        getVehicleIcons: getVehicleIcons,
+        getVehicleIconEmojis: getVehicleIconEmojis,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
