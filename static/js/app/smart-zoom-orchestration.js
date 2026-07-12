@@ -7,6 +7,21 @@
 
     var runtime = null;
 
+    var lastZoomLevel = 13;
+    var lastTurnZoomApplied = false;
+    var smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
+        ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
+        : (localStorage.getItem('smartZoomEnabled') === null
+            ? true
+            : localStorage.getItem('smartZoomEnabled') === '1'));
+
+    function getSmartZoomEnabled() { return smartZoomEnabled; }
+    function setSmartZoomEnabled(val) { smartZoomEnabled = !!val; }
+    function getLastZoomLevel() { return lastZoomLevel; }
+    function setLastZoomLevel(val) { lastZoomLevel = val; }
+    function getLastTurnZoomApplied() { return lastTurnZoomApplied; }
+    function setLastTurnZoomApplied(val) { lastTurnZoomApplied = !!val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[SmartZoom] Orchestration runtime not bound');
@@ -18,18 +33,18 @@
         const smartZoom = rt().smartZoom();
         const toggleUi = rt().toggleUI();
         const collected = smartZoom.buildToggleSmartZoomCollectPlan({
-            currentlyEnabled: rt().getSmartZoomEnabled(),
+            currentlyEnabled: getSmartZoomEnabled(),
         });
         const execute = smartZoom.buildToggleSmartZoomExecutePlan({ enabled: collected.enabled });
         if (!execute.shouldApply) return;
 
-        rt().setSmartZoomEnabled(execute.enabled);
+        setSmartZoomEnabled(execute.enabled);
         const btn = document.getElementById(execute.toggle.id);
         if (btn) toggleUi.applyToggleButton(btn, execute.toggle.enabled);
         localStorage.setItem(execute.storageKey, execute.storageValue);
         if (execute.saveAllSettings) rt().call.saveAllSettings();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
-        console.log(execute.logMessage, rt().getSmartZoomEnabled());
+        console.log(execute.logMessage, getSmartZoomEnabled());
     }
 
     function applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, userLat, userLon) {
@@ -42,12 +57,12 @@
         const map = rt().getMap();
         const currentUserMarker = rt().getCurrentUserMarker();
         const easePlan = CP.buildSmartZoomEasePlan({
-            smartZoomEnabled: rt().getSmartZoomEnabled(),
+            smartZoomEnabled: getSmartZoomEnabled(),
             routeInProgress: rt().getRouteInProgress(),
             speedMph: speedMph,
             distanceToNextTurn: distanceToNextTurn,
             roadType: roadType,
-            lastZoomLevel: rt().getLastZoomLevel(),
+            lastZoomLevel: getLastZoomLevel(),
             userLat: userLat,
             userLon: userLon,
             hasMap: !!map,
@@ -78,8 +93,8 @@
             map.setZoom(apply.newZoomLevel);
         }
 
-        rt().setLastZoomLevel(apply.newZoomLevel);
-        rt().setLastTurnZoomApplied(apply.lastTurnZoomApplied);
+        setLastZoomLevel(apply.newZoomLevel);
+        setLastTurnZoomApplied(apply.lastTurnZoomApplied);
         if (apply.logLine) console.log(apply.logLine);
     }
 
@@ -98,6 +113,12 @@
         toggleSmartZoom: toggleSmartZoom,
         applySmartZoomWithAnimation: applySmartZoomWithAnimation,
         applySmartZoom: applySmartZoom,
+        getSmartZoomEnabled: getSmartZoomEnabled,
+        setSmartZoomEnabled: setSmartZoomEnabled,
+        getLastZoomLevel: getLastZoomLevel,
+        setLastZoomLevel: setLastZoomLevel,
+        getLastTurnZoomApplied: getLastTurnZoomApplied,
+        setLastTurnZoomApplied: setLastTurnZoomApplied,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

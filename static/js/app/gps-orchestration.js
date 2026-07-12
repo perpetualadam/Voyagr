@@ -400,7 +400,7 @@
 
         const CP = cpModule();
         const zoomTick = CP.buildNavigationZoomTickPlan({
-            smartZoomEnabled,
+            smartZoomEnabled: VoyagrSmartZoomOrchestration.getSmartZoomEnabled(),
             routeInProgress: rt().g('routeInProgress'),
             navigationFollowEaseApplied,
             followZoom: navigationFollowZoom,
@@ -415,7 +415,7 @@
         if (zoomApply.action !== 'apply') return;
 
         if (zoomApply.syncLastZoomLevel != null) {
-            lastZoomLevel = zoomApply.syncLastZoomLevel;
+            VoyagrSmartZoomOrchestration.setLastZoomLevel(zoomApply.syncLastZoomLevel);
         }
         if (zoomApply.applySmartZoom) {
             rt().call.applySmartZoomWithAnimation(

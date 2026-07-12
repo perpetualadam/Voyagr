@@ -78,12 +78,7 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
 function getFuelEfficiencyLabel() { return VoyagrUnitsPreferencesOrchestration.getFuelEfficiencyLabel(); }
 
 // ===== NAVIGATION VARIABLES =====
-let lastZoomLevel = 13;
-let smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
-    ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
-    : (localStorage.getItem('smartZoomEnabled') === null
-        ? true
-        : localStorage.getItem('smartZoomEnabled') === '1'));
+// Smart zoom state lives in static/js/app/smart-zoom-orchestration.js (bound at file end).
 // Navigation tracking state (global)
 // These are now initialized in voyagr-core.js to prevent redeclaration errors
 // let zoomAndFollowEnabled = ...;
@@ -335,8 +330,8 @@ function getSettingsOrchestrationRuntime() {
         setCurrentVehicleType: (val) => { currentVehicleType = val; },
         getCurrentRoutingMode: () => currentRoutingMode,
         setCurrentRoutingMode: (val) => { currentRoutingMode = val; },
-        getSmartZoomEnabled: () => smartZoomEnabled,
-        setSmartZoomEnabled: (val) => { smartZoomEnabled = val; },
+        getSmartZoomEnabled: () => VoyagrSmartZoomOrchestration.getSmartZoomEnabled(),
+        setSmartZoomEnabled: (val) => VoyagrSmartZoomOrchestration.setSmartZoomEnabled(val),
         getShowCamerasEnabled: () => VoyagrMapOverlayOrchestration.getShowCamerasEnabled(),
         setShowCamerasEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowCamerasEnabled(val); },
         getShowOsmTrafficLightsEnabled: () => VoyagrMapOverlayOrchestration.getShowOsmTrafficLightsEnabled(),
@@ -677,7 +672,7 @@ function getCalculateRouteOrchestrationRuntime() {
         getRouteOptions: () => routeOptions,
         setRouteOptions: (val) => { routeOptions = val; },
         getRouteLayer: () => routeLayer,
-        setLastZoomLevel: (val) => { lastZoomLevel = val; },
+        setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getRouteInProgress: () => routeInProgress,
         getIsGeocoding: () => isGeocoding,
         getCurrentRoutingMode: () => currentRoutingMode,
@@ -1588,7 +1583,7 @@ function getFormClearOrchestrationRuntime() {
         getEndMarker: () => endMarker,
         getRouteLayer: () => routeLayer,
         getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
-        setLastZoomLevel: (val) => { lastZoomLevel = val; },
+        setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         call: {
             clearParkingSelection,
             updateAutoGpsLocation,
@@ -1864,13 +1859,13 @@ function getSmartZoomOrchestrationRuntime() {
         toggleUI: () => _toggleUI(),
         cameraPitch: () => _cameraPitch(),
         routeGeometry: () => _routeGeometry(),
-        getSmartZoomEnabled: () => smartZoomEnabled,
-        setSmartZoomEnabled: (val) => { smartZoomEnabled = val; },
+        getSmartZoomEnabled: () => VoyagrSmartZoomOrchestration.getSmartZoomEnabled(),
+        setSmartZoomEnabled: (val) => VoyagrSmartZoomOrchestration.setSmartZoomEnabled(val),
         getRouteInProgress: () => routeInProgress,
-        getLastZoomLevel: () => lastZoomLevel,
-        setLastZoomLevel: (val) => { lastZoomLevel = val; },
-        getLastTurnZoomApplied: () => lastTurnZoomApplied,
-        setLastTurnZoomApplied: (val) => { lastTurnZoomApplied = val; },
+        getLastZoomLevel: () => VoyagrSmartZoomOrchestration.getLastZoomLevel(),
+        setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
+        getLastTurnZoomApplied: () => VoyagrSmartZoomOrchestration.getLastTurnZoomApplied(),
+        setLastTurnZoomApplied: (val) => VoyagrSmartZoomOrchestration.setLastTurnZoomApplied(val),
         getZoomLevels: () => ZOOM_LEVELS,
         getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
         getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
@@ -2366,7 +2361,6 @@ const vehicleIconEmojis = {
 };
 
 // Variables initialized at the top level
-let lastTurnZoomApplied = false;
 const ZOOM_LEVELS = {
     'motorway_high_speed': 14,      // > 100 km/h
     'main_road_medium_speed': 15,   // 50-100 km/h
@@ -2934,7 +2928,7 @@ function getPageInitOrchestrationRuntime() {
         getMap: () => map,
         getCurrentVehicleType: () => currentVehicleType,
         getCurrentRoutingMode: () => currentRoutingMode,
-        getSmartZoomEnabled: () => smartZoomEnabled,
+        getSmartZoomEnabled: () => VoyagrSmartZoomOrchestration.getSmartZoomEnabled(),
         call: {
             initVoiceRecognition,
             setupVoiceCommandProcessing,
