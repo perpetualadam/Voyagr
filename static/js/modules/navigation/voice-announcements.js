@@ -689,6 +689,49 @@
     }
 
     /**
+     * Input assembly for voice preference DOM reads.
+     * @param {Object} formState
+     * @returns {Object}
+     */
+    function buildCollectVoicePreferencesDomInputPlan(formState) {
+        return buildCollectVoicePreferencesInputPlan(formState);
+    }
+
+    /**
+     * Entry orchestration plan for saveVoicePreferences handler.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildSaveVoicePreferencesEntryOrchestrationPlan(prefs) {
+        return {
+            execute: buildSaveVoicePreferencesExecutePlan(prefs),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadVoicePreferences with saved data.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildLoadVoicePreferencesSavedEntryOrchestrationPlan(prefs) {
+        return {
+            orch: buildLoadVoicePreferencesOrchestrationPlan(),
+            execute: buildLoadVoicePreferencesExecutePlan(prefs),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadVoicePreferences defaults path.
+     * @returns {Object}
+     */
+    function buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan() {
+        return {
+            orch: buildLoadVoicePreferencesOrchestrationPlan(),
+            defaults: buildLoadVoicePreferencesDefaultsExecutePlan(),
+        };
+    }
+
+    /**
      * @param {Object} [input]
      * @param {boolean} [input.currentEnabled]
      * @returns {Object}
@@ -759,10 +802,14 @@
         buildVoicePreferencesUiApplyPlan: buildVoicePreferencesUiApplyPlan,
         buildVoicePreferencesDomApplyPlan: buildVoicePreferencesDomApplyPlan,
         buildCollectVoicePreferencesInputPlan: buildCollectVoicePreferencesInputPlan,
+        buildCollectVoicePreferencesDomInputPlan: buildCollectVoicePreferencesDomInputPlan,
         buildSaveVoicePreferencesExecutePlan: buildSaveVoicePreferencesExecutePlan,
+        buildSaveVoicePreferencesEntryOrchestrationPlan: buildSaveVoicePreferencesEntryOrchestrationPlan,
         buildLoadVoicePreferencesOrchestrationPlan: buildLoadVoicePreferencesOrchestrationPlan,
         buildLoadVoicePreferencesExecutePlan: buildLoadVoicePreferencesExecutePlan,
         buildLoadVoicePreferencesDefaultsExecutePlan: buildLoadVoicePreferencesDefaultsExecutePlan,
+        buildLoadVoicePreferencesSavedEntryOrchestrationPlan: buildLoadVoicePreferencesSavedEntryOrchestrationPlan,
+        buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan: buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan,
         buildToggleVoiceAnnouncementsCollectPlan: buildToggleVoiceAnnouncementsCollectPlan,
         buildToggleVoiceAnnouncementsExecutePlan: buildToggleVoiceAnnouncementsExecutePlan,
     };

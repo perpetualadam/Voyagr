@@ -1469,21 +1469,25 @@ function collectSettingsSnapshotRuntimeState() {
     };
 }
 
-function saveAllSettings() {
-    const SS = _settingsSnapshot();
-    const savePlan = SS.buildSettingsSavePlan(
-        SS.buildSettingsSnapshotInputPlan(
-            collectSettingsSnapshotRuntimeState(),
-            collectSettingsFormState()
-        )
-    );
-    const execute = SS.buildSaveAllSettingsExecutePlan(savePlan);
-    if (!execute.shouldSave) return;
+function applySaveAllSettingsFromPlan(execute) {
+    if (!execute || !execute.shouldSave) return;
 
     localStorage.setItem(execute.storageKey, execute.storageValue);
     console.log(execute.logMessage, execute.snapshot);
 
     if (execute.persistActiveProfile) persistActiveProfile();
+}
+
+function saveAllSettings() {
+    const SS = _settingsSnapshot();
+    applySaveAllSettingsFromPlan(
+        SS.buildSaveAllSettingsEntryOrchestrationPlan(
+            SS.buildCollectSaveAllSettingsInputPlan(
+                collectSettingsSnapshotRuntimeState(),
+                collectSettingsFormState()
+            )
+        ).execute
+    );
 }
 
 /**
@@ -1506,7 +1510,8 @@ function applySettingsRestoreFromPlan(plan) {
 
 function loadAllSettings() {
     const SS = _settingsSnapshot();
-    const orch = SS.buildLoadAllSettingsOrchestrationPlan();
+    const entry = SS.buildLoadAllSettingsEntryOrchestrationPlan();
+    const orch = entry.orch;
     try {
         const saved = localStorage.getItem(orch.storageKey);
         if (!saved) {
@@ -1516,15 +1521,13 @@ function loadAllSettings() {
 
         const settings = JSON.parse(saved);
         console.log(orch.loadedLogPrefix, settings);
-        const restorePlan = SS.buildSettingsRestorePlan(settings);
-        if (!applySettingsRestoreFromPlan(restorePlan)) {
+        const restoreEntry = SS.buildLoadAllSettingsRestoreEntryOrchestrationPlan(settings, {
+            routeInProgress,
+        });
+        if (!applySettingsRestoreFromPlan(restoreEntry.restorePlan)) {
             return false;
         }
-        applySettingsRestorePostEffectsFromPlan(
-            SS.buildApplySettingsRestorePostEffectsExecutePlan(
-                SS.buildSettingsRestorePostApplyPlan(restorePlan.runtime || {}, { routeInProgress })
-            )
-        );
+        applySettingsRestorePostEffectsFromPlan(restoreEntry.postEffects);
 
         console.log(orch.successLog);
         return true;
@@ -4315,24 +4318,18 @@ function recalculateRouteWithPreferences() {
 }
 
 // ===== ROUTE SAVING FUNCTIONS =====
-/**
- * saveCurrentRoute function
- * @function saveCurrentRoute
- * @returns {*} Return value description
- */
-function saveCurrentRoute() {
-    const RS = _routeSharing();
-    const execute = RS.buildSaveCurrentRouteExecutePlan(
-        RS.buildSaveCurrentRoutePlan({
-            lastCalculatedRoute: window.lastCalculatedRoute,
-            routeName: document.getElementById('routeName')?.value,
-            startLabel: document.getElementById('start')?.value,
-            endLabel: document.getElementById('end')?.value,
-        })
-    );
+function collectSaveCurrentRouteInput() {
+    return _routeSharing().buildCollectSaveCurrentRouteInputPlan({
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        routeName: document.getElementById('routeName')?.value,
+        startLabel: document.getElementById('start')?.value,
+        endLabel: document.getElementById('end')?.value,
+    });
+}
 
-    if (!execute.shouldSave) {
-        showStatus(execute.errorStatusMessage, 'error');
+function applySaveCurrentRouteFromPlan(execute) {
+    if (!execute || !execute.shouldSave) {
+        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
@@ -4351,6 +4348,33 @@ function saveCurrentRoute() {
 }
 
 /**
+ * saveCurrentRoute function
+ * @function saveCurrentRoute
+ * @returns {*} Return value description
+ */
+function saveCurrentRoute() {
+    const RS = _routeSharing();
+    applySaveCurrentRouteFromPlan(
+        RS.buildSaveCurrentRouteEntryOrchestrationPlan(collectSaveCurrentRouteInput()).execute
+    );
+}
+
+function collectLoadSavedRoutesFmt() {
+    return {
+        convertDistance,
+        currencySymbol: getCurrencySymbol(),
+        distUnit: getDistanceUnit(),
+    };
+}
+
+function applyLoadSavedRoutesFromPlan(execute) {
+    if (!execute || !execute.shouldRender) return;
+    const savedRoutesList = document.getElementById(execute.listContainerId);
+    if (!savedRoutesList) return;
+    savedRoutesList.innerHTML = execute.listHtml;
+}
+
+/**
  * loadSavedRoutes function
  * @function loadSavedRoutes
  * @returns {*} Return value description
@@ -4358,17 +4382,23 @@ function saveCurrentRoute() {
 function loadSavedRoutes() {
     const RS = _routeSharing();
     const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
-    const execute = RS.buildLoadSavedRoutesExecutePlan(
-        RS.buildLoadSavedRoutesListInputPlan(savedRoutes, {
-            convertDistance,
-            currencySymbol: getCurrencySymbol(),
-            distUnit: getDistanceUnit(),
-        })
+    applyLoadSavedRoutesFromPlan(
+        RS.buildLoadSavedRoutesEntryOrchestrationPlan(savedRoutes, collectLoadSavedRoutesFmt()).execute
     );
-    const savedRoutesList = document.getElementById(execute.listContainerId);
-    if (!savedRoutesList) return;
-    savedRoutesList.innerHTML = execute.listHtml;
 }
+
+function applyUseSavedRouteFromPlan(plan) {
+    if (!plan || !plan.ok) return;
+
+    const startEl = document.getElementById('start');
+    const endEl = document.getElementById('end');
+    if (startEl) startEl.value = plan.startLabel;
+    if (endEl) endEl.value = plan.endLabel;
+    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+    showStatus(plan.successStatusMessage, 'success');
+    switchTab(plan.switchTab);
+}
+
 /**
  * useSavedRoute function
  * @function useSavedRoute
@@ -4378,15 +4408,20 @@ function loadSavedRoutes() {
 function useSavedRoute(routeId) {
     const RS = _routeSharing();
     const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
-    const plan = RS.buildUseSavedRoutePlan(routeId, savedRoutes);
-    if (!plan.ok) return;
-
-    document.getElementById('start').value = plan.startLabel;
-    document.getElementById('end').value = plan.endLabel;
-    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-    showStatus(plan.successStatusMessage, 'success');
-    switchTab(plan.switchTab);
+    applyUseSavedRouteFromPlan(
+        RS.buildUseSavedRouteEntryOrchestrationPlan(routeId, savedRoutes).plan
+    );
 }
+
+function applyDeleteSavedRouteFromPlan(execute) {
+    if (!execute || !execute.shouldPersist) return;
+
+    localStorage.setItem(execute.storageKey, JSON.stringify(execute.nextRoutes));
+    if (execute.persistProfile) persistActiveProfile();
+    showStatus(execute.successStatusMessage, 'success');
+    if (execute.reloadList) loadSavedRoutes();
+}
+
 /**
  * deleteSavedRoute function
  * @function deleteSavedRoute
@@ -4395,15 +4430,10 @@ function useSavedRoute(routeId) {
  */
 function deleteSavedRoute(routeId) {
     const RS = _routeSharing();
-    const deletePlan = RS.buildDeleteSavedRoutePlan(routeId);
-    if (!confirm(deletePlan.confirmMessage)) return;
-
-    const savedRoutes = JSON.parse(localStorage.getItem(deletePlan.storageKey) || '[]');
-    const execute = RS.buildDeleteSavedRouteExecutePlan(deletePlan, savedRoutes);
-    localStorage.setItem(execute.storageKey, JSON.stringify(execute.nextRoutes));
-    if (execute.persistProfile) persistActiveProfile();
-    showStatus(execute.successStatusMessage, 'success');
-    if (execute.reloadList) loadSavedRoutes();
+    const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
+    const entry = RS.buildDeleteSavedRouteEntryOrchestrationPlan(routeId, savedRoutes);
+    if (!confirm(entry.deletePlan.confirmMessage)) return;
+    applyDeleteSavedRouteFromPlan(entry.execute);
 }
 
 // ===== REAL-TIME TRAFFIC UPDATE FUNCTIONS =====
@@ -6149,24 +6179,38 @@ function applyMapLayerReorderEntryFromPlan(entry) {
     applyMapLayerReorderFromPlan(entry.reorderApply);
 }
 
+function collectBringTrafficEdgesToTopInput() {
+    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
+    return {
+        hasMap: !!map,
+        trafficLayers: routeTrafficLayers,
+        styleLayers: style && style.layers ? style.layers : null,
+    };
+}
+
 function bringTrafficEdgesToTop() {
     applyMapLayerReorderEntryFromPlan(
-        _routeSelection().buildBringTrafficEdgesToTopEntryOrchestrationPlan({
-            hasMap: !!map,
-            trafficLayers: routeTrafficLayers,
-            styleLayers: map && map.getStyle && map.getStyle().layers,
-        })
+        _routeSelection().buildBringTrafficEdgesToTopEntryOrchestrationPlan(
+            collectBringTrafficEdgesToTopInput()
+        )
     );
+}
+
+function collectBringNavRouteAboveTrafficEdgesInput() {
+    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
+    return {
+        hasMap: !!map,
+        routeLayer,
+        allRouteLayers,
+        styleLayers: style && style.layers ? style.layers : null,
+    };
 }
 
 function bringNavRouteAboveTrafficEdges() {
     applyMapLayerReorderEntryFromPlan(
-        _routeSelection().buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan({
-            hasMap: !!map,
-            routeLayer,
-            allRouteLayers,
-            styleLayers: map && map.getStyle && map.getStyle().layers,
-        })
+        _routeSelection().buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan(
+            collectBringNavRouteAboveTrafficEdgesInput()
+        )
     );
 }
 
@@ -7981,19 +8025,23 @@ function loadParkingPreferences() {
  * Collect voice preference values from settings form controls.
  * @returns {Object}
  */
+function collectVoicePreferencesDomInput() {
+    return {
+        turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
+        turnDistance2: document.getElementById('voiceTurnDistance2')?.value,
+        turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
+        hazardDistance: document.getElementById('voiceHazardDistance')?.value,
+        voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
+        announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
+            ? voiceAnnouncementsEnabled
+            : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
+    };
+}
+
 function collectVoicePreferencesFormState() {
     const VA = _voiceAnnouncements();
     return VA.buildVoicePreferencesCollectPlan(
-        VA.buildCollectVoicePreferencesInputPlan({
-            turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
-            turnDistance2: document.getElementById('voiceTurnDistance2')?.value,
-            turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
-            hazardDistance: document.getElementById('voiceHazardDistance')?.value,
-            voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
-            announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
-                ? voiceAnnouncementsEnabled
-                : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
-        })
+        VA.buildCollectVoicePreferencesDomInputPlan(collectVoicePreferencesDomInput())
     );
 }
 
@@ -8013,16 +8061,8 @@ function applyVoicePreferencesRuntimeFromPlan(plan) {
     VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = plan.voiceAnnouncementMinIntervalMs;
 }
 
-/**
- * saveVoicePreferences function
- * @function saveVoicePreferences
- * @returns {*} Return value description
- */
-function saveVoicePreferences() {
-    const VA = _voiceAnnouncements();
-    const prefs = collectVoicePreferencesFormState();
-    const execute = VA.buildSaveVoicePreferencesExecutePlan(prefs);
-    if (!execute.shouldSave) return;
+function applySaveVoicePreferencesFromPlan(execute) {
+    if (!execute || !execute.shouldSave) return;
 
     (execute.storagePatches || []).forEach(({ key, value }) => {
         localStorage.setItem(key, value);
@@ -8033,6 +8073,47 @@ function saveVoicePreferences() {
 
     console.log(execute.logMessage, execute.prefs);
     showStatus(execute.successStatusMessage, execute.successStatusType);
+}
+
+/**
+ * saveVoicePreferences function
+ * @function saveVoicePreferences
+ * @returns {*} Return value description
+ */
+function saveVoicePreferences() {
+    const VA = _voiceAnnouncements();
+    applySaveVoicePreferencesFromPlan(
+        VA.buildSaveVoicePreferencesEntryOrchestrationPlan(
+            collectVoicePreferencesFormState()
+        ).execute
+    );
+}
+
+function applyLoadVoicePreferencesSavedFromPlan(entry) {
+    const execute = entry.execute;
+    if (!execute || !execute.shouldApply) return;
+
+    applyDomSelectsFromPlan(execute.domPlan.selects);
+    _toggleUI().applyLabeledToggleButton(
+        document.getElementById(execute.domPlan.labeledToggle.id),
+        execute.domPlan.labeledToggle.enabled
+    );
+    applyVoicePreferencesRuntimeFromPlan(execute.runtimePlan);
+    console.log(entry.orch.loadedLogMessage, execute.prefs);
+}
+
+function applyLoadVoicePreferencesDefaultsFromPlan(entry) {
+    const defaults = entry.defaults;
+    if (!defaults || !defaults.shouldApply) return;
+
+    const toggleButton = document.getElementById(defaults.domPlan.labeledToggle.id);
+    if (toggleButton) {
+        _toggleUI().applyLabeledToggleButton(toggleButton, defaults.domPlan.labeledToggle.enabled);
+        if (defaults.setAnnouncementsEnabledFromToggle) {
+            voiceAnnouncementsEnabled = defaults.domPlan.labeledToggle.enabled;
+        }
+    }
+    console.log(entry.orch.defaultsLogMessage);
 }
 
 /**
@@ -8047,30 +8128,15 @@ function loadVoicePreferences() {
         const saved = localStorage.getItem(orch.storageKey);
         if (saved) {
             const prefs = JSON.parse(saved);
-            const execute = VA.buildLoadVoicePreferencesExecutePlan(prefs);
-            if (!execute.shouldApply) return;
-
-            applyDomSelectsFromPlan(execute.domPlan.selects);
-            _toggleUI().applyLabeledToggleButton(
-                document.getElementById(execute.domPlan.labeledToggle.id),
-                execute.domPlan.labeledToggle.enabled
+            applyLoadVoicePreferencesSavedFromPlan(
+                VA.buildLoadVoicePreferencesSavedEntryOrchestrationPlan(prefs)
             );
-            applyVoicePreferencesRuntimeFromPlan(execute.runtimePlan);
-            console.log(orch.loadedLogMessage, execute.prefs);
             return;
         }
 
-        const defaults = VA.buildLoadVoicePreferencesDefaultsExecutePlan();
-        if (!defaults.shouldApply) return;
-
-        const toggleButton = document.getElementById(defaults.domPlan.labeledToggle.id);
-        if (toggleButton) {
-            _toggleUI().applyLabeledToggleButton(toggleButton, defaults.domPlan.labeledToggle.enabled);
-            if (defaults.setAnnouncementsEnabledFromToggle) {
-                voiceAnnouncementsEnabled = defaults.domPlan.labeledToggle.enabled;
-            }
-        }
-        console.log(orch.defaultsLogMessage);
+        applyLoadVoicePreferencesDefaultsFromPlan(
+            VA.buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan()
+        );
     } catch (e) {
         console.log(orch.errorLogPrefix, e);
     }

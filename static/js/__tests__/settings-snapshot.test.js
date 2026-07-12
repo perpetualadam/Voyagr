@@ -476,6 +476,28 @@ describe('settings-snapshot module', () => {
         expect(execute.persistActiveProfile).toBe(true);
     });
 
+    test('save and load settings entry orchestration plans bundle execute plans', () => {
+        const saveEntry = SS.buildSaveAllSettingsEntryOrchestrationPlan(
+            SS.buildCollectSaveAllSettingsInputPlan(
+                { distanceUnit: 'km' },
+                { mapTheme: 'dark' }
+            )
+        );
+        expect(saveEntry.execute.shouldSave).toBe(true);
+        expect(saveEntry.savePlan.snapshot.unit_distance).toBe('km');
+
+        const loadEntry = SS.buildLoadAllSettingsEntryOrchestrationPlan();
+        expect(loadEntry.orch.storageKey).toBe(SS.SETTINGS_STORAGE_KEY);
+
+        const restoreEntry = SS.buildLoadAllSettingsRestoreEntryOrchestrationPlan(
+            { unit_distance: 'mi', routeTrafficEnabled: true },
+            { routeInProgress: true }
+        );
+        expect(restoreEntry.restorePlan.found).toBe(true);
+        expect(restoreEntry.postEffects.shouldDispatch).toBe(true);
+        expect(restoreEntry.postEffects.effects).toContain('startRouteTrafficUpdates');
+    });
+
     test('buildExportSettingsDomExecutePlan and import file picker orchestration', () => {
         const exportPlan = SS.buildSettingsExportPlan('{"unit_distance":"km"}', '2026-07-11');
         const execute = SS.buildExportSettingsDomExecutePlan(exportPlan);

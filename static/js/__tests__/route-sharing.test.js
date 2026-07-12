@@ -146,6 +146,36 @@ describe('route-sharing module', () => {
         expect(execute.nextRoutes.map((r) => r.id)).toEqual([1, 3]);
     });
 
+    test('saved route entry orchestration plans bundle execute plans', () => {
+        const saveEntry = RS.buildSaveCurrentRouteEntryOrchestrationPlan({
+            lastCalculatedRoute: { distance_km: 10, time: '20 min', geometry: 'abc' },
+            routeName: 'Commute',
+            startLabel: 'A',
+            endLabel: 'B',
+            now: 1000,
+        });
+        expect(saveEntry.execute.shouldSave).toBe(true);
+        expect(saveEntry.execute.savedRoute.name).toBe('Commute');
+
+        const loadEntry = RS.buildLoadSavedRoutesEntryOrchestrationPlan(
+            [{ id: 1, name: 'Commute', start: 'A', end: 'B', distance_km: 10, duration_minutes: '20 min', fuel_cost: 5, toll_cost: 0, caz_cost: 0 }],
+            { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.21'] }
+        );
+        expect(loadEntry.execute.shouldRender).toBe(true);
+        expect(loadEntry.execute.listHtml).toContain('Commute');
+
+        const useEntry = RS.buildUseSavedRouteEntryOrchestrationPlan(1, [{
+            id: 1, name: 'Commute', start: 'A', end: 'B',
+            distance_km: 10, duration_minutes: 20, fuel_cost: 5, toll_cost: 0, caz_cost: 0, geometry: 'abc',
+        }]);
+        expect(useEntry.plan.ok).toBe(true);
+        expect(useEntry.plan.switchTab).toBe('navigation');
+
+        const deleteEntry = RS.buildDeleteSavedRouteEntryOrchestrationPlan(2, [{ id: 1 }, { id: 2 }]);
+        expect(deleteEntry.deletePlan.confirmMessage).toContain('Delete');
+        expect(deleteEntry.execute.nextRoutes).toHaveLength(1);
+    });
+
     test('buildQrCodeImageUrl encodes share link and style sets dimensions', () => {
         const url = RS.buildQrCodeImageUrl('https://voyagr.test?route=abc', 200);
         expect(url).toContain('api.qrserver.com');
