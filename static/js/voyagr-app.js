@@ -4141,7 +4141,7 @@ function clearForm() {
     });
     lastZoomLevel = 13;
 
-    if (autoGpsEnabled) {
+    if (VoyagrAutoGpsOrchestration.getAutoGpsEnabled()) {
         updateAutoGpsLocation();
     }
 }
@@ -5272,92 +5272,26 @@ function toggleBatterySavingMode() { VoyagrBatterySavingOrchestration.toggleBatt
 function enableBatterySavingMode() { VoyagrBatterySavingOrchestration.enableBatterySavingMode(); }
 function disableBatterySavingMode() { VoyagrBatterySavingOrchestration.disableBatterySavingMode(); }
 
-// ===== PHASE 3 FEATURES: MAP THEMES =====
+// ===== MAP THEME ORCHESTRATION =====
+// Orchestration lives in static/js/app/map-theme-orchestration.js (bound at file end).
 
-let currentMapTheme =
-    typeof localStorage !== 'undefined' ? localStorage.getItem('mapTheme') || 'standard' : 'standard';
-/**
- * setMapTheme function
- * @function setMapTheme
- * @param {string|Event} themeOrEvent - Theme name or event object
- * @returns {void}
- */
-function setMapTheme(themeOrEvent) {
-    const MT = _mapTheme();
-    const execute = MT.buildSetMapThemeExecutePlan({
-        themeOrEvent,
-        currentMapTheme,
-        hasMap: !!map,
-        buildings3DEnabled: typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled,
-        toAbs: window.__voyagrToAbsoluteOriginUrl || ((u) => u),
-        preferredFallbackStyleUrl: window.__voyagrPreferredFallbackStyleUrl,
-    });
-    if (!execute.shouldApply) return;
-
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-
-    const mapThemeRow = document.getElementById(execute.selectorId);
-    if (mapThemeRow) {
-        mapThemeRow.querySelectorAll('.theme-option').forEach((btn) => {
-            btn.classList.remove('active');
-        });
-    }
-    const activeBtn = document.querySelector(execute.activeButtonSelector);
-    if (activeBtn) activeBtn.classList.add('active');
-
-    if (!execute.hasMap) {
-        console.warn(execute.mapNotReadyLog);
-        currentMapTheme = execute.theme;
-        return;
-    }
-    if (execute.skipStyleReload) {
-        console.log(execute.alreadyActiveLog);
-        return;
-    }
-
-    currentMapTheme = execute.theme;
-    const resolveUrls = window.__voyagrResolveStyleUrls || ((s) => s);
-    const toAbs = window.__voyagrToAbsoluteOriginUrl || ((u) => u);
-    const chosenUrl = execute.stylePlan.chosenUrl;
-
-    let resolvedStyle = null;
-    if (execute.syncFetchStyle) {
-        try {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', chosenUrl, false);
-            xhr.send();
-            if (xhr.status === 200) {
-                resolvedStyle = JSON.parse(xhr.responseText);
-                resolveUrls(resolvedStyle);
-            }
-        } catch (e) {
-            console.warn(execute.syncFetchErrorLogPrefix, e.message);
-        }
-    }
-
-    map.setStyle(resolvedStyle || chosenUrl);
-
-    map.once('style.load', () => {
-        if (execute.postStyleLoad.add3DBuildings) {
-            MapLibreHelpers.add3DBuildings(map, {
-                heightMultiplier: buildings3DHeightMultiplier,
-                opacity: buildings3DOpacity
-            });
-        }
-        if (execute.postStyleLoad.reinitRoadLabels && typeof initializeRoadLabels === 'function') {
-            initializeRoadLabels();
-        }
-    });
-
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings) saveAllSettings();
-
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(execute.persistApiBody),
-    }).catch((error) => console.error('Error updating map theme:', error));
+function getMapThemeOrchestrationRuntime() {
+    return {
+        mapTheme: () => _mapTheme(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getBuildings3DEnabled: () => buildings3DEnabled,
+        getBuildings3DHeightMultiplier: () => buildings3DHeightMultiplier,
+        getBuildings3DOpacity: () => buildings3DOpacity,
+        call: {
+            showStatus,
+            saveAllSettings,
+            initializeRoadLabels,
+        },
+    };
 }
+
+function setMapTheme(themeOrEvent) { VoyagrMapThemeOrchestration.setMapTheme(themeOrEvent); }
 
 // ===== PHASE 3 FEATURES: ML PREDICTIONS =====
 
@@ -6590,11 +6524,6 @@ function handleVoiceAction(data) { VoyagrVoiceControlOrchestration.handleVoiceAc
 let currentLat = 51.5074;
 let currentLon = -0.1278;
 
-// ===== AUTO GPS LOCATION FEATURE =====
-let autoGpsEnabled = false;
-let autoGpsLocationMonitor = null;
-const AUTO_GPS_UPDATE_INTERVAL = 5000; // Update every 5 seconds
-
 // ===== VEHICLE TYPE & ROUTING MODE =====
 let currentVehicleType = 'petrol_diesel';
 let currentRoutingMode = 'auto';
@@ -7023,117 +6952,25 @@ function getCurrentLocation() { VoyagrLocationOrchestration.getCurrentLocation()
 function setCurrentLocation(field) { VoyagrLocationOrchestration.setCurrentLocation(field); }
 function swapStartAndDestination() { VoyagrLocationOrchestration.swapStartAndDestination(); }
 
-// ===== AUTO GPS LOCATION FEATURE =====
-/**
- * toggleAutoGpsLocation function
- * @function toggleAutoGpsLocation
- * @returns {*} Return value description
- */
-function toggleAutoGpsLocation() {
-    const toggle = document.getElementById('autoGpsToggle');
-    autoGpsEnabled = toggle.checked;
+// ===== AUTO GPS ORCHESTRATION =====
+// Orchestration lives in static/js/app/auto-gps-orchestration.js (bound at file end).
 
-    if (autoGpsEnabled) {
-        startAutoGpsLocation();
-    } else {
-        stopAutoGpsLocation();
-    }
-
-    // Save preference to localStorage
-    localStorage.setItem('autoGpsEnabled', autoGpsEnabled);
-}
-
-/**
- * startAutoGpsLocation function
- * @function startAutoGpsLocation
- * @returns {*} Return value description
- */
-function startAutoGpsLocation() {
-    if (!navigator.geolocation) {
-        showStatus('❌ Geolocation not supported by your browser', 'error');
-        document.getElementById('autoGpsToggle').checked = false;
-        autoGpsEnabled = false;
-        return;
-    }
-
-    showStatus('📍 Auto GPS location enabled. Fetching your location...', 'success');
-    console.log('[Auto GPS] Starting auto location monitoring');
-
-    // Get initial location immediately
-    updateAutoGpsLocation();
-
-    // Then update every 5 seconds
-    autoGpsLocationMonitor = setInterval(() => {
-        updateAutoGpsLocation();
-    }, AUTO_GPS_UPDATE_INTERVAL);
-}
-
-/**
- * stopAutoGpsLocation function
- * @function stopAutoGpsLocation
- * @returns {*} Return value description
- */
-function stopAutoGpsLocation() {
-    if (autoGpsLocationMonitor) {
-        clearInterval(autoGpsLocationMonitor);
-        autoGpsLocationMonitor = null;
-    }
-    const startEl = document.getElementById('start');
-    if (startEl && startEl.dataset.lat && startEl.dataset.lon) {
-        const la = parseFloat(startEl.dataset.lat);
-        const lo = parseFloat(startEl.dataset.lon);
-        if (Number.isFinite(la) && Number.isFinite(lo)) {
-            startEl.value = `${la.toFixed(6)},${lo.toFixed(6)}`;
-            delete startEl.dataset.displayName;
-        }
-    }
-    showStatus('📍 Auto GPS location disabled', 'info');
-    console.log('[Auto GPS] Auto location monitoring stopped');
-}
-
-/**
- * updateAutoGpsLocation function
- * @function updateAutoGpsLocation
- * @returns {*} Return value description
- */
-function updateAutoGpsLocation() {
-    if (!autoGpsEnabled) return;
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
-
-            const startEl = document.getElementById('start');
-            if (startEl) {
-                startEl.value = 'Current Location';
-                startEl.dataset.lat = String(lat);
-                startEl.dataset.lon = String(lon);
-                startEl.dataset.displayName = 'Current Location';
-            }
-            currentLat = lat;
-            currentLon = lon;
-
-            // Log the update
-            console.log(`[Auto GPS] Location updated: ${lat.toFixed(6)}, ${lon.toFixed(6)} (accuracy: ${accuracy.toFixed(0)}m)`);
-
-            // Show subtle notification only on first update or significant change
-            if (!window.lastAutoGpsLat ||
-                calculateDistanceMeters(window.lastAutoGpsLat, window.lastAutoGpsLon, lat, lon) > 0.05) {
-                // Only show notification if moved more than 50 meters
-                showStatus(`📍 Location updated: ${lat.toFixed(4)}, ${lon.toFixed(4)}`, 'info');
-                window.lastAutoGpsLat = lat;
-                window.lastAutoGpsLon = lon;
-            }
+function getAutoGpsOrchestrationRuntime() {
+    return {
+        setCurrentLat: (val) => { currentLat = val; },
+        setCurrentLon: (val) => { currentLon = val; },
+        call: {
+            showStatus,
+            calculateDistanceMeters,
         },
-        (error) => {
-            console.log(`[Auto GPS] Error: ${error.message}`);
-            // Don't show error every time - just log it
-            // This prevents notification spam if GPS is temporarily unavailable
-        }
-    );
+    };
 }
+
+function toggleAutoGpsLocation() { VoyagrAutoGpsOrchestration.toggleAutoGpsLocation(); }
+function startAutoGpsLocation() { VoyagrAutoGpsOrchestration.startAutoGpsLocation(); }
+function stopAutoGpsLocation() { VoyagrAutoGpsOrchestration.stopAutoGpsLocation(); }
+function updateAutoGpsLocation() { VoyagrAutoGpsOrchestration.updateAutoGpsLocation(); }
+
 // ===== GEOCODING ORCHESTRATION =====
 // Orchestration lives in static/js/app/geocoding-orchestration.js (bound at file end).
 
@@ -7141,7 +6978,7 @@ function getGeocodingOrchestrationRuntime() {
     return {
         geocodingLocations: () => _geocodingLocations(),
         searchAutocomplete: () => _searchAutocomplete(),
-        getAutoGpsEnabled: () => autoGpsEnabled,
+        getAutoGpsEnabled: () => VoyagrAutoGpsOrchestration.getAutoGpsEnabled(),
         g: (key) => {
             switch (key) {
             case 'mapPickerMode': return mapPickerMode;
@@ -7772,7 +7609,7 @@ function getLegacyPreferencesOrchestrationRuntime() {
         legacyPrefsRestore: () => _legacyPrefsRestore(),
         batterySaving: () => _batterySaving(),
         setGestureEnabled: (val) => VoyagrGestureControlOrchestration.setGestureEnabled(val),
-        setAutoGpsEnabled: (val) => { autoGpsEnabled = val; },
+        setAutoGpsEnabled: (val) => VoyagrAutoGpsOrchestration.setAutoGpsEnabled(val),
         call: {
             loadHazardCameraTogglesFromApi,
             handleDeviceMotion,
@@ -7931,6 +7768,8 @@ VoyagrGestureControlOrchestration.bind(getGestureControlOrchestrationRuntime());
 VoyagrBatterySavingOrchestration.bind(getBatterySavingOrchestrationRuntime());
 VoyagrUnitsPreferencesOrchestration.bind(getUnitsPreferencesOrchestrationRuntime());
 VoyagrSmartZoomOrchestration.bind(getSmartZoomOrchestrationRuntime());
+VoyagrMapThemeOrchestration.bind(getMapThemeOrchestrationRuntime());
+VoyagrAutoGpsOrchestration.bind(getAutoGpsOrchestrationRuntime());
 VoyagrLocationOrchestration.bind(getLocationOrchestrationRuntime());
 VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
