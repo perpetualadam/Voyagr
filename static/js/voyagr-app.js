@@ -2719,6 +2719,18 @@ function doAddRouteLayers() {
     applyDoAddRouteLayersFromPlan(execute.apply);
 }
 
+function applyBringRoutesToTopEntryFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+    if (apply.entryLogPrefix != null) {
+        console.log(apply.entryLogPrefix, apply.layerCount);
+    }
+    if (apply.requiresMap && !map) {
+        if (apply.mapMissingLogMessage) console.warn(apply.mapMissingLogMessage);
+        return;
+    }
+    applyBringRoutesToTopFromPlan(apply.execute);
+}
+
 /**
  * Bring all route layers to the top of the map rendering order
  * This ensures routes are visible above traffic edges and other overlays
@@ -2727,19 +2739,15 @@ function doAddRouteLayers() {
  */
 function bringRoutesToTop() {
     const RS = _routeSelection();
-    const entry = RS.buildBringRoutesToTopEntryOrchestrationPlan({
-        layerCount: allRouteLayers?.length || 0,
-        layerDescriptors: allRouteLayers,
-        styleLayers: map && map.getStyle ? map.getStyle().layers : null,
-    });
-
-    console.log(entry.orch.entryLogPrefix, entry.orch.layerCount);
-
-    if (!map) {
-        console.warn(entry.orch.mapMissingLogMessage);
-        return;
-    }
-    applyBringRoutesToTopFromPlan(entry.execute);
+    applyBringRoutesToTopEntryFromPlan(
+        RS.buildBringRoutesToTopEntryApplyPlan(
+            RS.buildBringRoutesToTopEntryOrchestrationPlan({
+                layerCount: allRouteLayers?.length || 0,
+                layerDescriptors: allRouteLayers,
+                styleLayers: map && map.getStyle ? map.getStyle().layers : null,
+            })
+        )
+    );
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -3195,9 +3203,8 @@ function removeStop(index) {
 /**
  * Refresh via-point markers (update numbers after removal)
  */
-function refreshViaPointMarkers() {
-    const apply = _waypoints().buildViaPointMarkersRefreshApplyPlan(viaPoints);
-    if (!apply.shouldRefresh) return;
+function applyViaPointMarkersRefreshFromPlan(apply) {
+    if (!apply || !apply.shouldRefresh) return;
 
     if (apply.removeAllExistingMarkers) {
         viaPointMarkers.forEach((marker) => {
@@ -3221,12 +3228,17 @@ function refreshViaPointMarkers() {
     });
 }
 
+function refreshViaPointMarkers() {
+    applyViaPointMarkersRefreshFromPlan(
+        _waypoints().buildViaPointMarkersRefreshEntryOrchestrationPlan(viaPoints).apply
+    );
+}
+
 /**
  * Clear all via-points and stops
  */
-function clearAllWaypoints() {
-    const apply = _waypoints().buildClearAllWaypointsApplyPlan();
-    if (!apply.shouldClear) return;
+function applyClearAllWaypointsFromPlan(apply) {
+    if (!apply || !apply.shouldClear) return;
 
     if (apply.clearViaPoints) viaPoints = [];
     if (apply.clearStops) stops = [];
@@ -3239,6 +3251,12 @@ function clearAllWaypoints() {
     if (apply.clearMultiDropLayers) clearMultiDropLayers();
     if (apply.updateWaypointsList) updateWaypointsList();
     showStatus(apply.statusMessage, apply.statusType);
+}
+
+function clearAllWaypoints() {
+    applyClearAllWaypointsFromPlan(
+        _waypoints().buildClearAllWaypointsEntryOrchestrationPlan().apply
+    );
 }
 
 /**
@@ -4817,6 +4835,26 @@ async function applyCalculateRouteFetchHttpResponse(response, fetchPlan) {
     return response.json();
 }
 
+function collectCalculateRouteApiInput(geocodedStart, geocodedEnd) {
+    return _routingRequest().buildCalculateRouteApiInputCollectPlan({
+        storage: localStorage,
+        geocodedStart,
+        geocodedEnd,
+        viaPoints,
+        stops,
+        routingMode: currentRoutingMode,
+        vehicleType: currentVehicleType,
+        costParams: getRouteCostParams(currentVehicleType),
+        avoidTolls: isAvoidTollsEnabled(),
+        routePrefs: getRoutePreferences(),
+        routeInProgress,
+        isTrackingActive,
+        trackingHistory,
+        currentLat,
+        currentLon,
+    });
+}
+
 function applyCalculateRouteFetchErrorFromPlan(errApply, error) {
     if (!errApply) return;
     showStatus(errApply.statusMessage, errApply.statusType);
@@ -4853,28 +4891,14 @@ async function calculateRoute() {
         RR.buildCalculateRouteLoadingApplyPlan(RR.buildCalculateRouteLoadingExecutePlan())
     );
 
-    const routePlan = RR.buildCalculateRouteApiPlan({
-        storage: localStorage,
-        geocodedStart: geocodedStart,
-        geocodedEnd: geocodedEnd,
-        viaPoints: viaPoints,
-        stops: stops,
-        routingMode: currentRoutingMode,
-        vehicleType: currentVehicleType,
-        costParams: getRouteCostParams(currentVehicleType),
-        avoidTolls: isAvoidTollsEnabled(),
-        routePrefs: getRoutePreferences(),
-        routeInProgress: routeInProgress,
-        isTrackingActive: isTrackingActive,
-        trackingHistory: trackingHistory,
-        currentLat: currentLat,
-        currentLon: currentLon,
-    });
-    const fetchPlan = RR.buildCalculateRouteFetchPlan(routePlan);
+    const apiOrch = RR.buildCalculateRouteApiOrchestrationPlan(
+        collectCalculateRouteApiInput(geocodedStart, geocodedEnd)
+    );
+    const { routePlan, fetchPlan, requestLog } = apiOrch;
 
-    console.log(fetchPlan.requestLog.requestLogPrefix, fetchPlan.body);
-    console.log(fetchPlan.requestLog.viaPointsLogMessage);
-    console.log(fetchPlan.requestLog.multiDropLogMessage);
+    console.log(requestLog.requestLogPrefix, fetchPlan.body);
+    console.log(requestLog.viaPointsLogMessage);
+    console.log(requestLog.multiDropLogMessage);
 
     fetch(fetchPlan.apiPath, {
         method: fetchPlan.method,
@@ -7422,50 +7446,109 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     applyShowRoutePreviewFromPlan(orch.apply, routeData, skipMapDisplay);
 }
 
+function collectShowAlternativeRoutesPreviewInput() {
+    return {
+        routeCount: routeOptions ? routeOptions.length : 0,
+        routeOptions,
+        routeColors: routeColors(),
+        currencySymbol: getCurrencySymbol(),
+        distUnit: getDistanceUnit(),
+        fuelUnit: currentVehicleType === 'electric' ? 'kWh' : 'L',
+        convertDistance,
+    };
+}
+
 /**
  * showAlternativeRoutesInPreview function
  * @function showAlternativeRoutesInPreview
  * @returns {*} Return value description
  */
 function showAlternativeRoutesInPreview() {
-    const RS = _routeSelection();
-    const routeCount = routeOptions ? routeOptions.length : 0;
-    if (!RS.buildShowAlternativeRoutesPreviewOrchestrationPlan(routeCount).shouldShow) return;
+    const orch = _routeSelection().buildShowAlternativeRoutesPreviewEntryOrchestrationPlan(
+        collectShowAlternativeRoutesPreviewInput()
+    );
+    if (!orch.shouldShow) return;
+    applyAlternativeRoutesPreviewDomFromPlan(orch.apply);
+}
 
-    const mount = RS.buildAlternativeRoutesPreviewMountPlans(routeOptions, {
-        routeColors: routeColors(),
+function collectShowRouteComparisonInput() {
+    return {
+        routeCount: routeOptions ? routeOptions.length : 0,
+        routeOptions,
         currencySymbol: getCurrencySymbol(),
         distUnit: getDistanceUnit(),
-        fuelUnit: currentVehicleType === 'electric' ? 'kWh' : 'L',
-        convertDistance: convertDistance,
+        convertDistance,
+    };
+}
+
+function applyShowRouteComparisonEntryFromPlan(apply) {
+    if (!apply) return false;
+    if (apply.entryLogMessage) console.log(apply.entryLogMessage);
+    (apply.debugLogs || []).forEach((log) => console.log(log.prefix, log.value));
+    if (!apply.shouldProceed) {
+        if (apply.errorLogMessage) console.error(apply.errorLogMessage, apply.routeCount);
+        if (apply.errorStatusMessage) showStatus(apply.errorStatusMessage, 'error');
+        return false;
+    }
+    if (apply.singleRouteWarning) {
+        if (apply.singleRouteLogMessage) console.warn(apply.singleRouteLogMessage);
+        if (apply.singleRouteStatusMessage) showStatus(apply.singleRouteStatusMessage, 'info');
+    }
+    return true;
+}
+
+async function applyShowRouteComparisonFetchHttpResponse(response) {
+    const RR = _routingRequest();
+    const RS = _routeSelection();
+    const contentType = response.headers.get('content-type');
+    const plan = RS.buildShowRouteComparisonFetchHttpResponsePlan({
+        status: response.status,
+        ok: response.ok,
+        contentType,
+        isJson: RR.isRouteApiJsonContentType(contentType),
     });
-    applyAlternativeRoutesPreviewDomFromPlan(
-        RS.buildAlternativeRoutesPreviewDomApplyPlan(mount)
-    );
+
+    console.log(plan.statusLogPrefix, response.status);
+
+    if (plan.action === 'reject_non_json') {
+        const text = await response.text();
+        console.error(plan.nonJsonErrorLogPrefix, plan.contentType);
+        console.error(plan.responseTextLogPrefix, text.substring(0, 200));
+        throw new Error(RR.buildNonJsonRouteApiErrorMessage(plan.status, text));
+    }
+
+    if (plan.action === 'reject_http_error') {
+        const text = await response.text();
+        throw new Error(RR.parseRouteApiErrorMessage(plan.status, text));
+    }
+
+    return response.json();
+}
+
+function applyShowRouteComparisonSuccessFromPlan(successApply) {
+    if (!successApply || !successApply.shouldApply) {
+        if (successApply && successApply.errorLogMessage) {
+            console.error(successApply.errorLogMessage, ...(successApply.errorLogArgs || []));
+        }
+        if (successApply && successApply.errorStatusMessage) {
+            showStatus(successApply.errorStatusMessage, 'error');
+        }
+        return;
+    }
+    applyRouteComparisonModalFromPlan(successApply.domApplyPlan);
+    showStatus(successApply.successStatusMessage, 'success');
 }
 
 async function showRouteComparison() {
     const RS = _routeSelection();
-    const routeCount = routeOptions ? routeOptions.length : 0;
-    const orch = RS.buildShowRouteComparisonOrchestrationPlan(routeCount);
-
-    console.log(orch.entryLogMessage);
-    console.log('[RouteComparison] routeOptions:', routeOptions);
-    console.log('[RouteComparison] routeOptions length:', routeCount);
-
-    if (!orch.shouldProceed) {
-        console.error(orch.errorLogMessage, routeCount);
-        showStatus(orch.errorStatusMessage, 'error');
-        return;
-    }
-
-    if (orch.singleRouteWarning) {
-        console.warn(orch.singleRouteLogMessage);
-        showStatus(orch.singleRouteStatusMessage, 'info');
-    }
+    const input = collectShowRouteComparisonInput();
+    const orch = RS.buildShowRouteComparisonOrchestrationPlan(input.routeCount);
+    if (!applyShowRouteComparisonEntryFromPlan(
+        RS.buildShowRouteComparisonEntryApplyPlan(orch, input)
+    )) return;
 
     try {
-        const requestOrch = RS.buildShowRouteComparisonRequestOrchestrationPlan(routeOptions);
+        const requestOrch = RS.buildShowRouteComparisonRequestOrchestrationPlan(input.routeOptions);
         console.log(orch.routesLogPrefix, requestOrch.routesForComparison);
 
         const fetchPlan = requestOrch.fetchPlan;
@@ -7475,23 +7558,18 @@ async function showRouteComparison() {
             body: JSON.stringify(fetchPlan.body),
         });
 
-        const data = await response.json();
+        const data = await applyShowRouteComparisonFetchHttpResponse(response);
         const successPlan = RS.buildShowRouteComparisonApiResultExecutePlan(data, {
-            currencySymbol: getCurrencySymbol(),
-            distUnit: getDistanceUnit(),
-            convertDistance,
+            currencySymbol: input.currencySymbol,
+            distUnit: input.distUnit,
+            convertDistance: input.convertDistance,
         });
 
-        console.log(successPlan.responseLogPrefix || '[RouteComparison] API response:', data);
+        if (successPlan.responseLogPrefix) console.log(successPlan.responseLogPrefix, data);
 
-        if (!successPlan.shouldMountModal) {
-            console.error(successPlan.errorLogMessage, data.error);
-            showStatus(successPlan.errorStatusMessage, 'error');
-            return;
-        }
-
-        applyRouteComparisonModalFromPlan(successPlan.domApplyPlan);
-        showStatus(successPlan.successStatusMessage, 'success');
+        applyShowRouteComparisonSuccessFromPlan(
+            RS.buildShowRouteComparisonSuccessApplyPlan(successPlan)
+        );
     } catch (error) {
         const errExecute = RS.buildShowRouteComparisonErrorExecutePlan(error);
         showStatus(errExecute.statusMessage, 'error');

@@ -651,6 +651,7 @@
                 shouldMountModal: false,
                 errorStatusMessage: getRouteComparisonApiErrorMessage(o.apiError),
                 errorLogMessage: '[RouteComparison] API error:',
+                errorLogArgs: [o.apiError],
             };
         }
         var comparison = o.comparison || {};
@@ -735,6 +736,95 @@
             distUnit: fmt.distUnit,
             convertDistance: fmt.convertDistance,
         });
+    }
+
+    /**
+     * Apply plan for showRouteComparison entry validation and logging.
+     * @param {Object} [orch] - from buildShowRouteComparisonOrchestrationPlan
+     * @param {Object} [input]
+     * @param {number} [input.routeCount]
+     * @param {Array<Object>} [input.routeOptions]
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonEntryApplyPlan(orch, input) {
+        orch = orch || {};
+        input = input || {};
+        var routeCount = input.routeCount != null ? input.routeCount : orch.routeCount;
+        return {
+            shouldProceed: !!orch.shouldProceed,
+            entryLogMessage: orch.entryLogMessage,
+            routeCount: routeCount,
+            debugLogs: [
+                { prefix: '[RouteComparison] routeOptions:', value: input.routeOptions },
+                { prefix: '[RouteComparison] routeOptions length:', value: routeCount },
+            ],
+            errorLogMessage: orch.errorLogMessage,
+            errorStatusMessage: orch.errorStatusMessage,
+            singleRouteWarning: !!orch.singleRouteWarning,
+            singleRouteLogMessage: orch.singleRouteLogMessage,
+            singleRouteStatusMessage: orch.singleRouteStatusMessage,
+            routesLogPrefix: orch.routesLogPrefix,
+        };
+    }
+
+    /**
+     * Apply plan for mounting route-comparison modal after a successful API response.
+     * @param {Object} [successPlan] - from buildShowRouteComparisonApiResultExecutePlan
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonSuccessApplyPlan(successPlan) {
+        successPlan = successPlan || {};
+        if (!successPlan.shouldMountModal) {
+            return {
+                shouldApply: false,
+                errorLogMessage: successPlan.errorLogMessage,
+                errorLogArgs: successPlan.errorLogArgs,
+                errorStatusMessage: successPlan.errorStatusMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            domApplyPlan: successPlan.domApplyPlan,
+            successStatusMessage: successPlan.successStatusMessage,
+            responseLogPrefix: successPlan.responseLogPrefix,
+        };
+    }
+
+    /**
+     * Dispatch plan for parsing showRouteComparison HTTP fetch responses.
+     * @param {Object} [input]
+     * @param {number} [input.status]
+     * @param {boolean} [input.ok]
+     * @param {string|null|undefined} [input.contentType]
+     * @param {boolean} [input.isJson]
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonFetchHttpResponsePlan(input) {
+        input = input || {};
+        if (!input.isJson) {
+            return {
+                shouldParse: false,
+                action: 'reject_non_json',
+                status: input.status,
+                statusLogPrefix: '[RouteComparison] Response status:',
+                nonJsonErrorLogPrefix: '[RouteComparison] Non-JSON response:',
+                responseTextLogPrefix: '[RouteComparison] Response text:',
+                contentType: input.contentType,
+            };
+        }
+        if (!input.ok) {
+            return {
+                shouldParse: false,
+                action: 'reject_http_error',
+                status: input.status,
+                statusLogPrefix: '[RouteComparison] Response status:',
+            };
+        }
+        return {
+            shouldParse: true,
+            action: 'parse_json',
+            statusLogPrefix: '[RouteComparison] Response status:',
+        };
     }
 
     /**
@@ -1110,6 +1200,38 @@
         return {
             shouldShow: count > 0,
             routeCount: count,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for showAlternativeRoutesInPreview.
+     * @param {Object} [opts]
+     * @param {number} [opts.routeCount]
+     * @param {Array<Object>} [opts.routeOptions]
+     * @param {function(): Array<string>} [opts.routeColors]
+     * @param {string} [opts.currencySymbol]
+     * @param {string} [opts.distUnit]
+     * @param {string} [opts.fuelUnit]
+     * @param {function(number): string} [opts.convertDistance]
+     * @returns {Object}
+     */
+    function buildShowAlternativeRoutesPreviewEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        var routeCount = opts.routeCount || 0;
+        var orch = buildShowAlternativeRoutesPreviewOrchestrationPlan(routeCount);
+        if (!orch.shouldShow) {
+            return { shouldShow: false };
+        }
+        var mount = buildAlternativeRoutesPreviewMountPlans(opts.routeOptions || [], {
+            routeColors: opts.routeColors,
+            currencySymbol: opts.currencySymbol,
+            distUnit: opts.distUnit,
+            fuelUnit: opts.fuelUnit,
+            convertDistance: opts.convertDistance,
+        });
+        return {
+            shouldShow: true,
+            apply: buildAlternativeRoutesPreviewDomApplyPlan(mount),
         };
     }
 
@@ -3348,6 +3470,24 @@
     }
 
     /**
+     * Apply plan for bringRoutesToTop entry orchestration.
+     * @param {Object} [entry] - from buildBringRoutesToTopEntryOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopEntryApplyPlan(entry) {
+        entry = entry || {};
+        var orch = entry.orch || {};
+        return {
+            shouldApply: true,
+            entryLogPrefix: orch.entryLogPrefix,
+            layerCount: orch.layerCount,
+            requiresMap: !!entry.requiresMap,
+            mapMissingLogMessage: orch.mapMissingLogMessage,
+            execute: entry.execute,
+        };
+    }
+
+    /**
      * Orchestration plan for bringRoutesToTop entry logging.
      * @param {number} [layerCount]
      * @returns {Object}
@@ -3848,6 +3988,9 @@
         buildShowRouteComparisonErrorExecutePlan: buildShowRouteComparisonErrorExecutePlan,
         buildShowRouteComparisonRequestOrchestrationPlan: buildShowRouteComparisonRequestOrchestrationPlan,
         buildShowRouteComparisonApiResultExecutePlan: buildShowRouteComparisonApiResultExecutePlan,
+        buildShowRouteComparisonEntryApplyPlan: buildShowRouteComparisonEntryApplyPlan,
+        buildShowRouteComparisonSuccessApplyPlan: buildShowRouteComparisonSuccessApplyPlan,
+        buildShowRouteComparisonFetchHttpResponsePlan: buildShowRouteComparisonFetchHttpResponsePlan,
         buildShowAllRoutesOrchestrationPlan: buildShowAllRoutesOrchestrationPlan,
         buildShowAllRoutesApplyPlan: buildShowAllRoutesApplyPlan,
         buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
@@ -3863,6 +4006,8 @@
         buildAlternativeRoutesPreviewDomApplyPlan: buildAlternativeRoutesPreviewDomApplyPlan,
         buildAlternativeRoutesPreviewDomExecutePlan: buildAlternativeRoutesPreviewDomExecutePlan,
         buildShowAlternativeRoutesPreviewOrchestrationPlan: buildShowAlternativeRoutesPreviewOrchestrationPlan,
+        buildShowAlternativeRoutesPreviewEntryOrchestrationPlan:
+            buildShowAlternativeRoutesPreviewEntryOrchestrationPlan,
         getRouteComparisonNoRoutesMessage: getRouteComparisonNoRoutesMessage,
         getRouteComparisonSingleRouteMessage: getRouteComparisonSingleRouteMessage,
         getRouteComparisonSuccessMessage: getRouteComparisonSuccessMessage,
@@ -3953,6 +4098,7 @@
         buildDoAddRouteLayersEntryOrchestrationPlan: buildDoAddRouteLayersEntryOrchestrationPlan,
         buildBringRoutesToTopOrchestrationPlan: buildBringRoutesToTopOrchestrationPlan,
         buildBringRoutesToTopEntryOrchestrationPlan: buildBringRoutesToTopEntryOrchestrationPlan,
+        buildBringRoutesToTopEntryApplyPlan: buildBringRoutesToTopEntryApplyPlan,
         buildBringRoutesToTopAttemptLogPlan: buildBringRoutesToTopAttemptLogPlan,
         buildBringRoutesToTopLayerMoveLogPlan: buildBringRoutesToTopLayerMoveLogPlan,
         buildBringRoutesToTopLayerPresencePlan: buildBringRoutesToTopLayerPresencePlan,
