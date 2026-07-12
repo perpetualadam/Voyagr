@@ -802,13 +802,6 @@ function decodePolyline(encoded, precision = 6) {
  *
  * @param {*} saved
  */
-function buildRoutePayloadFromPersisted(saved) {
-    return _routeSelection().buildRoutePayloadFromPersisted(
-        saved,
-        (points, precision) => _polylineCodec().encodePolyline(points, precision)
-    );
-}
-
 
 /**
  * showStatus function
@@ -1034,18 +1027,6 @@ let routeJoinConfirmedForDeviation = false;
 /** After GPS deviation reroute, next in-nav route pick uses primary only (no name-based alt). */
 let _preferPrimaryRouteOnNextNavUpdate = false;
 
-function applyDeviationRerouteState(dev) {
-    deviationStartTimeCheck = dev.deviationStartTimeCheck;
-    rerouteAttemptCount = dev.rerouteAttemptCount;
-    postRerouteGraceUntil = dev.postRerouteGraceUntil;
-    routeJoinConfirmedForDeviation = dev.routeJoinConfirmedForDeviation;
-    deviationOffRouteStreak = dev.deviationOffRouteStreak;
-    lastRerouteTime = dev.lastRerouteTime;
-    lastRerouteAttemptTime = dev.lastRerouteAttemptTime;
-    rerouteInProgress = dev.rerouteInProgress;
-    if (dev.clearFailureRetries) clearRerouteFailureRetries();
-}
-
 function getRerouteMapOrchestrationRuntime() {
     return {
         rerouteDecision: () => _rerouteDecision(),
@@ -1095,7 +1076,20 @@ function getRerouteMapOrchestrationRuntime() {
         setInitialETAMovementRetries: (val) => { initialETAMovementRetries = val; },
         setVoiceAnnouncedForManeuverIndex: (val) => { _voiceAnnouncedForManeuverIndex = val; },
         setVoiceAnnouncedCategory: (val) => { _voiceAnnouncedCategory = val; },
-        applyDeviationRerouteState,
+        getDeviationStartTimeCheck: () => deviationStartTimeCheck,
+        setDeviationStartTimeCheck: (val) => { deviationStartTimeCheck = val; },
+        getRerouteAttemptCount: () => rerouteAttemptCount,
+        setRerouteAttemptCount: (val) => { rerouteAttemptCount = val; },
+        getPostRerouteGraceUntil: () => postRerouteGraceUntil,
+        setPostRerouteGraceUntil: (val) => { postRerouteGraceUntil = val; },
+        getDeviationOffRouteStreak: () => deviationOffRouteStreak,
+        setDeviationOffRouteStreak: (val) => { deviationOffRouteStreak = val; },
+        getLastRerouteTime: () => lastRerouteTime,
+        setLastRerouteTime: (val) => { lastRerouteTime = val; },
+        getLastRerouteAttemptTime: () => lastRerouteAttemptTime,
+        setLastRerouteAttemptTime: (val) => { lastRerouteAttemptTime = val; },
+        getRerouteInProgress: () => rerouteInProgress,
+        setRerouteInProgress: (val) => { rerouteInProgress = val; },
         call: {
             getRouteCostParams,
             getRoutePreferences,
@@ -2144,10 +2138,6 @@ function _poiSearch() { return VoyagrModules.poiSearch(); }
 /** Unit-tested routing request builders (modules/navigation/routing-request.js). */
 function _routingRequest() { return VoyagrModules.routingRequest(); }
 
-function applyZoomFollowButtonUi(btn, enabled) {
-    VoyagrMapRecenterOrchestration.applyZoomFollowButtonUi(btn, enabled);
-}
-
 /** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
 function _cameraMapMarkers() { return VoyagrModules.cameraMapMarkers(); }
 
@@ -2273,6 +2263,9 @@ function getMapRecenterOrchestrationRuntime() {
 }
 
 function toggleZoomAndFollow() { VoyagrMapRecenterOrchestration.toggleZoomAndFollow(); }
+function applyZoomFollowButtonUi(btn, enabled) {
+    VoyagrMapRecenterOrchestration.applyZoomFollowButtonUi(btn, enabled);
+}
 function updateRecenterButtonVisibility() { VoyagrMapRecenterOrchestration.updateRecenterButtonVisibility(); }
 function recenterOnVehicle() { VoyagrMapRecenterOrchestration.recenterOnVehicle(); }
 
@@ -2617,6 +2610,8 @@ function getOfflineNavigationOrchestrationRuntime() {
     return {
         offlineNavigation: () => _offlineNavigation(),
         speedLimitWidget: () => _speedLimitWidget(),
+        routeSelection: () => _routeSelection(),
+        polylineCodec: () => _polylineCodec(),
         getMap: () => map,
         getRouteInProgress: () => routeInProgress,
         getRoutePolyline: () => routePolyline,
@@ -2625,7 +2620,6 @@ function getOfflineNavigationOrchestrationRuntime() {
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         call: {
             showStatus,
-            buildRoutePayloadFromPersisted,
             startTurnByTurnNavigation,
         },
     };

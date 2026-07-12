@@ -20,6 +20,15 @@
     function OFF() { return rt().offlineNavigation(); }
     function SL() { return rt().speedLimitWidget(); }
 
+    function buildRoutePayloadFromPersisted(saved) {
+        return rt().routeSelection().buildRoutePayloadFromPersisted(
+            saved,
+            function (points, precision) {
+                return rt().polylineCodec().encodePolyline(points, precision);
+            }
+        );
+    }
+
     function createOfflineBanner() {
         const off = OFF();
         const execute = off.buildMountOfflineBannerExecutePlan();
@@ -266,7 +275,7 @@
 
             document.getElementById(mount.resumeYesId).onclick = () => {
                 resumeBanner.remove();
-                const payload = rt().call.buildRoutePayloadFromPersisted(saved);
+                const payload = buildRoutePayloadFromPersisted(saved);
                 const yesAction = off.buildTryResumeNavigationYesActionPlan({
                     saved,
                     preflight,

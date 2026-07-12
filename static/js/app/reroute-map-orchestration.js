@@ -67,6 +67,18 @@
         return RR.buildAutomaticRerouteRequestPlan(collect.storage, collect.opts);
     }
 
+    function applyDeviationRerouteState(dev) {
+        rt().setDeviationStartTimeCheck(dev.deviationStartTimeCheck);
+        rt().setRerouteAttemptCount(dev.rerouteAttemptCount);
+        rt().setPostRerouteGraceUntil(dev.postRerouteGraceUntil);
+        rt().setRouteJoinConfirmedForDeviation(dev.routeJoinConfirmedForDeviation);
+        rt().setDeviationOffRouteStreak(dev.deviationOffRouteStreak);
+        rt().setLastRerouteTime(dev.lastRerouteTime);
+        rt().setLastRerouteAttemptTime(dev.lastRerouteAttemptTime);
+        rt().setRerouteInProgress(dev.rerouteInProgress);
+        if (dev.clearFailureRetries) rt().call.clearRerouteFailureRetries();
+    }
+
     function applyVoiceAnnouncementStateResetFromPlan(execute) {
         if (!execute || !execute.shouldReset) return;
         var p = execute.patch;
@@ -145,7 +157,7 @@
 
         var dev = execute.deviation;
         if (dev) {
-            rt().applyDeviationRerouteState(dev);
+            applyDeviationRerouteState(dev);
         }
 
         var post = execute.post;
