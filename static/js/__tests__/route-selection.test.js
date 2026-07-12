@@ -1656,6 +1656,22 @@ describe('route overview and single-route display plans', () => {
         expect(wait.fallbackTimeoutMs).toBe(RS.DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS);
     });
 
+    test('buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan bundles immediate and wait schedules', () => {
+        const immediate = RS.buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan(
+            { strategy: 'immediate' },
+            { addLayersLogMessage: 'add now' }
+        );
+        expect(immediate.strategy).toBe('immediate');
+        expect(immediate.addLayersLogMessage).toBe('add now');
+
+        const dispatch = RS.buildDisplayAllRoutesMapDispatchPlan([{ polyline: [[1, 2]] }]);
+        const wait = RS.buildDisplayAllRoutesMapStyleLoadExecutePlan(dispatch, { isStyleLoaded: false });
+        const schedule = RS.buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan(wait);
+        expect(schedule.strategy).toBe('wait');
+        expect(schedule.runFallbackOnlyIfNoLayers).toBe(true);
+        expect(schedule.fallbackTimeoutMs).toBe(RS.DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS);
+    });
+
     test('buildDoAddRouteLayersPostMountExecutePlan requests hazards and z-order side effects', () => {
         const side = RS.buildAllRoutesMapSideEffectsPlan([{ polyline: [[1, 2]] }], {
             showTrafficEnabled: true,

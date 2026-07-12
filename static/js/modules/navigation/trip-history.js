@@ -544,6 +544,76 @@
     }
 
     /**
+     * Entry orchestration plan for recalculateTrip handler.
+     * @param {number} tripId
+     * @param {Array<Object>} allTrips
+     * @returns {Object}
+     */
+    function buildRecalculateTripEntryOrchestrationPlan(tripId, allTrips) {
+        var execute = buildRecalculateTripExecutePlan(tripId, allTrips);
+        return {
+            execute: execute,
+            apply: buildRecalculateTripDomApplyPlan(execute),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for deleteTripHistory handler.
+     * @param {number} tripId
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryEntryOrchestrationPlan(tripId) {
+        return {
+            orch: buildDeleteTripHistoryOrchestrationPlan(tripId),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for deleting a device-local trip row.
+     * @param {Object} orch
+     * @param {Array<Object>} allTrips
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryLocalEntryOrchestrationPlan(orch, allTrips) {
+        var localExecute = buildDeleteTripHistoryLocalExecutePlan(orch, allTrips);
+        return {
+            localExecute: localExecute,
+            apply: buildDeleteTripHistoryLocalDomApplyPlan(localExecute),
+            nextTrips: localExecute.nextTrips,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for a trip-history delete API response.
+     * @param {Object} data
+     * @param {number} tripId
+     * @param {Array<Object>} allTrips
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryServerResponseEntryOrchestrationPlan(data, tripId, allTrips) {
+        var execute = buildDeleteTripHistoryResponseExecutePlan(data);
+        return {
+            execute: execute,
+            apply: buildDeleteTripHistoryResponseDomApplyPlan(execute),
+            nextTrips: execute.shouldRemove
+                ? (allTrips || []).filter(function (t) { return t.id !== tripId; })
+                : null,
+        };
+    }
+
+    /**
+     * Execute plan when trip-history delete fetch fails.
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryFetchErrorExecutePlan() {
+        return {
+            statusMessage: 'Error deleting trip',
+            statusType: 'error',
+            errorLogPrefix: 'Error deleting trip:',
+        };
+    }
+
+    /**
      * DOM apply plan after a trip-history delete outcome.
      * @param {Object} input
      * @param {boolean} [input.refreshTripList]
@@ -895,10 +965,16 @@
         buildDisplayTripHistoryExecutePlan: buildDisplayTripHistoryExecutePlan,
         buildDisplayTripHistoryEntryOrchestrationPlan: buildDisplayTripHistoryEntryOrchestrationPlan,
         buildRecalculateTripExecutePlan: buildRecalculateTripExecutePlan,
+        buildRecalculateTripDomApplyPlan: buildRecalculateTripDomApplyPlan,
+        buildRecalculateTripEntryOrchestrationPlan: buildRecalculateTripEntryOrchestrationPlan,
         buildDeleteTripHistoryOrchestrationPlan: buildDeleteTripHistoryOrchestrationPlan,
         buildDeleteTripHistoryLocalExecutePlan: buildDeleteTripHistoryLocalExecutePlan,
         buildDeleteTripHistoryResponseExecutePlan: buildDeleteTripHistoryResponseExecutePlan,
-        buildRecalculateTripDomApplyPlan: buildRecalculateTripDomApplyPlan,
+        buildDeleteTripHistoryEntryOrchestrationPlan: buildDeleteTripHistoryEntryOrchestrationPlan,
+        buildDeleteTripHistoryLocalEntryOrchestrationPlan: buildDeleteTripHistoryLocalEntryOrchestrationPlan,
+        buildDeleteTripHistoryServerResponseEntryOrchestrationPlan:
+            buildDeleteTripHistoryServerResponseEntryOrchestrationPlan,
+        buildDeleteTripHistoryFetchErrorExecutePlan: buildDeleteTripHistoryFetchErrorExecutePlan,
         buildDeleteTripHistoryOutcomeDomApplyPlan: buildDeleteTripHistoryOutcomeDomApplyPlan,
         buildDeleteTripHistoryLocalDomApplyPlan: buildDeleteTripHistoryLocalDomApplyPlan,
         buildDeleteTripHistoryResponseDomApplyPlan: buildDeleteTripHistoryResponseDomApplyPlan,

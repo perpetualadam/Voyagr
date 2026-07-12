@@ -2361,23 +2361,30 @@ function applyDeleteTripHistoryOutcomeFromPlan(dom, nextTrips) {
 }
 
 async function recalculateTrip(tripId) {
-    const TH = _tripHistory();
-    const execute = TH.buildRecalculateTripExecutePlan(tripId, allTrips);
-    applyRecalculateTripDomFromPlan(TH.buildRecalculateTripDomApplyPlan(execute));
+    applyRecalculateTripDomFromPlan(
+        _tripHistory().buildRecalculateTripEntryOrchestrationPlan(tripId, allTrips).apply
+    );
+}
+
+function applyDeleteTripHistoryFetchErrorFromPlan(errorExecute, error) {
+    if (errorExecute && errorExecute.errorLogPrefix) {
+        console.error(errorExecute.errorLogPrefix, error);
+    }
+    if (errorExecute && errorExecute.statusMessage) {
+        showStatus(errorExecute.statusMessage, errorExecute.statusType);
+    }
 }
 
 async function deleteTripHistory(tripId) {
     const TH = _tripHistory();
-    const orch = TH.buildDeleteTripHistoryOrchestrationPlan(tripId);
+    const entry = TH.buildDeleteTripHistoryEntryOrchestrationPlan(tripId);
+    const orch = entry.orch;
     if (!confirm(orch.confirmMessage)) return;
 
-    const localExecute = TH.buildDeleteTripHistoryLocalExecutePlan(orch, allTrips);
-    if (localExecute.shouldDeleteLocal) {
-        removeLocalTripByLocalId(localExecute.localId);
-        applyDeleteTripHistoryOutcomeFromPlan(
-            TH.buildDeleteTripHistoryLocalDomApplyPlan(localExecute),
-            localExecute.nextTrips
-        );
+    const localEntry = TH.buildDeleteTripHistoryLocalEntryOrchestrationPlan(orch, allTrips);
+    if (localEntry.localExecute.shouldDeleteLocal) {
+        removeLocalTripByLocalId(localEntry.localExecute.localId);
+        applyDeleteTripHistoryOutcomeFromPlan(localEntry.apply, localEntry.nextTrips);
         return;
     }
 
@@ -2390,23 +2397,21 @@ async function deleteTripHistory(tripId) {
             headers,
         });
         const data = await response.json();
-        const execute = TH.buildDeleteTripHistoryResponseExecutePlan(data);
+        const serverEntry = TH.buildDeleteTripHistoryServerResponseEntryOrchestrationPlan(
+            data,
+            tripId,
+            allTrips
+        );
 
-        if (execute.shouldRemove) {
+        if (serverEntry.execute.shouldRemove) {
             removeLocalTripByServerId(tripId);
-            applyDeleteTripHistoryOutcomeFromPlan(
-                TH.buildDeleteTripHistoryResponseDomApplyPlan(execute),
-                allTrips.filter(t => t.id !== tripId)
-            );
-        } else {
-            applyDeleteTripHistoryOutcomeFromPlan(
-                TH.buildDeleteTripHistoryResponseDomApplyPlan(execute),
-                null
-            );
         }
+        applyDeleteTripHistoryOutcomeFromPlan(serverEntry.apply, serverEntry.nextTrips);
     } catch (error) {
-        console.error('Error deleting trip:', error);
-        showStatus('Error deleting trip', 'error');
+        applyDeleteTripHistoryFetchErrorFromPlan(
+            TH.buildDeleteTripHistoryFetchErrorExecutePlan(),
+            error
+        );
     }
 }
 
@@ -2483,24 +2488,82 @@ function clearRouteLayerHandlesFromPlan(plan) {
 }
 
 /**
- * Schedule route layer mounting based on a style-load execute plan.
- * @param {Object} stylePlan - from buildDisplayAllRoutesMapStyleLoadExecutePlan
+ * Mount one MapLibre line layer from a mount execute plan.
+ * @param {Object} mountPlan
+ * @param {Object} [opts]
+ * @returns {boolean}
+ */
+function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
+    opts = opts || {};
+    if (!mountPlan || !mountPlan.shouldMount || !map) return false;
+
+    try {
+        const { layerId, sourceId } = mountPlan;
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+
+        map.addSource(sourceId, {
+            type: 'geojson',
+            data: mountPlan.geoJsonFeature,
+        });
+
+        const lineWidth = mountPlan.paint.lineWeight != null
+            ? mountPlan.paint.lineWeight
+            : mountPlan.paint.lineWidth;
+
+        map.addLayer({
+            id: layerId,
+            type: 'line',
+            source: sourceId,
+            layout: mountPlan.layerLayout,
+            paint: {
+                'line-color': mountPlan.paint.lineColor,
+                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(lineWidth),
+                'line-opacity': mountPlan.paint.lineOpacity,
+            },
+        }, mountPlan.beforeId);
+
+        if (mountPlan.registerLayerHandle) {
+            allRouteLayers.unshift({
+                id: layerId,
+                remove: () => {
+                    if (map.getLayer(layerId)) map.removeLayer(layerId);
+                    if (map.getSource(sourceId)) map.removeSource(sourceId);
+                },
+            });
+        }
+        return true;
+    } catch (e) {
+        if (mountPlan.errorLogMessage) {
+            console.error(mountPlan.errorLogMessage, e);
+        } else {
+            const prefix = mountPlan.errorLogPrefix || '[Map] Failed to draw line layer ';
+            const suffix = mountPlan.legIndex != null ? mountPlan.legIndex : '';
+            console.warn(`${prefix}${suffix}:`, e);
+        }
+        return false;
+    }
+}
+
+/**
+ * Schedule route layer mounting based on a style-load schedule apply plan.
+ * @param {Object} schedule - from buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan
  * @param {Function} addRouteLayersFn
  */
-function scheduleDisplayAllRoutesLayerMountFromPlan(stylePlan, addRouteLayersFn) {
-    if (!stylePlan || stylePlan.strategy === 'immediate') {
+function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, addRouteLayersFn) {
+    if (!schedule || !schedule.shouldApply || schedule.strategy === 'immediate') {
         addRouteLayersFn();
         return;
     }
 
-    if (stylePlan.waitLogMessage) console.log(stylePlan.waitLogMessage);
+    if (schedule.waitLogMessage) console.log(schedule.waitLogMessage);
     map.once('style.load', addRouteLayersFn);
     setTimeout(() => {
-        if (stylePlan.runFallbackOnlyIfNoLayers && allRouteLayers.length === 0) {
-            if (stylePlan.fallbackLogMessage) console.log(stylePlan.fallbackLogMessage);
+        if (schedule.runFallbackOnlyIfNoLayers && allRouteLayers.length === 0) {
+            if (schedule.fallbackLogMessage) console.log(schedule.fallbackLogMessage);
             addRouteLayersFn();
         }
-    }, stylePlan.fallbackTimeoutMs);
+    }, schedule.fallbackTimeoutMs);
 }
 
 /**
@@ -2652,8 +2715,8 @@ function applyDisplayAllRoutesOnMapFromPlan(apply) {
         return;
     }
 
-    scheduleDisplayAllRoutesLayerMountFromPlan(mount.stylePlan, () => {
-        console.log(mount.addLayersLogMessage);
+    applyDisplayAllRoutesStyleLoadScheduleFromPlan(mount.styleSchedule, () => {
+        if (mount.addLayersLogMessage) console.log(mount.addLayersLogMessage);
         doAddRouteLayers();
     });
 }
@@ -2678,50 +2741,9 @@ function applyDisplayAllRoutesPreMountFromPlan(preMount) {
  * @returns {boolean}
  */
 function applyRouteLayerFromMapLibrePlan(applyPlan) {
-    const mountPlan = _routeSelection().buildRouteLayerMapLibreMountExecutePlan(applyPlan);
-    if (!mountPlan.shouldMount) return false;
-
-    try {
-        if (map.getLayer(mountPlan.layerId)) {
-            map.removeLayer(mountPlan.layerId);
-        }
-        if (map.getSource(mountPlan.sourceId)) {
-            map.removeSource(mountPlan.sourceId);
-        }
-
-        map.addSource(mountPlan.sourceId, {
-            type: 'geojson',
-            data: mountPlan.geoJsonFeature,
-        });
-
-        map.addLayer({
-            id: mountPlan.layerId,
-            type: 'line',
-            source: mountPlan.sourceId,
-            layout: mountPlan.layerLayout,
-            paint: {
-                'line-color': mountPlan.paint.lineColor,
-                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(mountPlan.paint.lineWeight),
-                'line-opacity': mountPlan.paint.lineOpacity,
-            },
-        }, mountPlan.beforeId);
-
-        if (mountPlan.registerLayerHandle) {
-            const layerId = mountPlan.layerId;
-            const sourceId = mountPlan.sourceId;
-            allRouteLayers.unshift({
-                id: layerId,
-                remove: () => {
-                    if (map.getLayer(layerId)) map.removeLayer(layerId);
-                    if (map.getSource(sourceId)) map.removeSource(sourceId);
-                },
-            });
-        }
-        return true;
-    } catch (e) {
-        console.error(mountPlan.errorLogMessage, e);
-        return false;
-    }
+    return applyMapLibreLineLayerFromMountPlan(
+        _routeSelection().buildRouteLayerMapLibreMountExecutePlan(applyPlan)
+    );
 }
 
 /**
@@ -3476,36 +3498,9 @@ function displayMultiDropLegs(data) {
  * @returns {boolean}
  */
 function applyMultiDropLegLayerFromMapLibrePlan(applyPlan) {
-    const mountPlan = _waypoints().buildMultiDropLegLayerMountExecutePlan(applyPlan);
-    if (!mountPlan.shouldMount) return false;
-
-    try {
-        const { layerId, sourceId } = mountPlan;
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: mountPlan.geoJsonFeature,
-        });
-
-        map.addLayer({
-            id: layerId,
-            type: 'line',
-            source: sourceId,
-            layout: mountPlan.layerLayout,
-            paint: {
-                'line-color': mountPlan.paint.lineColor,
-                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(mountPlan.paint.lineWidth),
-                'line-opacity': mountPlan.paint.lineOpacity,
-            },
-        });
-        return true;
-    } catch (e) {
-        const prefix = mountPlan.errorLogPrefix || '[MultiDrop] Failed to draw leg ';
-        console.warn(`${prefix}${mountPlan.legIndex}:`, e);
-        return false;
-    }
+    return applyMapLibreLineLayerFromMountPlan(
+        _waypoints().buildMultiDropLegLayerMountExecutePlan(applyPlan)
+    );
 }
 
 function applyDrawMultiDropLegsFromPlan(orch) {
@@ -12955,6 +12950,19 @@ function applyBottomSheetDragStartFromPlan(execute, bottomSheetEl) {
     bottomSheetEl.style.transition = execute.transitionValue;
 }
 
+function applyBottomSheetClickToggleFromPlan(entry) {
+    if (!entry || !entry.shouldToggle) return;
+    if (entry.logMessage != null) console.log(entry.logMessage, entry.logState);
+    if (entry.action === 'collapse') collapseBottomSheet();
+    else if (entry.action === 'expand') expandBottomSheet();
+}
+
+function applyBottomSheetBodyClickExpandFromPlan(entry) {
+    if (!entry || !entry.shouldExpand) return;
+    if (entry.logMessage) console.log(entry.logMessage);
+    expandBottomSheet();
+}
+
 // ===== BOTTOM SHEET FUNCTIONALITY =====
 /**
  * initBottomSheet function
@@ -12998,32 +13006,34 @@ function initBottomSheet() {
     };
 
     handle.addEventListener('click', (e) => {
-        console.log(initPlan.handleClickLogMessage, bottomSheetIsExpanded);
         e.stopPropagation();
-        if (bottomSheetIsExpanded) collapseBottomSheet();
-        else expandBottomSheet();
+        applyBottomSheetClickToggleFromPlan(
+            DH.buildBottomSheetHandleClickEntryOrchestrationPlan(bottomSheetIsExpanded, {
+                handleClickLogMessage: initPlan.handleClickLogMessage,
+            })
+        );
     });
 
     if (header) {
         header.addEventListener('click', (e) => {
-            const allow = DH.buildBottomSheetHeaderClickAllowedPlan(
-                !!DH.closest(e.target, initPlan.headerButtonIgnoreSelector)
+            const entry = DH.buildBottomSheetHeaderClickEntryOrchestrationPlan(
+                !!DH.closest(e.target, initPlan.headerButtonIgnoreSelector),
+                bottomSheetIsExpanded
             );
-            if (!allow.allowToggle) return;
+            if (!entry.shouldToggle) return;
             e.stopPropagation();
-            if (bottomSheetIsExpanded) collapseBottomSheet();
-            else expandBottomSheet();
+            applyBottomSheetClickToggleFromPlan(entry);
         });
     }
 
     bottomSheet.addEventListener('click', (e) => {
-        const expandPlan = DH.buildBottomSheetBodyClickExpandPlan(
-            !!DH.closest(e.target, initPlan.contentSelector),
-            bottomSheetIsExpanded
+        applyBottomSheetBodyClickExpandFromPlan(
+            DH.buildBottomSheetBodyClickEntryOrchestrationPlan(
+                !!DH.closest(e.target, initPlan.contentSelector),
+                bottomSheetIsExpanded,
+                { sheetExpandClickLogMessage: initPlan.sheetExpandClickLogMessage }
+            )
         );
-        if (!expandPlan.shouldExpand) return;
-        console.log(initPlan.sheetExpandClickLogMessage);
-        expandBottomSheet();
     });
 
     handle.addEventListener('touchstart', (e) => {

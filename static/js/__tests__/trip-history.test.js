@@ -326,6 +326,15 @@ describe('analytics display helpers', () => {
         expect(dom.scheduleCalculateRoute).toBe(true);
     });
 
+    test('buildRecalculateTripEntryOrchestrationPlan bundles apply plan', () => {
+        const entry = T.buildRecalculateTripEntryOrchestrationPlan(2, [
+            { id: 2, start_address: 'Home', end_address: 'Work' },
+        ]);
+        expect(entry.apply.shouldApply).toBe(true);
+        expect(entry.apply.inputPatches[0].value).toBe('Home');
+        expect(T.buildRecalculateTripEntryOrchestrationPlan(99, []).apply.shouldApply).toBe(false);
+    });
+
     test('buildDeleteTripHistory plans distinguish local and server deletes', () => {
         const orch = T.buildDeleteTripHistoryOrchestrationPlan(-3);
         expect(orch.isLocalOnly).toBe(true);
@@ -348,6 +357,30 @@ describe('analytics display helpers', () => {
             T.buildDeleteTripHistoryResponseExecutePlan({ success: false })
         );
         expect(errorDom.refreshTripList).toBe(false);
+    });
+
+    test('buildDeleteTripHistory entry orchestration plans bundle local and server outcomes', () => {
+        const entry = T.buildDeleteTripHistoryEntryOrchestrationPlan(5);
+        expect(entry.orch.apiPath).toBe('/api/trip-history/5');
+
+        const localEntry = T.buildDeleteTripHistoryLocalEntryOrchestrationPlan(
+            T.buildDeleteTripHistoryOrchestrationPlan(-2),
+            [{ id: -2 }, { id: 1 }]
+        );
+        expect(localEntry.localExecute.shouldDeleteLocal).toBe(true);
+        expect(localEntry.apply.refreshTripList).toBe(true);
+        expect(localEntry.nextTrips).toHaveLength(1);
+
+        const serverEntry = T.buildDeleteTripHistoryServerResponseEntryOrchestrationPlan(
+            { success: true },
+            5,
+            [{ id: 5 }, { id: 6 }]
+        );
+        expect(serverEntry.execute.shouldRemove).toBe(true);
+        expect(serverEntry.nextTrips).toHaveLength(1);
+
+        const fetchErr = T.buildDeleteTripHistoryFetchErrorExecutePlan();
+        expect(fetchErr.statusType).toBe('error');
     });
 
     test('buildBindTripHistorySearchExecutePlan and search filter plan', () => {
