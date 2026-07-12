@@ -4966,79 +4966,28 @@ function detectUpcomingTurn(userLat, userLon) {
     return apply.turnInfo;
 }
 
-// ===== VEHICLE TYPE & ROUTING MODE MANAGEMENT =====
+// ===== VEHICLE ROUTING ORCHESTRATION =====
+// Orchestration lives in static/js/app/vehicle-routing-orchestration.js (bound at file end).
 
-/**
- * updateVehicleType function
- * @function updateVehicleType
- * @returns {*} Return value description
- */
-function updateVehicleType() {
-    const select = document.getElementById('vehicleType');
-    currentVehicleType = select.value;
-    localStorage.setItem('vehicleType', currentVehicleType);
-
-    // Update user marker icon
-    updateUserMarkerIcon();
-
-    console.log('[Vehicle] Type changed to:', currentVehicleType);
-    saveAllSettings();
-    showStatus(`🚗 Vehicle type: ${select.options[select.selectedIndex].text}`, 'info');
-}
-/**
- * setRoutingMode function
- * @function setRoutingMode
- * @param {*} mode - Parameter description
- * @returns {*} Return value description
- */
-function setRoutingMode(mode) {
-    currentRoutingMode = mode;
-    localStorage.setItem('routingMode', mode);
-
-    // Update button states
-    document.getElementById('routingAuto').classList.toggle('active', mode === 'auto');
-    document.getElementById('routingPedestrian').classList.toggle('active', mode === 'pedestrian');
-    document.getElementById('routingBicycle').classList.toggle('active', mode === 'bicycle');
-
-    // Update vehicle type selector visibility
-    if (mode === 'pedestrian') {
-        document.getElementById('vehicleType').style.display = 'none';
-        currentVehicleType = 'pedestrian';
-    } else if (mode === 'bicycle') {
-        document.getElementById('vehicleType').style.display = 'none';
-        currentVehicleType = 'bicycle';
-    } else {
-        document.getElementById('vehicleType').style.display = 'block';
-        currentVehicleType = document.getElementById('vehicleType').value;
-    }
-
-    // Update user marker icon
-    updateUserMarkerIcon();
-
-    console.log('[Routing] Mode changed to:', mode);
-    const modeNames = { 'auto': '🚗 Auto', 'pedestrian': '🚶 Pedestrian', 'bicycle': '🚴 Bicycle' };
-    saveAllSettings();
-    showStatus(`${modeNames[mode]} mode`, 'info');
+function getVehicleRoutingOrchestrationRuntime() {
+    return {
+        getVehicleIcons: () => vehicleIcons,
+        getCurrentVehicleType: () => currentVehicleType,
+        setCurrentVehicleType: (val) => { currentVehicleType = val; },
+        getCurrentRoutingMode: () => currentRoutingMode,
+        setCurrentRoutingMode: (val) => { currentRoutingMode = val; },
+        getCurrentUserMarker: () => currentUserMarker,
+        setCurrentUserMarker: (val) => { currentUserMarker = val; },
+        setCurrentUserMarkerIcon: (val) => { currentUserMarkerIcon = val; },
+        call: {
+            saveAllSettings,
+            showStatus,
+        },
+    };
 }
 
-/**
- * updateUserMarkerIcon function
- * @function updateUserMarkerIcon
- * @returns {*} Return value description
- */
-function updateUserMarkerIcon() {
-    // Determine which icon to use
-    let iconPath = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || vehicleIcons['petrol_diesel'];
-
-    // Update the marker if it exists
-    if (currentUserMarker) {
-        if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
-        currentUserMarker = null;
-    }
-
-    currentUserMarkerIcon = iconPath;
-    console.log('[Marker] Icon updated to:', iconPath);
-}
+function updateVehicleType() { VoyagrVehicleRoutingOrchestration.updateVehicleType(); }
+function setRoutingMode(mode) { VoyagrVehicleRoutingOrchestration.setRoutingMode(mode); }
 
 /**
  * createVehicleMarker function
@@ -5293,79 +5242,23 @@ function getMapThemeOrchestrationRuntime() {
 
 function setMapTheme(themeOrEvent) { VoyagrMapThemeOrchestration.setMapTheme(themeOrEvent); }
 
-// ===== PHASE 3 FEATURES: ML PREDICTIONS =====
+// ===== ML PREDICTIONS ORCHESTRATION =====
+// Orchestration lives in static/js/app/ml-predictions-orchestration.js (bound at file end).
 
-/**
- * loadMLPredictions function
- * @function loadMLPredictions
- * @returns {*} Return value description
- */
-function loadMLPredictions() {
-    const ML = _mlPredictions();
-    const fetchPlan = ML.buildLoadMlPredictionsFetchPlan();
-    if (!fetchPlan.shouldFetch) return;
-
-    fetch(fetchPlan.url)
-        .then((response) => response.json())
-        .then((data) => {
-            const render = ML.buildLoadMlPredictionsDomRenderPlan(data);
-            if (!render.shouldRender) return;
-
-            const section = document.getElementById(fetchPlan.sectionId);
-            const list = document.getElementById(fetchPlan.listId);
-            if (!section || !list) return;
-
-            list.innerHTML = '';
-            (render.items || []).forEach((item) => {
-                const el = document.createElement('div');
-                el.className = item.className;
-                el.innerHTML = item.html;
-                el.onclick = () => {
-                    document.getElementById(fetchPlan.startInputId).value = item.routeInputs.start;
-                    document.getElementById(fetchPlan.endInputId).value = item.routeInputs.end;
-                    calculateRoute();
-                };
-                list.appendChild(el);
-            });
-            section.classList.add(render.sectionShowClass);
-        })
-        .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
+function getMlPredictionsOrchestrationRuntime() {
+    return {
+        mlPredictions: () => _mlPredictions(),
+        toggleUI: () => _toggleUI(),
+        call: {
+            calculateRoute,
+            showStatus,
+            saveAllSettings,
+        },
+    };
 }
 
-/**
- * toggleMLPredictions function
- * @function toggleMLPredictions
- * @returns {*} Return value description
- */
-function toggleMLPredictions() {
-    const ML = _mlPredictions();
-    const TU = _toggleUI();
-    const button = document.getElementById('mlPredictionsEnabled');
-    if (!button) return;
-
-    const collected = ML.buildToggleMlPredictionsCollectPlan({
-        currentEnabled: button.classList.contains('active'),
-    });
-    const execute = ML.buildToggleMlPredictionsExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    TU.applyLabeledToggleButton(button, execute.toggle.enabled);
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(execute.persistApiBody),
-    }).catch((error) => console.error('Error updating ML predictions:', error));
-
-    if (execute.loadPredictions) loadMLPredictions();
-    if (execute.hideSection) {
-        const section = document.getElementById(execute.sectionId);
-        if (section) section.classList.remove(execute.sectionShowClass);
-    }
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings) saveAllSettings();
-}
+function loadMLPredictions() { VoyagrMlPredictionsOrchestration.loadMLPredictions(); }
+function toggleMLPredictions() { VoyagrMlPredictionsOrchestration.toggleMLPredictions(); }
 
 // Warm Picovoice vendor bundles after idle load (optional offline wake).
 
@@ -7769,6 +7662,8 @@ VoyagrBatterySavingOrchestration.bind(getBatterySavingOrchestrationRuntime());
 VoyagrUnitsPreferencesOrchestration.bind(getUnitsPreferencesOrchestrationRuntime());
 VoyagrSmartZoomOrchestration.bind(getSmartZoomOrchestrationRuntime());
 VoyagrMapThemeOrchestration.bind(getMapThemeOrchestrationRuntime());
+VoyagrMlPredictionsOrchestration.bind(getMlPredictionsOrchestrationRuntime());
+VoyagrVehicleRoutingOrchestration.bind(getVehicleRoutingOrchestrationRuntime());
 VoyagrAutoGpsOrchestration.bind(getAutoGpsOrchestrationRuntime());
 VoyagrLocationOrchestration.bind(getLocationOrchestrationRuntime());
 VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
