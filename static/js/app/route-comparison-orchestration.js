@@ -7,6 +7,13 @@
 
     var runtime = null;
     var allRouteLayers = [];
+    var routeOptions = [];
+    var selectedRouteIndex = 0;
+
+    function getRouteOptions() { return routeOptions; }
+    function setRouteOptions(val) { routeOptions = val; }
+    function getSelectedRouteIndex() { return selectedRouteIndex; }
+    function setSelectedRouteIndex(val) { selectedRouteIndex = val; }
 
     function rt() {
         if (!runtime) {
@@ -334,7 +341,7 @@ function applySingleRouteMapDisplayFromPlan(plan) {
 function collectDisplayAllRoutesOnMapInput() {
     const map = rt().getMap();
     return {
-        routeOptions: rt().getRouteOptions(),
+        routeOptions: getRouteOptions(),
         isStyleLoaded: map && map.isStyleLoaded && map.isStyleLoaded(),
     };
 }
@@ -383,7 +390,7 @@ function applyDisplayAllRoutesPreMountFromPlan(apply) {
         clearAllRouteLayersFromMap();
     }
     if (apply.hydratePolylines) {
-        RS().hydrateRouteOptionPolylines(rt().getRouteOptions(), rt().call.decodePolyline);
+        RS().hydrateRouteOptionPolylines(getRouteOptions(), rt().call.decodePolyline);
     }
 }
 
@@ -432,8 +439,8 @@ function collectDoAddRouteLayersInput() {
     const map = rt().getMap();
     const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
     return {
-        routeOptions: rt().getRouteOptions(),
-        selectedRouteIndex: rt().getSelectedRouteIndex(),
+        routeOptions: getRouteOptions(),
+        selectedRouteIndex: getSelectedRouteIndex(),
         styleLayers: style && style.layers ? style.layers : [],
         showTrafficEnabled: rt().getShowTrafficEnabled(),
         hasTrafficLayer: !!rt().getTrafficLayer(),
@@ -500,10 +507,10 @@ function applyDisplayRouteComparisonFromPlan(apply) {
 }
 
 function collectDisplayRouteComparisonInput() {
-    const routes = rt().getRouteOptions() || [];
+    const routes = getRouteOptions() || [];
     return {
         routes,
-        selectedRouteIndex: rt().getSelectedRouteIndex(),
+        selectedRouteIndex: getSelectedRouteIndex(),
         routeColors: routeColors(),
         currencySymbol: rt().call.getCurrencySymbol(),
         distUnit: rt().call.getDistanceUnit(),
@@ -527,7 +534,7 @@ function displayRouteComparison() {
 function applySelectRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return;
 
-    rt().setSelectedRouteIndex(apply.selectedRouteIndex);
+    setSelectedRouteIndex(apply.selectedRouteIndex);
 
     if (apply.displaySingleRoute) displaySingleRoute(index);
     if (apply.displayRouteComparison) displayRouteComparison();
@@ -547,7 +554,7 @@ function applySelectRouteFromPlan(apply, index) {
 function collectSelectRouteInput(index) {
     return {
         index,
-        routeOptions: rt().getRouteOptions(),
+        routeOptions: getRouteOptions(),
         lastRouteApiResponse: window.lastRouteApiResponse,
     };
 }
@@ -612,7 +619,7 @@ function collectUseRouteInput(index) {
     const traffic = rt().call.getTrafficSettingsSnapshot();
     return {
         index,
-        routeOptions: rt().getRouteOptions(),
+        routeOptions: getRouteOptions(),
         routeTrafficEnabled: traffic.routeTrafficEnabled,
     };
 }
@@ -643,7 +650,7 @@ function applyDisplaySingleRouteFromPlan(apply) {
 function collectDisplaySingleRouteInput(index) {
     return {
         index,
-        routeOptions: rt().getRouteOptions(),
+        routeOptions: getRouteOptions(),
         runtime: collectDisplaySingleRouteRuntime(),
     };
 }
@@ -671,7 +678,7 @@ function applyShowAllRoutesFromPlan(apply) {
 function showAllRoutes() {
     applyShowAllRoutesFromPlan(
         RS().buildShowAllRoutesEntryOrchestrationPlan(
-            (function () { var ro = rt().getRouteOptions(); return ro ? ro.length : 0; })()
+            (function () { var ro = getRouteOptions(); return ro ? ro.length : 0; })()
         ).apply
     );
 }
@@ -679,7 +686,7 @@ function showAllRoutes() {
 function applyUseRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return;
 
-    rt().setSelectedRouteIndex(apply.selectedRouteIndex);
+    setSelectedRouteIndex(apply.selectedRouteIndex);
     if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
     if (apply.updateTripInfo) updateTripInfoFromRouteOption(apply.route);
 
@@ -704,10 +711,10 @@ function useRoute(index) {
     applyUseRouteFromPlan(orch.apply, index);
 }
 function syncLastCalculatedRouteFromSelection(index) {
-    if (!rt().getRouteOptions() || !rt().getRouteOptions()[index]) return;
+    if (!getRouteOptions() || !getRouteOptions()[index]) return;
     window.lastCalculatedRoute = RS().mergeLastCalculatedRouteFromSelection(
         window.lastCalculatedRoute,
-        rt().getRouteOptions()[index]
+        getRouteOptions()[index]
     );
 }
     function getAllRouteLayers() {
@@ -761,6 +768,10 @@ function syncLastCalculatedRouteFromSelection(index) {
         applyUseRouteFromPlan: applyUseRouteFromPlan,
         useRoute: useRoute,
         syncLastCalculatedRouteFromSelection: syncLastCalculatedRouteFromSelection,
+        getRouteOptions: getRouteOptions,
+        setRouteOptions: setRouteOptions,
+        getSelectedRouteIndex: getSelectedRouteIndex,
+        setSelectedRouteIndex: setSelectedRouteIndex,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

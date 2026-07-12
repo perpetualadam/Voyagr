@@ -34,10 +34,7 @@ function getRouteCostParams(vehicleType) {
 window.getRouteCostParams = getRouteCostParams;
 
 // Note: All global variables are declared below
-// ===== BOTTOM SHEET VARIABLES =====
-let bottomSheetStartY = 0;
-let bottomSheetCurrentY = 0;
-let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapsed)
+// Bottom sheet drag state lives in static/js/app/bottom-sheet-orchestration.js (bound at file end).
 
 // ===== RECENT DESTINATIONS ORCHESTRATION =====
 // Orchestration lives in static/js/app/recent-destinations-orchestration.js (bound at file end).
@@ -421,8 +418,7 @@ async function deleteTripHistory(tripId) {
 }
 
 // ===== ROUTE COMPARISON FUNCTIONS =====
-let routeOptions = [];
-let selectedRouteIndex = 0;
+// Route options state lives in static/js/app/route-comparison-orchestration.js (bound at file end).
 
 // Route colors for multi-route display (via route-selection accessor)
 function routeColors() {
@@ -472,10 +468,10 @@ function getRouteComparisonOrchestrationRuntime() {
         routeSelection: () => _routeSelection(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRouteOptions: () => routeOptions,
-        setRouteOptions: (val) => { routeOptions = val; },
-        getSelectedRouteIndex: () => selectedRouteIndex,
-        setSelectedRouteIndex: (val) => { selectedRouteIndex = val; },
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
+        setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
+        getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
+        setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
         getRouteLayer: () => routeLayer,
         setRouteLayer: (val) => { routeLayer = val; },
         getRoutePolyline: () => routePolyline,
@@ -669,8 +665,8 @@ function getCalculateRouteOrchestrationRuntime() {
         setEndMarker: (val) => { endMarker = val; },
         getMapPickerMode: () => mapPickerMode,
         setMapPickerMode: (val) => { mapPickerMode = val; },
-        getRouteOptions: () => routeOptions,
-        setRouteOptions: (val) => { routeOptions = val; },
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
+        setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
         getRouteLayer: () => routeLayer,
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getRouteInProgress: () => routeInProgress,
@@ -727,7 +723,7 @@ function getHazardMapOrchestrationRuntime() {
         hazardMapMarkers: () => _hazardMapMarkers(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRouteOptions: () => routeOptions,
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         call: {
             getOsmTrafficLightMarkerPillHTML,
         },
@@ -751,12 +747,12 @@ function collapseBottomSheetForRoutePreview() { VoyagrBottomSheetOrchestration.c
 function getBottomSheetOrchestrationRuntime() {
     return {
         domHelpers: () => _domHelpers(),
-        getBottomSheetStartY: () => bottomSheetStartY,
-        setBottomSheetStartY: (val) => { bottomSheetStartY = val; },
-        getBottomSheetCurrentY: () => bottomSheetCurrentY,
-        setBottomSheetCurrentY: (val) => { bottomSheetCurrentY = val; },
-        getBottomSheetIsExpanded: () => bottomSheetIsExpanded,
-        setBottomSheetIsExpanded: (val) => { bottomSheetIsExpanded = val; },
+        getBottomSheetStartY: () => VoyagrBottomSheetOrchestration.getBottomSheetStartY(),
+        setBottomSheetStartY: (val) => VoyagrBottomSheetOrchestration.setBottomSheetStartY(val),
+        getBottomSheetCurrentY: () => VoyagrBottomSheetOrchestration.getBottomSheetCurrentY(),
+        setBottomSheetCurrentY: (val) => VoyagrBottomSheetOrchestration.setBottomSheetCurrentY(val),
+        getBottomSheetIsExpanded: () => VoyagrBottomSheetOrchestration.getBottomSheetIsExpanded(),
+        setBottomSheetIsExpanded: (val) => VoyagrBottomSheetOrchestration.setBottomSheetIsExpanded(val),
         getRouteInProgress: () => routeInProgress,
     };
 }
@@ -1061,10 +1057,10 @@ function getRoutePreviewOrchestrationRuntime() {
         routeSharing: () => _routeSharing(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRouteOptions: () => routeOptions,
-        setRouteOptions: (val) => { routeOptions = val; },
-        getSelectedRouteIndex: () => selectedRouteIndex,
-        setSelectedRouteIndex: (val) => { selectedRouteIndex = val; },
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
+        setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
+        getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
+        setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
         getRoutePolyline: () => routePolyline,
         setRoutePolyline: (val) => { routePolyline = val; },
         getRouteInProgress: () => routeInProgress,
@@ -1107,9 +1103,15 @@ function getParkingOrchestrationRuntime() {
         multimodalParking: () => _multimodalParking(),
         routingRequest: () => _routingRequest(),
         getMap: () => map,
-        getRouteOptionsLength: () => (routeOptions && routeOptions.length) || 0,
-        getSelectedRouteIndex: () => selectedRouteIndex,
-        getRouteOptionAt: (idx) => (routeOptions && routeOptions[idx]) || null,
+        getRouteOptionsLength: () => {
+            const opts = VoyagrRouteComparisonOrchestration.getRouteOptions();
+            return (opts && opts.length) || 0;
+        },
+        getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
+        getRouteOptionAt: (idx) => {
+            const opts = VoyagrRouteComparisonOrchestration.getRouteOptions();
+            return (opts && opts[idx]) || null;
+        },
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         getCurrentVehicleType: () => currentVehicleType,
         getRouteCostParams,
@@ -1805,7 +1807,7 @@ function getJourneyOverviewOrchestrationRuntime() {
         getMapLibreHelpers: () => MapLibreHelpers,
         getRouteInProgress: () => routeInProgress,
         getRoutePolyline: () => routePolyline,
-        getRouteOptions: () => routeOptions,
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
@@ -2462,7 +2464,7 @@ function getPwaLifecycleOrchestrationRuntime() {
     return {
         pwaInstall: () => _pwaInstall(),
         appState: () => _appState(),
-        getBottomSheetExpanded: () => (typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true),
+        getBottomSheetExpanded: () => VoyagrBottomSheetOrchestration.getBottomSheetIsExpanded(),
         call: {
             showStatus,
             safeServiceWorkerUpdate,
@@ -2635,8 +2637,8 @@ function getNavigationLifecycleOrchestrationRuntime() {
         eta: () => _eta(),
         toggleUI: () => _toggleUI(),
         deviceEnvironment: () => _deviceEnvironment(),
-        getRouteOptions: () => routeOptions,
-        getSelectedRouteIndex: () => selectedRouteIndex,
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
+        getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
         getRouteInProgress: () => routeInProgress,
         setRouteInProgress: (val) => { routeInProgress = val; },
         getRouteJoinConfirmedForDeviation: () => VoyagrRerouteMapOrchestration.getRouteJoinConfirmedForDeviation(),

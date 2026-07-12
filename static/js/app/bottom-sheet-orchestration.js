@@ -7,6 +7,17 @@
 
     var runtime = null;
 
+    var bottomSheetStartY = 0;
+    var bottomSheetCurrentY = 0;
+    var bottomSheetIsExpanded = false;
+
+    function getBottomSheetStartY() { return bottomSheetStartY; }
+    function setBottomSheetStartY(val) { bottomSheetStartY = val; }
+    function getBottomSheetCurrentY() { return bottomSheetCurrentY; }
+    function setBottomSheetCurrentY(val) { bottomSheetCurrentY = val; }
+    function getBottomSheetIsExpanded() { return bottomSheetIsExpanded; }
+    function setBottomSheetIsExpanded(val) { bottomSheetIsExpanded = !!val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[BottomSheet] Orchestration runtime not bound');
@@ -84,14 +95,14 @@
         if (execute.setExpandedState) {
             bottomSheet.classList.add(execute.expandedClass || domHelpers.BOTTOM_SHEET_EXPANDED_CLASS);
             bottomSheet.setAttribute('aria-expanded', execute.ariaExpanded || 'true');
-            rt().setBottomSheetIsExpanded(true);
+            setBottomSheetIsExpanded(true);
             if (execute.expandedLogMessage) {
                 console.log(execute.expandedLogMessage, bottomSheet.className);
             }
         } else if (execute.setExpandedState === false) {
             bottomSheet.classList.remove(execute.expandedClass || domHelpers.BOTTOM_SHEET_EXPANDED_CLASS);
             bottomSheet.setAttribute('aria-expanded', execute.ariaExpanded || 'false');
-            rt().setBottomSheetIsExpanded(false);
+            setBottomSheetIsExpanded(false);
             if (execute.resetContentScroll && execute.contentSelector) {
                 const content = bottomSheet.querySelector(execute.contentSelector);
                 if (content) content.scrollTop = 0;
@@ -128,7 +139,7 @@
 
     function toggleBottomSheet() {
         applyBottomSheetStateFromPlan(
-            DH().buildToggleBottomSheetEntryOrchestrationPlan(rt().getBottomSheetIsExpanded()).execute
+            DH().buildToggleBottomSheetEntryOrchestrationPlan(getBottomSheetIsExpanded()).execute
         );
     }
 
@@ -163,7 +174,7 @@
             applyBottomSheetDragVisualFromPlan(
                 domHelpers.buildBottomSheetDragVisualEntryOrchestrationPlan({
                     diff,
-                    isExpanded: rt().getBottomSheetIsExpanded(),
+                    isExpanded: getBottomSheetIsExpanded(),
                     previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
                 }).feedback,
                 bottomSheet
@@ -172,7 +183,7 @@
 
         const finishDrag = (diff) => {
             applyBottomSheetDragFinishFromPlan(
-                domHelpers.buildBottomSheetDragFinishEntryOrchestrationPlan(diff, rt().getBottomSheetIsExpanded(), {
+                domHelpers.buildBottomSheetDragFinishEntryOrchestrationPlan(diff, getBottomSheetIsExpanded(), {
                     thresholdPx: initPlan.dragThresholdPx,
                     collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
                     expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
@@ -183,7 +194,7 @@
         handle.addEventListener('click', (e) => {
             e.stopPropagation();
             applyBottomSheetClickToggleFromPlan(
-                domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(rt().getBottomSheetIsExpanded(), {
+                domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(getBottomSheetIsExpanded(), {
                     handleClickLogMessage: initPlan.handleClickLogMessage,
                 })
             );
@@ -193,7 +204,7 @@
             header.addEventListener('click', (e) => {
                 const entry = domHelpers.buildBottomSheetHeaderClickEntryOrchestrationPlan(
                     !!domHelpers.closest(e.target, initPlan.headerButtonIgnoreSelector),
-                    rt().getBottomSheetIsExpanded()
+                    getBottomSheetIsExpanded()
                 );
                 if (!entry.shouldToggle) return;
                 e.stopPropagation();
@@ -205,7 +216,7 @@
             applyBottomSheetBodyClickExpandFromPlan(
                 domHelpers.buildBottomSheetBodyClickEntryOrchestrationPlan(
                     !!domHelpers.closest(e.target, initPlan.contentSelector),
-                    rt().getBottomSheetIsExpanded(),
+                    getBottomSheetIsExpanded(),
                     { sheetExpandClickLogMessage: initPlan.sheetExpandClickLogMessage }
                 )
             );
@@ -213,40 +224,40 @@
 
         handle.addEventListener('touchstart', (e) => {
             isDragging = true;
-            rt().setBottomSheetStartY(e.touches[0].clientY);
-            rt().setBottomSheetCurrentY(rt().getBottomSheetStartY());
+            setBottomSheetStartY(e.touches[0].clientY);
+            setBottomSheetCurrentY(getBottomSheetStartY());
             applyBottomSheetDragStartFromPlan(domHelpers.buildBottomSheetDragStartExecutePlan(), bottomSheet);
         }, { passive: true });
 
         handle.addEventListener('touchmove', (e) => {
             if (!isDragging) return;
-            rt().setBottomSheetCurrentY(e.touches[0].clientY);
-            applyDragVisual(rt().getBottomSheetCurrentY() - rt().getBottomSheetStartY());
+            setBottomSheetCurrentY(e.touches[0].clientY);
+            applyDragVisual(getBottomSheetCurrentY() - getBottomSheetStartY());
         }, { passive: true });
 
         handle.addEventListener('touchend', () => {
             if (!isDragging) return;
             isDragging = false;
-            finishDrag(rt().getBottomSheetCurrentY() - rt().getBottomSheetStartY());
+            finishDrag(getBottomSheetCurrentY() - getBottomSheetStartY());
         }, { passive: true });
 
         handle.addEventListener('mousedown', (e) => {
             isDragging = true;
-            rt().setBottomSheetStartY(e.clientY);
-            rt().setBottomSheetCurrentY(rt().getBottomSheetStartY());
+            setBottomSheetStartY(e.clientY);
+            setBottomSheetCurrentY(getBottomSheetStartY());
             applyBottomSheetDragStartFromPlan(domHelpers.buildBottomSheetDragStartExecutePlan(), bottomSheet);
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            rt().setBottomSheetCurrentY(e.clientY);
-            applyDragVisual(rt().getBottomSheetCurrentY() - rt().getBottomSheetStartY());
+            setBottomSheetCurrentY(e.clientY);
+            applyDragVisual(getBottomSheetCurrentY() - getBottomSheetStartY());
         });
 
         document.addEventListener('mouseup', () => {
             if (!isDragging) return;
             isDragging = false;
-            finishDrag(rt().getBottomSheetCurrentY() - rt().getBottomSheetStartY());
+            finishDrag(getBottomSheetCurrentY() - getBottomSheetStartY());
         });
 
         applyBottomSheetFocusExpandBindingFromPlan(
@@ -346,6 +357,12 @@
         collapseBottomSheet: collapseBottomSheet,
         initBottomSheet: initBottomSheet,
         debugScrollIssue: debugScrollIssue,
+        getBottomSheetStartY: getBottomSheetStartY,
+        setBottomSheetStartY: setBottomSheetStartY,
+        getBottomSheetCurrentY: getBottomSheetCurrentY,
+        setBottomSheetCurrentY: setBottomSheetCurrentY,
+        getBottomSheetIsExpanded: getBottomSheetIsExpanded,
+        setBottomSheetIsExpanded: setBottomSheetIsExpanded,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
