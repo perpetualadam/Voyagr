@@ -2458,11 +2458,13 @@ function applyVoiceAnnouncementStateResetFromPlan(execute) {
     initialETAMovementRetries = p.initialETAMovementRetries;
     _voiceAnnouncedForManeuverIndex = p.voiceAnnouncedForManeuverIndex;
     _voiceAnnouncedCategory = p.voiceAnnouncedCategory;
-    _lastLaneVoiceKey = p.lastLaneVoiceKey;
     if (execute.clearTurnThresholds) announcedTurnThresholds.clear();
     if (execute.clearExitThresholds) announcedExitThresholds.clear();
     if (execute.clearKeepThresholds) announcedKeepThresholds.clear();
     if (execute.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
+    if (p.lastLaneVoiceKey !== undefined) {
+        VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(p.lastLaneVoiceKey);
+    }
 }
 
 /**
@@ -3502,7 +3504,7 @@ function getGpsOrchestrationRuntime() {
             case 'announcedKeepThresholds': return announcedKeepThresholds;
             case '_voiceAnnouncedForManeuverIndex': return _voiceAnnouncedForManeuverIndex;
             case '_voiceAnnouncedCategory': return _voiceAnnouncedCategory;
-            case '_lastLaneVoiceKey': return _lastLaneVoiceKey;
+            case '_lastLaneVoiceKey': return VoyagrLaneGuidanceOrchestration.getLastLaneVoiceKey();
             case 'lastDestinationAnnouncementDistance': return lastDestinationAnnouncementDistance;
             case '_navigationArrivalTriggered': return _navigationArrivalTriggered;
             case '_navigationArrivalZoneSince': return _navigationArrivalZoneSince;
@@ -3568,7 +3570,7 @@ function getGpsOrchestrationRuntime() {
             case 'announcedKeepThresholds': announcedKeepThresholds = val; break;
             case '_voiceAnnouncedForManeuverIndex': _voiceAnnouncedForManeuverIndex = val; break;
             case '_voiceAnnouncedCategory': _voiceAnnouncedCategory = val; break;
-            case '_lastLaneVoiceKey': _lastLaneVoiceKey = val; break;
+            case '_lastLaneVoiceKey': VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(val); break;
             case 'lastDestinationAnnouncementDistance': lastDestinationAnnouncementDistance = val; break;
             case '_navigationArrivalTriggered': _navigationArrivalTriggered = val; break;
             case '_navigationArrivalZoneSince': _navigationArrivalZoneSince = val; break;
@@ -3910,156 +3912,29 @@ function addCurrentToFavorites() {
 }
 
 // ===== PHASE 2 FEATURES: LANE GUIDANCE =====
-/**
- * updateLaneGuidance function
- * @function updateLaneGuidance
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @param {*} heading - Parameter description
- * @param {*} maneuver - Parameter description
- * @returns {*} Return value description
- */
-// Lane guidance throttle to avoid API spam
-let lastLaneGuidanceFetch = 0;
-let lastLaneGuidanceManeuver = '';
-let lastLaneGuidancePosition = null;
-let _lastLaneVoiceKey = '';
+// Orchestration lives in static/js/app/lane-guidance-orchestration.js (bound at file end).
 
-// Short client-side cache of lane-guidance responses so the overlay shows instantly when
-// revisiting the same approach and so a slow/unavailable Overpass doesn't blank it out.
-const _laneGuidanceCache = new Map();        // key -> { data, ts, fallback }
-
-function _pruneLaneGuidanceCache() {
-    const LG = _laneGuidance();
-    const now = Date.now();
-    for (const [k, v] of _laneGuidanceCache) {
-        if (now - v.ts > LG.LANE_GUIDANCE_CACHE_TTL_MS) _laneGuidanceCache.delete(k);
-    }
-    while (_laneGuidanceCache.size > LG.LANE_GUIDANCE_CACHE_MAX_ENTRIES) {
-        const firstKey = _laneGuidanceCache.keys().next().value;
-        _laneGuidanceCache.delete(firstKey);
-    }
+function getLaneGuidanceOrchestrationRuntime() {
+    return {
+        laneGuidance: () => _laneGuidance(),
+        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getCurrentRouteSteps: () => currentRouteSteps,
+        getCurrentStepIndex: () => currentStepIndex,
+        getRoutePolyline: () => routePolyline,
+        call: {
+            calculateDistanceMeters,
+            getCurrentRoadType,
+            speakMessage,
+        },
+    };
 }
 
 function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
-    const LG = _laneGuidance();
-    roundaboutExitCount = roundaboutExitCount || 0;
-
-    const tick = LG.buildLaneGuidanceFetchTickPlan({
-        lat,
-        lon,
-        heading,
-        maneuver,
-        roundaboutExitCount,
-        now: Date.now(),
-        lastFetch: lastLaneGuidanceFetch,
-        lastPosition: lastLaneGuidancePosition,
-        lastManeuver: lastLaneGuidanceManeuver,
-        routeSteps: currentRouteSteps,
-        currentStepIndex,
-        routePolyline,
-        roadType: getCurrentRoadType() || 'unknown',
-        calculateDistance: calculateDistanceMeters,
-        cacheLookup: (key) => _laneGuidanceCache.get(key),
-    });
-
-    if (tick.action === 'skip') return;
-
-    const apply = LG.buildLaneGuidanceFetchStateApplyPlan(tick);
-    if (apply.action === 'skip') return;
-
-    lastLaneGuidanceFetch = apply.statePatch.lastFetch;
-    lastLaneGuidanceManeuver = apply.statePatch.lastManeuver;
-    lastLaneGuidancePosition = apply.statePatch.lastPosition;
-
-    if (apply.kind === 'render-cached') {
-        renderLaneGuidanceUI(apply.renderPayload);
-        return;
-    }
-
-    const fetchPlan = apply.fetch;
-    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), fetchPlan.timeoutMs) : null;
-
-    const useFallback = (reason) => {
-        const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
-            apiSuccess: false,
-            errorReason: reason,
-            maneuver: fetchPlan.maneuver,
-            distToManeuver: fetchPlan.distToManeuver,
-            roundaboutExitCount: fetchPlan.roundaboutExitCount,
-            roadType: fetchPlan.roadType,
-        });
-        _laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
-        _pruneLaneGuidanceCache();
-        if (outcome.warnLine) console.warn(outcome.warnLine);
-        renderLaneGuidanceUI(outcome.renderData);
-    };
-
-    fetch(fetchPlan.url, controller ? { signal: controller.signal } : undefined)
-        .then((response) => response.json())
-        .then((data) => {
-            if (timeoutId) clearTimeout(timeoutId);
-            const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
-                apiSuccess: !!(data && data.success),
-                apiData: data,
-                maneuver: fetchPlan.maneuver,
-                distToManeuver: fetchPlan.distToManeuver,
-                roundaboutExitCount: fetchPlan.roundaboutExitCount,
-                roadType: fetchPlan.roadType,
-                errorReason: 'no data',
-            });
-            _laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
-            _pruneLaneGuidanceCache();
-            if (outcome.warnLine) console.warn(outcome.warnLine);
-            renderLaneGuidanceUI(outcome.renderData);
-        })
-        .catch((error) => {
-            if (timeoutId) clearTimeout(timeoutId);
-            useFallback((error && error.name === 'AbortError') ? 'timeout' : (error && error.message) || 'error');
-        });
+    return VoyagrLaneGuidanceOrchestration.updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount);
 }
 
 function renderLaneGuidanceUI(data) {
-    const display = document.getElementById('laneGuidanceDisplay');
-    const visual = document.getElementById('laneVisual');
-    const text = document.getElementById('laneGuidanceText');
-
-    if (!display || !visual || !text) return;
-
-    const LG = _laneGuidance();
-    const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, _lastLaneVoiceKey);
-    const apply = LG.buildLaneGuidanceDomStateApplyPlan(domPlan, {
-        voiceEnabled: voiceAnnouncementsEnabled,
-    });
-
-    if (apply.action === 'hide') {
-        display.classList.remove('show');
-        return;
-    }
-
-    const badgeEl = document.getElementById('laneGuidanceBadge');
-    if (badgeEl && apply.badge) {
-        badgeEl.textContent = apply.badge.text;
-        badgeEl.style.display = apply.badge.visible ? 'inline-block' : 'none';
-    }
-
-    visual.innerHTML = '';
-    for (const ind of apply.indicators) {
-        const lane = document.createElement('div');
-        lane.className = ind.className;
-        lane.innerHTML = ind.innerHtml;
-        visual.appendChild(lane);
-    }
-
-    display.className = apply.displayClassName;
-    if (apply.urgencyClass) display.classList.add(apply.urgencyClass);
-    text.textContent = apply.guidanceText;
-
-    if (apply.voice) {
-        speakMessage(apply.voice.message, apply.voice.priority);
-        _lastLaneVoiceKey = apply.voice.announceKey;
-    }
+    return VoyagrLaneGuidanceOrchestration.renderLaneGuidanceUI(data);
 }
 
 // ===== GPS SPEED WIDGET =====
@@ -5971,6 +5846,7 @@ VoyagrRecentDestinationsOrchestration.bind(getRecentDestinationsOrchestrationRun
 VoyagrMapView3DOrchestration.bind(getMapView3DOrchestrationRuntime());
 VoyagrArNavigationOrchestration.bind(getArNavigationOrchestrationRuntime());
 VoyagrTurnInstructionWidgetOrchestration.bind(getTurnInstructionWidgetOrchestrationRuntime());
+VoyagrLaneGuidanceOrchestration.bind(getLaneGuidanceOrchestrationRuntime());
 VoyagrNavigationLifecycleOrchestration.bind(getNavigationLifecycleOrchestrationRuntime());
 VoyagrTabNavigationOrchestration.bind(getTabNavigationOrchestrationRuntime());
 VoyagrDriverCameraOrchestration.bind(getDriverCameraOrchestrationRuntime());
