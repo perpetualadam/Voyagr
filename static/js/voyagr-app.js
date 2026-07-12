@@ -686,7 +686,7 @@ function getCalculateRouteOrchestrationRuntime() {
         getIsGeocoding: () => isGeocoding,
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
-        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         getIsTrackingActive: () => isTrackingActive,
         getTrackingHistory: () => trackingHistory,
         getCurrentLat: () => currentLat,
@@ -906,15 +906,15 @@ function getRerouteMapOrchestrationRuntime() {
         getSnapBlendWeightState: () => _snapBlendWeightState,
         getSmoothDisplayLat: () => _smoothDisplayLat,
         getSmoothDisplayLon: () => _smoothDisplayLon,
-        getAnnouncedTurnThresholds: () => announcedTurnThresholds,
-        getAnnouncedExitThresholds: () => announcedExitThresholds,
-        getAnnouncedKeepThresholds: () => announcedKeepThresholds,
+        getAnnouncedTurnThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedTurnThresholds(),
+        getAnnouncedExitThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedExitThresholds(),
+        getAnnouncedKeepThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedKeepThresholds(),
         setLastETAAnnouncementTime: (val) => { lastETAAnnouncementTime = val; },
         setLastAnnouncedETA: (val) => { lastAnnouncedETA = val; },
-        setLastDestinationAnnouncementDistance: (val) => { lastDestinationAnnouncementDistance = val; },
+        setLastDestinationAnnouncementDistance: (val) => VoyagrVoiceAnnouncementsOrchestration.setLastDestinationAnnouncementDistance(val),
         setInitialETAMovementRetries: (val) => { initialETAMovementRetries = val; },
-        setVoiceAnnouncedForManeuverIndex: (val) => { _voiceAnnouncedForManeuverIndex = val; },
-        setVoiceAnnouncedCategory: (val) => { _voiceAnnouncedCategory = val; },
+        setVoiceAnnouncedForManeuverIndex: (val) => VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedForManeuverIndex(val),
+        setVoiceAnnouncedCategory: (val) => VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedCategory(val),
         getDeviationStartTimeCheck: () => deviationStartTimeCheck,
         setDeviationStartTimeCheck: (val) => { deviationStartTimeCheck = val; },
         getRerouteAttemptCount: () => rerouteAttemptCount,
@@ -1199,7 +1199,7 @@ function getTrafficOrchestrationRuntime() {
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         getRouteLayer: () => routeLayer,
         getAllRouteLayers: () => VoyagrRouteComparisonOrchestration.getAllRouteLayers(),
-        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         showStatus,
         saveAllSettings,
         sendNotification,
@@ -1367,13 +1367,13 @@ function getGpsOrchestrationRuntime() {
             case '_consecutiveDisplacementMoves': return _consecutiveDisplacementMoves;
             case '_smoothedSpeedMph': return _smoothedSpeedMph;
             case '_smoothedSpeedInitAt': return _smoothedSpeedInitAt;
-            case 'announcedTurnThresholds': return announcedTurnThresholds;
-            case 'announcedExitThresholds': return announcedExitThresholds;
-            case 'announcedKeepThresholds': return announcedKeepThresholds;
-            case '_voiceAnnouncedForManeuverIndex': return _voiceAnnouncedForManeuverIndex;
-            case '_voiceAnnouncedCategory': return _voiceAnnouncedCategory;
+            case 'announcedTurnThresholds': return VoyagrVoiceAnnouncementsOrchestration.getAnnouncedTurnThresholds();
+            case 'announcedExitThresholds': return VoyagrVoiceAnnouncementsOrchestration.getAnnouncedExitThresholds();
+            case 'announcedKeepThresholds': return VoyagrVoiceAnnouncementsOrchestration.getAnnouncedKeepThresholds();
+            case '_voiceAnnouncedForManeuverIndex': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncedForManeuverIndex();
+            case '_voiceAnnouncedCategory': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncedCategory();
             case '_lastLaneVoiceKey': return VoyagrLaneGuidanceOrchestration.getLastLaneVoiceKey();
-            case 'lastDestinationAnnouncementDistance': return lastDestinationAnnouncementDistance;
+            case 'lastDestinationAnnouncementDistance': return VoyagrVoiceAnnouncementsOrchestration.getLastDestinationAnnouncementDistance();
             case '_navigationArrivalTriggered': return _navigationArrivalTriggered;
             case '_navigationArrivalZoneSince': return _navigationArrivalZoneSince;
             case '_navTraveledMeters': return _navTraveledMeters;
@@ -1397,8 +1397,8 @@ function getGpsOrchestrationRuntime() {
             case 'rerouteFailureRetryCount': return rerouteFailureRetryCount;
             case '_preferPrimaryRouteOnNextNavUpdate': return _preferPrimaryRouteOnNextNavUpdate;
             case 'lastTurnDetectRouteVertexIndex': return lastTurnDetectRouteVertexIndex;
-            case 'voiceAnnouncementsEnabled': return voiceAnnouncementsEnabled;
-            case 'voiceFrequencyMode': return voiceFrequencyMode;
+            case 'voiceAnnouncementsEnabled': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled();
+            case 'voiceFrequencyMode': return VoyagrVoiceAnnouncementsOrchestration.getVoiceFrequencyMode();
             case 'speedWidgetEnabled': return speedWidgetEnabled;
             case 'userHasStartedMoving': return userHasStartedMoving;
                 default: return undefined;
@@ -1433,13 +1433,13 @@ function getGpsOrchestrationRuntime() {
             case '_consecutiveDisplacementMoves': _consecutiveDisplacementMoves = val; break;
             case '_smoothedSpeedMph': _smoothedSpeedMph = val; break;
             case '_smoothedSpeedInitAt': _smoothedSpeedInitAt = val; break;
-            case 'announcedTurnThresholds': announcedTurnThresholds = val; break;
-            case 'announcedExitThresholds': announcedExitThresholds = val; break;
-            case 'announcedKeepThresholds': announcedKeepThresholds = val; break;
-            case '_voiceAnnouncedForManeuverIndex': _voiceAnnouncedForManeuverIndex = val; break;
-            case '_voiceAnnouncedCategory': _voiceAnnouncedCategory = val; break;
+            case 'announcedTurnThresholds': break;
+            case 'announcedExitThresholds': break;
+            case 'announcedKeepThresholds': break;
+            case '_voiceAnnouncedForManeuverIndex': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedForManeuverIndex(val); break;
+            case '_voiceAnnouncedCategory': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedCategory(val); break;
             case '_lastLaneVoiceKey': VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(val); break;
-            case 'lastDestinationAnnouncementDistance': lastDestinationAnnouncementDistance = val; break;
+            case 'lastDestinationAnnouncementDistance': VoyagrVoiceAnnouncementsOrchestration.setLastDestinationAnnouncementDistance(val); break;
             case '_navigationArrivalTriggered': _navigationArrivalTriggered = val; break;
             case '_navigationArrivalZoneSince': _navigationArrivalZoneSince = val; break;
             case '_navTraveledMeters': _navTraveledMeters = val; break;
@@ -1463,8 +1463,8 @@ function getGpsOrchestrationRuntime() {
             case 'rerouteFailureRetryCount': rerouteFailureRetryCount = val; break;
             case '_preferPrimaryRouteOnNextNavUpdate': _preferPrimaryRouteOnNextNavUpdate = val; break;
             case 'lastTurnDetectRouteVertexIndex': lastTurnDetectRouteVertexIndex = val; break;
-            case 'voiceAnnouncementsEnabled': voiceAnnouncementsEnabled = val; break;
-            case 'voiceFrequencyMode': voiceFrequencyMode = val; break;
+            case 'voiceAnnouncementsEnabled': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncementsEnabled(val); break;
+            case 'voiceFrequencyMode': VoyagrVoiceAnnouncementsOrchestration.setVoiceFrequencyMode(val); break;
             case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
             case 'userHasStartedMoving': userHasStartedMoving = val; break;
                 default: break;
@@ -1490,13 +1490,13 @@ function getGpsOrchestrationRuntime() {
         consts: {
             ZOOM_LEVELS,
             TURN_ZOOM_THRESHOLD,
-            TURN_ANNOUNCEMENT_DISTANCES,
-            EXIT_ANNOUNCEMENT_DISTANCES,
-            KEEP_ANNOUNCEMENT_DISTANCES,
-            DESTINATION_ANNOUNCEMENT_DISTANCES,
+            TURN_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getTurnAnnouncementDistances(),
+            EXIT_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getExitAnnouncementDistances(),
+            KEEP_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getKeepAnnouncementDistances(),
+            DESTINATION_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getDestinationAnnouncementDistances(),
             ETA_CHANGE_THRESHOLD_MS,
             ETA_MIN_INTERVAL_MS,
-            HAZARD_WARNING_DISTANCE,
+            HAZARD_WARNING_DISTANCE: VoyagrVoiceAnnouncementsOrchestration.getHazardWarningDistance(),
         },
         getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
         call: {
@@ -1591,31 +1591,6 @@ function getVoiceAnnouncementsOrchestrationRuntime() {
     return {
         voiceAnnouncements: () => _voiceAnnouncements(),
         toggleUI: () => _toggleUI(),
-        g: (key) => {
-            switch (key) {
-            case 'voiceAnnouncementsEnabled': return voiceAnnouncementsEnabled;
-            case 'voiceFrequencyMode': return voiceFrequencyMode;
-            case 'voiceAnnouncementMinIntervalMs': return VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS;
-            default: return undefined;
-            }
-        },
-        s: (key, val) => {
-            switch (key) {
-            case 'voiceAnnouncementsEnabled': voiceAnnouncementsEnabled = val; break;
-            default: break;
-            }
-        },
-        applyVoiceRuntimeFromPlan: (plan) => {
-            if (!plan) return;
-            TURN_ANNOUNCEMENT_DISTANCES.length = 0;
-            TURN_ANNOUNCEMENT_DISTANCES.push(...plan.turnAnnouncementDistances);
-            DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
-            DESTINATION_ANNOUNCEMENT_DISTANCES.push(...plan.destinationAnnouncementDistances);
-            HAZARD_WARNING_DISTANCE = plan.hazardWarningDistance;
-            voiceAnnouncementsEnabled = plan.voiceAnnouncementsEnabled;
-            voiceFrequencyMode = plan.voiceFrequencyMode;
-            VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = plan.voiceAnnouncementMinIntervalMs;
-        },
         call: {
             showStatus,
             saveAllSettings,
@@ -1696,7 +1671,7 @@ function addCurrentToFavorites() {
 function getLaneGuidanceOrchestrationRuntime() {
     return {
         laneGuidance: () => _laneGuidance(),
-        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         getCurrentRouteSteps: () => currentRouteSteps,
         getCurrentStepIndex: () => currentStepIndex,
         getRoutePolyline: () => routePolyline,
@@ -2506,29 +2481,9 @@ function setupMapExploreHandlers() {
     VoyagrMapExploreOrchestration.setupMapExploreHandlers();
 }
 
-// Turn announcement variables
-let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
-const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
+// Turn announcement state lives in voice-announcements-orchestration.js.
 
-// Motorway/Highway exit announcement distances (much earlier warnings at speed)
-const EXIT_ANNOUNCEMENT_DISTANCES = [2000, 800, 200, 100]; // meters (2km, 800m, 200m, 100m exit now)
-let announcedExitThresholds = new Set();  // Track exit announcements separately
-
-// Keep right/left (fork/veer) announcement distances — earlier than turns, less than exits
-const KEEP_ANNOUNCEMENT_DISTANCES = [1000, 400, 150, 50]; // meters
-let announcedKeepThresholds = new Set();
-/** Per-maneuver voice dedup — cleared when maneuver index or category changes. */
-let _voiceAnnouncedForManeuverIndex = null;
-let _voiceAnnouncedCategory = null;
 let lastTurnDetectRouteVertexIndex = 0;
-let voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
-let voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
-let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
-let HAZARD_WARNING_DISTANCE = 500;
-
-// Distance-to-destination announcement variables
-let lastDestinationAnnouncementDistance = Infinity;
-const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; // meters (10km, 5km, 2km, 1km, 500m, 100m)
 
 let _navigationArrivalTriggered = false;
 let _navigationArrivalZoneSince = 0;
@@ -2568,7 +2523,7 @@ function getLiveDataRefreshOrchestrationRuntime() {
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         getRoutePolyline: () => routePolyline,
         getCurrentRoutingMode: () => currentRoutingMode,
-        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         g: (key) => {
             switch (key) {
             case 'lastETAAnnouncementTime': return lastETAAnnouncementTime;
@@ -2995,7 +2950,7 @@ function applyBestDepartureTime(timeStr) {
 function getNotificationsOrchestrationRuntime() {
     return {
         deviceEnvironment: () => _deviceEnvironment(),
-        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         getRouteInProgress: () => routeInProgress,
         getNavigationArrivalTriggered: () => _navigationArrivalTriggered,
         s: (key, val) => {

@@ -8,6 +8,55 @@
     var runtime = null;
     var lastVoiceAnnouncementTime = 0;
 
+    var announcedTurnThresholds = new Set();
+    var turnAnnouncementDistances = [500, 200, 100, 50];
+    var announcedExitThresholds = new Set();
+    var exitAnnouncementDistances = [2000, 800, 200, 100];
+    var announcedKeepThresholds = new Set();
+    var keepAnnouncementDistances = [1000, 400, 150, 50];
+    var voiceAnnouncedForManeuverIndex = null;
+    var voiceAnnouncedCategory = null;
+    var voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
+    var voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
+    var voiceAnnouncementMinIntervalMs = 10000;
+    var hazardWarningDistance = 500;
+    var lastDestinationAnnouncementDistance = Infinity;
+    var destinationAnnouncementDistances = [10000, 5000, 2000, 1000, 500, 100];
+
+    function getAnnouncedTurnThresholds() { return announcedTurnThresholds; }
+    function getAnnouncedExitThresholds() { return announcedExitThresholds; }
+    function getAnnouncedKeepThresholds() { return announcedKeepThresholds; }
+    function getTurnAnnouncementDistances() { return turnAnnouncementDistances; }
+    function getExitAnnouncementDistances() { return exitAnnouncementDistances; }
+    function getKeepAnnouncementDistances() { return keepAnnouncementDistances; }
+    function getDestinationAnnouncementDistances() { return destinationAnnouncementDistances; }
+    function getVoiceAnnouncedForManeuverIndex() { return voiceAnnouncedForManeuverIndex; }
+    function setVoiceAnnouncedForManeuverIndex(val) { voiceAnnouncedForManeuverIndex = val; }
+    function getVoiceAnnouncedCategory() { return voiceAnnouncedCategory; }
+    function setVoiceAnnouncedCategory(val) { voiceAnnouncedCategory = val; }
+    function getVoiceAnnouncementsEnabled() { return voiceAnnouncementsEnabled; }
+    function setVoiceAnnouncementsEnabled(val) { voiceAnnouncementsEnabled = !!val; }
+    function getVoiceFrequencyMode() { return voiceFrequencyMode; }
+    function setVoiceFrequencyMode(val) { voiceFrequencyMode = val; }
+    function getVoiceAnnouncementMinIntervalMs() { return voiceAnnouncementMinIntervalMs; }
+    function setVoiceAnnouncementMinIntervalMs(val) { voiceAnnouncementMinIntervalMs = val; }
+    function getHazardWarningDistance() { return hazardWarningDistance; }
+    function setHazardWarningDistance(val) { hazardWarningDistance = val; }
+    function getLastDestinationAnnouncementDistance() { return lastDestinationAnnouncementDistance; }
+    function setLastDestinationAnnouncementDistance(val) { lastDestinationAnnouncementDistance = val; }
+
+    function applyVoiceRuntimeFromPlan(plan) {
+        if (!plan) return;
+        turnAnnouncementDistances.length = 0;
+        turnAnnouncementDistances.push.apply(turnAnnouncementDistances, plan.turnAnnouncementDistances);
+        destinationAnnouncementDistances.length = 0;
+        destinationAnnouncementDistances.push.apply(destinationAnnouncementDistances, plan.destinationAnnouncementDistances);
+        hazardWarningDistance = plan.hazardWarningDistance;
+        voiceAnnouncementsEnabled = plan.voiceAnnouncementsEnabled;
+        voiceFrequencyMode = plan.voiceFrequencyMode;
+        voiceAnnouncementMinIntervalMs = plan.voiceAnnouncementMinIntervalMs;
+    }
+
     function rt() {
         if (!runtime) {
             throw new Error('[VoiceAnnouncements] Orchestration runtime not bound');
@@ -22,9 +71,9 @@
         if (priority === undefined) priority = 'normal';
         const now = Date.now();
         const timeSinceLastAnnouncement = now - lastVoiceAnnouncementTime;
-        const voiceFrequencyMode = rt().g('voiceFrequencyMode');
+        const voiceFrequencyMode = getVoiceFrequencyMode();
         const throttle = VA().VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode]
-            || rt().g('voiceAnnouncementMinIntervalMs');
+            || getVoiceAnnouncementMinIntervalMs();
 
         if (voiceFrequencyMode === 'minimal' && priority !== 'high') {
             console.log('[Voice] Skipped (minimal mode): "' + message + '"');
@@ -61,8 +110,8 @@
             turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
             hazardDistance: document.getElementById('voiceHazardDistance')?.value,
             voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
-            announcementsEnabled: typeof rt().g('voiceAnnouncementsEnabled') === 'boolean'
-                ? rt().g('voiceAnnouncementsEnabled')
+            announcementsEnabled: typeof getVoiceAnnouncementsEnabled() === 'boolean'
+                ? getVoiceAnnouncementsEnabled()
                 : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
         };
     }
@@ -75,8 +124,7 @@
     }
 
     function applyVoicePreferencesRuntimeFromPlan(plan) {
-        if (!plan) return;
-        rt().applyVoiceRuntimeFromPlan(plan);
+        applyVoiceRuntimeFromPlan(plan);
     }
 
     function applySaveVoicePreferencesFromPlan(execute) {
@@ -123,7 +171,7 @@
         if (toggleButton) {
             TU().applyLabeledToggleButton(toggleButton, defaults.domPlan.labeledToggle.enabled);
             if (defaults.setAnnouncementsEnabledFromToggle) {
-                rt().s('voiceAnnouncementsEnabled', defaults.domPlan.labeledToggle.enabled);
+                setVoiceAnnouncementsEnabled(defaults.domPlan.labeledToggle.enabled);
             }
         }
         console.log(entry.orch.defaultsLogMessage);
@@ -155,7 +203,7 @@
 
         TU().applyLabeledToggleButton(button, execute.toggle.enabled);
         localStorage.setItem(execute.storageKey, execute.storageValue);
-        if (execute.updateRuntimeFlag) rt().s('voiceAnnouncementsEnabled', execute.enabled);
+        if (execute.updateRuntimeFlag) setVoiceAnnouncementsEnabled(execute.enabled);
         if (execute.saveVoicePreferences) saveVoicePreferences();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
         if (execute.saveAllSettings) rt().call.saveAllSettings();
@@ -184,6 +232,28 @@
         saveVoicePreferences: saveVoicePreferences,
         loadVoicePreferences: loadVoicePreferences,
         toggleVoiceAnnouncements: toggleVoiceAnnouncements,
+        getAnnouncedTurnThresholds: getAnnouncedTurnThresholds,
+        getAnnouncedExitThresholds: getAnnouncedExitThresholds,
+        getAnnouncedKeepThresholds: getAnnouncedKeepThresholds,
+        getTurnAnnouncementDistances: getTurnAnnouncementDistances,
+        getExitAnnouncementDistances: getExitAnnouncementDistances,
+        getKeepAnnouncementDistances: getKeepAnnouncementDistances,
+        getDestinationAnnouncementDistances: getDestinationAnnouncementDistances,
+        getVoiceAnnouncedForManeuverIndex: getVoiceAnnouncedForManeuverIndex,
+        setVoiceAnnouncedForManeuverIndex: setVoiceAnnouncedForManeuverIndex,
+        getVoiceAnnouncedCategory: getVoiceAnnouncedCategory,
+        setVoiceAnnouncedCategory: setVoiceAnnouncedCategory,
+        getVoiceAnnouncementsEnabled: getVoiceAnnouncementsEnabled,
+        setVoiceAnnouncementsEnabled: setVoiceAnnouncementsEnabled,
+        getVoiceFrequencyMode: getVoiceFrequencyMode,
+        setVoiceFrequencyMode: setVoiceFrequencyMode,
+        getVoiceAnnouncementMinIntervalMs: getVoiceAnnouncementMinIntervalMs,
+        setVoiceAnnouncementMinIntervalMs: setVoiceAnnouncementMinIntervalMs,
+        getHazardWarningDistance: getHazardWarningDistance,
+        setHazardWarningDistance: setHazardWarningDistance,
+        getLastDestinationAnnouncementDistance: getLastDestinationAnnouncementDistance,
+        setLastDestinationAnnouncementDistance: setLastDestinationAnnouncementDistance,
+        applyVoiceRuntimeFromPlan: applyVoiceRuntimeFromPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
