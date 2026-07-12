@@ -672,6 +672,16 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for clearDepartureTime handler.
+     * @returns {Object}
+     */
+    function buildClearDepartureTimeEntryOrchestrationPlan() {
+        return {
+            apply: buildClearDepartureTimeApplyPlan(),
+        };
+    }
+
     /** localStorage keys cleared by resetAllSettings. */
     var SETTINGS_RESET_LOCAL_STORAGE_KEYS = [
         SETTINGS_STORAGE_KEY,
@@ -1138,6 +1148,7 @@
         buildLoadMultiDropPreferencesEntryOrchestrationPlan:
             buildLoadMultiDropPreferencesEntryOrchestrationPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
+        buildClearDepartureTimeEntryOrchestrationPlan: buildClearDepartureTimeEntryOrchestrationPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
         buildResetAllSettingsExecutePlan: buildResetAllSettingsExecutePlan,
         buildApplySettingsResetRuntimeExecutePlan: buildApplySettingsResetRuntimeExecutePlan,

@@ -1656,68 +1656,54 @@ function applyBringRoutesToTopFromPlan(plan) {
     const RS = _routeSelection();
 
     const moveLayersToTop = (retryCount = 0) => {
-        const attemptLog = RS.buildBringRoutesToTopAttemptLogPlan(retryCount, plan.layerIds);
-        console.log(attemptLog.attemptLogMessage, attemptLog.layerIds);
+        const presentById = {};
+        plan.layerIds.forEach((layerId) => {
+            presentById[layerId] = !!map.getLayer(layerId);
+        });
+
+        const step = RS.buildBringRoutesToTopRetryStepApplyPlan(plan, retryCount, presentById);
+        console.log(step.attemptLog.attemptLogMessage, step.attemptLog.layerIds);
 
         try {
-            const presentById = {};
-            plan.layerIds.forEach((layerId) => {
-                presentById[layerId] = !!map.getLayer(layerId);
-            });
-
-            plan.layerIds.forEach((layerId) => {
-                const moveLog = RS.buildBringRoutesToTopLayerMoveLogPlan(
-                    layerId,
-                    plan.beforeId,
-                    presentById[layerId]
-                );
-                if (moveLog.found) {
-                    map.moveLayer(layerId, plan.beforeId);
-                    if (moveLog.movedLogMessage) console.log(moveLog.movedLogMessage);
-                } else if (moveLog.notFoundLogMessage) {
-                    console.log(moveLog.notFoundLogMessage);
+            step.layerMoves.forEach((spec) => {
+                if (spec.moveLog.found) {
+                    map.moveLayer(spec.layerId, plan.beforeId);
+                    if (spec.moveLog.movedLogMessage) console.log(spec.moveLog.movedLogMessage);
+                } else if (spec.moveLog.notFoundLogMessage) {
+                    console.log(spec.moveLog.notFoundLogMessage);
                 }
             });
 
-            const presence = RS.buildBringRoutesToTopLayerPresencePlan(plan.layerIds, presentById);
-            const outcome = RS.buildBringRoutesToTopRetryOutcomePlan({
-                allFound: presence.allFound,
-                retryCount,
-                maxRetries: plan.maxRetries,
-                retryDelayMs: plan.retryDelayMs,
-                ensureLabelsOnTopAfterSuccess: plan.ensureLabelsOnTopAfterSuccess,
-            });
-
+            const outcome = step.outcome;
             if (outcome.action === 'retry') {
                 setTimeout(() => moveLayersToTop(outcome.nextRetryCount), outcome.retryDelayMs);
             } else if (outcome.action === 'success') {
-                if (outcome.logSuccess && plan.successLogMessage) console.log(plan.successLogMessage);
+                if (outcome.logSuccess && step.successLogMessage) console.log(step.successLogMessage);
                 if (outcome.ensureLabelsOnTop) ensureLabelsOnTop();
-            } else if (outcome.logPartialFailure && plan.partialFailureLogMessage) {
-                console.warn(plan.partialFailureLogMessage);
+            } else if (outcome.logPartialFailure && step.partialFailureLogMessage) {
+                console.warn(step.partialFailureLogMessage);
             }
         } catch (e) {
-            const prefix = plan.errorLogPrefix || '[Routes] Error bringing routes to top:';
+            const prefix = step.errorLogPrefix || '[Routes] Error bringing routes to top:';
             console.warn(prefix, e);
         }
     };
 
-    const startup = RS.buildBringRoutesToTopStartupPlan({
+    const schedule = RS.buildBringRoutesToTopStartupScheduleApplyPlan(plan, {
         isStyleLoaded: map.isStyleLoaded(),
-        waitForIdleIfStyleNotLoaded: plan.waitForIdleIfStyleNotLoaded,
-        initialDelayMs: plan.initialDelayMs,
-        waitForIdleLogMessage: plan.waitForIdleLogMessage,
     });
-    if (startup.action === 'skip') return;
+    if (!schedule.shouldSchedule) return;
 
     setTimeout(() => {
-        if (startup.action === 'immediate') {
+        if (schedule.startup.action === 'immediate') {
             moveLayersToTop(0);
-        } else if (startup.action === 'wait_idle') {
-            if (startup.waitForIdleLogMessage) console.log(startup.waitForIdleLogMessage);
+        } else if (schedule.startup.action === 'wait_idle') {
+            if (schedule.startup.waitForIdleLogMessage) {
+                console.log(schedule.startup.waitForIdleLogMessage);
+            }
             map.once('idle', () => moveLayersToTop(0));
         }
-    }, startup.initialDelayMs);
+    }, schedule.startup.initialDelayMs);
 }
 
 /**
@@ -4220,7 +4206,9 @@ function loadMultiDropPreferences() {
 }
 
 function clearDepartureTime() {
-    applyClearDepartureTimeFromPlan(_settingsSnapshot().buildClearDepartureTimeApplyPlan());
+    applyClearDepartureTimeFromPlan(
+        _settingsSnapshot().buildClearDepartureTimeEntryOrchestrationPlan().apply
+    );
 }
 
 /**
@@ -4298,18 +4286,9 @@ function getRoutePreferences() {
     return _routePrefs().getRoutePreferences(localStorage);
 }
 
-/**
- * recalculateRouteWithPreferences function
- * @function recalculateRouteWithPreferences
- * @returns {*} Return value description
- */
-function recalculateRouteWithPreferences() {
-    const RS = _routeSelection();
-    const execute = RS.buildRecalculateRouteWithPreferencesExecutePlan(
-        RS.buildRecalculateRouteWithPreferencesPlan(window.lastCalculatedRoute)
-    );
-    if (!execute.shouldRecalculate) {
-        showStatus(execute.errorStatusMessage, 'error');
+function applyRecalculateRouteWithPreferencesFromPlan(execute) {
+    if (!execute || !execute.shouldRecalculate) {
+        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
@@ -4320,6 +4299,19 @@ function recalculateRouteWithPreferences() {
     setTimeout(() => {
         calculateRoute();
     }, execute.recalculateDelayMs);
+}
+
+/**
+ * recalculateRouteWithPreferences function
+ * @function recalculateRouteWithPreferences
+ * @returns {*} Return value description
+ */
+function recalculateRouteWithPreferences() {
+    applyRecalculateRouteWithPreferencesFromPlan(
+        _routeSelection().buildRecalculateRouteWithPreferencesEntryOrchestrationPlan(
+            window.lastCalculatedRoute
+        ).execute
+    );
 }
 
 // ===== ROUTE SAVING FUNCTIONS =====
@@ -7921,14 +7913,27 @@ let parkingDrivingRoute = null;
  * Collect parking preference values from settings form controls.
  * @returns {Object}
  */
+function collectParkingPreferencesDomInput() {
+    return {
+        maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value,
+        preferredType: document.getElementById('parkingPreferredType')?.value,
+        pricePreference: document.getElementById('parkingPricePreference')?.value,
+    };
+}
+
 function collectParkingPreferencesFormState() {
-    return _multimodalParking().buildParkingPreferencesCollectPlan(
-        _multimodalParking().buildCollectParkingPreferencesInputPlan({
-            maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value,
-            preferredType: document.getElementById('parkingPreferredType')?.value,
-            pricePreference: document.getElementById('parkingPricePreference')?.value,
-        })
+    const MP = _multimodalParking();
+    return MP.buildParkingPreferencesCollectPlan(
+        MP.buildCollectParkingPreferencesInputPlan(collectParkingPreferencesDomInput())
     );
+}
+
+function applySaveParkingPreferencesFromPlan(execute) {
+    if (!execute || !execute.shouldSave) return;
+
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.saveAllSettings) saveAllSettings();
+    console.log(execute.logMessage, execute.prefs);
 }
 
 /**
@@ -7938,12 +7943,17 @@ function collectParkingPreferencesFormState() {
  */
 function saveParkingPreferences() {
     const MP = _multimodalParking();
-    const prefs = collectParkingPreferencesFormState();
-    const execute = MP.buildSaveParkingPreferencesExecutePlan(prefs);
-    if (!execute.shouldSave) return;
+    applySaveParkingPreferencesFromPlan(
+        MP.buildSaveParkingPreferencesEntryOrchestrationPlan(
+            MP.buildCollectParkingPreferencesInputPlan(collectParkingPreferencesDomInput())
+        ).execute
+    );
+}
 
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.saveAllSettings) saveAllSettings();
+function applyLoadParkingPreferencesFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+
+    applyDomSelectsFromPlan(execute.domPlan.selects);
     console.log(execute.logMessage, execute.prefs);
 }
 
@@ -7954,19 +7964,16 @@ function saveParkingPreferences() {
  */
 function loadParkingPreferences() {
     const MP = _multimodalParking();
-    const orch = MP.buildLoadParkingPreferencesOrchestrationPlan();
+    const entry = MP.buildLoadParkingPreferencesEntryOrchestrationPlan();
     try {
-        const saved = localStorage.getItem(orch.storageKey);
+        const saved = localStorage.getItem(entry.orch.storageKey);
         if (!saved) return;
 
-        const prefs = JSON.parse(saved);
-        const execute = MP.buildLoadParkingPreferencesExecutePlan(prefs);
-        if (!execute.shouldApply) return;
-
-        applyDomSelectsFromPlan(execute.domPlan.selects);
-        console.log(execute.logMessage, execute.prefs);
+        applyLoadParkingPreferencesFromPlan(
+            MP.buildLoadParkingPreferencesResponseEntryOrchestrationPlan(JSON.parse(saved)).execute
+        );
     } catch (e) {
-        console.log(orch.errorLogPrefix, e);
+        console.log(entry.orch.errorLogPrefix, e);
     }
 }
 

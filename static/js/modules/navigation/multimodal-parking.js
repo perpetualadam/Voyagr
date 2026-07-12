@@ -503,6 +503,40 @@
     }
 
     /**
+     * Entry orchestration plan for saveParkingPreferences handler.
+     * @param {Object} input - from buildCollectParkingPreferencesInputPlan
+     * @returns {Object}
+     */
+    function buildSaveParkingPreferencesEntryOrchestrationPlan(input) {
+        var prefs = buildParkingPreferencesCollectPlan(buildCollectParkingPreferencesInputPlan(input));
+        return {
+            prefs: prefs,
+            execute: buildSaveParkingPreferencesExecutePlan(prefs),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadParkingPreferences handler.
+     * @returns {Object}
+     */
+    function buildLoadParkingPreferencesEntryOrchestrationPlan() {
+        return {
+            orch: buildLoadParkingPreferencesOrchestrationPlan(),
+        };
+    }
+
+    /**
+     * Entry orchestration plan after parking preferences are parsed from storage.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildLoadParkingPreferencesResponseEntryOrchestrationPlan(prefs) {
+        return {
+            execute: buildLoadParkingPreferencesExecutePlan(prefs),
+        };
+    }
+
+    /**
      * @returns {string}
      */
     function getParkingSelectLoadingMessage() {
@@ -560,8 +594,12 @@
         buildParkingPreferencesDomApplyPlan: buildParkingPreferencesDomApplyPlan,
         buildCollectParkingPreferencesInputPlan: buildCollectParkingPreferencesInputPlan,
         buildSaveParkingPreferencesExecutePlan: buildSaveParkingPreferencesExecutePlan,
+        buildSaveParkingPreferencesEntryOrchestrationPlan: buildSaveParkingPreferencesEntryOrchestrationPlan,
         buildLoadParkingPreferencesOrchestrationPlan: buildLoadParkingPreferencesOrchestrationPlan,
         buildLoadParkingPreferencesExecutePlan: buildLoadParkingPreferencesExecutePlan,
+        buildLoadParkingPreferencesEntryOrchestrationPlan: buildLoadParkingPreferencesEntryOrchestrationPlan,
+        buildLoadParkingPreferencesResponseEntryOrchestrationPlan:
+            buildLoadParkingPreferencesResponseEntryOrchestrationPlan,
         getParkingSelectLoadingMessage: getParkingSelectLoadingMessage,
         getParkingSelectSuccessMessage: getParkingSelectSuccessMessage,
         getParkingSelectNoStartMessage: getParkingSelectNoStartMessage,

@@ -3391,6 +3391,19 @@
     }
 
     /**
+     * Entry orchestration plan for recalculateRouteWithPreferences handler.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @returns {Object}
+     */
+    function buildRecalculateRouteWithPreferencesEntryOrchestrationPlan(lastCalculatedRoute) {
+        var plan = buildRecalculateRouteWithPreferencesPlan(lastCalculatedRoute);
+        return {
+            plan: plan,
+            execute: buildRecalculateRouteWithPreferencesExecutePlan(plan),
+        };
+    }
+
+    /**
      * Execute plan for startNavigation / startNavigationFromPreview UI side effects.
      * @param {Object|null|undefined} lastCalculatedRoute
      * @param {Object} [opts]
@@ -3876,6 +3889,66 @@
         return { action: 'skip' };
     }
 
+    /**
+     * Apply plan bundling one bringRoutesToTop retry step.
+     * @param {Object} executePlan - from buildBringRoutesToTopExecutePlan
+     * @param {number} retryCount
+     * @param {Object} presentById
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopRetryStepApplyPlan(executePlan, retryCount, presentById) {
+        executePlan = executePlan || {};
+        presentById = presentById || {};
+        var layerIds = executePlan.layerIds || [];
+        var presence = buildBringRoutesToTopLayerPresencePlan(layerIds, presentById);
+        return {
+            shouldAttempt: true,
+            attemptLog: buildBringRoutesToTopAttemptLogPlan(retryCount, layerIds),
+            layerMoves: layerIds.map(function (layerId) {
+                return {
+                    layerId: layerId,
+                    moveLog: buildBringRoutesToTopLayerMoveLogPlan(
+                        layerId,
+                        executePlan.beforeId,
+                        !!presentById[layerId]
+                    ),
+                };
+            }),
+            outcome: buildBringRoutesToTopRetryOutcomePlan({
+                allFound: presence.allFound,
+                retryCount: retryCount,
+                maxRetries: executePlan.maxRetries,
+                retryDelayMs: executePlan.retryDelayMs,
+                ensureLabelsOnTopAfterSuccess: executePlan.ensureLabelsOnTopAfterSuccess,
+            }),
+            successLogMessage: executePlan.successLogMessage,
+            partialFailureLogMessage: executePlan.partialFailureLogMessage,
+            errorLogPrefix: executePlan.errorLogPrefix,
+        };
+    }
+
+    /**
+     * Apply plan for scheduling bringRoutesToTop startup.
+     * @param {Object} executePlan - from buildBringRoutesToTopExecutePlan
+     * @param {Object} [opts]
+     * @param {boolean} [opts.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopStartupScheduleApplyPlan(executePlan, opts) {
+        executePlan = executePlan || {};
+        opts = opts || {};
+        var startup = buildBringRoutesToTopStartupPlan({
+            isStyleLoaded: !!opts.isStyleLoaded,
+            waitForIdleIfStyleNotLoaded: executePlan.waitForIdleIfStyleNotLoaded,
+            initialDelayMs: executePlan.initialDelayMs,
+            waitForIdleLogMessage: executePlan.waitForIdleLogMessage,
+        });
+        return {
+            shouldSchedule: startup.action !== 'skip',
+            startup: startup,
+        };
+    }
+
     var ENSURE_LABELS_ON_TOP_DEBOUNCE_MS = 50;
 
     /**
@@ -4336,6 +4409,8 @@
         buildCalculateRouteIdleUiOrchestrationPlan: buildCalculateRouteIdleUiOrchestrationPlan,
         buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
         buildRecalculateRouteWithPreferencesExecutePlan: buildRecalculateRouteWithPreferencesExecutePlan,
+        buildRecalculateRouteWithPreferencesEntryOrchestrationPlan:
+            buildRecalculateRouteWithPreferencesEntryOrchestrationPlan,
         buildStartNavigationExecutePlan: buildStartNavigationExecutePlan,
         buildStartNavigationOrchestrationPlan: buildStartNavigationOrchestrationPlan,
         buildStartNavigationApplyPlan: buildStartNavigationApplyPlan,
@@ -4385,6 +4460,8 @@
         buildBringRoutesToTopLayerPresencePlan: buildBringRoutesToTopLayerPresencePlan,
         buildBringRoutesToTopRetryOutcomePlan: buildBringRoutesToTopRetryOutcomePlan,
         buildBringRoutesToTopStartupPlan: buildBringRoutesToTopStartupPlan,
+        buildBringRoutesToTopRetryStepApplyPlan: buildBringRoutesToTopRetryStepApplyPlan,
+        buildBringRoutesToTopStartupScheduleApplyPlan: buildBringRoutesToTopStartupScheduleApplyPlan,
         buildEnsureLabelsOnTopOrchestrationPlan: buildEnsureLabelsOnTopOrchestrationPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
         buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,

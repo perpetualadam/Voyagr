@@ -369,6 +369,12 @@ describe('settings-snapshot module', () => {
         expect(plan.statusType).toBe('info');
     });
 
+    test('buildClearDepartureTimeEntryOrchestrationPlan bundles apply plan', () => {
+        const entry = SS.buildClearDepartureTimeEntryOrchestrationPlan();
+        expect(entry.apply.elementId).toBe('departureTime');
+        expect(entry.apply.removeStorageKey).toBe('pref_departureTime');
+    });
+
     test('buildSettingsExportPlan builds download metadata from stored snapshot', () => {
         const raw = JSON.stringify({ unit_distance: 'km', vehicleType: 'petrol' });
         const plan = SS.buildSettingsExportPlan(raw, '2026-07-11');
