@@ -341,6 +341,22 @@
     }
 
     /**
+     * Apply plan for refreshing the route comparison tab list panel.
+     * @param {Object} [orch] - from buildDisplayRouteComparisonOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildDisplayRouteComparisonApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldDisplay) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            domPlan: orch.domPlan,
+        };
+    }
+
+    /**
      * Orchestration plan for selecting a route from the comparison list.
      * @param {number} index
      * @param {Array<Object>} routeOptions
@@ -767,16 +783,51 @@
                 selectedRouteIndex: dispatch.selectedRouteIndex,
             };
         }
+        var preview = buildSelectRoutePreviewPayloadPlan(
+            routeOptions,
+            index,
+            lastRouteApiResponse
+        );
         return {
             shouldSelect: true,
             selectedRouteIndex: dispatch.selectedRouteIndex,
             dispatch: dispatch,
-            preview: buildSelectRoutePreviewPayloadPlan(
-                routeOptions,
-                index,
-                lastRouteApiResponse
-            ),
+            preview: preview,
             selectedRoute: routeOptions[index],
+            apply: buildSelectRouteApplyPlan({
+                shouldSelect: true,
+                selectedRouteIndex: dispatch.selectedRouteIndex,
+                dispatch: dispatch,
+                selectedRoute: routeOptions[index],
+                preview: preview,
+            }),
+        };
+    }
+
+    /**
+     * Apply plan for selecting an alternative route.
+     * @param {Object} [orch] - from buildSelectRouteOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildSelectRouteApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldSelect) {
+            return { shouldApply: false };
+        }
+        var dispatch = orch.dispatch || {};
+        return {
+            shouldApply: true,
+            selectedRouteIndex: orch.selectedRouteIndex,
+            displaySingleRoute: !!dispatch.displaySingleRoute,
+            displayRouteComparison: !!dispatch.displayRouteComparison,
+            syncLastCalculatedRoute: !!dispatch.syncLastCalculatedRoute,
+            updateTripInfo: !!dispatch.updateTripInfo,
+            showRoutePreview: !!dispatch.showRoutePreview,
+            logPrefix: dispatch.logPrefix,
+            routeName: dispatch.routeName,
+            maneuverCount: dispatch.maneuverCount,
+            selectedRoute: orch.selectedRoute,
+            preview: orch.preview,
         };
     }
 
@@ -3616,6 +3667,7 @@
         buildRouteComparisonListHtml: buildRouteComparisonListHtml,
         buildRouteComparisonListDomApplyPlan: buildRouteComparisonListDomApplyPlan,
         buildDisplayRouteComparisonOrchestrationPlan: buildDisplayRouteComparisonOrchestrationPlan,
+        buildDisplayRouteComparisonApplyPlan: buildDisplayRouteComparisonApplyPlan,
         buildUseRouteOrchestrationPlan: buildUseRouteOrchestrationPlan,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
         buildRouteComparisonTableRowHtml: buildRouteComparisonTableRowHtml,
@@ -3637,6 +3689,7 @@
         buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
         buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
         buildSelectRouteOrchestrationPlan: buildSelectRouteOrchestrationPlan,
+        buildSelectRouteApplyPlan: buildSelectRouteApplyPlan,
         buildDisplaySingleRouteOrchestrationPlan: buildDisplaySingleRouteOrchestrationPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,

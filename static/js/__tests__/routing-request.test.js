@@ -608,6 +608,17 @@ describe('buildCalculateRouteResponseExecutePlan', () => {
         expect(plan.branch).toBe('error');
         expect(plan.statusMessage).toBe('Error: bad coords');
     });
+
+    test('buildCalculateRouteResponseApplyPlan wraps execute plan for apply helper', () => {
+        const execute = RR.buildCalculateRouteResponseExecutePlan(
+            { success: true, source: 'valhalla' },
+            true
+        );
+        const apply = RR.buildCalculateRouteResponseApplyPlan(execute);
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.branch).toBe('in_nav_reroute');
+        expect(apply.inNavRerouteLogMessage).toContain('in-nav reroute');
+    });
 });
 
 describe('buildAutomaticRerouteRequestPlan', () => {

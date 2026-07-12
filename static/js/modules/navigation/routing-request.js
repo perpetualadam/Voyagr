@@ -875,6 +875,28 @@
         };
     }
 
+    /**
+     * Apply plan for branching calculateRoute API response handling.
+     * @param {Object} [execute] - from buildCalculateRouteResponseExecutePlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteResponseApplyPlan(execute) {
+        execute = execute || {};
+        return {
+            shouldApply: true,
+            responseLogPrefix: execute.responseLogPrefix,
+            responseLogMeta: execute.responseLogMeta,
+            degradedLogPrefix: execute.degradedLogPrefix,
+            degradedLogWarning: execute.degradedLogWarning,
+            degradedStatusMessage: execute.degradedStatusMessage,
+            branch: execute.branch,
+            hideRouteProgressBar: !!execute.hideRouteProgressBar,
+            statusMessage: execute.statusMessage,
+            statusType: execute.statusType,
+            inNavRerouteLogMessage: execute.inNavRerouteLogMessage,
+        };
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -915,6 +937,7 @@
         buildCalculateRoutePreflightExecutePlan: buildCalculateRoutePreflightExecutePlan,
         buildCalculateRouteApiRequestLogPlan: buildCalculateRouteApiRequestLogPlan,
         buildCalculateRouteResponseExecutePlan: buildCalculateRouteResponseExecutePlan,
+        buildCalculateRouteResponseApplyPlan: buildCalculateRouteResponseApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

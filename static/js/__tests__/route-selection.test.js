@@ -523,6 +523,21 @@ describe('route comparison modal helpers', () => {
         expect(orch.domPlan.innerHtml).toContain('Show All 1 Routes');
     });
 
+    test('buildDisplayRouteComparisonApplyPlan wraps orchestration dom plan', () => {
+        const orch = RS.buildDisplayRouteComparisonOrchestrationPlan({
+            routes: [{ distance_km: 5, duration_minutes: 10 }],
+            selectedRouteIndex: 0,
+            routeColors: ['#00f'],
+            currencySymbol: '$',
+            distUnit: 'km',
+            distanceTexts: ['5.0'],
+        });
+        const apply = RS.buildDisplayRouteComparisonApplyPlan(orch);
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.domPlan.containerId).toBe('routeComparisonList');
+        expect(RS.buildDisplayRouteComparisonApplyPlan({ shouldDisplay: false }).shouldApply).toBe(false);
+    });
+
     test('buildUseRouteOrchestrationPlan gates invalid index and previews traffic when enabled', () => {
         expect(RS.buildUseRouteOrchestrationPlan(0, [], {}).shouldUse).toBe(false);
 
@@ -1051,8 +1066,33 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(orch.shouldSelect).toBe(true);
         expect(orch.dispatch.routeName).toBe('Fastest');
         expect(orch.preview.shouldPreview).toBe(true);
+        expect(orch.apply.shouldApply).toBe(true);
+        expect(orch.apply.displaySingleRoute).toBe(true);
         expect(RS.buildSelectRouteOrchestrationPlan(2, [{ name: 'A' }], null).shouldSelect)
             .toBe(false);
+    });
+
+    test('buildSelectRouteApplyPlan maps dispatch flags', () => {
+        const apply = RS.buildSelectRouteApplyPlan({
+            shouldSelect: true,
+            selectedRouteIndex: 1,
+            dispatch: {
+                displaySingleRoute: true,
+                displayRouteComparison: true,
+                syncLastCalculatedRoute: true,
+                updateTripInfo: true,
+                showRoutePreview: true,
+                logPrefix: '[Routes] Selected route',
+                routeName: 'Scenic',
+                maneuverCount: 4,
+            },
+            selectedRoute: { name: 'Scenic' },
+            preview: { shouldPreview: true, previewPayload: { routes: [] } },
+        });
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.routeName).toBe('Scenic');
+        expect(apply.preview.shouldPreview).toBe(true);
+        expect(RS.buildSelectRouteApplyPlan({ shouldSelect: false }).shouldApply).toBe(false);
     });
 
     test('buildDisplaySingleRouteOrchestrationPlan wraps execute and pre-clear', () => {

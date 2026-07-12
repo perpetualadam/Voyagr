@@ -330,6 +330,7 @@
         return {
             lat: lat,
             lon: lon,
+            shouldApply: true,
             viaPoint: add.viaPoint,
             markerMount: {
                 className: add.marker.className,
@@ -438,9 +439,56 @@
      */
     function buildRouteEditEnableOrchestrationPlan(routePath) {
         var markerPlan = buildRouteEditMarkersPlan(routePath);
+        var execute = buildRouteEditEnableExecutePlan(markerPlan);
         return {
             markerPlan: markerPlan,
-            execute: buildRouteEditEnableExecutePlan(markerPlan),
+            execute: execute,
+            runtimeApply: buildRouteEditEnableRuntimeApplyPlan(execute),
+        };
+    }
+
+    /**
+     * Runtime apply plan for enabling route editing markers.
+     * @param {Object} [execute] - from buildRouteEditEnableExecutePlan
+     * @returns {Object}
+     */
+    function buildRouteEditEnableRuntimeApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldEnable) {
+            return {
+                shouldApply: false,
+                errorStatusMessage: execute.errorStatusMessage,
+                statusType: execute.statusType,
+            };
+        }
+        return {
+            shouldApply: true,
+            routeEditingEnabled: true,
+            clearMarkersBeforeMount: true,
+            markers: execute.markers || [],
+            statusMessage: execute.statusMessage,
+            statusType: execute.statusType,
+            addedLogPrefix: execute.addedLogPrefix,
+            addedLogSuffix: execute.addedLogSuffix,
+        };
+    }
+
+    /**
+     * Apply plan when toggling route editing off.
+     * @param {Object} [orch] - from buildToggleRouteEditingOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildToggleRouteEditingDisableApplyPlan(orch) {
+        orch = orch || {};
+        if (orch.action !== 'disable') {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            clearRouteDragMarkers: !!orch.clearRouteDragMarkers,
+            disableRouteEditing: !!orch.disableRouteEditing,
+            statusMessage: orch.statusMessage,
+            statusType: orch.statusType,
         };
     }
 
@@ -1670,7 +1718,9 @@
         buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
         buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,
         buildRouteEditEnableExecutePlan: buildRouteEditEnableExecutePlan,
+        buildRouteEditEnableRuntimeApplyPlan: buildRouteEditEnableRuntimeApplyPlan,
         buildRouteEditEnableOrchestrationPlan: buildRouteEditEnableOrchestrationPlan,
+        buildToggleRouteEditingDisableApplyPlan: buildToggleRouteEditingDisableApplyPlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
         buildRouteDragMarkerApplyPlan: buildRouteDragMarkerApplyPlan,
         buildRouteDragMarkerEntryOrchestrationPlan: buildRouteDragMarkerEntryOrchestrationPlan,

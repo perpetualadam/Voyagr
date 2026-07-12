@@ -182,10 +182,43 @@ describe('waypoints module', () => {
     });
 
     test('buildRouteEditEnableOrchestrationPlan wraps marker and execute plans', () => {
-        const orch = W.buildRouteEditEnableOrchestrationPlan([[51.5, -0.1], [51.6, -0.2], [51.7, -0.3]]);
+        const routePath = [];
+        for (let i = 0; i < 60; i += 1) {
+            routePath.push([51.5 + i * 0.001, -0.1 + i * 0.001]);
+        }
+        const orch = W.buildRouteEditEnableOrchestrationPlan(routePath);
         expect(orch.execute.shouldEnable).toBe(true);
         expect(orch.markerPlan.valid).toBe(true);
+        expect(orch.runtimeApply.shouldApply).toBe(true);
+        expect(orch.runtimeApply.markers.length).toBeGreaterThan(0);
         expect(W.buildRouteEditEnableOrchestrationPlan([]).execute.shouldEnable).toBe(false);
+    });
+
+    test('buildRouteEditEnableRuntimeApplyPlan and disable apply plan', () => {
+        const runtime = W.buildRouteEditEnableRuntimeApplyPlan({
+            shouldEnable: true,
+            markers: [{ lat: 1, lon: 2, routeIndex: 0 }],
+            statusMessage: 'ok',
+            statusType: 'info',
+            addedLogPrefix: 'Added ',
+            addedLogSuffix: ' markers',
+        });
+        expect(runtime.shouldApply).toBe(true);
+        expect(runtime.clearMarkersBeforeMount).toBe(true);
+
+        const disable = W.buildToggleRouteEditingDisableApplyPlan({
+            action: 'disable',
+            clearRouteDragMarkers: true,
+            statusMessage: 'disabled',
+            statusType: 'info',
+        });
+        expect(disable.shouldApply).toBe(true);
+        expect(W.buildToggleRouteEditingDisableApplyPlan({ action: 'enable' }).shouldApply).toBe(false);
+    });
+
+    test('buildDraggedViaPointApplyPlan includes shouldApply flag', () => {
+        const apply = W.buildDraggedViaPointApplyPlan(51.5, -0.1, 0);
+        expect(apply.shouldApply).toBe(true);
     });
 
     test('buildViaPointAddPlan prepares marker label and status', () => {

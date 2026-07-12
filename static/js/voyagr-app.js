@@ -2740,23 +2740,28 @@ let routeEditingEnabled = false;
 /**
  * Enable route editing by adding draggable waypoints along the route
  */
-function enableRouteEditing() {
-    const orch = _waypoints().buildRouteEditEnableOrchestrationPlan(routePath);
-    const execute = orch.execute;
-    if (!execute.shouldEnable) {
-        showStatus(execute.errorStatusMessage, execute.statusType);
+function applyRouteEditEnableFromPlan(runtimeApply) {
+    if (!runtimeApply || !runtimeApply.shouldApply) {
+        if (runtimeApply && runtimeApply.errorStatusMessage) {
+            showStatus(runtimeApply.errorStatusMessage, runtimeApply.statusType);
+        }
         return;
     }
 
-    routeEditingEnabled = true;
-    clearRouteDragMarkers();
+    routeEditingEnabled = runtimeApply.routeEditingEnabled;
+    if (runtimeApply.clearMarkersBeforeMount) clearRouteDragMarkers();
 
-    execute.markers.forEach((markerPlan) => {
+    (runtimeApply.markers || []).forEach((markerPlan) => {
         addRouteDragMarker(markerPlan.lat, markerPlan.lon, markerPlan.routeIndex);
     });
 
-    showStatus(execute.statusMessage, execute.statusType);
-    console.log(execute.addedLogPrefix + routeDragMarkers.length + execute.addedLogSuffix);
+    showStatus(runtimeApply.statusMessage, runtimeApply.statusType);
+    console.log(runtimeApply.addedLogPrefix + routeDragMarkers.length + runtimeApply.addedLogSuffix);
+}
+
+function enableRouteEditing() {
+    const orch = _waypoints().buildRouteEditEnableOrchestrationPlan(routePath);
+    applyRouteEditEnableFromPlan(orch.runtimeApply);
 }
 
 /**
@@ -2807,8 +2812,9 @@ function addRouteDragMarker(lat, lon, routeIndex) {
 /**
  * Add a via-point from route dragging and recalculate
  */
-async function addDraggedViaPoint(lat, lon) {
-    const apply = _waypoints().buildDraggedViaPointOrchestrationPlan(lat, lon, viaPoints.length).apply;
+async function applyDraggedViaPointFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
     viaPoints.push(apply.viaPoint);
 
     const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
@@ -2824,6 +2830,12 @@ async function addDraggedViaPoint(lat, lon) {
     if (apply.clearRouteDragMarkers) clearRouteDragMarkers();
     showStatus(apply.statusMessage, apply.statusType);
     if (apply.recalculateRoute) await calculateRoute();
+}
+
+async function addDraggedViaPoint(lat, lon) {
+    await applyDraggedViaPointFromPlan(
+        _waypoints().buildDraggedViaPointOrchestrationPlan(lat, lon, viaPoints.length).apply
+    );
 }
 
 /**
@@ -2855,6 +2867,14 @@ function applyRouteEditingToggleDomFromPlan(domPlan) {
     btn.textContent = domPlan.text;
 }
 
+function applyToggleRouteEditingDisableFromPlan(disableApply) {
+    if (!disableApply || !disableApply.shouldApply) return;
+
+    if (disableApply.clearRouteDragMarkers) clearRouteDragMarkers();
+    else if (disableApply.disableRouteEditing) routeEditingEnabled = false;
+    showStatus(disableApply.statusMessage, disableApply.statusType);
+}
+
 function toggleRouteEditing() {
     const WP = _waypoints();
     const orch = WP.buildToggleRouteEditingOrchestrationPlan({
@@ -2862,9 +2882,7 @@ function toggleRouteEditing() {
     });
 
     if (orch.action === 'disable') {
-        if (orch.clearRouteDragMarkers) clearRouteDragMarkers();
-        else if (orch.disableRouteEditing) routeEditingEnabled = false;
-        showStatus(orch.statusMessage, orch.statusType);
+        applyToggleRouteEditingDisableFromPlan(WP.buildToggleRouteEditingDisableApplyPlan(orch));
     } else {
         enableRouteEditing();
     }
@@ -2885,6 +2903,11 @@ function applyRouteComparisonListDomFromPlan(domPlan) {
     listContainer.innerHTML = domPlan.innerHtml;
 }
 
+function applyDisplayRouteComparisonFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+    applyRouteComparisonListDomFromPlan(apply.domPlan);
+}
+
 /**
  * displayRouteComparison function - Shows distinct route types with hazard counts
  * @function displayRouteComparison
@@ -2901,8 +2924,7 @@ function displayRouteComparison() {
         distUnit: getDistanceUnit(),
         distanceTexts: routes.map((route) => convertDistance(route.distance_km)),
     });
-    if (!orch.shouldDisplay) return;
-    applyRouteComparisonListDomFromPlan(orch.domPlan);
+    applyDisplayRouteComparisonFromPlan(RS.buildDisplayRouteComparisonApplyPlan(orch));
 }
 
 // ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
@@ -3365,35 +3387,38 @@ function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
     );
 }
 
+function applySelectRouteFromPlan(apply, index) {
+    if (!apply || !apply.shouldApply) return;
+
+    selectedRouteIndex = apply.selectedRouteIndex;
+
+    if (apply.displaySingleRoute) displaySingleRoute(index);
+    if (apply.displayRouteComparison) displayRouteComparison();
+
+    if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
+    console.log(
+        `${apply.logPrefix} "${apply.routeName}" with ${apply.maneuverCount} maneuvers`
+    );
+
+    if (apply.updateTripInfo) updateTripInfoFromRouteOption(apply.selectedRoute);
+
+    if (apply.showRoutePreview && apply.preview && apply.preview.shouldPreview) {
+        showRoutePreview(apply.preview.previewPayload, true);
+    }
+}
+
 /**
  * selectRoute function - shows only the selected route and hides others
  * @function selectRoute
  * @param {number} index - Route index to select
  */
 function selectRoute(index) {
-    const RS = _routeSelection();
-    const orch = RS.buildSelectRouteOrchestrationPlan(
+    const orch = _routeSelection().buildSelectRouteOrchestrationPlan(
         index,
         routeOptions,
         window.lastRouteApiResponse
     );
-    if (!orch.shouldSelect) return;
-
-    selectedRouteIndex = orch.selectedRouteIndex;
-
-    if (orch.dispatch.displaySingleRoute) displaySingleRoute(index);
-    if (orch.dispatch.displayRouteComparison) displayRouteComparison();
-
-    syncLastCalculatedRouteFromSelection(index);
-    console.log(
-        `${orch.dispatch.logPrefix} "${orch.dispatch.routeName}" with ${orch.dispatch.maneuverCount} maneuvers`
-    );
-
-    updateTripInfoFromRouteOption(orch.selectedRoute);
-
-    if (orch.preview.shouldPreview) {
-        showRoutePreview(orch.preview.previewPayload, true);
-    }
+    applySelectRouteFromPlan(orch.apply, index);
 }
 
 /**
@@ -4652,6 +4677,37 @@ function applyCalculateRouteIdlePreviewOutcome(data, labels) {
     }
 }
 
+function applyCalculateRouteResponseFromPlan(apply, data, labels) {
+    if (!apply || !apply.shouldApply) return;
+
+    console.log(apply.responseLogPrefix, apply.responseLogMeta);
+
+    if (apply.degradedLogWarning) {
+        console.warn(
+            apply.degradedLogPrefix,
+            apply.degradedLogWarning.warning,
+            apply.degradedLogWarning.engines
+        );
+    }
+    if (apply.degradedStatusMessage) {
+        showStatus(apply.degradedStatusMessage, 'warning');
+    }
+
+    if (apply.branch === 'error') {
+        showStatus(apply.statusMessage, apply.statusType);
+        if (apply.hideRouteProgressBar) hideRouteProgressBar();
+        return;
+    }
+
+    if (apply.branch === 'in_nav_reroute') {
+        if (apply.inNavRerouteLogMessage) console.log(apply.inNavRerouteLogMessage);
+        applyCalculateRouteInNavRerouteOutcome(data, labels.geocodedEnd, labels.end);
+        return;
+    }
+
+    applyCalculateRouteIdlePreviewOutcome(data, labels);
+}
+
 async function calculateRoute() {
     const RR = _routingRequest();
     const startInput = document.getElementById('start');
@@ -4749,33 +4805,14 @@ async function calculateRoute() {
             return response.json();
         })
         .then(data => {
-            const responsePlan = RR.buildCalculateRouteResponseExecutePlan(data, routeInProgress);
-            console.log(responsePlan.responseLogPrefix, responsePlan.responseLogMeta);
-
-            if (responsePlan.degradedLogWarning) {
-                console.warn(
-                    responsePlan.degradedLogPrefix,
-                    responsePlan.degradedLogWarning.warning,
-                    responsePlan.degradedLogWarning.engines
-                );
-            }
-            if (responsePlan.degradedStatusMessage) {
-                showStatus(responsePlan.degradedStatusMessage, 'warning');
-            }
-
-            if (responsePlan.branch === 'error') {
-                showStatus(responsePlan.statusMessage, responsePlan.statusType);
-                hideRouteProgressBar();
-                return;
-            }
-
-            if (responsePlan.branch === 'in_nav_reroute') {
-                console.log(responsePlan.inNavRerouteLogMessage);
-                applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end);
-                return;
-            }
-
-            applyCalculateRouteIdlePreviewOutcome(data, { geocodedStart, geocodedEnd, start, end });
+            const RR = _routingRequest();
+            applyCalculateRouteResponseFromPlan(
+                RR.buildCalculateRouteResponseApplyPlan(
+                    RR.buildCalculateRouteResponseExecutePlan(data, routeInProgress)
+                ),
+                data,
+                { geocodedStart, geocodedEnd, start, end }
+            );
         })
         .catch(error => {
             const errApply = RR.buildCalculateRouteFetchErrorApplyPlan(error);
