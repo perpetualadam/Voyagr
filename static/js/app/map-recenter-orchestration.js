@@ -7,6 +7,19 @@
 
     var runtime = null;
 
+    var zoomAndFollowEnabled = (typeof VoyagrMapControls !== 'undefined'
+        && typeof VoyagrMapControls.resolveZoomAndFollowEnabledFromStorage === 'function')
+        ? VoyagrMapControls.resolveZoomAndFollowEnabledFromStorage(
+            localStorage.getItem('zoomAndFollowEnabled')
+        )
+        : (localStorage.getItem('zoomAndFollowEnabled') !== 'false');
+    var mapFollowingActive = false;
+
+    function getZoomAndFollowEnabled() { return zoomAndFollowEnabled; }
+    function setZoomAndFollowEnabled(val) { zoomAndFollowEnabled = !!val; }
+    function getMapFollowingActive() { return mapFollowingActive; }
+    function setMapFollowingActive(val) { mapFollowingActive = !!val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[MapRecenter] Orchestration runtime not bound');
@@ -43,8 +56,8 @@
             routeInProgress: rt().getRouteInProgress(),
             isTrackingActive: rt().getIsTrackingActive(),
             journeyOverviewActive: rt().getJourneyOverviewActive(),
-            zoomAndFollowEnabled: rt().getZoomAndFollowEnabled(),
-            mapFollowingActive: rt().getMapFollowingActive(),
+            zoomAndFollowEnabled: getZoomAndFollowEnabled(),
+            mapFollowingActive: getMapFollowingActive(),
             distanceFromCenterM: metersMapCenterFromVehicle(),
             minDistanceM: MC.RECENTER_MIN_DISTANCE_M,
         });
@@ -66,10 +79,10 @@
     function toggleZoomAndFollow() {
         var MC = rt().mapControls();
         var orch = MC.buildToggleZoomAndFollowOrchestrationPlan({
-            currentEnabled: rt().getZoomAndFollowEnabled(),
+            currentEnabled: getZoomAndFollowEnabled(),
         });
-        rt().setZoomAndFollowEnabled(orch.nextEnabled);
-        applyZoomFollowButtonUi(document.getElementById(orch.toggleButtonId), rt().getZoomAndFollowEnabled());
+        setZoomAndFollowEnabled(orch.nextEnabled);
+        applyZoomFollowButtonUi(document.getElementById(orch.toggleButtonId), getZoomAndFollowEnabled());
         localStorage.setItem(orch.storageKey, orch.storageValue);
 
         var map = rt().getMap();
@@ -79,7 +92,7 @@
                 currentLat: rt().getCurrentLat(),
                 currentLon: rt().getCurrentLon(),
             });
-            rt().setMapFollowingActive(execute.mapFollowingActive);
+            setMapFollowingActive(execute.mapFollowingActive);
             rt().call.showStatus(execute.statusMessage, execute.statusType);
             console.log(execute.logMessage);
             if (execute.flyTo && map) {
@@ -87,7 +100,7 @@
             }
         } else {
             var disabled = MC.buildToggleZoomAndFollowDisabledExecutePlan();
-            rt().setMapFollowingActive(disabled.mapFollowingActive);
+            setMapFollowingActive(disabled.mapFollowingActive);
             rt().call.showStatus(disabled.statusMessage, disabled.statusType);
             console.log(disabled.logMessage);
         }
@@ -122,7 +135,7 @@
 
         var map = rt().getMap();
         if (preflight.routeInProgress) {
-            rt().setMapFollowingActive(true);
+            setMapFollowingActive(true);
             var currentUserMarker = rt().getCurrentUserMarker();
             var speedMps = currentUserMarker && Number.isFinite(currentUserMarker.speed)
                 ? currentUserMarker.speed
@@ -173,7 +186,7 @@
                 lon: lon,
                 currentZoom: map.getZoom(),
             });
-            rt().setMapFollowingActive(tracking.mapFollowingActive);
+            setMapFollowingActive(tracking.mapFollowingActive);
             map.easeTo(tracking.easeTo);
             rt().call.showStatus(tracking.statusMessage, tracking.statusType);
         }
@@ -187,6 +200,10 @@
 
     var api = {
         bind: bind,
+        getZoomAndFollowEnabled: getZoomAndFollowEnabled,
+        setZoomAndFollowEnabled: setZoomAndFollowEnabled,
+        getMapFollowingActive: getMapFollowingActive,
+        setMapFollowingActive: setMapFollowingActive,
         applyZoomFollowButtonUi: applyZoomFollowButtonUi,
         toggleZoomAndFollow: toggleZoomAndFollow,
         updateRecenterButtonVisibility: updateRecenterButtonVisibility,

@@ -76,10 +76,7 @@ function getFuelEfficiencyLabel() { return VoyagrUnitsPreferencesOrchestration.g
 
 // ===== NAVIGATION VARIABLES =====
 // Smart zoom state lives in static/js/app/smart-zoom-orchestration.js (bound at file end).
-// Navigation tracking state (global)
-// These are now initialized in voyagr-core.js to prevent redeclaration errors
-// let zoomAndFollowEnabled = ...;
-// let mapFollowingActive = ...;
+// Zoom/follow state lives in static/js/app/map-recenter-orchestration.js (bound at file end).
 
 // ===== DARK MODE ORCHESTRATION =====
 // Orchestration lives in static/js/app/dark-mode-orchestration.js (bound at file end).
@@ -1300,8 +1297,8 @@ function getGpsOrchestrationRuntime() {
             case 'gpsWatchId': return VoyagrGpsOrchestration.getGpsWatchId();
             case 'currentUserMarker': return VoyagrGpsOrchestration.getCurrentUserMarker();
             case 'trackingHistory': return VoyagrGpsOrchestration.getTrackingHistory();
-            case 'zoomAndFollowEnabled': return zoomAndFollowEnabled;
-            case 'mapFollowingActive': return mapFollowingActive;
+            case 'zoomAndFollowEnabled': return VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled();
+            case 'mapFollowingActive': return VoyagrMapRecenterOrchestration.getMapFollowingActive();
             case 'driverPerspectiveEnabled': return VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled();
             case '_snapBlendWeightState': return VoyagrGpsOrchestration.getSnapBlendWeightState();
             case '_smoothDisplayLat': return VoyagrGpsOrchestration.getSmoothDisplayLat();
@@ -1366,8 +1363,8 @@ function getGpsOrchestrationRuntime() {
             case 'gpsWatchId': VoyagrGpsOrchestration.setGpsWatchId(val); break;
             case 'currentUserMarker': VoyagrGpsOrchestration.setCurrentUserMarker(val); break;
             case 'trackingHistory': VoyagrGpsOrchestration.setTrackingHistory(val); break;
-            case 'zoomAndFollowEnabled': zoomAndFollowEnabled = val; break;
-            case 'mapFollowingActive': mapFollowingActive = val; break;
+            case 'zoomAndFollowEnabled': VoyagrMapRecenterOrchestration.setZoomAndFollowEnabled(val); break;
+            case 'mapFollowingActive': VoyagrMapRecenterOrchestration.setMapFollowingActive(val); break;
             case 'driverPerspectiveEnabled': VoyagrDriverCameraOrchestration.setDriverPerspectiveEnabled(val); break;
             case '_snapBlendWeightState': VoyagrGpsOrchestration.setSnapBlendWeightState(val); break;
             case '_smoothDisplayLat': VoyagrGpsOrchestration.setSmoothDisplayLat(val); break;
@@ -1746,10 +1743,10 @@ function getMapRecenterOrchestrationRuntime() {
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getJourneyOverviewActive: () => VoyagrJourneyOverviewOrchestration.getJourneyOverviewActive(),
-        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
-        setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
-        getMapFollowingActive: () => mapFollowingActive,
-        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        setZoomAndFollowEnabled: (val) => VoyagrMapRecenterOrchestration.setZoomAndFollowEnabled(val),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
+        setMapFollowingActive: (val) => VoyagrMapRecenterOrchestration.setMapFollowingActive(val),
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         getZoomLevels: () => ZOOM_LEVELS,
         getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
@@ -1783,9 +1780,9 @@ function getJourneyOverviewOrchestrationRuntime() {
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
-        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
-        getMapFollowingActive: () => mapFollowingActive,
-        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
+        setMapFollowingActive: (val) => VoyagrMapRecenterOrchestration.setMapFollowingActive(val),
         call: {
             showStatus,
             updateRecenterButtonVisibility,
@@ -1847,8 +1844,8 @@ function getSmartZoomOrchestrationRuntime() {
         getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
         getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
         getMap: () => map,
-        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
-        getMapFollowingActive: () => mapFollowingActive,
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
@@ -2113,8 +2110,8 @@ function getDriverCameraOrchestrationRuntime() {
         toggleUI: () => _toggleUI(),
         getMap: () => map,
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
-        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
-        getMapFollowingActive: () => mapFollowingActive,
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
         getDriverPerspectiveEnabled: () => VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled(),
         setDriverPerspectiveEnabled: (val) => VoyagrDriverCameraOrchestration.setDriverPerspectiveEnabled(val),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
@@ -2217,8 +2214,8 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
         getMap: () => map,
-        getMapFollowingActive: () => mapFollowingActive,
-        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
+        setMapFollowingActive: (val) => VoyagrMapRecenterOrchestration.setMapFollowingActive(val),
         call: {
             detectUpcomingTurn: (lat, lon) => VoyagrTurnInstructionWidgetOrchestration.detectUpcomingTurn(lat, lon),
             updateARInstruction,
@@ -2336,10 +2333,10 @@ function getMapExploreOrchestrationRuntime() {
         getMap: () => map,
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
-        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
-        setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
-        getMapFollowingActive: () => mapFollowingActive,
-        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        setZoomAndFollowEnabled: (val) => VoyagrMapRecenterOrchestration.setZoomAndFollowEnabled(val),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
+        setMapFollowingActive: (val) => VoyagrMapRecenterOrchestration.setMapFollowingActive(val),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         setCurrentLat: (val) => VoyagrLocationOrchestration.setCurrentLat(val),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
@@ -2609,9 +2606,9 @@ function getNavigationLifecycleOrchestrationRuntime() {
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
-        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
-        getMapFollowingActive: () => mapFollowingActive,
-        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
+        setMapFollowingActive: (val) => VoyagrMapRecenterOrchestration.setMapFollowingActive(val),
         getJourneyOverviewActive: () => VoyagrJourneyOverviewOrchestration.getJourneyOverviewActive(),
         setJourneyOverviewActive: (val) => VoyagrJourneyOverviewOrchestration.setJourneyOverviewActive(val),
         getSavedMapState: () => VoyagrJourneyOverviewOrchestration.getSavedMapState(),

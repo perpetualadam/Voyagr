@@ -14,13 +14,8 @@ let endMarker = null;
 // mapPickerMode lives in static/js/app/geocoding-orchestration.js (bound at file end).
 
 // ===== ZOOM AND FOLLOW VARIABLES =====
-let zoomAndFollowEnabled = (typeof VoyagrMapControls !== 'undefined'
-    && typeof VoyagrMapControls.resolveZoomAndFollowEnabledFromStorage === 'function')
-    ? VoyagrMapControls.resolveZoomAndFollowEnabledFromStorage(
-        localStorage.getItem('zoomAndFollowEnabled')
-    )
-    : (localStorage.getItem('zoomAndFollowEnabled') !== 'false');
-let mapFollowingActive = false; // Whether we're currently following the vehicle
+// zoomAndFollowEnabled and mapFollowingActive live in
+// static/js/app/map-recenter-orchestration.js (bound at file end).
 
 // ===== UNIT CONVERSION VARIABLES =====
 let distanceUnit = localStorage.getItem('unit_distance') || 'mi';  // Default: miles
