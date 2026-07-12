@@ -7362,6 +7362,241 @@ function warmPicovoiceStaticCache() {
     VoyagrPorcupineOrchestration.warmPicovoiceStaticCache();
 }
 
+
+// ===== GPS ORCHESTRATION =====
+// Orchestration lives in static/js/app/gps-orchestration.js (bound at file end).
+
+function getGpsOrchestrationRuntime() {
+    return {
+        g: (key) => {
+            switch (key) {
+            case 'map': return map;
+            case 'routeInProgress': return routeInProgress;
+            case 'routePolyline': return routePolyline;
+            case 'routeStarted': return routeStarted;
+            case 'currentLat': return currentLat;
+            case 'currentLon': return currentLon;
+            case 'currentStepIndex': return currentStepIndex;
+            case 'lastSnappedRouteIndex': return lastSnappedRouteIndex;
+            case 'currentRouteSteps': return currentRouteSteps;
+            case 'isTrackingActive': return isTrackingActive;
+            case 'gpsWatchId': return gpsWatchId;
+            case 'currentUserMarker': return currentUserMarker;
+            case 'trackingHistory': return trackingHistory;
+            case 'zoomAndFollowEnabled': return zoomAndFollowEnabled;
+            case 'mapFollowingActive': return mapFollowingActive;
+            case 'driverPerspectiveEnabled': return driverPerspectiveEnabled;
+            case '_snapBlendWeightState': return _snapBlendWeightState;
+            case '_smoothDisplayLat': return _smoothDisplayLat;
+            case '_smoothDisplayLon': return _smoothDisplayLon;
+            case 'currentSpeedLimitMph': return currentSpeedLimitMph;
+            case 'lastSpeedLimitRegion': return lastSpeedLimitRegion;
+            case 'lastDetectedRoadType': return lastDetectedRoadType;
+            case '_lastActiveManeuverIdx': return _lastActiveManeuverIdx;
+            case '_lastGoodRawPickMph': return _lastGoodRawPickMph;
+            case '_consecutiveDisplacementMoves': return _consecutiveDisplacementMoves;
+            case '_smoothedSpeedMph': return _smoothedSpeedMph;
+            case '_smoothedSpeedInitAt': return _smoothedSpeedInitAt;
+            case 'announcedTurnThresholds': return announcedTurnThresholds;
+            case 'announcedExitThresholds': return announcedExitThresholds;
+            case 'announcedKeepThresholds': return announcedKeepThresholds;
+            case '_voiceAnnouncedForManeuverIndex': return _voiceAnnouncedForManeuverIndex;
+            case '_voiceAnnouncedCategory': return _voiceAnnouncedCategory;
+            case '_lastLaneVoiceKey': return _lastLaneVoiceKey;
+            case 'lastDestinationAnnouncementDistance': return lastDestinationAnnouncementDistance;
+            case '_navigationArrivalTriggered': return _navigationArrivalTriggered;
+            case '_navigationArrivalZoneSince': return _navigationArrivalZoneSince;
+            case '_navTraveledMeters': return _navTraveledMeters;
+            case '_navOdometerLastGeo': return _navOdometerLastGeo;
+            case '_navStartedAt': return _navStartedAt;
+            case 'lastETAAnnouncementTime': return lastETAAnnouncementTime;
+            case 'lastAnnouncedETA': return lastAnnouncedETA;
+            case 'initialETAMovementRetries': return initialETAMovementRetries;
+            case 'initialETAAnnouncementTimeoutId': return initialETAAnnouncementTimeoutId;
+            case 'lastNavTrafficFetchAt': return lastNavTrafficFetchAt;
+            case 'routeJoinConfirmedForDeviation': return routeJoinConfirmedForDeviation;
+            case 'deviationStartTimeCheck': return deviationStartTimeCheck;
+            case 'deviationOffRouteStreak': return deviationOffRouteStreak;
+            case 'rerouteAttemptCount': return rerouteAttemptCount;
+            case 'postRerouteGraceUntil': return postRerouteGraceUntil;
+            case 'lastRerouteTime': return lastRerouteTime;
+            case 'lastRerouteAttemptTime': return lastRerouteAttemptTime;
+            case 'rerouteInProgress': return rerouteInProgress;
+            case 'lastRerouteDeviation': return lastRerouteDeviation;
+            case 'rerouteFailureRetryTimer': return rerouteFailureRetryTimer;
+            case 'rerouteFailureRetryCount': return rerouteFailureRetryCount;
+            case '_preferPrimaryRouteOnNextNavUpdate': return _preferPrimaryRouteOnNextNavUpdate;
+            case 'lastTurnDetectRouteVertexIndex': return lastTurnDetectRouteVertexIndex;
+            case 'voiceAnnouncementsEnabled': return voiceAnnouncementsEnabled;
+            case 'voiceFrequencyMode': return voiceFrequencyMode;
+            case 'speedWidgetEnabled': return speedWidgetEnabled;
+            case 'lastRoadNameFetch': return lastRoadNameFetch;
+            case 'lastRoadNamePosition': return lastRoadNamePosition;
+            case 'currentRoadDisplayName': return currentRoadDisplayName;
+            case 'userHasStartedMoving': return userHasStartedMoving;
+                default: return undefined;
+            }
+        },
+        s: (key, val) => {
+            switch (key) {
+            case 'map': map = val; break;
+            case 'routeInProgress': routeInProgress = val; break;
+            case 'routePolyline': routePolyline = val; break;
+            case 'routeStarted': routeStarted = val; break;
+            case 'currentLat': currentLat = val; break;
+            case 'currentLon': currentLon = val; break;
+            case 'currentStepIndex': currentStepIndex = val; break;
+            case 'lastSnappedRouteIndex': lastSnappedRouteIndex = val; break;
+            case 'currentRouteSteps': currentRouteSteps = val; break;
+            case 'isTrackingActive': isTrackingActive = val; break;
+            case 'gpsWatchId': gpsWatchId = val; break;
+            case 'currentUserMarker': currentUserMarker = val; break;
+            case 'trackingHistory': trackingHistory = val; break;
+            case 'zoomAndFollowEnabled': zoomAndFollowEnabled = val; break;
+            case 'mapFollowingActive': mapFollowingActive = val; break;
+            case 'driverPerspectiveEnabled': driverPerspectiveEnabled = val; break;
+            case '_snapBlendWeightState': _snapBlendWeightState = val; break;
+            case '_smoothDisplayLat': _smoothDisplayLat = val; break;
+            case '_smoothDisplayLon': _smoothDisplayLon = val; break;
+            case 'currentSpeedLimitMph': currentSpeedLimitMph = val; break;
+            case 'lastSpeedLimitRegion': lastSpeedLimitRegion = val; break;
+            case 'lastDetectedRoadType': lastDetectedRoadType = val; break;
+            case '_lastActiveManeuverIdx': _lastActiveManeuverIdx = val; break;
+            case '_lastGoodRawPickMph': _lastGoodRawPickMph = val; break;
+            case '_consecutiveDisplacementMoves': _consecutiveDisplacementMoves = val; break;
+            case '_smoothedSpeedMph': _smoothedSpeedMph = val; break;
+            case '_smoothedSpeedInitAt': _smoothedSpeedInitAt = val; break;
+            case 'announcedTurnThresholds': announcedTurnThresholds = val; break;
+            case 'announcedExitThresholds': announcedExitThresholds = val; break;
+            case 'announcedKeepThresholds': announcedKeepThresholds = val; break;
+            case '_voiceAnnouncedForManeuverIndex': _voiceAnnouncedForManeuverIndex = val; break;
+            case '_voiceAnnouncedCategory': _voiceAnnouncedCategory = val; break;
+            case '_lastLaneVoiceKey': _lastLaneVoiceKey = val; break;
+            case 'lastDestinationAnnouncementDistance': lastDestinationAnnouncementDistance = val; break;
+            case '_navigationArrivalTriggered': _navigationArrivalTriggered = val; break;
+            case '_navigationArrivalZoneSince': _navigationArrivalZoneSince = val; break;
+            case '_navTraveledMeters': _navTraveledMeters = val; break;
+            case '_navOdometerLastGeo': _navOdometerLastGeo = val; break;
+            case '_navStartedAt': _navStartedAt = val; break;
+            case 'lastETAAnnouncementTime': lastETAAnnouncementTime = val; break;
+            case 'lastAnnouncedETA': lastAnnouncedETA = val; break;
+            case 'initialETAMovementRetries': initialETAMovementRetries = val; break;
+            case 'initialETAAnnouncementTimeoutId': initialETAAnnouncementTimeoutId = val; break;
+            case 'lastNavTrafficFetchAt': lastNavTrafficFetchAt = val; break;
+            case 'routeJoinConfirmedForDeviation': routeJoinConfirmedForDeviation = val; break;
+            case 'deviationStartTimeCheck': deviationStartTimeCheck = val; break;
+            case 'deviationOffRouteStreak': deviationOffRouteStreak = val; break;
+            case 'rerouteAttemptCount': rerouteAttemptCount = val; break;
+            case 'postRerouteGraceUntil': postRerouteGraceUntil = val; break;
+            case 'lastRerouteTime': lastRerouteTime = val; break;
+            case 'lastRerouteAttemptTime': lastRerouteAttemptTime = val; break;
+            case 'rerouteInProgress': rerouteInProgress = val; break;
+            case 'lastRerouteDeviation': lastRerouteDeviation = val; break;
+            case 'rerouteFailureRetryTimer': rerouteFailureRetryTimer = val; break;
+            case 'rerouteFailureRetryCount': rerouteFailureRetryCount = val; break;
+            case '_preferPrimaryRouteOnNextNavUpdate': _preferPrimaryRouteOnNextNavUpdate = val; break;
+            case 'lastTurnDetectRouteVertexIndex': lastTurnDetectRouteVertexIndex = val; break;
+            case 'voiceAnnouncementsEnabled': voiceAnnouncementsEnabled = val; break;
+            case 'voiceFrequencyMode': voiceFrequencyMode = val; break;
+            case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
+            case 'lastRoadNameFetch': lastRoadNameFetch = val; break;
+            case 'lastRoadNamePosition': lastRoadNamePosition = val; break;
+            case 'currentRoadDisplayName': currentRoadDisplayName = val; break;
+            case 'userHasStartedMoving': userHasStartedMoving = val; break;
+                default: break;
+            }
+        },
+        m: {
+            speedGps: () => _speedGps(),
+            cameraPitch: () => _cameraPitch(),
+            routeGeometry: () => _routeGeometry(),
+            routeProgress: () => _routeProgress(),
+            rerouteDecision: () => _rerouteDecision(),
+            eta: () => _eta(),
+            voiceAnnouncements: () => _voiceAnnouncements(),
+            hazardAlerts: () => _hazardAlerts(),
+            speedLimitWidget: () => _speedLimitWidget(),
+            mapControls: () => _mapControls(),
+            toggleUI: () => _toggleUI(),
+            trafficChange: () => _trafficChange(),
+            routeSelection: () => _routeSelection(),
+            navigationDestination: () => _navigationDestination(),
+            routingRequest: () => _routingRequest(),
+        },
+        consts: {
+            ZOOM_LEVELS,
+            TURN_ZOOM_THRESHOLD,
+            TURN_ANNOUNCEMENT_DISTANCES,
+            EXIT_ANNOUNCEMENT_DISTANCES,
+            KEEP_ANNOUNCEMENT_DISTANCES,
+            DESTINATION_ANNOUNCEMENT_DISTANCES,
+            ETA_CHANGE_THRESHOLD_MS,
+            ETA_MIN_INTERVAL_MS,
+            HAZARD_WARNING_DISTANCE,
+        },
+        call: {
+            resolveGpsRouteSnapForTick,
+            smoothGpsSpeedMph,
+            updateRecenterButtonVisibility,
+            updateTurnWidgetFromPosition,
+            fetchRoadNameThrottled,
+            showStatus,
+            sendNotification,
+            speakMessage,
+            updateRouteOnMap,
+            getRouteTrafficAhead,
+            getAutoRerouteOnDeviationEnabled,
+            pickActiveRouteDuringNavigation,
+            buildRouteRequest,
+            resolveNavigationDestination,
+            isActiveNavigationFollow,
+            shouldTiltDrivingCamera,
+            shouldUsePitchedDrivingCamera,
+            applySmartZoomWithAnimation,
+            getCurrentRoadType,
+            createVehicleMarker,
+            calculateDistanceMeters,
+            convertDistance,
+            getDistanceUnit,
+            updateSpeedWidgetVisibility,
+            updateRoadReportFabVisibility,
+            hasUserStartedMoving,
+        },
+    };
+}
+
+function startGPSTracking() { VoyagrGpsOrchestration.startGPSTracking(); }
+function stopGPSTracking() { VoyagrGpsOrchestration.stopGPSTracking(); }
+function applyVehicleMarkerFromTickPlan(markerTick) { VoyagrGpsOrchestration.applyVehicleMarkerFromTickPlan(markerTick); }
+function applySpeedLimitFetchResetFromPlan(resetPlan) { VoyagrGpsOrchestration.applySpeedLimitFetchResetFromPlan(resetPlan); }
+function resetVehicleMarkerDisplayState() { VoyagrGpsOrchestration.resetVehicleMarkerDisplayState(); }
+function primeVehicleMarkerOnRoute(lat, lon) { VoyagrGpsOrchestration.primeVehicleMarkerOnRoute(lat, lon); }
+function resetNavigationArrivalState() { VoyagrGpsOrchestration.resetNavigationArrivalState(); }
+function clearRerouteFailureRetries() { VoyagrGpsOrchestration.clearRerouteFailureRetries(); }
+function ensureDefaultTrafficAwareRouting() { VoyagrGpsOrchestration.ensureDefaultTrafficAwareRouting(); }
+function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
+    return VoyagrGpsOrchestration.applyTrafficRatioToBaseRemaining(baseRemainingMinutes);
+}
+function computeBaseNavigationETAMinutes() { return VoyagrGpsOrchestration.computeBaseNavigationETAMinutes(); }
+function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent) {
+    VoyagrGpsOrchestration.renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent);
+}
+function getNavigationRemainingDistanceMeters(lat, lon) {
+    return VoyagrGpsOrchestration.getNavigationRemainingDistanceMeters(lat, lon);
+}
+function updateNavigationFabVisibility() { VoyagrGpsOrchestration.updateNavigationFabVisibility(); }
+function processNavigationHazardAlerts(lat, lon) { VoyagrGpsOrchestration.processNavigationHazardAlerts(lat, lon); }
+function checkNearbyHazards(lat, lon) { VoyagrGpsOrchestration.checkNearbyHazards(lat, lon); }
+function checkRouteHazardCamerasAhead(lat, lon) { VoyagrGpsOrchestration.checkRouteHazardCamerasAhead(lat, lon); }
+function saveCameraAlertPreferences() { VoyagrGpsOrchestration.saveCameraAlertPreferences(); }
+function loadCameraAlertPreferences() { VoyagrGpsOrchestration.loadCameraAlertPreferences(); }
+function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
+    return VoyagrGpsOrchestration.triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
+}
+function triggerAutomaticReroute(currentLat, currentLon) {
+    return VoyagrGpsOrchestration.triggerAutomaticReroute(currentLat, currentLon);
+}
+
 /**
  * Collect voice preference values from settings form controls.
  * @returns {Object}
@@ -11862,585 +12097,6 @@ function collapseBottomSheet() {
     );
 }
 
-// ===== GPS TRACKING FUNCTIONS =====
-/**
- * Apply follow-camera ease for one GPS tick; returns zoom coordination flags.
- * @param {number} markerLat
- * @param {number} markerLon
- * @param {number} followJumpM
- * @param {number} speedMph
- * @param {number} heading
- * @param {string} roadType
- * @returns {{ navigationFollowEaseApplied: boolean, navigationFollowZoom: (number|null) }}
- */
-function applyGpsFollowCameraTick(markerLat, markerLon, followJumpM, speedMph, heading, roadType) {
-    const CP = _cameraPitch();
-    const followPlan = CP.buildNavigationFollowEasePlan({
-        nowMs: Date.now(),
-        lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
-        followJumpM,
-        zoomAndFollowEnabled,
-        mapFollowingActive,
-        mapUserPanned: !!(map && map._userPanned),
-        routeInProgress,
-    });
-
-    const followCamera = (followPlan.mode === 'navigation' && map)
-        ? CP.buildNavigationFollowCameraPlan({
-            speedMph,
-            roadType: roadType || 'unknown',
-            heading: heading || map.getBearing(),
-            mapBearing: map.getBearing(),
-            markerLat,
-            markerLon,
-            shouldEase: followPlan.shouldEase,
-            durationMs: followPlan.durationMs,
-            shouldTilt: shouldTiltDrivingCamera(),
-            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
-            viewportHeight: window.innerHeight,
-            viewportWidth: window.innerWidth,
-            computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
-                spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-            ),
-        })
-        : null;
-
-    const apply = CP.buildNavigationFollowApplyPlan({
-        hasMap: !!map,
-        followEasePlan: followPlan,
-        followCameraPlan: followCamera,
-        markerLat,
-        markerLon,
-        viewportHeight: window.innerHeight,
-        viewportWidth: window.innerWidth,
-        isActiveNavigationFollow: isActiveNavigationFollow(),
-        driverPerspectiveEnabled,
-    });
-
-    if (apply.statePatch) {
-        window.__voyagrLastFollowEaseAt = apply.statePatch.lastFollowEaseAt;
-        window.__voyagrLastFollowCenterGeo = apply.statePatch.lastFollowCenterGeo;
-    }
-    if (apply.easeTo && map) {
-        map.easeTo(apply.easeTo);
-    }
-    if (apply.logLine) console.log(apply.logLine);
-    if (apply.updateRecenterVisibility) updateRecenterButtonVisibility();
-
-    return {
-        navigationFollowEaseApplied: !!apply.navigationFollowEaseApplied,
-        navigationFollowZoom: apply.navigationFollowZoom,
-    };
-}
-
-/**
- * Apply a vehicle marker tick plan (update existing or create fresh).
- * @param {Object} markerTick - from buildVehicleMarkerTickPlan
- */
-function applyVehicleMarkerFromTickPlan(markerTick) {
-    if (!markerTick) return;
-
-    if (markerTick.action === 'update') {
-        currentUserMarker.setLngLat(markerTick.lngLat);
-        const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
-        if (markerEl) {
-            const inner = markerEl.querySelector('div');
-            if (inner) {
-                inner.style.transform = `rotate(${markerTick.rotationDeg}deg)`;
-            }
-        }
-        currentUserMarker.heading = markerTick.heading;
-        currentUserMarker.speed = markerTick.speed;
-        currentUserMarker.accuracy = markerTick.accuracy;
-        return;
-    }
-
-    if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
-        currentUserMarker.remove();
-    }
-    currentUserMarker = createVehicleMarker(
-        markerTick.lat,
-        markerTick.lon,
-        markerTick.speed,
-        markerTick.accuracy,
-        markerTick.heading
-    );
-    currentUserMarker.addTo(map);
-}
-
-/**
- * Update or create the vehicle marker from a GPS tick plan.
- * @param {number} markerLat
- * @param {number} markerLon
- * @param {number} heading
- * @param {number} speed
- * @param {number} accuracy
- */
-function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accuracy) {
-    const SGpos = _speedGps();
-    const markerTick = SGpos
-        ? SGpos.buildVehicleMarkerTickPlan({
-            hasMarker: !!currentUserMarker,
-            canSetLngLat: !!(currentUserMarker && typeof currentUserMarker.setLngLat === 'function'),
-            markerLat,
-            markerLon,
-            heading,
-            speed,
-            accuracy,
-            mapBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
-        })
-        : { action: 'create', lat: markerLat, lon: markerLon, speed, accuracy, heading };
-
-    applyVehicleMarkerFromTickPlan(markerTick);
-}
-
-/**
- * Apply GPS position state patches from a position apply plan.
- * @param {Object} apply - from buildGpsPositionStateApplyPlan
- */
-function applyGpsPositionStateFromPlan(apply) {
-    if (!apply || apply.action !== 'apply') return;
-    const patch = apply.statePatch || {};
-    if (patch.snapBlendWeightState != null) {
-        _snapBlendWeightState = patch.snapBlendWeightState;
-    }
-    if (patch.lastSnappedRouteIndex != null) {
-        lastSnappedRouteIndex = patch.lastSnappedRouteIndex;
-    }
-    if (patch.smoothDisplayLat != null) {
-        _smoothDisplayLat = patch.smoothDisplayLat;
-    }
-    if (patch.smoothDisplayLon != null) {
-        _smoothDisplayLon = patch.smoothDisplayLon;
-    }
-}
-
-/**
- * Apply speed-limit fetch state reset from buildSpeedLimitFetchResetApplyPlan.
- * @param {Object} resetPlan
- */
-function applySpeedLimitFetchResetFromPlan(resetPlan) {
-    if (!resetPlan || resetPlan.action !== 'apply') return;
-
-    if (resetPlan.newLastActiveManeuverIdx != null) {
-        _lastActiveManeuverIdx = resetPlan.newLastActiveManeuverIdx;
-    }
-
-    const state = _getSpeedLimitFetchState();
-    if (state) {
-        if (resetPlan.resetFetchTimestamps) {
-            state.lastFetchAt = 0;
-        }
-        if (resetPlan.resetLastPosition) {
-            state.lastPosition = null;
-        }
-        if (resetPlan.resetCurrentLimitMph) {
-            state.currentLimitMph = null;
-        }
-    }
-
-    if (resetPlan.resetCurrentSpeedLimitMph) {
-        currentSpeedLimitMph = null;
-    }
-    if (resetPlan.resetDetectedRoadType) {
-        lastDetectedRoadType = null;
-    }
-}
-
-/**
- * Apply speed widget update from buildSpeedWidgetApplyPlan result.
- * @param {Object} swPlan
- */
-function applySpeedWidgetFromApplyPlan(swPlan) {
-    if (!swPlan || swPlan.action !== 'apply') return;
-
-    if (swPlan.resetFetchState) {
-        const SL = _speedLimitWidget();
-        const resetPlan = SL
-            ? SL.buildSpeedLimitFetchResetApplyPlan({
-                kind: 'maneuver-change',
-                newLastActiveManeuverIdx: swPlan.newLastActiveManeuverIdx,
-            })
-            : null;
-        if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
-    }
-    updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
-    if (swPlan.fetchHint) {
-        fetchSpeedLimitThrottled(
-            swPlan.fetchHint.lat,
-            swPlan.fetchHint.lon,
-            swPlan.fetchHint.displaySpeedMph,
-            swPlan.fetchHint.roadType,
-            swPlan.fetchHint.valhallaSpeedLimitMph,
-            swPlan.fetchHint.heading
-        );
-    }
-}
-
-/**
- * Turn detection, voice, and widget side-effects for one GPS tick.
- * @param {number} lat
- * @param {number} lon
- * @param {Object} turnPlan - from buildGpsNavigationSideEffectsTickPlan.turn
- * @returns {{ distanceToNextTurn: (number|null), turnInfoThisTick: (Object|null) }}
- */
-function applyGpsTurnSideEffectsTick(lat, lon, turnPlan) {
-    let distanceToNextTurn = null;
-    let turnInfoThisTick = null;
-
-    if (turnPlan.detect) {
-        turnInfoThisTick = detectUpcomingTurn(lat, lon);
-    }
-
-    if (turnPlan.announce && turnInfoThisTick) {
-        distanceToNextTurn = turnInfoThisTick.distance;
-        announceUpcomingTurn(turnInfoThisTick);
-    }
-
-    if (turnPlan.updateWidget) {
-        updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
-    }
-
-    return { distanceToNextTurn, turnInfoThisTick };
-}
-
-/**
- * Route deviation and hazard side-effects for one GPS tick.
- * @param {number} lat
- * @param {number} lon
- * @param {number} accuracy
- * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
- */
-function applyGpsHazardAndDeviationSideEffectsTick(lat, lon, accuracy, tickPlan) {
-    if (tickPlan.checkDeviation) {
-        checkRouteDeviation(lat, lon, accuracy);
-    }
-    if (tickPlan.processHazards) {
-        processNavigationHazardAlerts(lat, lon);
-    }
-}
-
-/**
- * Road name fetch side-effect for one GPS tick.
- * @param {number} lat
- * @param {number} lon
- * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
- */
-function applyGpsRoadNameSideEffectTick(lat, lon, tickPlan) {
-    if (tickPlan.fetchRoadName) {
-        fetchRoadNameThrottled(lat, lon);
-    }
-}
-
-/**
- * Destination and arrival voice side-effects for one GPS tick.
- * @param {number} lat
- * @param {number} lon
- * @param {number} speedMs
- * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
- */
-function applyGpsNavigationVoiceSideEffectsTick(lat, lon, speedMs, tickPlan) {
-    if (tickPlan.announceDestination) {
-        announceDistanceToDestination(lat, lon);
-    }
-    if (tickPlan.checkArrival) {
-        checkNavigationArrival(lat, lon, speedMs);
-    }
-}
-
-/**
- * Smart zoom side-effects for one GPS tick.
- * @param {Object} ctx
- * @returns {void}
- */
-function applyGpsZoomSideEffectsTick(ctx) {
-    const {
-        speedMph,
-        distanceToNextTurn,
-        speedLimitPlan,
-        lat,
-        lon,
-        navigationFollowEaseApplied,
-        navigationFollowZoom,
-    } = ctx;
-
-    const CP = _cameraPitch();
-    const zoomTick = CP.buildNavigationZoomTickPlan({
-        smartZoomEnabled,
-        routeInProgress,
-        navigationFollowEaseApplied,
-        followZoom: navigationFollowZoom,
-    });
-    const zoomApply = CP.buildNavigationZoomApplyPlan(zoomTick, {
-        speedMph,
-        distanceToNextTurn,
-        roadType: speedLimitPlan.roadType || 'unknown',
-        lat,
-        lon,
-    });
-    if (zoomApply.action !== 'apply') return;
-
-    if (zoomApply.syncLastZoomLevel != null) {
-        lastZoomLevel = zoomApply.syncLastZoomLevel;
-    }
-    if (zoomApply.applySmartZoom) {
-        applySmartZoomWithAnimation(
-            zoomApply.applySmartZoom.speedMph,
-            zoomApply.applySmartZoom.distanceToNextTurn,
-            zoomApply.applySmartZoom.roadType,
-            zoomApply.applySmartZoom.lat,
-            zoomApply.applySmartZoom.lon
-        );
-    }
-}
-
-/**
- * Lane guidance and speed widget side-effects for one GPS tick.
- * @param {Object} ctx
- * @param {number} ctx.lat
- * @param {number} ctx.lon
- * @param {number} ctx.heading
- * @param {Object} ctx.tickPlan - from buildGpsNavigationSideEffectsTickPlan
- * @param {Object} ctx.speedLimitPlan
- */
-function applyGpsLaneAndSpeedSideEffectsTick(ctx) {
-    const { lat, lon, heading, tickPlan, speedLimitPlan } = ctx;
-
-    if (tickPlan.updateLaneGuidance) {
-        const TI = _turnInstructions();
-        const laneTick = TI.buildLaneGuidanceTickPlan({
-            routeInProgress,
-            routeSteps: currentRouteSteps,
-            currentStepIndex,
-        });
-        const laneApply = TI.buildLaneGuidanceTickApplyPlan(laneTick);
-        if (laneApply.action === 'apply') {
-            updateLaneGuidance(
-                lat,
-                lon,
-                heading,
-                laneApply.maneuverDir,
-                laneApply.roundaboutExitCount
-            );
-        }
-    }
-
-    if (tickPlan.showSpeedWidget) {
-        const SL = _speedLimitWidget();
-        const swPlan = SL
-            ? SL.buildSpeedWidgetApplyPlan({
-                showSpeedWidget: tickPlan.showSpeedWidget,
-                speedLimitPlan,
-                routeInProgress,
-                isTrackingActive,
-                lat,
-                lon,
-                heading,
-            })
-            : { action: 'skip' };
-        applySpeedWidgetFromApplyPlan(swPlan);
-    }
-}
-
-/**
- * Navigation side-effects for one GPS tick (deviation, voice, zoom, lane, speed).
- * @param {Object} ctx
- * @returns {{ distanceToNextTurn: (number|null) }}
- */
-function applyGpsNavigationSideEffectsTick(ctx) {
-    const {
-        lat,
-        lon,
-        speed,
-        accuracy,
-        heading,
-        speedMph,
-        sideEffects,
-        speedLimitPlan,
-        navigationFollowEaseApplied,
-        navigationFollowZoom,
-    } = ctx;
-
-    const tickPlan = _routeProgress().buildGpsNavigationSideEffectsTickPlan({ sideEffects });
-
-    applyGpsHazardAndDeviationSideEffectsTick(lat, lon, accuracy, tickPlan);
-
-    let distanceToNextTurn = null;
-
-    if (tickPlan.turn.detect || tickPlan.turn.announce || tickPlan.turn.updateWidget) {
-        const turnResult = applyGpsTurnSideEffectsTick(lat, lon, tickPlan.turn);
-        distanceToNextTurn = turnResult.distanceToNextTurn;
-    }
-
-    if (tickPlan.announceDestination || tickPlan.checkArrival) {
-        applyGpsNavigationVoiceSideEffectsTick(lat, lon, speed, tickPlan);
-    }
-
-    if (tickPlan.applyZoom) {
-        applyGpsZoomSideEffectsTick({
-            speedMph,
-            distanceToNextTurn,
-            speedLimitPlan,
-            lat,
-            lon,
-            navigationFollowEaseApplied,
-            navigationFollowZoom,
-        });
-    }
-
-    if (tickPlan.updateLaneGuidance || tickPlan.showSpeedWidget) {
-        applyGpsLaneAndSpeedSideEffectsTick({
-            lat,
-            lon,
-            heading,
-            tickPlan,
-            speedLimitPlan,
-        });
-    }
-
-    applyGpsRoadNameSideEffectTick(lat, lon, tickPlan);
-
-    return { distanceToNextTurn };
-}
-
-/**
- * Marker, follow camera, and navigation side-effects after a position tick.
- * @param {Object} pos - from applyGpsPositionTick
- */
-function applyGpsTrackingSideEffectsFromPosition(pos) {
-    applyGpsVehicleMarkerTick(pos.markerLat, pos.markerLon, pos.heading, pos.speed, pos.accuracy);
-
-    const followState = applyGpsFollowCameraTick(
-        pos.markerLat,
-        pos.markerLon,
-        pos.followJumpM,
-        pos.speedMph,
-        pos.heading,
-        pos.speedLimitPlan.roadType || 'unknown'
-    );
-
-    applyGpsNavigationSideEffectsTick({
-        lat: pos.lat,
-        lon: pos.lon,
-        speed: pos.speed,
-        accuracy: pos.accuracy,
-        heading: pos.heading,
-        speedMph: pos.speedMph,
-        sideEffects: pos.sideEffects,
-        speedLimitPlan: pos.speedLimitPlan,
-        navigationFollowEaseApplied: followState.navigationFollowEaseApplied,
-        navigationFollowZoom: followState.navigationFollowZoom,
-    });
-}
-
-/**
- * Coord sample, history, raw speed, and odometer for one GPS tick.
- * @param {Object} sample - from normalizeGeolocationCoordsSample
- * @returns {Object}
- */
-function applyGpsCoordSampleTick(sample) {
-    const SG = _speedGps();
-    const tick = SG.buildGpsCoordSampleTickPlan({
-        sample,
-        trackingHistory,
-        pickRawSpeedState: {
-            lastGoodRawPickMph: _lastGoodRawPickMph,
-            consecutiveDisplacementMoves: _consecutiveDisplacementMoves,
-        },
-        routeInProgress,
-        odometerState: { lastGeo: _navOdometerLastGeo, traveledMeters: _navTraveledMeters },
-        nowMs: Date.now(),
-        calculateDistanceMeters,
-    });
-    const apply = SG.buildGpsCoordSampleStateApplyPlan(tick);
-    if (apply.action !== 'apply') {
-        return {
-            lat: sample.lat,
-            lon: sample.lon,
-            accuracy: sample.accuracy,
-            speed: sample.speedMs,
-            deviceHeading: sample.deviceHeading,
-            speedMph: 0,
-        };
-    }
-
-    currentLat = apply.lat;
-    currentLon = apply.lon;
-    updateRoadReportFabVisibility();
-
-    const patch = apply.statePatch;
-    if (patch.trackingHistory) {
-        trackingHistory = patch.trackingHistory;
-    }
-    if (patch.pickRawSpeedState) {
-        _lastGoodRawPickMph = patch.pickRawSpeedState.lastGoodRawPickMph;
-        _consecutiveDisplacementMoves = patch.pickRawSpeedState.consecutiveDisplacementMoves;
-    }
-    if (patch.odometer) {
-        _navOdometerLastGeo = patch.odometer.lastGeo;
-        _navTraveledMeters = patch.odometer.traveledMeters;
-    }
-
-    return {
-        lat: apply.lat,
-        lon: apply.lon,
-        accuracy: apply.accuracy,
-        speed: apply.speed,
-        deviceHeading: apply.deviceHeading,
-        speedMph: apply.speedMph,
-    };
-}
-
-/**
- * Build inputs for buildGpsPositionTickPlan from app navigation state.
- * @param {Object} coord - from applyGpsCoordSampleTick
- * @returns {Object}
- */
-function buildGpsPositionTickInputs(coord) {
-    const SGhead = _speedGps();
-    const SL = _speedLimitWidget();
-    return {
-        lat: coord.lat,
-        lon: coord.lon,
-        accuracy: coord.accuracy,
-        routeInProgress,
-        routePolyline,
-        snapped: resolveGpsRouteSnapForTick(coord.lat, coord.lon),
-        lastSnappedRouteIndex,
-        prevSnapBlendWeightState: _snapBlendWeightState,
-        speedMph: coord.speedMph,
-        smoothDisplayLat: _smoothDisplayLat,
-        smoothDisplayLon: _smoothDisplayLon,
-        lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
-        calculateDistanceMeters,
-        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-        resolveGpsHeading: () => (SGhead
-            ? SGhead.resolveGpsHeadingDegrees({
-                deviceHeading: coord.deviceHeading,
-                speed: coord.speed,
-                trackingHistory,
-                calculateDistanceMeters,
-            })
-            : 0),
-        isTrackingActive,
-        currentRouteSteps,
-        displaySpeedMph: smoothGpsSpeedMph(coord.speedMph),
-        currentSpeedLimitMph,
-        lastSpeedLimitRegion,
-        lastActiveManeuverIdx: _lastActiveManeuverIdx,
-        resolveRoadType: (idx, spd) => _routeGeometry().resolveCurrentRoadType({
-            maneuverIdxOverride: idx,
-            gpsSpeedMph: spd,
-            currentRouteSteps,
-            currentStepIndex,
-            lastDetectedRoadType,
-        }),
-        pickDisplaySpeedLimitMph: SL
-            ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
-            : null,
-    };
-}
 
 /**
  * Apply route preview panel DOM patches from a pure DOM apply plan.
@@ -12523,119 +12179,6 @@ function applyRoutePreviewPanelDomFromPlan(domPlan) {
     }
 }
 
-/**
- * Position, odometer, speed-limit, and side-effects setup for one GPS tick.
- * @param {Object} sample - from normalizeGeolocationCoordsSample
- * @returns {Object}
- */
-function applyGpsPositionTick(sample) {
-    const coord = applyGpsCoordSampleTick(sample);
-    const SGpos = _speedGps();
-    const plans = SGpos
-        ? SGpos.buildGpsPositionTickPlan(buildGpsPositionTickInputs(coord))
-        : {
-            posApply: {
-                action: 'apply',
-                heading: 0,
-                markerLat: coord.lat,
-                markerLon: coord.lon,
-                followJumpM: Number.POSITIVE_INFINITY,
-                statePatch: { smoothDisplayLat: coord.lat, smoothDisplayLon: coord.lon },
-            },
-            speedLimitPlan: { roadType: 'unknown', shownLimit: null, resetFetchState: false, showWidget: false },
-        };
-    applyGpsPositionStateFromPlan(plans.posApply);
-
-    return _routeProgress().buildGpsTrackingTickOutcomePlan({
-        lat: coord.lat,
-        lon: coord.lon,
-        accuracy: coord.accuracy,
-        speed: coord.speed,
-        speedMph: coord.speedMph,
-        markerLat: plans.posApply.markerLat,
-        markerLon: plans.posApply.markerLon,
-        heading: plans.posApply.heading,
-        followJumpM: plans.posApply.followJumpM,
-        speedLimitPlan: plans.speedLimitPlan,
-        routeInProgress,
-        routePolyline,
-        routeSteps: currentRouteSteps,
-        isTrackingActive,
-        speedLimitShowWidget: plans.speedLimitPlan.showWidget,
-    });
-}
-
-/**
- * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
- * @param {GeolocationPosition} position
- */
-function applyGpsTrackingTick(position) {
-    const SGsample = _speedGps();
-    const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
-    const pos = applyGpsPositionTick(sample);
-    applyGpsTrackingSideEffectsFromPosition(pos);
-}
-
-/**
- * startGPSTracking function
- * @function startGPSTracking
- * @returns {*} Return value description
- */
-function startGPSTracking() {
-    if (!navigator.geolocation) {
-        showStatus('Geolocation not supported', 'error');
-        return;
-    }
-
-    if (isTrackingActive) {
-        stopGPSTracking();
-        return;
-    }
-
-    isTrackingActive = true;
-    trackingHistory = [];
-    _lastGoodRawPickMph = 0;
-    _consecutiveDisplacementMoves = 0;
-    _smoothedSpeedMph = 0;
-    _smoothedSpeedInitAt = 0;
-    resetVehicleMarkerDisplayState();
-    window.__voyagrLastFollowEaseAt = 0;
-    window.__voyagrLastFollowCenterGeo = null;
-    showStatus('🎯 GPS Tracking started...', 'success');
-
-    // Watch position with high accuracy
-    gpsWatchId = navigator.geolocation.watchPosition(
-        (position) => applyGpsTrackingTick(position),
-        (error) => {
-            showStatus('GPS Error: ' + error.message, 'error');
-            isTrackingActive = false;
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        }
-    );
-}
-
-/**
- * stopGPSTracking function
- * @function stopGPSTracking
- * @returns {*} Return value description
- */
-function stopGPSTracking() {
-    if (gpsWatchId !== null) {
-        navigator.geolocation.clearWatch(gpsWatchId);
-        gpsWatchId = null;
-    }
-    isTrackingActive = false;
-    resetVehicleMarkerDisplayState();
-    // Hide speed widget when tracking stops (use consolidated function)
-    updateSpeedWidgetVisibility();
-    updateRoadReportFabVisibility();
-    showStatus('🛑 GPS Tracking stopped', 'info');
-}
-
 // Turn announcement variables
 let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
 const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
@@ -12650,6 +12193,9 @@ let announcedKeepThresholds = new Set();
 /** Per-maneuver voice dedup — cleared when maneuver index or category changes. */
 let _voiceAnnouncedForManeuverIndex = null;
 let _voiceAnnouncedCategory = null;
+let lastTurnDetectRouteVertexIndex = 0;
+let voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
+let HAZARD_WARNING_DISTANCE = 500;
 
 // Distance-to-destination announcement variables
 let lastDestinationAnnouncementDistance = Infinity;
@@ -12678,883 +12224,6 @@ let lastNavTrafficFetchAt = 0;
 window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
 /** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
-function ensureDefaultTrafficAwareRouting() {
-    _eta().ensureDefaultTrafficAwareRouting(localStorage);
-}
-
-
-
-/**
- * Progress-based remaining time (minutes) from GPS on polyline; same basis as server route duration.
- * @returns {{ originalDurationMinutes: number, timeRemainingMinutes: number, progressPercent: number } | null}
- */
-function computeBaseNavigationETAMinutes() {
-    return _eta().computeBaseNavigationETAMinutes({
-        routeInProgress: routeInProgress,
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        polyline: routePolyline,
-        originalDurationMinutes: _eta().normalizeRouteDurationMinutes(window.lastCalculatedRoute),
-        userHasStartedMoving: hasUserStartedMoving(),
-        currentLat: currentLat,
-        currentLon: currentLon,
-        lastSnappedRouteIndex: lastSnappedRouteIndex,
-        routeGeometry: _routeGeometry(),
-    });
-}
-
-function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
-    return _eta().applyTrafficRatioToBaseRemaining(
-        baseRemainingMinutes,
-        window.navETASnapshot,
-        Date.now(),
-        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode)
-    );
-}
-
-async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, forceFetch = false) {
-    const ETA = _eta();
-    const preflight = ETA.buildRefreshNavTrafficETAPreflightPlan({
-        baseRemainingMinutes,
-        progressPercent,
-        applyTrafficAware: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
-        lat: currentLat,
-        lon: currentLon,
-        now: Date.now(),
-        lastFetchAt: lastNavTrafficFetchAt,
-        minIntervalMs: ETA.NAV_TRAFFIC_ETA_MIN_INTERVAL_MS,
-        forceFetch,
-        hasPriorTrafficFetch: !!window.navETASnapshot.trafficFetchAt,
-    });
-
-    window.navETASnapshot.baseRemainingMinutes = preflight.snapshotPatch.baseRemainingMinutes;
-    window.navETASnapshot.progressPercent = preflight.snapshotPatch.progressPercent;
-
-    if (preflight.action !== 'fetch') {
-        if (preflight.clearTrafficAdjusted) {
-            window.navETASnapshot.trafficAdjustedMinutes = null;
-        }
-        return;
-    }
-
-    lastNavTrafficFetchAt = preflight.updateLastFetchAt;
-
-    try {
-        const flow = await getRouteTrafficAhead(preflight.forceFetch);
-        const apply = ETA.buildRefreshNavTrafficETASnapshotApplyPlan(
-            flow,
-            baseRemainingMinutes,
-            Date.now()
-        );
-        if (apply.shouldMerge) {
-            window.navETASnapshot = {
-                ...window.navETASnapshot,
-                ...apply.patch,
-            };
-        } else if (apply.clearTrafficAdjusted) {
-            window.navETASnapshot.trafficAdjustedMinutes = null;
-        }
-    } catch (e) {
-        console.warn(preflight.errorLogPrefix, e);
-    }
-}
-
-function applyTurnInfoETAPanelFromPlan(render) {
-    if (!render || !render.shouldRender) return;
-    const turnInfo = document.getElementById(render.targetId);
-    if (turnInfo) turnInfo.innerHTML = render.panelHtml;
-}
-
-function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent) {
-    const ETA = _eta();
-    const displayMins = adjustedMinutes != null ? adjustedMinutes : baseMinutes;
-    const render = ETA.buildTurnInfoETAPanelRenderPlan({
-        baseMinutes,
-        adjustedMinutes,
-        progressPercent,
-        trafficLevel,
-        congestionPercent,
-        showTraffic: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
-        etaClockText: new Date(Date.now() + displayMins * 60000).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-        }),
-    });
-    applyTurnInfoETAPanelFromPlan(render);
-}
-
-
-let lastVoiceAnnouncementTime = 0;
-let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
-
-let voiceAnnouncementsEnabled = true;
-let voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
-
-
-
-
-
-/**
- * Remaining meters along the active route polyline (snapped progress). Shared by voice, ETA bar, and arrival.
- * @param {number} lat
- * @param {number} lon
- * @returns {number}
- */
-function getNavigationRemainingDistanceMeters(lat, lon) {
-    const plan = _routeGeometry().buildNavigationRemainingDistancePlan({
-        lat,
-        lon,
-        routePolyline,
-        lastSnappedRouteIndex,
-    });
-    return plan.remainingMeters;
-}
-
-function resetNavigationArrivalState() {
-    _navigationArrivalTriggered = false;
-    _navigationArrivalZoneSince = 0;
-}
-
-/**
- * Auto-end navigation when the driver reaches the destination (along-route distance + optional dwell).
- * @param {number} lat
- * @param {number} lon
- * @param {number} speedMs - GPS speed in m/s
- */
-function checkNavigationArrival(lat, lon, speedMs) {
-    const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
-    const RP = _routeProgress();
-    const tick = RP.buildNavigationArrivalTickPlan({
-        routeInProgress,
-        arrivalTriggered: _navigationArrivalTriggered,
-        remainingM,
-        speedMs,
-        arrivalZoneSince: _navigationArrivalZoneSince,
-        now: Date.now(),
-    });
-    if (tick.action === 'skip') return;
-
-    const apply = RP.buildNavigationArrivalStateApplyPlan(tick);
-    if (apply.action === 'skip') return;
-
-    if (apply.statePatch.arrivalZoneSince != null) {
-        _navigationArrivalZoneSince = apply.statePatch.arrivalZoneSince;
-    }
-
-    if (apply.endNavigation) {
-        if (apply.logMessage) console.log(apply.logMessage);
-        sendArrivalNotification();
-    }
-}
-
-/** Show/hide map FABs that depend on active turn-by-turn navigation. */
-function updateNavigationFabVisibility() {
-    const MC = _mapControls();
-    const plan = MC.getNavigationFabVisibilityPlan(routeInProgress);
-    const endBtn = document.getElementById('endNavigationBtn');
-    const startBtn = document.getElementById('startNavBtn');
-    if (endBtn) endBtn.style.display = plan.endBtnDisplay;
-    if (startBtn && plan.startBtnDisplay != null) startBtn.style.display = plan.startBtnDisplay;
-    syncBottomSheetOverlapFabs();
-    updateRecenterButtonVisibility();
-}
-
-// Track the last snapped route index for efficient searching
-let lastSnappedRouteIndex = 0;
-/** For turn detection only: monotonic polyline vertex index (never goes backwards). */
-let lastTurnDetectRouteVertexIndex = 0;
-
-// Active-navigation snap lock constants live in speed-gps.js (DEFAULTS).
-let _smoothDisplayLat = null;
-let _smoothDisplayLon = null;
-let _snapBlendWeightState = 0;
-
-/**
- * Clear EMA-smoothed marker position and follow-camera bookkeeping.
- * Without this, a second journey in the same session inherits journey-1 coords
- * and the icon jumps while the smoother catches up.
- */
-function resetVehicleMarkerDisplayState() {
-    _smoothDisplayLat = null;
-    _smoothDisplayLon = null;
-    _snapBlendWeightState = 0;
-    window.__voyagrLastFollowCenterGeo = null;
-    window.__voyagrLastFollowEaseAt = 0;
-}
-
-/**
- * Apply prime-vehicle-marker state and marker position from a pure apply plan.
- * @param {Object} apply - from buildPrimeVehicleMarkerOnRouteApplyPlan
- */
-function applyPrimeVehicleMarkerOnRouteFromPlan(apply) {
-    if (!apply || apply.action !== 'apply') return;
-    const patch = apply.statePatch || {};
-    if (patch.smoothDisplayLat != null) {
-        _smoothDisplayLat = patch.smoothDisplayLat;
-    }
-    if (patch.smoothDisplayLon != null) {
-        _smoothDisplayLon = patch.smoothDisplayLon;
-    }
-    if (patch.snapBlendWeightState != null) {
-        _snapBlendWeightState = patch.snapBlendWeightState;
-    }
-    if (apply.markerLngLat && currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-        currentUserMarker.setLngLat(apply.markerLngLat);
-    }
-}
-
-/**
- * Seed route progress and place the vehicle icon on the new polyline immediately.
- * @param {number} lat
- * @param {number} lon
- */
-function primeVehicleMarkerOnRoute(lat, lon) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-    if (!routePolyline || routePolyline.length < 2) return;
-    seedNavigationProgressOnNewRoute(lat, lon);
-    const SG = _speedGps();
-    const apply = SG.buildPrimeVehicleMarkerOnRouteApplyPlan({
-        lat,
-        lon,
-        routePolyline,
-        snapped: resolveGpsRouteSnapForTick(lat, lon),
-        lastSnappedRouteIndex,
-        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-    });
-    applyPrimeVehicleMarkerOnRouteFromPlan(apply);
-}
-
-/**
- * announceDistanceToDestination function
- * @function announceDistanceToDestination
- * @param {*} currentLat - Parameter description
- * @param {*} currentLon - Parameter description
- * @returns {*} Return value description
- */
-function announceDistanceToDestination(currentLat, currentLon) {
-    if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
-
-    const remainingDistance = getNavigationRemainingDistanceMeters(currentLat, currentLon);
-    const VA = _voiceAnnouncements();
-    const tick = VA.buildDestinationAnnouncementTickPlan({
-        routeInProgress,
-        routePolylineLength: routePolyline.length,
-        voiceAnnouncementsEnabled,
-        remainingDistanceM: remainingDistance,
-        lastDestinationAnnouncementDistance,
-        destinationDistances: DESTINATION_ANNOUNCEMENT_DISTANCES,
-        distanceUnit: getDistanceUnit(),
-    });
-
-    if (tick.action === 'skip') return;
-
-    const apply = VA.buildDestinationAnnouncementStateApplyPlan(tick);
-    if (apply.action === 'skip') return;
-
-    if (apply.statePatch.lastDestinationAnnouncementDistance != null) {
-        lastDestinationAnnouncementDistance = apply.statePatch.lastDestinationAnnouncementDistance;
-    }
-
-    if (apply.speak && apply.spokenMessage) {
-        const displayRemaining = convertDistance(remainingDistance / 1000);
-        console.log(`[Voice] Distance announcement: ${apply.spokenMessage} (remaining: ${displayRemaining} ${getDistanceUnit()})`);
-        speakMessage(apply.spokenMessage);
-    }
-}
-/**
- * announceUpcomingTurn function
- * @function announceUpcomingTurn
- * @param {*} turnInfo - Parameter description
- * @returns {*} Return value description
- */
-function announceUpcomingTurn(turnInfo) {
-    const TI = _turnInstructions();
-    const VA = _voiceAnnouncements();
-
-    const direction = turnInfo?.direction || 'straight';
-    let directionText = TI.getTurnDirectionText(direction);
-    if (direction === 'roundabout') {
-        directionText = TI.getRoundaboutDirectionText(
-            turnInfo.valhallaType,
-            turnInfo.roundabout_exit_count
-        );
-    }
-
-    const category = VA.resolveTurnAnnouncementCategory(direction);
-    const thresholdSet = category === 'exit' ? announcedExitThresholds
-        : category === 'keep' ? announcedKeepThresholds
-        : announcedTurnThresholds;
-
-    const tick = VA.buildTurnAnnouncementTickPlan({
-        turnInfo,
-        voiceAnnouncementsEnabled,
-        distanceUnit,
-        directionText,
-        turnDistances: TURN_ANNOUNCEMENT_DISTANCES,
-        exitDistances: EXIT_ANNOUNCEMENT_DISTANCES,
-        keepDistances: KEEP_ANNOUNCEMENT_DISTANCES,
-        announcedThresholdValues: Array.from(thresholdSet),
-        voiceAnnouncedForManeuverIndex: _voiceAnnouncedForManeuverIndex,
-        voiceAnnouncedCategory: _voiceAnnouncedCategory,
-        followingManeuver: turnInfo?.maneuverIndex != null
-            ? getFollowingManeuver(turnInfo.maneuverIndex)
-            : null,
-        chainAppendOpts: {
-            getTurnDirectionText: TI.getTurnDirectionText.bind(TI),
-            effectiveRoundaboutExitCount: (idx) => effectiveRoundaboutExitCount(idx),
-            ordinalEnglishExit: TI.ordinalEnglishExit,
-        },
-    });
-
-    if (tick.action === 'skip') {
-        if (tick.warnLine) console.warn(tick.warnLine);
-        return;
-    }
-
-    const apply = VA.buildTurnAnnouncementStateApplyPlan(tick);
-    if (apply.action === 'skip') {
-        if (apply.warnLine) console.warn(apply.warnLine);
-        return;
-    }
-
-    if (apply.clearThresholds) thresholdSet.clear();
-    if (apply.statePatch.voiceAnnouncedForManeuverIndex != null) {
-        _voiceAnnouncedForManeuverIndex = apply.statePatch.voiceAnnouncedForManeuverIndex;
-    }
-    if (apply.statePatch.voiceAnnouncedCategory != null) {
-        _voiceAnnouncedCategory = apply.statePatch.voiceAnnouncedCategory;
-    }
-    if (apply.announcedThresholdValues) {
-        thresholdSet.clear();
-        apply.announcedThresholdValues.forEach((d) => thresholdSet.add(d));
-    }
-
-    if (apply.speak && apply.spokenMessage) {
-        if (apply.logLine) console.log(apply.logLine);
-        speakMessage(apply.spokenMessage, apply.speakPriority || 'high');
-    }
-
-    if (apply.resetThresholds) {
-        if (apply.resetCategory === 'exit') announcedExitThresholds.clear();
-        else if (apply.resetCategory === 'keep') announcedKeepThresholds.clear();
-        else announcedTurnThresholds.clear();
-    }
-}
-
-// Rerouting debounce variables
-let lastRerouteTime = 0;
-let lastRerouteAttemptTime = 0;
-const REROUTE_DEBOUNCE_MS = 30000;
-let lastRerouteDeviation = 0;
-let deviationStartTimeCheck = null;
-let deviationOffRouteStreak = 0;
-let rerouteAttemptCount = 0;
-let rerouteInProgress = false;
-let postRerouteGraceUntil = 0;
-let lastRerouteAnnouncementTime = 0;
-
-/** After a failed deviation reroute API call, retry with backoff (does not replace GPS deviation timing). */
-let rerouteFailureRetryTimer = null;
-let rerouteFailureRetryCount = 0;
-
-function clearRerouteFailureRetries() {
-    if (rerouteFailureRetryTimer) {
-        clearTimeout(rerouteFailureRetryTimer);
-        rerouteFailureRetryTimer = null;
-    }
-    rerouteFailureRetryCount = 0;
-}
-
-function scheduleAutomaticRerouteRetry() {
-    const RD = _rerouteDecision();
-    const plan = RD.buildRerouteFailureRetryPlan({
-        routeInProgress,
-        autoRerouteOnDeviationEnabled: getAutoRerouteOnDeviationEnabled(),
-        postRerouteGraceUntil,
-        rerouteInProgress,
-        rerouteFailureRetryCount,
-        now: Date.now(),
-    });
-
-    if (plan.action === 'clear') {
-        clearRerouteFailureRetries();
-        return;
-    }
-    if (!plan.schedule) {
-        if (plan.action === 'exhausted' && plan.notification) {
-            sendNotification(plan.notification.title, plan.notification.body, plan.notification.type);
-            clearRerouteFailureRetries();
-        }
-        return;
-    }
-
-    rerouteFailureRetryCount = plan.nextRetryCount;
-    if (rerouteFailureRetryTimer) clearTimeout(rerouteFailureRetryTimer);
-    console.log(plan.logMessage);
-    rerouteFailureRetryTimer = setTimeout(() => {
-        rerouteFailureRetryTimer = null;
-        if (!routeInProgress || !getAutoRerouteOnDeviationEnabled()) {
-            clearRerouteFailureRetries();
-            return;
-        }
-        showStatus(plan.statusMessage, 'warning');
-        void triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
-    }, plan.delayMs);
-}
-
-/**
- * Apply route deviation state patches and optional reroute trigger.
- * @param {Object} stateApply - from buildRouteDeviationStateApplyPlan
- * @param {number} lat
- * @param {number} lon
- */
-function applyRouteDeviationFromApplyPlan(stateApply, lat, lon) {
-    if (!stateApply || stateApply.action !== 'apply') return;
-
-    routeJoinConfirmedForDeviation = stateApply.statePatch.routeJoinConfirmedForDeviation;
-    deviationStartTimeCheck = stateApply.statePatch.deviationStartTimeCheck;
-    deviationOffRouteStreak = stateApply.statePatch.deviationOffRouteStreak;
-    if (stateApply.statePatch.lastRerouteAttemptTime != null) {
-        lastRerouteAttemptTime = stateApply.statePatch.lastRerouteAttemptTime;
-    }
-
-    if (stateApply.logJoinLine) console.log(stateApply.logJoinLine);
-
-    if (stateApply.triggerReroute) {
-        if (stateApply.incrementRerouteAttemptCount) rerouteAttemptCount++;
-        if (stateApply.logDeviationLine) console.log(stateApply.logDeviationLine);
-        sendNotification(
-            stateApply.notification.title,
-            stateApply.notification.body,
-            stateApply.notification.type
-        );
-        triggerAutomaticRerouteWithHazardHandling(lat, lon);
-    }
-
-    if (stateApply.updateLastRerouteDeviation) {
-        lastRerouteDeviation = stateApply.lastRerouteDeviation;
-    }
-}
-
-/**
- * checkRouteDeviation function - Enhanced with time-based detection
- * Only triggers reroute if user is >50m off-route for >10 seconds
- * Respects auto-reroute toggle setting
- */
-function checkRouteDeviation(lat, lon, accuracy) {
-    const VRD = _rerouteDecision();
-    const inputs = VRD.buildRouteDeviationTickInputsPlan({
-        lat,
-        lon,
-        routePolyline,
-        lastSnappedRouteIndex,
-        snapFn: (a, b, c, d) => _routeGeometry().snapToRoutePolyline(a, b, c, d),
-        remainingFn: getNavigationRemainingDistanceMeters,
-    });
-    if (inputs.action !== 'ready') return;
-
-    const now = Date.now();
-    const tick = VRD.buildRouteDeviationTickPlan({
-        autoRerouteEnabled: getAutoRerouteOnDeviationEnabled(),
-        hasRoute: true,
-        remainingToDest: inputs.remainingToDest,
-        accuracy,
-        minDistance: inputs.minDistance,
-        routeJoinConfirmed: routeJoinConfirmedForDeviation,
-        deviationStartTime: deviationStartTimeCheck,
-        lastRerouteTime,
-        lastRerouteAttemptTime,
-        offRouteStreak: deviationOffRouteStreak,
-        now,
-        postRerouteGraceUntil,
-        rerouteInProgress,
-        distanceUnit,
-    });
-
-    if (tick.action === 'skip') return;
-
-    const apply = VRD.buildRouteDeviationApplyPlan(tick, { rerouteAttemptCount });
-    const stateApply = VRD.buildRouteDeviationStateApplyPlan(apply);
-    applyRouteDeviationFromApplyPlan(stateApply, lat, lon);
-}
-
-/**
- * Apply automatic reroute API outcome (success or failure).
- * @param {Object} ctx
- * @param {Object} ctx.apply - from buildAutomaticRerouteResultApplyPlan
- * @param {number} ctx.startLat
- * @param {number} ctx.startLon
- * @param {string} ctx.destination
- */
-function applyAutomaticRerouteResult(ctx) {
-    const { apply, startLat, startLon, destination } = ctx;
-    const execute = _rerouteDecision().buildAutomaticRerouteResultExecutePlan(apply);
-    if (!execute.shouldApply) return;
-
-    if (execute.kind === 'failure') {
-        execute.logs.forEach((line) => console.log(line));
-        if (execute.notification) {
-            sendNotification(execute.notification.title, execute.notification.body, execute.notification.type);
-        }
-        if (execute.scheduleRetry) scheduleAutomaticRerouteRetry();
-        if (execute.resetRerouteInProgress) rerouteInProgress = false;
-        return;
-    }
-
-    if (execute.clearFailureRetries) clearRerouteFailureRetries();
-    execute.logs.forEach((line) => console.log(line));
-
-    if (execute.showUnavoidableHazards) {
-        handleUnavoidableHazards(execute.newRoute, execute.hazardsList, execute.hazardCount);
-    }
-    if (execute.preferPrimaryRouteOnNextNavUpdate) {
-        _preferPrimaryRouteOnNextNavUpdate = true;
-    }
-    if (execute.updateRouteOnMap) updateRouteOnMap(execute.newRoute);
-    if (execute.logRerouteEvent) {
-        logReroutingEvent(startLat, startLon, destination, execute.newRoute, execute.hazardCount);
-    }
-
-    if (execute.voice && execute.voice.enabled) {
-        if (execute.voice.shouldSpeak) {
-            lastRerouteAnnouncementTime = execute.voice.announceAt;
-            speakMessage(execute.voice.message, 'high');
-        } else {
-            console.log('[Voice] Skipping duplicate reroute announcement');
-        }
-    }
-
-    if (execute.notification) {
-        sendNotification(execute.notification.title, execute.notification.body, execute.notification.type);
-    }
-}
-
-/**
- * Trigger automatic reroute with hazard handling
- * This enhanced version handles unavoidable hazards gracefully
- */
-async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
-    const now = Date.now();
-    const RD = _rerouteDecision();
-    const destination = resolveNavigationDestination();
-    const trigger = RD.buildAutomaticRerouteTriggerPlan(now, {
-        rerouteInProgress,
-        lastRerouteAttemptTime,
-        postRerouteGraceUntil,
-        debounceMs: REROUTE_DEBOUNCE_MS,
-        offline: !navigator.onLine,
-        destination,
-        hasRouteContext: !!window.lastCalculatedRoute,
-        startLat: currentLat,
-        startLon: currentLon,
-    });
-    const triggerExecute = RD.buildAutomaticRerouteTriggerExecutePlan(trigger);
-
-    if (triggerExecute.action === 'skip') {
-        console.log(triggerExecute.logMessage);
-        return;
-    }
-
-    lastRerouteAttemptTime = triggerExecute.lastRerouteAttemptTime;
-
-    if (triggerExecute.action === 'defer') {
-        if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
-        if (triggerExecute.scheduleRetry) scheduleAutomaticRerouteRetry();
-        if (triggerExecute.resetRerouteInProgress) rerouteInProgress = false;
-        return;
-    }
-
-    rerouteInProgress = triggerExecute.rerouteInProgress;
-    try {
-        if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
-
-        const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
-        const fetchOrch = RD.buildAutomaticRerouteFetchOrchestrationPlan();
-
-        const response = await fetch(fetchOrch.apiPath, {
-            method: fetchOrch.method,
-            headers: fetchOrch.headers,
-            body: JSON.stringify(routeRequest),
-        });
-
-        const data = await response.json();
-        const responsePlans = RD.buildAutomaticRerouteResponsePlans(data, {
-            convertDistance,
-            distUnit: getDistanceUnit(),
-            voiceEnabled: voiceAnnouncementsEnabled,
-            lastRerouteAnnouncementTime,
-            rerouteFailureRetryCount,
-            now: Date.now(),
-        });
-        applyAutomaticRerouteResult({
-            apply: responsePlans.apply,
-            startLat: currentLat,
-            startLon: currentLon,
-            destination,
-        });
-    } catch (error) {
-        console.error('[Rerouting] Error during automatic reroute:', error);
-        const errorPlans = RD.buildAutomaticRerouteErrorResponsePlans({ rerouteFailureRetryCount });
-        applyAutomaticRerouteResult({
-            apply: errorPlans.apply,
-            startLat: currentLat,
-            startLon: currentLon,
-            destination,
-        });
-    }
-}
-
-/**
- * Handle unavoidable hazards on route
- * Shows user-friendly notification with hazard details
- */
-function handleUnavoidableHazards(route, hazardsList, hazardCount) {
-    const plan = _hazardAlerts().buildUnavoidableHazardsHandlingPlan(hazardsList, hazardCount);
-    console.log(plan.logLine);
-    showUnavoidableHazardsModal(plan.hazardTypes, plan.hazardCount);
-    console.log(plan.summaryLogLine);
-}
-
-/**
- * Show modal for unavoidable hazards
- */
-function showUnavoidableHazardsModal(hazardTypes, totalCount) {
-    const hazardAlerts = _hazardAlerts();
-    const mount = hazardAlerts.buildUnavoidableHazardsModalMountPlan(hazardTypes, totalCount);
-
-    let modal = document.getElementById(mount.modalId);
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = mount.modalId;
-        modal.style.cssText = mount.modalStyle;
-        document.body.appendChild(modal);
-    }
-
-    modal.innerHTML = mount.innerHtml;
-
-    let backdrop = document.getElementById(mount.backdropId);
-    if (!backdrop) {
-        backdrop = document.createElement('div');
-        backdrop.id = mount.backdropId;
-        backdrop.style.cssText = mount.backdropStyle;
-        backdrop.onclick = closeUnavoidableHazardsModal;
-        document.body.appendChild(backdrop);
-    }
-
-    backdrop.style.display = mount.display;
-    modal.style.display = mount.display;
-    setTimeout(closeUnavoidableHazardsModal, mount.autoCloseMs);
-}
-
-/**
- * Close unavoidable hazards modal
- */
-function closeUnavoidableHazardsModal() {
-    const hazardAlerts = _hazardAlerts();
-    const modal = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID);
-    const backdrop = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID);
-    if (modal) modal.style.display = 'none';
-    if (backdrop) backdrop.style.display = 'none';
-}
-
-/**
- * Open hazard settings (navigates to settings tab)
- */
-function openHazardSettings() {
-    closeUnavoidableHazardsModal();
-    showTab('settings');
-}
-
-/**
- * Log rerouting event for debugging and analytics
- */
-function logReroutingEvent(startLat, startLon, destination, route, hazardCount) {
-    const result = _rerouteDecision().recordAutomaticRerouteLog(sessionStorage, {
-        startLat,
-        startLon,
-        destination,
-        route,
-        hazardCount,
-        routePrefs: _routePrefs(),
-    });
-    console.log('[Rerouting] Event logged:', result.event);
-}
-
-// Keep old function for backwards compatibility
-async function triggerAutomaticReroute(currentLat, currentLon) {
-    return triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
-}
-// Hazard announcement debouncing
-const hazardAnnouncementDebounce = {};
-let HAZARD_WARNING_DISTANCE = 500;
-
-// Camera alert types: 'off', 'voice', 'chime', 'both'
-let cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
-let cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
-
-function isCameraHazardType(typeStr) {
-    return _hazardAlerts().isCameraHazardType(typeStr);
-}
-
-/**
- * Play a chime alert sound using Web Audio API
- */
-function playCameraChime() {
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(880, ctx.currentTime);
-        osc1.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(660, ctx.currentTime);
-        osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
-
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-
-        osc1.connect(gain);
-        osc2.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc1.start(ctx.currentTime);
-        osc2.start(ctx.currentTime);
-        osc1.stop(ctx.currentTime + 0.4);
-        osc2.stop(ctx.currentTime + 0.4);
-
-        setTimeout(() => {
-            const osc3 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc3.type = 'sine';
-            osc3.frequency.setValueAtTime(1320, ctx.currentTime);
-            gain2.gain.setValueAtTime(0.25, ctx.currentTime);
-            gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-            osc3.connect(gain2);
-            gain2.connect(ctx.destination);
-            osc3.start(ctx.currentTime);
-            osc3.stop(ctx.currentTime + 0.3);
-        }, 200);
-    } catch (e) {
-        console.warn('[Camera Alert] Chime failed:', e);
-    }
-}
-
-function saveCameraAlertPreferences() {
-    const typeEl = document.getElementById('cameraAlertType');
-    const distEl = document.getElementById('cameraAlertDistance');
-    if (typeEl) {
-        cameraAlertType = typeEl.value;
-        localStorage.setItem('pref_cameraAlertType', cameraAlertType);
-    }
-    if (distEl) {
-        cameraAlertDistance = parseInt(distEl.value);
-        localStorage.setItem('pref_cameraAlertDistance', distEl.value);
-    }
-    showStatus('Camera alert preferences saved', 'success');
-}
-
-function loadCameraAlertPreferences() {
-    const typeEl = document.getElementById('cameraAlertType');
-    const distEl = document.getElementById('cameraAlertDistance');
-    cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
-    cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
-    if (typeEl) typeEl.value = cameraAlertType;
-    if (distEl) distEl.value = cameraAlertDistance.toString();
-}
-function announceCameraOrHazard(hazard, distanceM, opts = {}) {
-    const { unavoidableRouteCamera = false } = opts;
-    const HA = _hazardAlerts();
-    const debounceKey = HA.buildHazardAnnouncementDebounceKey(hazard, unavoidableRouteCamera);
-    const plan = HA.buildHazardAnnouncementPlan(hazard, distanceM, {
-        unavoidableRouteCamera,
-        cameraAlertType,
-        voiceAnnouncementsEnabled,
-        distanceUnit,
-        debounceMs: HA.HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
-        lastAnnounceAt: hazardAnnouncementDebounce[debounceKey] || 0,
-        now: Date.now(),
-    });
-    const execute = HA.buildHazardAnnouncementExecutePlan(plan);
-    if (!execute.shouldExecute) return;
-
-    hazardAnnouncementDebounce[execute.debounceKey] = execute.nextAnnounceAt;
-    sendNotification(execute.notification.title, execute.notification.message, execute.notification.type);
-    if (execute.speak) {
-        speakMessage(execute.spokenMessage, execute.speakPriority || undefined);
-    }
-    if (execute.playChime) {
-        playCameraChime();
-    }
-}
-
-function evaluateAndAnnounceHazards(lat, lon, nearbyPayload, includeNearby) {
-    const HA = _hazardAlerts();
-    if (!HA) return;
-
-    const params = HA.buildHazardEvaluationParams({
-        lat,
-        lon,
-        route: window.lastCalculatedRoute,
-        includeNearby: !!includeNearby,
-        nearbyPayload,
-        routePolyline: routePolyline,
-        snappedRouteIndex: lastSnappedRouteIndex,
-        cameraAlertDistanceM: cameraAlertDistance,
-        generalHazardDistanceM: HAZARD_WARNING_DISTANCE,
-        calculateDistance: calculateDistanceMeters,
-    });
-    const alerts = HA.collectHazardsToAnnounce(params);
-
-    alerts.forEach(({ hazard, distanceM, unavoidableRouteCamera }) => {
-        announceCameraOrHazard(hazard, distanceM, { unavoidableRouteCamera });
-    });
-}
-
-/**
- * Route-embedded hazards work offline; nearby API augments when online.
- */
-function processNavigationHazardAlerts(lat, lon) {
-    const HA = _hazardAlerts();
-    const tick = HA.buildNavigationHazardAlertsTickPlan({
-        routeInProgress,
-        isTrackingActive,
-        isOffline: _voyagrIsOffline,
-        navigatorOnLine: navigator.onLine,
-        lat,
-        lon,
-        nearbyRadiusKm: HA.NEARBY_HAZARDS_RADIUS_KM,
-    });
-    if (tick.action === 'skip') return;
-
-    if (tick.evaluateEmbedded) {
-        evaluateAndAnnounceHazards(lat, lon, null, false);
-    }
-
-    const fetchPlan = HA.buildNavigationHazardAlertsNearbyFetchPlan(tick);
-    if (!fetchPlan.shouldFetch) return;
-
-    fetch(fetchPlan.url)
-        .then((response) => response.json())
-        .then((data) => {
-            if (!data.success || !data.hazards) return;
-            evaluateAndAnnounceHazards(lat, lon, data.hazards, true);
-        })
-        .catch((error) => console.log(fetchPlan.errorLogPrefix, error));
-}
-
-/** @deprecated Use processNavigationHazardAlerts — kept for live refresh interval. */
-function checkNearbyHazards(lat, lon) {
-    processNavigationHazardAlerts(lat, lon);
-}
-
-/** @deprecated Merged into processNavigationHazardAlerts. */
-function checkRouteHazardCamerasAhead(lat, lon) {
-    processNavigationHazardAlerts(lat, lon);
-}
 
 // ===== PHASE 1: LIVE DATA REFRESH FUNCTIONS =====
 /**
@@ -16567,6 +15236,7 @@ function closeJourneySummary() {
 VoyagrParkingOrchestration.bind(getParkingOrchestrationRuntime());
 VoyagrTrafficOrchestration.bind(getTrafficOrchestrationRuntime());
 VoyagrPorcupineOrchestration.bind(getPorcupineOrchestrationRuntime());
+VoyagrGpsOrchestration.bind(getGpsOrchestrationRuntime());
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict
