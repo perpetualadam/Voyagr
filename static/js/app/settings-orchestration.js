@@ -19,6 +19,22 @@
     function TU() { return rt().toggleUI(); }
     function RP() { return rt().routePrefs(); }
 
+    function collectSettingsFormState() {
+        var settingsSnapshot = SS();
+        return settingsSnapshot.buildSettingsFormStateInputPlan(
+            settingsSnapshot.buildCollectSettingsFormStateInputPlan({
+                routePreferences: rt().call.collectRoutePreferencesFormState(),
+                hazardPreferences: settingsSnapshot.buildSettingsHazardPreferencesPlan({
+                    avoidTolls: rt().call.isAvoidTollsEnabled(),
+                    getStorageItem: function (key) { return localStorage.getItem(key); },
+                }),
+                parkingPreferences: rt().call.collectParkingPreferencesFormState(),
+                multiDropPreferences: rt().call.collectMultiDropFormState(),
+                mapTheme: localStorage.getItem('mapTheme') || 'standard',
+            })
+        );
+    }
+
     function collectSettingsSnapshotRuntimeState() {
         const traffic = root.VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
         return {
@@ -55,7 +71,7 @@
             settingsSnapshot.buildSaveAllSettingsEntryOrchestrationPlan(
                 settingsSnapshot.buildCollectSaveAllSettingsInputPlan(
                     collectSettingsSnapshotRuntimeState(),
-                    rt().call.collectSettingsFormState()
+                    collectSettingsFormState()
                 )
             ).execute
         );
@@ -406,6 +422,7 @@
 
     var api = {
         bind: bind,
+        collectSettingsFormState: collectSettingsFormState,
         saveAllSettings: saveAllSettings,
         loadAllSettings: loadAllSettings,
         applyDomSelectsFromPlan: applyDomSelectsFromPlan,

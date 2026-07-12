@@ -413,7 +413,10 @@ function getSettingsOrchestrationRuntime() {
             startAutoTrafficUpdates,
             ensureLabelsOnTop,
             showStatus,
-            collectSettingsFormState,
+            collectRoutePreferencesFormState,
+            collectParkingPreferencesFormState,
+            collectMultiDropFormState,
+            isAvoidTollsEnabled,
         },
     };
 }
@@ -820,24 +823,8 @@ function showStatus(message, type) {
     status.className = 'status ' + type;
 }
 
-/**
- * Collect settings form control values from the DOM for snapshot persistence.
- * @returns {Object}
- */
 function collectSettingsFormState() {
-    const SS = _settingsSnapshot();
-    return SS.buildSettingsFormStateInputPlan(
-        SS.buildCollectSettingsFormStateInputPlan({
-            routePreferences: collectRoutePreferencesFormState(),
-            hazardPreferences: SS.buildSettingsHazardPreferencesPlan({
-                avoidTolls: isAvoidTollsEnabled(),
-                getStorageItem: (key) => localStorage.getItem(key),
-            }),
-            parkingPreferences: collectParkingPreferencesFormState(),
-            multiDropPreferences: collectMultiDropFormState(),
-            mapTheme: localStorage.getItem('mapTheme') || 'standard',
-        })
-    );
+    return VoyagrSettingsOrchestration.collectSettingsFormState();
 }
 
 // ===== CALCULATE ROUTE ORCHESTRATION =====
@@ -1247,23 +1234,7 @@ function initializeRoadLabels() {
  * @function startNavigation
  * @returns {*} Return value description
  */
-function startNavigation() {
-    const RS = _routeSelection();
-    const plan = RS.buildStartNavigationExecutePlan(window.lastCalculatedRoute);
-    if (!plan.shouldStart) {
-        showStatus(plan.errorStatusMessage, 'error');
-        return;
-    }
-
-    startTurnByTurnNavigation(window.lastCalculatedRoute);
-
-    plan.hideStartNavButtonIds.forEach((id) => {
-        const btn = document.getElementById(id);
-        if (btn) btn.style.display = 'none';
-    });
-
-    if (plan.collapseBottomSheet) collapseBottomSheet();
-}
+function startNavigation() { VoyagrRoutePreviewOrchestration.startNavigation(); }
 
 // ===== ROUTE PREVIEW ORCHESTRATION =====
 function showRoutePreview(routeData, skipMapDisplay = false) {

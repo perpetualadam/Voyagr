@@ -420,6 +420,24 @@ function startNavigationFromPreview() {
     );
     applyStartNavigationFromPreviewFromPlan(orch.apply);
 }
+
+function startNavigation() {
+    const plan = RS().buildStartNavigationExecutePlan(window.lastCalculatedRoute);
+    if (!plan.shouldStart) {
+        rt().call.showStatus(plan.errorStatusMessage, 'error');
+        return;
+    }
+
+    rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute);
+
+    (plan.hideStartNavButtonIds || []).forEach(function (id) {
+        const btn = document.getElementById(id);
+        if (btn) btn.style.display = 'none';
+    });
+
+    if (plan.collapseBottomSheet) rt().call.collapseBottomSheet();
+}
+
 function applyRoutePreviewPanelDomFromPlan(domPlan) {
     const executePlan = RS().buildRoutePreviewPanelDomExecutePlan(domPlan);
     if (!executePlan.shouldExecute) return;
@@ -550,6 +568,7 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
         overviewRoute: overviewRoute,
         showAlternativeRoutesInPreview: showAlternativeRoutesInPreview,
         showRoutePreview: showRoutePreview,
+        startNavigation: startNavigation,
         startNavigationFromPreview: startNavigationFromPreview,
         updateTripInfo: updateTripInfo,
     };
