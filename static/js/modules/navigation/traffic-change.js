@@ -657,6 +657,97 @@
         };
     }
 
+    /**
+     * DOM apply plan for initialising auto-traffic and reroute toggles.
+     * @param {Object} [initPlan] - from buildInitAutoTrafficRerouteTogglesPlan
+     * @returns {Object}
+     */
+    function buildInitAutoTrafficRerouteTogglesApplyPlan(initPlan) {
+        initPlan = initPlan || {};
+        var toggles = initPlan.toggles || [];
+        var standardToggles = [];
+        for (var i = 0; i < toggles.length; i++) {
+            var toggle = toggles[i] || {};
+            standardToggles.push({
+                id: toggle.elementId,
+                enabled: !!toggle.enabled,
+            });
+        }
+        return {
+            shouldApply: standardToggles.length > 0,
+            standardToggles: standardToggles,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for updateTrafficConditions (runtime + validation).
+     * @param {Object} [opts]
+     * @param {Object|null|undefined} [opts.lastCalculatedRoute]
+     * @param {string} [opts.startLabel]
+     * @param {string} [opts.endLabel]
+     * @returns {Object}
+     */
+    function buildUpdateTrafficConditionsEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        var runtime = buildTrafficMonitoringRuntimeCollectPlan();
+        var orch = buildUpdateTrafficConditionsOrchestrationPlan(
+            opts.lastCalculatedRoute,
+            opts.startLabel != null ? opts.startLabel : '',
+            opts.endLabel != null ? opts.endLabel : ''
+        );
+        return Object.assign({ runtime: runtime }, orch);
+    }
+
+    /**
+     * Apply plan after checkTrafficAndReroute orchestration resolves.
+     * @param {Object} [orch] - from buildCheckTrafficAndRerouteOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildCheckTrafficAndRerouteApplyPlan(orch) {
+        orch = orch || {};
+        var base = {
+            shouldApply: true,
+            updateLastTrafficData: orch.updateLastTrafficData,
+            logMessage: orch.logMessage,
+            samplingLogMessage: '[Auto-Traffic] Sampling live traffic along route...',
+            errorLogPrefix: '[Auto-Traffic] Error checking traffic:',
+        };
+        if (orch.action === 'reroute' && orch.notifPlan) {
+            return Object.assign({}, base, {
+                shouldReroute: true,
+                notifPlan: orch.notifPlan,
+            });
+        }
+        return Object.assign({}, base, { shouldReroute: false });
+    }
+
+    /**
+     * Apply plan when a traffic-based reroute alternative is accepted.
+     * @param {Object} [dispatch] - from buildTrafficRerouteApiResponseDispatchPlan
+     * @returns {Object}
+     */
+    function buildTriggerTrafficBasedRerouteAcceptApplyPlan(dispatch) {
+        dispatch = dispatch || {};
+        if (dispatch.action !== 'accept' || !dispatch.acceptPlan) {
+            return {
+                shouldApply: false,
+                logMessage: dispatch.logMessage,
+            };
+        }
+        var acceptPlan = dispatch.acceptPlan;
+        return {
+            shouldApply: true,
+            newRoute: dispatch.newRoute,
+            clearTrafficCache: !!acceptPlan.clearTrafficCache,
+            clearLastTrafficData: !!acceptPlan.clearLastTrafficData,
+            notificationTitle: acceptPlan.notificationTitle,
+            notificationMessage: acceptPlan.notificationMessage,
+            notificationType: acceptPlan.notificationType,
+            voiceMessage: acceptPlan.voiceMessage,
+            speakPriority: 'high',
+        };
+    }
+
     var TRAFFIC_REROUTE_API_PATH = '/api/route';
 
     /**
@@ -815,6 +906,10 @@
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
         buildAutoRerouteOnDeviationToggleExecutePlan: buildAutoRerouteOnDeviationToggleExecutePlan,
         buildInitAutoTrafficRerouteTogglesPlan: buildInitAutoTrafficRerouteTogglesPlan,
+        buildInitAutoTrafficRerouteTogglesApplyPlan: buildInitAutoTrafficRerouteTogglesApplyPlan,
+        buildUpdateTrafficConditionsEntryOrchestrationPlan: buildUpdateTrafficConditionsEntryOrchestrationPlan,
+        buildCheckTrafficAndRerouteApplyPlan: buildCheckTrafficAndRerouteApplyPlan,
+        buildTriggerTrafficBasedRerouteAcceptApplyPlan: buildTriggerTrafficBasedRerouteAcceptApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

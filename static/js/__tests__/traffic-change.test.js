@@ -269,6 +269,83 @@ describe('auto traffic interval dispatch plans', () => {
         expect(plan.toggles[2].enabled).toBe(true);
     });
 
+    test('buildInitAutoTrafficRerouteTogglesApplyPlan maps init toggles to standard toggle patches', () => {
+        const apply = TC.buildInitAutoTrafficRerouteTogglesApplyPlan(
+            TC.buildInitAutoTrafficRerouteTogglesPlan({
+                autoTrafficUpdateEnabled: true,
+                autoRerouteOnDeviationEnabled: false,
+                routeTrafficEnabled: true,
+            })
+        );
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.standardToggles).toHaveLength(3);
+        expect(apply.standardToggles[1].id).toBe(TC.AUTO_REROUTE_DEVIATION_TOGGLE_ID);
+        expect(apply.standardToggles[1].enabled).toBe(false);
+    });
+
+    test('buildUpdateTrafficConditionsEntryOrchestrationPlan bundles runtime and validation', () => {
+        expect(TC.buildUpdateTrafficConditionsEntryOrchestrationPlan({
+            lastCalculatedRoute: null,
+            startLabel: 'A',
+            endLabel: 'B',
+        }).shouldFetch).toBe(false);
+
+        const orch = TC.buildUpdateTrafficConditionsEntryOrchestrationPlan({
+            lastCalculatedRoute: {},
+            startLabel: 'Home',
+            endLabel: 'Work',
+        });
+        expect(orch.shouldFetch).toBe(true);
+        expect(orch.runtime.startElementId).toBe(TC.TRAFFIC_CONDITIONS_START_ELEMENT_ID);
+        expect(orch.requestBody).toEqual({ start: 'Home', end: 'Work' });
+    });
+
+    test('buildCheckTrafficAndRerouteApplyPlan exposes reroute notification side effects', () => {
+        const noReroute = TC.buildCheckTrafficAndRerouteApplyPlan({
+            action: 'no_change',
+            logMessage: '[Auto-Traffic] No significant traffic change',
+        });
+        expect(noReroute.shouldReroute).toBe(false);
+        expect(noReroute.samplingLogMessage).toContain('Sampling');
+
+        const reroute = TC.buildCheckTrafficAndRerouteApplyPlan({
+            action: 'reroute',
+            notifPlan: {
+                shouldReroute: true,
+                changeType: 'severe',
+                avoidPoints: [{ lat: 1, lon: 2 }],
+                measuredDelayMin: 5,
+            },
+        });
+        expect(reroute.shouldReroute).toBe(true);
+        expect(reroute.notifPlan.changeType).toBe('severe');
+    });
+
+    test('buildTriggerTrafficBasedRerouteAcceptApplyPlan maps accepted reroute notifications', () => {
+        const reject = TC.buildTriggerTrafficBasedRerouteAcceptApplyPlan({
+            action: 'reject',
+            logMessage: 'keep current',
+        });
+        expect(reject.shouldApply).toBe(false);
+        expect(reject.logMessage).toBe('keep current');
+
+        const accept = TC.buildTriggerTrafficBasedRerouteAcceptApplyPlan({
+            action: 'accept',
+            newRoute: { duration_minutes: 12 },
+            acceptPlan: {
+                clearTrafficCache: true,
+                clearLastTrafficData: true,
+                notificationTitle: 'Reroute',
+                notificationMessage: 'Faster route found',
+                notificationType: 'info',
+                voiceMessage: 'Rerouting',
+            },
+        });
+        expect(accept.shouldApply).toBe(true);
+        expect(accept.clearTrafficCache).toBe(true);
+        expect(accept.voiceMessage).toBe('Rerouting');
+    });
+
     test('buildUpdateTrafficConditionsOrchestrationPlan validates route presence', () => {
         expect(TC.buildUpdateTrafficConditionsOrchestrationPlan(null, 'A', 'B').shouldFetch).toBe(false);
         const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan({}, 'A', 'B');

@@ -508,6 +508,40 @@ describe('route comparison modal helpers', () => {
         expect(dom.containerId).toBe('routeComparisonList');
         expect(dom.innerHtml).toContain('Show All 1 Routes');
     });
+
+    test('buildDisplayRouteComparisonOrchestrationPlan bundles list opts for non-empty routes', () => {
+        const orch = RS.buildDisplayRouteComparisonOrchestrationPlan({
+            routes: [{ distance_km: 5, duration_minutes: 10 }],
+            selectedRouteIndex: 1,
+            routeColors: ['#00f'],
+            currencySymbol: '$',
+            distUnit: 'km',
+            distanceTexts: ['5.0'],
+        });
+        expect(orch.shouldDisplay).toBe(true);
+        expect(orch.domPlan.containerId).toBe('routeComparisonList');
+        expect(orch.domPlan.innerHtml).toContain('Show All 1 Routes');
+    });
+
+    test('buildUseRouteOrchestrationPlan gates invalid index and previews traffic when enabled', () => {
+        expect(RS.buildUseRouteOrchestrationPlan(0, [], {}).shouldUse).toBe(false);
+
+        const withTraffic = RS.buildUseRouteOrchestrationPlan(
+            0,
+            [{ polyline: [[51, -1], [52, -1]] }],
+            { routeTrafficEnabled: true }
+        );
+        expect(withTraffic.shouldUse).toBe(true);
+        expect(withTraffic.previewTraffic).toBe(true);
+        expect(withTraffic.previewPolyline).toHaveLength(2);
+
+        const noTraffic = RS.buildUseRouteOrchestrationPlan(
+            0,
+            [{ polyline: [[51, -1]] }],
+            { routeTrafficEnabled: false }
+        );
+        expect(noTraffic.previewTraffic).toBe(false);
+    });
 });
 
 describe('buildInNavRerouteSuccessPlan', () => {

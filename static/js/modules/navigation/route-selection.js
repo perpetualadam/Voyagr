@@ -308,6 +308,68 @@
     }
 
     /**
+     * Orchestration plan for refreshing the route comparison tab list panel.
+     * @param {Object} [opts]
+     * @param {Array<Object>} [opts.routes]
+     * @param {number} [opts.selectedRouteIndex]
+     * @param {string[]} [opts.routeColors]
+     * @param {string} [opts.currencySymbol]
+     * @param {string} [opts.distUnit]
+     * @param {string[]} [opts.distanceTexts]
+     * @returns {Object}
+     */
+    function buildDisplayRouteComparisonOrchestrationPlan(opts) {
+        opts = opts || {};
+        var routes = opts.routes || [];
+        var listOpts = {};
+        if (routes.length > 0) {
+            listOpts = {
+                selectedIndex: opts.selectedRouteIndex != null ? opts.selectedRouteIndex : 0,
+                routeColors: opts.routeColors,
+                currencySymbol: opts.currencySymbol,
+                distUnit: opts.distUnit,
+                distanceTexts: opts.distanceTexts,
+            };
+        }
+        return {
+            shouldDisplay: true,
+            domPlan: buildRouteComparisonListDomApplyPlan({
+                routes: routes,
+                listOpts: listOpts,
+            }),
+        };
+    }
+
+    /**
+     * Orchestration plan for selecting a route from the comparison list.
+     * @param {number} index
+     * @param {Array<Object>} routeOptions
+     * @param {Object} [runtime]
+     * @returns {Object}
+     */
+    function buildUseRouteOrchestrationPlan(index, routeOptions, runtime) {
+        runtime = runtime || {};
+        var route = routeOptions && routeOptions[index];
+        if (!route) {
+            return { shouldUse: false };
+        }
+        var polylinePoints = route.polyline || [];
+        var previewTraffic = !!(
+            runtime.routeTrafficEnabled &&
+            polylinePoints.length > 0
+        );
+        return {
+            shouldUse: true,
+            selectedRouteIndex: index,
+            route: route,
+            statusMessage: 'Route selected. Ready to navigate!',
+            statusType: 'success',
+            previewTraffic: previewTraffic,
+            previewPolyline: previewTraffic ? polylinePoints : null,
+        };
+    }
+
+    /**
      * Normalize route options for POST /api/route-comparison.
      * @param {Array<Object>} routes
      * @returns {Array<Object>}
@@ -3244,6 +3306,8 @@
         buildRouteComparisonCardHtml: buildRouteComparisonCardHtml,
         buildRouteComparisonListHtml: buildRouteComparisonListHtml,
         buildRouteComparisonListDomApplyPlan: buildRouteComparisonListDomApplyPlan,
+        buildDisplayRouteComparisonOrchestrationPlan: buildDisplayRouteComparisonOrchestrationPlan,
+        buildUseRouteOrchestrationPlan: buildUseRouteOrchestrationPlan,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
         buildRouteComparisonTableRowHtml: buildRouteComparisonTableRowHtml,
         buildRouteComparisonTableHtml: buildRouteComparisonTableHtml,

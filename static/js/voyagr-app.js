@@ -2897,19 +2897,18 @@ function applyRouteComparisonListDomFromPlan(domPlan) {
  * @returns {void}
  */
 function displayRouteComparison() {
-    const selection = _routeSelection();
+    const RS = _routeSelection();
     const routes = routeOptions || [];
-    const domPlan = selection.buildRouteComparisonListDomApplyPlan({
+    const orch = RS.buildDisplayRouteComparisonOrchestrationPlan({
         routes,
-        listOpts: routes.length > 0 ? {
-            selectedIndex: selectedRouteIndex,
-            routeColors: routeColors(),
-            currencySymbol: getCurrencySymbol(),
-            distUnit: getDistanceUnit(),
-            distanceTexts: routes.map((route) => convertDistance(route.distance_km)),
-        } : {},
+        selectedRouteIndex,
+        routeColors: routeColors(),
+        currencySymbol: getCurrencySymbol(),
+        distUnit: getDistanceUnit(),
+        distanceTexts: routes.map((route) => convertDistance(route.distance_km)),
     });
-    applyRouteComparisonListDomFromPlan(domPlan);
+    if (!orch.shouldDisplay) return;
+    applyRouteComparisonListDomFromPlan(orch.domPlan);
 }
 
 // ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
@@ -3490,22 +3489,22 @@ function showAllRoutes() {
  * @returns {*} Return value description
  */
 function useRoute(index) {
-    const route = routeOptions[index];
-    if (!route) return;
+    const RS = _routeSelection();
+    const orch = RS.buildUseRouteOrchestrationPlan(index, routeOptions, {
+        routeTrafficEnabled,
+    });
+    if (!orch.shouldUse) return;
 
-    selectedRouteIndex = index;
+    selectedRouteIndex = orch.selectedRouteIndex;
     syncLastCalculatedRouteFromSelection(index);
-    updateTripInfoFromRouteOption(route);
+    updateTripInfoFromRouteOption(orch.route);
 
-    // Display traffic edges on selected route if enabled
-    const polylinePoints = route.polyline || [];
-    if (routeTrafficEnabled && polylinePoints.length > 0) {
-        routePolyline = polylinePoints; // Temporarily set for traffic display
+    if (orch.previewTraffic) {
+        routePolyline = orch.previewPolyline;
         fetchAndDisplayRouteTraffic();
     }
 
-    showStatus('Route selected. Ready to navigate!', 'success');
-    // switchTab('navigation'); // Removed to keep current tab (e.g. Preview) active
+    showStatus(orch.statusMessage, orch.statusType);
 }
 
 // ===== ROUTE SHARING FUNCTIONS =====
@@ -4121,14 +4120,13 @@ function deleteSavedRoute(routeId) {
  */
 function updateTrafficConditions() {
     const TC = _trafficChange();
-    const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
-    const startEl = document.getElementById(runtime.startElementId);
-    const endEl = document.getElementById(runtime.endElementId);
-    const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan(
-        window.lastCalculatedRoute,
-        startEl ? startEl.value : '',
-        endEl ? endEl.value : ''
-    );
+    const startEl = document.getElementById(TC.TRAFFIC_CONDITIONS_START_ELEMENT_ID);
+    const endEl = document.getElementById(TC.TRAFFIC_CONDITIONS_END_ELEMENT_ID);
+    const orch = TC.buildUpdateTrafficConditionsEntryOrchestrationPlan({
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        startLabel: startEl ? startEl.value : '',
+        endLabel: endEl ? endEl.value : '',
+    });
     if (!orch.shouldFetch) {
         showStatus(orch.errorStatusMessage, 'error');
         return;
@@ -6101,7 +6099,8 @@ async function checkTrafficAndReroute() {
     });
     if (!preflight.shouldCheck) return;
 
-    console.log('[Auto-Traffic] Sampling live traffic along route...');
+    const applyBase = TC.buildCheckTrafficAndRerouteApplyPlan({});
+    console.log(applyBase.samplingLogMessage);
 
     try {
         const flow = await getRouteTrafficAhead(preflight.forceFresh);
@@ -6111,13 +6110,14 @@ async function checkTrafficAndReroute() {
             flow,
             lastTrafficData,
         });
-        if (orch.updateLastTrafficData !== undefined) {
-            lastTrafficData = orch.updateLastTrafficData;
+        const apply = TC.buildCheckTrafficAndRerouteApplyPlan(orch);
+        if (apply.updateLastTrafficData !== undefined) {
+            lastTrafficData = apply.updateLastTrafficData;
         }
-        if (orch.logMessage) console.log(orch.logMessage);
+        if (apply.logMessage) console.log(apply.logMessage);
 
-        if (orch.action === 'reroute' && orch.notifPlan) {
-            const notifPlan = orch.notifPlan;
+        if (apply.shouldReroute && apply.notifPlan) {
+            const notifPlan = apply.notifPlan;
             sendNotification(notifPlan.notificationTitle, notifPlan.notificationMessage, notifPlan.notificationType);
             await triggerTrafficBasedReroute(
                 notifPlan.changeType,
@@ -6126,7 +6126,26 @@ async function checkTrafficAndReroute() {
             );
         }
     } catch (error) {
-        console.error('[Auto-Traffic] Error checking traffic:', error);
+        console.error(applyBase.errorLogPrefix, error);
+    }
+}
+
+/**
+ * Apply accepted traffic-based reroute side effects from a pure apply plan.
+ * @param {Object} apply - from buildTriggerTrafficBasedRerouteAcceptApplyPlan
+ */
+function applyTriggerTrafficBasedRerouteAcceptFromPlan(apply) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.logMessage) console.log(apply.logMessage);
+        return;
+    }
+
+    updateRouteOnMap(apply.newRoute);
+    if (apply.clearTrafficCache) _routeTrafficSampleCache = null;
+    if (apply.clearLastTrafficData) lastTrafficData = null;
+    sendNotification(apply.notificationTitle, apply.notificationMessage, apply.notificationType);
+    if (voiceAnnouncementsEnabled && apply.voiceMessage) {
+        speakMessage(apply.voiceMessage, apply.speakPriority || 'high');
     }
 }
 
@@ -6172,14 +6191,9 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
         });
 
         if (dispatch.action === 'accept') {
-            const acceptPlan = dispatch.acceptPlan;
-            updateRouteOnMap(dispatch.newRoute);
-            if (acceptPlan.clearTrafficCache) _routeTrafficSampleCache = null;
-            if (acceptPlan.clearLastTrafficData) lastTrafficData = null;
-            sendNotification(acceptPlan.notificationTitle, acceptPlan.notificationMessage, acceptPlan.notificationType);
-            if (voiceAnnouncementsEnabled && acceptPlan.voiceMessage) {
-                speakMessage(acceptPlan.voiceMessage, 'high');
-            }
+            applyTriggerTrafficBasedRerouteAcceptFromPlan(
+                TC.buildTriggerTrafficBasedRerouteAcceptApplyPlan(dispatch)
+            );
         } else if (dispatch.action === 'reject' && dispatch.logMessage) {
             console.log(dispatch.logMessage);
         }
