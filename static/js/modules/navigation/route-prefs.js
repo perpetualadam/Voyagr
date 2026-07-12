@@ -249,12 +249,37 @@
     }
 
     /**
+     * Entry orchestration plan for saveRoutePreferences handler.
+     * @param {Object} input - from buildCollectRoutePreferencesInputPlan
+     * @returns {Object}
+     */
+    function buildSaveRoutePreferencesEntryOrchestrationPlan(input) {
+        var preferences = buildRoutePreferencesFormStatePlan(input);
+        return {
+            preferences: preferences,
+            execute: buildSaveRoutePreferencesExecutePlan(preferences),
+        };
+    }
+
+    /**
      * Execute plan for loading route preferences into the form.
      * @returns {Object}
      */
     function buildLoadRoutePreferencesExecutePlan() {
         return {
             shouldLoad: true,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadRoutePreferences handler.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function buildLoadRoutePreferencesEntryOrchestrationPlan(storage) {
+        return {
+            execute: buildLoadRoutePreferencesExecutePlan(),
+            uiApply: buildRoutePreferencesUiApplyPlan(storage),
         };
     }
 
@@ -389,7 +414,9 @@
         buildRoutePreferencesDomApplyPlan: buildRoutePreferencesDomApplyPlan,
         buildCollectRoutePreferencesInputPlan: buildCollectRoutePreferencesInputPlan,
         buildSaveRoutePreferencesExecutePlan: buildSaveRoutePreferencesExecutePlan,
+        buildSaveRoutePreferencesEntryOrchestrationPlan: buildSaveRoutePreferencesEntryOrchestrationPlan,
         buildLoadRoutePreferencesExecutePlan: buildLoadRoutePreferencesExecutePlan,
+        buildLoadRoutePreferencesEntryOrchestrationPlan: buildLoadRoutePreferencesEntryOrchestrationPlan,
         buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
         buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
         buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,

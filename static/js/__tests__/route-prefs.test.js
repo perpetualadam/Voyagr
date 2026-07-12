@@ -160,6 +160,24 @@ describe('route-prefs module', () => {
         test('buildLoadRoutePreferencesExecutePlan enables form restore', () => {
             expect(RoutePrefs.buildLoadRoutePreferencesExecutePlan().shouldLoad).toBe(true);
         });
+
+        test('buildSaveRoutePreferencesEntryOrchestrationPlan bundles execute plan', () => {
+            const entry = RoutePrefs.buildSaveRoutePreferencesEntryOrchestrationPlan({
+                preferScenic: true,
+                maxDetour: 15,
+            });
+            expect(entry.execute.shouldSave).toBe(true);
+            expect(entry.preferences.preferScenic).toBe(true);
+            expect(entry.preferences.maxDetour).toBe(15);
+        });
+
+        test('buildLoadRoutePreferencesEntryOrchestrationPlan bundles ui apply plan', () => {
+            const entry = RoutePrefs.buildLoadRoutePreferencesEntryOrchestrationPlan({
+                getItem() { return null; },
+            });
+            expect(entry.execute.shouldLoad).toBe(true);
+            expect(entry.uiApply.selects.maxDetour).toBe(20);
+        });
     });
 
     describe('route leg avoidance preference helpers', () => {

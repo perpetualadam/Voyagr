@@ -163,4 +163,12 @@ describe('dom-helpers', () => {
         expect(body.shouldExpand).toBe(true);
         expect(body.logMessage).toBe('expand sheet');
     });
+
+    test('buildBottomSheetFocusExpandBindingPlan lists focus-expand input ids', () => {
+        const binding = Dom.buildBottomSheetFocusExpandBindingPlan(['start', 'end']);
+        expect(binding.shouldBind).toBe(true);
+        expect(binding.inputIds).toEqual(['start', 'end']);
+        expect(binding.action).toBe('expand');
+        expect(Dom.buildBottomSheetFocusExpandBindingPlan([]).shouldBind).toBe(false);
+    });
 });

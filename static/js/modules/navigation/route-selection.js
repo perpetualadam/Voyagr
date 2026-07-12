@@ -3085,6 +3085,28 @@
     }
 
     /**
+     * Entry apply plan for display-all-routes pre-mount runtime steps.
+     * @param {Object} [preMount] - from buildDisplayAllRoutesMapPreMountPlan
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesPreMountEntryApplyPlan(preMount) {
+        preMount = preMount || {};
+        if (!preMount.clearRouteLayerHandle
+            && !preMount.clearAllRouteLayerHandles
+            && !preMount.clearMapRouteLayers
+            && !preMount.hydratePolylines) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            clearRouteLayerHandle: !!preMount.clearRouteLayerHandle,
+            clearAllRouteLayerHandles: !!preMount.clearAllRouteLayerHandles,
+            clearMapRouteLayers: !!preMount.clearMapRouteLayers,
+            hydratePolylines: !!preMount.hydratePolylines,
+        };
+    }
+
+    /**
      * Style-load execute plan for deferred route layer mounting.
      * @param {Object} dispatch - from buildDisplayAllRoutesMapDispatchPlan
      * @param {Object} [opts]
@@ -3275,6 +3297,7 @@
         return {
             shouldMount: true,
             preMount: execute.preMount,
+            preMountApply: buildDisplayAllRoutesPreMountEntryApplyPlan(execute.preMount),
             stylePlan: execute.stylePlan,
             styleSchedule: buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan(execute.stylePlan, {
                 addLayersLogMessage: execute.addLayersLogMessage,
@@ -3966,6 +3989,17 @@
     }
 
     /**
+     * Entry orchestration plan for ensureLabelsOnTop handler.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildEnsureLabelsOnTopEntryOrchestrationPlan(input) {
+        return {
+            apply: buildEnsureLabelsOnTopApplyPlan(input),
+        };
+    }
+
+    /**
      * Layer reorder plan for route-traffic edge overlays.
      * @param {Array<{ id?: string }>} trafficLayers
      * @param {Array<Object>} [styleLayers]
@@ -4322,6 +4356,7 @@
         buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,
         buildClearAllRouteLayersFromMapPlan: buildClearAllRouteLayersFromMapPlan,
         buildDisplayAllRoutesMapPreMountPlan: buildDisplayAllRoutesMapPreMountPlan,
+        buildDisplayAllRoutesPreMountEntryApplyPlan: buildDisplayAllRoutesPreMountEntryApplyPlan,
         buildDisplayAllRoutesMapStyleLoadExecutePlan: buildDisplayAllRoutesMapStyleLoadExecutePlan,
         buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan:
             buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan,
@@ -4355,6 +4390,7 @@
         buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,
         buildEnsureLabelsOnTopDebounceApplyPlan: buildEnsureLabelsOnTopDebounceApplyPlan,
         buildEnsureLabelsOnTopApplyPlan: buildEnsureLabelsOnTopApplyPlan,
+        buildEnsureLabelsOnTopEntryOrchestrationPlan: buildEnsureLabelsOnTopEntryOrchestrationPlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,
         buildBringNavRouteAboveTrafficEdgesDispatchPlan: buildBringNavRouteAboveTrafficEdgesDispatchPlan,
         buildBringTrafficEdgesToTopExecutePlan: buildBringTrafficEdgesToTopExecutePlan,
