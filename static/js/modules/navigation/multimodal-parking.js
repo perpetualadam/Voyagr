@@ -333,6 +333,67 @@
     }
 
     /**
+     * Clamp selected route index for parking destination resolution.
+     * @param {number} routeOptionsLength
+     * @param {number|string} selectedRouteIndex
+     * @returns {number}
+     */
+    function buildResolveParkingDestinationSelectedRouteIndexPlan(routeOptionsLength, selectedRouteIndex) {
+        var len = routeOptionsLength || 0;
+        if (len <= 0) return 0;
+        return Math.max(0, Math.min(Number(selectedRouteIndex) || 0, len - 1));
+    }
+
+    /**
+     * Input assembly for resolveParkingDestinationCoords handler.
+     * @param {Object} input
+     * @returns {Object}
+     */
+    function buildCollectResolveParkingDestinationInputPlan(input) {
+        return input || {};
+    }
+
+    /**
+     * Preflight plan for findParkingNearDestination handler.
+     * @param {Object|null|undefined} lastRoute
+     * @param {string} endInput
+     * @returns {Object}
+     */
+    function buildFindParkingNearDestinationPreflightPlan(lastRoute, endInput) {
+        if (!lastRoute) {
+            return {
+                ok: false,
+                errorStatusMessage: 'Calculate a route first, then tap Find Parking',
+                errorStatusType: 'error',
+            };
+        }
+        if (!endInput) {
+            return {
+                ok: false,
+                errorStatusMessage: 'Please enter a destination first',
+                errorStatusType: 'error',
+            };
+        }
+        return {
+            ok: true,
+            loadingStatusMessage: '🔍 Searching for parking near destination...',
+            loadingStatusType: 'loading',
+        };
+    }
+
+    /**
+     * Entry orchestration plan for findParkingNearDestination preflight.
+     * @param {Object|null|undefined} lastRoute
+     * @param {string} endInput
+     * @returns {Object}
+     */
+    function buildFindParkingNearDestinationEntryOrchestrationPlan(lastRoute, endInput) {
+        return {
+            preflight: buildFindParkingNearDestinationPreflightPlan(lastRoute, endInput),
+        };
+    }
+
+    /**
      * Search dispatch plan for parking near destination.
      * @param {Object} formState
      * @param {number} formState.lat
@@ -585,6 +646,12 @@
         parseLatLonCommaString: parseLatLonCommaString,
         lastPolylinePointCoords: lastPolylinePointCoords,
         resolveParkingDestinationCoordsFromSources: resolveParkingDestinationCoordsFromSources,
+        buildResolveParkingDestinationSelectedRouteIndexPlan:
+            buildResolveParkingDestinationSelectedRouteIndexPlan,
+        buildCollectResolveParkingDestinationInputPlan: buildCollectResolveParkingDestinationInputPlan,
+        buildFindParkingNearDestinationPreflightPlan: buildFindParkingNearDestinationPreflightPlan,
+        buildFindParkingNearDestinationEntryOrchestrationPlan:
+            buildFindParkingNearDestinationEntryOrchestrationPlan,
         buildParkingSearchDispatchPlan: buildParkingSearchDispatchPlan,
         PARKING_PREFS_STORAGE_KEY: PARKING_PREFS_STORAGE_KEY,
         PARKING_PREFS_DEFAULTS: PARKING_PREFS_DEFAULTS,

@@ -116,4 +116,26 @@ describe('porcupine-wake module', () => {
         expect(execute.unsubscribeBridge).toBe(true);
         expect(execute.terminateWorker).toBe(true);
     });
+
+    test('porcupine wake entry orchestration plans bundle execute plans', () => {
+        const loadEntry = PW.buildLoadPorcupineWakeUiEntryOrchestrationPlan({
+            configured: true,
+            enabled: true,
+        });
+        expect(loadEntry.execute.showRow).toBe(true);
+
+        const toggleEntry = PW.buildTogglePorcupineWakeWordEntryOrchestrationPlan(false);
+        expect(toggleEntry.collected.enabled).toBe(true);
+        expect(toggleEntry.execute.startPipeline).toBe(true);
+
+        const resumeEntry = PW.buildPorcupineResumeAfterVoiceEntryOrchestrationPlan({
+            resumeFlag: true,
+            storageEnabled: true,
+            configured: true,
+        });
+        expect(resumeEntry.resume.shouldResume).toBe(true);
+
+        expect(PW.buildPorcupineWakeHotwordEntryOrchestrationPlan().execute.speakMessage)
+            .toBe('Say your command');
+    });
 });

@@ -280,6 +280,74 @@
         };
     }
 
+    /**
+     * Input assembly for Picovoice client configuration checks.
+     * @param {Object} env
+     * @returns {Object}
+     */
+    function buildCollectPicovoiceClientConfigInputPlan(env) {
+        return env || {};
+    }
+
+    /**
+     * Entry orchestration plan for loadPorcupineWakeUi handler.
+     * @param {Object} input
+     * @param {boolean} [input.configured]
+     * @param {boolean} [input.enabled]
+     * @returns {Object}
+     */
+    function buildLoadPorcupineWakeUiEntryOrchestrationPlan(input) {
+        return {
+            execute: buildLoadPorcupineWakeUiExecutePlan(input),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for togglePorcupineWakeWord handler.
+     * @param {boolean} currentEnabled
+     * @returns {Object}
+     */
+    function buildTogglePorcupineWakeWordEntryOrchestrationPlan(currentEnabled) {
+        var collected = buildTogglePorcupineWakeWordCollectPlan({ currentEnabled: currentEnabled });
+        return {
+            collected: collected,
+            execute: buildTogglePorcupineWakeWordExecutePlan({ enabled: collected.enabled }),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for maybeResumePorcupineWakeAfterVoice handler.
+     * @param {Object} input
+     * @param {boolean} [input.resumeFlag]
+     * @param {boolean} [input.storageEnabled]
+     * @param {boolean} [input.configured]
+     * @returns {Object}
+     */
+    function buildPorcupineResumeAfterVoiceEntryOrchestrationPlan(input) {
+        return {
+            resume: buildPorcupineResumeAfterVoicePlan(input),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for onPorcupineWakeHotword handler.
+     * @returns {Object}
+     */
+    function buildPorcupineWakeHotwordEntryOrchestrationPlan() {
+        return {
+            execute: buildPorcupineWakeHotwordExecutePlan(),
+        };
+    }
+
+    /**
+     * Input assembly for Porcupine pipeline preflight checks.
+     * @param {Object} input
+     * @returns {Object}
+     */
+    function buildCollectPorcupinePipelinePreflightInputPlan(input) {
+        return input || {};
+    }
+
     var api = {
         VOYAGR_PORCUPINE_WAKE_STORAGE_KEY: VOYAGR_PORCUPINE_WAKE_STORAGE_KEY,
         PORCUPINE_WAKE_UI_IDS: PORCUPINE_WAKE_UI_IDS,
@@ -297,6 +365,12 @@
         buildWarmPicovoicePostMessagePlan: buildWarmPicovoicePostMessagePlan,
         buildStopPorcupineWakePipelineExecutePlan: buildStopPorcupineWakePipelineExecutePlan,
         buildPorcupineInitAutoStartPlan: buildPorcupineInitAutoStartPlan,
+        buildCollectPicovoiceClientConfigInputPlan: buildCollectPicovoiceClientConfigInputPlan,
+        buildLoadPorcupineWakeUiEntryOrchestrationPlan: buildLoadPorcupineWakeUiEntryOrchestrationPlan,
+        buildTogglePorcupineWakeWordEntryOrchestrationPlan: buildTogglePorcupineWakeWordEntryOrchestrationPlan,
+        buildPorcupineResumeAfterVoiceEntryOrchestrationPlan: buildPorcupineResumeAfterVoiceEntryOrchestrationPlan,
+        buildPorcupineWakeHotwordEntryOrchestrationPlan: buildPorcupineWakeHotwordEntryOrchestrationPlan,
+        buildCollectPorcupinePipelinePreflightInputPlan: buildCollectPorcupinePipelinePreflightInputPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

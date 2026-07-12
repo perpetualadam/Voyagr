@@ -136,6 +136,18 @@ describe('multimodal-parking module', () => {
             .toEqual({ needsGeocode: true });
     });
 
+    test('parking destination and find-parking entry orchestration plans', () => {
+        expect(MP.buildResolveParkingDestinationSelectedRouteIndexPlan(3, 5)).toBe(2);
+        expect(MP.buildResolveParkingDestinationSelectedRouteIndexPlan(0, 1)).toBe(0);
+
+        const missingRoute = MP.buildFindParkingNearDestinationEntryOrchestrationPlan(null, 'Leeds');
+        expect(missingRoute.preflight.ok).toBe(false);
+
+        const ok = MP.buildFindParkingNearDestinationEntryOrchestrationPlan({}, 'Leeds');
+        expect(ok.preflight.ok).toBe(true);
+        expect(ok.preflight.loadingStatusMessage).toContain('Searching');
+    });
+
     test('buildParkingSearchDispatchPlan maps walking distance to radius and widen fallback', () => {
         const plan = MP.buildParkingSearchDispatchPlan({
             lat: 51.5,

@@ -645,6 +645,29 @@
     }
 
     /**
+     * Entry orchestration plan for manualTrafficUpdate handler.
+     * @returns {Object}
+     */
+    function buildManualTrafficUpdateEntryOrchestrationPlan() {
+        return buildManualTrafficUpdateOrchestrationPlan();
+    }
+
+    /**
+     * Entry orchestration plan for checkTrafficAndReroute handler preflight.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {number} [opts.currentLat]
+     * @param {number} [opts.currentLon]
+     * @returns {Object}
+     */
+    function buildCheckTrafficAndRerouteEntryOrchestrationPlan(opts) {
+        return {
+            preflight: buildCheckTrafficAndReroutePreflightPlan(opts),
+            applyBase: buildCheckTrafficAndRerouteApplyPlan({}),
+        };
+    }
+
+    /**
      * Entry orchestration plan before requesting a traffic-based reroute.
      * @param {Object} [opts]
      * @param {string|null|undefined} [opts.destination]
@@ -1046,6 +1069,8 @@
         buildStopTrafficMonitoringOrchestrationPlan: buildStopTrafficMonitoringOrchestrationPlan,
         buildStopTrafficMonitoringApplyPlan: buildStopTrafficMonitoringApplyPlan,
         buildManualTrafficUpdateOrchestrationPlan: buildManualTrafficUpdateOrchestrationPlan,
+        buildManualTrafficUpdateEntryOrchestrationPlan: buildManualTrafficUpdateEntryOrchestrationPlan,
+        buildCheckTrafficAndRerouteEntryOrchestrationPlan: buildCheckTrafficAndRerouteEntryOrchestrationPlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
         buildAutoTrafficUpdateToggleExecutePlan: buildAutoTrafficUpdateToggleExecutePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
