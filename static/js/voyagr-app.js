@@ -78,9 +78,6 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
 function getFuelEfficiencyLabel() { return VoyagrUnitsPreferencesOrchestration.getFuelEfficiencyLabel(); }
 
 // ===== NAVIGATION VARIABLES =====
-let isTrackingActive = false;
-let gpsWatchId = null;
-let currentUserMarker = null;
 let lastZoomLevel = 13;
 let smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
     ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
@@ -686,7 +683,7 @@ function getCalculateRouteOrchestrationRuntime() {
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
-        getIsTrackingActive: () => isTrackingActive,
+        getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getTrackingHistory: () => VoyagrGpsOrchestration.getTrackingHistory(),
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
@@ -894,7 +891,7 @@ function getRerouteMapOrchestrationRuntime() {
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
-        getCurrentUserMarker: () => currentUserMarker,
+        getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         getSnapBlendWeightState: () => VoyagrGpsOrchestration.getSnapBlendWeightState(),
         getSmoothDisplayLat: () => VoyagrGpsOrchestration.getSmoothDisplayLat(),
         getSmoothDisplayLon: () => VoyagrGpsOrchestration.getSmoothDisplayLon(),
@@ -1327,9 +1324,9 @@ function getGpsOrchestrationRuntime() {
             case 'currentStepIndex': return currentStepIndex;
             case 'lastSnappedRouteIndex': return lastSnappedRouteIndex;
             case 'currentRouteSteps': return currentRouteSteps;
-            case 'isTrackingActive': return isTrackingActive;
-            case 'gpsWatchId': return gpsWatchId;
-            case 'currentUserMarker': return currentUserMarker;
+            case 'isTrackingActive': return VoyagrGpsOrchestration.getIsTrackingActive();
+            case 'gpsWatchId': return VoyagrGpsOrchestration.getGpsWatchId();
+            case 'currentUserMarker': return VoyagrGpsOrchestration.getCurrentUserMarker();
             case 'trackingHistory': return VoyagrGpsOrchestration.getTrackingHistory();
             case 'zoomAndFollowEnabled': return zoomAndFollowEnabled;
             case 'mapFollowingActive': return mapFollowingActive;
@@ -1393,9 +1390,9 @@ function getGpsOrchestrationRuntime() {
             case 'currentStepIndex': currentStepIndex = val; break;
             case 'lastSnappedRouteIndex': lastSnappedRouteIndex = val; break;
             case 'currentRouteSteps': currentRouteSteps = val; break;
-            case 'isTrackingActive': isTrackingActive = val; break;
-            case 'gpsWatchId': gpsWatchId = val; break;
-            case 'currentUserMarker': currentUserMarker = val; break;
+            case 'isTrackingActive': VoyagrGpsOrchestration.setIsTrackingActive(val); break;
+            case 'gpsWatchId': VoyagrGpsOrchestration.setGpsWatchId(val); break;
+            case 'currentUserMarker': VoyagrGpsOrchestration.setCurrentUserMarker(val); break;
             case 'trackingHistory': VoyagrGpsOrchestration.setTrackingHistory(val); break;
             case 'zoomAndFollowEnabled': zoomAndFollowEnabled = val; break;
             case 'mapFollowingActive': mapFollowingActive = val; break;
@@ -1746,7 +1743,7 @@ function getSpeedWidgetOrchestrationRuntime() {
         routeGeometry: () => _routeGeometry(),
         toggleUI: () => _toggleUI(),
         getSpeedUnit: () => speedUnit,
-        getIsTrackingActive: () => isTrackingActive,
+        getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getRouteInProgress: () => routeInProgress,
         getCurrentRouteSteps: () => currentRouteSteps,
         getCurrentStepIndex: () => currentStepIndex,
@@ -1775,13 +1772,13 @@ function getMapRecenterOrchestrationRuntime() {
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
         getRouteInProgress: () => routeInProgress,
-        getIsTrackingActive: () => isTrackingActive,
+        getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getJourneyOverviewActive: () => VoyagrJourneyOverviewOrchestration.getJourneyOverviewActive(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
-        getCurrentUserMarker: () => currentUserMarker,
+        getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         getZoomLevels: () => ZOOM_LEVELS,
         getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
         call: {
@@ -1837,9 +1834,9 @@ function getVehicleRoutingOrchestrationRuntime() {
         setCurrentVehicleType: (val) => { currentVehicleType = val; },
         getCurrentRoutingMode: () => currentRoutingMode,
         setCurrentRoutingMode: (val) => { currentRoutingMode = val; },
-        getCurrentUserMarker: () => currentUserMarker,
-        setCurrentUserMarker: (val) => { currentUserMarker = val; },
-        setCurrentUserMarkerIcon: (val) => { currentUserMarkerIcon = val; },
+        getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
+        setCurrentUserMarker: (val) => VoyagrGpsOrchestration.setCurrentUserMarker(val),
+        setCurrentUserMarkerIcon: (val) => VoyagrGpsOrchestration.setCurrentUserMarkerIcon(val),
         getMap: () => map,
         vehicleMarker: () => _vehicleMarker(),
         getMapLibreHelpers: () => MapLibreHelpers,
@@ -1880,7 +1877,7 @@ function getSmartZoomOrchestrationRuntime() {
         getMap: () => map,
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
-        getCurrentUserMarker: () => currentUserMarker,
+        getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
         call: {
@@ -2155,7 +2152,7 @@ function getDriverCameraOrchestrationRuntime() {
         setDriverPerspectiveEnabled: (val) => { driverPerspectiveEnabled = val; },
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
-        getCurrentUserMarker: () => currentUserMarker,
+        getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         call: {
             showStatus,
             saveAllSettings,
@@ -2345,7 +2342,6 @@ let currentLon = -0.1278;
 // ===== VEHICLE TYPE & ROUTING MODE =====
 let currentVehicleType = 'petrol_diesel';
 let currentRoutingMode = 'auto';
-let currentUserMarkerIcon = null;
 
 // Vehicle icon mapping - now using custom SVG icons
 const vehicleIcons = {
@@ -2391,7 +2387,7 @@ function getMapExploreOrchestrationRuntime() {
         mapControls: () => _mapControls(),
         getMap: () => map,
         getRouteInProgress: () => routeInProgress,
-        getIsTrackingActive: () => isTrackingActive,
+        getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
         getMapFollowingActive: () => mapFollowingActive,
@@ -2664,7 +2660,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
         getMap: () => map,
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
-        getIsTrackingActive: () => isTrackingActive,
+        getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
@@ -2975,8 +2971,8 @@ function getMobilePwaOrchestrationRuntime() {
         pwaInstall: () => _pwaInstall(),
         domHelpers: () => _domHelpers(),
         getMap: () => map,
-        getIsTrackingActive: () => isTrackingActive,
-        getGpsWatchId: () => gpsWatchId,
+        getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
+        getGpsWatchId: () => VoyagrGpsOrchestration.getGpsWatchId(),
         call: {
             collapseBottomSheet,
             startGPSTracking,

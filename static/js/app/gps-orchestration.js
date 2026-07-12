@@ -11,9 +11,21 @@
     var smoothDisplayLat = null;
     var smoothDisplayLon = null;
     var trackingHistory = [];
+    var isTrackingActive = false;
+    var gpsWatchId = null;
+    var currentUserMarker = null;
+    var currentUserMarkerIcon = null;
 
     function getTrackingHistory() { return trackingHistory; }
     function setTrackingHistory(val) { trackingHistory = val; }
+    function getIsTrackingActive() { return isTrackingActive; }
+    function setIsTrackingActive(val) { isTrackingActive = !!val; }
+    function getGpsWatchId() { return gpsWatchId; }
+    function setGpsWatchId(val) { gpsWatchId = val; }
+    function getCurrentUserMarker() { return currentUserMarker; }
+    function setCurrentUserMarker(val) { currentUserMarker = val; }
+    function getCurrentUserMarkerIcon() { return currentUserMarkerIcon; }
+    function setCurrentUserMarkerIcon(val) { currentUserMarkerIcon = val; }
 
     function getSnapBlendWeightState() { return snapBlendWeightState; }
     function setSnapBlendWeightState(val) { snapBlendWeightState = val; }
@@ -161,31 +173,31 @@
         if (!markerTick) return;
 
         if (markerTick.action === 'update') {
-            rt().g('currentUserMarker').setLngLat(markerTick.lngLat);
-            const markerEl = rt().g('currentUserMarker').getElement ? rt().g('currentUserMarker').getElement() : null;
+            getCurrentUserMarker().setLngLat(markerTick.lngLat);
+            const markerEl = getCurrentUserMarker().getElement ? getCurrentUserMarker().getElement() : null;
             if (markerEl) {
                 const inner = markerEl.querySelector('div');
                 if (inner) {
                     inner.style.transform = `rotate(${markerTick.rotationDeg}deg)`;
                 }
             }
-            rt().g('currentUserMarker').heading = markerTick.heading;
-            rt().g('currentUserMarker').speed = markerTick.speed;
-            rt().g('currentUserMarker').accuracy = markerTick.accuracy;
+            getCurrentUserMarker().heading = markerTick.heading;
+            getCurrentUserMarker().speed = markerTick.speed;
+            getCurrentUserMarker().accuracy = markerTick.accuracy;
             return;
         }
 
-        if (rt().g('currentUserMarker') && typeof rt().g('currentUserMarker').remove === 'function') {
-            rt().g('currentUserMarker').remove();
+        if (getCurrentUserMarker() && typeof getCurrentUserMarker().remove === 'function') {
+            getCurrentUserMarker().remove();
         }
-        rt().s('currentUserMarker', rt().call.createVehicleMarker(
+        setCurrentUserMarker(rt().call.createVehicleMarker(
             markerTick.lat,
             markerTick.lon,
             markerTick.speed,
             markerTick.accuracy,
             markerTick.heading
         ));
-        rt().g('currentUserMarker').addTo(rt().g('map'));
+        getCurrentUserMarker().addTo(rt().g('map'));
     }
 
     /**
@@ -200,8 +212,8 @@
         const SGpos = sgModule();
         const markerTick = SGpos
             ? SGpos.buildVehicleMarkerTickPlan({
-                hasMarker: !!rt().g('currentUserMarker'),
-                canSetLngLat: !!(rt().g('currentUserMarker') && typeof rt().g('currentUserMarker').setLngLat === 'function'),
+                hasMarker: !!getCurrentUserMarker(),
+                canSetLngLat: !!(getCurrentUserMarker() && typeof getCurrentUserMarker().setLngLat === 'function'),
                 markerLat,
                 markerLon,
                 heading,
@@ -454,7 +466,7 @@
                     showSpeedWidget: tickPlan.showSpeedWidget,
                     speedLimitPlan,
                     routeInProgress: rt().g('routeInProgress'),
-                    isTrackingActive: rt().g('isTrackingActive'),
+                    isTrackingActive: getIsTrackingActive(),
                     lat,
                     lon,
                     heading,
@@ -645,7 +657,7 @@
                     calculateDistanceMeters: calculateDistanceMeters,
                 })
                 : 0),
-            isTrackingActive: rt().g('isTrackingActive'),
+            isTrackingActive: getIsTrackingActive(),
             currentRouteSteps: rt().g('currentRouteSteps'),
             displaySpeedMph: rt().call.smoothGpsSpeedMph(coord.speedMph),
             currentSpeedLimitMph: rt().g('currentSpeedLimitMph'),
@@ -701,7 +713,7 @@
             routeInProgress: rt().g('routeInProgress'),
             routePolyline: rt().g('routePolyline'),
             routeSteps: rt().g('currentRouteSteps'),
-            isTrackingActive: rt().g('isTrackingActive'),
+            isTrackingActive: getIsTrackingActive(),
             speedLimitShowWidget: plans.speedLimitPlan.showWidget,
         });
     }
@@ -728,12 +740,12 @@
             return;
         }
 
-        if (rt().g('isTrackingActive')) {
+        if (getIsTrackingActive()) {
             stopGPSTracking();
             return;
         }
 
-        rt().s('isTrackingActive',  true);
+        setIsTrackingActive(true);
         setTrackingHistory([]);
         rt().s('_lastGoodRawPickMph',  0);
         rt().s('_consecutiveDisplacementMoves',  0);
@@ -745,11 +757,11 @@
         rt().call.showStatus('🎯 GPS Tracking started...', 'success');
 
         // Watch position with high accuracy
-        rt().s('gpsWatchId', navigator.geolocation.watchPosition(
+        setGpsWatchId(navigator.geolocation.watchPosition(
             (position) => applyGpsTrackingTick(position),
             (error) => {
                 rt().call.showStatus('GPS Error: ' + error.message, 'error');
-                rt().s('isTrackingActive', false);
+                setIsTrackingActive(false);
             },
             {
                 enableHighAccuracy: true,
@@ -765,11 +777,11 @@
      * @returns {*} Return value description
      */
     function stopGPSTracking() {
-        if (rt().g('gpsWatchId') !== null) {
-            navigator.geolocation.clearWatch(rt().g('gpsWatchId'));
-            rt().s('gpsWatchId',  null);
+        if (getGpsWatchId() !== null) {
+            navigator.geolocation.clearWatch(getGpsWatchId());
+            setGpsWatchId(null);
         }
-        rt().s('isTrackingActive',  false);
+        setIsTrackingActive(false);
         resetVehicleMarkerDisplayState();
         // Hide speed widget when tracking stops (use consolidated function)
         rt().call.updateSpeedWidgetVisibility();
@@ -994,8 +1006,8 @@
         if (patch.snapBlendWeightState != null) {
             setSnapBlendWeightState(patch.snapBlendWeightState);
         }
-        if (apply.markerLngLat && rt().g('currentUserMarker') && typeof rt().g('currentUserMarker').setLngLat === 'function') {
-            rt().g('currentUserMarker').setLngLat(apply.markerLngLat);
+        if (apply.markerLngLat && getCurrentUserMarker() && typeof getCurrentUserMarker().setLngLat === 'function') {
+            getCurrentUserMarker().setLngLat(apply.markerLngLat);
         }
     }
 
@@ -1605,7 +1617,7 @@
         const HA = haModule();
         const tick = HA.buildNavigationHazardAlertsTickPlan({
             routeInProgress: rt().g('routeInProgress'),
-            isTrackingActive: rt().g('isTrackingActive'),
+            isTrackingActive: getIsTrackingActive(),
             isOffline: rt().getIsOffline(),
             navigatorOnLine: navigator.onLine,
             lat,
@@ -1681,6 +1693,14 @@
         setSmoothDisplayLon: setSmoothDisplayLon,
         getTrackingHistory: getTrackingHistory,
         setTrackingHistory: setTrackingHistory,
+        getIsTrackingActive: getIsTrackingActive,
+        setIsTrackingActive: setIsTrackingActive,
+        getGpsWatchId: getGpsWatchId,
+        setGpsWatchId: setGpsWatchId,
+        getCurrentUserMarker: getCurrentUserMarker,
+        setCurrentUserMarker: setCurrentUserMarker,
+        getCurrentUserMarkerIcon: getCurrentUserMarkerIcon,
+        setCurrentUserMarkerIcon: setCurrentUserMarkerIcon,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
