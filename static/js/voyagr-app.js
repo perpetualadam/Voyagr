@@ -1495,6 +1495,7 @@ function applySpeedLimitFetchResetFromPlan(resetPlan) { VoyagrGpsOrchestration.a
 function resetVehicleMarkerDisplayState() { VoyagrGpsOrchestration.resetVehicleMarkerDisplayState(); }
 function primeVehicleMarkerOnRoute(lat, lon) { VoyagrGpsOrchestration.primeVehicleMarkerOnRoute(lat, lon); }
 function resetNavigationArrivalState() { VoyagrGpsOrchestration.resetNavigationArrivalState(); }
+function resetNavETASnapshot() { VoyagrLiveDataRefreshOrchestration.resetNavETASnapshot(); }
 function clearRerouteFailureRetries() { VoyagrGpsOrchestration.clearRerouteFailureRetries(); }
 function ensureDefaultTrafficAwareRouting() { VoyagrGpsOrchestration.ensureDefaultTrafficAwareRouting(); }
 function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
@@ -2324,12 +2325,7 @@ function setupMapExploreHandlers() {
 
 // Navigation session state lives in navigation-lifecycle-orchestration.js.
 
-// ETA announcement state lives in live-data-refresh-orchestration.js.
-
-/** Live nav ETA + traffic snapshot (updated during navigation). */
-window.navETASnapshot = _eta().createEmptyNavETASnapshot();
-
-/** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
+// ETA announcement state and navETASnapshot live in live-data-refresh-orchestration.js.
 
 // ===== LIVE DATA REFRESH ORCHESTRATION =====
 // Orchestration lives in static/js/app/live-data-refresh-orchestration.js (bound at file end).
@@ -2594,6 +2590,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
             resetVoiceAnnouncementStateForNewRoute,
             resetVehicleMarkerDisplayState,
             resetNavigationArrivalState,
+            resetNavETASnapshot,
             decodePolyline,
             persistActiveRoute,
             precacheRouteTiles,

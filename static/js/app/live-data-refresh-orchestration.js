@@ -16,6 +16,7 @@
     var initialETAMovementRetries = 0;
     var initialETAAnnouncementTimeoutId = null;
     var lastNavTrafficFetchAt = 0;
+    var navETASnapshot = null;
     var ETA_CHANGE_THRESHOLD_MS = 300000;
     var ETA_MIN_INTERVAL_MS = 60000;
 
@@ -31,6 +32,22 @@
     function setLastNavTrafficFetchAt(val) { lastNavTrafficFetchAt = val; }
     function getEtaChangeThresholdMs() { return ETA_CHANGE_THRESHOLD_MS; }
     function getEtaMinIntervalMs() { return ETA_MIN_INTERVAL_MS; }
+
+    function syncNavETASnapshotToWindow() {
+        if (typeof window !== 'undefined') {
+            window.navETASnapshot = navETASnapshot;
+        }
+    }
+
+    function getNavETASnapshot() {
+        return navETASnapshot;
+    }
+
+    function resetNavETASnapshot() {
+        navETASnapshot = rt().eta().createEmptyNavETASnapshot();
+        syncNavETASnapshotToWindow();
+        return navETASnapshot;
+    }
 
     function rt() {
         if (!runtime) {
@@ -123,8 +140,8 @@
             baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
             progressPercent: base ? base.progressPercent : null,
             applyTrafficAware: ETA().shouldApplyTrafficAwareETA(localStorage, rt().getCurrentRoutingMode()),
-            trafficLevel: window.navETASnapshot.trafficLevel,
-            congestionPercent: window.navETASnapshot.congestionPercent,
+            trafficLevel: getNavETASnapshot().trafficLevel,
+            congestionPercent: getNavETASnapshot().congestionPercent,
         });
         if (tick.action !== 'update') {
             if (tick.warnLog) console.warn(tick.warnLog);
@@ -282,6 +299,7 @@
 
     function bind(nextRuntime) {
         runtime = nextRuntime;
+        resetNavETASnapshot();
     }
 
     var api = {
@@ -308,6 +326,8 @@
         setLastNavTrafficFetchAt: setLastNavTrafficFetchAt,
         getEtaChangeThresholdMs: getEtaChangeThresholdMs,
         getEtaMinIntervalMs: getEtaMinIntervalMs,
+        getNavETASnapshot: getNavETASnapshot,
+        resetNavETASnapshot: resetNavETASnapshot,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -90,7 +90,7 @@
         }
 
         if (apply.createEmptyEtaSnapshot) {
-            window.navETASnapshot = rt().eta().createEmptyNavETASnapshot();
+            rt().call.resetNavETASnapshot();
         }
     }
 
