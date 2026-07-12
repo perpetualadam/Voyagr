@@ -963,12 +963,12 @@ function getSettingsOrchestrationRuntime() {
         setCurrentRoutingMode: (val) => { currentRoutingMode = val; },
         getSmartZoomEnabled: () => smartZoomEnabled,
         setSmartZoomEnabled: (val) => { smartZoomEnabled = val; },
-        getShowCamerasEnabled: () => showCamerasEnabled,
-        setShowCamerasEnabled: (val) => { showCamerasEnabled = val; },
-        getShowOsmTrafficLightsEnabled: () => showOsmTrafficLightsEnabled,
-        setShowOsmTrafficLightsEnabled: (val) => { showOsmTrafficLightsEnabled = val; },
-        getShowOsmRailwayCrossingsEnabled: () => showOsmRailwayCrossingsEnabled,
-        setShowOsmRailwayCrossingsEnabled: (val) => { showOsmRailwayCrossingsEnabled = val; },
+        getShowCamerasEnabled: () => VoyagrMapOverlayOrchestration.getShowCamerasEnabled(),
+        setShowCamerasEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowCamerasEnabled(val); },
+        getShowOsmTrafficLightsEnabled: () => VoyagrMapOverlayOrchestration.getShowOsmTrafficLightsEnabled(),
+        setShowOsmTrafficLightsEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowOsmTrafficLightsEnabled(val); },
+        getShowOsmRailwayCrossingsEnabled: () => VoyagrMapOverlayOrchestration.getShowOsmRailwayCrossingsEnabled(),
+        setShowOsmRailwayCrossingsEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowOsmRailwayCrossingsEnabled(val); },
         getShowTrafficEnabled: () => showTrafficEnabled,
         setShowTrafficEnabled: (val) => { showTrafficEnabled = val; },
         getSpeedWidgetEnabled: () => speedWidgetEnabled,
@@ -2594,415 +2594,47 @@ function checkRouteCAZ(routeCoords, vehicleCazPass, vehicleType) {
 }
 
 // ===== ALWAYS-ON CAMERA LAYER =====
-// Separate layer for displaying cameras regardless of route
-window.cameraMarkers = [];
-const MOT = typeof VoyagrMapOverlayToggles !== 'undefined' ? VoyagrMapOverlayToggles : null;
-let showCamerasEnabled = MOT
-    ? MOT.resolveShowCamerasEnabledFromStorage(localStorage.getItem('showCamerasEnabled'))
-    : localStorage.getItem('showCamerasEnabled') !== 'false';
+// Orchestration lives in static/js/app/map-overlay-orchestration.js (bound at file end).
 
-window.osmTrafficLightMarkers = [];
-let showOsmTrafficLightsEnabled = MOT
-    ? MOT.resolveShowOsmTrafficLightsEnabledFromStorage(localStorage.getItem('showOsmTrafficLightsOnMap'))
-    : localStorage.getItem('showOsmTrafficLightsOnMap') !== 'false';
-
-window.osmRailwayCrossingMarkers = [];
-let showOsmRailwayCrossingsEnabled = MOT
-    ? MOT.resolveShowOsmRailwayCrossingsEnabledFromStorage(localStorage.getItem('showOsmRailwayCrossingsOnMap'))
-    : localStorage.getItem('showOsmRailwayCrossingsOnMap') !== 'false';
-
-/** Same vertical icon as route traffic lights (`traffic-lights.js`); fallback if module not loaded. */
-function getOsmTrafficLightMarkerInnerSVG() {
-    if (typeof TrafficLights !== 'undefined' && TrafficLights.createIconSVG) {
-        return TrafficLights.createIconSVG('none', 14, 32);
-    }
-    return _osmMapIcons().buildOsmTrafficLightFallbackSvg();
+function getMapOverlayOrchestrationRuntime() {
+    return {
+        mapOverlayToggles: () => _mapOverlayToggles(),
+        mapLayerToggles: () => _mapLayerToggles(),
+        toggleUI: () => _toggleUI(),
+        osmMapIcons: () => _osmMapIcons(),
+        hazardMapMarkers: () => _hazardMapMarkers(),
+        cameraMapMarkers: () => _cameraMapMarkers(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRoadLabelsEnabled: () => roadLabelsEnabled,
+        call: {
+            saveAllSettings,
+        },
+    };
 }
 
-/** Green pill + vertical SVG (OSM layer, route hazard markers — not the horizontal 🚥 emoji). */
 function getOsmTrafficLightMarkerPillHTML() {
-    return _osmMapIcons().buildOsmTrafficLightMarkerPillHtml(getOsmTrafficLightMarkerInnerSVG());
+    return VoyagrMapOverlayOrchestration.getOsmTrafficLightMarkerPillHTML();
 }
 
-/**
- * Toggle show cameras on map
- */
 function toggleShowCameras() {
-    const OT = _mapOverlayToggles();
-    const TU = _toggleUI();
-    const collected = OT.buildToggleShowCamerasCollectPlan({ currentlyEnabled: showCamerasEnabled });
-    const execute = OT.buildToggleShowCamerasExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    showCamerasEnabled = execute.enabled;
-    TU.writeBoolPref(execute.storageKey, showCamerasEnabled);
-    TU.applyToggleButton(document.getElementById(execute.toggleId), showCamerasEnabled);
-
-    if (execute.mapAction === 'fetchCameras') {
-        fetchAndDisplayCameras();
-        console.log(execute.enabledLogMessage);
-    } else {
-        clearCameraMarkers();
-        console.log(execute.disabledLogMessage);
-    }
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-function applyClearOverlayMarkersFromPlan(execute) {
-    if (!execute || !execute.shouldClear) return;
-    const markers = window[execute.markersProperty];
-    if (markers) {
-        markers.forEach((marker) => {
-            if (marker && typeof marker.remove === 'function') {
-                marker.remove();
-            }
-        });
-    }
-    if (execute.resetMarkerArray) {
-        window[execute.markersProperty] = [];
-    }
-}
-
-/**
- * Clear all camera markers from the map (separate from hazard markers)
- */
-function clearCameraMarkers() {
-    applyClearOverlayMarkersFromPlan(_mapOverlayToggles().buildClearCameraMarkersExecutePlan());
-}
-
-/**
- * Fetch cameras in current map viewport and display them
- */
-function fetchAndDisplayCameras() {
-    const OT = _mapOverlayToggles();
-    const dispatch = OT.buildFetchCamerasDispatchPlan({
-        enabled: showCamerasEnabled,
-        hasMap: !!map,
-        zoom: map ? map.getZoom() : 0,
-    });
-    if (!dispatch.shouldFetch) {
-        if (dispatch.clearMarkers) clearCameraMarkers();
-        if (dispatch.lowZoomLogMessage) console.log(dispatch.lowZoomLogMessage);
-        return;
-    }
-
-    const bounds = map.getBounds();
-    const north = bounds.getNorth();
-    const south = bounds.getSouth();
-    const east = bounds.getEast();
-    const west = bounds.getWest();
-
-    fetch(OT.buildAreaBoundsApiUrl(north, south, east, west, dispatch.apiPath))
-        .then((response) => response.json())
-        .then((data) => {
-            if (data.success && data.cameras) {
-                displayCameraMarkers(data.cameras);
-                console.log(`[Cameras] Loaded ${data.cameras.length} cameras in viewport`);
-            }
-        })
-        .catch((error) => {
-            console.error('[Cameras] Error fetching cameras:', error);
-        });
-}
-
-/**
- * Display camera markers on the map (separate layer from route hazards)
- */
-function displayCameraMarkers(cameras) {
-    const OT = _mapOverlayToggles();
-    const collect = OT.buildDisplayCameraMarkersCollectPlan(cameras);
-    if (!collect.shouldDisplay) {
-        if (collect.clearMarkers) clearCameraMarkers();
-        return;
-    }
-
-    clearCameraMarkers();
-
-    const HM = _hazardMapMarkers();
-    const styleMap = HM.getHazardMarkerStyleMap();
-    const CAM = _cameraMapMarkers();
-    const specs = CAM.buildCameraMarkersMountSpecs(collect.items, styleMap, {
-        normalizeBucket: (bucket) => HM.normalizeCameraHazardTypeForMarker(bucket),
-        markerClassName: collect.markerClassName,
-        markerSvgSize: collect.markerSvgSize,
-        popupSvgSize: collect.popupSvgSize,
-        iconSize: collect.iconSize,
-        iconAnchor: collect.iconAnchor,
-    });
-
-    specs.forEach((spec) => {
-        const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
-            className: spec.className,
-            html: spec.html,
-            iconSize: spec.iconSize,
-            iconAnchor: spec.iconAnchor,
-            popup: spec.popup,
-        }).addTo(map);
-
-        window.cameraMarkers.push(marker);
-    });
-
-    console.log(collect.displayedLogPrefix + window.cameraMarkers.length + collect.displayedLogSuffix);
+    VoyagrMapOverlayOrchestration.toggleShowCameras();
 }
 
 function toggleShowOsmTrafficLights() {
-    const OT = _mapOverlayToggles();
-    const TU = _toggleUI();
-    const collected = OT.buildToggleOsmTrafficLightsCollectPlan({
-        currentlyEnabled: showOsmTrafficLightsEnabled,
-    });
-    const execute = OT.buildToggleOsmTrafficLightsExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    showOsmTrafficLightsEnabled = execute.enabled;
-    TU.writeBoolPref(execute.storageKey, showOsmTrafficLightsEnabled);
-    TU.applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmTrafficLightsEnabled);
-
-    if (execute.mapAction === 'fetchOsmTrafficLights') {
-        fetchAndDisplayOsmTrafficLights();
-    } else {
-        clearOsmTrafficLightMarkers();
-    }
-    if (execute.saveAllSettings) saveAllSettings();
+    VoyagrMapOverlayOrchestration.toggleShowOsmTrafficLights();
 }
 
 function toggleShowOsmRailwayCrossings() {
-    const OT = _mapOverlayToggles();
-    const TU = _toggleUI();
-    const collected = OT.buildToggleOsmRailwayCrossingsCollectPlan({
-        currentlyEnabled: showOsmRailwayCrossingsEnabled,
-    });
-    const execute = OT.buildToggleOsmRailwayCrossingsExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    showOsmRailwayCrossingsEnabled = execute.enabled;
-    TU.writeBoolPref(execute.storageKey, showOsmRailwayCrossingsEnabled);
-    TU.applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmRailwayCrossingsEnabled);
-
-    if (execute.mapAction === 'fetchOsmRailwayCrossings') {
-        fetchAndDisplayOsmRailwayCrossings();
-    } else {
-        clearOsmRailwayCrossingMarkers();
-    }
-    if (execute.saveAllSettings) saveAllSettings();
+    VoyagrMapOverlayOrchestration.toggleShowOsmRailwayCrossings();
 }
 
-function clearOsmTrafficLightMarkers() {
-    applyClearOverlayMarkersFromPlan(_mapOverlayToggles().buildClearOsmTrafficLightMarkersExecutePlan());
-}
-
-function clearOsmRailwayCrossingMarkers() {
-    applyClearOverlayMarkersFromPlan(_mapOverlayToggles().buildClearOsmRailwayCrossingMarkersExecutePlan());
-}
-
-const OSM_OVERLAY_MAX_BBOX_DEG = MOT ? MOT.OSM_OVERLAY_MAX_BBOX_DEG : 0.35;
-
-function isOsmOverlayBboxTooLarge(north, south, east, west) {
-    return _mapOverlayToggles().isOsmOverlayBboxTooLarge(north, south, east, west);
-}
-
-/**
- * Fetch an OSM map-overlay endpoint; never parse HTML error pages as JSON.
- * @param {string} url
- * @param {string} logLabel
- * @returns {Promise<object|null>}
- */
-function fetchOsmAreaOverlay(url, logLabel) {
-    const OT = _mapOverlayToggles();
-    return fetch(url)
-        .then((response) => {
-            const httpPlan = OT.buildOsmAreaOverlayResponsePlan({
-                ok: response.ok,
-                statusCode: response.status,
-                logLabel,
-            });
-            if (!httpPlan.shouldParseJson) {
-                console.warn(httpPlan.logMessage);
-                return null;
-            }
-            return response.json();
-        })
-        .catch((err) => {
-            const errPlan = OT.buildOsmAreaOverlayFetchErrorPlan({
-                logLabel,
-                errorMessage: err.message || String(err),
-            });
-            console.warn(errPlan.logMessage);
-            return errPlan.result;
-        });
-}
-
-function fetchAndDisplayOsmTrafficLights() {
-    if (!map) return;
-    const OT = _mapOverlayToggles();
-    const bounds = map.getBounds();
-    const dispatch = OT.buildFetchOsmOverlayDispatchPlan({
-        enabled: showOsmTrafficLightsEnabled,
-        hasMap: true,
-        zoom: map.getZoom(),
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest(),
-        apiPath: OT.OSM_TRAFFIC_LIGHTS_AREA_API_PATH,
-        logLabel: 'OSM Traffic Lights',
-    });
-    if (!dispatch.shouldFetch) {
-        if (dispatch.clearMarkers) clearOsmTrafficLightMarkers();
-        return;
-    }
-    fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then((data) => {
-        if (data && data.success && data.traffic_lights) {
-            displayOsmTrafficLightMarkers(data.traffic_lights);
-        }
-    });
-}
-
-function fetchAndDisplayOsmRailwayCrossings() {
-    if (!map) return;
-    const OT = _mapOverlayToggles();
-    const bounds = map.getBounds();
-    const dispatch = OT.buildFetchOsmOverlayDispatchPlan({
-        enabled: showOsmRailwayCrossingsEnabled,
-        hasMap: true,
-        zoom: map.getZoom(),
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest(),
-        apiPath: OT.OSM_RAILWAY_CROSSINGS_AREA_API_PATH,
-        logLabel: 'OSM Railway Crossings',
-    });
-    if (!dispatch.shouldFetch) {
-        if (dispatch.clearMarkers) clearOsmRailwayCrossingMarkers();
-        return;
-    }
-    fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then((data) => {
-        if (data && data.success && data.railway_crossings) {
-            displayOsmRailwayCrossingMarkers(data.railway_crossings);
-        }
-    });
-}
-
-function displayOsmTrafficLightMarkers(lights) {
-    const OT = _mapOverlayToggles();
-    const collect = OT.buildDisplayOsmTrafficLightMarkersCollectPlan(lights);
-    if (!collect.shouldDisplay) {
-        if (collect.clearMarkers) clearOsmTrafficLightMarkers();
-        return;
-    }
-    clearOsmTrafficLightMarkers();
-    const OSM = _osmMapIcons();
-    const pill = getOsmTrafficLightMarkerPillHTML();
-    collect.items.forEach((light) => {
-        const marker = MapLibreHelpers.createMarker(light.lat, light.lon, {
-            className: collect.markerClassName,
-            html: pill,
-            iconSize: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
-            iconAnchor: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR,
-            popup: OSM.buildOsmTrafficLightPopupHtml(pill),
-        }).addTo(map);
-        window.osmTrafficLightMarkers.push(marker);
-    });
-}
-
-function displayOsmRailwayCrossingMarkers(crossings) {
-    const OT = _mapOverlayToggles();
-    const collect = OT.buildDisplayOsmRailwayCrossingMarkersCollectPlan(crossings);
-    if (!collect.shouldDisplay) {
-        if (collect.clearMarkers) clearOsmRailwayCrossingMarkers();
-        return;
-    }
-    clearOsmRailwayCrossingMarkers();
-    const OSM = _osmMapIcons();
-    const crossingIcon = OSM.buildRailwayCrossingIconSvg();
-    const popupHtml = OSM.buildRailwayCrossingPopupHtml(crossingIcon);
-    collect.items.forEach((cx) => {
-        const marker = MapLibreHelpers.createMarker(cx.lat, cx.lon, {
-            className: collect.markerClassName,
-            html: OSM.buildRailwayCrossingMarkerHtml(crossingIcon),
-            iconSize: collect.iconSize,
-            iconAnchor: collect.iconAnchor,
-            popup: popupHtml,
-        }).addTo(map);
-        window.osmRailwayCrossingMarkers.push(marker);
-    });
-}
-
-/**
- * Initialize camera layer - called after map is ready
- */
 function initializeCameraLayer() {
-    const OT = _mapOverlayToggles();
-    const execute = OT.buildInitializeCameraLayerExecutePlan({
-        hasMap: !!map,
-        alreadyInitialized: !!window.__voyagrCameraLayerInitialized,
-        showCamerasEnabled,
-        showOsmTrafficLightsEnabled,
-        showOsmRailwayCrossingsEnabled,
-    });
-    if (!execute.shouldInit) {
-        if (execute.mapNotReadyLog) console.log(execute.mapNotReadyLog);
-        return;
-    }
-    window[execute.initFlagProperty] = true;
-
-    const TU = _toggleUI();
-    (execute.toggles || []).forEach((toggle) => {
-        const el = document.getElementById(toggle.id);
-        if (!el) return;
-        if (toggle.labeled) TU.applyLabeledToggleButton(el, toggle.enabled);
-        else TU.applyToggleButton(el, toggle.enabled);
-    });
-
-    const movePlan = OT.buildCameraLayerMapMoveHandlerPlan({
-        mapMoveEvent: execute.mapMoveEvent,
-        cameraMoveDebounceMs: execute.cameraMoveDebounceMs,
-        osmOverlayDebounceMs: execute.osmOverlayDebounceMs,
-    });
-    let cameraFetchTimeout = null;
-    let osmOverlayFetchTimeout = null;
-    map.on(movePlan.mapMoveEvent, () => {
-        if (cameraFetchTimeout) clearTimeout(cameraFetchTimeout);
-        cameraFetchTimeout = setTimeout(() => {
-            fetchAndDisplayCameras();
-        }, movePlan.cameraFetch.debounceMs);
-        if (osmOverlayFetchTimeout) clearTimeout(osmOverlayFetchTimeout);
-        osmOverlayFetchTimeout = setTimeout(() => {
-            fetchAndDisplayOsmTrafficLights();
-            fetchAndDisplayOsmRailwayCrossings();
-        }, movePlan.osmOverlayFetch.debounceMs);
-    });
-
-    const initial = execute.initialFetches || {};
-    if (initial.cameras) fetchAndDisplayCameras();
-    if (initial.osmTrafficLights) fetchAndDisplayOsmTrafficLights();
-    if (initial.osmRailwayCrossings) fetchAndDisplayOsmRailwayCrossings();
-
-    console.log(execute.initLogMessage);
+    VoyagrMapOverlayOrchestration.initializeCameraLayer();
 }
 
-/**
- * Initialize road labels - called after map is ready
- */
 function initializeRoadLabels() {
-    const MLT = _mapLayerToggles();
-    const execute = MLT.buildInitializeRoadLabelsExecutePlan({
-        hasMap: !!map,
-        alreadyInitialized: !!window[MLT.ROAD_LABELS_INIT_FLAG],
-        roadLabelsEnabled,
-    });
-    if (!execute.shouldInit) {
-        if (execute.mapNotReadyLog) console.log(execute.mapNotReadyLog);
-        return;
-    }
-    window[execute.initFlagProperty] = true;
-
-    const toggle = document.getElementById(execute.toggleId);
-    _toggleUI().applyToggleButton(toggle, execute.roadLabelsEnabled, execute.toggleInactiveStyles);
-    MapLibreHelpers.toggleRoadLabels(map, execute.roadLabelsEnabled);
-
-    console.log(execute.initLogMessage);
+    VoyagrMapOverlayOrchestration.initializeRoadLabels();
 }
 
 /**
@@ -5688,6 +5320,7 @@ VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
+VoyagrMapOverlayOrchestration.bind(getMapOverlayOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
 
