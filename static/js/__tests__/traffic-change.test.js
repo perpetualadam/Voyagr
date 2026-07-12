@@ -286,6 +286,31 @@ describe('auto traffic interval dispatch plans', () => {
         expect(stop.statusMessage).toContain('stopped');
     });
 
+    test('buildDisplayTrafficUpdateOrchestrationPlan wraps execute plan', () => {
+        const orch = TC.buildDisplayTrafficUpdateOrchestrationPlan(
+            { traffic_level: 'moderate', updated_duration_minutes: 30 },
+            { time: 30 },
+            { convertDistance: (km) => String(km), distUnit: 'km' },
+            '12:00'
+        );
+        expect(orch.shouldApply).toBe(true);
+        expect(orch.execute.trafficStatusText).toContain('moderate');
+    });
+
+    test('buildStartTrafficMonitoringOrchestrationPlan bundles runtime and execute', () => {
+        const orch = TC.buildStartTrafficMonitoringOrchestrationPlan(true);
+        expect(orch.shouldStart).toBe(true);
+        expect(orch.runtime.intervalProperty).toBe(TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY);
+        expect(orch.execute.clearExistingInterval).toBe(true);
+    });
+
+    test('buildStopTrafficMonitoringOrchestrationPlan guards inactive monitoring', () => {
+        expect(TC.buildStopTrafficMonitoringOrchestrationPlan(false).shouldStop).toBe(false);
+        const orch = TC.buildStopTrafficMonitoringOrchestrationPlan(true);
+        expect(orch.shouldStop).toBe(true);
+        expect(orch.execute.clearInterval).toBe(true);
+    });
+
     test('buildCheckTrafficAndRerouteOrchestrationPlan routes reroute and simulated data', () => {
         const none = TC.buildCheckTrafficAndRerouteOrchestrationPlan({ flow: null, lastTrafficData: null });
         expect(none.action).toBe('no_data');

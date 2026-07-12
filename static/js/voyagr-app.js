@@ -2896,45 +2896,46 @@ let addingViaPoint = false;
 let addingStop = false;
 
 /**
+ * Apply waypoint map-pick toggle UI from a pure apply plan.
+ * @param {Object} apply - from buildAddViaPointToggleApplyPlan or buildAddStopToggleApplyPlan
+ */
+function applyWaypointMapPickToggleFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    addingViaPoint = apply.addingViaPoint;
+    addingStop = apply.addingStop;
+
+    const btn = document.getElementById(apply.buttonDom.elementId);
+    if (btn) {
+        btn.classList.toggle('active', apply.buttonDom.active);
+        btn.textContent = apply.buttonDom.text;
+    }
+
+    if (apply.statusMessage) {
+        showStatus(apply.statusMessage, apply.statusType);
+    }
+
+    if (apply.requireMapForCursor && map && typeof map.getContainer === 'function') {
+        map.getContainer().style.cursor = apply.mapCursor;
+    }
+}
+
+/**
  * Toggle via-point adding mode
  */
 function toggleAddViaPoint() {
-    const WP = _waypoints();
-    const plan = WP.buildAddViaPointTogglePlan(!addingViaPoint);
-    addingViaPoint = plan.addingViaPoint;
-    addingStop = plan.addingStop;
-
-    const btn = document.getElementById(plan.buttonId);
-    if (btn) {
-        btn.classList.toggle('active', plan.buttonActive);
-        btn.textContent = plan.buttonText;
-    }
-
-    if (plan.statusMessage) {
-        showStatus(plan.statusMessage, plan.statusType);
-    }
-    map.getContainer().style.cursor = plan.mapCursor;
+    applyWaypointMapPickToggleFromPlan(
+        _waypoints().buildAddViaPointToggleApplyPlan(!addingViaPoint)
+    );
 }
 
 /**
  * Toggle stop adding mode
  */
 function toggleAddStop() {
-    const WP = _waypoints();
-    const plan = WP.buildAddStopTogglePlan(!addingStop);
-    addingViaPoint = plan.addingViaPoint;
-    addingStop = plan.addingStop;
-
-    const btn = document.getElementById(plan.buttonId);
-    if (btn) {
-        btn.classList.toggle('active', plan.buttonActive);
-        btn.textContent = plan.buttonText;
-    }
-
-    if (plan.statusMessage) {
-        showStatus(plan.statusMessage, plan.statusType);
-    }
-    map.getContainer().style.cursor = plan.mapCursor;
+    applyWaypointMapPickToggleFromPlan(
+        _waypoints().buildAddStopToggleApplyPlan(!addingStop)
+    );
 }
 
 /**
@@ -3308,15 +3309,14 @@ function applyMultiDropLegLayerFromMapLibrePlan(applyPlan) {
  * Draw multi-drop route legs on the map with distinct colors per leg
  */
 function drawMultiDropLegsOnMap(data) {
-    if (!map) return;
+    const orch = _waypoints().buildDrawMultiDropLegsOrchestrationPlan({
+        hasMap: !!map,
+        data,
+        decodePolyline,
+    });
+    if (!orch.shouldDraw) return;
 
-    const WP = _waypoints();
-    const executePlan = WP.buildMultiDropLegsMapExecutePlan(
-        WP.buildMultiDropLegsMapApplyPlan(data, decodePolyline)
-    );
-    if (!executePlan.shouldExecute) return;
-
-    executePlan.layers.forEach((layerPlan) => {
+    orch.execute.layers.forEach((layerPlan) => {
         applyMultiDropLegLayerFromMapLibrePlan(layerPlan);
     });
 }
@@ -3325,10 +3325,10 @@ function drawMultiDropLegsOnMap(data) {
  * Clear multi-drop leg layers from map
  */
 function clearMultiDropLayers() {
-    if (!map) return;
-    const WP = _waypoints();
-    const plan = WP.buildClearMultiDropLayersPlan();
-    plan.layerSpecs.forEach((spec) => {
+    const apply = _waypoints().buildClearMultiDropLayersApplyPlan();
+    if (!apply.shouldClear || !map) return;
+
+    apply.layerSpecs.forEach((spec) => {
         if (map.getLayer(spec.layerId)) map.removeLayer(spec.layerId);
         if (map.getSource(spec.sourceId)) map.removeSource(spec.sourceId);
     });
@@ -4171,7 +4171,7 @@ function applyDisplayTrafficUpdateFromPlan(execute) {
 }
 
 function displayTrafficUpdate(data) {
-    const execute = _trafficChange().buildDisplayTrafficUpdateExecutePlan(
+    const orch = _trafficChange().buildDisplayTrafficUpdateOrchestrationPlan(
         data,
         window.lastCalculatedRoute,
         {
@@ -4180,7 +4180,8 @@ function displayTrafficUpdate(data) {
         },
         new Date().toLocaleTimeString()
     );
-    applyDisplayTrafficUpdateFromPlan(execute);
+    if (!orch.shouldApply) return;
+    applyDisplayTrafficUpdateFromPlan(orch.execute);
 }
 
 // Auto-update traffic every 5 minutes during navigation
@@ -4192,10 +4193,12 @@ function displayTrafficUpdate(data) {
 function startTrafficMonitoring() {
     const TC = _trafficChange();
     const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
-    const execute = TC.buildStartTrafficMonitoringExecutePlan(
+    const orch = TC.buildStartTrafficMonitoringOrchestrationPlan(
         !!window[runtime.intervalProperty]
     );
-    if (!execute.shouldStart) return;
+    if (!orch.shouldStart || !orch.execute.shouldStart) return;
+
+    const execute = orch.execute;
 
     if (execute.clearExistingInterval) {
         clearInterval(window[runtime.intervalProperty]);
@@ -4223,10 +4226,12 @@ function startTrafficMonitoring() {
 function stopTrafficMonitoring() {
     const TC = _trafficChange();
     const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
-    const execute = TC.buildStopTrafficMonitoringExecutePlan(
+    const orch = TC.buildStopTrafficMonitoringOrchestrationPlan(
         !!window[runtime.intervalProperty]
     );
-    if (!execute.shouldStop) return;
+    if (!orch.shouldStop) return;
+
+    const execute = orch.execute;
 
     if (execute.clearInterval) {
         clearInterval(window[runtime.intervalProperty]);

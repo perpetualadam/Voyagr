@@ -340,6 +340,14 @@ describe('waypoints module', () => {
             .toBe('add_stop');
     });
 
+    test('buildAddViaPointToggleApplyPlan wraps button DOM and map cursor flags', () => {
+        const apply = W.buildAddViaPointToggleApplyPlan(true);
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.buttonDom.elementId).toBe(W.ADD_VIA_POINT_BTN_ID);
+        expect(apply.requireMapForCursor).toBe(true);
+        expect(W.buildAddStopToggleApplyPlan(false).addingStop).toBe(false);
+    });
+
     test('buildWaypointsListDomApplyPlan targets list container', () => {
         const plan = W.buildWaypointsListDomApplyPlan([{ name: 'Via' }], []);
         expect(plan.containerId).toBe(W.WAYPOINTS_LIST_CONTAINER_ID);
@@ -429,6 +437,28 @@ describe('waypoints module', () => {
         const plan = W.buildClearMultiDropLayersPlan(3);
         expect(plan.layerSpecs).toHaveLength(3);
         expect(plan.layerSpecs[2].sourceId).toBe('multidrop-leg-source-2');
+    });
+
+    test('buildClearMultiDropLayersApplyPlan wraps clear layer specs', () => {
+        const apply = W.buildClearMultiDropLayersApplyPlan(2);
+        expect(apply.shouldClear).toBe(true);
+        expect(apply.layerSpecs).toHaveLength(2);
+    });
+
+    test('buildDrawMultiDropLegsOrchestrationPlan guards missing map', () => {
+        const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
+        expect(W.buildDrawMultiDropLegsOrchestrationPlan({
+            hasMap: false,
+            data: { all_geometry: ['geom'] },
+            decodePolyline: decode,
+        }).shouldDraw).toBe(false);
+        const orch = W.buildDrawMultiDropLegsOrchestrationPlan({
+            hasMap: true,
+            data: { all_geometry: ['geom'], legs: [{ geometry_precision: 6 }] },
+            decodePolyline: decode,
+        });
+        expect(orch.shouldDraw).toBe(true);
+        expect(orch.execute.layers.length).toBeGreaterThan(0);
     });
 
     test('buildMultiDropLegsDisplayDomApplyPlan appends itinerary to waypoints list', () => {

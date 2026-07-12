@@ -462,6 +462,53 @@
     }
 
     /**
+     * Orchestration plan for applying a traffic-conditions API response.
+     * @param {Object} data
+     * @param {Object} lastCalculatedRoute
+     * @param {Object} fmt
+     * @param {string} [timeStr]
+     * @returns {Object}
+     */
+    function buildDisplayTrafficUpdateOrchestrationPlan(data, lastCalculatedRoute, fmt, timeStr) {
+        return {
+            shouldApply: true,
+            execute: buildDisplayTrafficUpdateExecutePlan(
+                data,
+                lastCalculatedRoute,
+                fmt,
+                timeStr
+            ),
+        };
+    }
+
+    /**
+     * Orchestration plan for starting periodic traffic condition polling.
+     * @param {boolean} hasExistingInterval
+     * @returns {Object}
+     */
+    function buildStartTrafficMonitoringOrchestrationPlan(hasExistingInterval) {
+        return {
+            shouldStart: true,
+            runtime: buildTrafficMonitoringRuntimeCollectPlan(),
+            execute: buildStartTrafficMonitoringExecutePlan(hasExistingInterval),
+        };
+    }
+
+    /**
+     * Orchestration plan for stopping periodic traffic condition polling.
+     * @param {boolean} hasInterval
+     * @returns {Object}
+     */
+    function buildStopTrafficMonitoringOrchestrationPlan(hasInterval) {
+        var execute = buildStopTrafficMonitoringExecutePlan(hasInterval);
+        return {
+            shouldStop: execute.shouldStop,
+            runtime: buildTrafficMonitoringRuntimeCollectPlan(),
+            execute: execute,
+        };
+    }
+
+    /**
      * Toggle plan for enabling/disabling automatic traffic updates.
      * @param {boolean} currentEnabled
      * @returns {Object}
@@ -677,9 +724,12 @@
         buildTrafficMonitoringRuntimeCollectPlan: buildTrafficMonitoringRuntimeCollectPlan,
         parseStoredRouteDurationMinutes: parseStoredRouteDurationMinutes,
         buildDisplayTrafficUpdateExecutePlan: buildDisplayTrafficUpdateExecutePlan,
+        buildDisplayTrafficUpdateOrchestrationPlan: buildDisplayTrafficUpdateOrchestrationPlan,
         buildStartTrafficMonitoringExecutePlan: buildStartTrafficMonitoringExecutePlan,
+        buildStartTrafficMonitoringOrchestrationPlan: buildStartTrafficMonitoringOrchestrationPlan,
         buildTrafficMonitoringTickPlan: buildTrafficMonitoringTickPlan,
         buildStopTrafficMonitoringExecutePlan: buildStopTrafficMonitoringExecutePlan,
+        buildStopTrafficMonitoringOrchestrationPlan: buildStopTrafficMonitoringOrchestrationPlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
         buildInitAutoTrafficRerouteTogglesPlan: buildInitAutoTrafficRerouteTogglesPlan,

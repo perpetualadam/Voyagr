@@ -1120,6 +1120,29 @@
     }
 
     /**
+     * Apply plan for toggling via-point map-pick mode.
+     * @param {boolean} nextAddingViaPoint
+     * @returns {Object}
+     */
+    function buildAddViaPointToggleApplyPlan(nextAddingViaPoint) {
+        var plan = buildAddViaPointTogglePlan(nextAddingViaPoint);
+        return {
+            shouldApply: true,
+            addingViaPoint: plan.addingViaPoint,
+            addingStop: plan.addingStop,
+            buttonDom: {
+                elementId: plan.buttonId,
+                active: plan.buttonActive,
+                text: plan.buttonText,
+            },
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+            mapCursor: plan.mapCursor,
+            requireMapForCursor: true,
+        };
+    }
+
+    /**
      * Toggle plan for stop map-pick mode.
      * @param {boolean} addingStop
      * @returns {Object}
@@ -1134,6 +1157,29 @@
             statusMessage: addingStop ? 'Click on the map to add a stop' : null,
             statusType: 'info',
             mapCursor: addingStop ? 'crosshair' : '',
+        };
+    }
+
+    /**
+     * Apply plan for toggling stop map-pick mode.
+     * @param {boolean} nextAddingStop
+     * @returns {Object}
+     */
+    function buildAddStopToggleApplyPlan(nextAddingStop) {
+        var plan = buildAddStopTogglePlan(nextAddingStop);
+        return {
+            shouldApply: true,
+            addingViaPoint: plan.addingViaPoint,
+            addingStop: plan.addingStop,
+            buttonDom: {
+                elementId: plan.buttonId,
+                active: plan.buttonActive,
+                text: plan.buttonText,
+            },
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+            mapCursor: plan.mapCursor,
+            requireMapForCursor: true,
         };
     }
 
@@ -1399,6 +1445,30 @@
     }
 
     /**
+     * Orchestration plan for drawing multi-drop leg layers on the map.
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @param {Object} [input.data]
+     * @param {function(string, number): Array<[number,number]>} [input.decodePolyline]
+     * @returns {Object}
+     */
+    function buildDrawMultiDropLegsOrchestrationPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return { shouldDraw: false };
+        }
+        var applyPlan = buildMultiDropLegsMapApplyPlan(input.data, input.decodePolyline);
+        var execute = buildMultiDropLegsMapExecutePlan(applyPlan);
+        if (!execute.shouldExecute) {
+            return { shouldDraw: false };
+        }
+        return {
+            shouldDraw: true,
+            execute: execute,
+        };
+    }
+
+    /**
      * Clear plan for multi-drop leg map layers.
      * @param {number} [maxLegs]
      * @returns {Object}
@@ -1413,6 +1483,19 @@
             });
         }
         return { layerSpecs: layerSpecs };
+    }
+
+    /**
+     * Apply plan for clearing multi-drop leg layers from the map.
+     * @param {number} [maxLegs]
+     * @returns {Object}
+     */
+    function buildClearMultiDropLayersApplyPlan(maxLegs) {
+        var plan = buildClearMultiDropLayersPlan(maxLegs);
+        return {
+            shouldClear: true,
+            layerSpecs: plan.layerSpecs,
+        };
     }
 
     /**
@@ -1497,7 +1580,9 @@
         buildWaypointAddressResolvedDomApplyPlan: buildWaypointAddressResolvedDomApplyPlan,
         buildWaypointAddressGeocodeOutcomeApplyPlan: buildWaypointAddressGeocodeOutcomeApplyPlan,
         buildAddViaPointTogglePlan: buildAddViaPointTogglePlan,
+        buildAddViaPointToggleApplyPlan: buildAddViaPointToggleApplyPlan,
         buildAddStopTogglePlan: buildAddStopTogglePlan,
+        buildAddStopToggleApplyPlan: buildAddStopToggleApplyPlan,
         buildMapClickWaypointDispatchPlan: buildMapClickWaypointDispatchPlan,
         VIA_POINT_ADDRESS_INPUT_ID: VIA_POINT_ADDRESS_INPUT_ID,
         STOP_ADDRESS_INPUT_ID: STOP_ADDRESS_INPUT_ID,
@@ -1515,7 +1600,9 @@
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
         buildMultiDropLegLayerMapLibreApplyPlan: buildMultiDropLegLayerMapLibreApplyPlan,
         buildMultiDropLegsMapExecutePlan: buildMultiDropLegsMapExecutePlan,
+        buildDrawMultiDropLegsOrchestrationPlan: buildDrawMultiDropLegsOrchestrationPlan,
         buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,
+        buildClearMultiDropLayersApplyPlan: buildClearMultiDropLayersApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
