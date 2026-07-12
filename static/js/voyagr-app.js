@@ -4636,18 +4636,11 @@ function buildTurnDisplayInstruction(turnInfo) {
  * @returns {{ direction, valhallaType, streetName, gapMeters, index, maneuver } | null}
  */
 function getFollowingManeuver(currentIndex) {
-    const TI = _turnInstructions();
-    const RG = _routeGeometry();
-    return TI.findFollowingManeuver(currentRouteSteps, currentIndex, routePolyline, {
-        cumulativeDistanceBetweenVertices: RG.cumulativeDistanceBetweenVertices,
-        getManeuverStreetLabel: getManeuverStreetLabel,
-        resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
-    });
+    return VoyagrTurnInstructionWidgetOrchestration.getFollowingManeuver(currentIndex);
 }
 
-/** Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints. */
 function effectiveRoundaboutExitCount(stepIndex) {
-    return _turnInstructions().effectiveRoundaboutExitCountFromSteps(currentRouteSteps, stepIndex);
+    return VoyagrTurnInstructionWidgetOrchestration.effectiveRoundaboutExitCount(stepIndex);
 }
 
 // ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml live in
@@ -5155,293 +5148,53 @@ async function stopARMode() { return VoyagrArNavigationOrchestration.stopARMode(
 function updateARButtonState(status) { VoyagrArNavigationOrchestration.updateARButtonState(status); }
 function updateARInstruction(turnInfo) { VoyagrArNavigationOrchestration.updateARInstruction(turnInfo); }
 
-// ===== TURN INSTRUCTION WIDGET =====
-let instructionsPanelExpanded = false;
+// ===== TURN INSTRUCTION WIDGET ORCHESTRATION =====
+// Orchestration lives in static/js/app/turn-instruction-widget-orchestration.js (bound at file end).
 
-/**
- * Toggle the instructions panel expand/collapse state
- */
-function toggleInstructionsList() {
-    const panel = document.getElementById('instructionsPanel');
-    const expandIcon = document.getElementById('expandIcon');
-    const expandIndicator = document.querySelector('.expand-indicator');
-
-    if (!panel) return;
-
-    instructionsPanelExpanded = !instructionsPanelExpanded;
-
-    if (instructionsPanelExpanded) {
-        panel.style.display = 'block';
-        expandIndicator?.classList.add('expanded');
-        expandIcon.textContent = '▲';
-        populateInstructionsList();
-    } else {
-        panel.style.display = 'none';
-        expandIndicator?.classList.remove('expanded');
-        expandIcon.textContent = '▼';
-    }
-
-    console.log('[Turn Widget] Instructions panel:', instructionsPanelExpanded ? 'expanded' : 'collapsed');
+function getTurnInstructionWidgetOrchestrationRuntime() {
+    return {
+        turnInstructions: () => _turnInstructions(),
+        routeGeometry: () => _routeGeometry(),
+        speedGps: () => _speedGps(),
+        previewMarker: () => _previewMarker(),
+        getDistanceUnit: () => distanceUnit,
+        getRouteInProgress: () => routeInProgress,
+        getCurrentRouteSteps: () => currentRouteSteps,
+        getCurrentStepIndex: () => currentStepIndex,
+        getRoutePolyline: () => routePolyline,
+        getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
+        getMap: () => map,
+        getMapFollowingActive: () => mapFollowingActive,
+        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        call: {
+            detectUpcomingTurn,
+            updateARInstruction,
+            showStatus,
+            getCurrentRoadDisplayName: () => VoyagrRoadNameOrchestration.getCurrentRoadDisplayName(),
+            getManeuverStreetLabel,
+        },
+    };
 }
 
-/**
- * Show the turn instruction widget
- */
-function showTurnInstructionWidget() {
-    const widget = document.getElementById('turnInstructionWidget');
-    if (widget) {
-        widget.style.display = 'block';
-        console.log('[Turn Widget] Displayed');
-    }
-}
-
-/**
- * Hide the turn instruction widget
- */
-function hideTurnInstructionWidget() {
-    const widget = document.getElementById('turnInstructionWidget');
-    if (widget) {
-        widget.style.display = 'none';
-        instructionsPanelExpanded = false;
-        const panel = document.getElementById('instructionsPanel');
-        if (panel) panel.style.display = 'none';
-        const hintEl = document.getElementById('nextTurnLaneHint');
-        if (hintEl) {
-            hintEl.innerHTML = '';
-            hintEl.style.display = 'none';
-        }
-        const thenEl = document.getElementById('nextTurnThen');
-        if (thenEl) thenEl.style.display = 'none';
-        console.log('[Turn Widget] Hidden');
-    }
-}
-
-/**
- * Update the next turn display with current turn info
- * @param {Object} turnInfo - Turn information object
- */
+function toggleInstructionsList() { VoyagrTurnInstructionWidgetOrchestration.toggleInstructionsList(); }
+function showTurnInstructionWidget() { VoyagrTurnInstructionWidgetOrchestration.showTurnInstructionWidget(); }
+function hideTurnInstructionWidget() { VoyagrTurnInstructionWidgetOrchestration.hideTurnInstructionWidget(); }
 function updateTurnInstructionDisplay(turnInfo) {
-    const distanceEl = document.getElementById('nextTurnDistance');
-    const instructionEl = document.getElementById('nextTurnInstruction');
-    const streetEl = document.getElementById('nextTurnStreet');
-    const iconEl = document.getElementById('nextTurnIcon');
-    const hintEl = document.getElementById('nextTurnLaneHint');
-
-    if (!distanceEl || !instructionEl) return;
-
-    const TI = _turnInstructions();
-    const plan = TI.buildTurnWidgetRowDisplayPlan(turnInfo, distanceUnit, {
-        roundaboutExitCount: turnInfo && turnInfo.maneuverIndex != null
-            ? effectiveRoundaboutExitCount(turnInfo.maneuverIndex)
-            : 0,
-    });
-
-    distanceEl.textContent = plan.distanceText;
-    instructionEl.textContent = plan.instructionText;
-
-    if (streetEl) {
-        if (plan.streetVisible) {
-            streetEl.textContent = plan.streetText;
-            streetEl.style.display = 'block';
-        } else {
-            streetEl.style.display = 'none';
-        }
-    }
-
-    if (iconEl) iconEl.textContent = TI.getTurnIcon(plan.iconType);
-
-    if (hintEl) {
-        if (plan.hintVisible) {
-            hintEl.innerHTML = plan.hintHtml;
-            hintEl.style.display = 'block';
-        } else {
-            hintEl.innerHTML = '';
-            hintEl.style.display = 'none';
-        }
-    }
-
-    // Advance "Then …" row: surface the maneuver that follows the next turn.
-    updateThenRow(plan.maneuverIndex, plan.distance);
-
-    if (instructionsPanelExpanded) {
-        populateInstructionsList();
-    }
-
-    updateARInstruction(turnInfo);
+    return VoyagrTurnInstructionWidgetOrchestration.updateTurnInstructionDisplay(turnInfo);
 }
-
-/**
- * Show/hide the advance "Then <maneuver>" row. It appears while approaching the next
- * turn (<= 700 m) when another maneuver follows close behind (<= 900 m gap), e.g.
- * "Turn left … Then turn right".
- * @param {number|null} maneuverIndex - Index of the current/next maneuver in currentRouteSteps
- * @param {number|null} currentDistance - Distance (m) to the current maneuver
- */
 function updateThenRow(maneuverIndex, currentDistance) {
-    const thenEl = document.getElementById('nextTurnThen');
-    if (!thenEl) return;
-    const iconEl = document.getElementById('nextTurnThenIcon');
-    const textEl = document.getElementById('nextTurnThenText');
-    const TI = _turnInstructions();
-    const follow = getFollowingManeuver(maneuverIndex);
-    const plan = TI.buildThenRowDisplayPlan(
-        maneuverIndex,
-        currentDistance,
-        follow,
-        distanceUnit,
-        follow && follow.direction === 'roundabout' ? effectiveRoundaboutExitCount(follow.index) : 0
-    );
-
-    if (plan.visible) {
-        if (iconEl) iconEl.textContent = plan.icon;
-        if (textEl) textEl.textContent = plan.text;
-    }
-    thenEl.style.display = plan.visible ? 'flex' : 'none';
+    return VoyagrTurnInstructionWidgetOrchestration.updateThenRow(maneuverIndex, currentDistance);
 }
-
-/**
- * Populate the full instructions list in the expanded panel
- * Enhanced with click-to-preview functionality
- */
-function populateInstructionsList() {
-    const listEl = document.getElementById('instructionsList');
-    const countEl = document.getElementById('instructionsCount');
-    const TI = _turnInstructions();
-
-    const plan = TI.buildInstructionsListHtml(currentRouteSteps, currentStepIndex, {
-        getTurnIcon: TI.getTurnIcon.bind(TI),
-        effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
-    });
-
-    if (countEl) countEl.textContent = plan.countText;
-    if (!listEl) return;
-
-    listEl.innerHTML = plan.html;
-
-    const currentItem = listEl.querySelector('.instruction-item.current');
-    if (currentItem) {
-        currentItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-}
-
-/**
- * Preview instruction location on map when clicked
- * @param {number} stepIndex - Index of the step in currentRouteSteps
- * @param {number} shapeIndex - Index in the route polyline
- */
+function populateInstructionsList() { VoyagrTurnInstructionWidgetOrchestration.populateInstructionsList(); }
 function previewInstructionOnMap(stepIndex, shapeIndex) {
-    if (!routePolyline || shapeIndex >= routePolyline.length) {
-        console.log('[Instructions] Cannot preview: invalid polyline index');
-        return;
-    }
-
-    const point = routePolyline[shapeIndex];
-    if (!point) return;
-
-    const step = currentRouteSteps[stepIndex];
-    const instruction = step?.instruction || 'Maneuver';
-
-    console.log(`[Instructions] Previewing step ${stepIndex}: "${instruction}" at [${point[0].toFixed(4)}, ${point[1].toFixed(4)}]`);
-
-    // Temporarily disable map following
-    const wasFollowing = mapFollowingActive;
-    mapFollowingActive = false;
-
-    // Fly to the maneuver location
-    if (map) {
-        map.flyTo({
-            center: [point[1], point[0]],  // MapLibre uses [lng, lat]
-            zoom: 17,
-            duration: 1000
-        });
-
-        // Show a temporary marker at the preview location
-        showPreviewMarker(point[0], point[1], instruction);
-    }
-
-    // Re-enable following after 5 seconds
-    setTimeout(() => {
-        if (wasFollowing) {
-            mapFollowingActive = true;
-            hidePreviewMarker();
-        }
-    }, 5000);
-
-    showStatus(`📍 Previewing: ${instruction}`, 'info');
+    return VoyagrTurnInstructionWidgetOrchestration.previewInstructionOnMap(stepIndex, shapeIndex);
 }
-
-// Preview marker reference
-let previewMarker = null;
-
-/**
- * Show a temporary preview marker on the map
- */
 function showPreviewMarker(lat, lon, label) {
-    hidePreviewMarker();
-
-    if (!map) return;
-
-    const PM = _previewMarker();
-    const el = document.createElement('div');
-    el.className = PM.PREVIEW_MARKER_CLASS;
-    el.innerHTML = PM.buildPreviewMarkerInnerHtml(label);
-    el.style.cssText = PM.getPreviewMarkerStyleCssText();
-
-    // Create MapLibre marker
-    previewMarker = new maplibregl.Marker({ element: el })
-        .setLngLat([lon, lat])
-        .addTo(map);
+    return VoyagrTurnInstructionWidgetOrchestration.showPreviewMarker(lat, lon, label);
 }
-
-/**
- * Hide the preview marker
- */
-function hidePreviewMarker() {
-    if (previewMarker) {
-        previewMarker.remove();
-        previewMarker = null;
-    }
-}
-
-/**
- * Update turn widget from maneuver data (called from GPS tracking).
- * Delegates to {@link detectUpcomingTurn} so street names / distances stay in sync with
- * voice announcements — the old loop from `currentStepIndex` could show the wrong road
- * after a reroute when progress indices were re-seeded.
- *
- * @param {number} lat - Current latitude
- * @param {number} lon - Current longitude
- */
+function hidePreviewMarker() { VoyagrTurnInstructionWidgetOrchestration.hidePreviewMarker(); }
 function updateTurnWidgetFromPosition(lat, lon, turnInfo) {
-    const TI = _turnInstructions();
-    const RG = _routeGeometry();
-    const SG = _speedGps();
-
-    const resolvedTurnInfo = turnInfo !== undefined
-        ? turnInfo
-        : detectUpcomingTurn(lat, lon);
-
-    const tick = TI.buildTurnWidgetTickPlan({
-        routeInProgress,
-        routeSteps: currentRouteSteps,
-        routePolyline,
-        lat,
-        lon,
-        lastSnappedRouteIndex,
-        currentRoadDisplayName: VoyagrRoadNameOrchestration.getCurrentRoadDisplayName(),
-        turnInfo: resolvedTurnInfo,
-        getActiveRouteManeuverIndex: SG ? SG.getActiveRouteManeuverIndex.bind(SG) : null,
-        buildBetweenTurnDisplay: SG ? SG.buildBetweenTurnDisplay.bind(SG) : null,
-        snapToRoutePolyline: (a, b, c, d) => RG.snapToRoutePolyline(a, b, c, d),
-        distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters.bind(RG),
-    });
-
-    if (tick.action === 'skip') return;
-    if (tick.action === 'clear') {
-        updateTurnInstructionDisplay(null);
-        return;
-    }
-    updateTurnInstructionDisplay(tick.displayPayload);
+    return VoyagrTurnInstructionWidgetOrchestration.updateTurnWidgetFromPosition(lat, lon, turnInfo);
 }
 
 // ===== JOURNEY SUMMARY BAR =====
@@ -6583,6 +6336,7 @@ VoyagrRoadReportOrchestration.bind(getRoadReportOrchestrationRuntime());
 VoyagrRecentDestinationsOrchestration.bind(getRecentDestinationsOrchestrationRuntime());
 VoyagrMapView3DOrchestration.bind(getMapView3DOrchestrationRuntime());
 VoyagrArNavigationOrchestration.bind(getArNavigationOrchestrationRuntime());
+VoyagrTurnInstructionWidgetOrchestration.bind(getTurnInstructionWidgetOrchestrationRuntime());
 VoyagrTabNavigationOrchestration.bind(getTabNavigationOrchestrationRuntime());
 VoyagrDriverCameraOrchestration.bind(getDriverCameraOrchestrationRuntime());
 VoyagrPwaLifecycleOrchestration.bind(getPwaLifecycleOrchestrationRuntime());
