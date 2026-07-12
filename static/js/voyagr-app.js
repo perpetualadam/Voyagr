@@ -1667,7 +1667,6 @@ function getGpsOrchestrationRuntime() {
         },
         getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
         call: {
-            resolveGpsRouteSnapForTick,
             smoothGpsSpeedMph,
             updateRecenterButtonVisibility,
             updateTurnWidgetFromPosition,
@@ -1699,6 +1698,12 @@ function getGpsOrchestrationRuntime() {
 }
 
 function startGPSTracking() { VoyagrGpsOrchestration.startGPSTracking(); }
+function resolveGpsRouteSnapForTick(lat, lon) {
+    return VoyagrGpsOrchestration.resolveGpsRouteSnapForTick(lat, lon);
+}
+function getVehicleDisplayCoordinates() {
+    return VoyagrGpsOrchestration.getVehicleDisplayCoordinates();
+}
 function stopGPSTracking() { VoyagrGpsOrchestration.stopGPSTracking(); }
 function applyVehicleMarkerFromTickPlan(markerTick) { VoyagrGpsOrchestration.applyVehicleMarkerFromTickPlan(markerTick); }
 function applySpeedLimitFetchResetFromPlan(resetPlan) { VoyagrGpsOrchestration.applySpeedLimitFetchResetFromPlan(resetPlan); }
@@ -2233,36 +2238,6 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaS
 }
 function applySpeedWidgetToggleUi() { VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(); }
 function toggleSpeedWidget() { VoyagrSpeedWidgetOrchestration.toggleSpeedWidget(); }
-function resolveGpsRouteSnapForTick(lat, lon) {
-    const RG = _routeGeometry();
-    const plan = RG.buildGpsRouteSnapTickPlan({
-        lat,
-        lon,
-        routeInProgress,
-        routePolyline,
-        lastSnappedRouteIndex,
-    });
-    return plan.snapped;
-}
-
-/** Lat/lon for the vehicle icon (snapped to route during navigation). */
-function getVehicleDisplayCoordinates() {
-    const SG = _speedGps();
-    return SG.buildVehicleDisplayCoordinatesPlan({
-        lat: currentLat,
-        lon: currentLon,
-        routeInProgress,
-        routePolyline,
-        snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
-        lastSnappedRouteIndex,
-        prevSnapBlendWeightState: _snapBlendWeightState,
-        smoothDisplayLat: _smoothDisplayLat,
-        smoothDisplayLon: _smoothDisplayLon,
-        useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
-        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-    });
-}
 
 // ===== MAP RECENTER ORCHESTRATION =====
 // Orchestration lives in static/js/app/map-recenter-orchestration.js (bound at file end).

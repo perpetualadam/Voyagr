@@ -30,6 +30,39 @@
     function ndModule() { return rt().m.navigationDestination(); }
     function rrModule() { return rt().m.routingRequest(); }
 
+    function resolveGpsRouteSnapForTick(lat, lon) {
+        const RG = rgModule();
+        const plan = RG.buildGpsRouteSnapTickPlan({
+            lat: lat,
+            lon: lon,
+            routeInProgress: rt().g('routeInProgress'),
+            routePolyline: rt().g('routePolyline'),
+            lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
+        });
+        return plan.snapped;
+    }
+
+    function getVehicleDisplayCoordinates() {
+        const SG = sgModule();
+        const RG = rgModule();
+        const currentLat = rt().g('currentLat');
+        const currentLon = rt().g('currentLon');
+        return SG.buildVehicleDisplayCoordinatesPlan({
+            lat: currentLat,
+            lon: currentLon,
+            routeInProgress: rt().g('routeInProgress'),
+            routePolyline: rt().g('routePolyline'),
+            snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
+            lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
+            prevSnapBlendWeightState: rt().g('_snapBlendWeightState'),
+            smoothDisplayLat: rt().g('_smoothDisplayLat'),
+            smoothDisplayLon: rt().g('_smoothDisplayLon'),
+            useSmoothCoordsOnly: rt().g('_smoothDisplayLat') != null && rt().g('_smoothDisplayLon') != null,
+            calculateBearing: (a, b, c, d) => RG.bearing(a, b, c, d),
+            blendHeadingsCircular: RG.blendHeadingsCircular,
+        });
+    }
+
     // ===== GPS TRACKING FUNCTIONS =====
     /**
      * Apply follow-camera ease for one GPS tick; returns zoom coordination flags.
@@ -573,7 +606,7 @@
             accuracy: coord.accuracy,
             routeInProgress: rt().g('routeInProgress'),
             routePolyline: rt().g('routePolyline'),
-            snapped: rt().call.resolveGpsRouteSnapForTick(coord.lat, coord.lon),
+            snapped: resolveGpsRouteSnapForTick(coord.lat, coord.lon),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
             prevSnapBlendWeightState: rt().g('_snapBlendWeightState'),
             speedMph: coord.speedMph,
@@ -962,7 +995,7 @@
             lat,
             lon,
             routePolyline: rt().g('routePolyline'),
-            snapped: rt().call.resolveGpsRouteSnapForTick(lat, lon),
+            snapped: resolveGpsRouteSnapForTick(lat, lon),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
             calculateBearing: (a, b, c, d) => rgModule().bearing(a, b, c, d),
             blendHeadingsCircular: rgModule().blendHeadingsCircular,
@@ -1609,6 +1642,8 @@
 
     var api = {
         bind: bind,
+        resolveGpsRouteSnapForTick: resolveGpsRouteSnapForTick,
+        getVehicleDisplayCoordinates: getVehicleDisplayCoordinates,
         startGPSTracking: startGPSTracking,
         stopGPSTracking: stopGPSTracking,
         applyVehicleMarkerFromTickPlan: applyVehicleMarkerFromTickPlan,
