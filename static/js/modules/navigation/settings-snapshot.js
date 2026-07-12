@@ -624,6 +624,19 @@
     }
 
     /**
+     * Entry orchestration plan for saveMultiDropPreferences handler.
+     * @param {Object} input - from buildCollectMultiDropInputPlan
+     * @returns {Object}
+     */
+    function buildSaveMultiDropPreferencesEntryOrchestrationPlan(input) {
+        var prefs = buildMultiDropFormStatePlan(buildCollectMultiDropInputPlan(input));
+        return {
+            prefs: prefs,
+            execute: buildSaveMultiDropPreferencesExecutePlan(prefs),
+        };
+    }
+
+    /**
      * Execute plan for loading multi-drop preferences into the form.
      * @returns {Object}
      */
@@ -631,6 +644,18 @@
         return {
             shouldLoad: true,
             ensureDefaultTrafficAwareRouting: true,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadMultiDropPreferences handler.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function buildLoadMultiDropPreferencesEntryOrchestrationPlan(storage) {
+        return {
+            execute: buildLoadMultiDropPreferencesExecutePlan(),
+            uiApply: buildMultiDropPreferencesUiApplyPlan(storage),
         };
     }
 
@@ -1107,7 +1132,11 @@
         buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,
         buildCollectMultiDropInputPlan: buildCollectMultiDropInputPlan,
         buildSaveMultiDropPreferencesExecutePlan: buildSaveMultiDropPreferencesExecutePlan,
+        buildSaveMultiDropPreferencesEntryOrchestrationPlan:
+            buildSaveMultiDropPreferencesEntryOrchestrationPlan,
         buildLoadMultiDropPreferencesExecutePlan: buildLoadMultiDropPreferencesExecutePlan,
+        buildLoadMultiDropPreferencesEntryOrchestrationPlan:
+            buildLoadMultiDropPreferencesEntryOrchestrationPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
         buildResetAllSettingsExecutePlan: buildResetAllSettingsExecutePlan,

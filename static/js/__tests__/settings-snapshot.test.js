@@ -431,6 +431,32 @@ describe('settings-snapshot module', () => {
         expect(SS.buildLoadMultiDropPreferencesExecutePlan().ensureDefaultTrafficAwareRouting).toBe(true);
     });
 
+    test('buildSaveMultiDropPreferencesEntryOrchestrationPlan bundles execute plan', () => {
+        const entry = SS.buildSaveMultiDropPreferencesEntryOrchestrationPlan({
+            optimizeStopOrder: true,
+            roundTrip: true,
+            trafficAwareRouting: true,
+            avoidRoadClosures: false,
+            avoidIncidents: false,
+            departureTime: '',
+            getStorageItem: () => null,
+        });
+        expect(entry.execute.shouldSave).toBe(true);
+        expect(entry.prefs.roundTrip).toBe(true);
+        expect(entry.execute.storagePatches.pref_roundTrip).toBe('true');
+    });
+
+    test('buildLoadMultiDropPreferencesEntryOrchestrationPlan bundles ui apply plan', () => {
+        const entry = SS.buildLoadMultiDropPreferencesEntryOrchestrationPlan({
+            getItem(key) {
+                if (key === 'pref_roundTrip') return 'true';
+                return null;
+            },
+        });
+        expect(entry.execute.shouldLoad).toBe(true);
+        expect(entry.uiApply.checks.roundTrip).toBe(true);
+    });
+
     test('buildSaveAllSettingsExecutePlan wraps settings save plan', () => {
         const savePlan = SS.buildSettingsSavePlan(
             SS.buildSettingsSnapshotInputPlan(

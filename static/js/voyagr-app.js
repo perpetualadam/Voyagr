@@ -4157,27 +4157,35 @@ function collectRoutePreferencesFormState() {
     );
 }
 
-function saveMultiDropPreferences() {
-    const SS = _settingsSnapshot();
-    const prefs = SS.buildMultiDropFormStatePlan(
-        SS.buildCollectMultiDropInputPlan({
-            optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
-            roundTrip: document.getElementById('roundTrip')?.checked,
-            trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
-            avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
-            avoidIncidents: document.getElementById('avoidIncidents')?.checked,
-            departureTime: document.getElementById('departureTime')?.value,
-            getStorageItem: (key) => localStorage.getItem(key),
-        })
-    );
-    const execute = SS.buildSaveMultiDropPreferencesExecutePlan(prefs);
-    if (!execute.shouldSave) return;
+function collectMultiDropDomInput() {
+    return {
+        optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
+        roundTrip: document.getElementById('roundTrip')?.checked,
+        trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
+        avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
+        avoidIncidents: document.getElementById('avoidIncidents')?.checked,
+        departureTime: document.getElementById('departureTime')?.value,
+        getStorageItem: (key) => localStorage.getItem(key),
+    };
+}
+
+function applySaveMultiDropPreferencesFromPlan(execute) {
+    if (!execute || !execute.shouldSave) return;
 
     Object.entries(execute.storagePatches).forEach(([key, value]) => {
         localStorage.setItem(key, value);
     });
     if (execute.saveAllSettings) saveAllSettings();
     showStatus(execute.successStatusMessage, execute.successStatusType);
+}
+
+function saveMultiDropPreferences() {
+    const SS = _settingsSnapshot();
+    applySaveMultiDropPreferencesFromPlan(
+        SS.buildSaveMultiDropPreferencesEntryOrchestrationPlan(
+            SS.buildCollectMultiDropInputPlan(collectMultiDropDomInput())
+        ).execute
+    );
 }
 
 /**
@@ -4187,15 +4195,7 @@ function saveMultiDropPreferences() {
 function collectMultiDropFormState() {
     const SS = _settingsSnapshot();
     return SS.buildMultiDropFormStatePlan(
-        SS.buildCollectMultiDropInputPlan({
-            optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
-            roundTrip: document.getElementById('roundTrip')?.checked,
-            trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
-            avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
-            avoidIncidents: document.getElementById('avoidIncidents')?.checked,
-            departureTime: document.getElementById('departureTime')?.value,
-            getStorageItem: (key) => localStorage.getItem(key),
-        })
+        SS.buildCollectMultiDropInputPlan(collectMultiDropDomInput())
     );
 }
 
@@ -4212,13 +4212,11 @@ function applyMultiDropPreferencesUiFromPlan(plan) {
 }
 
 function loadMultiDropPreferences() {
-    const execute = _settingsSnapshot().buildLoadMultiDropPreferencesExecutePlan();
-    if (!execute.shouldLoad) return;
+    const entry = _settingsSnapshot().buildLoadMultiDropPreferencesEntryOrchestrationPlan(localStorage);
+    if (!entry.execute.shouldLoad) return;
 
-    if (execute.ensureDefaultTrafficAwareRouting) ensureDefaultTrafficAwareRouting();
-    applyMultiDropPreferencesUiFromPlan(
-        _settingsSnapshot().buildMultiDropPreferencesUiApplyPlan(localStorage)
-    );
+    if (entry.execute.ensureDefaultTrafficAwareRouting) ensureDefaultTrafficAwareRouting();
+    applyMultiDropPreferencesUiFromPlan(entry.uiApply);
 }
 
 function clearDepartureTime() {
@@ -4285,8 +4283,10 @@ function applyDetourLabelFromPlan(plan) {
 function updateDetourLabel() {
     const maxDetourEl = document.getElementById('maxDetour');
     if (!maxDetourEl) return;
-    applyDetourLabelFromPlan(_routePrefs().buildDetourLabelApplyPlan(maxDetourEl.value));
-    saveRoutePreferences();
+
+    const entry = _routePrefs().buildUpdateDetourLabelEntryOrchestrationPlan(maxDetourEl.value);
+    applyDetourLabelFromPlan(entry.detourApply);
+    if (entry.shouldSavePreferences) saveRoutePreferences();
 }
 
 /**
@@ -16589,27 +16589,45 @@ function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
 }
 
 // ===== ROUTE AVOIDANCE PREFERENCES =====
+function applyRouteLegAvoidanceToggleFromPlan(dispatch) {
+    if (!dispatch) return;
 
-function toggleAvoidancePreference(pref) {
-    const RP = _routePrefs();
     const TU = _toggleUI();
-    const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
+    const btn = document.getElementById(dispatch.buttonId);
     if (!btn) return;
-    const dispatch = RP.buildRouteLegAvoidanceToggleDispatchPlan(pref, btn.classList.contains('active'));
+
     TU.applyToggleButton(btn, dispatch.nextEnabled, TU.TOGGLE_SWITCH_OPTS);
     localStorage.setItem(dispatch.storage.storageKey, dispatch.storage.value);
     console.log(`[Avoidance] ${dispatch.logLine}`);
 }
 
-function loadAvoidancePreferences() {
+function toggleAvoidancePreference(pref) {
     const RP = _routePrefs();
+    const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
+    if (!btn) return;
+
+    applyRouteLegAvoidanceToggleFromPlan(
+        RP.buildRouteLegAvoidanceToggleEntryOrchestrationPlan(
+            pref,
+            btn.classList.contains('active')
+        ).dispatch
+    );
+}
+
+function applyLoadRouteLegAvoidanceTogglesFromPlan(items) {
     const TU = _toggleUI();
-    RP.buildRouteLegAvoidanceTogglesApplyPlan(localStorage).forEach((item) => {
+    (items || []).forEach((item) => {
         const btn = document.getElementById(item.buttonId);
         if (btn) {
             TU.applyToggleButton(btn, item.enabled, TU.TOGGLE_SWITCH_OPTS);
         }
     });
+}
+
+function loadAvoidancePreferences() {
+    applyLoadRouteLegAvoidanceTogglesFromPlan(
+        _routePrefs().buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan(localStorage).items
+    );
 }
 
 

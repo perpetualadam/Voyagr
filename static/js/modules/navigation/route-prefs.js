@@ -341,6 +341,41 @@
     }
 
     /**
+     * Entry orchestration plan for updateDetourLabel handler.
+     * @param {number|string} maxDetourValue
+     * @returns {Object}
+     */
+    function buildUpdateDetourLabelEntryOrchestrationPlan(maxDetourValue) {
+        return {
+            detourApply: buildDetourLabelApplyPlan(maxDetourValue),
+            shouldSavePreferences: true,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for toggleAvoidancePreference handler.
+     * @param {string} pref
+     * @param {boolean} currentlyActive
+     * @returns {Object}
+     */
+    function buildRouteLegAvoidanceToggleEntryOrchestrationPlan(pref, currentlyActive) {
+        return {
+            dispatch: buildRouteLegAvoidanceToggleDispatchPlan(pref, currentlyActive),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadAvoidancePreferences handler.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan(storage) {
+        return {
+            items: buildRouteLegAvoidanceTogglesApplyPlan(storage),
+        };
+    }
+
+    /**
      * One-time migration: pref_avoid_tollRoads ← pref_tolls when canonical key unset.
      * @param {Storage} storage
      */
@@ -421,6 +456,11 @@
         buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
         buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,
         buildRouteLegAvoidanceToggleDispatchPlan: buildRouteLegAvoidanceToggleDispatchPlan,
+        buildUpdateDetourLabelEntryOrchestrationPlan: buildUpdateDetourLabelEntryOrchestrationPlan,
+        buildRouteLegAvoidanceToggleEntryOrchestrationPlan:
+            buildRouteLegAvoidanceToggleEntryOrchestrationPlan,
+        buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan:
+            buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
