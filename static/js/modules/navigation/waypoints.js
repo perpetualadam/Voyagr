@@ -837,6 +837,17 @@
     }
 
     /**
+     * Entry orchestration plan for refreshing via-point markers.
+     * @param {Array<Object>} [viaPoints]
+     * @returns {Object}
+     */
+    function buildViaPointMarkersRefreshEntryOrchestrationPlan(viaPoints) {
+        return {
+            apply: buildViaPointMarkersRefreshApplyPlan(viaPoints),
+        };
+    }
+
+    /**
      * Add plan for a stop at map coordinates.
      * @param {number} lat
      * @param {number} lon
@@ -983,6 +994,16 @@
             updateWaypointsList: plan.updateWaypointsList,
             statusMessage: plan.statusMessage,
             statusType: plan.statusType,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for clearing all waypoints.
+     * @returns {Object}
+     */
+    function buildClearAllWaypointsEntryOrchestrationPlan() {
+        return {
+            apply: buildClearAllWaypointsApplyPlan(),
         };
     }
 
@@ -1809,6 +1830,7 @@
         buildViaPointRemoveEntryOrchestrationPlan: buildViaPointRemoveEntryOrchestrationPlan,
         buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
         buildViaPointMarkersRefreshApplyPlan: buildViaPointMarkersRefreshApplyPlan,
+        buildViaPointMarkersRefreshEntryOrchestrationPlan: buildViaPointMarkersRefreshEntryOrchestrationPlan,
         buildStopAddPlan: buildStopAddPlan,
         buildStopApplyPlan: buildStopApplyPlan,
         buildStopEntryOrchestrationPlan: buildStopEntryOrchestrationPlan,
@@ -1817,6 +1839,7 @@
         buildStopRemoveEntryOrchestrationPlan: buildStopRemoveEntryOrchestrationPlan,
         buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
         buildClearAllWaypointsApplyPlan: buildClearAllWaypointsApplyPlan,
+        buildClearAllWaypointsEntryOrchestrationPlan: buildClearAllWaypointsEntryOrchestrationPlan,
         buildWaypointMovePlan: buildWaypointMovePlan,
         buildWaypointMoveApplyPlan: buildWaypointMoveApplyPlan,
         buildWaypointReorderPlan: buildWaypointReorderPlan,

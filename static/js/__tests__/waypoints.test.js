@@ -303,6 +303,14 @@ describe('waypoints module', () => {
         expect(apply.markers[0].popupHtml).toContain('Via A');
     });
 
+    test('buildViaPointMarkersRefreshEntryOrchestrationPlan wraps apply plan', () => {
+        const entry = W.buildViaPointMarkersRefreshEntryOrchestrationPlan([
+            { lat: 51.5, lon: -0.1, name: 'Via A' },
+        ]);
+        expect(entry.apply.shouldRefresh).toBe(true);
+        expect(entry.apply.markers).toHaveLength(1);
+    });
+
     test('buildStopAddPlan and buildStopRemovePlan mirror via-point patterns', () => {
         const add = W.buildStopAddPlan(51.5, -0.1, 'Coffee', 20, 0);
         expect(add.stop.duration).toBe(20);
@@ -341,6 +349,12 @@ describe('waypoints module', () => {
         expect(apply.resetViaMarkerArray).toBe(true);
         expect(apply.resetStopMarkerArray).toBe(true);
         expect(apply.clearMultiDropLayers).toBe(true);
+    });
+
+    test('buildClearAllWaypointsEntryOrchestrationPlan wraps apply plan', () => {
+        const entry = W.buildClearAllWaypointsEntryOrchestrationPlan();
+        expect(entry.apply.shouldClear).toBe(true);
+        expect(entry.apply.statusMessage).toContain('cleared');
     });
 
     test('buildWaypointMovePlan and buildWaypointReorderPlan refresh via markers', () => {

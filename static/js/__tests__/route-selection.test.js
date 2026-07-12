@@ -509,6 +509,26 @@ describe('route comparison modal helpers', () => {
         expect(RS.buildShowAlternativeRoutesPreviewOrchestrationPlan(2).shouldShow).toBe(true);
     });
 
+    test('buildShowAlternativeRoutesPreviewEntryOrchestrationPlan bundles mount and dom apply', () => {
+        const blocked = RS.buildShowAlternativeRoutesPreviewEntryOrchestrationPlan({ routeCount: 0 });
+        expect(blocked.shouldShow).toBe(false);
+
+        const entry = RS.buildShowAlternativeRoutesPreviewEntryOrchestrationPlan({
+            routeCount: 2,
+            routeOptions: [
+                { name: 'Fast', distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0 },
+                { name: 'Scenic', distance_km: 12, duration_minutes: 25, fuel_cost: 5, toll_cost: 0, caz_cost: 0 },
+            ],
+            routeColors: ['#f00', '#0f0'],
+            currencySymbol: '£',
+            distUnit: 'mi',
+            fuelUnit: 'L',
+            convertDistance: (km) => String(km),
+        });
+        expect(entry.shouldShow).toBe(true);
+        expect(entry.apply.cardPlans).toHaveLength(2);
+    });
+
     test('buildRouteComparisonListDomApplyPlan maps routes to list container HTML', () => {
         const dom = RS.buildRouteComparisonListDomApplyPlan({
             routes: [{ name: 'Fast', distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0 }],
@@ -1085,6 +1105,63 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         const err = RS.buildShowRouteComparisonErrorExecutePlan(new Error('network'));
         expect(err.statusMessage).toContain('network');
 
+        const entryApply = RS.buildShowRouteComparisonEntryApplyPlan(
+            RS.buildShowRouteComparisonOrchestrationPlan(2),
+            { routeCount: 2, routeOptions: [{ name: 'A' }] }
+        );
+        expect(entryApply.shouldProceed).toBe(true);
+        expect(entryApply.debugLogs).toHaveLength(2);
+
+        const blocked = RS.buildShowRouteComparisonEntryApplyPlan(
+            RS.buildShowRouteComparisonOrchestrationPlan(0),
+            { routeCount: 0, routeOptions: [] }
+        );
+        expect(blocked.shouldProceed).toBe(false);
+
+        const successApply = RS.buildShowRouteComparisonSuccessApplyPlan(
+            RS.buildShowRouteComparisonSuccessExecutePlan({
+                apiSuccess: true,
+                comparison: {
+                    routes: [{
+                        distance_km: 5,
+                        duration_minutes: 10,
+                        total_cost: 4.5,
+                        cost_per_km: 0.9,
+                    }],
+                },
+                currencySymbol: '£',
+                distUnit: 'mi',
+                convertDistance: (km) => String(km),
+            })
+        );
+        expect(successApply.shouldApply).toBe(true);
+        expect(successApply.domApplyPlan).toBeDefined();
+
+        const failApply = RS.buildShowRouteComparisonSuccessApplyPlan({
+            shouldMountModal: false,
+            errorLogMessage: '[RouteComparison] API error:',
+            errorLogArgs: ['bad'],
+            errorStatusMessage: 'Error comparing routes: bad',
+        });
+        expect(failApply.shouldApply).toBe(false);
+        expect(failApply.errorLogArgs).toEqual(['bad']);
+
+        const okHttp = RS.buildShowRouteComparisonFetchHttpResponsePlan({
+            status: 200,
+            ok: true,
+            contentType: 'application/json',
+            isJson: true,
+        });
+        expect(okHttp.action).toBe('parse_json');
+
+        const badHttp = RS.buildShowRouteComparisonFetchHttpResponsePlan({
+            status: 500,
+            ok: false,
+            contentType: 'application/json',
+            isJson: true,
+        });
+        expect(badHttp.action).toBe('reject_http_error');
+
         const dispatch = RS.buildSelectRouteDispatchPlan(0, [
             { name: 'Scenic', maneuvers: [1, 2] },
         ]);
@@ -1416,6 +1493,11 @@ describe('route overview and single-route display plans', () => {
         expect(bringTop.orch.layerCount).toBe(2);
         expect(bringTop.execute.shouldExecute).toBe(true);
         expect(bringTop.requiresMap).toBe(true);
+
+        const entryApply = RS.buildBringRoutesToTopEntryApplyPlan(bringTop);
+        expect(entryApply.shouldApply).toBe(true);
+        expect(entryApply.execute).toBe(bringTop.execute);
+        expect(entryApply.mapMissingLogMessage).toContain('map not available');
     });
 
     test('buildRecalculateRouteWithPreferencesExecutePlan schedules delayed recalc', () => {

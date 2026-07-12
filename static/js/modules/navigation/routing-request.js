@@ -532,6 +532,49 @@
     }
 
     /**
+     * Collect runtime state for calculateRoute API request assembly.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildCalculateRouteApiInputCollectPlan(opts) {
+        opts = opts || {};
+        return {
+            storage: opts.storage,
+            geocodedStart: opts.geocodedStart,
+            geocodedEnd: opts.geocodedEnd,
+            viaPoints: opts.viaPoints || [],
+            stops: opts.stops || [],
+            routingMode: opts.routingMode,
+            vehicleType: opts.vehicleType,
+            costParams: opts.costParams,
+            avoidTolls: opts.avoidTolls,
+            routePrefs: opts.routePrefs,
+            routeInProgress: opts.routeInProgress,
+            isTrackingActive: opts.isTrackingActive,
+            trackingHistory: opts.trackingHistory || [],
+            currentLat: opts.currentLat,
+            currentLon: opts.currentLon,
+        };
+    }
+
+    /**
+     * Orchestration plan for calculateRoute API request and fetch metadata.
+     * @param {Object} [collect] - from buildCalculateRouteApiInputCollectPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteApiOrchestrationPlan(collect) {
+        collect = collect || {};
+        var routePlan = buildCalculateRouteApiPlan(collect);
+        var fetchPlan = buildCalculateRouteFetchPlan(routePlan);
+        return {
+            collect: collect,
+            routePlan: routePlan,
+            fetchPlan: fetchPlan,
+            requestLog: buildCalculateRouteApiRequestLogPlan(routePlan),
+        };
+    }
+
+    /**
      * User-facing message for a failed `/api/route` HTTP status when the body is not JSON
      * or does not contain a structured `error` field.
      * @param {number} status
@@ -1003,6 +1046,8 @@
         resolveLiveGpsStartCoord: resolveLiveGpsStartCoord,
         buildInitialRouteRequestBody: buildInitialRouteRequestBody,
         buildCalculateRouteApiPlan: buildCalculateRouteApiPlan,
+        buildCalculateRouteApiInputCollectPlan: buildCalculateRouteApiInputCollectPlan,
+        buildCalculateRouteApiOrchestrationPlan: buildCalculateRouteApiOrchestrationPlan,
         buildRouteApiHttpErrorMessage: buildRouteApiHttpErrorMessage,
         buildNonJsonRouteApiErrorMessage: buildNonJsonRouteApiErrorMessage,
         parseRouteApiErrorMessage: parseRouteApiErrorMessage,

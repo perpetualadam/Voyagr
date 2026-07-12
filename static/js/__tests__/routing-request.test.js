@@ -389,6 +389,49 @@ describe('buildCalculateRouteApiPlan', () => {
     });
 });
 
+describe('buildCalculateRouteApiInputCollectPlan', () => {
+    test('collects runtime state for API orchestration', () => {
+        const collect = RR.buildCalculateRouteApiInputCollectPlan({
+            storage: mockStorage({}),
+            geocodedStart: '51.5,-0.1',
+            geocodedEnd: '52,-1',
+            viaPoints: [{ lat: 51.6, lon: -0.2 }],
+            stops: [],
+            routingMode: 'auto',
+            vehicleType: 'petrol_diesel',
+            costParams: { fuel_efficiency: 6 },
+            avoidTolls: true,
+            routePrefs: { routeOptimization: 'fastest' },
+            routeInProgress: false,
+            isTrackingActive: false,
+            trackingHistory: [],
+            currentLat: null,
+            currentLon: null,
+        });
+        expect(collect.geocodedStart).toBe('51.5,-0.1');
+        expect(collect.viaPoints).toHaveLength(1);
+        expect(collect.avoidTolls).toBe(true);
+    });
+
+    test('buildCalculateRouteApiOrchestrationPlan bundles route and fetch plans', () => {
+        const orch = RR.buildCalculateRouteApiOrchestrationPlan(
+            RR.buildCalculateRouteApiInputCollectPlan({
+                storage: mockStorage({}),
+                geocodedStart: '51.5,-0.1',
+                geocodedEnd: '52,-1',
+                routingMode: 'auto',
+                vehicleType: 'petrol_diesel',
+                costParams: {},
+                avoidTolls: false,
+                routePrefs: {},
+            })
+        );
+        expect(orch.routePlan.requestBody.start).toBe('51.5,-0.1');
+        expect(orch.fetchPlan.apiPath).toBe('/api/route');
+        expect(orch.requestLog.requestLogPrefix).toContain('/api/route');
+    });
+});
+
 describe('buildRouteApiResultPlan', () => {
     test('maps success, degraded routing, and error payloads', () => {
         const ok = RR.buildRouteApiResultPlan({
