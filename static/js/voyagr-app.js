@@ -1450,6 +1450,7 @@ window.redeemPromoCode = redeemPromoCode;
  * @returns {*} Return value description
  */
 function collectSettingsSnapshotRuntimeState() {
+    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
     return {
         distanceUnit,
         currencyUnit,
@@ -1462,9 +1463,9 @@ function collectSettingsSnapshotRuntimeState() {
         showOsmTrafficLightsEnabled,
         showOsmRailwayCrossingsEnabled,
         showTrafficEnabled,
-        autoTrafficUpdateEnabled,
-        autoRerouteOnDeviationEnabled,
-        routeTrafficEnabled,
+        autoTrafficUpdateEnabled: traffic.autoTrafficUpdateEnabled,
+        autoRerouteOnDeviationEnabled: traffic.autoRerouteOnDeviationEnabled,
+        routeTrafficEnabled: traffic.routeTrafficEnabled,
         speedWidgetEnabled,
     };
 }
@@ -1828,9 +1829,15 @@ function applySettingsResetRuntimeFromPlan(execute) {
             case 'currentVehicleType': currentVehicleType = value; break;
             case 'currentRoutingMode': currentRoutingMode = value; break;
             case 'smartZoomEnabled': smartZoomEnabled = value; break;
-            case 'autoTrafficUpdateEnabled': autoTrafficUpdateEnabled = value; break;
-            case 'autoRerouteOnDeviationEnabled': autoRerouteOnDeviationEnabled = value; break;
-            case 'routeTrafficEnabled': routeTrafficEnabled = value; break;
+            case 'autoTrafficUpdateEnabled':
+                VoyagrTrafficOrchestration.applyTrafficSettingsPatch('autoTrafficUpdateEnabled', value);
+                break;
+            case 'autoRerouteOnDeviationEnabled':
+                VoyagrTrafficOrchestration.applyTrafficSettingsPatch('autoRerouteOnDeviationEnabled', value);
+                break;
+            case 'routeTrafficEnabled':
+                VoyagrTrafficOrchestration.applyTrafficSettingsPatch('routeTrafficEnabled', value);
+                break;
             case 'showCamerasEnabled': showCamerasEnabled = value; break;
             case 'showOsmTrafficLightsEnabled': showOsmTrafficLightsEnabled = value; break;
             case 'showOsmRailwayCrossingsEnabled': showOsmRailwayCrossingsEnabled = value; break;
@@ -3633,19 +3640,21 @@ function updateTripInfoFromRouteOption(route) {
 }
 
 function collectUseRouteInput(index) {
+    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
     return {
         index,
         routeOptions,
-        routeTrafficEnabled,
+        routeTrafficEnabled: traffic.routeTrafficEnabled,
     };
 }
 
 function collectDisplaySingleRouteRuntime() {
+    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
     return {
         displayOpts: {
             routeColors: routeColors(),
             showTrafficEnabled,
-            routeTrafficEnabled,
+            routeTrafficEnabled: traffic.routeTrafficEnabled,
             hasTrafficLayer: !!trafficLayer,
             trafficLightsEnabled: window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled(),
             trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
@@ -4438,178 +4447,6 @@ function deleteSavedRoute(routeId) {
     applyDeleteSavedRouteFromPlan(entry.execute);
 }
 
-// ===== REAL-TIME TRAFFIC UPDATE FUNCTIONS =====
-function collectUpdateTrafficConditionsInput() {
-    const TC = _trafficChange();
-    const startEl = document.getElementById(TC.TRAFFIC_CONDITIONS_START_ELEMENT_ID);
-    const endEl = document.getElementById(TC.TRAFFIC_CONDITIONS_END_ELEMENT_ID);
-    return {
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        startLabel: startEl ? startEl.value : '',
-        endLabel: endEl ? endEl.value : '',
-    };
-}
-
-/**
- * updateTrafficConditions function
- * @function updateTrafficConditions
- * @returns {*} Return value description
- */
-function updateTrafficConditions() {
-    const TC = _trafficChange();
-    const orch = TC.buildUpdateTrafficConditionsEntryOrchestrationPlan(
-        collectUpdateTrafficConditionsInput()
-    );
-    if (!orch.shouldFetch) {
-        showStatus(orch.errorStatusMessage, 'error');
-        return;
-    }
-
-    showStatus(orch.loadingStatusMessage, orch.loadingStatusType);
-
-    fetch(orch.apiPath, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orch.requestBody),
-    })
-        .then(response => response.json())
-        .then(data => {
-            const dispatch = TC.buildUpdateTrafficConditionsResponseDispatchPlan(data, orch);
-            if (dispatch.action === 'display') {
-                displayTrafficUpdate(dispatch.data);
-            } else {
-                showStatus(dispatch.statusMessage, dispatch.statusType);
-            }
-        })
-        .catch(error => {
-            const err = TC.buildUpdateTrafficConditionsFetchErrorPlan(orch);
-            console.error(err.logPrefix, error);
-            showStatus(err.statusMessage, err.statusType);
-        });
-}
-/**
- * displayTrafficUpdate function
- * @function displayTrafficUpdate
- * @param {*} data - Parameter description
- * @returns {*} Return value description
- */
-function applyDisplayTrafficUpdateFromPlan(execute) {
-    if (!execute) return;
-
-    if (execute.shouldUpdateStatusElement) {
-        const trafficStatus = document.getElementById(execute.trafficStatusElementId);
-        if (trafficStatus) trafficStatus.textContent = execute.trafficStatusText;
-    }
-
-    if (execute.durationChanged) {
-        showStatus(execute.durationChangedStatusMessage, execute.durationChangedStatusType);
-    } else {
-        showStatus(execute.unchangedStatusMessage, execute.unchangedStatusType);
-    }
-
-    if (window.lastCalculatedRoute && execute.patchLastCalculatedRoute) {
-        if (execute.lastRoutePatchMode === 'merge') {
-            window.lastCalculatedRoute = Object.assign(
-                {},
-                window.lastCalculatedRoute,
-                execute.patchLastCalculatedRoute
-            );
-        } else if (execute.lastRoutePatchMode === 'mutate' && execute.mutateFieldKeys) {
-            execute.mutateFieldKeys.forEach((key) => {
-                if (execute.patchLastCalculatedRoute[key] !== undefined) {
-                    window.lastCalculatedRoute[key] = execute.patchLastCalculatedRoute[key];
-                }
-            });
-        }
-    }
-
-    console.log(execute.detailsLogPrefix, execute.detailsLogMessage);
-}
-
-function collectDisplayTrafficUpdateFmt() {
-    return {
-        convertDistance,
-        distUnit: getDistanceUnit(),
-    };
-}
-
-function displayTrafficUpdate(data) {
-    const entry = _trafficChange().buildDisplayTrafficUpdateEntryOrchestrationPlan(
-        data,
-        window.lastCalculatedRoute,
-        collectDisplayTrafficUpdateFmt(),
-        new Date().toLocaleTimeString()
-    );
-    if (!entry.shouldApply) return;
-    applyDisplayTrafficUpdateFromPlan(entry.execute);
-}
-
-// Auto-update traffic every 5 minutes during navigation
-/**
- * startTrafficMonitoring function
- * @function startTrafficMonitoring
- * @returns {*} Return value description
- */
-function applyStartTrafficMonitoringFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    if (apply.clearExistingInterval) {
-        clearInterval(window[apply.intervalProperty]);
-    }
-
-    const TC = _trafficChange();
-    window[apply.intervalProperty] = setInterval(() => {
-        const startEl = document.getElementById(apply.startElementId);
-        const tick = TC.buildTrafficMonitoringTickPlan(
-            window.lastCalculatedRoute,
-            startEl ? startEl.value : ''
-        );
-        if (tick.shouldUpdate) {
-            updateTrafficConditions();
-        }
-    }, apply.intervalMs);
-
-    showStatus(apply.successStatusMessage, apply.successStatusType);
-}
-
-function applyStopTrafficMonitoringFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    if (apply.clearInterval) {
-        clearInterval(window[apply.intervalProperty]);
-        if (apply.resetIntervalHandle) {
-            window[apply.intervalProperty] = null;
-        }
-    }
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function startTrafficMonitoring() {
-    const TC = _trafficChange();
-    applyStartTrafficMonitoringFromPlan(
-        TC.buildStartTrafficMonitoringApplyPlan(
-            TC.buildStartTrafficMonitoringOrchestrationPlan(
-                !!window[TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY]
-            )
-        )
-    );
-}
-
-/**
- * stopTrafficMonitoring function
- * @function stopTrafficMonitoring
- * @returns {*} Return value description
- */
-function stopTrafficMonitoring() {
-    const TC = _trafficChange();
-    applyStopTrafficMonitoringFromPlan(
-        TC.buildStopTrafficMonitoringApplyPlan(
-            TC.buildStopTrafficMonitoringOrchestrationPlan(
-                !!window[TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY]
-            )
-        )
-    );
-}
 
 /**
  * setupMapClickHandler function
@@ -6020,350 +5857,10 @@ function initWeatherLayer() {
     addWeatherLayer();
 }
 
-// ===== ROUTE TRAFFIC EDGE COLORING =====
-// Displays traffic congestion as coloured edges along the active route.
-// Only congested segments (orange/red/black) are drawn — free-flow green is omitted so
-// the route line stays visible against TomTom's green traffic tiles.
-
-let routeTrafficLayers = []; // Array of polylines for traffic segments
-let routeTrafficEnabled = localStorage.getItem('routeTrafficEnabled') !== 'false'; // Default: enabled
-let routeTrafficUpdateInterval = null;
-
-// Traffic level colors moved to route-traffic-flow.js (TRAFFIC_COLORS).
-
-function applyRouteTrafficToggleFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-    const TU = _toggleUI();
-    routeTrafficEnabled = execute.nextEnabled;
-    if (execute.useWriteBoolPref) {
-        TU.writeBoolPref(execute.storageKey, routeTrafficEnabled);
-    }
-    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.fetchRouteTraffic) {
-        fetchAndDisplayRouteTraffic();
-    } else if (execute.clearLayersOnDisable) {
-        clearRouteTrafficLayers();
-    }
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * Toggle route traffic edge display on/off
- */
-function toggleRouteTraffic() {
-    applyRouteTrafficToggleFromPlan(
-        _routeTrafficFlow().buildRouteTrafficToggleExecutePlan(
-            routeTrafficEnabled,
-            routeInProgress,
-            !!(routePolyline && routePolyline.length > 0)
-        )
-    );
-}
-
-/**
- * Clear all route traffic edge layers from the map
- */
-function applyClearRouteTrafficLayersFromPlan(plan) {
-    if (!plan) return;
-
-    plan.layers.forEach((spec) => {
-        const layer = routeTrafficLayers[spec.index];
-        if (!layer) return;
-        if (spec.hasRemove) {
-            layer.remove();
-        } else if (map && spec.layerId && map.getLayer(spec.layerId)) {
-            map.removeLayer(spec.layerId);
-            if (map.getSource(spec.layerId)) {
-                map.removeSource(spec.layerId);
-            }
-        }
-    });
-
-    if (plan.resetLayersArray) routeTrafficLayers = [];
-    if (plan.shouldClear || plan.resetLayersArray) {
-        console.log(plan.logMessage);
-    }
-}
-
-function clearRouteTrafficLayers() {
-    applyClearRouteTrafficLayersFromPlan(
-        _routeTrafficFlow().buildClearRouteTrafficLayersApplyPlan(routeTrafficLayers)
-    );
-}
-
-function applyFetchAndDisplayRouteTrafficResultFromPlan(result) {
-    if (!result) return;
-    if (result.shouldDisplay) {
-        displayRouteTrafficEdges(result.segments);
-        console.log(result.displayLogMessage);
-    } else if (result.debugMessage) {
-        console.debug(result.debugMessage);
-    }
-}
-
-function collectFetchAndDisplayRouteTrafficInput() {
-    return {
-        routeTrafficEnabled,
-        routePolyline,
-    };
-}
-
-/**
- * Fetch traffic data for route and display colored edges
- */
-async function fetchAndDisplayRouteTraffic() {
-    const RTF = _routeTrafficFlow();
-    const entry = RTF.buildFetchAndDisplayRouteTrafficEntryOrchestrationPlan(
-        collectFetchAndDisplayRouteTrafficInput()
-    );
-    const orchestration = entry.orchestration;
-    if (!orchestration.shouldFetch) {
-        console.log(orchestration.logMessage);
-        return;
-    }
-
-    console.log(orchestration.fetchLogMessage);
-
-    try {
-        const data = await fetchRouteTrafficFlowPayload(routePolyline, orchestration.sampleInterval);
-        applyFetchAndDisplayRouteTrafficResultFromPlan(
-            RTF.buildFetchAndDisplayRouteTrafficResultPipelinePlan(data).resultApply
-        );
-    } catch (error) {
-        const errPrefix = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan({}).errorDebugPrefix;
-        console.debug(errPrefix, error);
-    }
-}
-
-function applyDisplayRouteTrafficEdgesMountFromPlan(apply) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.cannotDisplayLog) {
-            const log = apply.cannotDisplayLog;
-            console.log(
-                apply.cannotDisplayLogMessage,
-                log.map,
-                'segments:',
-                log.segmentCount,
-                'routePolyline:',
-                log.polylineLength
-            );
-        }
-        return;
-    }
-
-    console.log(apply.levelCountsLogPrefix, apply.levelCounts);
-
-    (apply.mountApply.polylines || []).forEach((polylinePlan) => {
-        const trafficLine = MapLibreHelpers.addPolyline(map, polylinePlan.points, {
-            color: polylinePlan.color,
-            weight: polylinePlan.weight,
-            opacity: polylinePlan.opacity,
-        });
-        if (polylinePlan.registerInRouteTrafficLayers) {
-            routeTrafficLayers.push(trafficLine);
-        }
-    });
-
-    const postDisplay = apply.postDisplay || {};
-    if (postDisplay.logMessage) console.log(postDisplay.logMessage);
-
-    if (postDisplay.bringTrafficEdgesToTop) {
-        bringTrafficEdgesToTop();
-    }
-    if (postDisplay.bringNavRouteAboveTrafficEdges) {
-        bringNavRouteAboveTrafficEdges();
-    }
-}
-
-function displayRouteTrafficEdges(segments) {
-    clearRouteTrafficLayers();
-
-    applyDisplayRouteTrafficEdgesMountFromPlan(
-        _routeTrafficFlow().buildDisplayRouteTrafficEdgesMountApplyPlan(
-            _routeTrafficFlow().buildRouteTrafficEdgesDisplayOrchestrationPlan({
-                segments,
-                polyline: routePolyline,
-                hasMap: !!map,
-                layersBeforeMount: routeTrafficLayers.length,
-            })
-        )
-    );
-}
-
-/**
- * Bring traffic edge layers to top of map rendering order
- */
-function applyMapLayerReorderEntryFromPlan(entry) {
-    if (!entry || !entry.shouldReorder) return;
-    applyMapLayerReorderFromPlan(entry.reorderApply);
-}
-
-function collectBringTrafficEdgesToTopInput() {
-    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
-    return {
-        hasMap: !!map,
-        trafficLayers: routeTrafficLayers,
-        styleLayers: style && style.layers ? style.layers : null,
-    };
-}
-
-function bringTrafficEdgesToTop() {
-    applyMapLayerReorderEntryFromPlan(
-        _routeSelection().buildBringTrafficEdgesToTopEntryOrchestrationPlan(
-            collectBringTrafficEdgesToTopInput()
-        )
-    );
-}
-
-function collectBringNavRouteAboveTrafficEdgesInput() {
-    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
-    return {
-        hasMap: !!map,
-        routeLayer,
-        allRouteLayers,
-        styleLayers: style && style.layers ? style.layers : null,
-    };
-}
-
-function bringNavRouteAboveTrafficEdges() {
-    applyMapLayerReorderEntryFromPlan(
-        _routeSelection().buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan(
-            collectBringNavRouteAboveTrafficEdgesInput()
-        )
-    );
-}
-
-// Debounce timer for ensureLabelsOnTop to prevent excessive calls
-let ensureLabelsTimeout = null;
-
-function applyEnsureLabelsOnTopFromPlan(plan) {
-    if (!plan || !plan.shouldApply || !map) return false;
-    if (plan.clearExistingTimer) clearTimeout(ensureLabelsTimeout);
-    ensureLabelsTimeout = setTimeout(() => {
-        try {
-            plan.labelLayerIds.forEach((layerId) => {
-                try {
-                    if (map.getLayer(layerId)) {
-                        map.moveLayer(layerId);
-                    }
-                } catch (_e) {
-                    if (!plan.skipMoveErrors) throw _e;
-                }
-            });
-            if (plan.movedLogMessage) console.log(plan.movedLogMessage);
-        } catch (e) {
-            console.log(plan.errorLogPrefix, e.message);
-        }
-    }, plan.debounceMs);
-    return true;
-}
-
-function collectEnsureLabelsOnTopInput() {
-    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
-    return {
-        hasMap: !!map,
-        styleLayers: style && style.layers ? style.layers : null,
-    };
-}
-
-/**
- * Ensure road labels are always rendered above route and traffic layers
- * This function moves all symbol layers with text-field to the top of the layer stack
- * Debounced to prevent excessive calls during rapid layer additions
- */
-function ensureLabelsOnTop() {
-    const entry = _routeSelection().buildEnsureLabelsOnTopEntryOrchestrationPlan(
-        collectEnsureLabelsOnTopInput()
-    );
-    if (!entry.apply.shouldApply) {
-        if (entry.apply.noLabelsLogMessage) console.log(entry.apply.noLabelsLogMessage);
-        return;
-    }
-
-    applyEnsureLabelsOnTopFromPlan(entry.apply);
-}
-
-/**
- * Start automatic route traffic updates during navigation
- */
-function applyStartRouteTrafficUpdatesFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    if (apply.clearExistingInterval && routeTrafficUpdateInterval) {
-        clearInterval(routeTrafficUpdateInterval);
-    }
-
-    if (apply.startLogMessage) console.log(apply.startLogMessage);
-
-    if (apply.immediateUpdate) {
-        setTimeout(() => {
-            console.log('[Route Traffic] Executing first traffic update');
-            fetchAndDisplayRouteTraffic();
-        }, apply.immediateDelayMs);
-    }
-
-    const RTF = _routeTrafficFlow();
-    routeTrafficUpdateInterval = setInterval(() => {
-        const tick = RTF.buildRouteTrafficIntervalTickPlan({
-            routeInProgress,
-            routeTrafficEnabled,
-            routePolyline,
-        });
-        if (tick.shouldFetch) {
-            console.log(tick.tickLogMessage);
-            fetchAndDisplayRouteTraffic();
-        }
-    }, apply.intervalMs);
-
-    if (apply.logMessage) console.log(apply.logMessage);
-}
-
-function applyStopRouteTrafficUpdatesFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    if (apply.shouldStopInterval) {
-        clearInterval(routeTrafficUpdateInterval);
-        routeTrafficUpdateInterval = null;
-    }
-    if (apply.clearTrafficLayers) clearRouteTrafficLayers();
-    if (apply.logMessage) console.log(apply.logMessage);
-}
-
-function startRouteTrafficUpdates() {
-    const RTF = _routeTrafficFlow();
-    applyStartRouteTrafficUpdatesFromPlan(
-        RTF.buildStartRouteTrafficUpdatesApplyPlan(
-            RTF.buildStartRouteTrafficUpdatesDispatchPlan({
-                routeTrafficUpdateInterval,
-                routeTrafficEnabled,
-                routePolyline,
-            })
-        )
-    );
-}
-
-function stopRouteTrafficUpdates() {
-    const RTF = _routeTrafficFlow();
-    applyStopRouteTrafficUpdatesFromPlan(
-        RTF.buildStopRouteTrafficUpdatesApplyPlan(
-            RTF.buildStopRouteTrafficUpdatesDispatchPlan(routeTrafficUpdateInterval)
-        )
-    );
-}
 
 // ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
-// Feature 1: Automatic traffic updates during navigation
-// Feature 2: Automatic rerouting on deviation with hazard avoidance
-
-// Auto-traffic update settings
-let autoTrafficUpdateEnabled = localStorage.getItem('autoTrafficUpdate') !== 'false'; // Default: enabled
-let autoRerouteOnDeviationEnabled = localStorage.getItem('autoRerouteOnDeviation') !== 'false'; // Default: enabled
-let trafficUpdateInterval = null;
-let lastTrafficData = null;
-let lastTrafficUpdateTime = 0;
-
-// Deviation tracking for time-based detection
+// Traffic orchestration lives in static/js/app/traffic-orchestration.js (bound at file end).
+// Deviation tracking for time-based detection (shared with GPS reroute):
 let routeJoinConfirmedForDeviation = false;
 /** After GPS deviation reroute, next in-nav route pick uses primary only (no name-based alt). */
 let _preferPrimaryRouteOnNextNavUpdate = false;
@@ -6396,315 +5893,6 @@ function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
     return activeRoute;
 }
 
-function applyAutoTrafficUpdateToggleFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-    const TU = _toggleUI();
-    autoTrafficUpdateEnabled = execute.nextEnabled;
-    TU.writeBoolPref(execute.storageKey, autoTrafficUpdateEnabled);
-    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.startAutoTrafficUpdates) startAutoTrafficUpdates();
-    else if (execute.stopAutoTrafficUpdates) stopAutoTrafficUpdates();
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-function applyAutoRerouteOnDeviationToggleFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-    const TU = _toggleUI();
-    autoRerouteOnDeviationEnabled = execute.nextEnabled;
-    TU.writeBoolPref(execute.storageKey, autoRerouteOnDeviationEnabled);
-    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * Toggle auto-traffic update on/off
- */
-function toggleAutoTrafficUpdate() {
-    applyAutoTrafficUpdateToggleFromPlan(
-        _trafficChange().buildAutoTrafficUpdateToggleExecutePlan(
-            autoTrafficUpdateEnabled,
-            routeInProgress
-        )
-    );
-}
-
-/**
- * Toggle auto-reroute on deviation on/off
- */
-function toggleAutoRerouteOnDeviation() {
-    applyAutoRerouteOnDeviationToggleFromPlan(
-        _trafficChange().buildAutoRerouteOnDeviationToggleExecutePlan(
-            autoRerouteOnDeviationEnabled
-        )
-    );
-}
-
-/**
- * Start automatic traffic updates during navigation
- */
-function applyStartAutoTrafficUpdatesFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    console.log(apply.logMessage);
-    if (apply.immediateCheck) checkTrafficAndReroute();
-
-    const TC = _trafficChange();
-    trafficUpdateInterval = setInterval(() => {
-        const tick = TC.buildAutoTrafficIntervalTickPlan({
-            routeInProgress,
-            autoTrafficUpdateEnabled,
-        });
-        if (tick.shouldCheck) checkTrafficAndReroute();
-    }, apply.intervalMs);
-}
-
-function applyStopAutoTrafficUpdatesFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    if (apply.clearInterval) clearInterval(trafficUpdateInterval);
-    if (apply.resetIntervalHandle) trafficUpdateInterval = null;
-    if (apply.logMessage) console.log(apply.logMessage);
-}
-
-function startAutoTrafficUpdates() {
-    const TC = _trafficChange();
-    applyStartAutoTrafficUpdatesFromPlan(
-        TC.buildStartAutoTrafficUpdatesApplyPlan(
-            TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
-                autoTrafficUpdateEnabled,
-                trafficUpdateInterval,
-            })
-        )
-    );
-}
-
-function stopAutoTrafficUpdates() {
-    const TC = _trafficChange();
-    applyStopAutoTrafficUpdatesFromPlan(
-        TC.buildStopAutoTrafficUpdatesApplyPlan(
-            TC.buildStopAutoTrafficUpdatesOrchestrationPlan(trafficUpdateInterval)
-        )
-    );
-}
-
-// Shared along-route traffic sampler (Levers A + B). Samples live TomTom flow on the
-// portion of the active route still ahead of the driver and returns congested-segment
-// avoid points plus a realistic extra-delay estimate. Cached briefly so the ETA refresh
-// and the reroute monitor don't each hit the API.
-let _routeTrafficSampleCache = null; // { at: ms, result }
-let _routeTrafficFlowBackoffUntil = 0;
-
-async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
-    const RTF = _routeTrafficFlow();
-    const preflight = RTF.buildRouteTrafficFlowPreflightPlan(_routeTrafficFlowBackoffUntil);
-    if (!preflight.shouldRequest) {
-        return null;
-    }
-
-    const requestPlan = RTF.buildRouteTrafficFlowFetchRequestPlan(points, sampleInterval);
-    let response;
-    try {
-        response = await fetch(requestPlan.url, {
-            method: requestPlan.method,
-            headers: requestPlan.headers,
-            body: requestPlan.body,
-        });
-    } catch (e) {
-        const apply = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(
-            RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' })
-        );
-        _routeTrafficFlowBackoffUntil = apply.backoffUntil;
-        console.debug(apply.logPrefix, apply.logMessage + ':', e && e.message);
-        return apply.result;
-    }
-
-    const outcome = RTF.buildRouteTrafficFlowResponsePlan({
-        ok: response.ok,
-        status: response.status,
-        contentType: response.headers.get('content-type') || '',
-    });
-    if (!outcome.ok) {
-        const apply = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(outcome);
-        _routeTrafficFlowBackoffUntil = apply.backoffUntil;
-        console.debug(apply.logPrefix, apply.logMessage);
-        return apply.result;
-    }
-
-    try {
-        return await response.json();
-    } catch (e) {
-        const apply = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(
-            RTF.buildRouteTrafficFlowParseFailurePlan()
-        );
-        _routeTrafficFlowBackoffUntil = apply.backoffUntil;
-        console.debug(apply.logPrefix, apply.logMessage + ':', e && e.message);
-        return apply.result;
-    }
-}
-
-async function sampleRouteTrafficAhead() {
-    const RTF = _routeTrafficFlow();
-    const dispatch = RTF.buildSampleRouteTrafficAheadDispatchPlan(routePolyline, lastSnappedRouteIndex);
-    if (!dispatch.shouldSample) return null;
-
-    let data;
-    try {
-        data = await fetchRouteTrafficFlowPayload(dispatch.points, dispatch.sampleInterval);
-    } catch (e) {
-        console.debug('[Auto-Traffic] route-traffic-flow fetch failed:', e);
-        return null;
-    }
-    if (!data) return null;
-    return RTF.buildTrafficAheadSnapshot(data, calculateDistanceMeters);
-}
-
-async function getRouteTrafficAhead(forceFresh = false) {
-    const RTF = _routeTrafficFlow();
-    const now = Date.now();
-    const cachePlan = RTF.buildRouteTrafficAheadCachePlan(
-        forceFresh,
-        _routeTrafficSampleCache,
-        now,
-        RTF.ROUTE_TRAFFIC_SAMPLE_TTL_MS
-    );
-    if (cachePlan.useCache) {
-        return cachePlan.cachedResult;
-    }
-    const result = await sampleRouteTrafficAhead();
-    const cacheUpdate = RTF.buildRouteTrafficAheadCacheUpdatePlan(result, now);
-    if (cacheUpdate.shouldUpdateCache) {
-        _routeTrafficSampleCache = cacheUpdate.cacheEntry;
-    }
-    return result;
-}
-
-/**
- * Check live traffic along the route and reroute around real congestion/closures.
- */
-async function checkTrafficAndReroute() {
-    const TC = _trafficChange();
-    const entry = TC.buildCheckTrafficAndRerouteEntryOrchestrationPlan({
-        routeInProgress,
-        currentLat,
-        currentLon,
-    });
-    if (!entry.preflight.shouldCheck) return;
-
-    console.log(entry.applyBase.samplingLogMessage);
-
-    try {
-        const flow = await getRouteTrafficAhead(entry.preflight.forceFresh);
-        lastTrafficUpdateTime = Date.now();
-
-        const orch = TC.buildCheckTrafficAndRerouteOrchestrationPlan({
-            flow,
-            lastTrafficData,
-        });
-        const apply = TC.buildCheckTrafficAndRerouteApplyPlan(orch);
-        if (apply.updateLastTrafficData !== undefined) {
-            lastTrafficData = apply.updateLastTrafficData;
-        }
-        if (apply.logMessage) console.log(apply.logMessage);
-
-        if (apply.shouldReroute && apply.notifPlan) {
-            const notifPlan = apply.notifPlan;
-            sendNotification(notifPlan.notificationTitle, notifPlan.notificationMessage, notifPlan.notificationType);
-            await triggerTrafficBasedReroute(
-                notifPlan.changeType,
-                notifPlan.avoidPoints,
-                notifPlan.measuredDelayMin
-            );
-        }
-    } catch (error) {
-        console.error(entry.applyBase.errorLogPrefix, error);
-    }
-}
-
-/**
- * Apply accepted traffic-based reroute side effects from a pure apply plan.
- * @param {Object} apply - from buildTriggerTrafficBasedRerouteAcceptApplyPlan
- */
-function applyTriggerTrafficBasedRerouteAcceptFromPlan(apply) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.logMessage) console.log(apply.logMessage);
-        return;
-    }
-
-    updateRouteOnMap(apply.newRoute);
-    if (apply.clearTrafficCache) _routeTrafficSampleCache = null;
-    if (apply.clearLastTrafficData) lastTrafficData = null;
-    sendNotification(apply.notificationTitle, apply.notificationMessage, apply.notificationType);
-    if (voiceAnnouncementsEnabled && apply.voiceMessage) {
-        speakMessage(apply.voiceMessage, apply.speakPriority || 'high');
-    }
-}
-
-function collectTriggerTrafficBasedRerouteInput(changeType, avoidPoints) {
-    return {
-        destination: resolveNavigationDestination(),
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        changeType,
-        avoidPoints,
-    };
-}
-
-/**
- * Trigger a reroute that actively avoids the congested/closed segments (Lever A).
- * @param {string} changeType - 'severe' | 'congestion'
- * @param {Array<{lat:number,lon:number}>} avoidPoints - congested segment midpoints to avoid
- * @param {number} measuredDelayMin - realistic extra delay on the current route (Lever B)
- */
-async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measuredDelayMin = 0) {
-    const TC = _trafficChange();
-    const entry = TC.buildTriggerTrafficBasedRerouteEntryOrchestrationPlan(
-        collectTriggerTrafficBasedRerouteInput(changeType, avoidPoints)
-    );
-    if (!entry.shouldReroute) {
-        console.log(entry.blockedLog.logMessage);
-        return;
-    }
-
-    console.log(entry.fetchOrch.logMessage);
-
-    try {
-        const routeRequest = buildRouteRequest(currentLat, currentLon, entry.destination, avoidPoints);
-        const response = await fetch(entry.fetchOrch.apiPath, {
-            method: entry.fetchOrch.method,
-            headers: entry.fetchOrch.headers,
-            body: JSON.stringify(routeRequest),
-        });
-
-        const data = await response.json();
-        const dispatch = TC.buildTrafficRerouteApiResponseDispatchPlan({
-            data,
-            isSevere: entry.preflight.isSevere,
-            oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
-            measuredDelayMin,
-        });
-
-        if (dispatch.action === 'accept') {
-            applyTriggerTrafficBasedRerouteAcceptFromPlan(
-                TC.buildTriggerTrafficBasedRerouteAcceptApplyPlan(dispatch)
-            );
-        } else if (dispatch.action === 'reject' && dispatch.logMessage) {
-            console.log(dispatch.logMessage);
-        }
-    } catch (error) {
-        console.error(entry.errorLogPrefix, error);
-    }
-}
-
-/**
- * Manual traffic update button handler
- */
-async function manualTrafficUpdate() {
-    const entry = _trafficChange().buildManualTrafficUpdateEntryOrchestrationPlan();
-    showStatus(entry.startStatus.statusMessage, entry.startStatus.statusType);
-    await checkTrafficAndReroute();
-    showStatus(entry.completeStatus.statusMessage, entry.completeStatus.statusType);
-}
 
 /**
  * Destination as "lat,lon" for reroute APIs — must survive useRoute() replacing lastCalculatedRoute with a bare route option.
@@ -7708,7 +6896,7 @@ function collectShowRoutePreviewInput(routeData, skipMapDisplay) {
         routeOptions,
         showTrafficEnabled,
         hasTrafficLayer: !!trafficLayer,
-        routeTrafficEnabled,
+        routeTrafficEnabled: VoyagrTrafficOrchestration.getTrafficSettingsSnapshot().routeTrafficEnabled,
     };
 }
 
@@ -8023,6 +7211,157 @@ function setParkingAsDestination(parking) {
     return VoyagrParkingOrchestration.setParkingAsDestination(parking);
 }
 
+// ===== TRAFFIC ORCHESTRATION =====
+// Orchestration lives in static/js/app/traffic-orchestration.js (bound at file end).
+
+function getTrafficOrchestrationRuntime() {
+    return {
+        trafficChange: () => _trafficChange(),
+        routeTrafficFlow: () => _routeTrafficFlow(),
+        toggleUI: () => _toggleUI(),
+        routeSelection: () => _routeSelection(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRoutePolyline: () => routePolyline,
+        getRouteInProgress: () => routeInProgress,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
+        getRouteLayer: () => routeLayer,
+        getAllRouteLayers: () => allRouteLayers,
+        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        showStatus,
+        saveAllSettings,
+        sendNotification,
+        speakMessage,
+        convertDistance,
+        getDistanceUnit,
+        calculateDistanceMeters,
+        buildRouteRequest,
+        resolveNavigationDestination,
+        updateRouteOnMap,
+        applyMapLayerReorderFromPlan,
+    };
+}
+
+function updateTrafficConditions() {
+    VoyagrTrafficOrchestration.updateTrafficConditions();
+}
+
+function startTrafficMonitoring() {
+    VoyagrTrafficOrchestration.startTrafficMonitoring();
+}
+
+function stopTrafficMonitoring() {
+    VoyagrTrafficOrchestration.stopTrafficMonitoring();
+}
+
+function toggleRouteTraffic() {
+    VoyagrTrafficOrchestration.toggleRouteTraffic();
+}
+
+function fetchAndDisplayRouteTraffic() {
+    return VoyagrTrafficOrchestration.fetchAndDisplayRouteTraffic();
+}
+
+function bringTrafficEdgesToTop() {
+    VoyagrTrafficOrchestration.bringTrafficEdgesToTop();
+}
+
+function bringNavRouteAboveTrafficEdges() {
+    VoyagrTrafficOrchestration.bringNavRouteAboveTrafficEdges();
+}
+
+function ensureLabelsOnTop() {
+    VoyagrTrafficOrchestration.ensureLabelsOnTop();
+}
+
+function startRouteTrafficUpdates() {
+    VoyagrTrafficOrchestration.startRouteTrafficUpdates();
+}
+
+function stopRouteTrafficUpdates() {
+    VoyagrTrafficOrchestration.stopRouteTrafficUpdates();
+}
+
+function toggleAutoTrafficUpdate() {
+    VoyagrTrafficOrchestration.toggleAutoTrafficUpdate();
+}
+
+function toggleAutoRerouteOnDeviation() {
+    VoyagrTrafficOrchestration.toggleAutoRerouteOnDeviation();
+}
+
+function startAutoTrafficUpdates() {
+    VoyagrTrafficOrchestration.startAutoTrafficUpdates();
+}
+
+function stopAutoTrafficUpdates() {
+    VoyagrTrafficOrchestration.stopAutoTrafficUpdates();
+}
+
+function checkTrafficAndReroute() {
+    return VoyagrTrafficOrchestration.checkTrafficAndReroute();
+}
+
+function manualTrafficUpdate() {
+    return VoyagrTrafficOrchestration.manualTrafficUpdate();
+}
+
+function getRouteTrafficAhead(forceFresh) {
+    return VoyagrTrafficOrchestration.getRouteTrafficAhead(forceFresh);
+}
+
+function getAutoRerouteOnDeviationEnabled() {
+    return VoyagrTrafficOrchestration.getTrafficSettingsSnapshot().autoRerouteOnDeviationEnabled;
+}
+
+// ===== PORCUPINE WAKE ORCHESTRATION =====
+// Orchestration lives in static/js/app/porcupine-orchestration.js (bound at file end).
+
+function getPorcupineOrchestrationRuntime() {
+    return {
+        porcupineWake: () => _porcupineWake(),
+        toggleUI: () => _toggleUI(),
+        showStatus,
+        saveAllSettings,
+        speakMessage,
+        initVoiceRecognition,
+        getVoiceRecognition: () => voiceRecognition,
+        getIsListening: () => isListening,
+        setIsListening: (v) => { isListening = !!v; },
+        setVoiceFinalTranscript: (v) => { _voiceFinalTranscript = v; },
+    };
+}
+
+function picovoiceClientConfigured() {
+    return VoyagrPorcupineOrchestration.picovoiceClientConfigured();
+}
+
+function loadPorcupineWakeUi() {
+    VoyagrPorcupineOrchestration.loadPorcupineWakeUi();
+}
+
+function togglePorcupineWakeWord() {
+    VoyagrPorcupineOrchestration.togglePorcupineWakeWord();
+}
+
+function maybeResumePorcupineWakeAfterVoice() {
+    VoyagrPorcupineOrchestration.maybeResumePorcupineWakeAfterVoice();
+}
+
+function startPorcupineWakePipeline() {
+    return VoyagrPorcupineOrchestration.startPorcupineWakePipeline();
+}
+
+function stopPorcupineWakePipeline() {
+    return VoyagrPorcupineOrchestration.stopPorcupineWakePipeline();
+}
+
+function warmPicovoiceStaticCache() {
+    VoyagrPorcupineOrchestration.warmPicovoiceStaticCache();
+}
+
 /**
  * Collect voice preference values from settings form controls.
  * @returns {Object}
@@ -8144,268 +7483,6 @@ function loadVoicePreferences() {
     }
 }
 
-// ----- Picovoice Porcupine wake word (browser / PWA). -----
-let porcupineWakePipelineRunning = false;
-let porcupineWakeResumeAfterVoice = false;
-let _porcupineWakeWorker = null;
-let _porcupineWakeBridgeEngine = null;
-let _porcupineWakeStarting = false;
-let _porcupineWakeLastDetectionMs = 0;
-
-function collectPicovoiceClientConfigInput() {
-    const PW = _porcupineWake();
-    return PW.buildCollectPicovoiceClientConfigInputPlan({
-        assetsOk: !!(typeof window !== 'undefined' && window.VoyagrPicovoiceWebAssetsOk),
-        accessKey: typeof window !== 'undefined' ? window.PICOVOICE_ACCESS_KEY : '',
-        hasPorcupineWeb: typeof PorcupineWeb !== 'undefined',
-        hasWebVoiceProcessor: typeof WebVoiceProcessor !== 'undefined',
-    });
-}
-
-function picovoiceClientConfigured() {
-    return _porcupineWake().isPicovoiceClientConfigured(collectPicovoiceClientConfigInput());
-}
-
-function collectLoadPorcupineWakeUiInput() {
-    const PW = _porcupineWake();
-    return {
-        configured: picovoiceClientConfigured(),
-        enabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
-    };
-}
-
-function applyLoadPorcupineWakeUiFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-
-    const PW = _porcupineWake();
-    const TU = _toggleUI();
-    const row = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.row);
-    const help = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.help);
-    const toggle = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
-    if (!row || !toggle) return;
-
-    if (execute.hideRow) {
-        row.style.display = 'none';
-        if (help) help.style.display = 'none';
-        return;
-    }
-    if (execute.showRow) row.style.display = '';
-    if (execute.showHelp && help) help.style.display = '';
-    if (execute.toggle) {
-        TU.applyLabeledToggleButton(toggle, execute.toggle.enabled);
-    }
-}
-
-function loadPorcupineWakeUi() {
-    const PW = _porcupineWake();
-    applyLoadPorcupineWakeUiFromPlan(
-        PW.buildLoadPorcupineWakeUiEntryOrchestrationPlan(collectLoadPorcupineWakeUiInput()).execute
-    );
-}
-
-function applyTogglePorcupineWakeWordFromPlan(execute, button) {
-    if (!execute || !execute.shouldApply || !button) return;
-
-    _toggleUI().applyLabeledToggleButton(button, execute.toggle.enabled);
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.clearResumeAfterVoice) porcupineWakeResumeAfterVoice = false;
-    if (execute.startPipeline) void startPorcupineWakePipeline();
-    if (execute.stopPipeline) void stopPorcupineWakePipeline();
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-function togglePorcupineWakeWord() {
-    const PW = _porcupineWake();
-    const button = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
-    if (!button || !picovoiceClientConfigured()) return;
-
-    applyTogglePorcupineWakeWordFromPlan(
-        PW.buildTogglePorcupineWakeWordEntryOrchestrationPlan(
-            button.classList.contains('active')
-        ).execute,
-        button
-    );
-}
-
-function collectPorcupineResumeAfterVoiceInput() {
-    const PW = _porcupineWake();
-    return {
-        resumeFlag: porcupineWakeResumeAfterVoice,
-        storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
-        configured: picovoiceClientConfigured(),
-    };
-}
-
-function maybeResumePorcupineWakeAfterVoice() {
-    const PW = _porcupineWake();
-    const resume = PW.buildPorcupineResumeAfterVoiceEntryOrchestrationPlan(
-        collectPorcupineResumeAfterVoiceInput()
-    ).resume;
-    if (resume.clearResumeFlag) porcupineWakeResumeAfterVoice = false;
-    if (resume.shouldResume) void startPorcupineWakePipeline();
-}
-
-async function porcupineCustomKeywordAvailable() {
-    const p = typeof window.VoyagrPicovoiceKeywordPath === 'string' ? window.VoyagrPicovoiceKeywordPath.trim() : '';
-    if (!p) {
-        return false;
-    }
-    try {
-        let r = await fetch(p, { method: 'HEAD', cache: 'no-store' });
-        if (r.status === 405 || r.status === 501) {
-            r = await fetch(p, { method: 'GET', cache: 'no-store' });
-        }
-        return r.ok;
-    } catch (e) {
-        console.warn('[Porcupine] Keyword probe failed:', e);
-        return false;
-    }
-}
-
-async function stopPorcupineWakePipeline() {
-    const PW = _porcupineWake();
-    const execute = PW.buildStopPorcupineWakePipelineExecutePlan({
-        hasBridgeEngine: !!_porcupineWakeBridgeEngine,
-        hasWorker: !!_porcupineWakeWorker,
-    });
-    if (!execute.shouldStop) {
-        porcupineWakePipelineRunning = false;
-        return;
-    }
-    if (execute.unsubscribeBridge && typeof WebVoiceProcessor !== 'undefined') {
-        try {
-            await WebVoiceProcessor.unsubscribe(_porcupineWakeBridgeEngine);
-        } catch (e) {
-            console.warn(execute.logPrefixes.unsubscribe, e);
-        }
-    }
-    if (execute.clearBridgeEngine) _porcupineWakeBridgeEngine = null;
-    if (_porcupineWakeWorker) {
-        if (execute.releaseWorker) {
-            try {
-                await _porcupineWakeWorker.release();
-            } catch (e) {
-                console.warn(execute.logPrefixes.release, e);
-            }
-        }
-        if (execute.terminateWorker) {
-            try {
-                _porcupineWakeWorker.terminate();
-            } catch (e) {
-                console.warn(execute.logPrefixes.terminate, e);
-            }
-        }
-        if (execute.clearWorker) _porcupineWakeWorker = null;
-    }
-    if (execute.setPipelineRunning === false) porcupineWakePipelineRunning = false;
-}
-
-async function startPorcupineWakePipeline() {
-    const PW = _porcupineWake();
-    const preflight = PW.buildPorcupinePipelinePreflightPlan(
-        PW.buildCollectPorcupinePipelinePreflightInputPlan({
-            configured: picovoiceClientConfigured(),
-            storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
-            pipelineRunning: porcupineWakePipelineRunning,
-            starting: _porcupineWakeStarting,
-            protocol: typeof location !== 'undefined' ? location.protocol : '',
-            hostname: typeof location !== 'undefined' ? location.hostname : '',
-        })
-    );
-    if (!preflight.shouldStart) {
-        if (preflight.reason === 'needs_https') {
-            console.warn(preflight.warningLog);
-            showStatus(preflight.statusMessage, preflight.statusType);
-        }
-        return;
-    }
-
-    _porcupineWakeStarting = true;
-    try {
-        if (preflight.stopExistingFirst) await stopPorcupineWakePipeline();
-        const useCustom = await porcupineCustomKeywordAvailable();
-        const startConfig = PW.buildPorcupineStartConfigPlan({
-            accessKey: window.PICOVOICE_ACCESS_KEY,
-            useCustomKeyword: useCustom,
-            keywordPath: window.VoyagrPicovoiceKeywordPath,
-        });
-        const onDetection = (detection) => {
-            if (!detection || typeof detection.label !== 'string') {
-                return;
-            }
-            const now = Date.now();
-            if (now - _porcupineWakeLastDetectionMs < startConfig.detectionDebounceMs) {
-                return;
-            }
-            _porcupineWakeLastDetectionMs = now;
-            if (typeof isListening !== 'undefined' && isListening) {
-                return;
-            }
-            console.log('[Porcupine] Wake detected:', detection.label);
-            void onPorcupineWakeHotword();
-        };
-        const keywords = useCustom
-            ? [startConfig.customKeyword]
-            : PorcupineWeb.BuiltInKeyword.Porcupine;
-        const worker = await PorcupineWeb.PorcupineWorker.create(
-            startConfig.accessKey,
-            keywords,
-            onDetection,
-            startConfig.model,
-            {
-                processErrorCallback: (err) => {
-                    console.error('[Porcupine] process error:', err);
-                }
-            }
-        );
-        _porcupineWakeWorker = worker;
-        WebVoiceProcessor.setOptions({
-            frameLength: worker.frameLength,
-            outputSampleRate: worker.sampleRate
-        }, false);
-        const bridge = {
-            onmessage: (e) => {
-                if (e.data && e.data.command === 'process' && e.data.inputFrame && _porcupineWakeWorker) {
-                    _porcupineWakeWorker.process(e.data.inputFrame);
-                }
-            }
-        };
-        _porcupineWakeBridgeEngine = bridge;
-        await WebVoiceProcessor.subscribe(bridge);
-        porcupineWakePipelineRunning = true;
-        if (!useCustom) {
-            console.info(startConfig.builtInFallbackLogPrefix, window.VoyagrPicovoiceKeywordPath);
-        }
-    } catch (e) {
-        const fail = PW.buildPorcupineStartConfigPlan();
-        console.error(fail.failureLogPrefix, e);
-        showStatus(fail.failureStatusMessage, fail.failureStatusType);
-        await stopPorcupineWakePipeline();
-    } finally {
-        _porcupineWakeStarting = false;
-    }
-}
-
-async function onPorcupineWakeHotword() {
-    const PW = _porcupineWake();
-    const execute = PW.buildPorcupineWakeHotwordEntryOrchestrationPlan().execute;
-    if (execute.setResumeAfterVoice) porcupineWakeResumeAfterVoice = true;
-    if (execute.stopPipeline) await stopPorcupineWakePipeline();
-    if (execute.speakMessage) speakMessage(execute.speakMessage, execute.speakPriority);
-    await new Promise((r) => setTimeout(r, execute.voiceStartDelayMs));
-    if (!voiceRecognition && !initVoiceRecognition()) {
-        maybeResumePorcupineWakeAfterVoice();
-        return;
-    }
-    if (!isListening) {
-        const tr = document.getElementById('voiceTranscript');
-        if (tr && execute.clearTranscript) tr.textContent = '';
-        if (execute.resetFinalTranscript) _voiceFinalTranscript = '';
-        voiceRecognition.start();
-        isListening = true;
-    }
-}
 
 function applyToggleVoiceAnnouncementsFromPlan(execute, button) {
     if (!execute || !execute.shouldApply || !button) return;
@@ -10511,33 +9588,6 @@ function toggleMLPredictions() {
 }
 
 // Warm Picovoice vendor bundles after idle load (optional offline wake).
-function warmPicovoiceStaticCache() {
-    void (async function warm() {
-        try {
-            const PW = _porcupineWake();
-            const plan = PW.buildWarmPicovoiceStaticCachePlan({
-                hasServiceWorker: 'serviceWorker' in navigator,
-                online: navigator.onLine,
-                controllerPresent: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
-            });
-            if (!plan.shouldWarm) return;
-            for (const u of plan.probeUrls) {
-                const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
-                const probe = PW.buildWarmPicovoiceProbeResponsePlan({ ok: !!(r && r.ok) });
-                if (probe.shouldAbort) return;
-            }
-            const post = PW.buildWarmPicovoicePostMessagePlan(plan);
-            if (post.shouldPost && navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({
-                    type: post.messageType,
-                    urls: post.urls,
-                });
-            }
-        } catch (_e) {
-            /* ignore */
-        }
-    }());
-}
 
 /** Hide map-stack FABs while the bottom sheet is fully expanded (peek mode keeps them visible). */
 function syncBottomSheetOverlapFabs() {
@@ -12237,7 +11287,7 @@ async function toggleVoiceInput() {
 
     const orch = VC.buildToggleVoiceInputOrchestrationPlan({
         isListening,
-        porcupineWakePipelineRunning,
+        porcupineWakePipelineRunning: VoyagrPorcupineOrchestration.isPipelineRunning(),
     });
 
     if (orch.action === 'stop') {
@@ -12247,7 +11297,7 @@ async function toggleVoiceInput() {
     }
 
     if (orch.pausePorcupineWake) {
-        porcupineWakeResumeAfterVoice = true;
+        VoyagrPorcupineOrchestration.setResumeAfterVoice(true);
         await stopPorcupineWakePipeline();
     }
     if (orch.clearTranscript) {
@@ -14019,7 +13069,7 @@ function scheduleAutomaticRerouteRetry() {
     const RD = _rerouteDecision();
     const plan = RD.buildRerouteFailureRetryPlan({
         routeInProgress,
-        autoRerouteOnDeviationEnabled,
+        autoRerouteOnDeviationEnabled: getAutoRerouteOnDeviationEnabled(),
         postRerouteGraceUntil,
         rerouteInProgress,
         rerouteFailureRetryCount,
@@ -14043,7 +13093,7 @@ function scheduleAutomaticRerouteRetry() {
     console.log(plan.logMessage);
     rerouteFailureRetryTimer = setTimeout(() => {
         rerouteFailureRetryTimer = null;
-        if (!routeInProgress || !autoRerouteOnDeviationEnabled) {
+        if (!routeInProgress || !getAutoRerouteOnDeviationEnabled()) {
             clearRerouteFailureRetries();
             return;
         }
@@ -14105,7 +13155,7 @@ function checkRouteDeviation(lat, lon, accuracy) {
 
     const now = Date.now();
     const tick = VRD.buildRouteDeviationTickPlan({
-        autoRerouteEnabled: autoRerouteOnDeviationEnabled,
+        autoRerouteEnabled: getAutoRerouteOnDeviationEnabled(),
         hasRoute: true,
         remainingToDest: inputs.remainingToDest,
         accuracy,
@@ -16053,11 +15103,12 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
 
     applyNavStartWakeLockFromPlan(MC, stateInit, 'wakeLock' in navigator);
 
+    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
     applyNavStartServicesFromPlan(MC.buildNavStartServicesOrchestrationPlan({
         stateInit,
         isTrackingActive,
-        autoTrafficUpdateEnabled,
-        routeTrafficEnabled,
+        autoTrafficUpdateEnabled: traffic.autoTrafficUpdateEnabled,
+        routeTrafficEnabled: traffic.routeTrafficEnabled,
         hasMap: !!map,
         hasPosition: currentLat != null && currentLon != null,
         zoomAndFollowEnabled,
@@ -17514,6 +16565,8 @@ function closeJourneySummary() {
 }
 
 VoyagrParkingOrchestration.bind(getParkingOrchestrationRuntime());
+VoyagrTrafficOrchestration.bind(getTrafficOrchestrationRuntime());
+VoyagrPorcupineOrchestration.bind(getPorcupineOrchestrationRuntime());
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict
