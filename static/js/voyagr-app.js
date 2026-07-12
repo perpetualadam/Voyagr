@@ -2204,378 +2204,146 @@ function getMapLayersOrchestrationRuntime() {
 
 // ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
 // Traffic orchestration lives in static/js/app/traffic-orchestration.js (bound at file end).
+// Reroute map update orchestration lives in static/js/app/reroute-map-orchestration.js (bound at file end).
 // Deviation tracking for time-based detection (shared with GPS reroute):
 let routeJoinConfirmedForDeviation = false;
 /** After GPS deviation reroute, next in-nav route pick uses primary only (no name-based alt). */
 let _preferPrimaryRouteOnNextNavUpdate = false;
 
-/**
- * Pick which route object to apply during active navigation.
- * Name-based matching is skipped once after automatic deviation reroute.
- *
- * @param {Array<Object>|null|undefined} routeList - `data.routes` from /api/route
- * @param {Object|null|undefined} singleRoutePayload - fallback when no list
- * @returns {Object|null}
- */
+function applyDeviationRerouteState(dev) {
+    deviationStartTimeCheck = dev.deviationStartTimeCheck;
+    rerouteAttemptCount = dev.rerouteAttemptCount;
+    postRerouteGraceUntil = dev.postRerouteGraceUntil;
+    routeJoinConfirmedForDeviation = dev.routeJoinConfirmedForDeviation;
+    deviationOffRouteStreak = dev.deviationOffRouteStreak;
+    lastRerouteTime = dev.lastRerouteTime;
+    lastRerouteAttemptTime = dev.lastRerouteAttemptTime;
+    rerouteInProgress = dev.rerouteInProgress;
+    if (dev.clearFailureRetries) clearRerouteFailureRetries();
+}
+
+function getRerouteMapOrchestrationRuntime() {
+    return {
+        rerouteDecision: () => _rerouteDecision(),
+        routeSelection: () => _routeSelection(),
+        navigationDestination: () => _navigationDestination(),
+        routingRequest: () => _routingRequest(),
+        routeGeometry: () => _routeGeometry(),
+        routeProgress: () => _routeProgress(),
+        speedGps: () => _speedGps(),
+        speedLimitWidget: () => _speedLimitWidget(),
+        voiceAnnouncements: () => _voiceAnnouncements(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getLastCalculatedRoute: () => window.lastCalculatedRoute,
+        setLastCalculatedRoute: (val) => { window.lastCalculatedRoute = val; },
+        getRoutePolyline: () => routePolyline,
+        setRoutePolyline: (val) => { routePolyline = val; },
+        getRouteLayer: () => routeLayer,
+        setRouteLayer: (val) => { routeLayer = val; },
+        getRouteInProgress: () => routeInProgress,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getCurrentRouteSteps: () => currentRouteSteps,
+        setCurrentRouteSteps: (val) => { currentRouteSteps = val; },
+        getCurrentStepIndex: () => currentStepIndex,
+        setCurrentStepIndex: (val) => { currentStepIndex = val; },
+        getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
+        setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
+        getLastTurnDetectRouteVertexIndex: () => lastTurnDetectRouteVertexIndex,
+        setLastTurnDetectRouteVertexIndex: (val) => { lastTurnDetectRouteVertexIndex = val; },
+        getRouteJoinConfirmedForDeviation: () => routeJoinConfirmedForDeviation,
+        setRouteJoinConfirmedForDeviation: (val) => { routeJoinConfirmedForDeviation = val; },
+        getPreferPrimaryRouteOnNextNavUpdate: () => _preferPrimaryRouteOnNextNavUpdate,
+        setPreferPrimaryRouteOnNextNavUpdate: (val) => { _preferPrimaryRouteOnNextNavUpdate = val; },
+        getCurrentRoutingMode: () => currentRoutingMode,
+        getCurrentVehicleType: () => currentVehicleType,
+        getCurrentUserMarker: () => currentUserMarker,
+        getSnapBlendWeightState: () => _snapBlendWeightState,
+        getSmoothDisplayLat: () => _smoothDisplayLat,
+        getSmoothDisplayLon: () => _smoothDisplayLon,
+        getAnnouncedTurnThresholds: () => announcedTurnThresholds,
+        getAnnouncedExitThresholds: () => announcedExitThresholds,
+        getAnnouncedKeepThresholds: () => announcedKeepThresholds,
+        setLastETAAnnouncementTime: (val) => { lastETAAnnouncementTime = val; },
+        setLastAnnouncedETA: (val) => { lastAnnouncedETA = val; },
+        setLastDestinationAnnouncementDistance: (val) => { lastDestinationAnnouncementDistance = val; },
+        setInitialETAMovementRetries: (val) => { initialETAMovementRetries = val; },
+        setVoiceAnnouncedForManeuverIndex: (val) => { _voiceAnnouncedForManeuverIndex = val; },
+        setVoiceAnnouncedCategory: (val) => { _voiceAnnouncedCategory = val; },
+        applyDeviationRerouteState,
+        call: {
+            getRouteCostParams,
+            getRoutePreferences,
+            isAvoidTollsEnabled,
+            convertDistance,
+            getDistanceUnit,
+            decodePolyline,
+            navActiveRouteColor,
+            bringNavRouteAboveTrafficEdges,
+            resetVehicleMarkerDisplayState,
+            applySpeedLimitFetchResetFromPlan,
+            primeVehicleMarkerOnRoute,
+            resetNavigationArrivalState,
+            resetRoadNameState: () => VoyagrRoadNameOrchestration.resetRoadNameState(),
+            clearRerouteFailureRetries,
+            updateTurnWidgetFromPosition,
+            fetchRoadNameThrottled,
+            updateTripInfo,
+            clearInitialETAAnnouncement,
+            setLastLaneVoiceKey: (val) => VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(val),
+            resolveGpsRouteSnapForTick,
+            applyVehicleMarkerFromTickPlan,
+        },
+    };
+}
+
 function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
-    const preferPrimary = _preferPrimaryRouteOnNextNavUpdate;
-    if (preferPrimary) {
-        _preferPrimaryRouteOnNextNavUpdate = false;
-        console.log('[Reroute] Using primary route (post-deviation; skipping name match)');
-    }
-    const activeRoute = _routeSelection().pickActiveRouteDuringNavigation(
-        routeList,
-        singleRoutePayload,
-        {
-            preferPrimary: preferPrimary,
-            previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
-        }
-    );
-    if (!preferPrimary && routeList && routeList.length > 1 && window.lastCalculatedRoute && activeRoute !== routeList[0]) {
-        console.log(`[Reroute] Matched previous route "${activeRoute.name}"`);
-    }
-    return activeRoute;
+    return VoyagrRerouteMapOrchestration.pickActiveRouteDuringNavigation(routeList, singleRoutePayload);
 }
 
-
-/**
- * Destination as "lat,lon" for reroute APIs — must survive useRoute() replacing lastCalculatedRoute with a bare route option.
- */
 function resolveNavigationDestination() {
-    const ND = _navigationDestination();
-    const collect = ND.buildResolveNavigationDestinationCollectPlan({
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        routePolyline: typeof routePolyline !== 'undefined' ? routePolyline : null,
-    });
-    const sources = ND.readNavigationDestinationSources({
-        lastRouteDestination: collect.lastRouteDestination,
-        endElement: document.getElementById(collect.endElementId),
-        polylineEnd: collect.polylineEnd,
-    });
-    return ND.resolveDestinationLatLon(sources);
+    return VoyagrRerouteMapOrchestration.resolveNavigationDestination();
 }
 
-/**
- * Build route request with current hazard avoidance settings
- */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
-    const RR = _routingRequest();
-    const collect = RR.buildRouteRequestCollectPlan({
-        storage: localStorage,
-        startLat,
-        startLon,
-        destination,
-        avoidPoints,
-        routingMode: currentRoutingMode || 'auto',
-        vehicleType: currentVehicleType || 'petrol_diesel',
-        costParams: getRouteCostParams(currentVehicleType),
-        isAvoidTollsEnabled,
-        routePrefs: (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {},
-    });
-    return RR.buildAutomaticRerouteRequestPlan(collect.storage, collect.opts);
+    return VoyagrRerouteMapOrchestration.buildRouteRequest(startLat, startLon, destination, avoidPoints);
 }
 
 function applyVoiceAnnouncementStateResetFromPlan(execute) {
-    if (!execute || !execute.shouldReset) return;
-    const p = execute.patch;
-    lastETAAnnouncementTime = p.lastETAAnnouncementTime;
-    lastAnnouncedETA = p.lastAnnouncedETA;
-    lastDestinationAnnouncementDistance = p.lastDestinationAnnouncementDistance;
-    lastTurnDetectRouteVertexIndex = p.lastTurnDetectRouteVertexIndex;
-    initialETAMovementRetries = p.initialETAMovementRetries;
-    _voiceAnnouncedForManeuverIndex = p.voiceAnnouncedForManeuverIndex;
-    _voiceAnnouncedCategory = p.voiceAnnouncedCategory;
-    if (execute.clearTurnThresholds) announcedTurnThresholds.clear();
-    if (execute.clearExitThresholds) announcedExitThresholds.clear();
-    if (execute.clearKeepThresholds) announcedKeepThresholds.clear();
-    if (execute.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
-    if (p.lastLaneVoiceKey !== undefined) {
-        VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(p.lastLaneVoiceKey);
-    }
+    return VoyagrRerouteMapOrchestration.applyVoiceAnnouncementStateResetFromPlan(execute);
 }
 
-/**
- * Reset voice/ETA/distance announcement state when geometry changes (reroute).
- * Prevents repeating the same milestones and back-to-back ETA after "route recalculated".
- */
 function resetVoiceAnnouncementStateForNewRoute() {
-    applyVoiceAnnouncementStateResetFromPlan(
-        _voiceAnnouncements().buildVoiceAnnouncementStateResetExecutePlan(Date.now())
-    );
+    return VoyagrRerouteMapOrchestration.resetVoiceAnnouncementStateForNewRoute();
 }
 
-/**
- * Apply navigation state patches after a reroute map layer update.
- * @param {Object} plan - from buildRouteMapUpdateStatePlan
- * @param {Object} newRoute
- */
 function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
-    const RD = _rerouteDecision();
-    const execute = RD.buildRouteMapUpdateStateExecutePlan(plan, {
-        currentLat,
-        currentLon,
-        newRoute,
-    });
-
-    if (execute.maneuvers) {
-        currentRouteSteps = execute.maneuvers.steps;
-        if (execute.maneuvers.logMessage) console.log(execute.maneuvers.logMessage);
-    }
-
-    if (execute.vehicleMarkerReset) {
-        resetVehicleMarkerDisplayState();
-    }
-
-    const speedReset = execute.speedLimitReset;
-    if (speedReset && speedReset.shouldReset) {
-        const SL = _speedLimitWidget();
-        const resetPlan = SL
-            ? SL.buildSpeedLimitFetchResetApplyPlan(
-                speedReset.kind === 'full-reroute'
-                    ? { kind: speedReset.kind }
-                    : {
-                        kind: speedReset.kind,
-                        newLastActiveManeuverIdx: speedReset.newLastActiveManeuverIdx,
-                        resetCurrentSpeedLimitMph: speedReset.resetCurrentSpeedLimitMph,
-                        resetDetectedRoadType: speedReset.resetDetectedRoadType,
-                    }
-            )
-            : null;
-        if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
-    }
-
-    const progress = execute.progress;
-    if (progress.action === 'primeVehicleMarker') {
-        primeVehicleMarkerOnRoute(currentLat, currentLon);
-    } else if (progress.action === 'resetProgress' && progress.patch) {
-        currentStepIndex = progress.patch.currentStepIndex;
-        lastSnappedRouteIndex = progress.patch.lastSnappedRouteIndex;
-        lastTurnDetectRouteVertexIndex = progress.patch.lastTurnDetectRouteVertexIndex;
-    }
-
-    if (execute.roadNameReset) {
-        VoyagrRoadNameOrchestration.resetRoadNameState();
-    }
-    if (execute.navigationArrivalReset) {
-        resetNavigationArrivalState();
-    }
-
-    const dev = execute.deviation;
-    if (dev) {
-        deviationStartTimeCheck = dev.deviationStartTimeCheck;
-        rerouteAttemptCount = dev.rerouteAttemptCount;
-        postRerouteGraceUntil = dev.postRerouteGraceUntil;
-        routeJoinConfirmedForDeviation = dev.routeJoinConfirmedForDeviation;
-        deviationOffRouteStreak = dev.deviationOffRouteStreak;
-        lastRerouteTime = dev.lastRerouteTime;
-        lastRerouteAttemptTime = dev.lastRerouteAttemptTime;
-        rerouteInProgress = dev.rerouteInProgress;
-        if (dev.clearFailureRetries) clearRerouteFailureRetries();
-    }
-
-    const post = execute.post;
-    if (post.refreshTurnWidget) {
-        updateTurnWidgetFromPosition(currentLat, currentLon);
-    }
-    if (post.fetchRoadName) {
-        fetchRoadNameThrottled(currentLat, currentLon);
-    }
-    if (execute.tripInfo) {
-        updateTripInfo(
-            execute.tripInfo.distance_km,
-            execute.tripInfo.duration_minutes,
-            execute.tripInfo.fuel_cost,
-            execute.tripInfo.toll_cost
-        );
-    }
-    if (post.patchLastCalculatedRoute) {
-        window.lastCalculatedRoute = execute.lastCalculatedRoutePatch;
-    }
-    if (post.completeLog) console.log(post.completeLog);
+    return VoyagrRerouteMapOrchestration.applyRouteMapUpdateStateFromPlan(plan, newRoute);
 }
 
-/**
- * Update route on map with new route data
- */
 function updateRouteOnMap(newRoute) {
-    const RD = _rerouteDecision();
-    const plan = RD.buildRouteMapUpdateStatePlan(newRoute, window.lastCalculatedRoute, {
-        now: Date.now(),
-        hasCurrentGps: currentLat != null && currentLon != null,
-        convertDistance,
-        distUnit: getDistanceUnit(),
-    });
-    const execute = RD.buildUpdateRouteOnMapExecutePlan(plan);
-
-    if (execute.resetVoiceAnnouncementState) {
-        resetVoiceAnnouncementStateForNewRoute();
-    }
-
-    if (execute.removeExistingRouteLayer && routeLayer && typeof routeLayer.remove === 'function') {
-        routeLayer.remove();
-    }
-
-    routePolyline = decodePolyline(newRoute.geometry, execute.polylineDecodePrecision);
-    console.log(`${execute.polylineLogPrefix} ${routePolyline.length} points`);
-
-    if (execute.mountActiveNavRoute) {
-        const mount = _routeSelection().buildNavActiveRouteLayerMountPlan({
-            routePolyline,
-            navRouteColor: navActiveRouteColor(),
-        });
-        routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
-    }
-    if (execute.bringNavRouteAboveTraffic) {
-        bringNavRouteAboveTrafficEdges();
-    }
-
-    if (execute.applyRouteMapUpdateState) {
-        applyRouteMapUpdateStateFromPlan(plan, newRoute);
-    }
+    return VoyagrRerouteMapOrchestration.updateRouteOnMap(newRoute);
 }
 
-/**
- * Shared polyline style for the active navigation route line.
- * @returns {Object} MapLibreHelpers.addPolyline options
- */
 function getNavActiveRoutePolylineOptions() {
-    return _routeSelection().buildNavActiveRoutePolylineStyle(navActiveRouteColor());
+    return VoyagrRerouteMapOrchestration.getNavActiveRoutePolylineOptions();
 }
 
-/**
- * After reroute or map style recovery, re-draw the navigation route line on the map.
- * @param {string} [reason] - Log context
- */
 function redrawNavigationRouteLayer(reason) {
-    const RS = _routeSelection();
-    const guard = RS.buildNavRouteLayerRedrawGuardPlan({ routeInProgress, map, routePolyline });
-    if (!guard.shouldRedraw) return;
-    try {
-        if (routeLayer && typeof routeLayer.remove === 'function') {
-            routeLayer.remove();
-        }
-        const mount = RS.buildNavActiveRouteLayerMountPlan({
-            routePolyline,
-            navRouteColor: navActiveRouteColor(),
-        });
-        routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
-        bringNavRouteAboveTrafficEdges();
-        if (reason) {
-            console.log('[Nav] Route layer redrawn:', reason);
-        }
-    } catch (e) {
-        console.warn('[Nav] Route layer redraw failed:', e);
-    }
+    return VoyagrRerouteMapOrchestration.redrawNavigationRouteLayer(reason);
 }
 
-/**
- * Re-attach vehicle marker after WebGL/style recovery (layers may be wiped).
- * @param {string} [reason] - Log context
- */
 function redrawNavigationVehicleMarker(reason) {
-    if (!routeInProgress || !map) return;
-    const lat = currentLat;
-    const lon = currentLon;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-    try {
-        const SG = _speedGps();
-        const heading = currentUserMarker && Number.isFinite(currentUserMarker.heading)
-            ? currentUserMarker.heading
-            : 0;
-        const speed = currentUserMarker && Number.isFinite(currentUserMarker.speed)
-            ? currentUserMarker.speed
-            : 0;
-        const acc = currentUserMarker && Number.isFinite(currentUserMarker.accuracy)
-            ? currentUserMarker.accuracy
-            : null;
-
-        const redraw = SG.buildNavigationVehicleMarkerRedrawPlan({
-            lat,
-            lon,
-            accuracy: acc,
-            routeInProgress,
-            routePolyline,
-            snapped: resolveGpsRouteSnapForTick(lat, lon),
-            gpsHeadingForBlend: heading,
-            lastSnappedRouteIndex,
-            prevSnapBlendWeightState: _snapBlendWeightState,
-            smoothDisplayLat: _smoothDisplayLat,
-            smoothDisplayLon: _smoothDisplayLon,
-            useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
-            speedMph: speed,
-            speed,
-            hasMarker: !!currentUserMarker,
-            canSetLngLat: !!(currentUserMarker && typeof currentUserMarker.setLngLat === 'function'),
-            markerOnMap: !!(currentUserMarker && currentUserMarker._map),
-            mapBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
-            calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-            blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-        });
-
-        applyVehicleMarkerFromTickPlan(redraw.markerTick);
-        if (redraw.reattachToMap && currentUserMarker && typeof currentUserMarker.addTo === 'function') {
-            currentUserMarker.addTo(map);
-        }
-        if (reason) {
-            console.log('[Nav] Vehicle marker redrawn:', reason);
-        }
-    } catch (e) {
-        console.warn('[Nav] Vehicle marker redraw failed:', e);
-    }
+    return VoyagrRerouteMapOrchestration.redrawNavigationVehicleMarker(reason);
 }
 
-/**
- * Called from voyagr-core after map/WebGL recovery so nav overlays survive setStyle.
- * @param {string} [reason]
- */
 function redrawNavigationOverlaysAfterMapRecovery(reason) {
-    if (!routeInProgress) return;
-    redrawNavigationRouteLayer(reason);
-    redrawNavigationVehicleMarker(reason);
-    if (currentLat != null && currentLon != null) {
-        updateTurnWidgetFromPosition(currentLat, currentLon);
-    }
+    return VoyagrRerouteMapOrchestration.redrawNavigationOverlaysAfterMapRecovery(reason);
 }
 
-window.__voyagrRedrawNavigationOverlays = redrawNavigationOverlaysAfterMapRecovery;
-
-/**
- * Snap current GPS onto the new polyline and seed progress indices (post-reroute).
- * Avoids speed limit / turn widget sticking at the start of the route.
- *
- * @param {number} lat
- * @param {number} lon
- */
 function seedNavigationProgressOnNewRoute(lat, lon) {
-    if (!routePolyline || routePolyline.length < 2) return;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-
-    const snapPlan = _routeGeometry().buildGpsRouteSnapTickPlan({
-        lat,
-        lon,
-        routeInProgress: true,
-        routePolyline,
-        lastSnappedRouteIndex: 0,
-        searchStartIndex: 0,
-    });
-    const snap = snapPlan.snapped;
-    if (!snap) return;
-    const idx = Math.max(0, Math.min(snap.index, routePolyline.length - 2));
-    const plan = _routeProgress().buildNavigationProgressSeedPlan(
-        idx,
-        snap.distance,
-        currentRouteSteps,
-        _rerouteDecision().DEFAULTS.ROUTE_JOIN_GATE_METERS
-    );
-
-    lastSnappedRouteIndex = plan.lastSnappedRouteIndex;
-    lastTurnDetectRouteVertexIndex = plan.lastTurnDetectRouteVertexIndex;
-    currentStepIndex = plan.currentStepIndex;
-    if (plan.routeJoinConfirmedForDeviation) {
-        routeJoinConfirmedForDeviation = true;
-    }
-
-    console.log(plan.logMessage);
+    return VoyagrRerouteMapOrchestration.seedNavigationProgressOnNewRoute(lat, lon);
 }
 
 // ===== CAZ ORCHESTRATION =====
@@ -5265,6 +5033,7 @@ function closeJourneySummary() {
 }
 
 VoyagrParkingOrchestration.bind(getParkingOrchestrationRuntime());
+VoyagrRerouteMapOrchestration.bind(getRerouteMapOrchestrationRuntime());
 VoyagrTrafficOrchestration.bind(getTrafficOrchestrationRuntime());
 VoyagrPorcupineOrchestration.bind(getPorcupineOrchestrationRuntime());
 VoyagrGpsOrchestration.bind(getGpsOrchestrationRuntime());
