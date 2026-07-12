@@ -11,6 +11,27 @@
     var weatherRefreshInterval = null;
     var hazardRefreshInterval = null;
 
+    var lastETAAnnouncementTime = 0;
+    var lastAnnouncedETA = null;
+    var initialETAMovementRetries = 0;
+    var initialETAAnnouncementTimeoutId = null;
+    var lastNavTrafficFetchAt = 0;
+    var ETA_CHANGE_THRESHOLD_MS = 300000;
+    var ETA_MIN_INTERVAL_MS = 60000;
+
+    function getLastETAAnnouncementTime() { return lastETAAnnouncementTime; }
+    function setLastETAAnnouncementTime(val) { lastETAAnnouncementTime = val; }
+    function getLastAnnouncedETA() { return lastAnnouncedETA; }
+    function setLastAnnouncedETA(val) { lastAnnouncedETA = val; }
+    function getInitialETAMovementRetries() { return initialETAMovementRetries; }
+    function setInitialETAMovementRetries(val) { initialETAMovementRetries = val; }
+    function getInitialETAAnnouncementTimeoutId() { return initialETAAnnouncementTimeoutId; }
+    function setInitialETAAnnouncementTimeoutId(val) { initialETAAnnouncementTimeoutId = val; }
+    function getLastNavTrafficFetchAt() { return lastNavTrafficFetchAt; }
+    function setLastNavTrafficFetchAt(val) { lastNavTrafficFetchAt = val; }
+    function getEtaChangeThresholdMs() { return ETA_CHANGE_THRESHOLD_MS; }
+    function getEtaMinIntervalMs() { return ETA_MIN_INTERVAL_MS; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[LiveDataRefresh] Orchestration runtime not bound');
@@ -135,7 +156,7 @@
             hasRoute: !!rt().getLastCalculatedRoute(),
             voiceEnabled: rt().getVoiceAnnouncementsEnabled(),
             now: Date.now(),
-            lastETAAnnouncementTime: rt().g('lastETAAnnouncementTime'),
+            lastETAAnnouncementTime: getLastETAAnnouncementTime(),
             baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
             applyTrafficRatio: rt().call.applyTrafficRatioToBaseRemaining,
         });
@@ -148,27 +169,27 @@
         const message = ETA().buildETAVoiceMessage(tick.timeRemainingMinutes, eta);
         console.log(`${tick.logPrefix} ${message}`);
         rt().call.speakMessage(message);
-        rt().s('lastETAAnnouncementTime', tick.updateLastETAAnnouncementTime);
-        rt().s('lastAnnouncedETA', eta);
+        setLastETAAnnouncementTime(tick.updateLastETAAnnouncementTime);
+        setLastAnnouncedETA(eta);
     }
 
     async function speakInitialETAAnnouncement() {
         const movement = ETA().buildInitialETAMovementDeferPlan({
             hasStartedMoving: rt().call.hasUserStartedMoving(),
-            retries: rt().g('initialETAMovementRetries'),
+            retries: getInitialETAMovementRetries(),
         });
         if (movement.action === 'defer') {
-            rt().s('initialETAMovementRetries', movement.retries);
-            const timeoutId = rt().g('initialETAAnnouncementTimeoutId');
+            setInitialETAMovementRetries(movement.retries);
+            const timeoutId = getInitialETAAnnouncementTimeoutId();
             if (timeoutId) {
                 clearTimeout(timeoutId);
-                rt().s('initialETAAnnouncementTimeoutId', null);
+                setInitialETAAnnouncementTimeoutId(null);
             }
             const nextId = setTimeout(() => {
-                rt().s('initialETAAnnouncementTimeoutId', null);
+                setInitialETAAnnouncementTimeoutId(null);
                 void speakInitialETAAnnouncement();
             }, movement.retryDelayMs);
-            rt().s('initialETAAnnouncementTimeoutId', nextId);
+            setInitialETAAnnouncementTimeoutId(nextId);
             console.log(movement.logMessage);
             return;
         }
@@ -193,7 +214,7 @@
         });
         if (!execute.shouldAnnounce) return;
 
-        if (execute.resetMovementRetries) rt().s('initialETAMovementRetries', 0);
+        if (execute.resetMovementRetries) setInitialETAMovementRetries(0);
         if (execute.refreshTrafficIfDue && base) {
             await rt().call.refreshNavTrafficETAIfDue(base.timeRemainingMinutes, base.progressPercent, true);
         }
@@ -202,30 +223,30 @@
         const message = ETA().buildETAVoiceMessage(execute.timeRemainingMinutes, eta);
         console.log(`${execute.logPrefix} ${message}`);
         rt().call.speakMessage(message);
-        rt().s('lastETAAnnouncementTime', execute.updateLastETAAnnouncementTime);
-        rt().s('lastAnnouncedETA', eta);
+        setLastETAAnnouncementTime(execute.updateLastETAAnnouncementTime);
+        setLastAnnouncedETA(eta);
     }
 
     function scheduleInitialETAAnnouncement() {
         const schedule = ETA().buildScheduleInitialETAAnnouncementPlan();
         if (!schedule.shouldSchedule) return;
-        const existingId = rt().g('initialETAAnnouncementTimeoutId');
+        const existingId = getInitialETAAnnouncementTimeoutId();
         if (schedule.clearExisting && existingId) {
             clearTimeout(existingId);
-            rt().s('initialETAAnnouncementTimeoutId', null);
+            setInitialETAAnnouncementTimeoutId(null);
         }
         const nextId = setTimeout(() => {
-            rt().s('initialETAAnnouncementTimeoutId', null);
+            setInitialETAAnnouncementTimeoutId(null);
             speakInitialETAAnnouncement();
         }, schedule.delayMs);
-        rt().s('initialETAAnnouncementTimeoutId', nextId);
+        setInitialETAAnnouncementTimeoutId(nextId);
     }
 
     function clearInitialETAAnnouncement() {
-        const timeoutId = rt().g('initialETAAnnouncementTimeoutId');
+        const timeoutId = getInitialETAAnnouncementTimeoutId();
         if (timeoutId) {
             clearTimeout(timeoutId);
-            rt().s('initialETAAnnouncementTimeoutId', null);
+            setInitialETAAnnouncementTimeoutId(null);
         }
     }
 
@@ -275,6 +296,18 @@
         clearInitialETAAnnouncement: clearInitialETAAnnouncement,
         refreshWeatherData: refreshWeatherData,
         getAdaptiveRefreshInterval: getAdaptiveRefreshInterval,
+        getLastETAAnnouncementTime: getLastETAAnnouncementTime,
+        setLastETAAnnouncementTime: setLastETAAnnouncementTime,
+        getLastAnnouncedETA: getLastAnnouncedETA,
+        setLastAnnouncedETA: setLastAnnouncedETA,
+        getInitialETAMovementRetries: getInitialETAMovementRetries,
+        setInitialETAMovementRetries: setInitialETAMovementRetries,
+        getInitialETAAnnouncementTimeoutId: getInitialETAAnnouncementTimeoutId,
+        setInitialETAAnnouncementTimeoutId: setInitialETAAnnouncementTimeoutId,
+        getLastNavTrafficFetchAt: getLastNavTrafficFetchAt,
+        setLastNavTrafficFetchAt: setLastNavTrafficFetchAt,
+        getEtaChangeThresholdMs: getEtaChangeThresholdMs,
+        getEtaMinIntervalMs: getEtaMinIntervalMs,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

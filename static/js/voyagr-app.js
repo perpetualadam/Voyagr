@@ -909,10 +909,10 @@ function getRerouteMapOrchestrationRuntime() {
         getAnnouncedTurnThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedTurnThresholds(),
         getAnnouncedExitThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedExitThresholds(),
         getAnnouncedKeepThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedKeepThresholds(),
-        setLastETAAnnouncementTime: (val) => { lastETAAnnouncementTime = val; },
-        setLastAnnouncedETA: (val) => { lastAnnouncedETA = val; },
+        setLastETAAnnouncementTime: (val) => VoyagrLiveDataRefreshOrchestration.setLastETAAnnouncementTime(val),
+        setLastAnnouncedETA: (val) => VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val),
         setLastDestinationAnnouncementDistance: (val) => VoyagrVoiceAnnouncementsOrchestration.setLastDestinationAnnouncementDistance(val),
-        setInitialETAMovementRetries: (val) => { initialETAMovementRetries = val; },
+        setInitialETAMovementRetries: (val) => VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val),
         setVoiceAnnouncedForManeuverIndex: (val) => VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedForManeuverIndex(val),
         setVoiceAnnouncedCategory: (val) => VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedCategory(val),
         getDeviationStartTimeCheck: () => deviationStartTimeCheck,
@@ -1379,11 +1379,11 @@ function getGpsOrchestrationRuntime() {
             case '_navTraveledMeters': return _navTraveledMeters;
             case '_navOdometerLastGeo': return _navOdometerLastGeo;
             case '_navStartedAt': return _navStartedAt;
-            case 'lastETAAnnouncementTime': return lastETAAnnouncementTime;
-            case 'lastAnnouncedETA': return lastAnnouncedETA;
-            case 'initialETAMovementRetries': return initialETAMovementRetries;
-            case 'initialETAAnnouncementTimeoutId': return initialETAAnnouncementTimeoutId;
-            case 'lastNavTrafficFetchAt': return lastNavTrafficFetchAt;
+            case 'lastETAAnnouncementTime': return VoyagrLiveDataRefreshOrchestration.getLastETAAnnouncementTime();
+            case 'lastAnnouncedETA': return VoyagrLiveDataRefreshOrchestration.getLastAnnouncedETA();
+            case 'initialETAMovementRetries': return VoyagrLiveDataRefreshOrchestration.getInitialETAMovementRetries();
+            case 'initialETAAnnouncementTimeoutId': return VoyagrLiveDataRefreshOrchestration.getInitialETAAnnouncementTimeoutId();
+            case 'lastNavTrafficFetchAt': return VoyagrLiveDataRefreshOrchestration.getLastNavTrafficFetchAt();
             case 'routeJoinConfirmedForDeviation': return routeJoinConfirmedForDeviation;
             case 'deviationStartTimeCheck': return deviationStartTimeCheck;
             case 'deviationOffRouteStreak': return deviationOffRouteStreak;
@@ -1445,11 +1445,11 @@ function getGpsOrchestrationRuntime() {
             case '_navTraveledMeters': _navTraveledMeters = val; break;
             case '_navOdometerLastGeo': _navOdometerLastGeo = val; break;
             case '_navStartedAt': _navStartedAt = val; break;
-            case 'lastETAAnnouncementTime': lastETAAnnouncementTime = val; break;
-            case 'lastAnnouncedETA': lastAnnouncedETA = val; break;
-            case 'initialETAMovementRetries': initialETAMovementRetries = val; break;
-            case 'initialETAAnnouncementTimeoutId': initialETAAnnouncementTimeoutId = val; break;
-            case 'lastNavTrafficFetchAt': lastNavTrafficFetchAt = val; break;
+            case 'lastETAAnnouncementTime': VoyagrLiveDataRefreshOrchestration.setLastETAAnnouncementTime(val); break;
+            case 'lastAnnouncedETA': VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val); break;
+            case 'initialETAMovementRetries': VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val); break;
+            case 'initialETAAnnouncementTimeoutId': VoyagrLiveDataRefreshOrchestration.setInitialETAAnnouncementTimeoutId(val); break;
+            case 'lastNavTrafficFetchAt': VoyagrLiveDataRefreshOrchestration.setLastNavTrafficFetchAt(val); break;
             case 'routeJoinConfirmedForDeviation': routeJoinConfirmedForDeviation = val; break;
             case 'deviationStartTimeCheck': deviationStartTimeCheck = val; break;
             case 'deviationOffRouteStreak': deviationOffRouteStreak = val; break;
@@ -1494,8 +1494,8 @@ function getGpsOrchestrationRuntime() {
             EXIT_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getExitAnnouncementDistances(),
             KEEP_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getKeepAnnouncementDistances(),
             DESTINATION_ANNOUNCEMENT_DISTANCES: VoyagrVoiceAnnouncementsOrchestration.getDestinationAnnouncementDistances(),
-            ETA_CHANGE_THRESHOLD_MS,
-            ETA_MIN_INTERVAL_MS,
+            ETA_CHANGE_THRESHOLD_MS: VoyagrLiveDataRefreshOrchestration.getEtaChangeThresholdMs(),
+            ETA_MIN_INTERVAL_MS: VoyagrLiveDataRefreshOrchestration.getEtaMinIntervalMs(),
             HAZARD_WARNING_DISTANCE: VoyagrVoiceAnnouncementsOrchestration.getHazardWarningDistance(),
         },
         getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
@@ -2495,15 +2495,8 @@ let _navTraveledMeters = 0;
 let _navOdometerLastGeo = null;
 let _navStartedAt = 0;
 
-// ETA announcement variables
-let lastETAAnnouncementTime = 0;
-let lastAnnouncedETA = null;
-let initialETAMovementRetries = 0;
-const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
-const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
+// ETA announcement state lives in live-data-refresh-orchestration.js.
 
-let initialETAAnnouncementTimeoutId = null;
-let lastNavTrafficFetchAt = 0;
 /** Live nav ETA + traffic snapshot (updated during navigation). */
 window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
@@ -2524,24 +2517,6 @@ function getLiveDataRefreshOrchestrationRuntime() {
         getRoutePolyline: () => routePolyline,
         getCurrentRoutingMode: () => currentRoutingMode,
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
-        g: (key) => {
-            switch (key) {
-            case 'lastETAAnnouncementTime': return lastETAAnnouncementTime;
-            case 'lastAnnouncedETA': return lastAnnouncedETA;
-            case 'initialETAMovementRetries': return initialETAMovementRetries;
-            case 'initialETAAnnouncementTimeoutId': return initialETAAnnouncementTimeoutId;
-            default: return undefined;
-            }
-        },
-        s: (key, val) => {
-            switch (key) {
-            case 'lastETAAnnouncementTime': lastETAAnnouncementTime = val; break;
-            case 'lastAnnouncedETA': lastAnnouncedETA = val; break;
-            case 'initialETAMovementRetries': initialETAMovementRetries = val; break;
-            case 'initialETAAnnouncementTimeoutId': initialETAAnnouncementTimeoutId = val; break;
-            default: break;
-            }
-        },
         call: {
             sendNotification,
             speakMessage,
@@ -2782,10 +2757,10 @@ function getNavigationLifecycleOrchestrationRuntime() {
         setNavTraveledMeters: (val) => { _navTraveledMeters = val; },
         setNavOdometerLastGeo: (val) => { _navOdometerLastGeo = val; },
         setNavStartedAt: (val) => { _navStartedAt = val; },
-        setLastETAAnnouncementTime: (val) => { lastETAAnnouncementTime = val; },
-        setLastAnnouncedETA: (val) => { lastAnnouncedETA = val; },
-        setLastNavTrafficFetchAt: (val) => { lastNavTrafficFetchAt = val; },
-        setInitialETAMovementRetries: (val) => { initialETAMovementRetries = val; },
+        setLastETAAnnouncementTime: (val) => VoyagrLiveDataRefreshOrchestration.setLastETAAnnouncementTime(val),
+        setLastAnnouncedETA: (val) => VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val),
+        setLastNavTrafficFetchAt: (val) => VoyagrLiveDataRefreshOrchestration.setLastNavTrafficFetchAt(val),
+        setInitialETAMovementRetries: (val) => VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val),
         call: {
             resetVoiceAnnouncementStateForNewRoute,
             resetVehicleMarkerDisplayState,
