@@ -7,6 +7,9 @@
 
     var runtime = null;
     var lastVoiceAnnouncementTime = 0;
+    var cachedSpeechVoices = [];
+    var pendingSpeechRetry = null;
+    var speechVoicesListenerBound = false;
 
     var announcedTurnThresholds = new Set();
     var turnAnnouncementDistances = [500, 200, 100, 50];
@@ -66,6 +69,85 @@
 
     function VA() { return rt().voiceAnnouncements(); }
     function TU() { return rt().toggleUI(); }
+    function SS() {
+        return root.VoyagrSpeechSynthesis || null;
+    }
+
+    function refreshCachedSpeechVoices() {
+        if (!('speechSynthesis' in window)) return [];
+        try {
+            cachedSpeechVoices = window.speechSynthesis.getVoices() || [];
+        } catch (e) {
+            cachedSpeechVoices = [];
+        }
+        return cachedSpeechVoices;
+    }
+
+    function resolveSpeechVoice(voices, voiceName) {
+        if (!voiceName || !Array.isArray(voices)) return null;
+        for (var i = 0; i < voices.length; i++) {
+            if (voices[i].name === voiceName) return voices[i];
+        }
+        return null;
+    }
+
+    function applySpeechSynthesisSpeakPlan(plan, priority) {
+        if (!plan || !plan.shouldSpeak || !('speechSynthesis' in window)) return false;
+
+        var voices = refreshCachedSpeechVoices();
+        if (plan.voicesWereEmpty && voices.length === 0) {
+            pendingSpeechRetry = { message: plan.utterance.text, priority: priority };
+            return false;
+        }
+
+        if (plan.shouldResume && typeof window.speechSynthesis.resume === 'function') {
+            try { window.speechSynthesis.resume(); } catch (e) { /* ignore */ }
+        }
+
+        var utterance = new SpeechSynthesisUtterance(plan.utterance.text);
+        utterance.rate = plan.utterance.rate;
+        utterance.pitch = plan.utterance.pitch;
+        utterance.volume = plan.utterance.volume;
+
+        var voice = plan.voice || resolveSpeechVoice(voices, plan.utterance.voiceName);
+        if (voice) utterance.voice = voice;
+
+        window.speechSynthesis.speak(utterance);
+        pendingSpeechRetry = null;
+        console.log(plan.logLine);
+        return true;
+    }
+
+    function initSpeechSynthesisWarmup() {
+        if (!('speechSynthesis' in window)) return;
+
+        var mod = SS();
+        var voices = refreshCachedSpeechVoices();
+        var warmup = mod
+            ? mod.buildSpeechSynthesisWarmupPlan(true, voices)
+            : { shouldWarmup: true, shouldPrimeVoices: voices.length === 0 };
+
+        if (!warmup.shouldWarmup) return;
+
+        if (warmup.shouldPrimeVoices && typeof window.speechSynthesis.resume === 'function') {
+            try { window.speechSynthesis.resume(); } catch (e) { /* ignore */ }
+        }
+
+        if (!speechVoicesListenerBound && typeof window.speechSynthesis.addEventListener === 'function') {
+            speechVoicesListenerBound = true;
+            window.speechSynthesis.addEventListener('voiceschanged', function () {
+                var previousCount = cachedSpeechVoices.length;
+                var nextVoices = refreshCachedSpeechVoices();
+                var retryPlan = mod
+                    ? mod.buildSpeechSynthesisVoicesChangedRetryPlan(previousCount, nextVoices)
+                    : { shouldRetryPending: previousCount === 0 && nextVoices.length > 0 };
+
+                if (retryPlan.shouldRetryPending && pendingSpeechRetry) {
+                    speakMessage(pendingSpeechRetry.message, pendingSpeechRetry.priority);
+                }
+            });
+        }
+    }
 
     function speakMessage(message, priority) {
         if (priority === undefined) priority = 'normal';
@@ -92,14 +174,18 @@
             return;
         }
 
-        if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(message);
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            speechSynthesis.speak(utterance);
+        var mod = SS();
+        var speakPlan = mod
+            ? mod.buildSpeechSynthesisSpeakPlan(message, {
+                voices: refreshCachedSpeechVoices(),
+                language: (typeof navigator !== 'undefined' && navigator.language) || 'en',
+            })
+            : { shouldSpeak: true, shouldResume: true, utterance: { text: message, rate: 1.0, pitch: 1.0, volume: 1.0 }, logLine: '[Voice] Speaking: "' + message + '"' };
+
+        if (!speakPlan.shouldSpeak) return;
+
+        if (applySpeechSynthesisSpeakPlan(speakPlan, priority)) {
             lastVoiceAnnouncementTime = now;
-            console.log('[Voice] Speaking: "' + message + '"');
         }
     }
 
@@ -224,6 +310,7 @@
 
     function bind(nextRuntime) {
         runtime = nextRuntime;
+        initSpeechSynthesisWarmup();
     }
 
     var api = {
