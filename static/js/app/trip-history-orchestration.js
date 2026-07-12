@@ -326,6 +326,74 @@
         }
     }
 
+    function collectAnalyticsDisplayFmt(data) {
+        return {
+            currencySymbol: rt().call.getCurrencySymbol(),
+            totalDistanceText: rt().call.convertDistance(data.total_distance_km || 0),
+            speedUnit: rt().getSpeedUnit(),
+            speedUnitLabel: rt().call.getSpeedUnitLabel(),
+            distUnit: rt().call.getDistanceUnit(),
+            escapeHtml: rt().call.escapeHtml,
+            convertDistance: rt().call.convertDistance,
+        };
+    }
+
+    function applyAnalyticsDisplayFromPlan(execute) {
+        if (!execute || !execute.shouldRender) return;
+
+        Object.entries(execute.elementPatches).forEach(([id, text]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        });
+
+        const frequentRoutesList = document.getElementById(execute.frequentRoutesListId);
+        if (frequentRoutesList) frequentRoutesList.innerHTML = execute.frequentRoutesHtml;
+    }
+
+    function applyLoadRouteAnalyticsResponseFromPlan(execute) {
+        if (!execute || !execute.shouldDisplay) {
+            if (execute && execute.statusMessage) rt().call.showStatus(execute.statusMessage, execute.statusType);
+            return;
+        }
+        displayAnalytics(execute.data);
+    }
+
+    function applyLoadRouteAnalyticsFetchErrorFromPlan(errorExecute, error) {
+        if (errorExecute && errorExecute.errorLogPrefix) {
+            console.error(errorExecute.errorLogPrefix, error);
+        }
+        if (errorExecute && errorExecute.statusMessage) {
+            rt().call.showStatus(errorExecute.statusMessage, errorExecute.statusType);
+        }
+    }
+
+    function loadRouteAnalytics() {
+        const entry = TH().buildLoadRouteAnalyticsEntryOrchestrationPlan();
+        const orch = entry.orch;
+
+        rt().call.fetchJsonWithAuth(orch.apiPath)
+            .then(({ res, data }) => {
+                applyLoadRouteAnalyticsResponseFromPlan(
+                    TH().buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch)
+                );
+            })
+            .catch((error) => {
+                applyLoadRouteAnalyticsFetchErrorFromPlan(
+                    TH().buildLoadRouteAnalyticsFetchErrorExecutePlan(orch),
+                    error
+                );
+            });
+    }
+
+    function displayAnalytics(data) {
+        applyAnalyticsDisplayFromPlan(
+            TH().buildAnalyticsDisplayEntryOrchestrationPlan(
+                data,
+                collectAnalyticsDisplayFmt(data)
+            ).execute
+        );
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
@@ -337,6 +405,8 @@
         displayTripHistory: displayTripHistory,
         recalculateTrip: recalculateTrip,
         deleteTripHistory: deleteTripHistory,
+        loadRouteAnalytics: loadRouteAnalytics,
+        displayAnalytics: displayAnalytics,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -2059,12 +2059,15 @@ function getTripHistoryOrchestrationRuntime() {
         html: () => _html(),
         getRoutePolyline: () => routePolyline,
         getCurrentRoutingMode: () => currentRoutingMode,
+        getSpeedUnit: () => speedUnit,
         call: {
             getSupabaseAccessToken,
             fetchJsonWithAuth,
             convertDistance,
             getDistanceUnit,
             getCurrencySymbol,
+            escapeHtml,
+            getSpeedUnitLabel: getSpeedUnit,
             showStatus,
             switchTab,
             calculateRoute,
@@ -2819,303 +2822,49 @@ function copyShareLink() { VoyagrRouteSharingOrchestration.copyShareLink(); }
 function downloadQRCode() { VoyagrRouteSharingOrchestration.downloadQRCode(); }
 function shareViaWhatsApp() { VoyagrRouteSharingOrchestration.shareViaWhatsApp(); }
 function shareViaEmail() { VoyagrRouteSharingOrchestration.shareViaEmail(); }
-// ===== ROUTE ANALYTICS FUNCTIONS =====
-function collectAnalyticsDisplayFmt(data) {
+// ===== ROUTE ANALYTICS ORCHESTRATION =====
+// Lives in static/js/app/trip-history-orchestration.js (bound at file end).
+
+function loadRouteAnalytics() { VoyagrTripHistoryOrchestration.loadRouteAnalytics(); }
+function displayAnalytics(data) { VoyagrTripHistoryOrchestration.displayAnalytics(data); }
+// ===== ROUTE PREFERENCES ORCHESTRATION =====
+// Orchestration lives in static/js/app/route-preferences-orchestration.js (bound at file end).
+
+function getRoutePreferencesOrchestrationRuntime() {
     return {
-        currencySymbol: getCurrencySymbol(),
-        totalDistanceText: convertDistance(data.total_distance_km || 0),
-        speedUnit: speedUnit,
-        speedUnitLabel: getSpeedUnit(),
-        distUnit: getDistanceUnit(),
-        escapeHtml: escapeHtml,
-        convertDistance: convertDistance,
+        routePrefs: () => _routePrefs(),
+        settingsSnapshot: () => _settingsSnapshot(),
+        routeSelection: () => _routeSelection(),
+        call: {
+            showStatus,
+            saveAllSettings,
+            applyDomChecksFromPlan,
+            applyDomSelectsFromPlan,
+            ensureDefaultTrafficAwareRouting,
+            calculateRoute,
+            switchTab,
+            isAvoidTollsEnabled,
+        },
     };
 }
 
-function applyAnalyticsDisplayFromPlan(execute) {
-    if (!execute || !execute.shouldRender) return;
-
-    Object.entries(execute.elementPatches).forEach(([id, text]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
-    });
-
-    const frequentRoutesList = document.getElementById(execute.frequentRoutesListId);
-    if (frequentRoutesList) frequentRoutesList.innerHTML = execute.frequentRoutesHtml;
-}
-
-function applyLoadRouteAnalyticsResponseFromPlan(execute) {
-    if (!execute || !execute.shouldDisplay) {
-        if (execute && execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
-        return;
-    }
-    displayAnalytics(execute.data);
-}
-
-function applyLoadRouteAnalyticsFetchErrorFromPlan(errorExecute, error) {
-    if (errorExecute && errorExecute.errorLogPrefix) {
-        console.error(errorExecute.errorLogPrefix, error);
-    }
-    if (errorExecute && errorExecute.statusMessage) {
-        showStatus(errorExecute.statusMessage, errorExecute.statusType);
-    }
-}
-
-/**
- * loadRouteAnalytics function
- * @function loadRouteAnalytics
- * @returns {*} Return value description
- */
-function loadRouteAnalytics() {
-    const TH = _tripHistory();
-    const entry = TH.buildLoadRouteAnalyticsEntryOrchestrationPlan();
-    const orch = entry.orch;
-
-    fetchJsonWithAuth(orch.apiPath)
-        .then(({ res, data }) => {
-            applyLoadRouteAnalyticsResponseFromPlan(
-                TH.buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch)
-            );
-        })
-        .catch((error) => {
-            applyLoadRouteAnalyticsFetchErrorFromPlan(
-                TH.buildLoadRouteAnalyticsFetchErrorExecutePlan(orch),
-                error
-            );
-        });
-}
-/**
- * displayAnalytics function
- * @function displayAnalytics
- * @param {*} data - Parameter description
- * @returns {*} Return value description
- */
-function displayAnalytics(data) {
-    applyAnalyticsDisplayFromPlan(
-        _tripHistory().buildAnalyticsDisplayEntryOrchestrationPlan(
-            data,
-            collectAnalyticsDisplayFmt(data)
-        ).execute
-    );
-}
-
-// ===== ADVANCED ROUTE PREFERENCES FUNCTIONS =====
-function collectRoutePreferencesDomInput() {
-    return {
-        avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-        preferScenic: document.getElementById('preferScenic')?.checked || false,
-        avoidTolls: isAvoidTollsEnabled(),
-        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-        preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-        avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-        routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-        maxDetour: document.getElementById('maxDetour')?.value || 20,
-    };
-}
-
-function applySaveRoutePreferencesFromPlan(execute) {
-    if (!execute || !execute.shouldSave) return;
-
-    localStorage.setItem(execute.storageKey, JSON.stringify(execute.preferences));
-    if (execute.saveAllSettings) saveAllSettings();
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-/**
- * saveRoutePreferences function
- * @function saveRoutePreferences
- * @returns {*} Return value description
- */
-function saveRoutePreferences() {
-    const RP = _routePrefs();
-    applySaveRoutePreferencesFromPlan(
-        RP.buildSaveRoutePreferencesEntryOrchestrationPlan(
-            RP.buildCollectRoutePreferencesInputPlan(collectRoutePreferencesDomInput())
-        ).execute
-    );
-}
-
-/**
- * Read route preference controls from the DOM (source of truth for save).
- * @returns {Object}
- */
+function saveRoutePreferences() { VoyagrRoutePreferencesOrchestration.saveRoutePreferences(); }
+function loadRoutePreferences() { VoyagrRoutePreferencesOrchestration.loadRoutePreferences(); }
+function getRoutePreferences() { return VoyagrRoutePreferencesOrchestration.getRoutePreferences(); }
 function collectRoutePreferencesFormState() {
-    return _routePrefs().buildRoutePreferencesFormStatePlan(
-        _routePrefs().buildCollectRoutePreferencesInputPlan(collectRoutePreferencesDomInput())
-    );
+    return VoyagrRoutePreferencesOrchestration.collectRoutePreferencesFormState();
 }
-
-function collectMultiDropDomInput() {
-    return {
-        optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
-        roundTrip: document.getElementById('roundTrip')?.checked,
-        trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
-        avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
-        avoidIncidents: document.getElementById('avoidIncidents')?.checked,
-        departureTime: document.getElementById('departureTime')?.value,
-        getStorageItem: (key) => localStorage.getItem(key),
-    };
+function collectRoutePreferencesDomInput() {
+    return VoyagrRoutePreferencesOrchestration.collectRoutePreferencesDomInput();
 }
-
-function applySaveMultiDropPreferencesFromPlan(execute) {
-    if (!execute || !execute.shouldSave) return;
-
-    Object.entries(execute.storagePatches).forEach(([key, value]) => {
-        localStorage.setItem(key, value);
-    });
-    if (execute.saveAllSettings) saveAllSettings();
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-function saveMultiDropPreferences() {
-    const SS = _settingsSnapshot();
-    applySaveMultiDropPreferencesFromPlan(
-        SS.buildSaveMultiDropPreferencesEntryOrchestrationPlan(
-            SS.buildCollectMultiDropInputPlan(collectMultiDropDomInput())
-        ).execute
-    );
-}
-
-/**
- * Read multi-drop preference controls from the DOM (source of truth for save).
- * @returns {Object}
- */
-function collectMultiDropFormState() {
-    const SS = _settingsSnapshot();
-    return SS.buildMultiDropFormStatePlan(
-        SS.buildCollectMultiDropInputPlan(collectMultiDropDomInput())
-    );
-}
-
-/**
- * Apply multi-drop preference form controls from a pure UI apply plan.
- * @param {Object} plan - from buildMultiDropPreferencesUiApplyPlan
- */
-function applyMultiDropPreferencesUiFromPlan(plan) {
-    if (!plan) return;
-
-    const domPlan = _settingsSnapshot().buildMultiDropPreferencesDomApplyPlan(plan);
-    applyDomChecksFromPlan(domPlan.checks);
-    applyDomSelectsFromPlan(domPlan.selects);
-}
-
-function loadMultiDropPreferences() {
-    const entry = _settingsSnapshot().buildLoadMultiDropPreferencesEntryOrchestrationPlan(localStorage);
-    if (!entry.execute.shouldLoad) return;
-
-    if (entry.execute.ensureDefaultTrafficAwareRouting) ensureDefaultTrafficAwareRouting();
-    applyMultiDropPreferencesUiFromPlan(entry.uiApply);
-}
-
-function clearDepartureTime() {
-    applyClearDepartureTimeFromPlan(
-        _settingsSnapshot().buildClearDepartureTimeEntryOrchestrationPlan().apply
-    );
-}
-
-/**
- * Clear departure time input and storage from a pure apply plan.
- * @param {Object} plan - from buildClearDepartureTimeApplyPlan
- */
-function applyClearDepartureTimeFromPlan(plan) {
-    if (!plan) return;
-    const el = document.getElementById(plan.elementId);
-    if (el) el.value = '';
-    if (plan.removeStorageKey) {
-        localStorage.removeItem(plan.removeStorageKey);
-    }
-    showStatus(plan.statusMessage, plan.statusType);
-}
-
-/**
- * loadRoutePreferences function
- * @function loadRoutePreferences
- * @returns {*} Return value description
- */
-function loadRoutePreferences() {
-    const entry = _routePrefs().buildLoadRoutePreferencesEntryOrchestrationPlan(localStorage);
-    if (!entry.execute.shouldLoad) return;
-    applyRoutePreferencesUiFromPlan(entry.uiApply);
-}
-
-/**
- * Apply route preference form controls from a pure UI apply plan.
- * @param {Object} plan - from buildRoutePreferencesUiApplyPlan
- */
-function applyRoutePreferencesUiFromPlan(plan) {
-    if (!plan) return;
-
-    const domPlan = _routePrefs().buildRoutePreferencesDomApplyPlan(plan);
-    applyDomChecksFromPlan(domPlan.checks);
-    applyDomSelectsFromPlan(domPlan.selects);
-    if (domPlan.detourLabel) {
-        applyDetourLabelFromPlan(domPlan.detourLabel);
-    }
-}
-
-/**
- * Apply max-detour label text from a pure apply plan (no save).
- * @param {Object} plan - from buildDetourLabelApplyPlan
- */
-function applyDetourLabelFromPlan(plan) {
-    if (!plan) return;
-    const labelEl = document.getElementById(plan.labelElementId || 'detourLabel');
-    if (labelEl && plan.text != null) {
-        labelEl.textContent = plan.text;
-    }
-}
-
-/**
- * updateDetourLabel function
- * @function updateDetourLabel
- * @returns {*} Return value description
- */
-function updateDetourLabel() {
-    const maxDetourEl = document.getElementById('maxDetour');
-    if (!maxDetourEl) return;
-
-    const entry = _routePrefs().buildUpdateDetourLabelEntryOrchestrationPlan(maxDetourEl.value);
-    applyDetourLabelFromPlan(entry.detourApply);
-    if (entry.shouldSavePreferences) saveRoutePreferences();
-}
-
-/**
- * getRoutePreferences function
- * @function getRoutePreferences
- * @returns {*} Return value description
- */
-function getRoutePreferences() {
-    return _routePrefs().getRoutePreferences(localStorage);
-}
-
-function applyRecalculateRouteWithPreferencesFromPlan(execute) {
-    if (!execute || !execute.shouldRecalculate) {
-        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
-        return;
-    }
-
-    if (execute.saveRoutePreferences) saveRoutePreferences();
-    showStatus(execute.loadingStatusMessage, 'loading');
-    switchTab(execute.switchTab);
-
-    setTimeout(() => {
-        calculateRoute();
-    }, execute.recalculateDelayMs);
-}
-
-/**
- * recalculateRouteWithPreferences function
- * @function recalculateRouteWithPreferences
- * @returns {*} Return value description
- */
+function updateDetourLabel() { VoyagrRoutePreferencesOrchestration.updateDetourLabel(); }
 function recalculateRouteWithPreferences() {
-    applyRecalculateRouteWithPreferencesFromPlan(
-        _routeSelection().buildRecalculateRouteWithPreferencesEntryOrchestrationPlan(
-            window.lastCalculatedRoute
-        ).execute
-    );
+    VoyagrRoutePreferencesOrchestration.recalculateRouteWithPreferences();
 }
-
+function saveMultiDropPreferences() { VoyagrRoutePreferencesOrchestration.saveMultiDropPreferences(); }
+function loadMultiDropPreferences() { VoyagrRoutePreferencesOrchestration.loadMultiDropPreferences(); }
+function clearDepartureTime() { VoyagrRoutePreferencesOrchestration.clearDepartureTime(); }
+function collectMultiDropFormState() { VoyagrRoutePreferencesOrchestration.collectMultiDropFormState(); }
 // ===== ROUTE SAVING ORCHESTRATION =====
 // Orchestration lives in static/js/app/route-saving-orchestration.js (bound at file end).
 
@@ -9697,11 +9446,6 @@ function updateJourneySummaryBar() {
     console.log(`[Journey Summary] Distance: ${plan.distanceText}, Time: ${plan.timeText}, ETA: ${plan.etaText}`);
 }
 
-// ===== NOTIFICATIONS SYSTEM =====
-let notificationQueue = [];
-let lastNotificationTime = 0;
-const NOTIFICATION_THROTTLE_MS = 3000; // Prevent notification spam
-
 // ===== PWA AUTO-RELOAD SYSTEM (PHASE 2) =====
 let updatePending = false;
 let appStateBeforeReload = null;
@@ -12032,283 +11776,46 @@ function applyBestDepartureTime(timeStr) {
 }
 
 
-// ===== NOTIFICATIONS SYSTEM FUNCTIONS =====
-/**
- * sendNotification function
- * @function sendNotification
- * @param {*} title - Parameter description
- * @param {*} message - Parameter description
- * @param {*} type - Parameter description
- * @returns {*} Return value description
- */
-function sendNotification(title, message, type = 'info') {
-    // Throttle notifications to prevent spam
-    const now = Date.now();
-    if (now - lastNotificationTime < NOTIFICATION_THROTTLE_MS) {
-        return;
-    }
-    lastNotificationTime = now;
+// ===== NOTIFICATIONS ORCHESTRATION =====
+// Orchestration lives in static/js/app/notifications-orchestration.js (bound at file end).
 
-    // Send browser push notification if permission granted
-    if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-            const notification = new Notification(title, {
-                body: message,
-                icon: '/favicon.ico',
-                badge: '/favicon.ico',
-                tag: type,
-                requireInteraction: type === 'warning' || type === 'error'
-            });
-
-            // Auto-close after 5 seconds (unless warning/error)
-            if (type !== 'warning' && type !== 'error') {
-                setTimeout(() => notification.close(), 5000);
-            }
-
-            notification.onclick = () => {
-                window.focus();
-                notification.close();
-            };
-        } catch (e) {
-            console.log('Notification error:', e);
-        }
-    }
-
-    // Also show in-app notification
-    showInAppNotification(title, message, type);
-}
-/**
- * showInAppNotification function
- * @function showInAppNotification
- * @param {*} title - Parameter description
- * @param {*} message - Parameter description
- * @param {*} type - Parameter description
- * @returns {*} Return value description
- */
-function showInAppNotification(title, message, type = 'info', durationMs = 5000) {
-    const notifContainer = document.getElementById('notificationContainer');
-    if (!notifContainer) {
-        console.log('Notification container not found');
-        return;
-    }
-
-    const notif = document.createElement('div');
-    notif.className = `in-app-notification notification-${type}`;
-    notif.innerHTML = _deviceEnvironment().buildInAppNotificationHtml(title, message);
-
-    notifContainer.appendChild(notif);
-
-    const ttl = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 5000;
-    setTimeout(() => {
-        if (notif.parentElement) {
-            notif.remove();
-        }
-    }, ttl);
+function getNotificationsOrchestrationRuntime() {
+    return {
+        deviceEnvironment: () => _deviceEnvironment(),
+        getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
+        getRouteInProgress: () => routeInProgress,
+        getNavigationArrivalTriggered: () => _navigationArrivalTriggered,
+        s: (key, val) => {
+            if (key === 'navigationArrivalTriggered') _navigationArrivalTriggered = val;
+        },
+        call: {
+            speakMessage,
+            stopTurnByTurnNavigation,
+        },
+    };
 }
 
-/** Min interval between same-class environment hints (offline / GPS / volume). */
-const _envHintLast = { offline: 0, online: 0, gps: 0, volume: 0 };
-
-/**
- * In-app (+ system notification if permitted) for connectivity / GPS / volume reminders.
- * Uses its own throttle so it is not blocked by generic sendNotification throttling.
- * @param {'offline'|'online'|'gps'|'volume'} channel
- */
-function sendEnvironmentHint(channel, title, message, type = 'warning') {
-    const DE = _deviceEnvironment();
-    const now = Date.now();
-    if (now - (_envHintLast[channel] || 0) < DE.ENV_HINT_MIN_MS) return;
-    _envHintLast[channel] = now;
-
-    showInAppNotification(title, message, type);
-
-    if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-            new Notification(title, {
-                body: message,
-                icon: '/favicon.ico',
-                badge: '/favicon.ico',
-                tag: `voyagr-env-${channel}`,
-                requireInteraction: type === 'warning' || type === 'error'
-            });
-        } catch (e) {
-            console.log('[EnvHint] Notification API:', e);
-        }
-    }
+function sendNotification(title, message, type) {
+    return VoyagrNotificationsOrchestration.sendNotification(title, message, type);
 }
-
-/**
- * Offline/online, GPS permission, and (when starting nav) volume reminders.
- * System volume cannot be read in a browser; we remind when voice guidance is on.
- */
+function showInAppNotification(title, message, type, durationMs) {
+    return VoyagrNotificationsOrchestration.showInAppNotification(title, message, type, durationMs);
+}
+function sendEnvironmentHint(channel, title, message, type) {
+    return VoyagrNotificationsOrchestration.sendEnvironmentHint(channel, title, message, type);
+}
 function initDeviceEnvironmentNotifications() {
-    try {
-        const DE = _deviceEnvironment();
-        const hints = DE.ENV_HINT_MESSAGES;
-        const listeners = DE.buildInitDeviceEnvironmentListenersPlan({
-            connectivityHandledElsewhere: true,
-            initiallyOffline: typeof navigator !== 'undefined' && !navigator.onLine,
-        });
-
-        const notifyOffline = () =>
-            sendEnvironmentHint(listeners.offlineChannel, hints.offline.title, hints.offline.message, hints.offline.type);
-        const notifyOnline = () =>
-            sendEnvironmentHint(listeners.onlineChannel, hints.online.title, hints.online.message, hints.online.type);
-
-        if (listeners.notifyInitialOffline) {
-            notifyOffline();
-        }
-
-        if (listeners.registerConnectivityListeners) {
-            window.addEventListener('offline', notifyOffline);
-            window.addEventListener('online', notifyOnline);
-        }
-
-        if (listeners.registerGpsPermissionListener && navigator.permissions && typeof navigator.permissions.query === 'function') {
-            try {
-                navigator.permissions
-                    .query({ name: 'geolocation' })
-                    .then((status) => {
-                        const onChange = () => {
-                            if (status.state === 'denied') {
-                                sendEnvironmentHint(
-                                    'gps',
-                                    hints.gps.title,
-                                    hints.gps.message,
-                                    hints.gps.type
-                                );
-                            }
-                        };
-                        onChange();
-                        status.addEventListener('change', onChange);
-                    })
-                    .catch(() => {
-                        /* Safari / older browsers: no Permissions API for geolocation */
-                    });
-            } catch (e) {
-                console.log('[EnvHint] permissions.query not available:', e);
-            }
-        }
-    } catch (e) {
-        console.warn('[EnvHint] initDeviceEnvironmentNotifications:', e);
-    }
+    VoyagrNotificationsOrchestration.initDeviceEnvironmentNotifications();
 }
-
-/**
- * Volume reminder: textual (fixed banner + top-right toast) + optional spoken line if voice is on.
- * Does not use #status — wake lock and other code overwrite that element.
- */
 function showVolumeHintForNavigation() {
-    const DE = _deviceEnvironment();
-    const execute = DE.buildShowVolumeHintExecutePlan({
-        voiceAnnouncementsEnabled: typeof voiceAnnouncementsEnabled !== 'undefined'
-            && voiceAnnouncementsEnabled,
-    });
-    if (!execute.shouldShow) return;
-
-    if (execute.speakIfVoiceEnabled) {
-        try {
-            speakMessage(execute.spokenLine, execute.spokenPriority);
-        } catch (e) {
-            console.log('[EnvHint] volume TTS:', e);
-        }
-    }
-
-    let chip = document.getElementById(execute.bannerId);
-    if (chip) chip.remove();
-    chip = document.createElement('div');
-    chip.id = execute.bannerId;
-    chip.setAttribute('role', 'status');
-    chip.style.cssText = execute.bannerStyleCssText;
-    chip.innerHTML = execute.bannerHtml;
-    document.body.appendChild(chip);
-    const dismiss = chip.querySelector('#' + execute.dismissButtonId);
-    if (dismiss) dismiss.onclick = () => chip.remove();
-    const ok = chip.querySelector('#' + execute.okButtonId);
-    if (ok) ok.onclick = () => chip.remove();
-
-    setTimeout(() => {
-        const el = document.getElementById(execute.bannerId);
-        if (el) el.remove();
-    }, execute.autoDismissMs);
-
-    if (execute.showNotification && 'Notification' in window && Notification.permission === 'granted') {
-        try {
-            new Notification(execute.notificationTitle, {
-                body: execute.notificationBody,
-                icon: execute.notificationIcon,
-                tag: execute.notificationTag,
-                silent: execute.notificationSilent,
-            });
-        } catch (e) {
-            console.log('[EnvHint] volume Notification:', e);
-        }
-    }
+    VoyagrNotificationsOrchestration.showVolumeHintForNavigation();
 }
-
-/**
- * speakMessage function
- * @function speakMessage
- * @param {*} message - Parameter description
- * @returns {*} Return value description
- */
-function speakMessage(message, priority = 'normal') {
-    const now = Date.now();
-    const timeSinceLastAnnouncement = now - lastVoiceAnnouncementTime;
-    const throttle = _voiceAnnouncements().VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode] || VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS;
-
-    if (voiceFrequencyMode === 'minimal' && priority !== 'high') {
-        console.log(`[Voice] Skipped (minimal mode): "${message}"`);
-        return;
-    }
-    if (voiceFrequencyMode === 'important' && priority !== 'high' && priority !== 'normal') {
-        console.log(`[Voice] Skipped (important-only mode): "${message}"`);
-        return;
-    }
-
-    if (priority !== 'high' && timeSinceLastAnnouncement < throttle) {
-        console.log(`[Voice] Throttled: "${message}" (${timeSinceLastAnnouncement}ms since last, throttle=${throttle}ms)`);
-        return;
-    }
-
-    if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(message);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        speechSynthesis.speak(utterance);
-        lastVoiceAnnouncementTime = now;
-        console.log(`[Voice] Speaking: "${message}"`);
-    }
-}
-/**
- * sendETANotification function
- * @function sendETANotification
- * @param {*} eta - Parameter description
- * @param {*} distance - Parameter description
- * @returns {*} Return value description
- */
 function sendETANotification(eta, distance) {
-    const etaTime = new Date(eta);
-    const timeStr = etaTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    sendNotification('ETA Update', `Arriving at ${timeStr} (${distance} remaining)`, 'info');
+    VoyagrNotificationsOrchestration.sendETANotification(eta, distance);
 }
-
-/**
- * sendArrivalNotification function
- * @function sendArrivalNotification
- * @returns {*} Return value description
- */
 function sendArrivalNotification() {
-    if (!routeInProgress || _navigationArrivalTriggered) {
-        return;
-    }
-    _navigationArrivalTriggered = true;
-    sendNotification('🎉 Destination Reached', 'You have arrived at your destination', 'success');
-    speakMessage('You have arrived at your destination');
-    stopTurnByTurnNavigation();
+    VoyagrNotificationsOrchestration.sendArrivalNotification();
 }
-
 // ===== PREFERENCE FUNCTIONS =====
 /**
  * togglePreference function
@@ -13041,6 +12548,9 @@ VoyagrGeocodingOrchestration.bind(getGeocodingOrchestrationRuntime());
 VoyagrSpeedWidgetOrchestration.bind(getSpeedWidgetOrchestrationRuntime());
 VoyagrWaypointsOrchestration.bind(getWaypointsOrchestrationRuntime());
 VoyagrRouteSharingOrchestration.bind(getRouteSharingOrchestrationRuntime());
+VoyagrNotificationsOrchestration.bind(getNotificationsOrchestrationRuntime());
+VoyagrRoutePreferencesOrchestration.bind(getRoutePreferencesOrchestrationRuntime());
+
 
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
