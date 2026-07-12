@@ -16,6 +16,61 @@
 
     function U() { return rt().units(); }
     function SG() { return rt().speedGps(); }
+    function SLW() { return rt().speedLimitWidget(); }
+
+    function updateAllDistanceDisplays() {
+        const mainEl = document.getElementById('distance');
+        const previewEl = document.getElementById('previewDistance');
+        const execute = U().buildUpdateAllDistanceDisplaysExecutePlan({
+            distanceUnit: rt().getDistanceUnit(),
+            mainDistanceKm: mainEl && mainEl.dataset.km,
+            previewDistanceKm: previewEl && previewEl.dataset.km,
+        });
+        if (!execute.shouldUpdate) return;
+
+        execute.elementPatches.forEach(({ id, text }) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        });
+    }
+
+    function updateAllCostDisplays() {
+        const fuelCostEl = document.getElementById('fuelCost');
+        const tollCostEl = document.getElementById('tollCost');
+        const cazCostEl = document.getElementById('cazCost');
+        const execute = U().buildUpdateAllCostDisplaysExecutePlan({
+            currencySymbol: getCurrencySymbol(),
+            fuelCost: fuelCostEl && fuelCostEl.dataset.value,
+            tollCost: tollCostEl && tollCostEl.dataset.value,
+            cazCost: cazCostEl && cazCostEl.dataset.value,
+        });
+        if (!execute.shouldUpdate) return;
+
+        execute.elementPatches.forEach(({ id, text }) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        });
+    }
+
+    function updateAllSpeedDisplays() {
+        const execute = SLW().buildUpdateAllSpeedDisplaysExecutePlan({
+            apiSpeedLimitMph: rt().getCurrentSpeedLimitMph(),
+            valhallaSpeedLimitMph: null,
+            roadType: rt().getLastDetectedRoadType() || rt().call.getCurrentRoadType(undefined, rt().getCurrentGpsSpeedMph()),
+            region: rt().getLastSpeedLimitRegion(),
+            gpsSpeedMph: rt().getCurrentGpsSpeedMph(),
+            speedUnit: rt().getSpeedUnit(),
+        });
+        if (execute.shouldUpdateWidget) {
+            rt().call.updateSpeedWidget(execute.gpsSpeedMph, execute.shownLimitMph);
+        }
+        if (execute.shouldLog) console.log(execute.logMessage);
+    }
+
+    function updateAllTemperatureDisplays() {
+        const execute = U().buildUpdateAllTemperatureDisplaysExecutePlan(rt().getTemperatureUnit());
+        if (execute.shouldLog) console.log(execute.logMessage);
+    }
 
     function convertDistance(km) {
         return U().convertDistance(km, rt().getDistanceUnit());
@@ -87,7 +142,7 @@
         rt().setDistanceUnit(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
-        if (execute.updateDisplays) rt().call.updateAllDistanceDisplays();
+        if (execute.updateDisplays) updateAllDistanceDisplays();
         if (execute.saveSettings) rt().call.saveAllSettings();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
     }
@@ -101,7 +156,7 @@
         rt().setCurrencyUnit(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
-        if (execute.updateDisplays) rt().call.updateAllCostDisplays();
+        if (execute.updateDisplays) updateAllCostDisplays();
         if (execute.saveSettings) rt().call.saveAllSettings();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
     }
@@ -115,7 +170,7 @@
         rt().setSpeedUnit(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
-        if (execute.updateDisplays) rt().call.updateAllSpeedDisplays();
+        if (execute.updateDisplays) updateAllSpeedDisplays();
         if (execute.saveSettings) rt().call.saveAllSettings();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
     }
@@ -129,7 +184,7 @@
         rt().setTemperatureUnit(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
-        if (execute.updateDisplays) rt().call.updateAllTemperatureDisplays();
+        if (execute.updateDisplays) updateAllTemperatureDisplays();
         if (execute.saveSettings) rt().call.saveAllSettings();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
     }
@@ -155,6 +210,10 @@
         updateCurrencyUnit: updateCurrencyUnit,
         updateSpeedUnit: updateSpeedUnit,
         updateTemperatureUnit: updateTemperatureUnit,
+        updateAllDistanceDisplays: updateAllDistanceDisplays,
+        updateAllCostDisplays: updateAllCostDisplays,
+        updateAllSpeedDisplays: updateAllSpeedDisplays,
+        updateAllTemperatureDisplays: updateAllTemperatureDisplays,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

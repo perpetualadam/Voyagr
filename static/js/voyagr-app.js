@@ -209,6 +209,7 @@ function getUnitsPreferencesOrchestrationRuntime() {
     return {
         units: () => _units(),
         speedGps: () => _speedGps(),
+        speedLimitWidget: () => _speedLimitWidget(),
         getDistanceUnit: () => distanceUnit,
         setDistanceUnit: (val) => { distanceUnit = val; },
         getCurrencyUnit: () => currencyUnit,
@@ -217,13 +218,15 @@ function getUnitsPreferencesOrchestrationRuntime() {
         setSpeedUnit: (val) => { speedUnit = val; },
         getTemperatureUnit: () => temperatureUnit,
         setTemperatureUnit: (val) => { temperatureUnit = val; },
+        getCurrentSpeedLimitMph: () => currentSpeedLimitMph,
+        getLastDetectedRoadType: () => lastDetectedRoadType,
+        getLastSpeedLimitRegion: () => lastSpeedLimitRegion,
+        getCurrentGpsSpeedMph: () => currentGpsSpeedMph,
         call: {
-            updateAllDistanceDisplays,
-            updateAllCostDisplays,
-            updateAllSpeedDisplays,
-            updateAllTemperatureDisplays,
             saveAllSettings,
             showStatus,
+            updateSpeedWidget,
+            getCurrentRoadType,
         },
     };
 }
@@ -233,6 +236,10 @@ function updateCurrencyUnit() { VoyagrUnitsPreferencesOrchestration.updateCurren
 function updateSpeedUnit() { VoyagrUnitsPreferencesOrchestration.updateSpeedUnit(); }
 function updateTemperatureUnit() { VoyagrUnitsPreferencesOrchestration.updateTemperatureUnit(); }
 function saveUnitSettingsToBackend() { VoyagrUnitsPreferencesOrchestration.saveUnitSettingsToBackend(); }
+function updateAllDistanceDisplays() { VoyagrUnitsPreferencesOrchestration.updateAllDistanceDisplays(); }
+function updateAllCostDisplays() { VoyagrUnitsPreferencesOrchestration.updateAllCostDisplays(); }
+function updateAllSpeedDisplays() { VoyagrUnitsPreferencesOrchestration.updateAllSpeedDisplays(); }
+function updateAllTemperatureDisplays() { VoyagrUnitsPreferencesOrchestration.updateAllTemperatureDisplays(); }
 
 // ===== COMPREHENSIVE PERSISTENT SETTINGS SYSTEM =====
 
@@ -431,83 +438,6 @@ function exportSettings() { VoyagrSettingsOrchestration.exportSettings(); }
 function importSettings() { VoyagrSettingsOrchestration.importSettings(); }
 
 // Update all distance displays
-/**
- * updateAllDistanceDisplays function
- * @function updateAllDistanceDisplays
- * @returns {*} Return value description
- */
-function updateAllDistanceDisplays() {
-    const mainEl = document.getElementById('distance');
-    const previewEl = document.getElementById('previewDistance');
-    const execute = _units().buildUpdateAllDistanceDisplaysExecutePlan({
-        distanceUnit,
-        mainDistanceKm: mainEl?.dataset.km,
-        previewDistanceKm: previewEl?.dataset.km,
-    });
-    if (!execute.shouldUpdate) return;
-
-    execute.elementPatches.forEach(({ id, text }) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
-    });
-}
-
-// Update all cost displays
-/**
- * updateAllCostDisplays function
- * @function updateAllCostDisplays
- * @returns {*} Return value description
- */
-function updateAllCostDisplays() {
-    const fuelCostEl = document.getElementById('fuelCost');
-    const tollCostEl = document.getElementById('tollCost');
-    const cazCostEl = document.getElementById('cazCost');
-    const execute = _units().buildUpdateAllCostDisplaysExecutePlan({
-        currencySymbol: getCurrencySymbol(),
-        fuelCost: fuelCostEl?.dataset.value,
-        tollCost: tollCostEl?.dataset.value,
-        cazCost: cazCostEl?.dataset.value,
-    });
-    if (!execute.shouldUpdate) return;
-
-    execute.elementPatches.forEach(({ id, text }) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
-    });
-}
-
-// Update all speed displays
-/**
- * updateAllSpeedDisplays function
- * @function updateAllSpeedDisplays
- * @returns {*} Return value description
- */
-function updateAllSpeedDisplays() {
-    const execute = _speedLimitWidget().buildUpdateAllSpeedDisplaysExecutePlan({
-        apiSpeedLimitMph: currentSpeedLimitMph,
-        valhallaSpeedLimitMph: null,
-        roadType: lastDetectedRoadType || getCurrentRoadType(undefined, currentGpsSpeedMph),
-        region: lastSpeedLimitRegion,
-        gpsSpeedMph: currentGpsSpeedMph,
-        speedUnit,
-    });
-    if (execute.shouldUpdateWidget) {
-        updateSpeedWidget(execute.gpsSpeedMph, execute.shownLimitMph);
-    }
-    if (execute.shouldLog) console.log(execute.logMessage);
-}
-
-// Update all temperature displays
-/**
- * updateAllTemperatureDisplays function
- * @function updateAllTemperatureDisplays
- * @returns {*} Return value description
- */
-function updateAllTemperatureDisplays() {
-    const execute = _units().buildUpdateAllTemperatureDisplaysExecutePlan(temperatureUnit);
-    if (execute.shouldLog) console.log(execute.logMessage);
-}
-
 // ===== TRIP HISTORY ORCHESTRATION =====
 // Orchestration lives in static/js/app/trip-history-orchestration.js (bound at file end).
 
