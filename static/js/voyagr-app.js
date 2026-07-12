@@ -9741,66 +9741,27 @@ window.toggleHazardPreferenceApi = toggleHazardPreferenceApi;
 window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
 
 // ===== PREFERENCE FUNCTIONS =====
+function getLegacyPreferencesOrchestrationRuntime() {
+    return {
+        routePrefs: () => _routePrefs(),
+        toggleUI: () => _toggleUI(),
+        gestureControl: () => _gestureControl(),
+        legacyPrefsRestore: () => _legacyPrefsRestore(),
+        batterySaving: () => _batterySaving(),
+        setGestureEnabled: (val) => { gestureEnabled = val; },
+        setAutoGpsEnabled: (val) => { autoGpsEnabled = val; },
+        call: {
+            loadHazardCameraTogglesFromApi,
+            handleDeviceMotion,
+            startAutoGpsLocation,
+            applyBatterySavingModeFromPlan,
+            applySpeedWidgetToggleUi,
+        },
+    };
+}
+
 function loadPreferences() {
-    const RP = _routePrefs();
-    const TU = _toggleUI();
-    const GC = _gestureControl();
-    const LPR = _legacyPrefsRestore();
-    const BS = _batterySaving();
-    const orch = LPR.buildLoadLegacyPreferencesOrchestrationPlan();
-
-    if (orch.applyRouteAvoidanceToggles) {
-        RP.buildRouteAvoidanceTogglesApplyPlan(localStorage).forEach((item) => {
-            const button = document.getElementById(item.buttonId);
-
-            if (button) {
-                TU.applyLabeledToggleButton(button, item.enabled);
-                console.log('[Settings] Loaded preference:', item.pref, '=', item.enabled ? 'enabled' : 'disabled',
-                    item.usesDefault ? '(default)' : '');
-            } else {
-                console.warn('[Settings] Button not found for preference:', item.pref, 'ID:', item.buttonId);
-            }
-        });
-    }
-
-    if (orch.loadHazardCameraTogglesFromApi) loadHazardCameraTogglesFromApi();
-
-    const gestureRestore = LPR.buildRestoreGesturePreferencePlan({
-        savedValue: localStorage.getItem(GC.GESTURE_ENABLED_STORAGE_KEY),
-        hasDeviceMotion: 'DeviceMotionEvent' in window,
-    });
-    if (gestureRestore.shouldRestore) {
-        gestureEnabled = gestureRestore.gestureEnabled;
-        const gestureButton = document.getElementById(gestureRestore.toggle.id);
-        if (gestureButton) TU.applyToggleButton(gestureButton, gestureRestore.toggle.enabled);
-        const gestureSettings = document.getElementById(gestureRestore.settingsPanel.id);
-        if (gestureSettings) gestureSettings.style.display = gestureRestore.settingsPanel.display;
-        if (gestureRestore.addDeviceMotionListener) {
-            window.addEventListener('devicemotion', handleDeviceMotion);
-        }
-    }
-
-    const autoGpsRestore = LPR.buildRestoreAutoGpsPreferencePlan({
-        savedValue: localStorage.getItem(LPR.AUTO_GPS_STORAGE_KEY),
-    });
-    if (autoGpsRestore.shouldRestore) {
-        const autoGpsToggle = document.getElementById(autoGpsRestore.toggle.id);
-        if (autoGpsToggle) {
-            autoGpsToggle.checked = autoGpsRestore.toggle.checked;
-            autoGpsEnabled = autoGpsRestore.autoGpsEnabled;
-            if (autoGpsRestore.startAutoGpsLocation) startAutoGpsLocation();
-            console.log(autoGpsRestore.restoreLogMessage);
-        }
-    }
-
-    const batteryRestore = BS.buildRestoreBatterySavingUiPlan({
-        savedValue: localStorage.getItem(BS.BATTERY_SAVING_STORAGE_KEY),
-    });
-    if (batteryRestore.shouldApply) {
-        applyBatterySavingModeFromPlan(batteryRestore);
-    }
-
-    if (orch.applySpeedWidgetToggleUi) applySpeedWidgetToggleUi();
+    VoyagrLegacyPreferencesOrchestration.loadPreferences();
 }
 
 // Update trip info display
@@ -9948,6 +9909,7 @@ VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
+VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
