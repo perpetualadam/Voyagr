@@ -550,6 +550,15 @@ describe('voice preferences plans', () => {
         expect(VA.buildLoadVoicePreferencesDefaultsExecutePlan().useDefaults).toBe(true);
     });
 
+    test('buildCollectVoicePreferencesDomInputPlan passes through DOM reads', () => {
+        const input = VA.buildCollectVoicePreferencesDomInputPlan({
+            turnDistance1: '400',
+            hazardDistance: '600',
+        });
+        expect(input.turnDistance1).toBe('400');
+        expect(input.hazardDistance).toBe('600');
+    });
+
     test('voice preferences entry orchestration plans bundle execute plans', () => {
         const prefs = {
             turnDistance1: 400,
