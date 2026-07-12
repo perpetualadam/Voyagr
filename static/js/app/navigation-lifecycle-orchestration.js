@@ -13,6 +13,7 @@
     var currentStepIndex = 0;
     var nextManeuverDistance = 0;
     var routePolyline = null;
+    var lastSnappedRouteIndex = 0;
 
     var lastTurnDetectRouteVertexIndex = 0;
     var navigationArrivalTriggered = false;
@@ -33,6 +34,8 @@
     function setNextManeuverDistance(val) { nextManeuverDistance = val; }
     function getRoutePolyline() { return routePolyline; }
     function setRoutePolyline(val) { routePolyline = val; }
+    function getLastSnappedRouteIndex() { return lastSnappedRouteIndex; }
+    function setLastSnappedRouteIndex(val) { lastSnappedRouteIndex = val; }
 
     function getLastTurnDetectRouteVertexIndex() { return lastTurnDetectRouteVertexIndex; }
     function setLastTurnDetectRouteVertexIndex(val) { lastTurnDetectRouteVertexIndex = val; }
@@ -126,7 +129,7 @@
             if (execute.primeVehicleWhenPositionKnown && rt().getCurrentLat() != null && rt().getCurrentLon() != null) {
                 rt().call.primeVehicleMarkerOnRoute(rt().getCurrentLat(), rt().getCurrentLon());
             } else if (execute.resetSnappedIndexWhenNoPosition) {
-                rt().setLastSnappedRouteIndex(0);
+                setLastSnappedRouteIndex(0);
             }
             return true;
         } catch (e) {
@@ -491,6 +494,8 @@
         setNextManeuverDistance: setNextManeuverDistance,
         getRoutePolyline: getRoutePolyline,
         setRoutePolyline: setRoutePolyline,
+        getLastSnappedRouteIndex: getLastSnappedRouteIndex,
+        setLastSnappedRouteIndex: setLastSnappedRouteIndex,
         getLastTurnDetectRouteVertexIndex: getLastTurnDetectRouteVertexIndex,
         setLastTurnDetectRouteVertexIndex: setLastTurnDetectRouteVertexIndex,
         getNavigationArrivalTriggered: getNavigationArrivalTriggered,
