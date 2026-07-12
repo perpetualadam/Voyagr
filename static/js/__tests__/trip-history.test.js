@@ -377,4 +377,25 @@ describe('analytics display helpers', () => {
         expect(dom.listContainerId).toBe('tripHistoryList');
         expect(dom.listInnerHtml).toContain('Error loading trips');
     });
+
+    test('buildLoadTripHistoryEntryOrchestrationPlan and fetch error execute plan', () => {
+        const entry = T.buildLoadTripHistoryEntryOrchestrationPlan();
+        expect(entry.orch.apiPath).toBe('/api/trip-history');
+
+        const fetchErr = T.buildLoadTripHistoryFetchErrorExecutePlan(entry.orch);
+        expect(fetchErr.errorLogPrefix).toBe(entry.orch.errorLogPrefix);
+        expect(fetchErr.errorEntry.dom.shouldApply).toBe(true);
+        expect(fetchErr.errorEntry.dom.listInnerHtml).toContain('Error loading trips');
+    });
+
+    test('buildDisplayTripHistoryEntryOrchestrationPlan bundles execute plan', () => {
+        const entry = T.buildDisplayTripHistoryEntryOrchestrationPlan([], {
+            escapeHtml: (s) => s,
+            convertDistance: (km) => String(km),
+            distUnit: 'mi',
+            currencySymbol: '£',
+        });
+        expect(entry.execute.shouldRender).toBe(true);
+        expect(entry.execute.listInnerHtml).toBe(T.EMPTY_TRIP_LIST_HTML);
+    });
 });

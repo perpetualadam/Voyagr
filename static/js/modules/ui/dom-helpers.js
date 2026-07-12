@@ -366,6 +366,48 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for bottom sheet drag visual feedback.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBottomSheetDragVisualEntryOrchestrationPlan(input) {
+        return {
+            feedback: buildBottomSheetDragVisualFeedbackPlan(input),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for finishing a bottom sheet drag gesture.
+     * @param {number} diff
+     * @param {boolean} isExpanded
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildBottomSheetDragFinishEntryOrchestrationPlan(diff, isExpanded, opts) {
+        opts = opts || {};
+        var snap = buildBottomSheetDragSnapPlan(diff, isExpanded, opts.thresholdPx);
+        return {
+            snap: snap,
+            clearInlineStyles: ['transition', 'transform'],
+            shouldCollapse: snap.action === 'collapse',
+            shouldExpand: snap.action === 'expand',
+            collapseLogMessage: snap.action === 'collapse' ? opts.collapseSwipeLogMessage : null,
+            expandLogMessage: snap.action === 'expand' ? opts.expandSwipeLogMessage : null,
+        };
+    }
+
+    /**
+     * Execute plan for starting a bottom sheet drag gesture.
+     * @returns {Object}
+     */
+    function buildBottomSheetDragStartExecutePlan() {
+        return {
+            shouldDisableTransition: true,
+            transitionValue: 'none',
+        };
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -391,6 +433,9 @@
         buildExpandBottomSheetEntryOrchestrationPlan: buildExpandBottomSheetEntryOrchestrationPlan,
         buildCollapseBottomSheetEntryOrchestrationPlan: buildCollapseBottomSheetEntryOrchestrationPlan,
         buildToggleBottomSheetEntryOrchestrationPlan: buildToggleBottomSheetEntryOrchestrationPlan,
+        buildBottomSheetDragVisualEntryOrchestrationPlan: buildBottomSheetDragVisualEntryOrchestrationPlan,
+        buildBottomSheetDragFinishEntryOrchestrationPlan: buildBottomSheetDragFinishEntryOrchestrationPlan,
+        buildBottomSheetDragStartExecutePlan: buildBottomSheetDragStartExecutePlan,
         buildCollapseBottomSheetForRoutePreviewExecutePlan: buildCollapseBottomSheetForRoutePreviewExecutePlan,
         buildCollapseBottomSheetForRoutePreviewApplyPlan: buildCollapseBottomSheetForRoutePreviewApplyPlan,
         buildCollapseBottomSheetForRoutePreviewOrchestrationPlan:

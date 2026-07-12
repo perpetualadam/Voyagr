@@ -336,6 +336,55 @@
     }
 
     /**
+     * Entry orchestration plan for loadTripHistory handler.
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryEntryOrchestrationPlan() {
+        return {
+            orch: buildLoadTripHistoryOrchestrationPlan(),
+        };
+    }
+
+    /**
+     * Execute plan when trip-history fetch fails.
+     * @param {Object} [orch] - from buildLoadTripHistoryOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryFetchErrorExecutePlan(orch) {
+        orch = orch || buildLoadTripHistoryOrchestrationPlan();
+        return {
+            errorLogPrefix: orch.errorLogPrefix,
+            errorEntry: buildLoadTripHistoryErrorEntryOrchestrationPlan(orch),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for trip-history load error handling.
+     * @param {Object} [orch]
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryErrorEntryOrchestrationPlan(orch) {
+        orch = orch || buildLoadTripHistoryOrchestrationPlan();
+        var execute = buildLoadTripHistoryErrorExecutePlan();
+        return {
+            execute: execute,
+            dom: buildLoadTripHistoryErrorDomExecutePlan(execute, orch),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for displayTripHistory handler.
+     * @param {Array<Object>} trips
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildDisplayTripHistoryEntryOrchestrationPlan(trips, fmt) {
+        return {
+            execute: buildDisplayTripHistoryExecutePlan(buildDisplayTripHistoryInputPlan(trips, fmt)),
+        };
+    }
+
+    /**
      * Input assembly for rendering the trip history list.
      * @param {Array<Object>} trips
      * @param {Object} fmt
@@ -839,8 +888,12 @@
         buildLoadTripHistoryErrorDomExecutePlan: buildLoadTripHistoryErrorDomExecutePlan,
         buildLoadTripHistoryResponseExecutePlan: buildLoadTripHistoryResponseExecutePlan,
         buildLoadTripHistoryErrorExecutePlan: buildLoadTripHistoryErrorExecutePlan,
+        buildLoadTripHistoryEntryOrchestrationPlan: buildLoadTripHistoryEntryOrchestrationPlan,
+        buildLoadTripHistoryFetchErrorExecutePlan: buildLoadTripHistoryFetchErrorExecutePlan,
+        buildLoadTripHistoryErrorEntryOrchestrationPlan: buildLoadTripHistoryErrorEntryOrchestrationPlan,
         buildDisplayTripHistoryInputPlan: buildDisplayTripHistoryInputPlan,
         buildDisplayTripHistoryExecutePlan: buildDisplayTripHistoryExecutePlan,
+        buildDisplayTripHistoryEntryOrchestrationPlan: buildDisplayTripHistoryEntryOrchestrationPlan,
         buildRecalculateTripExecutePlan: buildRecalculateTripExecutePlan,
         buildDeleteTripHistoryOrchestrationPlan: buildDeleteTripHistoryOrchestrationPlan,
         buildDeleteTripHistoryLocalExecutePlan: buildDeleteTripHistoryLocalExecutePlan,
