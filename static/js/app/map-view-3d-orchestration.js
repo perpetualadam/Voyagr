@@ -7,6 +7,22 @@
 
     var runtime = null;
 
+    var MV3D_INIT = typeof VoyagrMapView3D !== 'undefined' ? VoyagrMapView3D : null;
+    var mapView3DEnabled = MV3D_INIT
+        ? MV3D_INIT.resolveMapView3DEnabledFromStorage(
+            localStorage.getItem('mapView3DEnabled'),
+            (typeof VoyagrDriverCameraOrchestration !== 'undefined'
+                ? VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled()
+                : false)
+                || (typeof VoyagrMapLayersOrchestration !== 'undefined'
+                    ? VoyagrMapLayersOrchestration.getBuildings3DEnabled()
+                    : false)
+        )
+        : (localStorage.getItem('mapView3DEnabled') !== 'false');
+
+    function getMapView3DEnabled() { return mapView3DEnabled; }
+    function setMapView3DEnabled(val) { mapView3DEnabled = !!val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[MapView3D] Orchestration runtime not bound');
@@ -17,7 +33,7 @@
     function syncMapView3DToggleUI() {
         const TU = rt().toggleUI();
         const plan = rt().mapView3D().buildSyncMapView3DToggleUIPlan({
-            mapView3DEnabled: rt().getMapView3DEnabled(),
+            mapView3DEnabled: getMapView3DEnabled(),
             driverPerspectiveEnabled: rt().getDriverPerspectiveEnabled(),
             buildings3DEnabled: rt().getBuildings3DEnabled(),
         });
@@ -42,7 +58,7 @@
         });
         if (!execute.shouldApply) return;
 
-        rt().setMapView3DEnabled(execute.mapView3DEnabled);
+        setMapView3DEnabled(execute.mapView3DEnabled);
         localStorage.setItem(execute.mapViewStorageKey, execute.mapViewStorageValue);
 
         rt().setDriverPerspectiveEnabled(execute.driverPerspectiveEnabled);
@@ -70,7 +86,7 @@
     function toggleMapView3D() {
         const MV = rt().mapView3D();
         const collected = MV.buildToggleMapView3DCollectPlan({
-            currentlyEnabled: rt().getMapView3DEnabled(),
+            currentlyEnabled: getMapView3DEnabled(),
         });
         const execute = MV.buildToggleMapView3DExecutePlan({ enabled: collected.enabled });
         if (!execute.shouldApply) return;
@@ -87,7 +103,7 @@
         });
         if (!execute.shouldApply) return;
 
-        rt().setMapView3DEnabled(execute.mapView3DEnabled);
+        setMapView3DEnabled(execute.mapView3DEnabled);
         localStorage.setItem(execute.storageKey, execute.storageValue);
         if (execute.syncToggleUI) syncMapView3DToggleUI();
     }
@@ -102,6 +118,8 @@
         setMapView3D: setMapView3D,
         toggleMapView3D: toggleMapView3D,
         recomputeMapView3DFromGranular: recomputeMapView3DFromGranular,
+        getMapView3DEnabled: getMapView3DEnabled,
+        setMapView3DEnabled: setMapView3DEnabled,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

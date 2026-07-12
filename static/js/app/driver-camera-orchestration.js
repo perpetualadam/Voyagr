@@ -7,6 +7,11 @@
 
     var runtime = null;
 
+    var driverPerspectiveEnabled = localStorage.getItem('driverPerspectiveEnabled') === 'true';
+
+    function getDriverPerspectiveEnabled() { return driverPerspectiveEnabled; }
+    function setDriverPerspectiveEnabled(val) { driverPerspectiveEnabled = !!val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[DriverCamera] Orchestration runtime not bound');
@@ -25,7 +30,7 @@
     function decideDrivingCameraState() {
         const state = {
             activeNavFollow: isActiveNavigationFollow(),
-            driverPerspectiveEnabled: rt().getDriverPerspectiveEnabled(),
+            driverPerspectiveEnabled: getDriverPerspectiveEnabled(),
             prefersFlat2D: userPrefersFlat2D(),
         };
         const CP = rt().cameraPitch();
@@ -103,7 +108,7 @@
         const MV = rt().mapView3D();
         const TU = rt().toggleUI();
         const collected = MV.buildToggleDriverPerspectiveCollectPlan({
-            currentlyEnabled: rt().getDriverPerspectiveEnabled(),
+            currentlyEnabled: getDriverPerspectiveEnabled(),
         });
         const execute = MV.buildToggleDriverPerspectiveExecutePlan({
             enabled: collected.enabled,
@@ -111,7 +116,7 @@
         });
         if (!execute.shouldApply) return;
 
-        rt().setDriverPerspectiveEnabled(execute.enabled);
+        setDriverPerspectiveEnabled(execute.enabled);
         localStorage.setItem(execute.storageKey, execute.storageValue);
 
         const btn = document.getElementById(execute.toggleId);
@@ -142,6 +147,8 @@
         applyLiveNavigationCamera: applyLiveNavigationCamera,
         applyDriverPerspective: applyDriverPerspective,
         toggleDriverPerspective: toggleDriverPerspective,
+        getDriverPerspectiveEnabled: getDriverPerspectiveEnabled,
+        setDriverPerspectiveEnabled: setDriverPerspectiveEnabled,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

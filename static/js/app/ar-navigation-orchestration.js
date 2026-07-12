@@ -7,6 +7,13 @@
 
     var runtime = null;
     var arNavigator = null;
+    var arModeActive = false;
+    var isAREnabled = false;
+
+    function getIsAREnabled() { return isAREnabled; }
+    function setIsAREnabled(val) { isAREnabled = !!val; }
+    function getArModeActive() { return arModeActive; }
+    function setArModeActive(val) { arModeActive = !!val; }
 
     function rt() {
         if (!runtime) {
@@ -20,18 +27,18 @@
 
     function toggleARSetting() {
         const collected = MC().buildToggleARSettingCollectPlan({
-            currentlyEnabled: rt().getIsAREnabled(),
+            currentlyEnabled: getIsAREnabled(),
         });
         const execute = MC().buildToggleARSettingExecutePlan({
             enabled: collected.enabled,
-            arModeActive: rt().getArModeActive(),
+            arModeActive: getArModeActive(),
         });
         const btn = document.getElementById(execute.toggleId);
         if (!btn) return;
 
-        rt().setIsAREnabled(execute.enabled);
-        TU().applyToggleButton(btn, rt().getIsAREnabled(), TU().TOGGLE_SWITCH_OPTS);
-        MC().writeAREnabledToStorage(localStorage, rt().getIsAREnabled());
+        setIsAREnabled(execute.enabled);
+        TU().applyToggleButton(btn, getIsAREnabled(), TU().TOGGLE_SWITCH_OPTS);
+        MC().writeAREnabledToStorage(localStorage, getIsAREnabled());
 
         if (execute.updateFabVisibility) updateARButtonVisibility();
 
@@ -45,7 +52,7 @@
 
         const hasRoute = window.lastCalculatedRoute !== null;
         const display = MC().getARFabVisibilityDisplay(
-            rt().getIsAREnabled(),
+            getIsAREnabled(),
             hasRoute,
             rt().getRouteInProgress()
         );
@@ -56,7 +63,7 @@
     }
 
     async function toggleARMode() {
-        const entry = MC().buildToggleARModeEntryPlan({ arModeActive: rt().getArModeActive() });
+        const entry = MC().buildToggleARModeEntryPlan({ arModeActive: getArModeActive() });
         const toggleBtn = document.getElementById(entry.toggleId);
 
         if (entry.shouldStop) {
@@ -87,7 +94,7 @@
             const resultPlan = MC().buildToggleARModeStartResultPlan(result);
 
             if (resultPlan.shouldApply) {
-                rt().setArModeActive(resultPlan.arModeActive);
+                setArModeActive(resultPlan.arModeActive);
                 if (resultPlan.applyToggleOn) MC().applyARModeToggleButton(toggleBtn, true, TU());
                 rt().call.showStatus(resultPlan.statusMessage, resultPlan.statusType);
 
@@ -115,7 +122,7 @@
             await arNavigator.stop();
         }
         const execute = MC().buildStopARModeExecutePlan();
-        rt().setArModeActive(execute.arModeActive);
+        setArModeActive(execute.arModeActive);
         MC().applyARModeToggleButton(
             document.getElementById(execute.toggleId),
             false,
@@ -129,7 +136,7 @@
     }
 
     function updateARInstruction(turnInfo) {
-        if (!rt().getArModeActive() || !arNavigator) return;
+        if (!getArModeActive() || !arNavigator) return;
 
         arNavigator.updateInstruction({
             instruction: turnInfo?.instruction || 'Follow route',
@@ -150,6 +157,10 @@
         stopARMode: stopARMode,
         updateARButtonState: updateARButtonState,
         updateARInstruction: updateARInstruction,
+        getIsAREnabled: getIsAREnabled,
+        setIsAREnabled: setIsAREnabled,
+        getArModeActive: getArModeActive,
+        setArModeActive: setArModeActive,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

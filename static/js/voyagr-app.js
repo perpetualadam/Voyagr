@@ -1302,7 +1302,7 @@ function getGpsOrchestrationRuntime() {
             case 'trackingHistory': return VoyagrGpsOrchestration.getTrackingHistory();
             case 'zoomAndFollowEnabled': return zoomAndFollowEnabled;
             case 'mapFollowingActive': return mapFollowingActive;
-            case 'driverPerspectiveEnabled': return driverPerspectiveEnabled;
+            case 'driverPerspectiveEnabled': return VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled();
             case '_snapBlendWeightState': return VoyagrGpsOrchestration.getSnapBlendWeightState();
             case '_smoothDisplayLat': return VoyagrGpsOrchestration.getSmoothDisplayLat();
             case '_smoothDisplayLon': return VoyagrGpsOrchestration.getSmoothDisplayLon();
@@ -1368,7 +1368,7 @@ function getGpsOrchestrationRuntime() {
             case 'trackingHistory': VoyagrGpsOrchestration.setTrackingHistory(val); break;
             case 'zoomAndFollowEnabled': zoomAndFollowEnabled = val; break;
             case 'mapFollowingActive': mapFollowingActive = val; break;
-            case 'driverPerspectiveEnabled': driverPerspectiveEnabled = val; break;
+            case 'driverPerspectiveEnabled': VoyagrDriverCameraOrchestration.setDriverPerspectiveEnabled(val); break;
             case '_snapBlendWeightState': VoyagrGpsOrchestration.setSnapBlendWeightState(val); break;
             case '_smoothDisplayLat': VoyagrGpsOrchestration.setSmoothDisplayLat(val); break;
             case '_smoothDisplayLon': VoyagrGpsOrchestration.setSmoothDisplayLon(val); break;
@@ -1881,7 +1881,7 @@ function getPhase3FeaturesOrchestrationRuntime() {
         setGestureEnabled: (val) => VoyagrGestureControlOrchestration.setGestureEnabled(val),
         setGestureSensitivity: (val) => VoyagrGestureControlOrchestration.setGestureSensitivity(val),
         setGestureAction: (val) => VoyagrGestureControlOrchestration.setGestureAction(val),
-        setIsAREnabled: (val) => { isAREnabled = val; },
+        setIsAREnabled: (val) => VoyagrArNavigationOrchestration.setIsAREnabled(val),
         call: {
             updateBatteryStatus,
             loadMLPredictions,
@@ -2105,8 +2105,7 @@ let nextManeuverDistance = 0;
 let routePolyline = null;
 
 // ===== DRIVER'S PERSPECTIVE =====
-// Preference when browsing. During turn-by-turn with zoom-and-follow, 60° is always used regardless.
-let driverPerspectiveEnabled = localStorage.getItem('driverPerspectiveEnabled') === 'true';  // Default false (opt-in)
+// Preference lives in static/js/app/driver-camera-orchestration.js (bound at file end).
 
 // ===== DRIVER CAMERA ORCHESTRATION =====
 // Orchestration lives in static/js/app/driver-camera-orchestration.js (bound at file end).
@@ -2120,8 +2119,8 @@ function getDriverCameraOrchestrationRuntime() {
         getRouteInProgress: () => routeInProgress,
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
-        getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
-        setDriverPerspectiveEnabled: (val) => { driverPerspectiveEnabled = val; },
+        getDriverPerspectiveEnabled: () => VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled(),
+        setDriverPerspectiveEnabled: (val) => VoyagrDriverCameraOrchestration.setDriverPerspectiveEnabled(val),
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
@@ -2143,16 +2142,7 @@ function toggleDriverPerspective() { VoyagrDriverCameraOrchestration.toggleDrive
 function applyDriverPerspective() { VoyagrDriverCameraOrchestration.applyDriverPerspective(); }
 
 // ===== 2D / 3D MAP VIEW (scene preset) =====
-// One user-facing switch that bundles the existing camera-tilt + 3D-building controls:
-//   3D = tilted camera (driver perspective) + 3D building extrusions
-//   2D = flat camera (pitch 0) + no building extrusions
-// It reuses the existing flags/functions (no separate state). The choice applies while
-// browsing AND during turn-by-turn navigation: 2D navigation still follows heading-up,
-// it just stays flat instead of tilting to 60° (see shouldTiltDrivingCamera()).
-let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
-    localStorage.getItem('mapView3DEnabled'),
-    driverPerspectiveEnabled || VoyagrMapLayersOrchestration.getBuildings3DEnabled()
-);
+// mapView3DEnabled lives in static/js/app/map-view-3d-orchestration.js (bound at file end).
 
 // ===== MAP VIEW 3D ORCHESTRATION =====
 // Orchestration lives in static/js/app/map-view-3d-orchestration.js (bound at file end).
@@ -2161,10 +2151,10 @@ function getMapView3DOrchestrationRuntime() {
     return {
         mapView3D: () => _mapView3D(),
         toggleUI: () => _toggleUI(),
-        getMapView3DEnabled: () => mapView3DEnabled,
-        setMapView3DEnabled: (val) => { mapView3DEnabled = val; },
-        getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
-        setDriverPerspectiveEnabled: (val) => { driverPerspectiveEnabled = val; },
+        getMapView3DEnabled: () => VoyagrMapView3DOrchestration.getMapView3DEnabled(),
+        setMapView3DEnabled: (val) => VoyagrMapView3DOrchestration.setMapView3DEnabled(val),
+        getDriverPerspectiveEnabled: () => VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled(),
+        setDriverPerspectiveEnabled: (val) => VoyagrDriverCameraOrchestration.setDriverPerspectiveEnabled(val),
         getBuildings3DEnabled: () => VoyagrMapLayersOrchestration.getBuildings3DEnabled(),
         setBuildings3DEnabled: (val) => VoyagrMapLayersOrchestration.setBuildings3DEnabled(val),
         getBuildings3DHeightMultiplier: () => VoyagrMapLayersOrchestration.getBuildings3DHeightMultiplier(),
@@ -2184,20 +2174,17 @@ function setMapView3D(enabled) { VoyagrMapView3DOrchestration.setMapView3D(enabl
 function toggleMapView3D() { VoyagrMapView3DOrchestration.toggleMapView3D(); }
 
 // ===== AR NAVIGATION ORCHESTRATION =====
-// Orchestration lives in static/js/app/ar-navigation-orchestration.js (bound at file end).
-
-let arModeActive = false;
-let isAREnabled = false;
+// AR mode state lives in static/js/app/ar-navigation-orchestration.js (bound at file end).
 
 function getArNavigationOrchestrationRuntime() {
     return {
         mapControls: () => _mapControls(),
         toggleUI: () => _toggleUI(),
         turnInstructions: () => _turnInstructions(),
-        getIsAREnabled: () => isAREnabled,
-        setIsAREnabled: (val) => { isAREnabled = val; },
-        getArModeActive: () => arModeActive,
-        setArModeActive: (val) => { arModeActive = val; },
+        getIsAREnabled: () => VoyagrArNavigationOrchestration.getIsAREnabled(),
+        setIsAREnabled: (val) => VoyagrArNavigationOrchestration.setIsAREnabled(val),
+        getArModeActive: () => VoyagrArNavigationOrchestration.getArModeActive(),
+        setArModeActive: (val) => VoyagrArNavigationOrchestration.setArModeActive(val),
         getRouteInProgress: () => routeInProgress,
         getCurrentRouteSteps: () => currentRouteSteps,
         getCurrentStepIndex: () => currentStepIndex,
@@ -2637,8 +2624,8 @@ function getNavigationLifecycleOrchestrationRuntime() {
         setJourneyOverviewActive: (val) => VoyagrJourneyOverviewOrchestration.setJourneyOverviewActive(val),
         getSavedMapState: () => VoyagrJourneyOverviewOrchestration.getSavedMapState(),
         setSavedMapState: (val) => VoyagrJourneyOverviewOrchestration.setSavedMapState(val),
-        getArModeActive: () => arModeActive,
-        getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
+        getArModeActive: () => VoyagrArNavigationOrchestration.getArModeActive(),
+        getDriverPerspectiveEnabled: () => VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled(),
         getUpdatePending: () => VoyagrServiceWorkerOrchestration.getUpdatePending(),
         setNavTraveledMeters: (val) => VoyagrNavigationLifecycleOrchestration.setNavTraveledMeters(val),
         setNavOdometerLastGeo: (val) => VoyagrNavigationLifecycleOrchestration.setNavOdometerLastGeo(val),
