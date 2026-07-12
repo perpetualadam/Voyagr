@@ -3303,48 +3303,52 @@ function onWaypointDragOver(e) {
 function onWaypointDrop(e) {
     e.preventDefault();
     const target = _domHelpers().closest(e.target, '.waypoint-item');
-    const WP = _waypoints();
-    const apply = WP.buildWaypointDropApplyPlan(
-        _draggedWaypoint,
-        target ? target.dataset.type : null,
-        target ? parseInt(target.dataset.index) : NaN,
-        viaPoints.length,
-        stops.length
+    applyWaypointDropFromPlan(
+        _waypoints().buildWaypointDropEntryOrchestrationPlan({
+            draggedWaypoint: _draggedWaypoint,
+            targetType: target ? target.dataset.type : null,
+            targetIndex: target ? parseInt(target.dataset.index, 10) : NaN,
+            viaCount: viaPoints.length,
+            stopsCount: stops.length,
+        }).apply
     );
+}
 
-    if (apply.action === 'reorder' && apply.reorder && apply.reorder.shouldReorder) {
-        const reorder = apply.reorder;
-        const arr = reorder.type === 'via' ? viaPoints : stops;
-        const markerArr = reorder.type === 'via' ? viaPointMarkers : stopMarkers;
-        const item = arr.splice(reorder.fromIndex, 1)[0];
-        if (reorder.spliceMarkers) {
-            const marker = markerArr.splice(reorder.fromIndex, 1)[0];
-            arr.splice(reorder.toIndex, 0, item);
-            markerArr.splice(reorder.toIndex, 0, marker);
-        } else {
-            arr.splice(reorder.toIndex, 0, item);
-        }
-        if (reorder.updateWaypointsList) updateWaypointsList();
-        if (reorder.refreshViaMarkers) refreshViaPointMarkers();
+function applyWaypointReorderFromPlan(reorder) {
+    if (!reorder || !reorder.shouldReorder) return;
+
+    const arr = reorder.type === 'via' ? viaPoints : stops;
+    const markerArr = reorder.type === 'via' ? viaPointMarkers : stopMarkers;
+    const item = arr.splice(reorder.fromIndex, 1)[0];
+    if (reorder.spliceMarkers) {
+        const marker = markerArr.splice(reorder.fromIndex, 1)[0];
+        arr.splice(reorder.toIndex, 0, item);
+        markerArr.splice(reorder.toIndex, 0, marker);
+    } else {
+        arr.splice(reorder.toIndex, 0, item);
+    }
+    if (reorder.updateWaypointsList) updateWaypointsList();
+    if (reorder.refreshViaMarkers) refreshViaPointMarkers();
+}
+
+function applyWaypointDropFromPlan(apply) {
+    if (!apply) return;
+
+    if (apply.action === 'reorder' && apply.reorder) {
+        applyWaypointReorderFromPlan(apply.reorder);
     }
 
     if (apply.clearDragState) _draggedWaypoint = null;
     if (apply.resetOpacity) {
-        const resetApply = WP.buildWaypointDragOpacityResetApplyPlan();
+        const resetApply = _waypoints().buildWaypointDragOpacityResetApplyPlan();
         document.querySelectorAll(resetApply.selector).forEach(
-            el => el.style.opacity = resetApply.opacity
+            (el) => { el.style.opacity = resetApply.opacity; }
         );
     }
 }
 
-function moveWaypoint(type, index, direction) {
-    const apply = _waypoints().buildWaypointMoveApplyPlan(
-        type,
-        index,
-        direction,
-        type === 'via' ? viaPoints.length : stops.length
-    );
-    if (!apply.shouldMove) return;
+function applyWaypointMoveFromPlan(apply) {
+    if (!apply || !apply.shouldMove) return;
 
     const arr = apply.type === 'via' ? viaPoints : stops;
     const markerArr = apply.type === 'via' ? viaPointMarkers : stopMarkers;
@@ -3355,6 +3359,17 @@ function moveWaypoint(type, index, direction) {
     }
     if (apply.updateWaypointsList) updateWaypointsList();
     if (apply.refreshViaMarkers) refreshViaPointMarkers();
+}
+
+function moveWaypoint(type, index, direction) {
+    applyWaypointMoveFromPlan(
+        _waypoints().buildWaypointMoveEntryOrchestrationPlan(
+            type,
+            index,
+            direction,
+            type === 'via' ? viaPoints.length : stops.length
+        ).apply
+    );
 }
 
 /**
@@ -3474,16 +3489,22 @@ function applySelectRouteFromPlan(apply, index) {
     }
 }
 
+function collectSelectRouteInput(index) {
+    return {
+        index,
+        routeOptions,
+        lastRouteApiResponse: window.lastRouteApiResponse,
+    };
+}
+
 /**
  * selectRoute function - shows only the selected route and hides others
  * @function selectRoute
  * @param {number} index - Route index to select
  */
 function selectRoute(index) {
-    const orch = _routeSelection().buildSelectRouteOrchestrationPlan(
-        index,
-        routeOptions,
-        window.lastRouteApiResponse
+    const orch = _routeSelection().buildSelectRouteEntryOrchestrationPlan(
+        collectSelectRouteInput(index)
     );
     applySelectRouteFromPlan(orch.apply, index);
 }
@@ -3492,25 +3513,28 @@ function selectRoute(index) {
  * Apply formatted trip info values to the navigation panel DOM.
  * @param {Object} display
  */
-function applyTripInfoDisplayValues(display) {
-    if (!display) return;
+function applyTripInfoDomFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
 
-    const distanceEl = document.getElementById('distance');
-    const timeEl = document.getElementById('time');
-    const fuelEl = document.getElementById('fuelCost');
-    const tollEl = document.getElementById('tollCost');
+    const distanceEl = document.getElementById(apply.distanceId);
+    const timeEl = document.getElementById(apply.timeId);
+    const fuelEl = document.getElementById(apply.fuelCostId);
+    const tollEl = document.getElementById(apply.tollCostId);
     if (distanceEl) {
-        distanceEl.textContent = display.distanceText + ' ' + display.distUnit;
-        distanceEl.dataset.km = display.distanceKm;
+        distanceEl.textContent = apply.distanceText;
+        distanceEl.dataset.km = apply.distanceKm;
     }
-    if (timeEl) timeEl.textContent = display.durationMinutes + ' min';
+    if (timeEl) timeEl.textContent = apply.durationMinutes + ' min';
     if (fuelEl) {
-        fuelEl.textContent = display.fuelCostText;
-        fuelEl.dataset.value = display.fuelCost;
+        fuelEl.textContent = apply.fuelCostText;
+        fuelEl.dataset.value = apply.fuelCost;
     }
     if (tollEl) {
-        tollEl.textContent = display.tollCostText;
-        tollEl.dataset.value = display.tollCost;
+        tollEl.textContent = apply.tollCostText;
+        tollEl.dataset.value = apply.tollCost;
+    }
+    if (apply.costLogMessage && apply.costLogPayload) {
+        console.log(apply.costLogMessage, apply.costLogPayload);
     }
 }
 
@@ -3520,19 +3544,21 @@ function applyTripInfoDisplayValues(display) {
  */
 function updateTripInfoFromRouteOption(route) {
     if (!route) return;
-    const display = _routeSelection().buildTripInfoDisplayValues(route, {
+    const orch = _routeSelection().buildTripInfoUpdateFromRouteOrchestrationPlan(route, {
         distanceText: convertDistance(route.distance_km),
         distUnit: getDistanceUnit(),
         currencySymbol: getCurrencySymbol(),
     });
-    if (!display) return;
+    if (!orch.shouldUpdate) return;
+    applyTripInfoDomFromPlan(orch.apply);
+}
 
-    applyTripInfoDisplayValues(display);
-    console.log('[Cost] Route selected with costs:', {
-        fuelCost: display.fuelCost.toFixed(2),
-        tollCost: display.tollCost.toFixed(2),
-        cazCost: display.cazCost.toFixed(2),
-    });
+function collectUseRouteInput(index) {
+    return {
+        index,
+        routeOptions,
+        routeTrafficEnabled,
+    };
 }
 
 function collectDisplaySingleRouteRuntime() {
@@ -3609,9 +3635,9 @@ function applyUseRouteFromPlan(apply, index) {
  * @returns {*} Return value description
  */
 function useRoute(index) {
-    const orch = _routeSelection().buildUseRouteOrchestrationPlan(index, routeOptions, {
-        routeTrafficEnabled,
-    });
+    const orch = _routeSelection().buildUseRouteEntryOrchestrationPlan(
+        collectUseRouteInput(index)
+    );
     applyUseRouteFromPlan(orch.apply, index);
 }
 
@@ -4987,43 +5013,47 @@ function hideRouteProgressBar() {
     );
 }
 
+function applyCollapseBottomSheetForRoutePreviewFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    const bottomSheet = document.getElementById(apply.bottomSheetId);
+    if (!bottomSheet) return;
+
+    (apply.clearInlineStyles || []).forEach((prop) => {
+        bottomSheet.style[prop] = '';
+    });
+    if (apply.collapse) collapseBottomSheet();
+
+    const handle = bottomSheet.querySelector(apply.handleSelector);
+    if (handle && apply.handleTitle) handle.title = apply.handleTitle;
+    if (apply.logMessage) console.log(apply.logMessage);
+}
+
 /**
  * Collapse bottom sheet to show map with route preview
  * Uses the standard collapse mechanism instead of inline styles
  */
 function collapseBottomSheetForRoutePreview() {
-    const DH = _domHelpers();
-    const execute = DH.buildCollapseBottomSheetForRoutePreviewExecutePlan();
-    if (!execute.shouldApply) return;
-
-    const bottomSheet = document.getElementById(DH.BOTTOM_SHEET_ID);
-    if (!bottomSheet) return;
-
-    (execute.clearInlineStyles || []).forEach((prop) => {
-        bottomSheet.style[prop] = '';
-    });
-    if (execute.collapse) collapseBottomSheet();
-
-    const handle = bottomSheet.querySelector(execute.handleSelector);
-    if (handle && execute.handleTitle) handle.title = execute.handleTitle;
-    if (execute.logMessage) console.log(execute.logMessage);
+    applyCollapseBottomSheetForRoutePreviewFromPlan(
+        _domHelpers().buildCollapseBottomSheetForRoutePreviewOrchestrationPlan().apply
+    );
 }
 
-/**
- * Display hazard markers on the map
- * @param {Array} hazards - Array of hazard objects with lat, lon, type, description
- */
-function displayHazardMarkers(hazards) {
-    const HM = _hazardMapMarkers();
+function collectDisplayHazardMarkersInput(hazards) {
     const OSM = _osmMapIcons();
     const pillHtml = getOsmTrafficLightMarkerPillHTML();
-    const execute = HM.buildDisplayHazardMarkersExecutePlan(
-        HM.buildDisplayHazardMarkersPlan(hazards, {
+    return {
+        hazards,
+        markerOpts: {
             osmTrafficLightPillHtml: pillHtml,
             osmTrafficLightIconSize: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
             osmTrafficLightPopupIcon: OSM.buildOsmTrafficLightPopupIconWrapperHtml(pillHtml),
-        })
-    );
+        },
+    };
+}
+
+function applyDisplayHazardMarkersFromPlan(execute) {
+    if (!execute) return;
 
     if (!execute.shouldDisplay) {
         if (execute.clearExisting) clearHazardMarkers();
@@ -5046,6 +5076,18 @@ function displayHazardMarkers(hazards) {
     });
 
     if (execute.successLogMessage) console.log(execute.successLogMessage);
+}
+
+/**
+ * Display hazard markers on the map
+ * @param {Array} hazards - Array of hazard objects with lat, lon, type, description
+ */
+function displayHazardMarkers(hazards) {
+    applyDisplayHazardMarkersFromPlan(
+        _hazardMapMarkers().buildDisplayHazardMarkersEntryOrchestrationPlan(
+            collectDisplayHazardMarkersInput(hazards)
+        ).execute
+    );
 }
 
 /**
@@ -17030,7 +17072,7 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
     );
     if (!plan.visible || !tripInfo) return;
 
-    applyTripInfoDisplayValues(plan.display);
+    applyTripInfoDomFromPlan(_routeSelection().buildTripInfoDomApplyPlan(plan.display));
     if (plan.dashFuel) {
         const fuelEl = document.getElementById('fuelCost');
         if (fuelEl) fuelEl.textContent = '-';

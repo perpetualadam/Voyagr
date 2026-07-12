@@ -115,6 +115,18 @@ describe('hazard-map-markers module', () => {
         expect(execute.markers).toHaveLength(1);
     });
 
+    test('buildDisplayHazardMarkersEntryOrchestrationPlan bundles hazard mount execute', () => {
+        const entry = HM.buildDisplayHazardMarkersEntryOrchestrationPlan({
+            hazards: [{ lat: 51.5, lon: -0.1, type: 'speed_camera' }],
+            markerOpts: {},
+        });
+        expect(entry.execute.shouldDisplay).toBe(true);
+        expect(entry.execute.markers.length).toBeGreaterThan(0);
+
+        const empty = HM.buildDisplayHazardMarkersEntryOrchestrationPlan({ hazards: [] });
+        expect(empty.execute.shouldDisplay).toBe(false);
+    });
+
     test('buildClearHazardMarkersExecutePlan wraps clear orchestration', () => {
         const execute = HM.buildClearHazardMarkersExecutePlan(
             HM.buildClearHazardMarkersPlan(2)

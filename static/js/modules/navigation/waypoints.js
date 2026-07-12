@@ -1079,6 +1079,20 @@
     }
 
     /**
+     * Entry orchestration plan for moveWaypoint handler.
+     * @param {string} type
+     * @param {number} index
+     * @param {number} direction
+     * @param {number} [count]
+     * @returns {Object}
+     */
+    function buildWaypointMoveEntryOrchestrationPlan(type, index, direction, count) {
+        return {
+            apply: buildWaypointMoveApplyPlan(type, index, direction, count),
+        };
+    }
+
+    /**
      * Reorder plan for drag-and-drop waypoint list changes.
      * @param {string} type - 'via' | 'stop'
      * @param {number} dragIndex
@@ -1636,6 +1650,29 @@
     }
 
     /**
+     * Entry orchestration plan for onWaypointDrop handler.
+     * @param {Object} [opts]
+     * @param {Object|null} [opts.draggedWaypoint]
+     * @param {string|null} [opts.targetType]
+     * @param {number} [opts.targetIndex]
+     * @param {number} [opts.viaCount]
+     * @param {number} [opts.stopsCount]
+     * @returns {Object}
+     */
+    function buildWaypointDropEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        return {
+            apply: buildWaypointDropApplyPlan(
+                opts.draggedWaypoint,
+                opts.targetType,
+                opts.targetIndex,
+                opts.viaCount,
+                opts.stopsCount
+            ),
+        };
+    }
+
+    /**
      * Map apply plan for drawing all multi-drop leg geometries.
      * @param {Object} data
      * @param {function(string, number): Array<[number,number]>} decodePolyline
@@ -1865,6 +1902,7 @@
         buildClearAllWaypointsEntryOrchestrationPlan: buildClearAllWaypointsEntryOrchestrationPlan,
         buildWaypointMovePlan: buildWaypointMovePlan,
         buildWaypointMoveApplyPlan: buildWaypointMoveApplyPlan,
+        buildWaypointMoveEntryOrchestrationPlan: buildWaypointMoveEntryOrchestrationPlan,
         buildWaypointReorderPlan: buildWaypointReorderPlan,
         buildWaypointReorderApplyPlan: buildWaypointReorderApplyPlan,
         buildWaypointAddressAddDispatchPlan: buildWaypointAddressAddDispatchPlan,
@@ -1894,6 +1932,7 @@
         buildWaypointDragOverApplyPlan: buildWaypointDragOverApplyPlan,
         buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
         buildWaypointDropApplyPlan: buildWaypointDropApplyPlan,
+        buildWaypointDropEntryOrchestrationPlan: buildWaypointDropEntryOrchestrationPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
         buildWaypointDragOpacityResetApplyPlan: buildWaypointDragOpacityResetApplyPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,

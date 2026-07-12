@@ -296,6 +296,39 @@
         };
     }
 
+    /**
+     * Apply plan for collapsing the sheet before route preview.
+     * @param {Object} [execute] - from buildCollapseBottomSheetForRoutePreviewExecutePlan
+     * @returns {Object}
+     */
+    function buildCollapseBottomSheetForRoutePreviewApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldApply) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            bottomSheetId: BOTTOM_SHEET_ID,
+            clearInlineStyles: execute.clearInlineStyles || [],
+            collapse: !!execute.collapse,
+            handleSelector: execute.handleSelector,
+            handleTitle: execute.handleTitle,
+            logMessage: execute.logMessage,
+        };
+    }
+
+    /**
+     * Orchestration plan for collapseBottomSheetForRoutePreview entry.
+     * @returns {Object}
+     */
+    function buildCollapseBottomSheetForRoutePreviewOrchestrationPlan() {
+        var execute = buildCollapseBottomSheetForRoutePreviewExecutePlan();
+        return {
+            execute: execute,
+            apply: buildCollapseBottomSheetForRoutePreviewApplyPlan(execute),
+        };
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -319,6 +352,9 @@
         buildCollapseBottomSheetExecutePlan: buildCollapseBottomSheetExecutePlan,
         buildToggleBottomSheetCollectPlan: buildToggleBottomSheetCollectPlan,
         buildCollapseBottomSheetForRoutePreviewExecutePlan: buildCollapseBottomSheetForRoutePreviewExecutePlan,
+        buildCollapseBottomSheetForRoutePreviewApplyPlan: buildCollapseBottomSheetForRoutePreviewApplyPlan,
+        buildCollapseBottomSheetForRoutePreviewOrchestrationPlan:
+            buildCollapseBottomSheetForRoutePreviewOrchestrationPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

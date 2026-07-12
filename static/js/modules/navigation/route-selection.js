@@ -193,6 +193,54 @@
     }
 
     /**
+     * DOM apply plan for navigation tab trip info panel values.
+     * @param {Object} [display] - from buildTripInfoDisplayValues
+     * @returns {Object}
+     */
+    function buildTripInfoDomApplyPlan(display) {
+        if (!display) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            distanceId: 'distance',
+            timeId: 'time',
+            fuelCostId: 'fuelCost',
+            tollCostId: 'tollCost',
+            distanceText: display.distanceText + ' ' + display.distUnit,
+            distanceKm: display.distanceKm,
+            durationMinutes: display.durationMinutes,
+            fuelCostText: display.fuelCostText,
+            fuelCost: display.fuelCost,
+            tollCostText: display.tollCostText,
+            tollCost: display.tollCost,
+            costLogMessage: '[Cost] Route selected with costs:',
+            costLogPayload: {
+                fuelCost: display.fuelCost.toFixed(2),
+                tollCost: display.tollCost.toFixed(2),
+                cazCost: display.cazCost.toFixed(2),
+            },
+        };
+    }
+
+    /**
+     * Orchestration plan for updating trip info from a route option.
+     * @param {Object} route
+     * @param {Object} [fmt]
+     * @returns {Object}
+     */
+    function buildTripInfoUpdateFromRouteOrchestrationPlan(route, fmt) {
+        var display = buildTripInfoDisplayValues(route, fmt);
+        if (!display) {
+            return { shouldUpdate: false };
+        }
+        return {
+            shouldUpdate: true,
+            apply: buildTripInfoDomApplyPlan(display),
+        };
+    }
+
+    /**
      * Apply plan for the trip-info panel after calculateRoute or similar.
      * @param {*} distance - km number or string
      * @param {*} time - duration string/number
@@ -427,6 +475,40 @@
             statusMessage: orch.statusMessage,
             statusType: orch.statusType,
         };
+    }
+
+    /**
+     * Entry orchestration plan for selectRoute handler.
+     * @param {Object} [input]
+     * @param {number} [input.index]
+     * @param {Array<Object>} [input.routeOptions]
+     * @param {Object} [input.lastRouteApiResponse]
+     * @returns {Object}
+     */
+    function buildSelectRouteEntryOrchestrationPlan(input) {
+        input = input || {};
+        return buildSelectRouteOrchestrationPlan(
+            input.index,
+            input.routeOptions,
+            input.lastRouteApiResponse
+        );
+    }
+
+    /**
+     * Entry orchestration plan for useRoute handler.
+     * @param {Object} [input]
+     * @param {number} [input.index]
+     * @param {Array<Object>} [input.routeOptions]
+     * @param {boolean} [input.routeTrafficEnabled]
+     * @returns {Object}
+     */
+    function buildUseRouteEntryOrchestrationPlan(input) {
+        input = input || {};
+        return buildUseRouteOrchestrationPlan(
+            input.index,
+            input.routeOptions,
+            { routeTrafficEnabled: !!input.routeTrafficEnabled }
+        );
     }
 
     /**
@@ -4066,6 +4148,8 @@
         collectTextSymbolLayerIds: collectTextSymbolLayerIds,
         buildRouteLayerMountPlan: buildRouteLayerMountPlan,
         buildTripInfoDisplayValues: buildTripInfoDisplayValues,
+        buildTripInfoDomApplyPlan: buildTripInfoDomApplyPlan,
+        buildTripInfoUpdateFromRouteOrchestrationPlan: buildTripInfoUpdateFromRouteOrchestrationPlan,
         buildTripInfoApplyPlan: buildTripInfoApplyPlan,
         buildRouteComparisonCardHtml: buildRouteComparisonCardHtml,
         buildRouteComparisonListHtml: buildRouteComparisonListHtml,
@@ -4075,6 +4159,7 @@
         buildDisplayRouteComparisonEntryOrchestrationPlan: buildDisplayRouteComparisonEntryOrchestrationPlan,
         buildUseRouteOrchestrationPlan: buildUseRouteOrchestrationPlan,
         buildUseRouteApplyPlan: buildUseRouteApplyPlan,
+        buildUseRouteEntryOrchestrationPlan: buildUseRouteEntryOrchestrationPlan,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
         buildRouteComparisonTableRowHtml: buildRouteComparisonTableRowHtml,
         buildRouteComparisonTableHtml: buildRouteComparisonTableHtml,
@@ -4101,6 +4186,7 @@
         buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
         buildSelectRouteOrchestrationPlan: buildSelectRouteOrchestrationPlan,
         buildSelectRouteApplyPlan: buildSelectRouteApplyPlan,
+        buildSelectRouteEntryOrchestrationPlan: buildSelectRouteEntryOrchestrationPlan,
         buildDisplaySingleRouteOrchestrationPlan: buildDisplaySingleRouteOrchestrationPlan,
         buildDisplaySingleRouteApplyPlan: buildDisplaySingleRouteApplyPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,

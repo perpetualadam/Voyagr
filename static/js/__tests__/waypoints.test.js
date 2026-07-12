@@ -551,6 +551,21 @@ describe('waypoints module', () => {
         expect(W.buildWaypointDropApplyPlan(null, 'via', 0, 2, 1).resetOpacity).toBe(true);
     });
 
+    test('buildWaypointDropEntryOrchestrationPlan and move entry wrap apply', () => {
+        const drop = W.buildWaypointDropEntryOrchestrationPlan({
+            draggedWaypoint: { type: 'via', index: 0 },
+            targetType: 'via',
+            targetIndex: 1,
+            viaCount: 2,
+            stopsCount: 0,
+        });
+        expect(drop.apply.action).toBe('reorder');
+
+        const move = W.buildWaypointMoveEntryOrchestrationPlan('via', 0, 1, 2);
+        expect(move.apply.shouldMove).toBe(true);
+        expect(move.apply.refreshViaMarkers).toBe(true);
+    });
+
     test('buildMultiDropLegsMapApplyPlan builds layer specs from geometry', () => {
         const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
         const plan = W.buildMultiDropLegsMapApplyPlan({
