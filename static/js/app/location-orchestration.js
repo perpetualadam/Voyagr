@@ -7,6 +7,14 @@
 
     var runtime = null;
 
+    var currentLat = 51.5074;
+    var currentLon = -0.1278;
+
+    function getCurrentLat() { return currentLat; }
+    function setCurrentLat(val) { currentLat = val; }
+    function getCurrentLon() { return currentLon; }
+    function setCurrentLon(val) { currentLon = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[Location] Orchestration runtime not bound');
@@ -25,8 +33,8 @@
             (position) => {
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
-                rt().setCurrentLat(lat);
-                rt().setCurrentLon(lon);
+                setCurrentLat(lat);
+                setCurrentLon(lon);
 
                 const map = rt().getMap();
                 map.flyTo([lat, lon], 15, {
@@ -72,8 +80,8 @@
                 input.dataset.lon = lon;
                 input.dataset.displayName = 'Current Location';
 
-                rt().setCurrentLat(lat);
-                rt().setCurrentLon(lon);
+                setCurrentLat(lat);
+                setCurrentLon(lon);
                 rt().call.showStatus('Location set!', 'success');
             },
             (error) => {
@@ -153,6 +161,10 @@
         getCurrentLocation: getCurrentLocation,
         setCurrentLocation: setCurrentLocation,
         swapStartAndDestination: swapStartAndDestination,
+        getCurrentLat: getCurrentLat,
+        setCurrentLat: setCurrentLat,
+        getCurrentLon: getCurrentLon,
+        setCurrentLon: setCurrentLon,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

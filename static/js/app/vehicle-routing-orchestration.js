@@ -7,6 +7,14 @@
 
     var runtime = null;
 
+    var currentVehicleType = localStorage.getItem('vehicleType') || 'petrol_diesel';
+    var currentRoutingMode = localStorage.getItem('routingMode') || 'auto';
+
+    function getCurrentVehicleType() { return currentVehicleType; }
+    function setCurrentVehicleType(val) { currentVehicleType = val; }
+    function getCurrentRoutingMode() { return currentRoutingMode; }
+    function setCurrentRoutingMode(val) { currentRoutingMode = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[VehicleRouting] Orchestration runtime not bound');
@@ -16,8 +24,8 @@
 
     function updateUserMarkerIcon() {
         const vehicleIcons = rt().getVehicleIcons();
-        const iconPath = vehicleIcons[rt().getCurrentRoutingMode()]
-            || vehicleIcons[rt().getCurrentVehicleType()]
+        const iconPath = vehicleIcons[getCurrentRoutingMode()]
+            || vehicleIcons[getCurrentVehicleType()]
             || vehicleIcons.petrol_diesel;
 
         const currentUserMarker = rt().getCurrentUserMarker();
@@ -32,18 +40,18 @@
 
     function updateVehicleType() {
         const select = document.getElementById('vehicleType');
-        rt().setCurrentVehicleType(select.value);
-        localStorage.setItem('vehicleType', rt().getCurrentVehicleType());
+        setCurrentVehicleType(select.value);
+        localStorage.setItem('vehicleType', getCurrentVehicleType());
 
         updateUserMarkerIcon();
 
-        console.log('[Vehicle] Type changed to:', rt().getCurrentVehicleType());
+        console.log('[Vehicle] Type changed to:', getCurrentVehicleType());
         rt().call.saveAllSettings();
         rt().call.showStatus('🚗 Vehicle type: ' + select.options[select.selectedIndex].text, 'info');
     }
 
     function setRoutingMode(mode) {
-        rt().setCurrentRoutingMode(mode);
+        setCurrentRoutingMode(mode);
         localStorage.setItem('routingMode', mode);
 
         document.getElementById('routingAuto').classList.toggle('active', mode === 'auto');
@@ -52,13 +60,13 @@
 
         if (mode === 'pedestrian') {
             document.getElementById('vehicleType').style.display = 'none';
-            rt().setCurrentVehicleType('pedestrian');
+            setCurrentVehicleType('pedestrian');
         } else if (mode === 'bicycle') {
             document.getElementById('vehicleType').style.display = 'none';
-            rt().setCurrentVehicleType('bicycle');
+            setCurrentVehicleType('bicycle');
         } else {
             document.getElementById('vehicleType').style.display = 'block';
-            rt().setCurrentVehicleType(document.getElementById('vehicleType').value);
+            setCurrentVehicleType(document.getElementById('vehicleType').value);
         }
 
         updateUserMarkerIcon();
@@ -72,8 +80,8 @@
     function createVehicleMarker(lat, lon, speed, accuracy, heading) {
         if (heading === undefined) heading = 0;
         const vehicleIconEmojis = rt().getVehicleIconEmojis();
-        const iconEmoji = vehicleIconEmojis[rt().getCurrentRoutingMode()]
-            || vehicleIconEmojis[rt().getCurrentVehicleType()]
+        const iconEmoji = vehicleIconEmojis[getCurrentRoutingMode()]
+            || vehicleIconEmojis[getCurrentVehicleType()]
             || '🚗';
         const safeHeading = Number.isFinite(heading) ? heading : 0;
         const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
@@ -133,6 +141,10 @@
         setRoutingMode: setRoutingMode,
         updateUserMarkerIcon: updateUserMarkerIcon,
         createVehicleMarker: createVehicleMarker,
+        getCurrentVehicleType: getCurrentVehicleType,
+        setCurrentVehicleType: setCurrentVehicleType,
+        getCurrentRoutingMode: getCurrentRoutingMode,
+        setCurrentRoutingMode: setCurrentRoutingMode,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
