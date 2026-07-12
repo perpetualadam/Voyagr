@@ -382,6 +382,38 @@
             statusType: 'success',
             previewTraffic: previewTraffic,
             previewPolyline: previewTraffic ? polylinePoints : null,
+            apply: buildUseRouteApplyPlan({
+                shouldUse: true,
+                selectedRouteIndex: index,
+                route: route,
+                statusMessage: 'Route selected. Ready to navigate!',
+                statusType: 'success',
+                previewTraffic: previewTraffic,
+                previewPolyline: previewTraffic ? polylinePoints : null,
+            }),
+        };
+    }
+
+    /**
+     * Apply plan for useRoute handler side effects.
+     * @param {Object} [orch] - from buildUseRouteOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildUseRouteApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldUse) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            selectedRouteIndex: orch.selectedRouteIndex,
+            route: orch.route,
+            syncLastCalculatedRoute: true,
+            updateTripInfo: true,
+            previewTraffic: !!orch.previewTraffic,
+            previewPolyline: orch.previewPolyline,
+            statusMessage: orch.statusMessage,
+            statusType: orch.statusType,
         };
     }
 
@@ -717,6 +749,30 @@
             displayAllRoutes: true,
             statusMessage: 'Showing all ' + count + ' routes',
             statusType: 'info',
+            apply: buildShowAllRoutesApplyPlan({
+                shouldShow: count > 0,
+                displayAllRoutes: true,
+                statusMessage: 'Showing all ' + count + ' routes',
+                statusType: 'info',
+            }),
+        };
+    }
+
+    /**
+     * Apply plan for showAllRoutes handler side effects.
+     * @param {Object} [orch] - from buildShowAllRoutesOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildShowAllRoutesApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldShow) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            displayAllRoutes: !!orch.displayAllRoutes,
+            statusMessage: orch.statusMessage,
+            statusType: orch.statusType,
         };
     }
 
@@ -854,6 +910,33 @@
                 clearAllRouteLayerHandles: true,
             },
             execute: execute,
+            apply: buildDisplaySingleRouteApplyPlan({
+                shouldExecute: execute.shouldExecute,
+                entryLogMessage: '[Routes] displaySingleRoute(' + index + ') - clearing all existing routes',
+                preClear: {
+                    clearRouteLayerHandle: true,
+                    clearAllRouteLayerHandles: true,
+                },
+                execute: execute,
+            }),
+        };
+    }
+
+    /**
+     * Apply plan for displaySingleRoute handler side effects.
+     * @param {Object} [orch] - from buildDisplaySingleRouteOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildDisplaySingleRouteApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldExecute) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            entryLogMessage: orch.entryLogMessage,
+            preClear: orch.preClear,
+            execute: orch.execute,
         };
     }
 
@@ -3669,6 +3752,7 @@
         buildDisplayRouteComparisonOrchestrationPlan: buildDisplayRouteComparisonOrchestrationPlan,
         buildDisplayRouteComparisonApplyPlan: buildDisplayRouteComparisonApplyPlan,
         buildUseRouteOrchestrationPlan: buildUseRouteOrchestrationPlan,
+        buildUseRouteApplyPlan: buildUseRouteApplyPlan,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
         buildRouteComparisonTableRowHtml: buildRouteComparisonTableRowHtml,
         buildRouteComparisonTableHtml: buildRouteComparisonTableHtml,
@@ -3686,11 +3770,13 @@
         buildShowRouteComparisonRequestOrchestrationPlan: buildShowRouteComparisonRequestOrchestrationPlan,
         buildShowRouteComparisonApiResultExecutePlan: buildShowRouteComparisonApiResultExecutePlan,
         buildShowAllRoutesOrchestrationPlan: buildShowAllRoutesOrchestrationPlan,
+        buildShowAllRoutesApplyPlan: buildShowAllRoutesApplyPlan,
         buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
         buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
         buildSelectRouteOrchestrationPlan: buildSelectRouteOrchestrationPlan,
         buildSelectRouteApplyPlan: buildSelectRouteApplyPlan,
         buildDisplaySingleRouteOrchestrationPlan: buildDisplaySingleRouteOrchestrationPlan,
+        buildDisplaySingleRouteApplyPlan: buildDisplaySingleRouteApplyPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,

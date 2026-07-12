@@ -715,6 +715,7 @@
         return {
             lat: lat,
             lon: lon,
+            shouldApply: true,
             viaPoint: add.viaPoint,
             markerMount: {
                 className: add.marker.className,
@@ -866,6 +867,7 @@
         return {
             lat: lat,
             lon: lon,
+            shouldApply: true,
             stop: add.stop,
             markerMount: {
                 className: add.marker.className,
@@ -1327,6 +1329,46 @@
     }
 
     /**
+     * Entry orchestration plan for mounting a via-point.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {string|null} [name]
+     * @param {number} [viaPointsCount]
+     * @returns {Object}
+     */
+    function buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPointsCount) {
+        return {
+            apply: buildViaPointApplyPlan(lat, lon, name, viaPointsCount),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for mounting a stop.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {string|null} [name]
+     * @param {number} [duration]
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildStopEntryOrchestrationPlan(lat, lon, name, duration, stopsCount) {
+        return {
+            apply: buildStopApplyPlan(lat, lon, name, duration, stopsCount),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for map clicks while adding waypoints.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildMapClickWaypointEntryOrchestrationPlan(opts) {
+        return {
+            apply: buildMapClickWaypointApplyPlan(opts),
+        };
+    }
+
+    /**
      * DOM apply plan for the waypoints list container.
      * @param {Array<Object>} viaPoints
      * @param {Array<Object>} stops
@@ -1737,12 +1779,14 @@
         buildStopPopupHtml: buildStopPopupHtml,
         buildViaPointAddPlan: buildViaPointAddPlan,
         buildViaPointApplyPlan: buildViaPointApplyPlan,
+        buildViaPointEntryOrchestrationPlan: buildViaPointEntryOrchestrationPlan,
         buildViaPointRemovePlan: buildViaPointRemovePlan,
         buildViaPointRemoveApplyPlan: buildViaPointRemoveApplyPlan,
         buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
         buildViaPointMarkersRefreshApplyPlan: buildViaPointMarkersRefreshApplyPlan,
         buildStopAddPlan: buildStopAddPlan,
         buildStopApplyPlan: buildStopApplyPlan,
+        buildStopEntryOrchestrationPlan: buildStopEntryOrchestrationPlan,
         buildStopRemovePlan: buildStopRemovePlan,
         buildStopRemoveApplyPlan: buildStopRemoveApplyPlan,
         buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
@@ -1762,6 +1806,7 @@
         buildAddStopToggleApplyPlan: buildAddStopToggleApplyPlan,
         buildMapClickWaypointDispatchPlan: buildMapClickWaypointDispatchPlan,
         buildMapClickWaypointApplyPlan: buildMapClickWaypointApplyPlan,
+        buildMapClickWaypointEntryOrchestrationPlan: buildMapClickWaypointEntryOrchestrationPlan,
         VIA_POINT_ADDRESS_INPUT_ID: VIA_POINT_ADDRESS_INPUT_ID,
         STOP_ADDRESS_INPUT_ID: STOP_ADDRESS_INPUT_ID,
         ADD_VIA_POINT_BTN_ID: ADD_VIA_POINT_BTN_ID,

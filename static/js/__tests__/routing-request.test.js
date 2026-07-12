@@ -558,6 +558,31 @@ describe('buildCalculateRoute entry orchestration helpers', () => {
 
         const ok = RR.buildCalculateRoutePreflightOrchestrationPlan(collect, false);
         expect(ok.execute.shouldProceed).toBe(true);
+        expect(ok.apply.shouldProceed).toBe(true);
+        expect(ok.apply.debugLogs).toBeDefined();
+    });
+
+    test('buildCalculateRoutePreflightApplyPlan and loading apply plan', () => {
+        const apply = RR.buildCalculateRoutePreflightApplyPlan({
+            execute: {
+                shouldProceed: false,
+                statusMessage: 'busy',
+                statusType: 'info',
+                geocodingBusyLogMessage: 'wait',
+            },
+            collect: { debugLogs: [{ prefix: 'x', value: 1 }] },
+            entryLogMessage: 'start',
+            geocodeCallLogMessage: 'geocode',
+        });
+        expect(apply.shouldProceed).toBe(false);
+        expect(apply.geocodingBusyLogMessage).toBe('wait');
+        expect(apply.debugLogs).toHaveLength(1);
+
+        const loading = RR.buildCalculateRouteLoadingApplyPlan(
+            RR.buildCalculateRouteLoadingExecutePlan()
+        );
+        expect(loading.shouldApply).toBe(true);
+        expect(loading.showRouteProgressBar).toBe(true);
     });
 
     test('buildCalculateRouteFetchPlan and fetch error apply plan', () => {

@@ -235,6 +235,26 @@ describe('waypoints module', () => {
         expect(apply.markerMount.markerHtml).toContain('1');
         expect(apply.markerMount.popupHtml).toContain('Custom');
         expect(apply.updateWaypointsList).toBe(true);
+        expect(apply.shouldApply).toBe(true);
+    });
+
+    test('buildViaPointEntryOrchestrationPlan and stop/map-click entry plans', () => {
+        const via = W.buildViaPointEntryOrchestrationPlan(51.5, -0.1, 'Via', 0);
+        expect(via.apply.shouldApply).toBe(true);
+        expect(via.apply.viaPoint.name).toBe('Via');
+
+        const stop = W.buildStopEntryOrchestrationPlan(51.6, -0.2, 'Stop', 20, 1);
+        expect(stop.apply.shouldApply).toBe(true);
+        expect(stop.apply.stop.name).toBe('Stop');
+
+        const click = W.buildMapClickWaypointEntryOrchestrationPlan({
+            addingViaPoint: true,
+            addingStop: false,
+            lat: 51.5,
+            lon: -0.1,
+        });
+        expect(click.apply.action).toBe('add_via');
+        expect(click.apply.toggleOffVia).toBe(true);
     });
 
     test('buildViaPointRemovePlan rejects invalid index and refreshes markers', () => {

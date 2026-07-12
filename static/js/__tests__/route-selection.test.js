@@ -549,6 +549,8 @@ describe('route comparison modal helpers', () => {
         expect(withTraffic.shouldUse).toBe(true);
         expect(withTraffic.previewTraffic).toBe(true);
         expect(withTraffic.previewPolyline).toHaveLength(2);
+        expect(withTraffic.apply.shouldApply).toBe(true);
+        expect(withTraffic.apply.previewTraffic).toBe(true);
 
         const noTraffic = RS.buildUseRouteOrchestrationPlan(
             0,
@@ -563,6 +565,31 @@ describe('route comparison modal helpers', () => {
         const orch = RS.buildShowAllRoutesOrchestrationPlan(3);
         expect(orch.shouldShow).toBe(true);
         expect(orch.statusMessage).toContain('3 routes');
+        expect(orch.apply.shouldApply).toBe(true);
+        expect(orch.apply.displayAllRoutes).toBe(true);
+    });
+
+    test('buildUseRouteApplyPlan and buildShowAllRoutesApplyPlan gate invalid input', () => {
+        expect(RS.buildUseRouteApplyPlan({ shouldUse: false }).shouldApply).toBe(false);
+        const use = RS.buildUseRouteApplyPlan({
+            shouldUse: true,
+            selectedRouteIndex: 1,
+            route: { name: 'Fast' },
+            previewTraffic: true,
+            previewPolyline: [[51, -1]],
+            statusMessage: 'ready',
+            statusType: 'success',
+        });
+        expect(use.syncLastCalculatedRoute).toBe(true);
+        expect(use.previewPolyline).toHaveLength(1);
+
+        expect(RS.buildShowAllRoutesApplyPlan({ shouldShow: false }).shouldApply).toBe(false);
+        expect(RS.buildShowAllRoutesApplyPlan({
+            shouldShow: true,
+            displayAllRoutes: true,
+            statusMessage: 'showing',
+            statusType: 'info',
+        }).displayAllRoutes).toBe(true);
     });
 
     test('buildShowRouteComparisonRequestOrchestrationPlan and API result execute', () => {
@@ -1102,6 +1129,19 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(orch.shouldExecute).toBe(true);
         expect(orch.preClear.clearAllRouteLayerHandles).toBe(true);
         expect(orch.entryLogMessage).toContain('displaySingleRoute(0)');
+        expect(orch.apply.shouldApply).toBe(true);
+        expect(orch.apply.execute).toBeTruthy();
+    });
+
+    test('buildDisplaySingleRouteApplyPlan gates when orchestration cannot execute', () => {
+        expect(RS.buildDisplaySingleRouteApplyPlan({ shouldExecute: false }).shouldApply).toBe(false);
+        const apply = RS.buildDisplaySingleRouteApplyPlan({
+            shouldExecute: true,
+            entryLogMessage: 'log',
+            preClear: { clearAllRouteLayerHandles: true },
+            execute: { shouldExecute: true },
+        });
+        expect(apply.preClear.clearAllRouteLayerHandles).toBe(true);
     });
 
     test('buildRouteComparisonModalExecutePlan wraps DOM mount fields', () => {

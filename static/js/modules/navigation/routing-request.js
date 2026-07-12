@@ -760,8 +760,36 @@
             collect: collect,
             preflight: preflight,
             execute: buildCalculateRoutePreflightExecutePlan(preflight),
+            apply: buildCalculateRoutePreflightApplyPlan({
+                collect: collect,
+                execute: buildCalculateRoutePreflightExecutePlan(preflight),
+                entryLogMessage: '[calculateRoute] START - Function called',
+                geocodeCallLogMessage: '[calculateRoute] Calling geocodeLocations...',
+            }),
             entryLogMessage: '[calculateRoute] START - Function called',
             geocodeCallLogMessage: '[calculateRoute] Calling geocodeLocations...',
+        };
+    }
+
+    /**
+     * Apply plan for calculateRoute preflight validation and logging.
+     * @param {Object} [orch] - from buildCalculateRoutePreflightOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildCalculateRoutePreflightApplyPlan(orch) {
+        orch = orch || {};
+        var execute = orch.execute || {};
+        var collect = orch.collect || {};
+        return {
+            shouldProceed: !!execute.shouldProceed,
+            statusMessage: execute.statusMessage,
+            statusType: execute.statusType,
+            missingInputsLogMessage: execute.missingInputsLogMessage,
+            geocodingBusyLogMessage: execute.geocodingBusyLogMessage,
+            entryLogMessage: orch.entryLogMessage,
+            geocodeCallLogMessage: orch.geocodeCallLogMessage,
+            collect: collect,
+            debugLogs: collect.debugLogs || [],
         };
     }
 
@@ -775,6 +803,21 @@
             statusMessage: '📍 Calculating route...',
             statusType: 'loading',
             showRouteProgressBar: true,
+        };
+    }
+
+    /**
+     * Apply plan for calculateRoute loading UI after geocoding succeeds.
+     * @param {Object} [loading] - from buildCalculateRouteLoadingExecutePlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteLoadingApplyPlan(loading) {
+        loading = loading || buildCalculateRouteLoadingExecutePlan();
+        return {
+            shouldApply: !!loading.shouldShowLoading,
+            statusMessage: loading.statusMessage,
+            statusType: loading.statusType,
+            showRouteProgressBar: !!loading.showRouteProgressBar,
         };
     }
 
@@ -931,7 +974,9 @@
         buildCalculateRoutePreflightPlan: buildCalculateRoutePreflightPlan,
         buildCalculateRouteInputCollectPlan: buildCalculateRouteInputCollectPlan,
         buildCalculateRoutePreflightOrchestrationPlan: buildCalculateRoutePreflightOrchestrationPlan,
+        buildCalculateRoutePreflightApplyPlan: buildCalculateRoutePreflightApplyPlan,
         buildCalculateRouteLoadingExecutePlan: buildCalculateRouteLoadingExecutePlan,
+        buildCalculateRouteLoadingApplyPlan: buildCalculateRouteLoadingApplyPlan,
         buildCalculateRouteFetchPlan: buildCalculateRouteFetchPlan,
         buildCalculateRouteFetchErrorApplyPlan: buildCalculateRouteFetchErrorApplyPlan,
         buildCalculateRoutePreflightExecutePlan: buildCalculateRoutePreflightExecutePlan,

@@ -2981,13 +2981,9 @@ function toggleAddStop() {
 /**
  * Handle map click for adding via-points or stops
  */
-function handleMapClickForWaypoints(e) {
-    const apply = _waypoints().buildMapClickWaypointApplyPlan({
-        addingViaPoint,
-        addingStop,
-        lat: e.lngLat.lat,
-        lon: e.lngLat.lng,
-    });
+function applyMapClickWaypointFromPlan(apply) {
+    if (!apply || apply.action === 'none') return;
+
     if (apply.action === 'add_via') {
         addViaPoint(apply.lat, apply.lon);
         if (apply.toggleOffVia) toggleAddViaPoint();
@@ -2995,6 +2991,17 @@ function handleMapClickForWaypoints(e) {
         addStop(apply.lat, apply.lon);
         if (apply.toggleOffStop) toggleAddStop();
     }
+}
+
+function handleMapClickForWaypoints(e) {
+    applyMapClickWaypointFromPlan(
+        _waypoints().buildMapClickWaypointEntryOrchestrationPlan({
+            addingViaPoint,
+            addingStop,
+            lat: e.lngLat.lat,
+            lon: e.lngLat.lng,
+        }).apply
+    );
 }
 
 async function addViaPointFromAddress() {
@@ -3074,8 +3081,9 @@ async function addWaypointFromAddress(waypointKind) {
 /**
  * Add a via-point at given coordinates
  */
-function addViaPoint(lat, lon, name = null) {
-    const apply = _waypoints().buildViaPointApplyPlan(lat, lon, name, viaPoints.length);
+function applyViaPointFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
     viaPoints.push(apply.viaPoint);
 
     const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
@@ -3091,11 +3099,18 @@ function addViaPoint(lat, lon, name = null) {
     showStatus(apply.statusMessage, apply.statusType);
 }
 
+function addViaPoint(lat, lon, name = null) {
+    applyViaPointFromPlan(
+        _waypoints().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply
+    );
+}
+
 /**
  * Add a stop at given coordinates
  */
-function addStop(lat, lon, name = null, duration = 15) {
-    const apply = _waypoints().buildStopApplyPlan(lat, lon, name, duration, stops.length);
+function applyStopFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
     stops.push(apply.stop);
 
     const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
@@ -3109,6 +3124,12 @@ function addStop(lat, lon, name = null, duration = 15) {
     stopMarkers.push(marker);
     if (apply.updateWaypointsList) updateWaypointsList();
     showStatus(apply.statusMessage, apply.statusType);
+}
+
+function addStop(lat, lon, name = null, duration = 15) {
+    applyStopFromPlan(
+        _waypoints().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply
+    );
 }
 
 /**
@@ -3468,13 +3489,8 @@ function updateTripInfoFromRouteOption(route) {
     });
 }
 
-/**
- * Display only a single route on the map
- * @param {number} index - Route index to display
- */
-function displaySingleRoute(index) {
-    const RS = _routeSelection();
-    const orch = RS.buildDisplaySingleRouteOrchestrationPlan(index, routeOptions, {
+function collectDisplaySingleRouteRuntime() {
+    return {
         displayOpts: {
             routeColors: routeColors(),
             showTrafficEnabled,
@@ -3484,26 +3500,59 @@ function displaySingleRoute(index) {
             trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
                 || typeof plotTrafficLightsOnRoute === 'function',
         },
-    });
+    };
+}
 
-    console.log(orch.entryLogMessage);
+function applyDisplaySingleRouteFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
 
-    if (!orch.shouldExecute) return;
+    console.log(apply.entryLogMessage);
+    clearRouteLayerHandlesFromPlan(apply.preClear);
+    applySingleRouteMapDisplayFromPlan(apply.execute);
+}
 
-    clearRouteLayerHandlesFromPlan(orch.preClear);
-    applySingleRouteMapDisplayFromPlan(orch.execute);
+/**
+ * Display only a single route on the map
+ * @param {number} index - Route index to display
+ */
+function displaySingleRoute(index) {
+    const orch = _routeSelection().buildDisplaySingleRouteOrchestrationPlan(
+        index,
+        routeOptions,
+        collectDisplaySingleRouteRuntime()
+    );
+    applyDisplaySingleRouteFromPlan(orch.apply);
 }
 
 /**
  * Show all routes on the map (called by "Show All Routes" button)
  */
-function showAllRoutes() {
-    const RS = _routeSelection();
-    const orch = RS.buildShowAllRoutesOrchestrationPlan(routeOptions ? routeOptions.length : 0);
-    if (!orch.shouldShow) return;
-    if (orch.displayAllRoutes) displayAllRoutesOnMap();
-    showStatus(orch.statusMessage, orch.statusType);
+function applyShowAllRoutesFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+    if (apply.displayAllRoutes) displayAllRoutesOnMap();
+    showStatus(apply.statusMessage, apply.statusType);
 }
+
+function showAllRoutes() {
+    const orch = _routeSelection().buildShowAllRoutesOrchestrationPlan(routeOptions ? routeOptions.length : 0);
+    applyShowAllRoutesFromPlan(orch.apply);
+}
+
+function applyUseRouteFromPlan(apply, index) {
+    if (!apply || !apply.shouldApply) return;
+
+    selectedRouteIndex = apply.selectedRouteIndex;
+    if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
+    if (apply.updateTripInfo) updateTripInfoFromRouteOption(apply.route);
+
+    if (apply.previewTraffic) {
+        routePolyline = apply.previewPolyline;
+        fetchAndDisplayRouteTraffic();
+    }
+
+    showStatus(apply.statusMessage, apply.statusType);
+}
+
 /**
  * useRoute function
  * @function useRoute
@@ -3511,22 +3560,10 @@ function showAllRoutes() {
  * @returns {*} Return value description
  */
 function useRoute(index) {
-    const RS = _routeSelection();
-    const orch = RS.buildUseRouteOrchestrationPlan(index, routeOptions, {
+    const orch = _routeSelection().buildUseRouteOrchestrationPlan(index, routeOptions, {
         routeTrafficEnabled,
     });
-    if (!orch.shouldUse) return;
-
-    selectedRouteIndex = orch.selectedRouteIndex;
-    syncLastCalculatedRouteFromSelection(index);
-    updateTripInfoFromRouteOption(orch.route);
-
-    if (orch.previewTraffic) {
-        routePolyline = orch.previewPolyline;
-        fetchAndDisplayRouteTraffic();
-    }
-
-    showStatus(orch.statusMessage, orch.statusType);
+    applyUseRouteFromPlan(orch.apply, index);
 }
 
 // ===== ROUTE SHARING FUNCTIONS =====
@@ -4708,6 +4745,34 @@ function applyCalculateRouteResponseFromPlan(apply, data, labels) {
     applyCalculateRouteIdlePreviewOutcome(data, labels);
 }
 
+function applyCalculateRoutePreflightFromPlan(preflightApply) {
+    if (!preflightApply) return false;
+
+    console.log(preflightApply.entryLogMessage);
+    (preflightApply.debugLogs || []).forEach(({ prefix, value }) => {
+        console.log(prefix, value);
+    });
+
+    if (!preflightApply.shouldProceed) {
+        showStatus(preflightApply.statusMessage, preflightApply.statusType);
+        if (preflightApply.missingInputsLogMessage) {
+            console.error(preflightApply.missingInputsLogMessage);
+        } else if (preflightApply.geocodingBusyLogMessage) {
+            console.warn(preflightApply.geocodingBusyLogMessage);
+        }
+        return false;
+    }
+
+    console.log(preflightApply.geocodeCallLogMessage);
+    return true;
+}
+
+function applyCalculateRouteLoadingFromPlan(loadingApply) {
+    if (!loadingApply || !loadingApply.shouldApply) return;
+    showStatus(loadingApply.statusMessage, loadingApply.statusType);
+    if (loadingApply.showRouteProgressBar) showRouteProgressBar();
+}
+
 async function calculateRoute() {
     const RR = _routingRequest();
     const startInput = document.getElementById('start');
@@ -4717,24 +4782,9 @@ async function calculateRoute() {
         isGeocoding
     );
 
-    console.log(preflightOrch.entryLogMessage);
-    (preflightOrch.collect.debugLogs || []).forEach(({ prefix, value }) => {
-        console.log(prefix, value);
-    });
-
-    const preflightExecute = preflightOrch.execute;
-    if (!preflightExecute.shouldProceed) {
-        showStatus(preflightExecute.statusMessage, preflightExecute.statusType);
-        if (preflightExecute.missingInputsLogMessage) {
-            console.error(preflightExecute.missingInputsLogMessage);
-        } else if (preflightExecute.geocodingBusyLogMessage) {
-            console.warn(preflightExecute.geocodingBusyLogMessage);
-        }
-        return;
-    }
+    if (!applyCalculateRoutePreflightFromPlan(preflightOrch.apply)) return;
 
     const { start, end } = preflightOrch.collect;
-    console.log(preflightOrch.geocodeCallLogMessage);
 
     let geocodedResult = await geocodeLocations(start, end);
     if (!geocodedResult) {
@@ -4748,13 +4798,9 @@ async function calculateRoute() {
     console.log('[calculateRoute] Geocoded start:', geocodedStart);
     console.log('[calculateRoute] Geocoded end:', geocodedEnd);
 
-    const loading = RR.buildCalculateRouteLoadingExecutePlan();
-    if (loading.shouldShowLoading) {
-        showStatus(loading.statusMessage, loading.statusType);
-    }
-    if (loading.showRouteProgressBar) {
-        showRouteProgressBar();
-    }
+    applyCalculateRouteLoadingFromPlan(
+        RR.buildCalculateRouteLoadingApplyPlan(RR.buildCalculateRouteLoadingExecutePlan())
+    );
 
     const routePlan = RR.buildCalculateRouteApiPlan({
         storage: localStorage,
