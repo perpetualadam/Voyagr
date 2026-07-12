@@ -35,6 +35,18 @@ describe('route-progress module', () => {
         expect(plan.animationStyleId).toBe('progressAnimationStyle');
         expect(plan.animationKeyframes).toContain('progressGradient');
     });
+
+    test('buildRouteProgressShowOrchestrationPlan and hide apply plans', () => {
+        const show = RP.buildRouteProgressShowOrchestrationPlan('Routing…');
+        expect(show.apply.shouldShow).toBe(true);
+        expect(show.apply.containerId).toBe('routeProgressContainer');
+        expect(show.apply.showLogMessage).toContain('Showing progress bar');
+
+        const hide = RP.buildRouteProgressHideOrchestrationPlan();
+        expect(hide.apply.shouldHide).toBe(true);
+        expect(hide.apply.containerId).toBe('routeProgressContainer');
+        expect(hide.apply.hideLogMessage).toContain('Hiding progress bar');
+    });
 });
 
 describe('navigation progress seed helpers', () => {

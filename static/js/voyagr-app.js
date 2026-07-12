@@ -2894,19 +2894,22 @@ function applyToggleRouteEditingDisableFromPlan(disableApply) {
 
 function toggleRouteEditing() {
     const WP = _waypoints();
-    const orch = WP.buildToggleRouteEditingOrchestrationPlan({
-        currentlyEnabled: routeEditingEnabled,
-    });
+    const entryApply = WP.buildToggleRouteEditingEntryApplyPlan(
+        WP.buildToggleRouteEditingOrchestrationPlan({ currentlyEnabled: routeEditingEnabled })
+    );
+    if (!entryApply.shouldToggle) return;
 
-    if (orch.action === 'disable') {
-        applyToggleRouteEditingDisableFromPlan(WP.buildToggleRouteEditingDisableApplyPlan(orch));
+    if (entryApply.action === 'disable') {
+        applyToggleRouteEditingDisableFromPlan(entryApply.disableApply);
     } else {
         enableRouteEditing();
     }
 
-    applyRouteEditingToggleDomFromPlan(
-        WP.buildRouteEditingToggleDomApplyPlan(routeEditingEnabled)
-    );
+    if (entryApply.updateToggleDom) {
+        applyRouteEditingToggleDomFromPlan(
+            WP.buildRouteEditingToggleDomApplyPlan(routeEditingEnabled)
+        );
+    }
 }
 
 /**
@@ -2925,23 +2928,29 @@ function applyDisplayRouteComparisonFromPlan(apply) {
     applyRouteComparisonListDomFromPlan(apply.domPlan);
 }
 
-/**
- * displayRouteComparison function - Shows distinct route types with hazard counts
- * @function displayRouteComparison
- * @returns {void}
- */
-function displayRouteComparison() {
-    const RS = _routeSelection();
+function collectDisplayRouteComparisonInput() {
     const routes = routeOptions || [];
-    const orch = RS.buildDisplayRouteComparisonOrchestrationPlan({
+    return {
         routes,
         selectedRouteIndex,
         routeColors: routeColors(),
         currencySymbol: getCurrencySymbol(),
         distUnit: getDistanceUnit(),
         distanceTexts: routes.map((route) => convertDistance(route.distance_km)),
-    });
-    applyDisplayRouteComparisonFromPlan(RS.buildDisplayRouteComparisonApplyPlan(orch));
+    };
+}
+
+/**
+ * displayRouteComparison function - Shows distinct route types with hazard counts
+ * @function displayRouteComparison
+ * @returns {void}
+ */
+function displayRouteComparison() {
+    applyDisplayRouteComparisonFromPlan(
+        _routeSelection().buildDisplayRouteComparisonEntryOrchestrationPlan(
+            collectDisplayRouteComparisonInput()
+        ).apply
+    );
 }
 
 // ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
@@ -3571,8 +3580,11 @@ function applyShowAllRoutesFromPlan(apply) {
 }
 
 function showAllRoutes() {
-    const orch = _routeSelection().buildShowAllRoutesOrchestrationPlan(routeOptions ? routeOptions.length : 0);
-    applyShowAllRoutesFromPlan(orch.apply);
+    applyShowAllRoutesFromPlan(
+        _routeSelection().buildShowAllRoutesEntryOrchestrationPlan(
+            routeOptions ? routeOptions.length : 0
+        ).apply
+    );
 }
 
 function applyUseRouteFromPlan(apply, index) {
@@ -4926,40 +4938,53 @@ async function calculateRoute() {
 /**
  * Show route calculation progress bar
  */
-function showRouteProgressBar() {
-    const RP = _routeProgress();
-    const mount = RP.buildRouteProgressMountPlan();
-    let progressContainer = document.getElementById(mount.containerId);
+function applyRouteProgressShowFromPlan(apply) {
+    if (!apply || !apply.shouldShow) return;
 
-    if (!progressContainer) {
+    let progressContainer = document.getElementById(apply.containerId);
+
+    if (!progressContainer && apply.mountIfMissing) {
         progressContainer = document.createElement('div');
-        progressContainer.id = mount.containerId;
-        progressContainer.style.cssText = mount.containerStyleCssText;
-        progressContainer.innerHTML = mount.innerHtml;
+        progressContainer.id = apply.containerId;
+        progressContainer.style.cssText = apply.containerStyleCssText;
+        progressContainer.innerHTML = apply.innerHtml;
 
-        if (!document.getElementById(mount.animationStyleId)) {
+        if (apply.animationStyleId && apply.animationKeyframes &&
+            !document.getElementById(apply.animationStyleId)) {
             const style = document.createElement('style');
-            style.id = mount.animationStyleId;
-            style.textContent = mount.animationKeyframes;
+            style.id = apply.animationStyleId;
+            style.textContent = apply.animationKeyframes;
             document.head.appendChild(style);
         }
 
         document.body.appendChild(progressContainer);
     }
 
-    progressContainer.style.display = 'block';
-    console.log('[Route Progress] Showing progress bar');
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (apply.showLogMessage) console.log(apply.showLogMessage);
+}
+
+function showRouteProgressBar() {
+    applyRouteProgressShowFromPlan(
+        _routeProgress().buildRouteProgressShowOrchestrationPlan().apply
+    );
 }
 
 /**
  * Hide route calculation progress bar
  */
+function applyRouteProgressHideFromPlan(apply) {
+    if (!apply || !apply.shouldHide) return;
+
+    const progressContainer = document.getElementById(apply.containerId);
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (apply.hideLogMessage) console.log(apply.hideLogMessage);
+}
+
 function hideRouteProgressBar() {
-    const progressContainer = document.getElementById(_routeProgress().ROUTE_PROGRESS_CONTAINER_ID);
-    if (progressContainer) {
-        progressContainer.style.display = 'none';
-    }
-    console.log('[Route Progress] Hiding progress bar');
+    applyRouteProgressHideFromPlan(
+        _routeProgress().buildRouteProgressHideOrchestrationPlan().apply
+    );
 }
 
 /**
@@ -7577,6 +7602,25 @@ async function showRouteComparison() {
     }
 }
 
+function applyRouteOverviewFromPlan(apply) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.statusMessage) showStatus(apply.statusMessage, apply.statusType);
+        if (apply && apply.errorLogMessage) console.error(apply.errorLogMessage);
+        return;
+    }
+
+    try {
+        MapLibreHelpers.fitMapBounds(map, apply.routePath, apply.fitBounds);
+        showStatus(apply.statusMessage, apply.statusType);
+        if (apply.successLogPrefix) {
+            console.log(apply.successLogPrefix, apply.routePath.length, 'points');
+        }
+    } catch (error) {
+        showStatus((apply.catchErrorStatusPrefix || '') + error.message, 'error');
+        if (apply.catchErrorLogPrefix) console.error(apply.catchErrorLogPrefix, error);
+    }
+}
+
 /**
  * overviewRoute function
  * @function overviewRoute
@@ -7584,21 +7628,37 @@ async function showRouteComparison() {
  */
 function overviewRoute() {
     const RS = _routeSelection();
-    const plan = RS.buildRouteOverviewDispatchPlan(window.lastCalculatedRoute, decodePolyline);
-    if (!plan.ok) {
-        showStatus(plan.statusMessage, plan.statusType);
-        console.error('[Route] No route available for overview');
+    const orch = RS.buildRouteOverviewOrchestrationPlan(window.lastCalculatedRoute, decodePolyline);
+    applyRouteOverviewFromPlan(RS.buildRouteOverviewApplyPlan(orch));
+}
+
+function collectStartNavigationFromPreviewInput() {
+    return {
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        noRouteMessage: 'No route available',
+        syncFromSelection: true,
+        selectedRouteIndex,
+    };
+}
+
+function applyStartNavigationFromPreviewFromPlan(apply) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.errorStatusMessage) showStatus(apply.errorStatusMessage, 'error');
         return;
     }
 
-    try {
-        MapLibreHelpers.fitMapBounds(map, plan.routePath, plan.fitBounds);
-        showStatus(plan.statusMessage, plan.statusType);
-        console.log('[Route] Overview fitted bounds for', plan.routePath.length, 'points');
-    } catch (error) {
-        showStatus('Error displaying route overview: ' + error.message, 'error');
-        console.error('[Route] Overview error:', error);
+    if (apply.syncFromSelection) {
+        syncLastCalculatedRouteFromSelection(apply.selectedRouteIndex);
     }
+
+    apply.hideStartNavButtonIds.forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.style.display = 'none';
+    });
+
+    startTurnByTurnNavigation(window.lastCalculatedRoute);
+
+    if (apply.collapseBottomSheet) collapseBottomSheet();
 }
 
 /**
@@ -7607,29 +7667,12 @@ function overviewRoute() {
  * @returns {*} Return value description
  */
 function startNavigationFromPreview() {
-    const RS = _routeSelection();
-    const plan = RS.buildStartNavigationExecutePlan(window.lastCalculatedRoute, {
-        noRouteMessage: 'No route available',
-        syncFromSelection: true,
-        selectedRouteIndex,
-    });
-    if (!plan.shouldStart) {
-        showStatus(plan.errorStatusMessage, 'error');
-        return;
-    }
-
-    if (plan.syncFromSelection) {
-        syncLastCalculatedRouteFromSelection(plan.selectedRouteIndex);
-    }
-
-    plan.hideStartNavButtonIds.forEach((id) => {
-        const btn = document.getElementById(id);
-        if (btn) btn.style.display = 'none';
-    });
-
-    startTurnByTurnNavigation(window.lastCalculatedRoute);
-
-    if (plan.collapseBottomSheet) collapseBottomSheet();
+    const input = collectStartNavigationFromPreviewInput();
+    const orch = _routeSelection().buildStartNavigationOrchestrationPlan(
+        input.lastCalculatedRoute,
+        input
+    );
+    applyStartNavigationFromPreviewFromPlan(orch.apply);
 }
 
 // ===== PARKING INTEGRATION FEATURE =====
