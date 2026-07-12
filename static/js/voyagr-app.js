@@ -2741,10 +2741,8 @@ let routeEditingEnabled = false;
  * Enable route editing by adding draggable waypoints along the route
  */
 function enableRouteEditing() {
-    const WP = _waypoints();
-    const execute = WP.buildRouteEditEnableExecutePlan(
-        WP.buildRouteEditMarkersPlan(routePath)
-    );
+    const orch = _waypoints().buildRouteEditEnableOrchestrationPlan(routePath);
+    const execute = orch.execute;
     if (!execute.shouldEnable) {
         showStatus(execute.errorStatusMessage, execute.statusType);
         return;
@@ -4409,21 +4407,8 @@ function collectSettingsFormState() {
  * @param {string} geocodedEnd
  * @param {string} end
  */
-function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
-    const RS = _routeSelection();
-    const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
-    const dispatch = RS.buildInNavRerouteDispatchPlan(
-        activeRoute,
-        data,
-        geocodedEnd,
-        end,
-        voiceAnnouncementsEnabled
-            ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
-            : { enabled: false }
-    );
-    const plan = RS.buildInNavRerouteOutcomeExecutePlan(dispatch, activeRoute);
-
-    if (!plan.shouldApply) {
+function applyCalculateRouteInNavRerouteFromPlan(plan) {
+    if (!plan || !plan.shouldApply) {
         showStatus(plan.noRouteErrorMessage, 'error');
         return;
     }
@@ -4451,6 +4436,20 @@ function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
             );
         } catch (_) { /* ignore */ }
     }
+}
+
+function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
+    const RS = _routeSelection();
+    const orch = RS.buildCalculateRouteInNavRerouteOrchestrationPlan({
+        activeRoute: pickActiveRouteDuringNavigation(data.routes, data),
+        data,
+        geocodedEnd,
+        destinationLabel: end,
+        voiceOpts: voiceAnnouncementsEnabled
+            ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
+            : { enabled: false },
+    });
+    applyCalculateRouteInNavRerouteFromPlan(orch.execute);
 }
 
 /**
@@ -4557,12 +4556,59 @@ function applyRoutePreviewMapFromPlan(plan) {
  * @param {Object} data
  * @param {{ geocodedStart: string, geocodedEnd: string, start: string, end: string }} labels
  */
+function applyCalculateRouteIdlePreviewFromPlan(orch, data) {
+    const RS = _routeSelection();
+    const plan = orch.execute;
+
+    if (!plan.shouldExecute) {
+        showStatus(plan.errorStatusMessage, 'error');
+        if (plan.hideRouteProgressBarOnError) hideRouteProgressBar();
+        return;
+    }
+
+    const mapApplied = applyRoutePreviewMapFromPlan(
+        _previewMarker().buildRoutePreviewMapApplyPlan(orch.mapApplyInput)
+    );
+    if (!mapApplied) return;
+
+    if (plan.multiDropStopLogMessage) console.log(plan.multiDropStopLogMessage);
+    updateTripInfo(
+        plan.tripInfo.distance,
+        plan.tripInfo.displayTime,
+        plan.tripInfo.fuelCost,
+        plan.tripInfo.tollCost
+    );
+    showStatus(plan.statusMessage, 'success');
+
+    if (plan.showMultiDropLegs) {
+        displayMultiDropLegs(data);
+    }
+
+    if (plan.storeLastRouteApiResponse) window.lastRouteApiResponse = data;
+    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+    if (plan.durationLogMessage) console.log(plan.durationLogMessage);
+
+    if (plan.displayPrimaryHazards) {
+        displayHazardMarkers(plan.primaryHazards);
+    }
+
+    if (plan.multiRouteLogMessage) {
+        console.log(plan.multiRouteLogMessage);
+        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
+        console.log(plan.loadedRoutesLogPrefix + routeOptions.length + ' real routes from ' + data.source + ':', routeOptions.map(r => r.name));
+    } else {
+        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
+        if (plan.fallbackRouteLogMessage) console.log(plan.fallbackRouteLogMessage);
+    }
+
+    applyCalculateRouteIdleUiFromPlan(orch.idleUiApplyPlan, data);
+}
+
 function applyCalculateRouteIdlePreviewOutcome(data, labels) {
     try {
         const GL = _geocodingLocations();
-        const RS = _routeSelection();
-        const previewPlan = RS.buildRoutePreviewSuccessPlan(
-            RS.buildRoutePreviewSuccessInputPlan({
+        const orch = _routeSelection().buildCalculateRouteIdlePreviewOrchestrationPlan({
+            input: {
                 geocodedStart: labels.geocodedStart,
                 geocodedEnd: labels.geocodedEnd,
                 startLabel: labels.start,
@@ -4576,63 +4622,15 @@ function applyCalculateRouteIdlePreviewOutcome(data, labels) {
                 distUnit: getDistanceUnit(),
                 currencySymbol: getCurrencySymbol(),
                 parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
-            })
-        );
-        const plan = RS.buildCalculateRouteIdlePreviewExecutePlan(previewPlan, data);
-
-        if (!plan.shouldExecute) {
-            showStatus(plan.errorStatusMessage, 'error');
-            if (plan.hideRouteProgressBarOnError) hideRouteProgressBar();
-            return;
-        }
-
-        const mapApplied = applyRoutePreviewMapFromPlan(
-            _previewMarker().buildRoutePreviewMapApplyPlan({
-                startCoords: plan.startCoords,
-                endCoords: plan.endCoords,
-                routePath: plan.routePath,
-                pathPlan: plan.pathPlan,
-                hasGeometry: plan.hasGeometry,
-                geometrySource: plan.geometrySource,
-            })
-        );
-        if (!mapApplied) return;
-
-        if (plan.multiDropStopLogMessage) console.log(plan.multiDropStopLogMessage);
-        updateTripInfo(
-            plan.tripInfo.distance,
-            plan.tripInfo.displayTime,
-            plan.tripInfo.fuelCost,
-            plan.tripInfo.tollCost
-        );
-        showStatus(plan.statusMessage, 'success');
-
-        if (plan.showMultiDropLegs) {
-            displayMultiDropLegs(data);
-        }
-
-        if (plan.storeLastRouteApiResponse) window.lastRouteApiResponse = data;
-        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-        if (plan.durationLogMessage) console.log(plan.durationLogMessage);
-
-        if (plan.displayPrimaryHazards) {
-            displayHazardMarkers(plan.primaryHazards);
-        }
-
-        if (plan.multiRouteLogMessage) {
-            console.log(plan.multiRouteLogMessage);
-            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
-            console.log(plan.loadedRoutesLogPrefix + routeOptions.length + ' real routes from ' + data.source + ':', routeOptions.map(r => r.name));
-        } else {
-            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
-            if (plan.fallbackRouteLogMessage) console.log(plan.fallbackRouteLogMessage);
-        }
-
-        applyCalculateRouteIdleUiFromPlan(RS.buildCalculateRouteIdleUiApplyPlan(plan.idleUiApplyInput), data);
+            },
+            data,
+        });
+        applyCalculateRouteIdlePreviewFromPlan(orch, data);
     } catch (e) {
-        showStatus('Error parsing coordinates: ' + e.message, 'error');
-        console.error('Coordinate parsing error:', e);
-        hideRouteProgressBar();
+        const errApply = _routeSelection().buildCalculateRouteIdlePreviewParseErrorApplyPlan(e);
+        showStatus(errApply.statusMessage, errApply.statusType);
+        console.error(errApply.logPrefix, e);
+        if (errApply.hideRouteProgressBar) hideRouteProgressBar();
     }
 }
 
@@ -5668,42 +5666,40 @@ async function fetchAndDisplayRouteTraffic() {
 
     try {
         const data = await fetchRouteTrafficFlowPayload(routePolyline, orchestration.sampleInterval);
-        const response = RTF.buildFetchAndDisplayRouteTrafficResponsePlan(data);
-        if (response.action === 'display') {
-            displayRouteTrafficEdges(response.segments);
-            console.log(response.logMessage);
-        } else {
-            console.debug(response.debugMessage);
+        const result = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan(
+            RTF.buildFetchAndDisplayRouteTrafficResponsePlan(data)
+        );
+        if (result.shouldDisplay) {
+            displayRouteTrafficEdges(result.segments);
+            console.log(result.displayLogMessage);
+        } else if (result.debugMessage) {
+            console.debug(result.debugMessage);
         }
     } catch (error) {
-        console.debug('[Route Traffic] Error fetching traffic:', error);
+        const errPrefix = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan({}).errorDebugPrefix;
+        console.debug(errPrefix, error);
     }
 }
 
-/**
- * Display traffic-colored edges along the route
- * Creates polylines that follow the actual route geometry (not straight lines)
- * Traffic edges are drawn ON TOP of the route with thick, visible lines
- */
-function displayRouteTrafficEdges(segments) {
-    clearRouteTrafficLayers();
-
-    const RTF = _routeTrafficFlow();
-    const orch = RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
-        segments,
-        polyline: routePolyline,
-        hasMap: !!map,
-        layersBeforeMount: routeTrafficLayers.length,
-    });
-    if (!orch.shouldDisplay) {
-        const log = orch.cannotDisplayLog || {};
-        console.log('[Route Traffic] Cannot display - map:', log.map, 'segments:', log.segmentCount, 'routePolyline:', log.polylineLength);
+function applyDisplayRouteTrafficEdgesMountFromPlan(apply) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.cannotDisplayLog) {
+            const log = apply.cannotDisplayLog;
+            console.log(
+                apply.cannotDisplayLogMessage,
+                log.map,
+                'segments:',
+                log.segmentCount,
+                'routePolyline:',
+                log.polylineLength
+            );
+        }
         return;
     }
 
-    console.log('[Route Traffic] Segment levels:', orch.levelCounts);
+    console.log(apply.levelCountsLogPrefix, apply.levelCounts);
 
-    orch.mountApply.polylines.forEach((polylinePlan) => {
+    (apply.mountApply.polylines || []).forEach((polylinePlan) => {
         const trafficLine = MapLibreHelpers.addPolyline(map, polylinePlan.points, {
             color: polylinePlan.color,
             weight: polylinePlan.weight,
@@ -5714,7 +5710,7 @@ function displayRouteTrafficEdges(segments) {
         }
     });
 
-    const postDisplay = orch.postDisplay || {};
+    const postDisplay = apply.postDisplay || {};
     if (postDisplay.logMessage) console.log(postDisplay.logMessage);
 
     if (postDisplay.bringTrafficEdgesToTop) {
@@ -5723,6 +5719,21 @@ function displayRouteTrafficEdges(segments) {
     if (postDisplay.bringNavRouteAboveTrafficEdges) {
         bringNavRouteAboveTrafficEdges();
     }
+}
+
+function displayRouteTrafficEdges(segments) {
+    clearRouteTrafficLayers();
+
+    applyDisplayRouteTrafficEdgesMountFromPlan(
+        _routeTrafficFlow().buildDisplayRouteTrafficEdgesMountApplyPlan(
+            _routeTrafficFlow().buildRouteTrafficEdgesDisplayOrchestrationPlan({
+                segments,
+                polyline: routePolyline,
+                hasMap: !!map,
+                layersBeforeMount: routeTrafficLayers.length,
+            })
+        )
+    );
 }
 
 /**

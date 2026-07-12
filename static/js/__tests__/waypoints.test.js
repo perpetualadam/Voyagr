@@ -168,6 +168,13 @@ describe('waypoints module', () => {
         expect(W.buildClearRouteDragMarkersApplyPlan().removeAllMarkers).toBe(true);
     });
 
+    test('buildRouteEditEnableOrchestrationPlan wraps marker and execute plans', () => {
+        const orch = W.buildRouteEditEnableOrchestrationPlan([[51.5, -0.1], [51.6, -0.2], [51.7, -0.3]]);
+        expect(orch.execute.shouldEnable).toBe(true);
+        expect(orch.markerPlan.valid).toBe(true);
+        expect(W.buildRouteEditEnableOrchestrationPlan([]).execute.shouldEnable).toBe(false);
+    });
+
     test('buildViaPointAddPlan prepares marker label and status', () => {
         const plan = W.buildViaPointAddPlan(51.5, -0.1, null, 1);
         expect(plan.viaPoint.name).toBe('Via-point 2');

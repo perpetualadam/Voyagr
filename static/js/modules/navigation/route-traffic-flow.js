@@ -765,6 +765,45 @@
         };
     }
 
+    /**
+     * Apply plan after route-traffic fetch resolves.
+     * @param {Object} [response] - from buildFetchAndDisplayRouteTrafficResponsePlan
+     * @returns {Object}
+     */
+    function buildFetchAndDisplayRouteTrafficResultApplyPlan(response) {
+        response = response || {};
+        return {
+            shouldDisplay: response.action === 'display',
+            segments: response.segments,
+            displayLogMessage: response.logMessage,
+            debugMessage: response.debugMessage,
+            errorDebugPrefix: '[Route Traffic] Error fetching traffic:',
+        };
+    }
+
+    /**
+     * Apply plan for mounting displayed route-traffic edge polylines.
+     * @param {Object} [orch] - from buildRouteTrafficEdgesDisplayOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildDisplayRouteTrafficEdgesMountApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldDisplay) {
+            return {
+                shouldApply: false,
+                cannotDisplayLog: orch.cannotDisplayLog,
+                cannotDisplayLogMessage: '[Route Traffic] Cannot display - map:',
+            };
+        }
+        return {
+            shouldApply: true,
+            levelCounts: orch.levelCounts,
+            mountApply: orch.mountApply,
+            postDisplay: orch.postDisplay,
+            levelCountsLogPrefix: '[Route Traffic] Segment levels:',
+        };
+    }
+
     var api = {
         TRAFFIC_COLORS: TRAFFIC_COLORS,
         findForwardPolylineIndex: findForwardPolylineIndex,
@@ -797,6 +836,8 @@
         buildClearRouteTrafficLayersApplyPlan: buildClearRouteTrafficLayersApplyPlan,
         buildFetchAndDisplayRouteTrafficOrchestrationPlan: buildFetchAndDisplayRouteTrafficOrchestrationPlan,
         buildFetchAndDisplayRouteTrafficResponsePlan: buildFetchAndDisplayRouteTrafficResponsePlan,
+        buildFetchAndDisplayRouteTrafficResultApplyPlan: buildFetchAndDisplayRouteTrafficResultApplyPlan,
+        buildDisplayRouteTrafficEdgesMountApplyPlan: buildDisplayRouteTrafficEdgesMountApplyPlan,
         ROUTE_TRAFFIC_ENABLED_STORAGE_KEY: ROUTE_TRAFFIC_ENABLED_STORAGE_KEY,
         ROUTE_TRAFFIC_TOGGLE_ID: ROUTE_TRAFFIC_TOGGLE_ID,
         ROUTE_TRAFFIC_UPDATE_INTERVAL_MS: ROUTE_TRAFFIC_UPDATE_INTERVAL_MS,

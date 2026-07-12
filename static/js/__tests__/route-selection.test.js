@@ -870,6 +870,54 @@ describe('route preview panel and in-nav dispatch helpers', () => {
             .toBe(false);
     });
 
+    test('buildCalculateRouteIdlePreviewOrchestrationPlan bundles preview execute and map input', () => {
+        const orch = RS.buildCalculateRouteIdlePreviewOrchestrationPlan({
+            input: {
+                geocodedStart: '51,0',
+                geocodedEnd: '52,0',
+                startLabel: 'A',
+                endLabel: 'B',
+                data: { success: true, distance_km: 10, duration_minutes: 20, geometry: 'abc' },
+                parseLatLonPair: (s) => {
+                    const parts = String(s).split(',');
+                    return { valid: true, coords: [parseFloat(parts[0]), parseFloat(parts[1])] };
+                },
+                decodePolyline: () => [[51, 0], [52, 0]],
+                convertDistance: (km) => String(km),
+                distUnit: 'km',
+                currencySymbol: '£',
+                parseDurationMinutes: () => 20,
+            },
+            data: { success: true, distance_km: 10, duration_minutes: 20, geometry: 'abc' },
+        });
+        expect(orch.execute.shouldExecute).toBe(true);
+        expect(orch.mapApplyInput).toBeTruthy();
+        expect(orch.idleUiApplyPlan.showStartNavButtons).toBe(true);
+    });
+
+    test('buildCalculateRouteInNavRerouteOrchestrationPlan and parse error apply', () => {
+        const orch = RS.buildCalculateRouteInNavRerouteOrchestrationPlan({
+            activeRoute: { geometry: 'abc', duration_minutes: 20 },
+            data: { success: true },
+            geocodedEnd: '52,0',
+            destinationLabel: 'Leeds',
+            voiceOpts: { enabled: false },
+        });
+        expect(orch.execute.shouldApply).toBe(true);
+
+        const missing = RS.buildCalculateRouteInNavRerouteOrchestrationPlan({
+            activeRoute: null,
+            data: {},
+            geocodedEnd: '52,0',
+            destinationLabel: 'Leeds',
+        });
+        expect(missing.execute.shouldApply).toBe(false);
+
+        const err = RS.buildCalculateRouteIdlePreviewParseErrorApplyPlan(new Error('bad coords'));
+        expect(err.statusMessage).toContain('bad coords');
+        expect(err.hideRouteProgressBar).toBe(true);
+    });
+
     test('buildRouteUpdateDuringNavigationExecutePlan patches lastCalculatedRoute', () => {
         const execute = RS.buildRouteUpdateDuringNavigationExecutePlan(
             { name: 'Fastest', geometry: 'abc', duration_minutes: 25 },

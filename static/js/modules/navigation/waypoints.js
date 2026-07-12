@@ -419,6 +419,19 @@
     }
 
     /**
+     * Orchestration plan for enabling route editing markers.
+     * @param {Array<[number,number]>} [routePath]
+     * @returns {Object}
+     */
+    function buildRouteEditEnableOrchestrationPlan(routePath) {
+        var markerPlan = buildRouteEditMarkersPlan(routePath);
+        return {
+            markerPlan: markerPlan,
+            execute: buildRouteEditEnableExecutePlan(markerPlan),
+        };
+    }
+
+    /**
      * Execute plan for mounting one route drag marker.
      * @param {Object} mountPlan - from buildRouteDragMarkerMountPlan
      * @returns {Object}
@@ -1630,6 +1643,7 @@
         buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
         buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,
         buildRouteEditEnableExecutePlan: buildRouteEditEnableExecutePlan,
+        buildRouteEditEnableOrchestrationPlan: buildRouteEditEnableOrchestrationPlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
         buildRouteDragMarkerApplyPlan: buildRouteDragMarkerApplyPlan,
         buildRouteDragMarkerDragEndDispatchPlan: buildRouteDragMarkerDragEndDispatchPlan,

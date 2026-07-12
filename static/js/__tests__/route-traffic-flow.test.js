@@ -314,6 +314,26 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(RTF.buildFetchAndDisplayRouteTrafficResponsePlan(null).reason).toBe('no_data');
     });
 
+    test('buildFetchAndDisplayRouteTrafficResultApplyPlan and mount apply plan', () => {
+        const result = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan({
+            action: 'display',
+            segments: [{ traffic_level: 'red' }],
+            logMessage: 'displayed',
+        });
+        expect(result.shouldDisplay).toBe(true);
+        expect(result.displayLogMessage).toBe('displayed');
+
+        const orch = RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
+            segments: [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
+            polyline,
+            hasMap: true,
+            layersBeforeMount: 0,
+        });
+        const mount = RTF.buildDisplayRouteTrafficEdgesMountApplyPlan(orch);
+        expect(mount.shouldApply).toBe(true);
+        expect(mount.mountApply.polylines.length).toBeGreaterThan(0);
+    });
+
     test('buildRouteTrafficEdgesDisplayPlan mounts polylines when map and segments exist', () => {
         const plan = RTF.buildRouteTrafficEdgesDisplayPlan(
             [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],

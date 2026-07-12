@@ -1694,6 +1694,87 @@
     }
 
     /**
+     * Orchestration plan for idle calculateRoute preview outcome assembly.
+     * @param {Object} [o]
+     * @param {Object} [o.input] - passed to buildRoutePreviewSuccessInputPlan
+     * @param {Object} [o.data] - route API response
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdlePreviewOrchestrationPlan(o) {
+        o = o || {};
+        var previewPlan = buildRoutePreviewSuccessPlan(
+            buildRoutePreviewSuccessInputPlan(o.input || {})
+        );
+        var data = o.data || {};
+        var execute = buildCalculateRouteIdlePreviewExecutePlan(previewPlan, data);
+        return {
+            previewPlan: previewPlan,
+            execute: execute,
+            idleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan(previewPlan),
+            mapApplyInput: buildCalculateRouteIdlePreviewMapApplyInput(execute),
+        };
+    }
+
+    /**
+     * Map apply input for route preview after idle calculateRoute success.
+     * @param {Object} [execute] - from buildCalculateRouteIdlePreviewExecutePlan
+     * @returns {Object|null}
+     */
+    function buildCalculateRouteIdlePreviewMapApplyInput(execute) {
+        execute = execute || {};
+        if (!execute.shouldExecute) return null;
+        return {
+            startCoords: execute.startCoords,
+            endCoords: execute.endCoords,
+            routePath: execute.routePath,
+            pathPlan: execute.pathPlan,
+            hasGeometry: execute.hasGeometry,
+            geometrySource: execute.geometrySource,
+        };
+    }
+
+    /**
+     * Orchestration plan for in-navigation calculateRoute reroute outcome.
+     * @param {Object} [o]
+     * @param {Object|null|undefined} [o.activeRoute]
+     * @param {Object} [o.data]
+     * @param {string} [o.geocodedEnd]
+     * @param {string} [o.destinationLabel]
+     * @param {Object} [o.voiceOpts]
+     * @returns {Object}
+     */
+    function buildCalculateRouteInNavRerouteOrchestrationPlan(o) {
+        o = o || {};
+        var dispatch = buildInNavRerouteDispatchPlan(
+            o.activeRoute,
+            o.data,
+            o.geocodedEnd,
+            o.destinationLabel,
+            o.voiceOpts
+        );
+        return {
+            dispatch: dispatch,
+            execute: buildInNavRerouteOutcomeExecutePlan(dispatch, o.activeRoute),
+        };
+    }
+
+    /**
+     * Apply plan when idle preview coordinate parsing throws.
+     * @param {Error|Object} [error]
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdlePreviewParseErrorApplyPlan(error) {
+        error = error || {};
+        return {
+            shouldApply: true,
+            statusMessage: 'Error parsing coordinates: ' + (error.message || 'unknown'),
+            statusType: 'error',
+            logPrefix: 'Coordinate parsing error:',
+            hideRouteProgressBar: true,
+        };
+    }
+
+    /**
      * Greedy nearest-neighbour ordering of via-points and stops between start and end.
      * @param {number} startLat
      * @param {number} startLon
@@ -3485,6 +3566,10 @@
         buildRoutePreviewSuccessInputPlan: buildRoutePreviewSuccessInputPlan,
         buildRoutePreviewSuccessPlan: buildRoutePreviewSuccessPlan,
         buildCalculateRouteIdlePreviewExecutePlan: buildCalculateRouteIdlePreviewExecutePlan,
+        buildCalculateRouteIdlePreviewOrchestrationPlan: buildCalculateRouteIdlePreviewOrchestrationPlan,
+        buildCalculateRouteIdlePreviewMapApplyInput: buildCalculateRouteIdlePreviewMapApplyInput,
+        buildCalculateRouteInNavRerouteOrchestrationPlan: buildCalculateRouteInNavRerouteOrchestrationPlan,
+        buildCalculateRouteIdlePreviewParseErrorApplyPlan: buildCalculateRouteIdlePreviewParseErrorApplyPlan,
         isCurrentLocationPlaceholder: isCurrentLocationPlaceholder,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,
