@@ -14,8 +14,7 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Note: All global variables are declared in voyagr-core.js
 // This file contains all the application logic and functions
 // Variables: map, routeLayer, startMarker, endMarker
-// Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
-// Currency symbols: currencySymbols
+// Unit variables live in static/js/app/units-preferences-orchestration.js (bound at file end).
 //
 // VoyagrModules (modules/voyagr-modules.js) is the central registry for extracted
 // navigation/UI modules. App-layer wrappers below inject live prefs from voyagr-core.
@@ -105,10 +104,10 @@ function updateThemeButtons() { VoyagrDarkModeOrchestration.updateThemeButtons()
 function getTabNavigationOrchestrationRuntime() {
     return {
         units: () => _units(),
-        getDistanceUnit: () => distanceUnit,
-        getCurrencyUnit: () => currencyUnit,
-        getSpeedUnit: () => speedUnit,
-        getTemperatureUnit: () => temperatureUnit,
+        getDistanceUnit: () => VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(),
+        getCurrencyUnit: () => VoyagrUnitsPreferencesOrchestration.getCurrencyUnitValue(),
+        getSpeedUnit: () => VoyagrUnitsPreferencesOrchestration.getSpeedUnitValue(),
+        getTemperatureUnit: () => VoyagrUnitsPreferencesOrchestration.getTemperatureUnitValue(),
         call: {
             applyDomSelectsFromPlan,
             loadRoutePreferences,
@@ -141,14 +140,14 @@ function getUnitsPreferencesOrchestrationRuntime() {
         units: () => _units(),
         speedGps: () => _speedGps(),
         speedLimitWidget: () => _speedLimitWidget(),
-        getDistanceUnit: () => distanceUnit,
-        setDistanceUnit: (val) => { distanceUnit = val; },
-        getCurrencyUnit: () => currencyUnit,
-        setCurrencyUnit: (val) => { currencyUnit = val; },
-        getSpeedUnit: () => speedUnit,
-        setSpeedUnit: (val) => { speedUnit = val; },
-        getTemperatureUnit: () => temperatureUnit,
-        setTemperatureUnit: (val) => { temperatureUnit = val; },
+        getDistanceUnit: () => VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(),
+        setDistanceUnit: (val) => VoyagrUnitsPreferencesOrchestration.setDistanceUnitValue(val),
+        getCurrencyUnit: () => VoyagrUnitsPreferencesOrchestration.getCurrencyUnitValue(),
+        setCurrencyUnit: (val) => VoyagrUnitsPreferencesOrchestration.setCurrencyUnitValue(val),
+        getSpeedUnit: () => VoyagrUnitsPreferencesOrchestration.getSpeedUnitValue(),
+        setSpeedUnit: (val) => VoyagrUnitsPreferencesOrchestration.setSpeedUnitValue(val),
+        getTemperatureUnit: () => VoyagrUnitsPreferencesOrchestration.getTemperatureUnitValue(),
+        setTemperatureUnit: (val) => VoyagrUnitsPreferencesOrchestration.setTemperatureUnitValue(val),
         getCurrentSpeedLimitMph: () => VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph(),
         getLastDetectedRoadType: () => VoyagrSpeedWidgetOrchestration.getLastDetectedRoadType(),
         getLastSpeedLimitRegion: () => VoyagrSpeedWidgetOrchestration.getLastSpeedLimitRegion(),
@@ -316,14 +315,14 @@ function getSettingsOrchestrationRuntime() {
         routePrefs: () => _routePrefs(),
         getMap: () => map,
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
-        getDistanceUnit: () => distanceUnit,
-        setDistanceUnit: (val) => { distanceUnit = val; },
-        getCurrencyUnit: () => currencyUnit,
-        setCurrencyUnit: (val) => { currencyUnit = val; },
-        getSpeedUnit: () => speedUnit,
-        setSpeedUnit: (val) => { speedUnit = val; },
-        getTemperatureUnit: () => temperatureUnit,
-        setTemperatureUnit: (val) => { temperatureUnit = val; },
+        getDistanceUnit: () => VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(),
+        setDistanceUnit: (val) => VoyagrUnitsPreferencesOrchestration.setDistanceUnitValue(val),
+        getCurrencyUnit: () => VoyagrUnitsPreferencesOrchestration.getCurrencyUnitValue(),
+        setCurrencyUnit: (val) => VoyagrUnitsPreferencesOrchestration.setCurrencyUnitValue(val),
+        getSpeedUnit: () => VoyagrUnitsPreferencesOrchestration.getSpeedUnitValue(),
+        setSpeedUnit: (val) => VoyagrUnitsPreferencesOrchestration.setSpeedUnitValue(val),
+        getTemperatureUnit: () => VoyagrUnitsPreferencesOrchestration.getTemperatureUnitValue(),
+        setTemperatureUnit: (val) => VoyagrUnitsPreferencesOrchestration.setTemperatureUnitValue(val),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
         setCurrentVehicleType: (val) => VoyagrVehicleRoutingOrchestration.setCurrentVehicleType(val),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
@@ -382,7 +381,7 @@ function getTripHistoryOrchestrationRuntime() {
         html: () => _html(),
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
-        getSpeedUnit: () => speedUnit,
+        getSpeedUnit: () => VoyagrUnitsPreferencesOrchestration.getSpeedUnitValue(),
         call: {
             getSupabaseAccessToken,
             fetchJsonWithAuth,
@@ -1038,7 +1037,7 @@ function getRoutePreviewOrchestrationRuntime() {
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
-        getDistanceUnitValue: () => distanceUnit,
+        getDistanceUnitValue: () => VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(),
         getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
         getTrafficLayer: () => VoyagrMapLayersOrchestration.getTrafficLayer(),
         call: {
@@ -1711,7 +1710,7 @@ function getSpeedWidgetOrchestrationRuntime() {
         speedLimitWidget: () => _speedLimitWidget(),
         routeGeometry: () => _routeGeometry(),
         toggleUI: () => _toggleUI(),
-        getSpeedUnit: () => speedUnit,
+        getSpeedUnit: () => VoyagrUnitsPreferencesOrchestration.getSpeedUnitValue(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
@@ -2204,7 +2203,7 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
         routeGeometry: () => _routeGeometry(),
         speedGps: () => _speedGps(),
         previewMarker: () => _previewMarker(),
-        getDistanceUnit: () => distanceUnit,
+        getDistanceUnit: () => VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(),
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
         getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
@@ -2702,7 +2701,7 @@ function getPoiSearchOrchestrationRuntime() {
         call: {
             showStatus,
             calculateRoute,
-            formatPoiDistance: (distanceM) => _units().formatPoiDistanceMeters(distanceM, distanceUnit),
+            formatPoiDistance: (distanceM) => _units().formatPoiDistanceMeters(distanceM, VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue()),
         },
     };
 }
@@ -2938,7 +2937,7 @@ function getJourneySummaryOrchestrationRuntime() {
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getLastSnappedRouteIndex: () => VoyagrNavigationLifecycleOrchestration.getLastSnappedRouteIndex(),
-        getDistanceUnit: () => distanceUnit,
+        getDistanceUnit: () => VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(),
         getNavTraveledMeters: () => VoyagrNavigationLifecycleOrchestration.getNavTraveledMeters(),
         getNavStartedAt: () => VoyagrNavigationLifecycleOrchestration.getNavStartedAt(),
         call: {

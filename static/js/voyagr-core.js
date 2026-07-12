@@ -18,16 +18,8 @@ let endMarker = null;
 // static/js/app/map-recenter-orchestration.js (bound at file end).
 
 // ===== UNIT CONVERSION VARIABLES =====
-let distanceUnit = localStorage.getItem('unit_distance') || 'mi';  // Default: miles
-let currencyUnit = localStorage.getItem('unit_currency') || 'GBP';
-let speedUnit = localStorage.getItem('unit_speed') || 'mph';  // Default: mph
-let temperatureUnit = localStorage.getItem('unit_temperature') || 'celsius';
-
-const currencySymbols = {
-    'GBP': '£',
-    'USD': '$',
-    'EUR': '€'
-};
+// distanceUnit, currencyUnit, speedUnit, temperatureUnit live in
+// static/js/app/units-preferences-orchestration.js (bound at file end).
 
 /**
  * Initialize the map with Leaflet

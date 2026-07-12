@@ -7,6 +7,26 @@
 
     var runtime = null;
 
+    var distanceUnit = localStorage.getItem('unit_distance') || 'mi';
+    var currencyUnit = localStorage.getItem('unit_currency') || 'GBP';
+    var speedUnit = localStorage.getItem('unit_speed') || 'mph';
+    var temperatureUnit = localStorage.getItem('unit_temperature') || 'celsius';
+
+    var currencySymbols = {
+        'GBP': '£',
+        'USD': '$',
+        'EUR': '€'
+    };
+
+    function getDistanceUnitValue() { return distanceUnit; }
+    function setDistanceUnitValue(val) { distanceUnit = val; }
+    function getCurrencyUnitValue() { return currencyUnit; }
+    function setCurrencyUnitValue(val) { currencyUnit = val; }
+    function getSpeedUnitValue() { return speedUnit; }
+    function setSpeedUnitValue(val) { speedUnit = val; }
+    function getTemperatureUnitValue() { return temperatureUnit; }
+    function setTemperatureUnitValue(val) { temperatureUnit = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[UnitsPreferences] Orchestration runtime not bound');
@@ -22,7 +42,7 @@
         const mainEl = document.getElementById('distance');
         const previewEl = document.getElementById('previewDistance');
         const execute = U().buildUpdateAllDistanceDisplaysExecutePlan({
-            distanceUnit: rt().getDistanceUnit(),
+            distanceUnit: getDistanceUnitValue(),
             mainDistanceKm: mainEl && mainEl.dataset.km,
             previewDistanceKm: previewEl && previewEl.dataset.km,
         });
@@ -59,7 +79,7 @@
             roadType: rt().getLastDetectedRoadType() || rt().call.getCurrentRoadType(undefined, rt().getCurrentGpsSpeedMph()),
             region: rt().getLastSpeedLimitRegion(),
             gpsSpeedMph: rt().getCurrentGpsSpeedMph(),
-            speedUnit: rt().getSpeedUnit(),
+            speedUnit: getSpeedUnitValue(),
         });
         if (execute.shouldUpdateWidget) {
             rt().call.updateSpeedWidget(execute.gpsSpeedMph, execute.shownLimitMph);
@@ -68,40 +88,40 @@
     }
 
     function updateAllTemperatureDisplays() {
-        const execute = U().buildUpdateAllTemperatureDisplaysExecutePlan(rt().getTemperatureUnit());
+        const execute = U().buildUpdateAllTemperatureDisplaysExecutePlan(getTemperatureUnitValue());
         if (execute.shouldLog) console.log(execute.logMessage);
     }
 
     function convertDistance(km) {
-        return U().convertDistance(km, rt().getDistanceUnit());
+        return U().convertDistance(km, getDistanceUnitValue());
     }
 
     function getDistanceUnit() {
-        return U().getDistanceUnit(rt().getDistanceUnit());
+        return U().getDistanceUnit(getDistanceUnitValue());
     }
 
     function convertSpeed(kmh) {
         const n = Number(kmh);
         if (!Number.isFinite(n)) return '0.0';
         const mph = SG().kmhToMph(n);
-        const display = SG().mphToDisplaySpeed(mph, rt().getSpeedUnit());
+        const display = SG().mphToDisplaySpeed(mph, getSpeedUnitValue());
         return display.toFixed(1);
     }
 
     function getSpeedUnit() {
-        return SG().speedUnitLabel(rt().getSpeedUnit());
+        return SG().speedUnitLabel(getSpeedUnitValue());
     }
 
     function convertTemperature(celsius) {
-        return U().convertTemperature(celsius, rt().getTemperatureUnit());
+        return U().convertTemperature(celsius, getTemperatureUnitValue());
     }
 
     function getTemperatureUnit() {
-        return U().getTemperatureUnit(rt().getTemperatureUnit());
+        return U().getTemperatureUnit(getTemperatureUnitValue());
     }
 
     function getCurrencySymbol() {
-        return U().getCurrencySymbol(rt().getCurrencyUnit());
+        return U().getCurrencySymbol(getCurrencyUnitValue());
     }
 
     function adjustCostForUnits(cost, costType) {
@@ -110,19 +130,19 @@
     }
 
     function getFuelEfficiencyInUnits(liters_per_100km) {
-        return U().getFuelEfficiencyInUnits(liters_per_100km, rt().getDistanceUnit());
+        return U().getFuelEfficiencyInUnits(liters_per_100km, getDistanceUnitValue());
     }
 
     function getFuelEfficiencyLabel() {
-        return U().getFuelEfficiencyLabel(rt().getDistanceUnit());
+        return U().getFuelEfficiencyLabel(getDistanceUnitValue());
     }
 
     function saveUnitSettingsToBackend() {
         const request = U().buildSaveUnitSettingsBackendRequestPlan({
-            distanceUnit: rt().getDistanceUnit(),
-            currencyUnit: rt().getCurrencyUnit(),
-            speedUnit: rt().getSpeedUnit(),
-            temperatureUnit: rt().getTemperatureUnit(),
+            distanceUnit: getDistanceUnitValue(),
+            currencyUnit: getCurrencyUnitValue(),
+            speedUnit: getSpeedUnitValue(),
+            temperatureUnit: getTemperatureUnitValue(),
         });
         if (!request.shouldSave) return;
 
@@ -139,7 +159,7 @@
         );
         if (!execute.shouldChange) return;
 
-        rt().setDistanceUnit(execute.newUnit);
+        setDistanceUnitValue(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
         if (execute.updateDisplays) updateAllDistanceDisplays();
@@ -153,7 +173,7 @@
         );
         if (!execute.shouldChange) return;
 
-        rt().setCurrencyUnit(execute.newUnit);
+        setCurrencyUnitValue(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
         if (execute.updateDisplays) updateAllCostDisplays();
@@ -167,7 +187,7 @@
         );
         if (!execute.shouldChange) return;
 
-        rt().setSpeedUnit(execute.newUnit);
+        setSpeedUnitValue(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
         if (execute.updateDisplays) updateAllSpeedDisplays();
@@ -181,7 +201,7 @@
         );
         if (!execute.shouldChange) return;
 
-        rt().setTemperatureUnit(execute.newUnit);
+        setTemperatureUnitValue(execute.newUnit);
         localStorage.setItem(execute.storageKey, execute.newUnit);
         if (execute.saveBackend) saveUnitSettingsToBackend();
         if (execute.updateDisplays) updateAllTemperatureDisplays();
@@ -195,6 +215,14 @@
 
     var api = {
         bind: bind,
+        getDistanceUnitValue: getDistanceUnitValue,
+        setDistanceUnitValue: setDistanceUnitValue,
+        getCurrencyUnitValue: getCurrencyUnitValue,
+        setCurrencyUnitValue: setCurrencyUnitValue,
+        getSpeedUnitValue: getSpeedUnitValue,
+        setSpeedUnitValue: setSpeedUnitValue,
+        getTemperatureUnitValue: getTemperatureUnitValue,
+        setTemperatureUnitValue: setTemperatureUnitValue,
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
         convertSpeed: convertSpeed,
