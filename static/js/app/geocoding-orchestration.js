@@ -346,6 +346,7 @@ async function geocodeAddress(address) {
 }
 
 async function resolveGeocodeEndpoint(GL, endpointPlan, which, fallbackAddress) {
+    const gl = GL();
     const resolvePlan = gl.buildGeocodeEndpointResolveExecutePlan(which, endpointPlan);
     if (resolvePlan.useStored) {
         console.log(resolvePlan.storedLogPrefix, resolvePlan.storedResult);

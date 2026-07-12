@@ -502,7 +502,6 @@
 
         var geocodedResult = await rt().call.geocodeLocations(start, end);
         if (!geocodedResult) {
-            console.error('[calculateRoute] ERROR: geocodeLocations returned null');
             return;
         }
 
