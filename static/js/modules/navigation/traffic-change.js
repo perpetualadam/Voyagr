@@ -540,6 +540,96 @@
     }
 
     /**
+     * Apply plan for starting periodic traffic condition polling.
+     * @param {Object} [orch] - from buildStartTrafficMonitoringOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildStartTrafficMonitoringApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldStart || !orch.execute || !orch.execute.shouldStart) {
+            return { shouldApply: false };
+        }
+        var execute = orch.execute;
+        var runtime = orch.runtime || buildTrafficMonitoringRuntimeCollectPlan();
+        return {
+            shouldApply: true,
+            intervalProperty: runtime.intervalProperty,
+            startElementId: runtime.startElementId,
+            clearExistingInterval: execute.clearExistingInterval,
+            intervalMs: execute.intervalMs,
+            successStatusMessage: execute.successStatusMessage,
+            successStatusType: execute.successStatusType,
+        };
+    }
+
+    /**
+     * Apply plan for stopping periodic traffic condition polling.
+     * @param {Object} [orch] - from buildStopTrafficMonitoringOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildStopTrafficMonitoringApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldStop || !orch.execute) {
+            return { shouldApply: false };
+        }
+        var execute = orch.execute;
+        var runtime = orch.runtime || buildTrafficMonitoringRuntimeCollectPlan();
+        return {
+            shouldApply: true,
+            intervalProperty: runtime.intervalProperty,
+            clearInterval: execute.clearInterval,
+            resetIntervalHandle: true,
+            statusMessage: execute.statusMessage,
+            statusType: execute.statusType,
+        };
+    }
+
+    /**
+     * Orchestration plan for manual traffic update button handler.
+     * @returns {Object}
+     */
+    function buildManualTrafficUpdateOrchestrationPlan() {
+        return {
+            startStatus: buildManualTrafficUpdateStatusPlan('start'),
+            completeStatus: buildManualTrafficUpdateStatusPlan('complete'),
+        };
+    }
+
+    /**
+     * Entry orchestration plan before requesting a traffic-based reroute.
+     * @param {Object} [opts]
+     * @param {string|null|undefined} [opts.destination]
+     * @param {Object|null|undefined} [opts.lastCalculatedRoute]
+     * @param {string} [opts.changeType]
+     * @param {Array<Object>} [opts.avoidPoints]
+     * @returns {Object}
+     */
+    function buildTriggerTrafficBasedRerouteEntryOrchestrationPlan(opts) {
+        opts = opts || {};
+        var preflight = buildTrafficReroutePreflightPlan({
+            destination: opts.destination,
+            lastCalculatedRoute: opts.lastCalculatedRoute,
+            changeType: opts.changeType,
+        });
+        if (!preflight.shouldReroute) {
+            return {
+                shouldReroute: false,
+                blockedLog: buildTrafficRerouteBlockedLogPlan(preflight.reason),
+            };
+        }
+        return {
+            shouldReroute: true,
+            destination: opts.destination,
+            preflight: preflight,
+            fetchOrch: buildTrafficRerouteFetchOrchestrationPlan({
+                changeType: opts.changeType,
+                avoidPointCount: (opts.avoidPoints || []).length,
+            }),
+            errorLogPrefix: '[Auto-Traffic] Error during traffic-based reroute:',
+        };
+    }
+
+    /**
      * Toggle plan for enabling/disabling automatic traffic updates.
      * @param {boolean} currentEnabled
      * @returns {Object}
@@ -898,9 +988,12 @@
         buildDisplayTrafficUpdateOrchestrationPlan: buildDisplayTrafficUpdateOrchestrationPlan,
         buildStartTrafficMonitoringExecutePlan: buildStartTrafficMonitoringExecutePlan,
         buildStartTrafficMonitoringOrchestrationPlan: buildStartTrafficMonitoringOrchestrationPlan,
+        buildStartTrafficMonitoringApplyPlan: buildStartTrafficMonitoringApplyPlan,
         buildTrafficMonitoringTickPlan: buildTrafficMonitoringTickPlan,
         buildStopTrafficMonitoringExecutePlan: buildStopTrafficMonitoringExecutePlan,
         buildStopTrafficMonitoringOrchestrationPlan: buildStopTrafficMonitoringOrchestrationPlan,
+        buildStopTrafficMonitoringApplyPlan: buildStopTrafficMonitoringApplyPlan,
+        buildManualTrafficUpdateOrchestrationPlan: buildManualTrafficUpdateOrchestrationPlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
         buildAutoTrafficUpdateToggleExecutePlan: buildAutoTrafficUpdateToggleExecutePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
@@ -910,6 +1003,7 @@
         buildUpdateTrafficConditionsEntryOrchestrationPlan: buildUpdateTrafficConditionsEntryOrchestrationPlan,
         buildCheckTrafficAndRerouteApplyPlan: buildCheckTrafficAndRerouteApplyPlan,
         buildTriggerTrafficBasedRerouteAcceptApplyPlan: buildTriggerTrafficBasedRerouteAcceptApplyPlan,
+        buildTriggerTrafficBasedRerouteEntryOrchestrationPlan: buildTriggerTrafficBasedRerouteEntryOrchestrationPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

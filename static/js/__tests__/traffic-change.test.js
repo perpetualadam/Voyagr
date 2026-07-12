@@ -426,6 +426,47 @@ describe('auto traffic interval dispatch plans', () => {
         expect(orch.execute.clearInterval).toBe(true);
     });
 
+    test('buildStartTrafficMonitoringApplyPlan and buildStopTrafficMonitoringApplyPlan expose interval side effects', () => {
+        const start = TC.buildStartTrafficMonitoringApplyPlan(
+            TC.buildStartTrafficMonitoringOrchestrationPlan(false)
+        );
+        expect(start.shouldApply).toBe(true);
+        expect(start.intervalProperty).toBe(TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY);
+        expect(start.clearExistingInterval).toBe(false);
+
+        const stop = TC.buildStopTrafficMonitoringApplyPlan(
+            TC.buildStopTrafficMonitoringOrchestrationPlan(true)
+        );
+        expect(stop.shouldApply).toBe(true);
+        expect(stop.resetIntervalHandle).toBe(true);
+    });
+
+    test('buildManualTrafficUpdateOrchestrationPlan wraps start and complete status', () => {
+        const orch = TC.buildManualTrafficUpdateOrchestrationPlan();
+        expect(orch.startStatus.statusMessage).toContain('Updating');
+        expect(orch.completeStatus.statusMessage).toContain('updated');
+    });
+
+    test('buildTriggerTrafficBasedRerouteEntryOrchestrationPlan gates blocked reroutes', () => {
+        const blocked = TC.buildTriggerTrafficBasedRerouteEntryOrchestrationPlan({
+            destination: null,
+            lastCalculatedRoute: {},
+            changeType: 'severe',
+        });
+        expect(blocked.shouldReroute).toBe(false);
+        expect(blocked.blockedLog.logMessage).toContain('cannot reroute');
+
+        const entry = TC.buildTriggerTrafficBasedRerouteEntryOrchestrationPlan({
+            destination: '51.0,-1.0',
+            lastCalculatedRoute: { geometry: 'abc' },
+            changeType: 'congestion',
+            avoidPoints: [{ lat: 1, lon: 2 }],
+        });
+        expect(entry.shouldReroute).toBe(true);
+        expect(entry.destination).toBe('51.0,-1.0');
+        expect(entry.fetchOrch.logMessage).toContain('avoid pts: 1');
+    });
+
     test('buildCheckTrafficAndRerouteOrchestrationPlan routes reroute and simulated data', () => {
         const none = TC.buildCheckTrafficAndRerouteOrchestrationPlan({ flow: null, lastTrafficData: null });
         expect(none.action).toBe('no_data');

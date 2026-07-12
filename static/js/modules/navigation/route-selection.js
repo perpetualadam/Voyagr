@@ -655,6 +655,56 @@
     }
 
     /**
+     * Request orchestration plan for route-comparison API fetch.
+     * @param {Array<Object>} [routeOptions]
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonRequestOrchestrationPlan(routeOptions) {
+        var routesForComparison = buildRouteComparisonRequestRoutes(routeOptions || []);
+        return {
+            routesForComparison: routesForComparison,
+            fetchPlan: buildShowRouteComparisonFetchPlan(routesForComparison),
+        };
+    }
+
+    /**
+     * Execute plan from a route-comparison API JSON response.
+     * @param {Object} [data]
+     * @param {Object} [fmt]
+     * @param {string} [fmt.currencySymbol]
+     * @param {string} [fmt.distUnit]
+     * @param {function(number): string} [fmt.convertDistance]
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonApiResultExecutePlan(data, fmt) {
+        data = data || {};
+        fmt = fmt || {};
+        return buildShowRouteComparisonSuccessExecutePlan({
+            apiSuccess: !!data.success,
+            apiError: data.error,
+            comparison: data.comparison,
+            currencySymbol: fmt.currencySymbol,
+            distUnit: fmt.distUnit,
+            convertDistance: fmt.convertDistance,
+        });
+    }
+
+    /**
+     * Orchestration plan for the "Show All Routes" button handler.
+     * @param {number} [routeCount]
+     * @returns {Object}
+     */
+    function buildShowAllRoutesOrchestrationPlan(routeCount) {
+        var count = routeCount || 0;
+        return {
+            shouldShow: count > 0,
+            displayAllRoutes: true,
+            statusMessage: 'Showing all ' + count + ' routes',
+            statusType: 'info',
+        };
+    }
+
+    /**
      * Dispatch plan for selecting an alternative route.
      * @param {number} index
      * @param {Array<Object>} routeOptions
@@ -3322,6 +3372,9 @@
         buildShowRouteComparisonSuccessExecutePlan: buildShowRouteComparisonSuccessExecutePlan,
         buildShowRouteComparisonFetchPlan: buildShowRouteComparisonFetchPlan,
         buildShowRouteComparisonErrorExecutePlan: buildShowRouteComparisonErrorExecutePlan,
+        buildShowRouteComparisonRequestOrchestrationPlan: buildShowRouteComparisonRequestOrchestrationPlan,
+        buildShowRouteComparisonApiResultExecutePlan: buildShowRouteComparisonApiResultExecutePlan,
+        buildShowAllRoutesOrchestrationPlan: buildShowAllRoutesOrchestrationPlan,
         buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
         buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
         buildSelectRouteOrchestrationPlan: buildSelectRouteOrchestrationPlan,

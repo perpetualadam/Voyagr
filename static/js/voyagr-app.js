@@ -3479,8 +3479,11 @@ function displaySingleRoute(index) {
  * Show all routes on the map (called by "Show All Routes" button)
  */
 function showAllRoutes() {
-    displayAllRoutesOnMap();
-    showStatus(`Showing all ${routeOptions.length} routes`, 'info');
+    const RS = _routeSelection();
+    const orch = RS.buildShowAllRoutesOrchestrationPlan(routeOptions ? routeOptions.length : 0);
+    if (!orch.shouldShow) return;
+    if (orch.displayAllRoutes) displayAllRoutesOnMap();
+    showStatus(orch.statusMessage, orch.statusType);
 }
 /**
  * useRoute function
@@ -4213,22 +4216,16 @@ function displayTrafficUpdate(data) {
  * @function startTrafficMonitoring
  * @returns {*} Return value description
  */
-function startTrafficMonitoring() {
-    const TC = _trafficChange();
-    const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
-    const orch = TC.buildStartTrafficMonitoringOrchestrationPlan(
-        !!window[runtime.intervalProperty]
-    );
-    if (!orch.shouldStart || !orch.execute.shouldStart) return;
+function applyStartTrafficMonitoringFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
 
-    const execute = orch.execute;
-
-    if (execute.clearExistingInterval) {
-        clearInterval(window[runtime.intervalProperty]);
+    if (apply.clearExistingInterval) {
+        clearInterval(window[apply.intervalProperty]);
     }
 
-    window[runtime.intervalProperty] = setInterval(() => {
-        const startEl = document.getElementById(runtime.startElementId);
+    const TC = _trafficChange();
+    window[apply.intervalProperty] = setInterval(() => {
+        const startEl = document.getElementById(apply.startElementId);
         const tick = TC.buildTrafficMonitoringTickPlan(
             window.lastCalculatedRoute,
             startEl ? startEl.value : ''
@@ -4236,9 +4233,32 @@ function startTrafficMonitoring() {
         if (tick.shouldUpdate) {
             updateTrafficConditions();
         }
-    }, execute.intervalMs);
+    }, apply.intervalMs);
 
-    showStatus(execute.successStatusMessage, execute.successStatusType);
+    showStatus(apply.successStatusMessage, apply.successStatusType);
+}
+
+function applyStopTrafficMonitoringFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    if (apply.clearInterval) {
+        clearInterval(window[apply.intervalProperty]);
+        if (apply.resetIntervalHandle) {
+            window[apply.intervalProperty] = null;
+        }
+    }
+    showStatus(apply.statusMessage, apply.statusType);
+}
+
+function startTrafficMonitoring() {
+    const TC = _trafficChange();
+    applyStartTrafficMonitoringFromPlan(
+        TC.buildStartTrafficMonitoringApplyPlan(
+            TC.buildStartTrafficMonitoringOrchestrationPlan(
+                !!window[TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY]
+            )
+        )
+    );
 }
 
 /**
@@ -4248,19 +4268,13 @@ function startTrafficMonitoring() {
  */
 function stopTrafficMonitoring() {
     const TC = _trafficChange();
-    const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
-    const orch = TC.buildStopTrafficMonitoringOrchestrationPlan(
-        !!window[runtime.intervalProperty]
+    applyStopTrafficMonitoringFromPlan(
+        TC.buildStopTrafficMonitoringApplyPlan(
+            TC.buildStopTrafficMonitoringOrchestrationPlan(
+                !!window[TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY]
+            )
+        )
     );
-    if (!orch.shouldStop) return;
-
-    const execute = orch.execute;
-
-    if (execute.clearInterval) {
-        clearInterval(window[runtime.intervalProperty]);
-        window[runtime.intervalProperty] = null;
-    }
-    showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**
@@ -6157,35 +6171,31 @@ function applyTriggerTrafficBasedRerouteAcceptFromPlan(apply) {
  */
 async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measuredDelayMin = 0) {
     const TC = _trafficChange();
-    const destination = resolveNavigationDestination();
-    const preflight = TC.buildTrafficReroutePreflightPlan({
-        destination,
+    const entry = TC.buildTriggerTrafficBasedRerouteEntryOrchestrationPlan({
+        destination: resolveNavigationDestination(),
         lastCalculatedRoute: window.lastCalculatedRoute,
         changeType,
+        avoidPoints,
     });
-    if (!preflight.shouldReroute) {
-        console.log(TC.buildTrafficRerouteBlockedLogPlan(preflight.reason).logMessage);
+    if (!entry.shouldReroute) {
+        console.log(entry.blockedLog.logMessage);
         return;
     }
 
-    const fetchOrch = TC.buildTrafficRerouteFetchOrchestrationPlan({
-        changeType,
-        avoidPointCount: avoidPoints.length,
-    });
-    console.log(fetchOrch.logMessage);
+    console.log(entry.fetchOrch.logMessage);
 
     try {
-        const routeRequest = buildRouteRequest(currentLat, currentLon, destination, avoidPoints);
-        const response = await fetch(fetchOrch.apiPath, {
-            method: fetchOrch.method,
-            headers: fetchOrch.headers,
+        const routeRequest = buildRouteRequest(currentLat, currentLon, entry.destination, avoidPoints);
+        const response = await fetch(entry.fetchOrch.apiPath, {
+            method: entry.fetchOrch.method,
+            headers: entry.fetchOrch.headers,
             body: JSON.stringify(routeRequest),
         });
 
         const data = await response.json();
         const dispatch = TC.buildTrafficRerouteApiResponseDispatchPlan({
             data,
-            isSevere: preflight.isSevere,
+            isSevere: entry.preflight.isSevere,
             oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
             measuredDelayMin,
         });
@@ -6198,7 +6208,7 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
             console.log(dispatch.logMessage);
         }
     } catch (error) {
-        console.error('[Auto-Traffic] Error during traffic-based reroute:', error);
+        console.error(entry.errorLogPrefix, error);
     }
 }
 
@@ -6206,12 +6216,10 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
  * Manual traffic update button handler
  */
 async function manualTrafficUpdate() {
-    const TC = _trafficChange();
-    const start = TC.buildManualTrafficUpdateStatusPlan('start');
-    showStatus(start.statusMessage, start.statusType);
+    const orch = _trafficChange().buildManualTrafficUpdateOrchestrationPlan();
+    showStatus(orch.startStatus.statusMessage, orch.startStatus.statusType);
     await checkTrafficAndReroute();
-    const done = TC.buildManualTrafficUpdateStatusPlan('complete');
-    showStatus(done.statusMessage, done.statusType);
+    showStatus(orch.completeStatus.statusMessage, orch.completeStatus.statusType);
 }
 
 /**
@@ -7286,9 +7294,9 @@ function showAlternativeRoutesInPreview() {
 }
 
 async function showRouteComparison() {
-    const selection = _routeSelection();
+    const RS = _routeSelection();
     const routeCount = routeOptions ? routeOptions.length : 0;
-    const orch = selection.buildShowRouteComparisonOrchestrationPlan(routeCount);
+    const orch = RS.buildShowRouteComparisonOrchestrationPlan(routeCount);
 
     console.log(orch.entryLogMessage);
     console.log('[RouteComparison] routeOptions:', routeOptions);
@@ -7306,11 +7314,10 @@ async function showRouteComparison() {
     }
 
     try {
-        const routesForComparison = selection.buildRouteComparisonRequestRoutes(routeOptions);
+        const requestOrch = RS.buildShowRouteComparisonRequestOrchestrationPlan(routeOptions);
+        console.log(orch.routesLogPrefix, requestOrch.routesForComparison);
 
-        console.log(orch.routesLogPrefix, routesForComparison);
-
-        const fetchPlan = selection.buildShowRouteComparisonFetchPlan(routesForComparison);
+        const fetchPlan = requestOrch.fetchPlan;
         const response = await fetch(fetchPlan.apiPath, {
             method: fetchPlan.method,
             headers: fetchPlan.headers,
@@ -7318,10 +7325,7 @@ async function showRouteComparison() {
         });
 
         const data = await response.json();
-        const successPlan = selection.buildShowRouteComparisonSuccessExecutePlan({
-            apiSuccess: !!data.success,
-            apiError: data.error,
-            comparison: data.comparison,
+        const successPlan = RS.buildShowRouteComparisonApiResultExecutePlan(data, {
             currencySymbol: getCurrencySymbol(),
             distUnit: getDistanceUnit(),
             convertDistance,
@@ -7338,7 +7342,7 @@ async function showRouteComparison() {
         applyRouteComparisonModalFromPlan(successPlan.domApplyPlan);
         showStatus(successPlan.successStatusMessage, 'success');
     } catch (error) {
-        const errExecute = selection.buildShowRouteComparisonErrorExecutePlan(error);
+        const errExecute = RS.buildShowRouteComparisonErrorExecutePlan(error);
         showStatus(errExecute.statusMessage, 'error');
         console.error(errExecute.errorLogPrefix, ...(errExecute.logArgs || []));
     }

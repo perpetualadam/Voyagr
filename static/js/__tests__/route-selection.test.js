@@ -542,6 +542,46 @@ describe('route comparison modal helpers', () => {
         );
         expect(noTraffic.previewTraffic).toBe(false);
     });
+
+    test('buildShowAllRoutesOrchestrationPlan gates empty route list', () => {
+        expect(RS.buildShowAllRoutesOrchestrationPlan(0).shouldShow).toBe(false);
+        const orch = RS.buildShowAllRoutesOrchestrationPlan(3);
+        expect(orch.shouldShow).toBe(true);
+        expect(orch.statusMessage).toContain('3 routes');
+    });
+
+    test('buildShowRouteComparisonRequestOrchestrationPlan and API result execute', () => {
+        const request = RS.buildShowRouteComparisonRequestOrchestrationPlan([
+            { distance_km: 10, duration_minutes: 20, fuel_cost: 1, toll_cost: 0, caz_cost: 0 },
+        ]);
+        expect(request.fetchPlan.apiPath).toBe('/api/route-comparison');
+        expect(request.routesForComparison).toHaveLength(1);
+
+        const success = RS.buildShowRouteComparisonApiResultExecutePlan(
+            {
+                success: true,
+                comparison: {
+                    routes: [{
+                        route_id: 1,
+                        distance_km: 10,
+                        duration_minutes: 20,
+                        total_cost: 8,
+                        cost_per_km: 0.8,
+                        name: 'A',
+                    }],
+                    recommendations: [],
+                },
+            },
+            { currencySymbol: '£', distUnit: 'mi', convertDistance: (km) => String(km) }
+        );
+        expect(success.shouldMountModal).toBe(true);
+
+        const fail = RS.buildShowRouteComparisonApiResultExecutePlan(
+            { success: false, error: 'bad' },
+            {}
+        );
+        expect(fail.shouldMountModal).toBe(false);
+    });
 });
 
 describe('buildInNavRerouteSuccessPlan', () => {
