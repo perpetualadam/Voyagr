@@ -4674,86 +4674,19 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
     console.log(plan.logMessage);
 }
 
-// ===== CAZ (CLEAN AIR ZONE) INFORMATION =====
-let cazZonesData = null;
-let cazPassTypes = null;
+// ===== CAZ ORCHESTRATION =====
+// Orchestration lives in static/js/app/caz-orchestration.js (bound at file end).
 
-/**
- * Show CAZ zones information in settings
- */
-async function showCAZInfo() {
-    const container = document.getElementById('cazInfoContainer');
-    if (!container) return;
-
-    // Toggle visibility
-    if (container.style.display === 'block') {
-        container.style.display = 'none';
-        return;
-    }
-
-    container.style.display = 'block';
-    container.innerHTML = _cazInfo().buildCazLoadingHtml();
-
-    try {
-        // Fetch CAZ zones if not cached
-        if (!cazZonesData) {
-            const response = await fetch('/api/caz-zones');
-            const data = await response.json();
-            if (data.success) {
-                cazZonesData = data.zones;
-            } else {
-                throw new Error(data.error || 'Failed to load CAZ zones');
-            }
-        }
-
-        container.innerHTML = _cazInfo().buildCazZonesListHtml(cazZonesData);
-    } catch (error) {
-        console.error('[CAZ] Error loading zones:', error);
-        container.innerHTML = _cazInfo().buildCazErrorHtml(error.message);
-    }
+function getCazOrchestrationRuntime() {
+    return {
+        cazInfo: () => _cazInfo(),
+    };
 }
 
-/**
- * Get CAZ pass types for vehicle selection
- */
-async function getCAZPassTypes() {
-    if (cazPassTypes) return cazPassTypes;
-
-    try {
-        const response = await fetch('/api/caz-pass-types');
-        const data = await response.json();
-        if (data.success) {
-            cazPassTypes = data.pass_types;
-            return cazPassTypes;
-        }
-    } catch (error) {
-        console.error('[CAZ] Error loading pass types:', error);
-    }
-    return [];
-}
-
-/**
- * Check if route passes through CAZ zones
- */
-async function checkRouteCAZ(routeCoords, vehicleCazPass = 'none', vehicleType = 'petrol_diesel') {
-    try {
-        const response = await fetch('/api/caz-check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                route_coords: routeCoords,
-                vehicle_caz_pass: vehicleCazPass,
-                vehicle_type: vehicleType
-            })
-        });
-        const data = await response.json();
-        if (data.success) {
-            return data.caz_result;
-        }
-    } catch (error) {
-        console.error('[CAZ] Error checking route:', error);
-    }
-    return null;
+function showCAZInfo() { return VoyagrCazOrchestration.showCAZInfo(); }
+function getCAZPassTypes() { return VoyagrCazOrchestration.getCAZPassTypes(); }
+function checkRouteCAZ(routeCoords, vehicleCazPass, vehicleType) {
+    return VoyagrCazOrchestration.checkRouteCAZ(routeCoords, vehicleCazPass, vehicleType);
 }
 
 // ===== ALWAYS-ON CAMERA LAYER =====
@@ -10996,48 +10929,29 @@ function searchAlongRoute() { VoyagrPoiSearchOrchestration.searchAlongRoute(); }
 function searchAlongRouteByType(type) { VoyagrPoiSearchOrchestration.searchAlongRouteByType(type); }
 function clearPOIMarkers() { VoyagrPoiSearchOrchestration.clearPOIMarkers(); }
 
-// ===== ROUTE AVOIDANCE PREFERENCES =====
-function applyRouteLegAvoidanceToggleFromPlan(dispatch) {
-    if (!dispatch) return;
+// ===== ROUTE AVOIDANCE ORCHESTRATION =====
+// Orchestration lives in static/js/app/route-avoidance-orchestration.js (bound at file end).
 
-    const TU = _toggleUI();
-    const btn = document.getElementById(dispatch.buttonId);
-    if (!btn) return;
-
-    TU.applyToggleButton(btn, dispatch.nextEnabled, TU.TOGGLE_SWITCH_OPTS);
-    localStorage.setItem(dispatch.storage.storageKey, dispatch.storage.value);
-    console.log(`[Avoidance] ${dispatch.logLine}`);
+function getRouteAvoidanceOrchestrationRuntime() {
+    return {
+        routePrefs: () => _routePrefs(),
+        toggleUI: () => _toggleUI(),
+        call: {
+            showStatus,
+            saveAllSettings,
+        },
+    };
 }
 
 function toggleAvoidancePreference(pref) {
-    const RP = _routePrefs();
-    const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
-    if (!btn) return;
-
-    applyRouteLegAvoidanceToggleFromPlan(
-        RP.buildRouteLegAvoidanceToggleEntryOrchestrationPlan(
-            pref,
-            btn.classList.contains('active')
-        ).dispatch
-    );
+    VoyagrRouteAvoidanceOrchestration.toggleAvoidancePreference(pref);
 }
-
-function applyLoadRouteLegAvoidanceTogglesFromPlan(items) {
-    const TU = _toggleUI();
-    (items || []).forEach((item) => {
-        const btn = document.getElementById(item.buttonId);
-        if (btn) {
-            TU.applyToggleButton(btn, item.enabled, TU.TOGGLE_SWITCH_OPTS);
-        }
-    });
-}
-
 function loadAvoidancePreferences() {
-    applyLoadRouteLegAvoidanceTogglesFromPlan(
-        _routePrefs().buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan(localStorage).items
-    );
+    VoyagrRouteAvoidanceOrchestration.loadAvoidancePreferences();
 }
-
+function togglePreference(pref) {
+    VoyagrRouteAvoidanceOrchestration.togglePreference(pref);
+}
 
 // ===== ROAD NAME DISPLAY (TomTom Reverse Geocoding) =====
 
@@ -11149,53 +11063,6 @@ function sendArrivalNotification() {
     VoyagrNotificationsOrchestration.sendArrivalNotification();
 }
 // ===== PREFERENCE FUNCTIONS =====
-/**
- * togglePreference function
- * @function togglePreference
- * @param {*} pref - Parameter description
- * @returns {*} Return value description
- */
-function togglePreference(pref) {
-    // Safety check - pref should not be undefined
-    if (!pref) {
-        console.error('[Preferences] togglePreference called with undefined pref');
-        return;
-    }
-
-    const RP = _routePrefs();
-    const buttonId = RP.resolveRouteAvoidanceButtonId(pref);
-    const button = document.getElementById(buttonId);
-
-    if (!button) {
-        console.warn('[Preferences] Button not found for preference:', pref, 'ID:', buttonId);
-        return;
-    }
-
-    button.classList.toggle('active');
-    const isActive = button.classList.contains('active');
-    localStorage.setItem(RP.getRouteAvoidancePrefStorageKey(pref), isActive ? 'true' : 'false');
-
-    _toggleUI().applyLabeledToggleButton(button, isActive);
-
-    // Handle specific preference behaviors
-    if (pref === 'caz') {
-        console.log('[Settings] Charge zones routing:', isActive ? 'enabled' : 'disabled');
-        showStatus(`Emissions charge zones ${isActive ? 'on' : 'off'} for routing`, 'info');
-    } else if (pref === 'cameras') {
-        console.log('[Settings] Smarter routing:', isActive ? 'enabled' : 'disabled');
-        showStatus(`Map-based routing ${isActive ? 'on' : 'off'}`, 'info');
-    } else if (pref === 'trafficLightsAvoid') {
-        console.log('[Settings] Traffic signals routing:', isActive ? 'enabled' : 'disabled');
-        showStatus(`Traffic signals ${isActive ? 'on' : 'off'} for routing`, 'info');
-    } else if (pref === 'railwayCrossingsAvoid') {
-        console.log('[Settings] Level crossings routing:', isActive ? 'enabled' : 'disabled');
-        showStatus(`Level crossings ${isActive ? 'on' : 'off'} for routing`, 'info');
-    }
-
-    // Save all settings to persistent storage
-    saveAllSettings();
-}
-
 function applyHazardToggleStyles(button, enabled) {
     _toggleUI().applyLabeledToggleButton(button, enabled);
 }
@@ -11886,6 +11753,8 @@ VoyagrOfflineNavigationOrchestration.bind(getOfflineNavigationOrchestrationRunti
 VoyagrSearchFavoritesOrchestration.bind(getSearchFavoritesOrchestrationRuntime());
 VoyagrPoiSearchOrchestration.bind(getPoiSearchOrchestrationRuntime());
 VoyagrBestTimeLeaveOrchestration.bind(getBestTimeLeaveOrchestrationRuntime());
+VoyagrCazOrchestration.bind(getCazOrchestrationRuntime());
+VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 
 
 
