@@ -164,10 +164,10 @@ function getUnitsPreferencesOrchestrationRuntime() {
         setSpeedUnit: (val) => { speedUnit = val; },
         getTemperatureUnit: () => temperatureUnit,
         setTemperatureUnit: (val) => { temperatureUnit = val; },
-        getCurrentSpeedLimitMph: () => currentSpeedLimitMph,
-        getLastDetectedRoadType: () => lastDetectedRoadType,
-        getLastSpeedLimitRegion: () => lastSpeedLimitRegion,
-        getCurrentGpsSpeedMph: () => currentGpsSpeedMph,
+        getCurrentSpeedLimitMph: () => VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph(),
+        getLastDetectedRoadType: () => VoyagrSpeedWidgetOrchestration.getLastDetectedRoadType(),
+        getLastSpeedLimitRegion: () => VoyagrSpeedWidgetOrchestration.getLastSpeedLimitRegion(),
+        getCurrentGpsSpeedMph: () => VoyagrSpeedWidgetOrchestration.getCurrentGpsSpeedMph(),
         call: {
             saveAllSettings,
             showStatus,
@@ -349,8 +349,8 @@ function getSettingsOrchestrationRuntime() {
         setShowOsmRailwayCrossingsEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowOsmRailwayCrossingsEnabled(val); },
         getShowTrafficEnabled: () => showTrafficEnabled,
         setShowTrafficEnabled: (val) => { showTrafficEnabled = val; },
-        getSpeedWidgetEnabled: () => speedWidgetEnabled,
-        setSpeedWidgetEnabled: (val) => { speedWidgetEnabled = val; },
+        getSpeedWidgetEnabled: () => VoyagrSpeedWidgetOrchestration.getSpeedWidgetEnabled(),
+        setSpeedWidgetEnabled: (val) => VoyagrSpeedWidgetOrchestration.setSpeedWidgetEnabled(val),
         call: {
             persistActiveProfile,
             loadPreferences,
@@ -1338,14 +1338,14 @@ function getGpsOrchestrationRuntime() {
             case '_snapBlendWeightState': return _snapBlendWeightState;
             case '_smoothDisplayLat': return _smoothDisplayLat;
             case '_smoothDisplayLon': return _smoothDisplayLon;
-            case 'currentSpeedLimitMph': return currentSpeedLimitMph;
-            case 'lastSpeedLimitRegion': return lastSpeedLimitRegion;
-            case 'lastDetectedRoadType': return lastDetectedRoadType;
-            case '_lastActiveManeuverIdx': return _lastActiveManeuverIdx;
-            case '_lastGoodRawPickMph': return _lastGoodRawPickMph;
-            case '_consecutiveDisplacementMoves': return _consecutiveDisplacementMoves;
-            case '_smoothedSpeedMph': return _smoothedSpeedMph;
-            case '_smoothedSpeedInitAt': return _smoothedSpeedInitAt;
+            case 'currentSpeedLimitMph': return VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph();
+            case 'lastSpeedLimitRegion': return VoyagrSpeedWidgetOrchestration.getLastSpeedLimitRegion();
+            case 'lastDetectedRoadType': return VoyagrSpeedWidgetOrchestration.getLastDetectedRoadType();
+            case '_lastActiveManeuverIdx': return VoyagrSpeedWidgetOrchestration.getLastActiveManeuverIdx();
+            case '_lastGoodRawPickMph': return VoyagrSpeedWidgetOrchestration.getLastGoodRawPickMph();
+            case '_consecutiveDisplacementMoves': return VoyagrSpeedWidgetOrchestration.getConsecutiveDisplacementMoves();
+            case '_smoothedSpeedMph': return VoyagrSpeedWidgetOrchestration.getSmoothedSpeedMph();
+            case '_smoothedSpeedInitAt': return VoyagrSpeedWidgetOrchestration.getSmoothedSpeedInitAt();
             case 'announcedTurnThresholds': return VoyagrVoiceAnnouncementsOrchestration.getAnnouncedTurnThresholds();
             case 'announcedExitThresholds': return VoyagrVoiceAnnouncementsOrchestration.getAnnouncedExitThresholds();
             case 'announcedKeepThresholds': return VoyagrVoiceAnnouncementsOrchestration.getAnnouncedKeepThresholds();
@@ -1378,7 +1378,7 @@ function getGpsOrchestrationRuntime() {
             case 'lastTurnDetectRouteVertexIndex': return VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex();
             case 'voiceAnnouncementsEnabled': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled();
             case 'voiceFrequencyMode': return VoyagrVoiceAnnouncementsOrchestration.getVoiceFrequencyMode();
-            case 'speedWidgetEnabled': return speedWidgetEnabled;
+            case 'speedWidgetEnabled': return VoyagrSpeedWidgetOrchestration.getSpeedWidgetEnabled();
             case 'userHasStartedMoving': return userHasStartedMoving;
                 default: return undefined;
             }
@@ -1404,14 +1404,14 @@ function getGpsOrchestrationRuntime() {
             case '_snapBlendWeightState': _snapBlendWeightState = val; break;
             case '_smoothDisplayLat': _smoothDisplayLat = val; break;
             case '_smoothDisplayLon': _smoothDisplayLon = val; break;
-            case 'currentSpeedLimitMph': currentSpeedLimitMph = val; break;
-            case 'lastSpeedLimitRegion': lastSpeedLimitRegion = val; break;
-            case 'lastDetectedRoadType': lastDetectedRoadType = val; break;
-            case '_lastActiveManeuverIdx': _lastActiveManeuverIdx = val; break;
-            case '_lastGoodRawPickMph': _lastGoodRawPickMph = val; break;
-            case '_consecutiveDisplacementMoves': _consecutiveDisplacementMoves = val; break;
-            case '_smoothedSpeedMph': _smoothedSpeedMph = val; break;
-            case '_smoothedSpeedInitAt': _smoothedSpeedInitAt = val; break;
+            case 'currentSpeedLimitMph': VoyagrSpeedWidgetOrchestration.setCurrentSpeedLimitMph(val); break;
+            case 'lastSpeedLimitRegion': VoyagrSpeedWidgetOrchestration.setLastSpeedLimitRegion(val); break;
+            case 'lastDetectedRoadType': VoyagrSpeedWidgetOrchestration.setLastDetectedRoadType(val); break;
+            case '_lastActiveManeuverIdx': VoyagrSpeedWidgetOrchestration.setLastActiveManeuverIdx(val); break;
+            case '_lastGoodRawPickMph': VoyagrSpeedWidgetOrchestration.setLastGoodRawPickMph(val); break;
+            case '_consecutiveDisplacementMoves': VoyagrSpeedWidgetOrchestration.setConsecutiveDisplacementMoves(val); break;
+            case '_smoothedSpeedMph': VoyagrSpeedWidgetOrchestration.setSmoothedSpeedMph(val); break;
+            case '_smoothedSpeedInitAt': VoyagrSpeedWidgetOrchestration.setSmoothedSpeedInitAt(val); break;
             case 'announcedTurnThresholds': break;
             case 'announcedExitThresholds': break;
             case 'announcedKeepThresholds': break;
@@ -1444,7 +1444,7 @@ function getGpsOrchestrationRuntime() {
             case 'lastTurnDetectRouteVertexIndex': VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val); break;
             case 'voiceAnnouncementsEnabled': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncementsEnabled(val); break;
             case 'voiceFrequencyMode': VoyagrVoiceAnnouncementsOrchestration.setVoiceFrequencyMode(val); break;
-            case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
+            case 'speedWidgetEnabled': VoyagrSpeedWidgetOrchestration.setSpeedWidgetEnabled(val); break;
             case 'userHasStartedMoving': userHasStartedMoving = val; break;
                 default: break;
             }
@@ -1670,23 +1670,7 @@ function renderLaneGuidanceUI(data) {
     return VoyagrLaneGuidanceOrchestration.renderLaneGuidanceUI(data);
 }
 
-// ===== GPS SPEED WIDGET =====
-
-// Speed widget variables - default to enabled
-let speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';  // Default true
-let currentSpeedMph = 0;
-
-// GPS speed tracking
-let currentGpsSpeedMph = 0;
-let currentGpsSpeedKmh = 0;
-let currentSpeedLimitMph = null;
-let lastDetectedRoadType = null;
-let lastSpeedLimitRegion = 'uk';
-let _lastActiveManeuverIdx = -1;
-let _smoothedSpeedMph = 0;
-let _smoothedSpeedInitAt = 0;
-let _lastGoodRawPickMph = 0;
-let _consecutiveDisplacementMoves = 0;
+// Speed widget state lives in speed-widget-orchestration.js.
 
 // Module accessors — thin delegates to VoyagrModules (modules/voyagr-modules.js).
 const _speedGps = () => VoyagrModules.speedGps();
@@ -1768,32 +1752,6 @@ function getSpeedWidgetOrchestrationRuntime() {
         getCurrentRouteSteps: () => currentRouteSteps,
         getCurrentStepIndex: () => currentStepIndex,
         getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
-        g: (key) => {
-            switch (key) {
-            case 'speedWidgetEnabled': return speedWidgetEnabled;
-            case 'currentGpsSpeedMph': return currentGpsSpeedMph;
-            case 'currentGpsSpeedKmh': return currentGpsSpeedKmh;
-            case 'currentSpeedLimitMph': return currentSpeedLimitMph;
-            case 'lastDetectedRoadType': return lastDetectedRoadType;
-            case 'lastSpeedLimitRegion': return lastSpeedLimitRegion;
-            case '_smoothedSpeedMph': return _smoothedSpeedMph;
-            case '_smoothedSpeedInitAt': return _smoothedSpeedInitAt;
-            default: return undefined;
-            }
-        },
-        s: (key, val) => {
-            switch (key) {
-            case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
-            case 'currentGpsSpeedMph': currentGpsSpeedMph = val; break;
-            case 'currentGpsSpeedKmh': currentGpsSpeedKmh = val; break;
-            case 'currentSpeedLimitMph': currentSpeedLimitMph = val; break;
-            case 'lastDetectedRoadType': lastDetectedRoadType = val; break;
-            case 'lastSpeedLimitRegion': lastSpeedLimitRegion = val; break;
-            case '_smoothedSpeedMph': _smoothedSpeedMph = val; break;
-            case '_smoothedSpeedInitAt': _smoothedSpeedInitAt = val; break;
-            default: break;
-            }
-        },
         call: {
             getSpeedUnit,
             calculateDistanceMeters,

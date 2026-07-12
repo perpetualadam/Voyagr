@@ -9,6 +9,41 @@
     var _speedLimitFetchState = null;
     var _lastSpeedWidgetVisible = null;
 
+    var speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';
+    var currentGpsSpeedMph = 0;
+    var currentGpsSpeedKmh = 0;
+    var currentSpeedLimitMph = null;
+    var lastDetectedRoadType = null;
+    var lastSpeedLimitRegion = 'uk';
+    var lastActiveManeuverIdx = -1;
+    var smoothedSpeedMph = 0;
+    var smoothedSpeedInitAt = 0;
+    var lastGoodRawPickMph = 0;
+    var consecutiveDisplacementMoves = 0;
+
+    function getSpeedWidgetEnabled() { return speedWidgetEnabled; }
+    function setSpeedWidgetEnabled(val) { speedWidgetEnabled = !!val; }
+    function getCurrentGpsSpeedMph() { return currentGpsSpeedMph; }
+    function setCurrentGpsSpeedMph(val) { currentGpsSpeedMph = val; }
+    function getCurrentGpsSpeedKmh() { return currentGpsSpeedKmh; }
+    function setCurrentGpsSpeedKmh(val) { currentGpsSpeedKmh = val; }
+    function getCurrentSpeedLimitMph() { return currentSpeedLimitMph; }
+    function setCurrentSpeedLimitMph(val) { currentSpeedLimitMph = val; }
+    function getLastDetectedRoadType() { return lastDetectedRoadType; }
+    function setLastDetectedRoadType(val) { lastDetectedRoadType = val; }
+    function getLastSpeedLimitRegion() { return lastSpeedLimitRegion; }
+    function setLastSpeedLimitRegion(val) { lastSpeedLimitRegion = val; }
+    function getLastActiveManeuverIdx() { return lastActiveManeuverIdx; }
+    function setLastActiveManeuverIdx(val) { lastActiveManeuverIdx = val; }
+    function getSmoothedSpeedMph() { return smoothedSpeedMph; }
+    function setSmoothedSpeedMph(val) { smoothedSpeedMph = val; }
+    function getSmoothedSpeedInitAt() { return smoothedSpeedInitAt; }
+    function setSmoothedSpeedInitAt(val) { smoothedSpeedInitAt = val; }
+    function getLastGoodRawPickMph() { return lastGoodRawPickMph; }
+    function setLastGoodRawPickMph(val) { lastGoodRawPickMph = val; }
+    function getConsecutiveDisplacementMoves() { return consecutiveDisplacementMoves; }
+    function setConsecutiveDisplacementMoves(val) { consecutiveDisplacementMoves = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[SpeedWidget] Orchestration runtime not bound');
@@ -31,14 +66,14 @@
         const mod = SG();
         const r = mod.stepSmoothGpsSpeedMph(
             {
-                smoothedMph: rt().g('_smoothedSpeedMph'),
-                initAt: rt().g('_smoothedSpeedInitAt'),
+                smoothedMph: getSmoothedSpeedMph(),
+                initAt: getSmoothedSpeedInitAt(),
             },
             rawMph,
             Date.now()
         );
-        rt().s('_smoothedSpeedMph', r.state.smoothedMph);
-        rt().s('_smoothedSpeedInitAt', r.state.initAt);
+        setSmoothedSpeedMph(r.state.smoothedMph);
+        setSmoothedSpeedInitAt(r.state.initAt);
         return r.value;
     }
 
@@ -47,8 +82,8 @@
         const widget = document.getElementById('speedWidget');
         if (!widget) return;
 
-        rt().s('currentGpsSpeedMph', currentSpeedInMph);
-        rt().s('currentGpsSpeedKmh', currentSpeedInMph * 1.609344);
+        setCurrentGpsSpeedMph(currentSpeedInMph);
+        setCurrentGpsSpeedKmh(currentSpeedInMph * 1.609344);
 
         const speedGps = SG();
         const speedLimit = SL();
@@ -70,7 +105,7 @@
                 : null;
 
             if (resolvedLimit !== null && resolvedLimit > 0) {
-                rt().s('currentSpeedLimitMph', resolvedLimit);
+                setCurrentSpeedLimitMph(resolvedLimit);
                 const limitDisplay = speedLimit.formatSpeedForWidget(resolvedLimit, rt().getSpeedUnit(), speedGps);
                 limitValueEl.textContent = String(speedLimit.sanitizeWidgetDisplayNumber(limitDisplay.value));
                 limitUnitEl.textContent = limitDisplay.unitLabel;
@@ -90,7 +125,7 @@
         if (!widget) return;
 
         const shouldShow = (rt().getIsTrackingActive() || rt().getRouteInProgress())
-            && rt().g('speedWidgetEnabled');
+            && getSpeedWidgetEnabled();
         if (shouldShow !== _lastSpeedWidgetVisible) {
             widget.style.display = shouldShow ? 'block' : 'none';
             _lastSpeedWidgetVisible = shouldShow;
@@ -105,7 +140,7 @@
             gpsSpeedMph,
             currentRouteSteps: rt().getCurrentRouteSteps(),
             currentStepIndex: rt().getCurrentStepIndex(),
-            lastDetectedRoadType: rt().g('lastDetectedRoadType'),
+            lastDetectedRoadType: getLastDetectedRoadType(),
         });
     }
 
@@ -126,15 +161,15 @@
         if (!outcomeApply || outcomeApply.action !== 'apply') return;
 
         const patch = outcomeApply.statePatch || {};
-        if (patch.lastDetectedRoadType) rt().s('lastDetectedRoadType', patch.lastDetectedRoadType);
-        if (patch.lastSpeedLimitRegion) rt().s('lastSpeedLimitRegion', patch.lastSpeedLimitRegion);
+        if (patch.lastDetectedRoadType) setLastDetectedRoadType(patch.lastDetectedRoadType);
+        if (patch.lastSpeedLimitRegion) setLastSpeedLimitRegion(patch.lastSpeedLimitRegion);
 
         const state = _getSpeedLimitFetchState();
         if (patch.currentLimitMph != null && state) {
             state.currentLimitMph = patch.currentLimitMph;
         }
         if (patch.currentSpeedLimitMph != null) {
-            rt().s('currentSpeedLimitMph', patch.currentSpeedLimitMph);
+            setCurrentSpeedLimitMph(patch.currentSpeedLimitMph);
         }
 
         if (outcomeApply.widgetUpdate) {
@@ -174,9 +209,9 @@
             fetchState: state,
             calculateDistance: rt().call.calculateDistanceMeters,
             currentSpeedMph,
-            currentGpsSpeedMph: rt().g('currentGpsSpeedMph'),
-            lastDetectedRoadType: rt().g('lastDetectedRoadType'),
-            lastSpeedLimitRegion: rt().g('lastSpeedLimitRegion'),
+            currentGpsSpeedMph: getCurrentGpsSpeedMph(),
+            lastDetectedRoadType: getLastDetectedRoadType(),
+            lastSpeedLimitRegion: getLastSpeedLimitRegion(),
         });
         if (tick.action === 'skip') return;
 
@@ -239,14 +274,14 @@
 
     function applySpeedWidgetToggleUi() {
         const toggle = document.getElementById('speedWidgetToggle');
-        rt().toggleUI().applyLabeledToggleButton(toggle, rt().g('speedWidgetEnabled'));
+        rt().toggleUI().applyLabeledToggleButton(toggle, getSpeedWidgetEnabled());
         _lastSpeedWidgetVisible = null;
         updateSpeedWidgetVisibility();
     }
 
     function toggleSpeedWidget() {
-        const next = !rt().g('speedWidgetEnabled');
-        rt().s('speedWidgetEnabled', next);
+        const next = !getSpeedWidgetEnabled();
+        setSpeedWidgetEnabled(next);
         localStorage.setItem('speedWidgetEnabled', next ? 'true' : 'false');
         applySpeedWidgetToggleUi();
         rt().call.saveAllSettings();
@@ -273,6 +308,28 @@
         applySpeedWidgetToggleUi: applySpeedWidgetToggleUi,
         toggleSpeedWidget: toggleSpeedWidget,
         getSpeedLimitFetchState: getSpeedLimitFetchState,
+        getSpeedWidgetEnabled: getSpeedWidgetEnabled,
+        setSpeedWidgetEnabled: setSpeedWidgetEnabled,
+        getCurrentGpsSpeedMph: getCurrentGpsSpeedMph,
+        setCurrentGpsSpeedMph: setCurrentGpsSpeedMph,
+        getCurrentGpsSpeedKmh: getCurrentGpsSpeedKmh,
+        setCurrentGpsSpeedKmh: setCurrentGpsSpeedKmh,
+        getCurrentSpeedLimitMph: getCurrentSpeedLimitMph,
+        setCurrentSpeedLimitMph: setCurrentSpeedLimitMph,
+        getLastDetectedRoadType: getLastDetectedRoadType,
+        setLastDetectedRoadType: setLastDetectedRoadType,
+        getLastSpeedLimitRegion: getLastSpeedLimitRegion,
+        setLastSpeedLimitRegion: setLastSpeedLimitRegion,
+        getLastActiveManeuverIdx: getLastActiveManeuverIdx,
+        setLastActiveManeuverIdx: setLastActiveManeuverIdx,
+        getSmoothedSpeedMph: getSmoothedSpeedMph,
+        setSmoothedSpeedMph: setSmoothedSpeedMph,
+        getSmoothedSpeedInitAt: getSmoothedSpeedInitAt,
+        setSmoothedSpeedInitAt: setSmoothedSpeedInitAt,
+        getLastGoodRawPickMph: getLastGoodRawPickMph,
+        setLastGoodRawPickMph: setLastGoodRawPickMph,
+        getConsecutiveDisplacementMoves: getConsecutiveDisplacementMoves,
+        setConsecutiveDisplacementMoves: setConsecutiveDisplacementMoves,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
