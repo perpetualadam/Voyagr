@@ -212,5 +212,23 @@ describe('route-prefs module', () => {
             expect(dispatch.storage.value).toBe('false');
             expect(dispatch.logLine).toBe('ferries = false');
         });
+
+        test('buildUpdateDetourLabelEntryOrchestrationPlan bundles label apply and save flag', () => {
+            const entry = RoutePrefs.buildUpdateDetourLabelEntryOrchestrationPlan(30);
+            expect(entry.detourApply.text).toBe('30%');
+            expect(entry.shouldSavePreferences).toBe(true);
+        });
+
+        test('buildRouteLegAvoidanceToggleEntryOrchestrationPlan wraps dispatch plan', () => {
+            const entry = RoutePrefs.buildRouteLegAvoidanceToggleEntryOrchestrationPlan('motorways', false);
+            expect(entry.dispatch.nextEnabled).toBe(true);
+            expect(entry.dispatch.buttonId).toBe('avoidMotorways');
+        });
+
+        test('buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan lists toggle items', () => {
+            localStorage.setItem('pref_avoid_motorways', 'true');
+            const entry = RoutePrefs.buildLoadRouteLegAvoidanceTogglesEntryOrchestrationPlan(localStorage);
+            expect(entry.items.find((item) => item.pref === 'motorways').enabled).toBe(true);
+        });
     });
 });
