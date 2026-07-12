@@ -6234,220 +6234,39 @@ function clearForm() {
     }
 }
 
-// ===== PHASE 2 FEATURES: SEARCH HISTORY & FAVORITES =====
+// ===== SEARCH & FAVORITES ORCHESTRATION =====
+// Orchestration lives in static/js/app/search-favorites-orchestration.js (bound at file end).
 
-/**
-async function renderEndDestinationSuggestions(dropdown, fieldId) {
-    return VoyagrGeocodingOrchestration.renderEndDestinationSuggestions(dropdown, fieldId);
+function getSearchFavoritesOrchestrationRuntime() {
+    return {
+        favorites: () => _favorites(),
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        call: {
+            showStatus,
+            getSupabaseAccessToken,
+            fetchJsonWithAuth,
+            escapeHtml,
+            recordRecentDestination,
+            expandBottomSheet,
+        },
+    };
 }
-function showSearchHistory() { VoyagrGeocodingOrchestration.showSearchHistory(); }
 
-// Add search to history
-/**
- * addToSearchHistory function
- * @function addToSearchHistory
- * @param {*} query - Parameter description
- * @param {*} resultName - Parameter description
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @returns {*} Return value description
- */
 function addToSearchHistory(query, resultName, lat, lon) {
-    if (query && lat != null && lon != null) {
-        recordRecentDestination(resultName || query, lat, lon, 'search');
-    }
-    getSupabaseAccessToken().then(token => {
-        if (!token) return;
-        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-        return fetch('/api/search-history', {
-        method: 'POST',
-            headers,
-            body: JSON.stringify({ query, result_name: resultName, lat, lon })
-        });
-    }).catch(error => console.error('Error adding to search history:', error));
+    VoyagrSearchFavoritesOrchestration.addToSearchHistory(query, resultName, lat, lon);
 }
-
-// Load and display favorite locations with edit/delete options
-/**
- * Mount one favorites grid row from a module-built spec.
- * @param {HTMLElement} grid
- * @param {Object} fav
- * @param {Object} handlers
- */
-function mountFavoriteGridItem(grid, fav, handlers) {
-    const FAV = _favorites();
-    const spec = FAV.buildFavoriteGridItemSpec(fav, { escapeHtml });
-    const container = document.createElement('div');
-    container.className = spec.container.className;
-    container.style.cssText = spec.container.style;
-
-    const btn = document.createElement('button');
-    btn.className = spec.mainButton.className;
-    btn.style.cssText = spec.mainButton.style;
-    btn.innerHTML = spec.mainButton.html;
-    btn.onclick = () => handlers.onSelect(fav);
-
-    const editBtn = document.createElement('button');
-    editBtn.innerHTML = spec.editButton.html;
-    editBtn.title = spec.editButton.title;
-    editBtn.style.cssText = spec.editButton.style;
-    editBtn.onclick = (e) => {
-        e.stopPropagation();
-        handlers.onEdit(fav);
-    };
-
-    const delBtn = document.createElement('button');
-    delBtn.innerHTML = spec.deleteButton.html;
-    delBtn.title = spec.deleteButton.title;
-    delBtn.style.cssText = spec.deleteButton.style;
-    delBtn.onclick = (e) => {
-        e.stopPropagation();
-        handlers.onDelete(fav);
-    };
-
-    container.appendChild(btn);
-    container.appendChild(editBtn);
-    container.appendChild(delBtn);
-    grid.appendChild(container);
-}
-
-/**
- * loadFavorites function
- * @function loadFavorites
- * @returns {*} Return value description
- */
 function loadFavorites() {
-    const FAV = _favorites();
-    fetchJsonWithAuth('/api/favorites')
-        .then(({ res, data }) => {
-            const section = document.getElementById('favoritesSection');
-            const grid = document.getElementById('favoritesGrid');
-            grid.innerHTML = '';
-
-            if (res.status === 401) {
-                section.style.display = 'none';
-                return;
-            }
-
-            const favorites = data.success && data.favorites ? data.favorites : [];
-            if (FAV.shouldShowFavoritesSection(false, favorites.length)) {
-                favorites.forEach(fav => {
-                    mountFavoriteGridItem(grid, fav, {
-                        onSelect: (item) => {
-                            document.getElementById('end').value = item.name;
-                            document.getElementById('end').dataset.lat = item.lat;
-                            document.getElementById('end').dataset.lon = item.lon;
-                            document.getElementById('end').dataset.displayName = item.name;
-                            addToSearchHistory(item.name, item.name, item.lat, item.lon);
-                            expandBottomSheet();
-                            showStatus(FAV.getFavoriteSelectStatusMessage(item.name), 'success');
-                        },
-                        onEdit: editFavorite,
-                        onDelete: deleteFavorite,
-                    });
-                });
-
-                section.style.display = 'block';
-            } else {
-                section.style.display = 'none';
-            }
-        })
-        .catch(error => console.error('Error loading favorites:', error));
+    VoyagrSearchFavoritesOrchestration.loadFavorites();
 }
-
-/**
- * Edit a favorite location
- */
 function editFavorite(fav) {
-    const FAV = _favorites();
-    const newName = prompt('Edit name:', fav.name);
-    if (!newName || newName === fav.name) return;
-
-    const newCategory = prompt('Edit category:', fav.category);
-
-    getSupabaseAccessToken().then(token => fetch('/api/favorites', {
-        method: 'PUT',
-        headers: FAV.buildFavoriteAuthHeaders(token),
-        body: FAV.buildFavoriteUpdateBody(fav, newName, newCategory),
-    }))
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showStatus(FAV.getFavoriteUpdatedStatusMessage(newName), 'success');
-            loadFavorites();
-        } else {
-            showStatus(FAV.getFavoriteApiErrorMessage(data.error), 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Error updating favorite:', err);
-        showStatus(FAV.getFavoriteActionFailedMessage('update'), 'error');
-    });
+    VoyagrSearchFavoritesOrchestration.editFavorite(fav);
 }
-
-/**
- * Delete a favorite location
- */
 function deleteFavorite(fav) {
-    const FAV = _favorites();
-    if (!confirm(FAV.getFavoriteDeleteConfirmMessage(fav.name))) return;
-
-    getSupabaseAccessToken().then(token => fetch('/api/favorites', {
-        method: 'DELETE',
-        headers: FAV.buildFavoriteAuthHeaders(token),
-        body: FAV.buildFavoriteDeleteBody(fav),
-    }))
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showStatus(FAV.getFavoriteRemovedStatusMessage(fav.name), 'success');
-            loadFavorites();
-        } else {
-            showStatus(FAV.getFavoriteApiErrorMessage(data.error), 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Error deleting favorite:', err);
-        showStatus(FAV.getFavoriteActionFailedMessage('delete'), 'error');
-    });
+    VoyagrSearchFavoritesOrchestration.deleteFavorite(fav);
 }
-
-// Add current location to favorites
-/**
- * addCurrentToFavorites function
- * @function addCurrentToFavorites
- * @returns {*} Return value description
- */
 function addCurrentToFavorites() {
-    const FAV = _favorites();
-    const name = prompt('Enter name for this location (e.g., Home, Work):');
-    if (!name) return;
-
-    const category = prompt('Enter category (e.g., home, work, shopping):', 'location');
-
-    getSupabaseAccessToken().then(token => fetch('/api/favorites', {
-        method: 'POST',
-        headers: FAV.buildFavoriteAuthHeaders(token),
-        body: FAV.buildFavoriteCreateBody({
-            name: name,
-            address: document.getElementById('end').value,
-            lat: currentLat,
-            lon: currentLon,
-            category: category || 'location',
-        }),
-    }))
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showStatus(FAV.getFavoriteAddedStatusMessage(name), 'success');
-                loadFavorites();
-            } else {
-                showStatus('Error adding to favorites', 'error');
-            }
-        })
-        .catch(error => {
-            showStatus('Error: ' + error.message, 'error');
-        });
+    VoyagrSearchFavoritesOrchestration.addCurrentToFavorites();
 }
 
 // ===== PHASE 2 FEATURES: LANE GUIDANCE =====
@@ -12317,6 +12136,7 @@ VoyagrRouteSharingOrchestration.bind(getRouteSharingOrchestrationRuntime());
 VoyagrNotificationsOrchestration.bind(getNotificationsOrchestrationRuntime());
 VoyagrRoutePreferencesOrchestration.bind(getRoutePreferencesOrchestrationRuntime());
 VoyagrOfflineNavigationOrchestration.bind(getOfflineNavigationOrchestrationRuntime());
+VoyagrSearchFavoritesOrchestration.bind(getSearchFavoritesOrchestrationRuntime());
 
 
 
