@@ -35,6 +35,7 @@
     var SWAP_LOCATIONS_REST_STYLE = { background: '#f5f5f5', borderColor: '#ddd' };
     var SWAP_LOCATIONS_FLASH_MS = 300;
     var BOTTOM_SHEET_DRAG_THRESHOLD_PX = 50;
+    var BOTTOM_SHEET_TAP_SLOP_PX = 10;
     var BOTTOM_SHEET_ID = 'bottomSheet';
     var BOTTOM_SHEET_EXPANDED_CLASS = 'expanded';
 
@@ -101,6 +102,58 @@
             return { action: 'expand' };
         }
         return { action: 'revert' };
+    }
+
+    /**
+     * Decide whether a pointer/touch move should start a drag (vs a tap).
+     * @param {Object} [input]
+     * @param {number} [input.startY]
+     * @param {number} [input.currentY]
+     * @param {boolean} [input.isDragging]
+     * @param {number} [input.tapSlopPx]
+     * @returns {Object}
+     */
+    function buildBottomSheetGestureMovePlan(input) {
+        input = input || {};
+        var startY = input.startY != null ? input.startY : 0;
+        var currentY = input.currentY != null ? input.currentY : startY;
+        var diff = currentY - startY;
+        var slop = input.tapSlopPx != null ? input.tapSlopPx : BOTTOM_SHEET_TAP_SLOP_PX;
+        var isDragging = !!input.isDragging;
+
+        if (!isDragging && Math.abs(diff) > slop) {
+            isDragging = true;
+        }
+
+        return {
+            isDragging: isDragging,
+            diff: diff,
+            shouldApplyDrag: isDragging,
+        };
+    }
+
+    /**
+     * End-of-gesture plan: tap toggles; drag snaps open/closed.
+     * @param {number} diff
+     * @param {boolean} isDragging
+     * @param {boolean} isExpanded
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildBottomSheetGestureEndPlan(diff, isDragging, isExpanded, opts) {
+        opts = opts || {};
+        if (!isDragging) {
+            return {
+                kind: 'tap',
+                shouldToggle: true,
+                action: isExpanded ? 'collapse' : 'expand',
+                logMessage: opts.tapLogMessage,
+                logState: isExpanded,
+            };
+        }
+
+        var finish = buildBottomSheetDragFinishEntryOrchestrationPlan(diff, isExpanded, opts);
+        return Object.assign({ kind: 'drag' }, finish);
     }
 
     /**
@@ -489,6 +542,7 @@
         SWAP_LOCATIONS_REST_STYLE: SWAP_LOCATIONS_REST_STYLE,
         SWAP_LOCATIONS_FLASH_MS: SWAP_LOCATIONS_FLASH_MS,
         BOTTOM_SHEET_DRAG_THRESHOLD_PX: BOTTOM_SHEET_DRAG_THRESHOLD_PX,
+        BOTTOM_SHEET_TAP_SLOP_PX: BOTTOM_SHEET_TAP_SLOP_PX,
         BOTTOM_SHEET_ID: BOTTOM_SHEET_ID,
         BOTTOM_SHEET_EXPANDED_CLASS: BOTTOM_SHEET_EXPANDED_CLASS,
         BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS: BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS,
@@ -497,6 +551,8 @@
         buildBottomSheetFullInitOrchestrationPlan: buildBottomSheetFullInitOrchestrationPlan,
         buildBottomSheetDragStartAllowedPlan: buildBottomSheetDragStartAllowedPlan,
         buildBottomSheetDragSnapPlan: buildBottomSheetDragSnapPlan,
+        buildBottomSheetGestureMovePlan: buildBottomSheetGestureMovePlan,
+        buildBottomSheetGestureEndPlan: buildBottomSheetGestureEndPlan,
         buildBottomSheetDragVisualFeedbackPlan: buildBottomSheetDragVisualFeedbackPlan,
         buildBottomSheetHeaderClickAllowedPlan: buildBottomSheetHeaderClickAllowedPlan,
         buildBottomSheetBodyClickExpandPlan: buildBottomSheetBodyClickExpandPlan,

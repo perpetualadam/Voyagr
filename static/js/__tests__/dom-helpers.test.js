@@ -66,6 +66,39 @@ describe('dom-helpers', () => {
         expect(Dom.buildBottomSheetDragStartAllowedPlan(true, false).allowDrag).toBe(true);
     });
 
+    test('buildBottomSheetGestureMovePlan starts drag only after tap slop', () => {
+        expect(Dom.buildBottomSheetGestureMovePlan({
+            startY: 100,
+            currentY: 104,
+            isDragging: false,
+        }).shouldApplyDrag).toBe(false);
+
+        const drag = Dom.buildBottomSheetGestureMovePlan({
+            startY: 100,
+            currentY: 120,
+            isDragging: false,
+        });
+        expect(drag.isDragging).toBe(true);
+        expect(drag.shouldApplyDrag).toBe(true);
+        expect(drag.diff).toBe(20);
+    });
+
+    test('buildBottomSheetGestureEndPlan toggles on tap and snaps on drag', () => {
+        const tap = Dom.buildBottomSheetGestureEndPlan(0, false, false, {
+            tapLogMessage: 'tapped',
+        });
+        expect(tap.kind).toBe('tap');
+        expect(tap.shouldToggle).toBe(true);
+        expect(tap.action).toBe('expand');
+
+        const drag = Dom.buildBottomSheetGestureEndPlan(60, true, true, {
+            thresholdPx: 50,
+            collapseSwipeLogMessage: 'collapsed',
+        });
+        expect(drag.kind).toBe('drag');
+        expect(drag.shouldCollapse).toBe(true);
+    });
+
     test('buildBottomSheetDragVisualFeedbackPlan clamps expand preview', () => {
         const down = Dom.buildBottomSheetDragVisualFeedbackPlan({ diff: 30, isExpanded: true });
         expect(down.shouldApplyTransform).toBe(true);
