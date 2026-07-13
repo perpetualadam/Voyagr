@@ -78,6 +78,118 @@
         });
     }
 
+    function applyBottomSheetGestureEndFromPlan(entry) {
+        if (!entry) return;
+
+        if (entry.kind === 'tap' && entry.shouldToggle) {
+            applyBottomSheetClickToggleFromPlan(entry);
+            return;
+        }
+
+        applyBottomSheetDragFinishFromPlan(entry);
+    }
+
+    function bindBottomSheetPointerGesture(el, bottomSheet, initPlan, options) {
+        const domHelpers = DH();
+        let pointerId = null;
+        let isDragging = false;
+        let suppressClick = false;
+        options = options || {};
+
+        const applyDragVisual = (diff) => {
+            applyBottomSheetDragVisualFromPlan(
+                domHelpers.buildBottomSheetDragVisualEntryOrchestrationPlan({
+                    diff,
+                    isExpanded: getBottomSheetIsExpanded(),
+                    previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
+                }).feedback,
+                bottomSheet
+            );
+        };
+
+        const finishGesture = (diff) => {
+            applyBottomSheetGestureEndFromPlan(
+                domHelpers.buildBottomSheetGestureEndPlan(diff, isDragging, getBottomSheetIsExpanded(), {
+                    thresholdPx: initPlan.dragThresholdPx,
+                    collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
+                    expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
+                    tapLogMessage: options.tapLogMessage,
+                })
+            );
+        };
+
+        const resetGesture = () => {
+            pointerId = null;
+            isDragging = false;
+        };
+
+        el.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
+
+            pointerId = e.pointerId;
+            isDragging = false;
+            suppressClick = false;
+            setBottomSheetStartY(e.clientY);
+            setBottomSheetCurrentY(getBottomSheetStartY());
+            applyBottomSheetDragStartFromPlan(domHelpers.buildBottomSheetDragStartExecutePlan(), bottomSheet);
+
+            if (typeof el.setPointerCapture === 'function') {
+                el.setPointerCapture(e.pointerId);
+            }
+        });
+
+        el.addEventListener('pointermove', (e) => {
+            if (pointerId == null || e.pointerId !== pointerId) return;
+
+            const movePlan = domHelpers.buildBottomSheetGestureMovePlan({
+                startY: getBottomSheetStartY(),
+                currentY: e.clientY,
+                isDragging: isDragging,
+            });
+            isDragging = movePlan.isDragging;
+            setBottomSheetCurrentY(e.clientY);
+
+            if (!movePlan.shouldApplyDrag) return;
+            applyDragVisual(movePlan.diff);
+        });
+
+        const onPointerEnd = (e) => {
+            if (pointerId == null || e.pointerId !== pointerId) return;
+
+            const diff = e.clientY - getBottomSheetStartY();
+            if (!isDragging) {
+                suppressClick = true;
+            }
+            finishGesture(diff);
+            resetGesture();
+
+            if (typeof el.releasePointerCapture === 'function' && el.hasPointerCapture(e.pointerId)) {
+                el.releasePointerCapture(e.pointerId);
+            }
+        };
+
+        el.addEventListener('pointerup', onPointerEnd);
+        el.addEventListener('pointercancel', onPointerEnd);
+
+        if (options.useClickFallback) {
+            el.addEventListener('click', (e) => {
+                if (suppressClick) {
+                    suppressClick = false;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                e.stopPropagation();
+                applyBottomSheetClickToggleFromPlan(
+                    domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(getBottomSheetIsExpanded(), {
+                        handleClickLogMessage: options.tapLogMessage,
+                    })
+                );
+            });
+        }
+    }
+
     function applyBottomSheetStateFromPlan(execute) {
         const domHelpers = DH();
         if (!execute || !execute.shouldApply) return;
@@ -161,7 +273,6 @@
         const handle = document.querySelector('.bottom-sheet-handle');
         const header = document.querySelector('.bottom-sheet-header');
         const initPlan = domHelpers.buildBottomSheetFullInitOrchestrationPlan(!!bottomSheet, !!handle);
-        let isDragging = false;
 
         console.log(initPlan.initLogMessage, { bottomSheet, handle, header });
 
@@ -170,45 +281,15 @@
             return;
         }
 
-        const applyDragVisual = (diff) => {
-            applyBottomSheetDragVisualFromPlan(
-                domHelpers.buildBottomSheetDragVisualEntryOrchestrationPlan({
-                    diff,
-                    isExpanded: getBottomSheetIsExpanded(),
-                    previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
-                }).feedback,
-                bottomSheet
-            );
-        };
-
-        const finishDrag = (diff) => {
-            applyBottomSheetDragFinishFromPlan(
-                domHelpers.buildBottomSheetDragFinishEntryOrchestrationPlan(diff, getBottomSheetIsExpanded(), {
-                    thresholdPx: initPlan.dragThresholdPx,
-                    collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
-                    expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
-                })
-            );
-        };
-
-        handle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            applyBottomSheetClickToggleFromPlan(
-                domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(getBottomSheetIsExpanded(), {
-                    handleClickLogMessage: initPlan.handleClickLogMessage,
-                })
-            );
+        bindBottomSheetPointerGesture(handle, bottomSheet, initPlan, {
+            useClickFallback: true,
+            tapLogMessage: initPlan.handleClickLogMessage,
         });
 
         if (header) {
-            header.addEventListener('click', (e) => {
-                const entry = domHelpers.buildBottomSheetHeaderClickEntryOrchestrationPlan(
-                    !!domHelpers.closest(e.target, initPlan.headerButtonIgnoreSelector),
-                    getBottomSheetIsExpanded()
-                );
-                if (!entry.shouldToggle) return;
-                e.stopPropagation();
-                applyBottomSheetClickToggleFromPlan(entry);
+            bindBottomSheetPointerGesture(header, bottomSheet, initPlan, {
+                shouldIgnoreTarget: (target) => !!domHelpers.closest(target, initPlan.headerButtonIgnoreSelector),
+                tapLogMessage: initPlan.handleClickLogMessage,
             });
         }
 
@@ -220,44 +301,6 @@
                     { sheetExpandClickLogMessage: initPlan.sheetExpandClickLogMessage }
                 )
             );
-        });
-
-        handle.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            setBottomSheetStartY(e.touches[0].clientY);
-            setBottomSheetCurrentY(getBottomSheetStartY());
-            applyBottomSheetDragStartFromPlan(domHelpers.buildBottomSheetDragStartExecutePlan(), bottomSheet);
-        }, { passive: true });
-
-        handle.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            setBottomSheetCurrentY(e.touches[0].clientY);
-            applyDragVisual(getBottomSheetCurrentY() - getBottomSheetStartY());
-        }, { passive: true });
-
-        handle.addEventListener('touchend', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            finishDrag(getBottomSheetCurrentY() - getBottomSheetStartY());
-        }, { passive: true });
-
-        handle.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            setBottomSheetStartY(e.clientY);
-            setBottomSheetCurrentY(getBottomSheetStartY());
-            applyBottomSheetDragStartFromPlan(domHelpers.buildBottomSheetDragStartExecutePlan(), bottomSheet);
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            setBottomSheetCurrentY(e.clientY);
-            applyDragVisual(getBottomSheetCurrentY() - getBottomSheetStartY());
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            finishDrag(getBottomSheetCurrentY() - getBottomSheetStartY());
         });
 
         applyBottomSheetFocusExpandBindingFromPlan(

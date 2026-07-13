@@ -418,7 +418,7 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
     -webkit-backdrop-filter: blur(10px);
     border-radius: 28px 28px 0 0;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.1);
-    z-index: 50;
+    z-index: 110;
     height: 92vh;
     height: 92dvh;
     transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
@@ -430,6 +430,7 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
     overflow: hidden !important;
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-bottom: none;
+    pointer-events: auto;
 }
 
 .bottom-sheet.expanded {
@@ -517,6 +518,7 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
     z-index: 10;
     touch-action: none;
     pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .bottom-sheet-handle::before {
@@ -543,6 +545,9 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
     flex-shrink: 0;
     user-select: none;
     min-height: 60px;
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .bottom-sheet-header h2 {
