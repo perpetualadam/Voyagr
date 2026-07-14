@@ -951,6 +951,15 @@ function featureGroup(layers) {
  *   - textHaloWidth: number (default: 1) - Halo width in pixels
  *   - textSize: number (default: 12) - Base text size
  */
+function isRoadLabelLayerId(layerId) {
+    if (!layerId) return false;
+    return layerId.includes('label') || layerId.includes('text')
+        || layerId.includes('road') || layerId.includes('transportation')
+        || layerId.includes('highway') || layerId.includes('street')
+        || layerId.includes('motorway') || layerId.includes('trunk')
+        || layerId.includes('primary') || layerId.includes('ref');
+}
+
 function configureRoadLabels(mapInstance, options = {}) {
     if (!mapInstance) {
         console.error('[MapLibre] configureRoadLabels: map is null');
@@ -981,11 +990,7 @@ function configureRoadLabels(mapInstance, options = {}) {
                 layer.type === 'symbol' &&
                 layer.layout &&
                 layer.layout['text-field'] &&
-                (layer.id.includes('label') || layer.id.includes('text') ||
-                 layer.id.includes('road') || layer.id.includes('transportation') ||
-                 layer.id.includes('street') || layer.id.includes('motorway') ||
-                 layer.id.includes('trunk') || layer.id.includes('primary') ||
-                 layer.id.includes('ref'))
+                isRoadLabelLayerId(layer.id)
             );
 
             console.log(`[MapLibre] Found ${labelLayers.length} label layers to configure`);
@@ -1073,10 +1078,7 @@ function toggleRoadLabels(mapInstance, visible) {
                 layer.type === 'symbol' &&
                 layer.layout &&
                 layer.layout['text-field'] &&
-                (layer.id.includes('road') || layer.id.includes('transportation') ||
-                 layer.id.includes('motorway') || layer.id.includes('street') ||
-                 layer.id.includes('trunk') || layer.id.includes('primary') ||
-                 layer.id.includes('ref'))
+                isRoadLabelLayerId(layer.id)
             );
 
             labelLayers.forEach(layer => {
@@ -1135,7 +1137,7 @@ function setRoadLabelZoomFilters(mapInstance, options = {}) {
                     // Determine which zoom level applies to this layer
                     let minZoom = config.streetMinZoom;
 
-                    if (layer.id.includes('motorway')) {
+                    if (layer.id.includes('motorway') || layer.id.includes('highway_name_motorway')) {
                         minZoom = config.motorwayMinZoom;
                     } else if (layer.id.includes('trunk') || layer.id.includes('primary') || layer.id.includes('secondary')) {
                         minZoom = config.mainRoadMinZoom;

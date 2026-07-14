@@ -422,10 +422,15 @@ function startNavigationFromPreview() {
 }
 
 function startNavigation() {
-    const plan = RS().buildStartNavigationExecutePlan(window.lastCalculatedRoute);
+    const input = collectStartNavigationFromPreviewInput();
+    const plan = RS().buildStartNavigationExecutePlan(input.lastCalculatedRoute, input);
     if (!plan.shouldStart) {
         rt().call.showStatus(plan.errorStatusMessage, 'error');
         return;
+    }
+
+    if (plan.syncFromSelection) {
+        rt().call.syncLastCalculatedRouteFromSelection(plan.selectedRouteIndex);
     }
 
     rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute);

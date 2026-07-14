@@ -55,6 +55,12 @@
             var theme = localStorage.getItem('ui_theme') || 'light';
             var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             var useDark = theme === 'dark' || (theme === 'auto' && prefersDark);
+            var linkThemes = localStorage.getItem('linkUiMapTheme') !== 'false';
+            if (linkThemes) {
+                var linkedMap = theme === 'dark' ? 'dark'
+                    : (theme === 'auto' ? (prefersDark ? 'dark' : 'standard') : 'standard');
+                localStorage.setItem('mapTheme', linkedMap);
+            }
             function applyDarkClass() {
                 if (!useDark) return;
                 document.documentElement.classList.add('dark-mode');

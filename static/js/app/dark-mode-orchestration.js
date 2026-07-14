@@ -7,6 +7,7 @@
 
     var runtime = null;
     var systemThemeListenerBound = false;
+    var themeLinkInProgress = false;
     var currentTheme =
         typeof localStorage !== 'undefined' ? localStorage.getItem('ui_theme') || 'light' : 'light';
 
@@ -44,6 +45,22 @@
 
         currentTheme = themeName;
         localStorage.setItem('ui_theme', themeName);
+
+        if (!themeLinkInProgress
+            && theme().isUiMapThemeLinkEnabled()
+            && typeof rt().call.setMapTheme === 'function'
+            && typeof rt().call.getCurrentMapTheme === 'function') {
+            var prefersDarkForMap = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var linkedMapTheme = theme().linkedMapThemeForUiTheme(themeName, prefersDarkForMap);
+            if (rt().call.getCurrentMapTheme() !== linkedMapTheme) {
+                themeLinkInProgress = true;
+                try {
+                    rt().call.setMapTheme(linkedMapTheme);
+                } finally {
+                    themeLinkInProgress = false;
+                }
+            }
+        }
     }
 
     function initializeDarkMode() {

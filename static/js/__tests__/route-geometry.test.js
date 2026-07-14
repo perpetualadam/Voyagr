@@ -8,7 +8,7 @@ const RG = require('../modules/navigation/route-geometry.js');
 describe('route-geometry module surface', () => {
     test('exposes all expected functions', () => {
         const fns = ['haversineDistanceMeters', 'bearing', 'blendHeadingsCircular',
-            'projectToSegment', 'snapToRoutePolyline', 'distanceAlongRouteToVertexMeters',
+            'projectToSegment', 'snapToRoutePolyline', 'snapToRoutePolylineForDeviation', 'distanceAlongRouteToVertexMeters',
             'totalPolylineLengthMeters', 'computeRemainingDistanceAlongRoute',
             'findNearestPolylineVertexIndex', 'buildVertexDestinationProgress'];
         fns.forEach(fn => expect(typeof RG[fn]).toBe('function'));
@@ -84,6 +84,21 @@ describe('snapToRoutePolyline', () => {
         const s = RG.snapToRoutePolyline(51.5, -0.1, [], 0);
         expect(s.index).toBe(0);
         expect(s.distance).toBe(0);
+    });
+});
+
+describe('snapToRoutePolylineForDeviation', () => {
+    test('finds nearest segment far along a long polyline', () => {
+        const polyline = [];
+        for (let i = 0; i < 400; i++) {
+            polyline.push([51.5 + i * 0.0001, -0.1]);
+        }
+        const targetIdx = 350;
+        const lat = polyline[targetIdx][0];
+        const lon = polyline[targetIdx][1];
+        const snap = RG.snapToRoutePolylineForDeviation(lat, lon, polyline);
+        expect(snap.distance).toBeLessThan(5);
+        expect(snap.index).toBeGreaterThanOrEqual(targetIdx - 1);
     });
 });
 

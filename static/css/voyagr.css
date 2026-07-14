@@ -3156,6 +3156,48 @@ html.dark-mode, body.dark-mode textarea:focus {
     box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
 }
 
+html.dark-mode,
+body.dark-mode {
+    --voyagr-surface: rgba(24, 24, 27, 0.98);
+    --voyagr-text: #f4f4f5;
+    --voyagr-muted: #a1a1aa;
+    --voyagr-border: rgba(255, 255, 255, 0.1);
+    --voyagr-accent: #818cf8;
+}
+
+html.dark-mode .bottom-sheet-header .sheet-title,
+body.dark-mode .bottom-sheet-header .sheet-title {
+    color: #f4f4f5;
+}
+
+html.dark-mode .preferences-section h3,
+body.dark-mode .preferences-section h3 {
+    color: #e4e4e7;
+}
+
+html.dark-mode .preference-label,
+body.dark-mode .preference-label {
+    color: #d4d4d8;
+}
+
+html.dark-mode .location-btn,
+body.dark-mode .location-btn {
+    background: #27272a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f4f4f5;
+}
+
+html.dark-mode .sheet-icon-btn,
+body.dark-mode .sheet-icon-btn {
+    background: rgba(39, 39, 42, 0.95);
+    color: #f4f4f5;
+}
+
+html.dark-mode #speedLimitValue,
+body.dark-mode #speedLimitValue {
+    color: #e0e0e0 !important;
+}
+
 /* ============================================
    Navigation shell — toolbar, cards, actions
    ============================================ */

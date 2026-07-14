@@ -46,4 +46,27 @@ describe('theme module', () => {
             expect(Theme.buildEarlyUiThemeBootPlan('auto', false).useDark).toBe(false);
         });
     });
+
+    describe('linked themes', () => {
+        test('linkedMapThemeForUiTheme pairs dark UI with dark map', () => {
+            expect(Theme.linkedMapThemeForUiTheme('dark', false)).toBe('dark');
+            expect(Theme.linkedMapThemeForUiTheme('light', true)).toBe('standard');
+            expect(Theme.linkedMapThemeForUiTheme('auto', true)).toBe('dark');
+            expect(Theme.linkedMapThemeForUiTheme('auto', false)).toBe('standard');
+        });
+
+        test('linkedUiThemeForMapTheme pairs basemap with UI except satellite', () => {
+            expect(Theme.linkedUiThemeForMapTheme('dark')).toBe('dark');
+            expect(Theme.linkedUiThemeForMapTheme('standard')).toBe('light');
+            expect(Theme.linkedUiThemeForMapTheme('satellite')).toBeNull();
+        });
+
+        test('buildEarlyLinkedMapThemeBootPlan defaults linking on', () => {
+            const plan = Theme.buildEarlyLinkedMapThemeBootPlan('dark', false, {
+                getItem: () => null,
+            });
+            expect(plan.shouldSet).toBe(true);
+            expect(plan.mapTheme).toBe('dark');
+        });
+    });
 });

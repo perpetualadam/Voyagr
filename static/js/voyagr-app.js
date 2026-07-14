@@ -87,6 +87,8 @@ function getDarkModeOrchestrationRuntime() {
             showStatus,
             saveAllSettings,
             applyTheme,
+            setMapTheme,
+            getCurrentMapTheme: () => VoyagrMapThemeOrchestration.getCurrentMapTheme(),
         },
     };
 }
@@ -1950,6 +1952,7 @@ function getMapThemeOrchestrationRuntime() {
             showStatus,
             saveAllSettings,
             initializeRoadLabels,
+            setTheme,
         },
     };
 }

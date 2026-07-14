@@ -1247,7 +1247,7 @@
             lon,
             routePolyline: rt().g('routePolyline'),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
-            snapFn: (a, b, c, d) => rgModule().snapToRoutePolyline(a, b, c, d),
+            snapFn: (a, b, c) => rgModule().snapToRoutePolylineForDeviation(a, b, c),
             remainingFn: getNavigationRemainingDistanceMeters,
         });
         if (inputs.action !== 'ready') return;
