@@ -2822,7 +2822,7 @@ html.dark-mode, body.dark-mode .instruction-item-status.current-status {
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 100;
+    z-index: 120;
     display: flex;
     justify-content: space-around;
     align-items: center;
@@ -2830,6 +2830,11 @@ html.dark-mode, body.dark-mode .instruction-item-status.current-status {
     padding: 12px 20px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Lower z-index when bottom sheet is expanded to avoid blocking sheet content */
+.bottom-sheet.expanded ~ .journey-summary-bar {
+    z-index: 100;
 }
 
 .journey-summary-item {
@@ -2907,8 +2912,9 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
 /* Z-Index Hierarchy (organized layers):
    1     - Map base
    10    - Route overlays, markers
-   50    - Bottom sheet
-   100   - Journey summary bar
+   100   - Journey summary bar (when bottom sheet is expanded)
+   110   - Bottom sheet
+   120   - Journey summary bar (default, above collapsed sheet peek)
    150   - FAB container
    200   - Navigation control buttons
    250   - Turn instruction widget
