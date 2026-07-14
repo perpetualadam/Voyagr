@@ -133,10 +133,6 @@
             setBottomSheetStartY(e.clientY);
             setBottomSheetCurrentY(getBottomSheetStartY());
             applyBottomSheetDragStartFromPlan(domHelpers.buildBottomSheetDragStartExecutePlan(), bottomSheet);
-
-            if (typeof el.setPointerCapture === 'function') {
-                el.setPointerCapture(e.pointerId);
-            }
         });
 
         el.addEventListener('pointermove', (e) => {
@@ -147,10 +143,18 @@
                 currentY: e.clientY,
                 isDragging: isDragging,
             });
+            const wasDragging = isDragging;
             isDragging = movePlan.isDragging;
             setBottomSheetCurrentY(e.clientY);
 
             if (!movePlan.shouldApplyDrag) return;
+
+            // Capture only once a real drag starts. Capturing on pointerdown
+            // breaks tap toggling in Firefox (touch capture suppresses the
+            // synthesized click and can fire pointercancel early).
+            if (!wasDragging && typeof el.setPointerCapture === 'function') {
+                el.setPointerCapture(e.pointerId);
+            }
             applyDragVisual(movePlan.diff);
         });
 
@@ -180,6 +184,7 @@
                     e.stopPropagation();
                     return;
                 }
+                if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
                 e.stopPropagation();
                 applyBottomSheetClickToggleFromPlan(
                     domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(getBottomSheetIsExpanded(), {
@@ -288,6 +293,7 @@
 
         if (header) {
             bindBottomSheetPointerGesture(header, bottomSheet, initPlan, {
+                useClickFallback: true,
                 shouldIgnoreTarget: (target) => !!domHelpers.closest(target, initPlan.headerButtonIgnoreSelector),
                 tapLogMessage: initPlan.handleClickLogMessage,
             });
