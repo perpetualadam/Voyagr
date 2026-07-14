@@ -2832,6 +2832,11 @@ html.dark-mode, body.dark-mode .instruction-item-status.current-status {
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
+/* Lower z-index when bottom sheet is expanded to avoid blocking sheet content */
+.bottom-sheet.expanded ~ .journey-summary-bar {
+    z-index: 100;
+}
+
 .journey-summary-item {
     display: flex;
     align-items: center;
@@ -2907,8 +2912,9 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
 /* Z-Index Hierarchy (organized layers):
    1     - Map base
    10    - Route overlays, markers
+   100   - Journey summary bar (when bottom sheet is expanded)
    110   - Bottom sheet
-   120   - Journey summary bar (above collapsed sheet peek)
+   120   - Journey summary bar (default, above collapsed sheet peek)
    150   - FAB container
    200   - Navigation control buttons
    250   - Turn instruction widget

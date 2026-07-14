@@ -184,7 +184,10 @@
                     e.stopPropagation();
                     return;
                 }
-                if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
+                if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) {
+                    e.stopPropagation();
+                    return;
+                }
                 e.stopPropagation();
                 applyBottomSheetClickToggleFromPlan(
                     domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(getBottomSheetIsExpanded(), {
