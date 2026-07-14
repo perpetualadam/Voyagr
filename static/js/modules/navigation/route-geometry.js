@@ -126,6 +126,23 @@
     }
 
     /**
+     * Snap for off-route deviation checks — always scans the full polyline so
+     * windowed search cannot latch onto a distant loop on complex/optimised routes.
+     *
+     * @param {number} lat
+     * @param {number} lon
+     * @param {Array<[number,number]>} polyline
+     * @returns {{ lat, lon, index, distance, t }}
+     */
+    function snapToRoutePolylineForDeviation(lat, lon, polyline) {
+        return snapToRoutePolyline(lat, lon, polyline, 0, {
+            backwardWindow: 0,
+            forwardWindow: Math.max(0, (polyline ? polyline.length : 0) - 1),
+            fullScanThresholdM: 0,
+        });
+    }
+
+    /**
      * Route snap plan for one GPS tick when navigation has an active polyline.
      * @param {Object} opts
      * @param {number} opts.lat
@@ -274,6 +291,7 @@
         blendHeadingsCircular: blendHeadingsCircular,
         projectToSegment: projectToSegment,
         snapToRoutePolyline: snapToRoutePolyline,
+        snapToRoutePolylineForDeviation: snapToRoutePolylineForDeviation,
         buildGpsRouteSnapTickPlan: buildGpsRouteSnapTickPlan,
         distanceAlongRouteToVertexMeters: distanceAlongRouteToVertexMeters,
         totalPolylineLengthMeters: totalPolylineLengthMeters,
@@ -380,8 +398,8 @@
         if (opts.lastDetectedRoadType) return opts.lastDetectedRoadType;
 
         var spd = Number(opts.gpsSpeedMph);
-        if (Number.isFinite(spd) && spd >= 65) return 'motorway';
-        if (Number.isFinite(spd) && spd >= 45) return 'primary';
+        if (Number.isFinite(spd) && spd >= 70) return 'motorway';
+        if (Number.isFinite(spd) && spd >= 50) return 'primary';
 
         return 'unknown';
     }

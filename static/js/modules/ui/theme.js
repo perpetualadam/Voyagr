@@ -54,11 +54,73 @@
         };
     }
 
+    var UI_MAP_THEME_LINK_STORAGE_KEY = 'linkUiMapTheme';
+
+    /**
+     * Whether UI theme changes should drive the basemap theme (default on).
+     * @param {{ getItem: function(string): (string|null|undefined) }} [storage]
+     * @returns {boolean}
+     */
+    function isUiMapThemeLinkEnabled(storage) {
+        if (!storage && typeof localStorage !== 'undefined') {
+            storage = localStorage;
+        }
+        if (!storage || typeof storage.getItem !== 'function') return true;
+        return storage.getItem(UI_MAP_THEME_LINK_STORAGE_KEY) !== 'false';
+    }
+
+    /**
+     * Basemap theme that pairs with a UI theme choice.
+     * @param {string} uiTheme
+     * @param {boolean} prefersDark
+     * @returns {'standard'|'dark'}
+     */
+    function linkedMapThemeForUiTheme(uiTheme, prefersDark) {
+        if (uiTheme === 'dark') return 'dark';
+        if (uiTheme === 'light') return 'standard';
+        if (uiTheme === 'auto') return prefersDark ? 'dark' : 'standard';
+        return 'standard';
+    }
+
+    /**
+     * UI theme that pairs with a basemap theme, or null when unlinked (satellite).
+     * @param {string} mapTheme
+     * @returns {'light'|'dark'|null}
+     */
+    function linkedUiThemeForMapTheme(mapTheme) {
+        if (mapTheme === 'dark') return 'dark';
+        if (mapTheme === 'standard') return 'light';
+        return null;
+    }
+
+    /**
+     * Early-boot plan for syncing linked basemap theme before deferred scripts run.
+     * @param {string} [storedUiTheme]
+     * @param {boolean} [prefersDark]
+     * @param {{ getItem: function(string): (string|null|undefined) }} [storage]
+     * @returns {{ shouldSet: boolean, mapTheme: string }}
+     */
+    function buildEarlyLinkedMapThemeBootPlan(storedUiTheme, prefersDark, storage) {
+        if (!isUiMapThemeLinkEnabled(storage)) {
+            return { shouldSet: false, mapTheme: 'standard' };
+        }
+        var uiTheme = storedUiTheme || 'light';
+        return {
+            shouldSet: true,
+            mapTheme: linkedMapThemeForUiTheme(uiTheme, !!prefersDark),
+        };
+    }
+
     var api = {
         shouldUseDarkMode: shouldUseDarkMode,
         toggleBetweenLightAndDark: toggleBetweenLightAndDark,
         activeThemeButtonId: activeThemeButtonId,
         buildEarlyUiThemeBootPlan: buildEarlyUiThemeBootPlan,
+        UI_MAP_THEME_LINK_STORAGE_KEY: UI_MAP_THEME_LINK_STORAGE_KEY,
+        isUiMapThemeLinkEnabled: isUiMapThemeLinkEnabled,
+        linkedMapThemeForUiTheme: linkedMapThemeForUiTheme,
+        linkedUiThemeForMapTheme: linkedUiThemeForMapTheme,
+        buildEarlyLinkedMapThemeBootPlan: buildEarlyLinkedMapThemeBootPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

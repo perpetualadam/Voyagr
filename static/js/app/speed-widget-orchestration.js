@@ -212,6 +212,7 @@
             currentGpsSpeedMph: getCurrentGpsSpeedMph(),
             lastDetectedRoadType: getLastDetectedRoadType(),
             lastSpeedLimitRegion: getLastSpeedLimitRegion(),
+            lastFetchedRoadType: state.lastFetchedRoadType || null,
         });
         if (tick.action === 'skip') return;
 
@@ -221,6 +222,9 @@
         state.inFlight = apply.statePatch.inFlight;
         state.lastFetchAt = apply.statePatch.lastFetchAt;
         state.lastPosition = apply.statePatch.lastPosition;
+        if (apply.statePatch.lastFetchedRoadType) {
+            state.lastFetchedRoadType = apply.statePatch.lastFetchedRoadType;
+        }
         state.seq = apply.statePatch.seq;
         const mySeq = apply.fetch.seq;
         const ctx = apply.context;

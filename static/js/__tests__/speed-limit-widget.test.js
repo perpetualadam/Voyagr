@@ -153,6 +153,19 @@ describe('speed-limit-widget module', () => {
         expect(tick.url).toContain('/api/speed-limit');
     });
 
+    test('buildSpeedLimitFetchTickPlan fetches immediately when road type changes', () => {
+        const tick = SL.buildSpeedLimitFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'motorway',
+            lastFetchedRoadType: 'residential',
+            fetchState: SL.createFetchState({ lastFetchAt: Date.now(), lastPosition: { lat: 51.5, lon: -0.1 } }),
+            now: Date.now(),
+            calculateDistance: () => 0,
+        });
+        expect(tick.action).toBe('fetch');
+    });
+
     test('buildSpeedLimitApiSuccessApplyPlan maps API payload to widget update', () => {
         const apply = SL.buildSpeedLimitApiSuccessApplyPlan({
             data: {

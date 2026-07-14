@@ -637,15 +637,25 @@ describe('reroute retry and notification helpers', () => {
 describe('buildRouteDeviationTickPlan', () => {
     const now = 1_700_000_000_000;
 
-    test('skips during post-reroute grace', () => {
+    test('suppresses reroute trigger during post-reroute grace but still tracks deviation', () => {
         const plan = RD.buildRouteDeviationTickPlan({
             autoRerouteEnabled: true,
             hasRoute: true,
+            remainingToDest: 5000,
+            accuracy: 10,
+            minDistance: 120,
+            routeJoinConfirmed: true,
+            deviationStartTime: now - 12_000,
+            lastRerouteTime: 0,
+            lastRerouteAttemptTime: 0,
+            offRouteStreak: 5,
             now,
             postRerouteGraceUntil: now + 5000,
+            distanceUnit: 'km',
         });
-        expect(plan.action).toBe('skip');
-        expect(plan.reason).toBe('grace');
+        expect(plan.action).toBe('grace-suppressed');
+        expect(plan.triggerReroute).toBeUndefined();
+        expect(plan.trackDeviation).toBe(true);
     });
 
     test('applies reroute notification and state patch when deviation confirmed', () => {

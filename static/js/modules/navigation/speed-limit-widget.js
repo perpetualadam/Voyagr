@@ -38,9 +38,11 @@
      * @param {object} [constants]
      * @returns {boolean}
      */
-    function shouldFetchSpeedLimit(state, lat, lon, now, distanceMeters, constants) {
+    function shouldFetchSpeedLimit(state, lat, lon, now, distanceMeters, constants, opts) {
         var c = constants || DEFAULTS;
+        opts = opts || {};
         if (!state || state.inFlight) return false;
+        if (opts.roadTypeChanged) return true;
         var elapsed = state.lastFetchAt ? (now - state.lastFetchAt) : Infinity;
         var moved = Infinity;
         if (state.lastPosition && typeof distanceMeters === 'function') {
@@ -181,6 +183,9 @@
      */
     function pickDisplaySpeedLimitMph(apiLimitMph, valhallaLimitMph, roadType, region, options) {
         options = options || {};
+        if (options.preferValhallaOverApi && Number.isFinite(valhallaLimitMph) && valhallaLimitMph > 0) {
+            return valhallaLimitMph;
+        }
         if (apiLimitMph != null && apiLimitMph > 0) return apiLimitMph;
         if (Number.isFinite(valhallaLimitMph) && valhallaLimitMph > 0) return valhallaLimitMph;
         if (options.allowRoadTypeFallback) {
@@ -326,7 +331,13 @@
             return { action: 'skip', reason: 'no-state' };
         }
         var now = opts.now != null ? opts.now : Date.now();
-        if (!shouldFetchSpeedLimit(state, opts.lat, opts.lon, now, opts.calculateDistance)) {
+        var roadType = opts.roadType || 'unknown';
+        var roadTypeChanged = !!(opts.lastFetchedRoadType
+            && roadType !== 'unknown'
+            && roadType !== opts.lastFetchedRoadType);
+        if (!shouldFetchSpeedLimit(state, opts.lat, opts.lon, now, opts.calculateDistance, null, {
+            roadTypeChanged: roadTypeChanged,
+        })) {
             return { action: 'skip', reason: 'throttle' };
         }
         var nextSeq = (state.seq || 0) + 1;
@@ -344,6 +355,7 @@
                 inFlight: true,
                 lastFetchAt: now,
                 lastPosition: { lat: opts.lat, lon: opts.lon },
+                lastFetchedRoadType: roadType,
                 seq: nextSeq,
             },
             context: {

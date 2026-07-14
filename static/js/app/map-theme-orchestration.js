@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = null;
+    var themeLinkInProgress = false;
     var currentMapTheme =
         (root.VoyagrMapTheme && typeof root.VoyagrMapTheme.readStoredMapTheme === 'function')
             ? root.VoyagrMapTheme.readStoredMapTheme()
@@ -93,6 +94,28 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(execute.persistApiBody),
         }).catch((error) => console.error('Error updating map theme:', error));
+
+        if (!themeLinkInProgress) {
+            var themeMod = root.VoyagrTheme;
+            if (themeMod
+                && typeof themeMod.isUiMapThemeLinkEnabled === 'function'
+                && themeMod.isUiMapThemeLinkEnabled()
+                && typeof themeMod.linkedUiThemeForMapTheme === 'function'
+                && typeof rt().call.setTheme === 'function') {
+                var linkedUiTheme = themeMod.linkedUiThemeForMapTheme(execute.theme);
+                if (linkedUiTheme) {
+                    var currentUiTheme = localStorage.getItem('ui_theme') || 'light';
+                    if (currentUiTheme !== linkedUiTheme) {
+                        themeLinkInProgress = true;
+                        try {
+                            rt().call.setTheme(linkedUiTheme);
+                        } finally {
+                            themeLinkInProgress = false;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     function getCurrentMapTheme() {

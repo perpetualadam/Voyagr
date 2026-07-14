@@ -236,12 +236,11 @@
         if (!opts.hasRoute) {
             return { action: 'skip', reason: 'no-route' };
         }
-        if ((opts.postRerouteGraceUntil || 0) > now) {
-            return { action: 'skip', reason: 'grace' };
-        }
         if (opts.rerouteInProgress) {
             return { action: 'skip', reason: 'in-progress' };
         }
+
+        var inPostRerouteGrace = (opts.postRerouteGraceUntil || 0) > now;
 
         var decision = decideRouteDeviation({
             autoRerouteEnabled: opts.autoRerouteEnabled,
@@ -272,18 +271,23 @@
         };
 
         if (decision.action === 'reroute') {
-            plan.statePatch.lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
-            plan.rerouteAttemptIncrement = true;
-            plan.notification = buildDeviationRerouteNotification(
-                opts.minDistance,
-                opts.distanceUnit,
-                decision.deviationDuration
-            );
-            plan.logDeviation = {
-                minDistance: opts.minDistance,
-                deviationDuration: decision.deviationDuration,
-            };
-            plan.triggerReroute = true;
+            if (inPostRerouteGrace) {
+                plan.action = 'grace-suppressed';
+                plan.trackDeviation = true;
+            } else {
+                plan.statePatch.lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
+                plan.rerouteAttemptIncrement = true;
+                plan.notification = buildDeviationRerouteNotification(
+                    opts.minDistance,
+                    opts.distanceUnit,
+                    decision.deviationDuration
+                );
+                plan.logDeviation = {
+                    minDistance: opts.minDistance,
+                    deviationDuration: decision.deviationDuration,
+                };
+                plan.triggerReroute = true;
+            }
         } else if (decision.action === 'debounced' || decision.action === 'waiting') {
             plan.trackDeviation = true;
         }

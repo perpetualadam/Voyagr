@@ -16,6 +16,7 @@ function makeFakeMap({ styleLoaded = true } = {}) {
     const style = {
         layers: [
             { id: 'motorway-label', type: 'symbol', layout: { 'text-field': '{name}' } },
+            { id: 'highway_name_other', type: 'symbol', layout: { 'text-field': '{name}' } },
             { id: 'trunk-label', type: 'symbol', layout: { 'text-field': '{name}' } },
             { id: 'primary-label', type: 'symbol', layout: { 'text-field': '{name}' } },
             { id: 'secondary-label', type: 'symbol', layout: { 'text-field': '{name}' } },
@@ -102,9 +103,11 @@ describe('MapLibreHelpers road-label functions (real implementation)', () => {
         test('does not target non-road symbol layers (e.g. water-name)', () => {
             const map = makeFakeMap();
             Helpers.toggleRoadLabels(map, false);
-            const touchedIds = map.setLayoutProperty.mock.calls.map(c => c[0]);
-            expect(touchedIds).not.toContain('water-name');
-            expect(touchedIds).toContain('motorway-label');
+            const toggledIds = map.setLayoutProperty.mock.calls
+                .filter(c => c[1] === 'visibility')
+                .map(c => c[0]);
+            expect(toggledIds).toContain('highway_name_other');
+            expect(toggledIds).not.toContain('water-name');
         });
 
         test('null map is a no-op', () => {

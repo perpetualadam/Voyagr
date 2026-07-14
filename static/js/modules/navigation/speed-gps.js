@@ -1382,7 +1382,9 @@
         var resetFetchState = activeManeuverIdx >= 0 && activeManeuverIdx !== opts.lastActiveManeuverIdx;
         var pickFn = opts.pickDisplaySpeedLimitMph;
         var shownLimit = typeof pickFn === 'function'
-            ? pickFn(opts.currentSpeedLimitMph, valhallaSpeedLimitMph, roadType, opts.lastSpeedLimitRegion)
+            ? pickFn(opts.currentSpeedLimitMph, valhallaSpeedLimitMph, roadType, opts.lastSpeedLimitRegion, {
+                preferValhallaOverApi: resetFetchState && valhallaSpeedLimitMph != null,
+            })
             : (opts.currentSpeedLimitMph && opts.currentSpeedLimitMph > 0
                 ? opts.currentSpeedLimitMph
                 : valhallaSpeedLimitMph);
