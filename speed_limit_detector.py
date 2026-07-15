@@ -92,7 +92,10 @@ HIGHWAY_INFERRED_MPH = {
         'trunk': 70, 'trunk_link': 50,
         'primary': 50, 'primary_link': 40,
         'secondary': 50, 'secondary_link': 40,
-        'tertiary': 40, 'tertiary_link': 30,
+        # UK tertiary roads frequently pass through built-up areas where the
+        # national speed limit does not apply; 30 mph is the safer default when
+        # no maxspeed tag is present (OSM/TomTom data still takes precedence).
+        'tertiary': 30, 'tertiary_link': 30,
         'unclassified': 30, 'residential': 30,
         'living_street': 20, 'service': 20,
         'pedestrian': 10, 'track': 20,

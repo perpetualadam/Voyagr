@@ -694,7 +694,19 @@
         opts = opts || {};
         data = data || {};
         if (data.success && data.routes && data.routes.length > 0) {
+            // Match the previously active route by name (e.g. '⚡ Optimised') so the
+            // reroute stays on the same route type rather than always falling back to
+            // routes[0] (which may be a different option on multi-route responses).
             var newRoute = data.routes[0];
+            if (data.routes.length > 1 && opts.previousRouteName) {
+                var prevName = String(opts.previousRouteName).toLowerCase();
+                for (var ri = 0; ri < data.routes.length; ri++) {
+                    if ((data.routes[ri].name || '').toLowerCase() === prevName) {
+                        newRoute = data.routes[ri];
+                        break;
+                    }
+                }
+            }
             var hazardCount = newRoute.hazard_count || 0;
             var hazardsList = newRoute.hazards || newRoute.hazards_on_route || [];
             var displayDist = typeof opts.convertDistance === 'function'

@@ -537,6 +537,11 @@
 
         applyGpsRoadNameSideEffectTick(lat, lon, tickPlan);
 
+        // Update the ETA/distance countdown on every GPS tick (Waze-style live countdown).
+        if (rt().g('routeInProgress') && typeof rt().call.updateJourneySummaryBar === 'function') {
+            rt().call.updateJourneySummaryBar();
+        }
+
         return { distanceToNextTurn };
     }
 
@@ -1384,6 +1389,7 @@
                 lastRerouteAnnouncementTime,
                 rerouteFailureRetryCount: rt().g('rerouteFailureRetryCount'),
                 now: Date.now(),
+                previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
             });
             applyAutomaticRerouteResult({
                 apply: responsePlans.apply,

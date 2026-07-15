@@ -1479,6 +1479,7 @@ function getGpsOrchestrationRuntime() {
             detectUpcomingTurn: (lat, lon) => VoyagrTurnInstructionWidgetOrchestration.detectUpcomingTurn(lat, lon),
             getFollowingManeuver: (idx) => VoyagrTurnInstructionWidgetOrchestration.getFollowingManeuver(idx),
             effectiveRoundaboutExitCount: (idx) => VoyagrTurnInstructionWidgetOrchestration.effectiveRoundaboutExitCount(idx),
+            updateJourneySummaryBar: () => VoyagrJourneySummaryOrchestration.updateJourneySummaryBar(),
         },
     };
 }
