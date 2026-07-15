@@ -15,6 +15,8 @@ html {
     --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
     --safe-area-inset-left: env(safe-area-inset-left, 0px);
     --safe-area-inset-right: env(safe-area-inset-right, 0px);
+    /* Collapsed bottom-sheet peek height (handle + header); keep in sync with dom-helpers BOTTOM_SHEET_PEEK_HEIGHT_PX */
+    --bottom-sheet-peek-height: 110px;
 }
 
 html,
@@ -422,7 +424,7 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
     height: 92vh;
     height: 92dvh;
     transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
-    transform: translateY(calc(100% - 110px - var(--safe-area-inset-bottom, 0px)));
+    transform: translateY(calc(100% - var(--bottom-sheet-peek-height, 110px) - var(--safe-area-inset-bottom, 0px)));
     will-change: transform;
     padding-bottom: var(--safe-area-inset-bottom, 0px);
     display: flex;
@@ -441,8 +443,8 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
 
 .bottom-sheet-content {
     /* CRITICAL: Use viewport height directly since flex isn't working */
-    height: calc(92vh - 110px) !important;
-    height: calc(92dvh - 110px) !important;
+    height: calc(92vh - var(--bottom-sheet-peek-height, 110px)) !important;
+    height: calc(92dvh - var(--bottom-sheet-peek-height, 110px)) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
@@ -451,6 +453,11 @@ html.dark-mode, body.dark-mode .fab.fab-recenter {
     touch-action: pan-y;
     pointer-events: auto;
     box-sizing: border-box;
+}
+
+/* Collapsed sheet: clipped content must not steal taps from handle/header (Firefox, WebKit) */
+.bottom-sheet:not(.expanded) .bottom-sheet-content {
+    pointer-events: none;
 }
 
 /* ALL elements inside bottom-sheet-content: no overflow, no height limits */
@@ -2819,7 +2826,8 @@ html.dark-mode, body.dark-mode .instruction-item-status.current-status {
 
 .journey-summary-bar {
     position: absolute;
-    bottom: 0;
+    /* Sit above collapsed sheet peek so ETA stays visible and sheet handle stays tappable */
+    bottom: calc(var(--bottom-sheet-peek-height, 110px) + var(--safe-area-inset-bottom, 0px));
     left: 0;
     right: 0;
     z-index: 120;
@@ -2832,8 +2840,9 @@ html.dark-mode, body.dark-mode .instruction-item-status.current-status {
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
-/* Lower z-index when bottom sheet is expanded to avoid blocking sheet content */
+/* When sheet is expanded, tuck bar behind full sheet at screen bottom */
 .bottom-sheet.expanded ~ .journey-summary-bar {
+    bottom: 0;
     z-index: 100;
 }
 
