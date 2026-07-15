@@ -559,6 +559,40 @@ describe('auto traffic interval dispatch plans', () => {
         expect(reject.action).toBe('reject');
     });
 
+    test('buildTrafficRerouteApiResponseDispatchPlan keeps previously active route type', () => {
+        const matched = TC.buildTrafficRerouteApiResponseDispatchPlan({
+            data: {
+                success: true,
+                routes: [
+                    { name: 'Fastest', duration_minutes: 10 },
+                    { name: '\u26a1 Optimised', duration_minutes: 10 },
+                ],
+            },
+            isSevere: true,
+            oldBaseMinutes: 25,
+            measuredDelayMin: 5,
+            previousRouteName: '\u26a1 Optimised',
+        });
+        expect(matched.action).toBe('accept');
+        expect(matched.newRoute.name).toBe('\u26a1 Optimised');
+
+        const fallback = TC.buildTrafficRerouteApiResponseDispatchPlan({
+            data: {
+                success: true,
+                routes: [
+                    { name: 'Fastest', duration_minutes: 10 },
+                    { name: '\ud83d\udccf Shortest', duration_minutes: 10 },
+                ],
+            },
+            isSevere: true,
+            oldBaseMinutes: 25,
+            measuredDelayMin: 5,
+            previousRouteName: '\u26a1 Optimised',
+        });
+        expect(fallback.action).toBe('accept');
+        expect(fallback.newRoute.name).toBe('Fastest');
+    });
+
     test('buildUpdateTrafficConditionsResponseDispatchPlan and monitoring runtime collect', () => {
         const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan({}, 'A', 'B');
         const ok = TC.buildUpdateTrafficConditionsResponseDispatchPlan({ success: true }, orch);

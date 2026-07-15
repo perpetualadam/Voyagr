@@ -950,6 +950,7 @@
      * @param {boolean} [input.isSevere]
      * @param {number} [input.oldBaseMinutes]
      * @param {number} [input.measuredDelayMin]
+     * @param {string} [input.previousRouteName]
      * @returns {Object}
      */
     function buildTrafficRerouteApiResponseDispatchPlan(input) {
@@ -958,7 +959,18 @@
         if (!data.success || !data.routes || !data.routes.length) {
             return { action: 'no_route' };
         }
+        // Stay on the previously active route type (e.g. '⚡ Optimised') across the
+        // multi-route traffic-reroute response instead of always taking routes[0].
         var newRoute = data.routes[0];
+        if (data.routes.length > 1 && input.previousRouteName) {
+            var prevName = String(input.previousRouteName).toLowerCase();
+            for (var ri = 0; ri < data.routes.length; ri++) {
+                if ((data.routes[ri].name || '').toLowerCase() === prevName) {
+                    newRoute = data.routes[ri];
+                    break;
+                }
+            }
+        }
         var acceptPlan = buildTrafficRerouteAcceptancePlan({
             isSevere: !!input.isSevere,
             oldBaseMinutes: input.oldBaseMinutes || 0,

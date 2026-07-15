@@ -823,6 +823,7 @@
                 isSevere: entry.preflight.isSevere,
                 oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
                 measuredDelayMin,
+                previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
             });
 
             if (dispatch.action === 'accept') {
