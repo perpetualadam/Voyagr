@@ -383,6 +383,39 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.notification.title).toContain('Route Updated');
     });
 
+    test('buildAutomaticRerouteOutcomePlan keeps previously active route type by name', () => {
+        const matched = RD.buildAutomaticRerouteOutcomePlan({
+            success: true,
+            routes: [
+                { name: 'Fastest', distance_km: 10, duration_minutes: 20 },
+                { name: '\u26a1 Optimised', distance_km: 12, duration_minutes: 22 },
+            ],
+        }, {
+            previousRouteName: '\u26a1 Optimised',
+            convertDistance: (km) => km.toFixed(1),
+            distUnit: 'km',
+            now: 70000,
+        });
+        expect(matched.ok).toBe(true);
+        expect(matched.newRoute.name).toBe('\u26a1 Optimised');
+        expect(matched.newRoute.distance_km).toBe(12);
+
+        const fallback = RD.buildAutomaticRerouteOutcomePlan({
+            success: true,
+            routes: [
+                { name: 'Fastest', distance_km: 10, duration_minutes: 20 },
+                { name: '\ud83d\udccf Shortest', distance_km: 9, duration_minutes: 24 },
+            ],
+        }, {
+            previousRouteName: '\u26a1 Optimised',
+            convertDistance: (km) => km.toFixed(1),
+            distUnit: 'km',
+            now: 70000,
+        });
+        expect(fallback.ok).toBe(true);
+        expect(fallback.newRoute.name).toBe('Fastest');
+    });
+
     test('buildAutomaticRerouteOutcomePlan returns failure with first-attempt notification', () => {
         const plan = RD.buildAutomaticRerouteOutcomePlan({ success: false, error: 'timeout' }, {
             rerouteFailureRetryCount: 0,
