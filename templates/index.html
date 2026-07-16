@@ -48,7 +48,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260716navmenu2" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260716navmenu3" />
     <script>
     (function () {
         try {
@@ -184,7 +184,7 @@
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260712aaew"></script>
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20260712ab21"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260716ffmob1"></script>
-    <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260716navmenu2"></script>
+    <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260716navmenu3"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
     <script defer src="/static/js/app/profile-store-orchestration.js?v=20260712ab14"></script>
     <script defer src="/static/js/app/settings-orchestration.js?v=20260712maptheme1"></script>
@@ -1810,7 +1810,7 @@
 
         <!-- Map action menu (bottom-right hamburger) -->
         <div class="nav-control-menu">
-            <button id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" onclick="toggleNavMenu()" aria-label="Toggle map actions menu" aria-expanded="false" aria-controls="navControlButtons">☰</button>
+            <button type="button" id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" aria-label="Toggle map actions menu" aria-expanded="false" aria-controls="navControlButtons">☰</button>
             <button id="endNavigationBtn" data-testid="end-navigation" class="fab nav-end-nav-fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
             <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed">
                 <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>

@@ -748,6 +748,7 @@ function applyBottomSheetStateFromPlan(execute) { VoyagrBottomSheetOrchestration
 
 function toggleNavMenu() { VoyagrNavMenuOrchestration.toggleNavMenu(); }
 function collapseNavMenu() { VoyagrNavMenuOrchestration.collapseNavMenu(); }
+function initNavMenu() { VoyagrNavMenuOrchestration.initNavMenu(); }
 
 function collapseBottomSheetForRoutePreview() { VoyagrBottomSheetOrchestration.collapseBottomSheetForRoutePreview(); }
 

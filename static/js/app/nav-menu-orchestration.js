@@ -4,6 +4,8 @@
 (function (root) {
     'use strict';
 
+    var NAV_MENU_BOUND_DATASET = 'voyagrNavMenuBound';
+
     function DH() {
         return root.VoyagrDomHelpers;
     }
@@ -52,10 +54,24 @@
         applyNavMenuStateFromPlan(DH().buildCollapseNavMenuExecutePlan());
     }
 
+    function initNavMenu() {
+        var domHelpers = DH();
+        var toggle = document.getElementById(domHelpers.NAV_MENU_TOGGLE_ID);
+        if (!toggle || toggle.dataset[NAV_MENU_BOUND_DATASET] === '1') return;
+        toggle.dataset[NAV_MENU_BOUND_DATASET] = '1';
+
+        toggle.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleNavMenu();
+        });
+    }
+
     var api = {
         applyNavMenuStateFromPlan: applyNavMenuStateFromPlan,
         toggleNavMenu: toggleNavMenu,
         collapseNavMenu: collapseNavMenu,
+        initNavMenu: initNavMenu,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

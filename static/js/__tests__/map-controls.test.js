@@ -31,7 +31,10 @@ describe('map-controls module', () => {
 
     test('map controls hint helpers format labels and filter elements', () => {
         expect(MC.shouldSkipMapControlsHintElement('mapControlsHintFab')).toBe(true);
+        expect(MC.shouldSkipMapControlsHintElement('navMenuToggle')).toBe(true);
         expect(MC.shouldSkipMapControlsHintElement('voiceFab')).toBe(false);
+        expect(MC.buildInitMobileMapIconHintsPlan({ touchHintsEnabled: true }).rootSelectors)
+            .not.toContain('.nav-control-menu');
         expect(MC.isMapControlsHintElementVisible('flex', 'visible')).toBe(true);
         expect(MC.isMapControlsHintElementVisible('none', 'visible')).toBe(false);
         expect(MC.formatMapControlsHintItemLabel('  🎤  mic ', 'Voice commands')).toContain('Voice commands');
