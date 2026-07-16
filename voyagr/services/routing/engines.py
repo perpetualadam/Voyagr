@@ -349,7 +349,21 @@ def route_with_graphhopper(
             if response.status_code == 200:
                 custom_model_applied = True
             else:
-                logger.warning(f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); retrying GET(no custom_model)")
+                from voyagr.services.routing.graphhopper_fallback import (
+                    should_refuse_graphhopper_unfiltered_fallback,
+                )
+                if should_refuse_graphhopper_unfiltered_fallback(
+                    custom_model, custom_model_applied=False,
+                ):
+                    logger.warning(
+                        f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); "
+                        "refusing unfiltered fallback — caller should use Valhalla"
+                    )
+                    return None
+                logger.warning(
+                    f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); "
+                    "retrying GET (costing-only custom model)"
+                )
                 response = None
 
         if response is None:
@@ -397,6 +411,7 @@ def route_with_graphhopper(
                     'bbox': path.get('bbox', []),
                     'camera_avoidance': custom_model_applied,
                     'custom_model_applied': custom_model_applied,
+                    'custom_model_requested': bool(custom_model),
                 }
 
                 logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")

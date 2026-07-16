@@ -158,6 +158,17 @@ def db_connection() -> Iterator[Any]:
         return_db_connection(conn)
 
 
+def migrate_persistent_route_cache_cache_key(cursor: sqlite3.Cursor) -> None:
+    """Add cache_key column + unique index for preference-aware DB cache rows."""
+    cols = {row[1] for row in cursor.execute('PRAGMA table_info(persistent_route_cache)')}
+    if 'cache_key' not in cols:
+        cursor.execute('ALTER TABLE persistent_route_cache ADD COLUMN cache_key TEXT')
+    cursor.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS uq_persistent_route_cache_key '
+        'ON persistent_route_cache(cache_key)'
+    )
+
+
 def migrate_legacy_camera_hazard_preferences(cursor: sqlite3.Cursor) -> None:
     """If DB only has legacy 'camera', copy settings into camera_* rows once."""
     cursor.execute(
@@ -565,6 +576,7 @@ def init_db():
         ''', (hazard_type, penalty, enabled, threshold))
 
     migrate_legacy_camera_hazard_preferences(cursor)
+    migrate_persistent_route_cache_cache_key(cursor)
     apply_camera_hazard_penalty_defaults(cursor)
 
     conn.commit()

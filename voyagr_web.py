@@ -1259,7 +1259,16 @@ def calculate_route():
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
         # ====================================================================
-        from voyagr.services.routing.route_cache_key import should_bypass_route_cache
+        from voyagr.services.routing.route_cache_key import should_bypass_route_cache, build_route_cache_key
+        db_cache_key = build_route_cache_key(
+            start_lat=start_lat,
+            start_lon=start_lon,
+            end_lat=end_lat,
+            end_lon=end_lon,
+            routing_mode=routing_mode,
+            vehicle_type=vehicle_type,
+            **cache_kwargs,
+        )
         if not should_bypass_route_cache(
             force_refresh=force_refresh,
             is_reroute=is_reroute,
@@ -1276,6 +1285,20 @@ def calculate_route():
                 cached_route['cached'] = True
                 cached_route['cache_stats'] = route_cache.get_stats()
                 return jsonify(cached_route)
+
+            db_cached_route = cost_calculator.get_cached_route_from_db(db_cache_key)
+            if db_cached_route:
+                logger.info(
+                    f"[CACHE] DB HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) "
+                    f"key={db_cache_key[:48]}..."
+                )
+                db_cached_route['cached'] = True
+                db_cached_route['cache_stats'] = route_cache.get_stats()
+                route_cache.set(
+                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                    db_cached_route, **cache_kwargs,
+                )
+                return jsonify(db_cached_route)
         elif is_reroute or force_refresh or avoid_points:
             logger.info('[CACHE] BYPASS: reroute/force_refresh/avoid_points requires live routing')
 
@@ -1635,7 +1658,7 @@ def calculate_route():
                     # ================================================================
                     cost_calculator.cache_route_to_db(
                         start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                        response_data, routing_source,
+                        response_data, routing_source, cache_key=db_cache_key,
                     )
                     print("[CACHE] STORED: Route cached in database")
 
@@ -1790,7 +1813,7 @@ def calculate_route():
                                 cache_source = 'GraphHopper+Valhalla' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla'
                                 cost_calculator.cache_route_to_db(
                                     start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                                    response_data, cache_source
+                                    response_data, cache_source, cache_key=db_cache_key,
                                 )
                                 print("[CACHE] STORED: Retry route cached in database")
 
@@ -1948,7 +1971,7 @@ def calculate_route():
                         )
                         cost_calculator.cache_route_to_db(
                             start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                            recovery_data, routing_source,
+                            recovery_data, routing_source, cache_key=db_cache_key,
                         )
                         logger.info(f"[ROUTING] Recovery response: {routing_source}, {len(routes_out)} route(s)")
                 except Exception as rec_e:
@@ -2049,7 +2072,7 @@ def calculate_route():
                         # ================================================================
                         cost_calculator.cache_route_to_db(
                             start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                            response_data, 'OSRM'
+                            response_data, 'OSRM', cache_key=db_cache_key,
                         )
                         print("[CACHE] STORED: Route cached in database")
 
