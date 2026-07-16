@@ -1814,20 +1814,23 @@
         <!-- Gesture Indicator (Phase 3) -->
         <div class="gesture-indicator" id="gestureIndicator">👋</div>
 
-        <!-- Navigation Control Buttons -->
+        <!-- Navigation Control Buttons with Collapsible Menu -->
         <!-- z-index: 200 in mobile layout hierarchy -->
-        <div id="navControlButtons" class="nav-control-buttons">
-            <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
-            <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
-            <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
-            <button type="button" id="recenterVehicleFab" class="fab fab-recenter" title="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;" aria-label="Recenter on vehicle">
-                <svg class="fab-recenter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                </svg>
-            </button>
-            <button id="endNavigationBtn" data-testid="end-navigation" class="fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
-            <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
-            <button id="roadReportFab" class="fab" title="Report road issue" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
+        <div class="nav-control-menu">
+            <button id="navMenuToggle" class="fab nav-menu-toggle" title="Navigation Menu" onclick="toggleNavMenu()" aria-label="Toggle navigation menu">☰</button>
+            <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed">
+                <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
+                <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
+                <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
+                <button type="button" id="recenterVehicleFab" class="fab fab-recenter" title="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;" aria-label="Recenter on vehicle">
+                    <svg class="fab-recenter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                    </svg>
+                </button>
+                <button id="endNavigationBtn" data-testid="end-navigation" class="fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
+                <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
+                <button id="roadReportFab" class="fab" title="Report road issue" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
+            </div>
         </div>
 
         <div id="mapControlsHintModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="mapControlsHintTitle">
@@ -2080,6 +2083,18 @@
                     });
                 }
             }, 5000);
+        }
+
+        // Toggle navigation menu
+        function toggleNavMenu() {
+            const navButtons = document.getElementById('navControlButtons');
+            if (navButtons.classList.contains('nav-menu-collapsed')) {
+                navButtons.classList.remove('nav-menu-collapsed');
+                navButtons.classList.add('nav-menu-expanded');
+            } else {
+                navButtons.classList.remove('nav-menu-expanded');
+                navButtons.classList.add('nav-menu-collapsed');
+            }
         }
 
         function updateDashcamUI() {
