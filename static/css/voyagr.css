@@ -963,11 +963,7 @@ button {
 }
 
 @media (max-width: 480px) {
-    .fab-container {
-        bottom: calc(90px + var(--safe-area-inset-bottom));
-        right: calc(10px + var(--safe-area-inset-right));
-    }
-
+    /* This older block is kept for backwards compatibility but positioning overridden below */
     .fab {
         width: 52px;
         height: 52px;
