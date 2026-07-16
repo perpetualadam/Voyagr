@@ -239,7 +239,7 @@ body {
     right: calc(16px + var(--safe-area-inset-right, 0px));
     z-index: 200;
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
     align-items: flex-end;
     gap: 10px;
     pointer-events: none;
@@ -278,18 +278,25 @@ body.voyagr-journey-summary-visible .nav-control-menu {
 }
 
 .nav-control-buttons {
-    flex-direction: column-reverse;
+    display: flex;
+    flex-direction: column;
     align-items: flex-end;
     gap: 10px;
 }
 
-.nav-control-buttons.nav-menu-collapsed {
+.nav-control-buttons[hidden],
+.nav-control-buttons.nav-menu-collapsed:not(.nav-menu-expanded) {
     display: none !important;
 }
 
-.nav-control-buttons.nav-menu-expanded,
-.nav-control-menu--open > .nav-control-buttons {
+.nav-control-menu--open .nav-control-buttons,
+.nav-control-buttons.nav-menu-expanded {
     display: flex !important;
+}
+
+.nav-menu-toggle.nav-menu-toggle--open {
+    background: rgba(76, 175, 80, 0.95) !important;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
 }
 
 .nav-end-nav-fab {

@@ -63,6 +63,10 @@
     var NAV_CONTROL_MENU_OPEN_CLASS = 'nav-control-menu--open';
     var NAV_MENU_COLLAPSED_CLASS = 'nav-menu-collapsed';
     var NAV_MENU_EXPANDED_CLASS = 'nav-menu-expanded';
+
+    function navMenuModule() {
+        return root.VoyagrNavMenu;
+    }
     var JOURNEY_SUMMARY_VISIBLE_BODY_CLASS = 'voyagr-journey-summary-visible';
 
     /**
@@ -378,40 +382,22 @@
     }
 
     /**
-     * Whether the map action menu is currently collapsed.
-     * @param {boolean} [hasCollapsedClass]
+     * Whether the map action menu is currently open.
+     * @param {boolean} [isOpen]
      * @returns {Object}
      */
-    function buildNavMenuToggleCollectPlan(hasCollapsedClass) {
-        return { expand: !!hasCollapsedClass };
+    function buildNavMenuToggleCollectPlan(isOpen) {
+        return navMenuModule().buildNavMenuToggleCollectPlan({ isOpen: !!isOpen });
     }
 
     /**
      * Apply plan for expanded/collapsed map action menu state.
      * @param {Object} [input]
-     * @param {boolean} [input.expand]
-     * @param {boolean} [input.collapse]
+     * @param {boolean} [input.open]
      * @returns {Object}
      */
     function buildNavMenuStateApplyPlan(input) {
-        input = input || {};
-        var expand = !!input.expand;
-        var collapse = !!input.collapse;
-        if (!expand && !collapse) {
-            return { shouldApply: false };
-        }
-        return {
-            shouldApply: true,
-            navControlButtonsId: NAV_CONTROL_BUTTONS_ID,
-            navMenuToggleId: NAV_MENU_TOGGLE_ID,
-            navControlMenuSelector: NAV_CONTROL_MENU_SELECTOR,
-            navControlMenuOpenClass: NAV_CONTROL_MENU_OPEN_CLASS,
-            collapsedClass: NAV_MENU_COLLAPSED_CLASS,
-            expandedClass: NAV_MENU_EXPANDED_CLASS,
-            expand: expand,
-            collapse: collapse,
-            ariaExpanded: expand ? 'true' : 'false',
-        };
+        return navMenuModule().buildNavMenuStateApplyPlan(input || {});
     }
 
     /**
@@ -419,20 +405,16 @@
      * @returns {Object}
      */
     function buildCollapseNavMenuExecutePlan() {
-        return buildNavMenuStateApplyPlan({ collapse: true });
+        return navMenuModule().buildCollapseNavMenuExecutePlan();
     }
 
     /**
      * Entry plan for toggling the map action menu.
-     * @param {boolean} isCollapsed
+     * @param {boolean} isOpen
      * @returns {Object}
      */
-    function buildToggleNavMenuEntryOrchestrationPlan(isCollapsed) {
-        var collected = buildNavMenuToggleCollectPlan(isCollapsed);
-        return {
-            collected: collected,
-            execute: buildNavMenuStateApplyPlan({ expand: collected.expand, collapse: !collected.expand }),
-        };
+    function buildToggleNavMenuEntryOrchestrationPlan(isOpen) {
+        return navMenuModule().buildToggleNavMenuEntryOrchestrationPlan(!!isOpen);
     }
 
     /**

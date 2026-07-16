@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+global.VoyagrNavMenu = require('../modules/ui/nav-menu.js');
 const Dom = require('../modules/ui/dom-helpers.js');
 
 describe('dom-helpers', () => {
@@ -228,19 +229,19 @@ describe('dom-helpers', () => {
     });
 
     test('buildToggleNavMenuEntryOrchestrationPlan expands and collapses menu', () => {
-        const expand = Dom.buildToggleNavMenuEntryOrchestrationPlan(true);
-        expect(expand.collected.expand).toBe(true);
-        expect(expand.execute.expand).toBe(true);
+        const expand = Dom.buildToggleNavMenuEntryOrchestrationPlan(false);
+        expect(expand.collected.nextOpen).toBe(true);
+        expect(expand.execute.open).toBe(true);
         expect(expand.execute.navControlMenuOpenClass).toBe('nav-control-menu--open');
         expect(expand.execute.ariaExpanded).toBe('true');
 
-        const collapse = Dom.buildToggleNavMenuEntryOrchestrationPlan(false);
-        expect(collapse.collected.expand).toBe(false);
-        expect(collapse.execute.collapse).toBe(true);
+        const collapse = Dom.buildToggleNavMenuEntryOrchestrationPlan(true);
+        expect(collapse.collected.nextOpen).toBe(false);
+        expect(collapse.execute.open).toBe(false);
         expect(collapse.execute.ariaExpanded).toBe('false');
 
         const forced = Dom.buildCollapseNavMenuExecutePlan();
-        expect(forced.collapse).toBe(true);
+        expect(forced.open).toBe(false);
         expect(forced.ariaExpanded).toBe('false');
     });
 
