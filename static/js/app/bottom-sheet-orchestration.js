@@ -237,6 +237,9 @@
                 if (gestureConsumed || pointerHandled) return;
                 if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
 
+                // Defensive: Guard against missing changedTouches (Firefox compatibility)
+                if (!e.changedTouches || e.changedTouches.length === 0) return;
+
                 const touch = e.changedTouches[0];
                 if (!touch) return;
 
@@ -252,7 +255,7 @@
                 applyBottomSheetGestureEndFromPlan(entry);
                 suppressClick = true;
                 pointerHandled = true;
-            }, { passive: true });
+            }, { passive: false });
 
             el.addEventListener('touchcancel', () => {
                 touchTapActive = false;
