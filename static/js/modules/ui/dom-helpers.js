@@ -48,6 +48,7 @@
         'voiceFab',
         'currentLocationFab',
         'mapControlsHintFab',
+        'showCamerasFab',
         'recenterVehicleFab',
     ];
     var BOTTOM_SHEET_HANDLE_SELECTOR = '.bottom-sheet-handle';
@@ -58,6 +59,8 @@
     var ROUTE_PREVIEW_HANDLE_TITLE = 'Swipe up to see route details';
     var NAV_CONTROL_BUTTONS_ID = 'navControlButtons';
     var NAV_MENU_TOGGLE_ID = 'navMenuToggle';
+    var NAV_CONTROL_MENU_SELECTOR = '.nav-control-menu';
+    var NAV_CONTROL_MENU_OPEN_CLASS = 'nav-control-menu--open';
     var NAV_MENU_COLLAPSED_CLASS = 'nav-menu-collapsed';
     var NAV_MENU_EXPANDED_CLASS = 'nav-menu-expanded';
     var JOURNEY_SUMMARY_VISIBLE_BODY_CLASS = 'voyagr-journey-summary-visible';
@@ -401,6 +404,8 @@
             shouldApply: true,
             navControlButtonsId: NAV_CONTROL_BUTTONS_ID,
             navMenuToggleId: NAV_MENU_TOGGLE_ID,
+            navControlMenuSelector: NAV_CONTROL_MENU_SELECTOR,
+            navControlMenuOpenClass: NAV_CONTROL_MENU_OPEN_CLASS,
             collapsedClass: NAV_MENU_COLLAPSED_CLASS,
             expandedClass: NAV_MENU_EXPANDED_CLASS,
             expand: expand,
@@ -696,6 +701,8 @@
         BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS: BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS,
         NAV_CONTROL_BUTTONS_ID: NAV_CONTROL_BUTTONS_ID,
         NAV_MENU_TOGGLE_ID: NAV_MENU_TOGGLE_ID,
+        NAV_CONTROL_MENU_SELECTOR: NAV_CONTROL_MENU_SELECTOR,
+        NAV_CONTROL_MENU_OPEN_CLASS: NAV_CONTROL_MENU_OPEN_CLASS,
         NAV_MENU_COLLAPSED_CLASS: NAV_MENU_COLLAPSED_CLASS,
         NAV_MENU_EXPANDED_CLASS: NAV_MENU_EXPANDED_CLASS,
         JOURNEY_SUMMARY_VISIBLE_BODY_CLASS: JOURNEY_SUMMARY_VISIBLE_BODY_CLASS,

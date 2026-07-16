@@ -230,9 +230,11 @@ body {
     z-index: 1;
 }
 
-/* Map action menu (bottom-right hamburger) */
+/* Map action menu — fixed to viewport bottom-right; icons live inside the menu panel */
 .nav-control-menu {
-    position: absolute;
+    position: fixed;
+    top: auto;
+    left: auto;
     bottom: calc(var(--bottom-sheet-peek-height, 110px) + var(--safe-area-inset-bottom, 0px) + 12px);
     right: calc(16px + var(--safe-area-inset-right, 0px));
     z-index: 200;
@@ -240,6 +242,12 @@ body {
     flex-direction: column-reverse;
     align-items: flex-end;
     gap: 10px;
+    pointer-events: none;
+}
+
+.nav-control-menu > .fab,
+.nav-control-menu > .nav-control-buttons {
+    pointer-events: auto;
 }
 
 body.voyagr-journey-summary-visible .nav-control-menu {
@@ -266,18 +274,19 @@ body.voyagr-journey-summary-visible .nav-control-menu {
 }
 
 .nav-control-buttons {
-    display: none;
+    display: none !important;
     flex-direction: column-reverse;
     align-items: flex-end;
     gap: 10px;
 }
 
-.nav-control-buttons.nav-menu-expanded {
-    display: flex;
+.nav-control-buttons.nav-menu-expanded,
+.nav-control-menu--open .nav-control-buttons {
+    display: flex !important;
 }
 
 .nav-control-buttons.nav-menu-collapsed {
-    display: none;
+    display: none !important;
 }
 
 .nav-end-nav-fab {
@@ -3051,6 +3060,8 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
     /* Navigation control menu - bottom-right above sheet peek */
     .nav-control-menu {
         right: calc(10px + var(--safe-area-inset-right, 0px)) !important;
+        left: auto !important;
+        top: auto !important;
     }
 
     /* MapLibre controls - moderate spacing to avoid overlap */

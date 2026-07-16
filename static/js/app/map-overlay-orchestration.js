@@ -142,6 +142,9 @@
         showCamerasEnabled = execute.enabled;
         TU().writeBoolPref(execute.storageKey, showCamerasEnabled);
         TU().applyToggleButton(document.getElementById(execute.toggleId), showCamerasEnabled);
+        (execute.fabToggleIds || []).forEach(function (fabId) {
+            TU().applyToggleButton(document.getElementById(fabId), showCamerasEnabled);
+        });
 
         if (execute.mapAction === 'fetchCameras') {
             fetchAndDisplayCameras();

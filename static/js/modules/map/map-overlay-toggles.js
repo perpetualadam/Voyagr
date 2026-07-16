@@ -7,6 +7,7 @@
 
     var SHOW_CAMERAS_STORAGE_KEY = 'showCamerasEnabled';
     var SHOW_CAMERAS_TOGGLE_ID = 'showCamerasToggle';
+    var SHOW_CAMERAS_FAB_ID = 'showCamerasFab';
     var SHOW_CAMERAS_DEFAULT_ENABLED = true;
 
     var SHOW_OSM_TRAFFIC_LIGHTS_STORAGE_KEY = 'showOsmTrafficLightsOnMap';
@@ -95,6 +96,7 @@
             shouldApply: true,
             enabled: enabled,
             toggleId: SHOW_CAMERAS_TOGGLE_ID,
+            fabToggleIds: [SHOW_CAMERAS_FAB_ID],
             storageKey: SHOW_CAMERAS_STORAGE_KEY,
             storageValue: enabled ? 'true' : 'false',
             mapAction: enabled ? 'fetchCameras' : 'clearCameraMarkers',
@@ -454,6 +456,7 @@
             mapMoveEvent: 'moveend',
             toggles: [
                 { id: SHOW_CAMERAS_TOGGLE_ID, enabled: !!input.showCamerasEnabled, labeled: false },
+                { id: SHOW_CAMERAS_FAB_ID, enabled: !!input.showCamerasEnabled, labeled: false },
                 { id: SHOW_OSM_TRAFFIC_LIGHTS_TOGGLE_ID, enabled: !!input.showOsmTrafficLightsEnabled, labeled: true },
                 { id: SHOW_OSM_RAILWAY_CROSSINGS_TOGGLE_ID, enabled: !!input.showOsmRailwayCrossingsEnabled, labeled: true },
             ],
@@ -499,6 +502,7 @@
     var api = {
         SHOW_CAMERAS_STORAGE_KEY: SHOW_CAMERAS_STORAGE_KEY,
         SHOW_CAMERAS_TOGGLE_ID: SHOW_CAMERAS_TOGGLE_ID,
+        SHOW_CAMERAS_FAB_ID: SHOW_CAMERAS_FAB_ID,
         SHOW_OSM_TRAFFIC_LIGHTS_STORAGE_KEY: SHOW_OSM_TRAFFIC_LIGHTS_STORAGE_KEY,
         SHOW_OSM_TRAFFIC_LIGHTS_TOGGLE_ID: SHOW_OSM_TRAFFIC_LIGHTS_TOGGLE_ID,
         SHOW_OSM_RAILWAY_CROSSINGS_STORAGE_KEY: SHOW_OSM_RAILWAY_CROSSINGS_STORAGE_KEY,
