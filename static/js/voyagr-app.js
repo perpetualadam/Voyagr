@@ -746,9 +746,21 @@ function initBottomSheet() { VoyagrBottomSheetOrchestration.initBottomSheet(); }
 function syncBottomSheetOverlapFabs() { VoyagrBottomSheetOrchestration.syncBottomSheetOverlapFabs(); }
 function applyBottomSheetStateFromPlan(execute) { VoyagrBottomSheetOrchestration.applyBottomSheetStateFromPlan(execute); }
 
-function toggleNavMenu() { VoyagrNavMenuOrchestration.toggleNavMenu(); }
-function collapseNavMenu() { VoyagrNavMenuOrchestration.collapseNavMenu(); }
-function initNavMenu() { VoyagrNavMenuOrchestration.initNavMenu(); }
+function toggleNavMenu() {
+    if (typeof VoyagrNavMenuOrchestration !== 'undefined') {
+        VoyagrNavMenuOrchestration.toggleNavMenu();
+    }
+}
+function collapseNavMenu() {
+    if (typeof VoyagrNavMenuOrchestration !== 'undefined') {
+        VoyagrNavMenuOrchestration.collapseNavMenu();
+    }
+}
+function initNavMenu() {
+    if (typeof VoyagrNavMenuOrchestration !== 'undefined') {
+        VoyagrNavMenuOrchestration.initNavMenu();
+    }
+}
 
 function collapseBottomSheetForRoutePreview() { VoyagrBottomSheetOrchestration.collapseBottomSheetForRoutePreview(); }
 
