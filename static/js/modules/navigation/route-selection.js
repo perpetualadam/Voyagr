@@ -1497,12 +1497,83 @@
     }
 
     /**
+     * Normalize routing engine source labels for comparison.
+     * @param {string} [source]
+     * @returns {string}
+     */
+    function normalizeRouteSourceKey(source) {
+        return String(source || '').toLowerCase().replace(/[^a-z0-9+]/g, '');
+    }
+
+    /**
+     * Whether a reroute candidate matches the previously active engine family.
+     * @param {string} [previousSource]
+     * @param {string} [candidateSource]
+     * @returns {boolean}
+     */
+    function routeSourcesMatch(previousSource, candidateSource) {
+        var prev = normalizeRouteSourceKey(previousSource);
+        var candidate = normalizeRouteSourceKey(candidateSource);
+        if (!prev) return true;
+        if (!candidate) return false;
+        if (prev.indexOf('graphhopper') >= 0) {
+            return candidate.indexOf('graphhopper') >= 0;
+        }
+        if (prev.indexOf('valhalla') >= 0) {
+            return candidate.indexOf('valhalla') >= 0;
+        }
+        if (prev.indexOf('osrm') >= 0) {
+            return candidate.indexOf('osrm') >= 0;
+        }
+        return prev === candidate || candidate.indexOf(prev) >= 0 || prev.indexOf(candidate) >= 0;
+    }
+
+    /**
+     * Pick a route from a multi-route response, preferring name + engine source match.
+     * @param {Array<Object>|null|undefined} routeList
+     * @param {Object} [opts]
+     * @param {boolean} [opts.preferPrimary]
+     * @param {string} [opts.previousRouteName]
+     * @param {string} [opts.previousRouteSource]
+     * @returns {Object|null}
+     */
+    function pickRouteMatchingPreviousSelection(routeList, opts) {
+        opts = opts || {};
+        if (!routeList || routeList.length === 0) return null;
+        if (opts.preferPrimary) return routeList[0];
+
+        var prevName = opts.previousRouteName ? String(opts.previousRouteName).toLowerCase() : '';
+        var prevSource = opts.previousRouteSource || '';
+
+        if (prevName && prevSource) {
+            for (var i = 0; i < routeList.length; i++) {
+                var exact = routeList[i];
+                if ((exact.name || '').toLowerCase() === prevName
+                    && routeSourcesMatch(prevSource, exact.source)) {
+                    return exact;
+                }
+            }
+        }
+
+        if (prevName) {
+            for (var j = 0; j < routeList.length; j++) {
+                if ((routeList[j].name || '').toLowerCase() === prevName) {
+                    return routeList[j];
+                }
+            }
+        }
+
+        return routeList[0];
+    }
+
+    /**
      * Pick which route option to use during navigation after a reroute response.
      * @param {Array<Object>|null|undefined} routeList
      * @param {Object|null|undefined} singleRoutePayload
      * @param {Object} [opts]
      * @param {boolean} [opts.preferPrimary]
      * @param {string} [opts.previousRouteName]
+     * @param {string} [opts.previousRouteSource]
      * @returns {Object|null}
      */
     function pickActiveRouteDuringNavigation(routeList, singleRoutePayload, opts) {
@@ -1510,22 +1581,7 @@
         if (!routeList || routeList.length === 0) {
             return singleRoutePayload || null;
         }
-        if (opts.preferPrimary) {
-            return routeList[0];
-        }
-        var activeRoute = routeList[0];
-        if (routeList.length > 1 && opts.previousRouteName) {
-            var prevName = String(opts.previousRouteName).toLowerCase();
-            if (prevName) {
-                for (var i = 0; i < routeList.length; i++) {
-                    var name = (routeList[i].name || '').toLowerCase();
-                    if (name === prevName) {
-                        return routeList[i];
-                    }
-                }
-            }
-        }
-        return activeRoute;
+        return pickRouteMatchingPreviousSelection(routeList, opts);
     }
 
     /**
@@ -4414,6 +4470,9 @@
         shouldShowPreviewAlternativeRoutes: shouldShowPreviewAlternativeRoutes,
         buildPreviewAlternativeRouteCardMountPlan: buildPreviewAlternativeRouteCardMountPlan,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
+        pickRouteMatchingPreviousSelection: pickRouteMatchingPreviousSelection,
+        routeSourcesMatch: routeSourcesMatch,
+        normalizeRouteSourceKey: normalizeRouteSourceKey,
         buildNavRouteSilentUpdatePatchPlan: buildNavRouteSilentUpdatePatchPlan,
         buildRouteUpdateDuringNavigationExecutePlan: buildRouteUpdateDuringNavigationExecutePlan,
         buildInNavRerouteSuccessPlan: buildInNavRerouteSuccessPlan,

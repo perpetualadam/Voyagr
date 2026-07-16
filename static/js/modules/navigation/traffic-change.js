@@ -943,6 +943,49 @@
         };
     }
 
+    function normalizeTrafficRouteSourceKey(source) {
+        return String(source || '').toLowerCase().replace(/[^a-z0-9+]/g, '');
+    }
+
+    function trafficRouteSourcesMatch(previousSource, candidateSource) {
+        var prev = normalizeTrafficRouteSourceKey(previousSource);
+        var candidate = normalizeTrafficRouteSourceKey(candidateSource);
+        if (!prev) return true;
+        if (!candidate) return false;
+        if (prev.indexOf('graphhopper') >= 0) return candidate.indexOf('graphhopper') >= 0;
+        if (prev.indexOf('valhalla') >= 0) return candidate.indexOf('valhalla') >= 0;
+        if (prev.indexOf('osrm') >= 0) return candidate.indexOf('osrm') >= 0;
+        return prev === candidate || candidate.indexOf(prev) >= 0 || prev.indexOf(candidate) >= 0;
+    }
+
+    /**
+     * Pick a route from a traffic reroute response (name + engine source aware).
+     * @param {Array<Object>} routes
+     * @param {Object} [opts]
+     * @returns {Object|null}
+     */
+    function pickTrafficRerouteRouteFromResponse(routes, opts) {
+        opts = opts || {};
+        if (!routes || !routes.length) return null;
+        var prevName = opts.previousRouteName ? String(opts.previousRouteName).toLowerCase() : '';
+        var prevSource = opts.previousRouteSource || '';
+        if (prevName && prevSource) {
+            for (var i = 0; i < routes.length; i++) {
+                var exact = routes[i];
+                if ((exact.name || '').toLowerCase() === prevName
+                    && trafficRouteSourcesMatch(prevSource, exact.source)) {
+                    return exact;
+                }
+            }
+        }
+        if (prevName) {
+            for (var j = 0; j < routes.length; j++) {
+                if ((routes[j].name || '').toLowerCase() === prevName) return routes[j];
+            }
+        }
+        return routes[0];
+    }
+
     /**
      * Dispatch plan after /api/route returns during traffic-based reroute.
      * @param {Object} [input]
@@ -951,6 +994,7 @@
      * @param {number} [input.oldBaseMinutes]
      * @param {number} [input.measuredDelayMin]
      * @param {string} [input.previousRouteName]
+     * @param {string} [input.previousRouteSource]
      * @returns {Object}
      */
     function buildTrafficRerouteApiResponseDispatchPlan(input) {
@@ -959,18 +1003,10 @@
         if (!data.success || !data.routes || !data.routes.length) {
             return { action: 'no_route' };
         }
-        // Stay on the previously active route type (e.g. '⚡ Optimised') across the
-        // multi-route traffic-reroute response instead of always taking routes[0].
-        var newRoute = data.routes[0];
-        if (data.routes.length > 1 && input.previousRouteName) {
-            var prevName = String(input.previousRouteName).toLowerCase();
-            for (var ri = 0; ri < data.routes.length; ri++) {
-                if ((data.routes[ri].name || '').toLowerCase() === prevName) {
-                    newRoute = data.routes[ri];
-                    break;
-                }
-            }
-        }
+        var newRoute = pickTrafficRerouteRouteFromResponse(data.routes, {
+            previousRouteName: input.previousRouteName,
+            previousRouteSource: input.previousRouteSource,
+        }) || data.routes[0];
         var acceptPlan = buildTrafficRerouteAcceptancePlan({
             isSevere: !!input.isSevere,
             oldBaseMinutes: input.oldBaseMinutes || 0,
@@ -1053,6 +1089,8 @@
         buildTrafficRerouteBlockedLogPlan: buildTrafficRerouteBlockedLogPlan,
         buildTrafficRerouteFetchOrchestrationPlan: buildTrafficRerouteFetchOrchestrationPlan,
         buildTrafficRerouteApiResponseDispatchPlan: buildTrafficRerouteApiResponseDispatchPlan,
+        pickTrafficRerouteRouteFromResponse: pickTrafficRerouteRouteFromResponse,
+        trafficRouteSourcesMatch: trafficRouteSourcesMatch,
         buildTrafficRerouteAcceptancePlan: buildTrafficRerouteAcceptancePlan,
         buildStartAutoTrafficUpdatesDispatchPlan: buildStartAutoTrafficUpdatesDispatchPlan,
         buildStartAutoTrafficUpdatesOrchestrationPlan: buildStartAutoTrafficUpdatesOrchestrationPlan,

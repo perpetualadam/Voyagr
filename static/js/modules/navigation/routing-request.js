@@ -260,6 +260,8 @@
             avoid_points: o.avoidPoints || [],
             include_tolls: !!o.includeTolls,
             include_caz: !!o.includeCaz,
+            force_refresh: true,
+            is_reroute: true,
         };
         var shared = buildSharedRouteOptions(o.sharedOptions || {});
         for (var key in shared) {

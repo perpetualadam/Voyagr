@@ -60,6 +60,8 @@ class RouteRequestParams:
     start_lon: float
     end_lat: float
     end_lon: float
+    force_refresh: bool
+    is_reroute: bool
 
 
 def parse_route_request(data: Dict[str, Any]) -> RouteRequestParams:
@@ -153,6 +155,9 @@ def parse_route_request(data: Dict[str, Any]) -> RouteRequestParams:
     start_lat, start_lon = start_coords
     end_lat, end_lon = end_coords
 
+    force_refresh = bool(data.get('force_refresh', False))
+    is_reroute = bool(data.get('is_reroute', False))
+
     return RouteRequestParams(
         start=start,
         end=end,
@@ -194,4 +199,6 @@ def parse_route_request(data: Dict[str, Any]) -> RouteRequestParams:
         start_lon=start_lon,
         end_lat=end_lat,
         end_lon=end_lon,
+        force_refresh=force_refresh,
+        is_reroute=is_reroute,
     )

@@ -416,6 +416,36 @@ describe('reroute retry and notification helpers', () => {
         expect(fallback.newRoute.name).toBe('Fastest');
     });
 
+    test('buildAutomaticRerouteOutcomePlan prefers GraphHopper Optimised by source', () => {
+        const matched = RD.buildAutomaticRerouteOutcomePlan({
+            success: true,
+            routes: [
+                { name: '\u26a1 Optimised', source: 'Valhalla', distance_km: 10, duration_minutes: 20 },
+                { name: '\u26a1 Optimised', source: 'GraphHopper', distance_km: 12, duration_minutes: 22 },
+            ],
+        }, {
+            previousRouteName: '\u26a1 Optimised',
+            previousRouteSource: 'GraphHopper',
+            convertDistance: (km) => km.toFixed(1),
+            distUnit: 'km',
+            now: 70000,
+        });
+        expect(matched.newRoute.source).toBe('GraphHopper');
+        expect(matched.newRoute.distance_km).toBe(12);
+    });
+
+    test('pickRerouteRouteFromResponse matches engine family', () => {
+        const routes = [
+            { name: '\u26a1 Optimised', source: 'Valhalla' },
+            { name: '\u26a1 Optimised', source: 'GraphHopper' },
+        ];
+        expect(RD.pickRerouteRouteFromResponse(routes, {
+            previousRouteName: '\u26a1 Optimised',
+            previousRouteSource: 'GraphHopper',
+        }).source).toBe('GraphHopper');
+        expect(RD.routeSourcesMatch('GraphHopper+Valhalla', 'GraphHopper')).toBe(true);
+    });
+
     test('buildAutomaticRerouteOutcomePlan returns failure with first-attempt notification', () => {
         const plan = RD.buildAutomaticRerouteOutcomePlan({ success: false, error: 'timeout' }, {
             rerouteFailureRetryCount: 0,

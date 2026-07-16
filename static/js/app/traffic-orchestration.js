@@ -824,6 +824,7 @@
                 oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
                 measuredDelayMin,
                 previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
+                previousRouteSource: window.lastCalculatedRoute ? window.lastCalculatedRoute.source : '',
             });
 
             if (dispatch.action === 'accept') {

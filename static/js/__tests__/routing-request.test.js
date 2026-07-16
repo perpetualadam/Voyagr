@@ -170,6 +170,8 @@ describe('buildRerouteRequestBody', () => {
         expect(body.include_caz).toBe(false);
         expect(body.routing_mode).toBe('auto');
         expect(body.avoid_tolls).toBe(true);
+        expect(body.force_refresh).toBe(true);
+        expect(body.is_reroute).toBe(true);
     });
 });
 

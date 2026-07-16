@@ -221,6 +221,13 @@ def route_with_graphhopper(
     avoid_caz_zones: bool = False,
     avoid_points: Optional[list] = None,
     camera_hazards: Optional[Dict[str, list]] = None,
+    avoid_tolls: bool = False,
+    avoid_motorways: bool = False,
+    avoid_ferries: bool = False,
+    avoid_unpaved: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    route_optimization: str = 'fastest',
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -239,6 +246,7 @@ def route_with_graphhopper(
         Route data dict or None if failed
     """
     try:
+        from voyagr.services.routing.costing import build_graphhopper_costing_preference_model
         from voyagr.services.hazards import (
             merge_graphhopper_custom_model_parts,
             build_graphhopper_caz_avoidance_model,
@@ -300,7 +308,19 @@ def route_with_graphhopper(
         if avoid_caz_zones:
             caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
 
-        custom_model = merge_graphhopper_custom_model_parts(cam_model, tl_rx_model, caz_model)
+        costing_model = build_graphhopper_costing_preference_model(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            avoid_unpaved=avoid_unpaved,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            route_optimization=route_optimization,
+        ) or None
+
+        custom_model = merge_graphhopper_custom_model_parts(
+            cam_model, tl_rx_model, caz_model, costing_model,
+        )
         if custom_model:
             payload["custom_model"] = custom_model
             logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
@@ -407,6 +427,13 @@ def attempt_graphhopper_camera_route(
     avoid_railway_crossings: bool,
     apply_caz_routing_avoidance: bool,
     avoid_points: Optional[List[Dict[str, Any]]],
+    avoid_tolls: bool = False,
+    avoid_motorways: bool = False,
+    avoid_ferries: bool = False,
+    avoid_unpaved: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    route_optimization: str = 'fastest',
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Try GraphHopper first (car-only) when camera avoidance is enabled.
@@ -440,6 +467,13 @@ def attempt_graphhopper_camera_route(
             avoid_caz_zones=apply_caz_routing_avoidance,
             avoid_points=avoid_points if avoid_points else None,
             camera_hazards=_cam_gh if _cam_gh and any(_cam_gh.values()) else None,
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            avoid_unpaved=avoid_unpaved,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            route_optimization=route_optimization,
         )
         if graphhopper_route and graphhopper_route.get('success'):
             logger.info("[GRAPHHOPPER] ✅ Route found with camera avoidance")
