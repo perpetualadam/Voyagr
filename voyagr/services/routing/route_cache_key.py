@@ -40,17 +40,25 @@ def build_route_cache_key(
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
+    avoid_unpaved: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    route_optimization: str = 'fastest',
+    max_detour: float = 20.0,
     avoid_points: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> str:
-    """Create cache key from route parameters (rv7 adds prefs + avoid_points)."""
+    """Create cache key from route parameters (rv8 adds route-shape prefs)."""
     avoid_fp = fingerprint_avoid_points(avoid_points)
+    ro = (route_optimization or 'fastest').lower()
     return (
         f'{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},'
         f'{routing_mode},{vehicle_type},'
         f'{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},'
         f'{int(avoid_railway_crossings)},{int(avoid_caz_zones)},'
         f'{int(avoid_tolls)},{int(avoid_motorways)},{int(avoid_ferries)},'
-        f'{avoid_fp},rv7'
+        f'{int(avoid_unpaved)},{int(prefer_scenic)},{int(prefer_quiet)},'
+        f'{ro},{float(max_detour):.0f},'
+        f'{avoid_fp},rv8'
     )
 
 

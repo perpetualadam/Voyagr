@@ -18,3 +18,9 @@ def test_graphhopper_costing_model_avoid_tolls_and_ferries():
     rules = ' '.join(rule['if'] for rule in model['priority'])
     assert 'toll' in rules
     assert 'FERRY' in rules
+
+
+def test_graphhopper_costing_model_eco_speed_cap():
+    model = build_graphhopper_costing_preference_model(route_optimization='eco')
+    assert model.get('speed')
+    assert any(rule.get('limit_to') == '90' for rule in model['speed'])

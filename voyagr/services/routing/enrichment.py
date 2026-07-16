@@ -50,6 +50,7 @@ class RouteEnrichmentContext:
     include_caz: bool
     caz_exempt: bool
     traffic_multiplier: float = 1.0
+    traffic_level: str = 'N/A'
     max_detour: int = 20
     valhalla_costing: str = 'auto'
     prefer_scenic: bool = False
@@ -123,6 +124,10 @@ def merge_graphhopper_optimised_route(
     if not (gh and gh.get('success')):
         return routes
 
+    if ctx.has_waypoints:
+        logger.info('[GRAPHHOPPER] Skipping Optimised merge — route has via-points/stops (GH is A→B only)')
+        return routes
+
     if not graphhopper_qualifies_as_optimised(gh, avoid_cameras=ctx.avoid_cameras):
         if ctx.avoid_cameras:
             logger.warning(
@@ -145,6 +150,8 @@ def merge_graphhopper_optimised_route(
             include_caz=ctx.include_caz,
             caz_exempt=ctx.caz_exempt,
             traffic_multiplier=ctx.traffic_multiplier,
+            traffic_level=ctx.traffic_level,
+            include_traffic_fields=(log_label == 'primary'),
         )
         if not gh_route_entry:
             return routes

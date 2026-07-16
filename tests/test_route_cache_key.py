@@ -29,8 +29,22 @@ def test_build_route_cache_key_changes_with_avoid_points():
     k1 = build_route_cache_key(**base, avoid_points=[])
     k2 = build_route_cache_key(**base, avoid_points=[{'lat': 51.55, 'lon': -0.15}])
     assert k1 != k2
-    assert k1.endswith(',rv7')
-    assert k2.endswith(',rv7')
+    assert k1.endswith(',rv8')
+    assert k2.endswith(',rv8')
+
+
+def test_build_route_cache_key_changes_with_route_prefs():
+    base = dict(
+        start_lat=51.5,
+        start_lon=-0.1,
+        end_lat=51.6,
+        end_lon=-0.2,
+        routing_mode='auto',
+        vehicle_type='petrol_diesel',
+    )
+    k1 = build_route_cache_key(**base, prefer_scenic=False, route_optimization='fastest')
+    k2 = build_route_cache_key(**base, prefer_scenic=True, route_optimization='scenic')
+    assert k1 != k2
 
 
 def test_should_bypass_route_cache_for_reroute_and_avoid_points():

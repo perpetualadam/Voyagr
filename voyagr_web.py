@@ -701,6 +701,11 @@ class RouteCache:
         avoid_tolls: bool = False,
         avoid_motorways: bool = False,
         avoid_ferries: bool = False,
+        avoid_unpaved: bool = False,
+        prefer_scenic: bool = False,
+        prefer_quiet: bool = False,
+        route_optimization: str = 'fastest',
+        max_detour: float = 20.0,
         avoid_points: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Create cache key from route parameters."""
@@ -720,6 +725,11 @@ class RouteCache:
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
+            avoid_unpaved=avoid_unpaved,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            route_optimization=route_optimization,
+            max_detour=max_detour,
             avoid_points=avoid_points,
         )
 
@@ -739,6 +749,11 @@ class RouteCache:
         avoid_tolls: bool = False,
         avoid_motorways: bool = False,
         avoid_ferries: bool = False,
+        avoid_unpaved: bool = False,
+        prefer_scenic: bool = False,
+        prefer_quiet: bool = False,
+        route_optimization: str = 'fastest',
+        max_detour: float = 20.0,
         avoid_points: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
@@ -747,7 +762,8 @@ class RouteCache:
                 start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
                 enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
                 avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
-                avoid_ferries, avoid_points,
+                avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
+                route_optimization, max_detour, avoid_points,
             )
 
             if key not in self.cache:
@@ -783,6 +799,11 @@ class RouteCache:
         avoid_tolls: bool = False,
         avoid_motorways: bool = False,
         avoid_ferries: bool = False,
+        avoid_unpaved: bool = False,
+        prefer_scenic: bool = False,
+        prefer_quiet: bool = False,
+        route_optimization: str = 'fastest',
+        max_detour: float = 20.0,
         avoid_points: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Cache a route calculation."""
@@ -791,7 +812,8 @@ class RouteCache:
                 start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
                 enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
                 avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
-                avoid_ferries, avoid_points,
+                avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
+                route_optimization, max_detour, avoid_points,
             )
 
             # Remove oldest if at capacity
@@ -1206,6 +1228,11 @@ def calculate_route():
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
+            avoid_unpaved=avoid_unpaved,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            route_optimization=route_optimization,
+            max_detour=max_detour,
             avoid_points=avoid_points,
         )
 
@@ -1565,6 +1592,7 @@ def calculate_route():
 
                     # Post-Valhalla enrichment (GH Optimised merge, ensure_*, annotate, reorder)
                     enrich_ctx.traffic_multiplier = traffic_multiplier
+                    enrich_ctx.traffic_level = traffic_level
                     routes = apply_valhalla_route_enrichment(routes, enrich_ctx, log_label='primary')
 
                     # ================================================================
@@ -1607,7 +1635,7 @@ def calculate_route():
                     # ================================================================
                     cost_calculator.cache_route_to_db(
                         start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                        response_data, 'Valhalla'
+                        response_data, routing_source,
                     )
                     print("[CACHE] STORED: Route cached in database")
 

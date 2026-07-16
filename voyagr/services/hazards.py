@@ -408,22 +408,48 @@ def build_graphhopper_filtered_camera_model(
     )
 
 
+# Align GraphHopper polygon weights with Valhalla exclude_locations priority.
+GRAPHOPPER_HAZARD_WEIGHTS: Dict[str, float] = {
+    'avoid_point': 60.0,
+    'camera': 50.0,
+    'road_closed': 45.0,
+    'police': 40.0,
+    'accident': 35.0,
+    'traffic_light': 38.0,
+    'lane_closed': 32.0,
+    'roadworks': 30.0,
+    'jam': 25.0,
+    'railway_crossing': 35.0,
+    'pothole': 15.0,
+    'debris': 15.0,
+}
+MIN_GRAPHOPPER_HAZARD_WEIGHT = 15.0
+
+# TomTom / live-incident buckets merged into GraphHopper custom models (Valhalla parity).
+GRAPHHOPPER_LIVE_INCIDENT_BUCKETS: Tuple[str, ...] = (
+    'road_closed', 'police', 'accident', 'roadworks', 'jam', 'lane_closed',
+)
+
+
+def extract_graphhopper_live_incident_hazards(
+    hazards: Dict[str, List[Dict[str, Any]]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Return live-incident hazard buckets for GraphHopper dynamic polygons."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for key in GRAPHHOPPER_LIVE_INCIDENT_BUCKETS:
+        bucket = hazards.get(key)
+        if bucket:
+            out[key] = list(bucket)
+    return out
+
+
 def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                                    route_bbox: Optional[Dict[str, float]] = None,
                                    max_hazards: int = 25) -> Dict[str, Any]:
     """Build GraphHopper Custom Model to avoid hazards using circular zones."""
     try:
         all_hazards = []
-        hazard_weights = {
-            'camera': 50.0,
-            'traffic_light': 40.0,
-            'police': 30.0,
-            'railway_crossing': 35.0,  # OSM level crossings — same tier as dynamic avoidance (must be >= 30)
-            'accident': 20.0,
-            'roadworks': 15.0,
-            'pothole': 5.0,
-            'debris': 5.0
-        }
+        hazard_weights = dict(GRAPHOPPER_HAZARD_WEIGHTS)
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
@@ -431,7 +457,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                 weight = 100.0
             elif hazard_type.startswith('camera_'):
                 weight = hazard_weights.get('camera', 50.0)
-            if weight >= 30.0:
+            if weight >= MIN_GRAPHOPPER_HAZARD_WEIGHT:
                 for hazard in hazard_list:
                     if route_bbox:
                         margin = 0.1
@@ -905,8 +931,10 @@ def merge_graphhopper_custom_model_parts(
     if not models:
         return None
     merged: Dict[str, Any] = {'priority': []}
+    speed_rules: List[Dict[str, Any]] = []
     for m in models:
         merged['priority'].extend(m.get('priority', []))
+        speed_rules.extend(m.get('speed', []))
     fc_features: List[Dict[str, Any]] = []
     for m in models:
         areas = m.get('areas')
@@ -914,6 +942,8 @@ def merge_graphhopper_custom_model_parts(
             fc_features.extend(areas['features'])
     if fc_features:
         merged['areas'] = {'type': 'FeatureCollection', 'features': fc_features}
+    if speed_rules:
+        merged['speed'] = speed_rules
     return merged
 
 

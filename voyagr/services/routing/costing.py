@@ -129,6 +129,12 @@ def build_graphhopper_costing_preference_model(
     elif ro == 'eco':
         priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.5'})
 
-    if not priority:
+    if not priority and ro != 'eco':
         return {}
-    return {'priority': priority}
+
+    model: Dict[str, Any] = {}
+    if priority:
+        model['priority'] = priority
+    if ro == 'eco':
+        model.setdefault('speed', []).append({'if': 'true', 'limit_to': '90'})
+    return model

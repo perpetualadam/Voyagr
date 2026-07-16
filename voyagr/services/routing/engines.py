@@ -220,6 +220,7 @@ def route_with_graphhopper(
     railway_crossing_hazards: Optional[list] = None,
     avoid_caz_zones: bool = False,
     avoid_points: Optional[list] = None,
+    incident_hazards: Optional[Dict[str, list]] = None,
     camera_hazards: Optional[Dict[str, list]] = None,
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
@@ -295,13 +296,17 @@ def route_with_graphhopper(
             # Congested/closed segments — penalise (not hard-block) so the optimised route
             # prefers to route around them when a reasonable alternative exists.
             osm_dynamic['avoid_point'] = avoid_points
+        if incident_hazards:
+            for bucket, items in incident_hazards.items():
+                if items:
+                    osm_dynamic[bucket] = items
 
         tl_rx_model: Optional[Dict[str, Any]] = None
         if osm_dynamic:
             tl_rx_model = gh_build_hazard_model(
                 osm_dynamic,
                 route_bbox=route_bbox,
-                max_hazards=22,
+                max_hazards=28,
             ) or None
 
         caz_model: Optional[Dict[str, Any]] = None
@@ -458,6 +463,10 @@ def attempt_graphhopper_camera_route(
             for k in CAMERA_HAZARD_BUCKETS
             if hazards.get(k)
         } if avoid_cameras else None
+        _incident_gh = None
+        if enable_hazard_avoidance:
+            from voyagr.services.hazards import extract_graphhopper_live_incident_hazards
+            _incident_gh = extract_graphhopper_live_incident_hazards(hazards) or None
         graphhopper_route = route_with_graphhopper(
             start_lat, start_lon, end_lat, end_lon,
             enable_camera_avoidance=avoid_cameras,
@@ -466,6 +475,7 @@ def attempt_graphhopper_camera_route(
             railway_crossing_hazards=_rx_gh if _rx_gh else None,
             avoid_caz_zones=apply_caz_routing_avoidance,
             avoid_points=avoid_points if avoid_points else None,
+            incident_hazards=_incident_gh,
             camera_hazards=_cam_gh if _cam_gh and any(_cam_gh.values()) else None,
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
