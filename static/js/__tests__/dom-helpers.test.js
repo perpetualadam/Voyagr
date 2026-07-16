@@ -52,6 +52,7 @@ describe('dom-helpers', () => {
         expect(Dom.SWAP_LOCATIONS_REST_STYLE.borderColor).toBe('#ddd');
         expect(Dom.SWAP_LOCATIONS_FLASH_MS).toBe(300);
         expect(Dom.BOTTOM_SHEET_PEEK_HEIGHT_PX).toBe(110);
+        expect(Dom.JOURNEY_SUMMARY_BAR_HEIGHT_PX).toBe(64);
     });
 
     test('buildBottomSheetInitOrchestrationPlan requires sheet and handle', () => {
