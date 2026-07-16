@@ -28,10 +28,18 @@
         });
     }
 
+    var JOURNEY_SUMMARY_VISIBLE_BODY_CLASS = 'voyagr-journey-summary-visible';
+
+    function setJourneySummaryLayoutActive(active) {
+        if (typeof document === 'undefined' || !document.body) return;
+        document.body.classList.toggle(JOURNEY_SUMMARY_VISIBLE_BODY_CLASS, !!active);
+    }
+
     function showJourneySummaryBar() {
         const bar = document.getElementById('journeySummaryBar');
         if (bar) {
             bar.style.display = 'flex';
+            setJourneySummaryLayoutActive(true);
             console.log('[Journey Summary] Displayed');
             startJourneySummaryUpdates();
         }
@@ -41,6 +49,7 @@
         const bar = document.getElementById('journeySummaryBar');
         if (bar) {
             bar.style.display = 'none';
+            setJourneySummaryLayoutActive(false);
             console.log('[Journey Summary] Hidden');
         }
         if (journeySummaryUpdateInterval) {
