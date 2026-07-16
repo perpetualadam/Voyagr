@@ -3060,7 +3060,7 @@ body.voyagr-has-offline-banner #speedWidget {
     right: calc(20px + var(--safe-area-inset-right, 0px));
     z-index: 200 !important;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     align-items: flex-end;
     gap: 10px;
 }
@@ -3071,6 +3071,7 @@ body.voyagr-has-offline-banner #speedWidget {
     font-size: 20px !important;
     font-weight: 700;
     color: white !important;
+    order: 2;
 }
 
 .nav-menu-toggle:hover {
@@ -3080,12 +3081,13 @@ body.voyagr-has-offline-banner #speedWidget {
 
 .nav-control-buttons {
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     gap: 10px;
-    max-height: 500px;
-    overflow: hidden;
+    max-height: 0;
+    overflow: visible;
     transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-    opacity: 1;
+    opacity: 0;
+    order: 1;
 }
 
 .nav-control-buttons.nav-menu-collapsed {
