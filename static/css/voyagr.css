@@ -245,6 +245,10 @@ body {
     pointer-events: none;
 }
 
+.nav-control-menu.nav-control-menu--open {
+    z-index: 350;
+}
+
 .nav-control-menu > .fab,
 .nav-control-menu > .nav-control-buttons {
     pointer-events: auto;
@@ -274,19 +278,18 @@ body.voyagr-journey-summary-visible .nav-control-menu {
 }
 
 .nav-control-buttons {
-    display: none !important;
     flex-direction: column-reverse;
     align-items: flex-end;
     gap: 10px;
 }
 
-.nav-control-buttons.nav-menu-expanded,
-.nav-control-menu--open .nav-control-buttons {
-    display: flex !important;
-}
-
 .nav-control-buttons.nav-menu-collapsed {
     display: none !important;
+}
+
+.nav-control-buttons.nav-menu-expanded,
+.nav-control-menu--open > .nav-control-buttons {
+    display: flex !important;
 }
 
 .nav-end-nav-fab {

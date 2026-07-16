@@ -36,6 +36,13 @@ function initializeApp() {
         // Initialize UI components
         initBottomSheet();
         try {
+            if (typeof initNavMenu === 'function') {
+                initNavMenu();
+            }
+        } catch (e) {
+            console.warn('[App] Nav menu init:', e);
+        }
+        try {
             initMobileMapIconHints();
         } catch (e) {
             console.warn('[App] Map icon hints:', e);
