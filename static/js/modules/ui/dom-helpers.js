@@ -42,6 +42,7 @@
     var BOTTOM_SHEET_EXPANDED_CLASS = 'expanded';
 
     var BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS = [
+        'navMenuToggle',
         'roadReportFab',
         'startTrackingBtn',
         'voiceFab',
@@ -55,6 +56,11 @@
     var BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX = 100;
     var BOTTOM_SHEET_FOCUS_EXPAND_INPUT_IDS = ['start', 'end'];
     var ROUTE_PREVIEW_HANDLE_TITLE = 'Swipe up to see route details';
+    var NAV_CONTROL_BUTTONS_ID = 'navControlButtons';
+    var NAV_MENU_TOGGLE_ID = 'navMenuToggle';
+    var NAV_MENU_COLLAPSED_CLASS = 'nav-menu-collapsed';
+    var NAV_MENU_EXPANDED_CLASS = 'nav-menu-expanded';
+    var JOURNEY_SUMMARY_VISIBLE_BODY_CLASS = 'voyagr-journey-summary-visible';
 
     /**
      * Orchestration plan for bottom sheet init element lookup.
@@ -364,6 +370,63 @@
             routeInProgress: routeInProgress,
             alwaysHideWhenExpanded: alwaysHide,
             navFabDisplays: navFabDisplays,
+            collapseNavMenu: sheetExpanded,
+        };
+    }
+
+    /**
+     * Whether the map action menu is currently collapsed.
+     * @param {boolean} [hasCollapsedClass]
+     * @returns {Object}
+     */
+    function buildNavMenuToggleCollectPlan(hasCollapsedClass) {
+        return { expand: !!hasCollapsedClass };
+    }
+
+    /**
+     * Apply plan for expanded/collapsed map action menu state.
+     * @param {Object} [input]
+     * @param {boolean} [input.expand]
+     * @param {boolean} [input.collapse]
+     * @returns {Object}
+     */
+    function buildNavMenuStateApplyPlan(input) {
+        input = input || {};
+        var expand = !!input.expand;
+        var collapse = !!input.collapse;
+        if (!expand && !collapse) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            navControlButtonsId: NAV_CONTROL_BUTTONS_ID,
+            navMenuToggleId: NAV_MENU_TOGGLE_ID,
+            collapsedClass: NAV_MENU_COLLAPSED_CLASS,
+            expandedClass: NAV_MENU_EXPANDED_CLASS,
+            expand: expand,
+            collapse: collapse,
+            ariaExpanded: expand ? 'true' : 'false',
+        };
+    }
+
+    /**
+     * Execute plan to collapse the map action menu.
+     * @returns {Object}
+     */
+    function buildCollapseNavMenuExecutePlan() {
+        return buildNavMenuStateApplyPlan({ collapse: true });
+    }
+
+    /**
+     * Entry plan for toggling the map action menu.
+     * @param {boolean} isCollapsed
+     * @returns {Object}
+     */
+    function buildToggleNavMenuEntryOrchestrationPlan(isCollapsed) {
+        var collected = buildNavMenuToggleCollectPlan(isCollapsed);
+        return {
+            collected: collected,
+            execute: buildNavMenuStateApplyPlan({ expand: collected.expand, collapse: !collected.expand }),
         };
     }
 
@@ -631,6 +694,11 @@
         BOTTOM_SHEET_ID: BOTTOM_SHEET_ID,
         BOTTOM_SHEET_EXPANDED_CLASS: BOTTOM_SHEET_EXPANDED_CLASS,
         BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS: BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS,
+        NAV_CONTROL_BUTTONS_ID: NAV_CONTROL_BUTTONS_ID,
+        NAV_MENU_TOGGLE_ID: NAV_MENU_TOGGLE_ID,
+        NAV_MENU_COLLAPSED_CLASS: NAV_MENU_COLLAPSED_CLASS,
+        NAV_MENU_EXPANDED_CLASS: NAV_MENU_EXPANDED_CLASS,
+        JOURNEY_SUMMARY_VISIBLE_BODY_CLASS: JOURNEY_SUMMARY_VISIBLE_BODY_CLASS,
         BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX: BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX,
         buildBottomSheetInitOrchestrationPlan: buildBottomSheetInitOrchestrationPlan,
         buildBottomSheetFullInitOrchestrationPlan: buildBottomSheetFullInitOrchestrationPlan,
@@ -646,6 +714,10 @@
         buildBottomSheetHeaderClickAllowedPlan: buildBottomSheetHeaderClickAllowedPlan,
         buildBottomSheetBodyClickExpandPlan: buildBottomSheetBodyClickExpandPlan,
         buildBottomSheetOverlapFabDisplayPlan: buildBottomSheetOverlapFabDisplayPlan,
+        buildNavMenuToggleCollectPlan: buildNavMenuToggleCollectPlan,
+        buildNavMenuStateApplyPlan: buildNavMenuStateApplyPlan,
+        buildCollapseNavMenuExecutePlan: buildCollapseNavMenuExecutePlan,
+        buildToggleNavMenuEntryOrchestrationPlan: buildToggleNavMenuEntryOrchestrationPlan,
         buildExpandBottomSheetExecutePlan: buildExpandBottomSheetExecutePlan,
         buildCollapseBottomSheetExecutePlan: buildCollapseBottomSheetExecutePlan,
         buildToggleBottomSheetCollectPlan: buildToggleBottomSheetCollectPlan,

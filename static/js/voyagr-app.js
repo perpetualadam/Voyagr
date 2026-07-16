@@ -746,6 +746,9 @@ function initBottomSheet() { VoyagrBottomSheetOrchestration.initBottomSheet(); }
 function syncBottomSheetOverlapFabs() { VoyagrBottomSheetOrchestration.syncBottomSheetOverlapFabs(); }
 function applyBottomSheetStateFromPlan(execute) { VoyagrBottomSheetOrchestration.applyBottomSheetStateFromPlan(execute); }
 
+function toggleNavMenu() { VoyagrNavMenuOrchestration.toggleNavMenu(); }
+function collapseNavMenu() { VoyagrNavMenuOrchestration.collapseNavMenu(); }
+
 function collapseBottomSheetForRoutePreview() { VoyagrBottomSheetOrchestration.collapseBottomSheetForRoutePreview(); }
 
 function getBottomSheetOrchestrationRuntime() {

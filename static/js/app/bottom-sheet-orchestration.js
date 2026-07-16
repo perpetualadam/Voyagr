@@ -340,6 +340,10 @@
             const el = document.getElementById(id);
             if (el) el.style.display = display;
         });
+
+        if (execute.collapseNavMenu && typeof root.VoyagrNavMenuOrchestration !== 'undefined') {
+            root.VoyagrNavMenuOrchestration.collapseNavMenu();
+        }
     }
 
     function toggleBottomSheet() {

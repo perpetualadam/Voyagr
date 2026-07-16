@@ -32,6 +32,9 @@
         const bar = document.getElementById('journeySummaryBar');
         if (bar) {
             bar.style.display = 'flex';
+            if (typeof document !== 'undefined' && document.body) {
+                document.body.classList.add('voyagr-journey-summary-visible');
+            }
             console.log('[Journey Summary] Displayed');
             startJourneySummaryUpdates();
         }
@@ -41,6 +44,9 @@
         const bar = document.getElementById('journeySummaryBar');
         if (bar) {
             bar.style.display = 'none';
+            if (typeof document !== 'undefined' && document.body) {
+                document.body.classList.remove('voyagr-journey-summary-visible');
+            }
             console.log('[Journey Summary] Hidden');
         }
         if (journeySummaryUpdateInterval) {

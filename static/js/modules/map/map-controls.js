@@ -19,7 +19,7 @@
     var AR_FAB_VISIBLE_ICON = '👓';
 
     var MAP_CONTROLS_HINT_SECTIONS = [
-        { title: 'Map (round buttons)', selector: '.fab-container .fab, #navControlButtons .fab' },
+        { title: 'Map (round buttons)', selector: '#navControlButtons .fab, .nav-control-menu > .fab' },
         { title: 'Bottom sheet toolbar', selector: '.sheet-toolbar .sheet-icon-btn' },
     ];
 
@@ -38,7 +38,7 @@
     var MAP_HINT_AUTO_DISMISS_MS = 4200;
     var MAP_ICON_HINT_LONG_PRESS_MS = 420;
     var MAP_ICON_HINT_MOVE_PX2 = 100;
-    var MAP_ICON_HINT_ROOT_SELECTORS = ['.fab-container', '#navControlButtons', '.sheet-toolbar'];
+    var MAP_ICON_HINT_ROOT_SELECTORS = ['#navControlButtons', '.nav-control-menu', '.sheet-toolbar'];
     var MAP_ICON_HINT_BUTTON_SELECTOR = 'button.fab, button.sheet-icon-btn';
     var MAP_CONTROLS_HINT_MODAL_ID = 'mapControlsHintModal';
     var MAP_CONTROLS_HINT_LIST_ID = 'mapControlsHintList';
