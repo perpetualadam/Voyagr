@@ -24,6 +24,24 @@ def fingerprint_avoid_points(avoid_points: Optional[Sequence[Dict[str, Any]]]) -
     return digest
 
 
+def fingerprint_waypoints(waypoints: Optional[Sequence[Dict[str, Any]]]) -> str:
+    """Stable short fingerprint for via_points or stops (route-shaping waypoints)."""
+    if not waypoints:
+        return ''
+    parts: List[str] = []
+    for wp in list(waypoints)[:20]:  # Support more waypoints for multi-drop
+        try:
+            lat = float(wp['lat'])
+            lon = float(wp['lon'])
+        except (TypeError, ValueError, KeyError):
+            continue
+        parts.append(f'{lat:.4f},{lon:.4f}')
+    if not parts:
+        return ''
+    digest = hashlib.sha1('|'.join(parts).encode('utf-8')).hexdigest()[:12]
+    return digest
+
+
 def build_route_cache_key(
     *,
     start_lat: float,
@@ -46,9 +64,19 @@ def build_route_cache_key(
     route_optimization: str = 'fastest',
     max_detour: float = 20.0,
     avoid_points: Optional[Sequence[Dict[str, Any]]] = None,
+    via_points: Optional[Sequence[Dict[str, Any]]] = None,
+    stops: Optional[Sequence[Dict[str, Any]]] = None,
+    departure_time: Optional[str] = None,
 ) -> str:
-    """Create cache key from route parameters (rv8 adds route-shape prefs)."""
+    """Create cache key from route parameters (rv9 adds via_points, stops, departure_time).
+
+    Route-shaping inputs like via_points, stops, and departure_time are now included
+    to prevent returning cached direct routes for multi-leg or time-dependent requests.
+    """
     avoid_fp = fingerprint_avoid_points(avoid_points)
+    via_fp = fingerprint_waypoints(via_points)
+    stops_fp = fingerprint_waypoints(stops)
+    dep_time = departure_time or ''
     ro = (route_optimization or 'fastest').lower()
     return (
         f'{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},'
@@ -58,7 +86,7 @@ def build_route_cache_key(
         f'{int(avoid_tolls)},{int(avoid_motorways)},{int(avoid_ferries)},'
         f'{int(avoid_unpaved)},{int(prefer_scenic)},{int(prefer_quiet)},'
         f'{ro},{float(max_detour):.0f},'
-        f'{avoid_fp},rv8'
+        f'{avoid_fp},{via_fp},{stops_fp},{dep_time},rv9'
     )
 
 

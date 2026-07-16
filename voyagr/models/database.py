@@ -159,13 +159,76 @@ def db_connection() -> Iterator[Any]:
 
 
 def migrate_persistent_route_cache_cache_key(cursor: sqlite3.Cursor) -> None:
-    """Add cache_key column + unique index for preference-aware DB cache rows."""
+    """Add cache_key column + unique index for preference-aware DB cache rows.
+
+    Also removes the legacy UNIQUE(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+    constraint to allow multiple preference variants with different cache_keys.
+    """
     cols = {row[1] for row in cursor.execute('PRAGMA table_info(persistent_route_cache)')}
-    if 'cache_key' not in cols:
-        cursor.execute('ALTER TABLE persistent_route_cache ADD COLUMN cache_key TEXT')
+
+    # Check if we need to recreate the table to remove the legacy UNIQUE constraint
+    # First, check if the old constraint exists by examining the table's SQL
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='persistent_route_cache'")
+    table_sql_result = cursor.fetchone()
+
+    if table_sql_result:
+        table_sql = table_sql_result[0] or ''
+        has_legacy_constraint = 'UNIQUE(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)' in table_sql
+
+        if has_legacy_constraint:
+            # Need to recreate table without the legacy constraint
+            logger.info('[DB Migration] Removing legacy UNIQUE constraint from persistent_route_cache')
+
+            # Create new table without the legacy constraint
+            cursor.execute('''
+                CREATE TABLE persistent_route_cache_new (
+                    id INTEGER PRIMARY KEY,
+                    start_lat REAL, start_lon REAL,
+                    end_lat REAL, end_lon REAL,
+                    routing_mode TEXT, vehicle_type TEXT,
+                    route_data TEXT,
+                    distance_km REAL, duration_minutes REAL,
+                    fuel_cost REAL, toll_cost REAL, caz_cost REAL,
+                    total_cost REAL,
+                    source TEXT,
+                    access_count INTEGER DEFAULT 1,
+                    last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    cache_key TEXT
+                )
+            ''')
+
+            # Copy data from old table (conditionally include cache_key if it exists)
+            if 'cache_key' in cols:
+                cursor.execute('''
+                    INSERT INTO persistent_route_cache_new
+                    SELECT id, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                           route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                           total_cost, source, access_count, last_accessed, created_at, cache_key
+                    FROM persistent_route_cache
+                ''')
+            else:
+                cursor.execute('''
+                    INSERT INTO persistent_route_cache_new
+                    SELECT id, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                           route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                           total_cost, source, access_count, last_accessed, created_at, NULL
+                    FROM persistent_route_cache
+                ''')
+
+            # Drop old table
+            cursor.execute('DROP TABLE persistent_route_cache')
+
+            # Rename new table
+            cursor.execute('ALTER TABLE persistent_route_cache_new RENAME TO persistent_route_cache')
+        elif 'cache_key' not in cols:
+            # Table exists but doesn't have legacy constraint, just add cache_key column if missing
+            cursor.execute('ALTER TABLE persistent_route_cache ADD COLUMN cache_key TEXT')
+
+    # Create unique index on cache_key (handles NULL values properly - each NULL is unique)
     cursor.execute(
         'CREATE UNIQUE INDEX IF NOT EXISTS uq_persistent_route_cache_key '
-        'ON persistent_route_cache(cache_key)'
+        'ON persistent_route_cache(cache_key) WHERE cache_key IS NOT NULL'
     )
 
 

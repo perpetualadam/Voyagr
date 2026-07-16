@@ -236,7 +236,8 @@ def build_graphhopper_optimised_route_entry(
             'maneuvers': gh_maneuvers,
             'source': 'GraphHopper',
         }
-        if graphhopper_route.get('custom_model_applied'):
+        # Only set camera_exclusions_applied when cameras were actually in the custom model
+        if graphhopper_route.get('camera_avoidance'):
             entry['camera_exclusions_applied'] = True
         if include_traffic_fields:
             entry['base_duration_minutes'] = round(base_duration_min, 0)

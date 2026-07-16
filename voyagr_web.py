@@ -707,6 +707,9 @@ class RouteCache:
         route_optimization: str = 'fastest',
         max_detour: float = 20.0,
         avoid_points: Optional[List[Dict[str, Any]]] = None,
+        via_points: Optional[List[Dict[str, Any]]] = None,
+        stops: Optional[List[Dict[str, Any]]] = None,
+        departure_time: Optional[str] = None,
     ) -> str:
         """Create cache key from route parameters."""
         from voyagr.services.routing.route_cache_key import build_route_cache_key
@@ -731,6 +734,9 @@ class RouteCache:
             route_optimization=route_optimization,
             max_detour=max_detour,
             avoid_points=avoid_points,
+            via_points=via_points,
+            stops=stops,
+            departure_time=departure_time,
         )
 
     def get(
@@ -755,6 +761,9 @@ class RouteCache:
         route_optimization: str = 'fastest',
         max_detour: float = 20.0,
         avoid_points: Optional[List[Dict[str, Any]]] = None,
+        via_points: Optional[List[Dict[str, Any]]] = None,
+        stops: Optional[List[Dict[str, Any]]] = None,
+        departure_time: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
         with self.lock:
@@ -763,7 +772,7 @@ class RouteCache:
                 enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
                 avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
                 avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
-                route_optimization, max_detour, avoid_points,
+                route_optimization, max_detour, avoid_points, via_points, stops, departure_time,
             )
 
             if key not in self.cache:
@@ -805,6 +814,9 @@ class RouteCache:
         route_optimization: str = 'fastest',
         max_detour: float = 20.0,
         avoid_points: Optional[List[Dict[str, Any]]] = None,
+        via_points: Optional[List[Dict[str, Any]]] = None,
+        stops: Optional[List[Dict[str, Any]]] = None,
+        departure_time: Optional[str] = None,
     ) -> None:
         """Cache a route calculation."""
         with self.lock:
@@ -813,7 +825,7 @@ class RouteCache:
                 enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
                 avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
                 avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
-                route_optimization, max_detour, avoid_points,
+                route_optimization, max_detour, avoid_points, via_points, stops, departure_time,
             )
 
             # Remove oldest if at capacity
@@ -1234,6 +1246,9 @@ def calculate_route():
             route_optimization=route_optimization,
             max_detour=max_detour,
             avoid_points=avoid_points,
+            via_points=via_points,
+            stops=stops,
+            departure_time=departure_time,
         )
 
         logger.info(f"[ROUTE] Via-points: {len(via_points)}, Stops: {len(stops)}, Total stop time: {total_stop_time} min")
@@ -1299,6 +1314,23 @@ def calculate_route():
                     db_cached_route, **cache_kwargs,
                 )
                 return jsonify(db_cached_route)
+
+            # Fallback to legacy coord-only lookup for pre-migration cache rows
+            legacy_cached_route = cost_calculator.get_cached_route_from_db_legacy(
+                start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type
+            )
+            if legacy_cached_route:
+                logger.info(
+                    f"[CACHE] DB LEGACY HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) "
+                    "(coord-only match, pre-migration row)"
+                )
+                legacy_cached_route['cached'] = True
+                legacy_cached_route['cache_stats'] = route_cache.get_stats()
+                route_cache.set(
+                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                    legacy_cached_route, **cache_kwargs,
+                )
+                return jsonify(legacy_cached_route)
         elif is_reroute or force_refresh or avoid_points:
             logger.info('[CACHE] BYPASS: reroute/force_refresh/avoid_points requires live routing')
 

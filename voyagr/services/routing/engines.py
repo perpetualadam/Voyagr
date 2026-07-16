@@ -278,6 +278,7 @@ def route_with_graphhopper(
 
         custom_model: Optional[Dict[str, Any]] = None
         custom_model_applied = False
+        camera_model_included = False
         cam_model: Optional[Dict[str, Any]] = None
         if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
             cam_model = build_graphhopper_combined_camera_model(
@@ -285,6 +286,7 @@ def route_with_graphhopper(
                 route_bbox=route_bbox,
             ) or None
             if cam_model:
+                camera_model_included = True
                 logger.info('[GRAPHHOPPER] Using UK camera area sections (+ SCDB filters when enabled)')
 
         osm_dynamic: Dict[str, list] = {}
@@ -362,7 +364,7 @@ def route_with_graphhopper(
                     return None
                 logger.warning(
                     f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); "
-                    "retrying GET (costing-only custom model)"
+                    "retrying GET (custom model not applied, default routing)"
                 )
                 response = None
 
@@ -409,7 +411,7 @@ def route_with_graphhopper(
                     'instructions': path.get('instructions', []),
                     'details': path.get('details', {}),  # per-edge attrs incl. max_speed
                     'bbox': path.get('bbox', []),
-                    'camera_avoidance': custom_model_applied,
+                    'camera_avoidance': camera_model_included and custom_model_applied,
                     'custom_model_applied': custom_model_applied,
                     'custom_model_requested': bool(custom_model),
                 }
