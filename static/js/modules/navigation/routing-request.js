@@ -199,6 +199,9 @@
         return storage.getItem('pref_cameras') !== 'false' ||
             storage.getItem('pref_trafficLightsAvoid') !== 'false' ||
             storage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
+            storage.getItem('pref_police') === 'true' ||
+            storage.getItem('pref_roadworks') === 'true' ||
+            storage.getItem('pref_accidents') === 'true' ||
             isAvoidTollsEnabled() ||
             storage.getItem('pref_caz') !== 'false';
     }
@@ -260,6 +263,8 @@
             avoid_points: o.avoidPoints || [],
             include_tolls: !!o.includeTolls,
             include_caz: !!o.includeCaz,
+            force_refresh: true,
+            is_reroute: true,
         };
         var shared = buildSharedRouteOptions(o.sharedOptions || {});
         for (var key in shared) {
@@ -326,6 +331,7 @@
      */
     function buildMultimodalDrivingLegBody(o) {
         o = o || {};
+        var routePrefs = o.routePrefs || {};
         var body = {
             start: formatCoordPair(o.startLat, o.startLon),
             end: formatCoordPair(o.endLat, o.endLon),
@@ -338,6 +344,13 @@
             avoid_cameras: !!o.avoidCameras,
             avoid_traffic_lights: !!o.avoidTrafficLights,
             avoid_railway_crossings: !!o.avoidRailwayCrossings,
+            avoid_motorways: !!o.avoidMotorways,
+            avoid_ferries: !!o.avoidFerries,
+            prefer_scenic: !!routePrefs.preferScenic,
+            prefer_quiet: !!routePrefs.preferQuiet,
+            avoid_unpaved: !!routePrefs.avoidUnpaved,
+            route_optimization: routePrefs.routeOptimization || 'fastest',
+            max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
         };
         spreadCostParams(body, o.costParams);
         return body;

@@ -66,9 +66,23 @@ def test_camera_hazards_forwarded_when_present():
     assert 'camera_speed' in kwargs['camera_hazards']
 
 
-def test_camera_hazards_none_when_avoid_cameras_false():
+def test_costing_preferences_forwarded_to_graphhopper():
     ok = {'success': True}
-    hazards = {'camera_speed': [{'lat': 51.55, 'lon': -0.15}]}
     with patch.object(engines, 'route_with_graphhopper', return_value=ok) as m:
-        attempt_graphhopper_camera_route(hazards=hazards, **{**BASE, 'avoid_cameras': False})
-    assert m.call_args.kwargs['camera_hazards'] is None
+        attempt_graphhopper_camera_route(
+            hazards={},
+            **{
+                **BASE,
+                'avoid_tolls': True,
+                'avoid_motorways': True,
+                'avoid_ferries': True,
+                'prefer_scenic': True,
+                'route_optimization': 'eco',
+            },
+        )
+    kwargs = m.call_args.kwargs
+    assert kwargs['avoid_tolls'] is True
+    assert kwargs['avoid_motorways'] is True
+    assert kwargs['avoid_ferries'] is True
+    assert kwargs['prefer_scenic'] is True
+    assert kwargs['route_optimization'] == 'eco'

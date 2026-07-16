@@ -685,6 +685,73 @@
     }
 
     /**
+     * Normalize routing engine source labels for comparison.
+     * @param {string} [source]
+     * @returns {string}
+     */
+    function normalizeRouteSourceKey(source) {
+        return String(source || '').toLowerCase().replace(/[^a-z0-9+]/g, '');
+    }
+
+    /**
+     * Whether a reroute candidate matches the previously active engine family.
+     * @param {string} [previousSource]
+     * @param {string} [candidateSource]
+     * @returns {boolean}
+     */
+    function routeSourcesMatch(previousSource, candidateSource) {
+        var prev = normalizeRouteSourceKey(previousSource);
+        var candidate = normalizeRouteSourceKey(candidateSource);
+        if (!prev) return true;
+        if (!candidate) return false;
+        if (prev.indexOf('graphhopper') >= 0) {
+            return candidate.indexOf('graphhopper') >= 0;
+        }
+        if (prev.indexOf('valhalla') >= 0) {
+            return candidate.indexOf('valhalla') >= 0;
+        }
+        if (prev.indexOf('osrm') >= 0) {
+            return candidate.indexOf('osrm') >= 0;
+        }
+        return prev === candidate || candidate.indexOf(prev) >= 0 || prev.indexOf(candidate) >= 0;
+    }
+
+    /**
+     * Pick a route from a multi-route reroute response (name + engine source aware).
+     * @param {Array<Object>} routes
+     * @param {Object} [opts]
+     * @returns {Object|null}
+     */
+    function pickRerouteRouteFromResponse(routes, opts) {
+        opts = opts || {};
+        if (!routes || !routes.length) return null;
+        if (opts.preferPrimary) return routes[0];
+
+        var prevName = opts.previousRouteName ? String(opts.previousRouteName).toLowerCase() : '';
+        var prevSource = opts.previousRouteSource || '';
+
+        if (prevName && prevSource) {
+            for (var i = 0; i < routes.length; i++) {
+                var exact = routes[i];
+                if ((exact.name || '').toLowerCase() === prevName
+                    && routeSourcesMatch(prevSource, exact.source)) {
+                    return exact;
+                }
+            }
+        }
+
+        if (prevName) {
+            for (var j = 0; j < routes.length; j++) {
+                if ((routes[j].name || '').toLowerCase() === prevName) {
+                    return routes[j];
+                }
+            }
+        }
+
+        return routes[0];
+    }
+
+    /**
      * Outcome plan after `/api/route` returns for automatic deviation reroute.
      * @param {Object|null|undefined} data
      * @param {Object} opts
@@ -694,19 +761,10 @@
         opts = opts || {};
         data = data || {};
         if (data.success && data.routes && data.routes.length > 0) {
-            // Match the previously active route by name (e.g. '⚡ Optimised') so the
-            // reroute stays on the same route type rather than always falling back to
-            // routes[0] (which may be a different option on multi-route responses).
-            var newRoute = data.routes[0];
-            if (data.routes.length > 1 && opts.previousRouteName) {
-                var prevName = String(opts.previousRouteName).toLowerCase();
-                for (var ri = 0; ri < data.routes.length; ri++) {
-                    if ((data.routes[ri].name || '').toLowerCase() === prevName) {
-                        newRoute = data.routes[ri];
-                        break;
-                    }
-                }
-            }
+            var newRoute = pickRerouteRouteFromResponse(data.routes, {
+                previousRouteName: opts.previousRouteName,
+                previousRouteSource: opts.previousRouteSource,
+            }) || data.routes[0];
             var hazardCount = newRoute.hazard_count || 0;
             var hazardsList = newRoute.hazards || newRoute.hazards_on_route || [];
             var displayDist = typeof opts.convertDistance === 'function'
@@ -1160,6 +1218,9 @@
         buildRerouteVoiceMessage: buildRerouteVoiceMessage,
         buildRerouteSuccessNotificationPlan: buildRerouteSuccessNotificationPlan,
         buildAutomaticRerouteGuardPlan: buildAutomaticRerouteGuardPlan,
+        pickRerouteRouteFromResponse: pickRerouteRouteFromResponse,
+        routeSourcesMatch: routeSourcesMatch,
+        normalizeRouteSourceKey: normalizeRouteSourceKey,
         buildAutomaticRerouteOutcomePlan: buildAutomaticRerouteOutcomePlan,
         buildAutomaticRerouteErrorPlan: buildAutomaticRerouteErrorPlan,
         buildAutomaticRerouteResultApplyPlan: buildAutomaticRerouteResultApplyPlan,

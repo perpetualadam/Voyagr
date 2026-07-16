@@ -72,6 +72,7 @@
             {
                 preferPrimary: preferPrimary,
                 previousRouteName: rt().getLastCalculatedRoute() ? rt().getLastCalculatedRoute().name : '',
+                previousRouteSource: rt().getLastCalculatedRoute() ? rt().getLastCalculatedRoute().source : '',
             }
         );
         if (!preferPrimary && routeList && routeList.length > 1 && rt().getLastCalculatedRoute() && activeRoute !== routeList[0]) {

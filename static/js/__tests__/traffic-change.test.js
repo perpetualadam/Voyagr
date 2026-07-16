@@ -593,6 +593,25 @@ describe('auto traffic interval dispatch plans', () => {
         expect(fallback.newRoute.name).toBe('Fastest');
     });
 
+    test('buildTrafficRerouteApiResponseDispatchPlan prefers GraphHopper Optimised by source', () => {
+        const matched = TC.buildTrafficRerouteApiResponseDispatchPlan({
+            data: {
+                success: true,
+                routes: [
+                    { name: '\u26a1 Optimised', source: 'Valhalla', duration_minutes: 12 },
+                    { name: '\u26a1 Optimised', source: 'GraphHopper', duration_minutes: 10 },
+                ],
+            },
+            isSevere: true,
+            oldBaseMinutes: 25,
+            measuredDelayMin: 5,
+            previousRouteName: '\u26a1 Optimised',
+            previousRouteSource: 'GraphHopper',
+        });
+        expect(matched.action).toBe('accept');
+        expect(matched.newRoute.source).toBe('GraphHopper');
+    });
+
     test('buildUpdateTrafficConditionsResponseDispatchPlan and monitoring runtime collect', () => {
         const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan({}, 'A', 'B');
         const ok = TC.buildUpdateTrafficConditionsResponseDispatchPlan({ success: true }, orch);

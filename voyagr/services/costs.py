@@ -414,8 +414,19 @@ class CostCalculator:
             'recommendations': recommendations,
         }
 
-    def cache_route_to_db(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
-                         routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], source: str) -> bool:
+    def cache_route_to_db(
+        self,
+        start_lat: float,
+        start_lon: float,
+        end_lat: float,
+        end_lon: float,
+        routing_mode: str,
+        vehicle_type: str,
+        route_data: Dict[str, Any],
+        source: str,
+        *,
+        cache_key: Optional[str] = None,
+    ) -> bool:
         """Cache a route to the database for long-term storage and analytics."""
         try:
             with db_connection() as conn:
@@ -428,20 +439,41 @@ class CostCalculator:
                 caz_cost = route_data.get('caz_cost', 0)
                 total_cost = fuel_cost + toll_cost + caz_cost
 
-                cursor.execute('''
-                    INSERT OR REPLACE INTO persistent_route_cache
-                    (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                     route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
-                     total_cost, source, access_count, last_accessed)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                            COALESCE((SELECT access_count FROM persistent_route_cache
-                                     WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                                     AND routing_mode=? AND vehicle_type=?), 0) + 1,
-                            CURRENT_TIMESTAMP)
-                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                      json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
-                      caz_cost, total_cost, source, start_lat, start_lon, end_lat, end_lon,
-                      routing_mode, vehicle_type))
+                if cache_key:
+                    cursor.execute(
+                        'SELECT access_count FROM persistent_route_cache WHERE cache_key = ?',
+                        (cache_key,),
+                    )
+                    prev = cursor.fetchone()
+                    next_access = (int(prev[0]) if prev else 0) + 1
+                    cursor.execute(
+                        'DELETE FROM persistent_route_cache WHERE cache_key = ?',
+                        (cache_key,),
+                    )
+                    cursor.execute('''
+                        INSERT INTO persistent_route_cache
+                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                         total_cost, source, cache_key, access_count, last_accessed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                          json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
+                          caz_cost, total_cost, source, cache_key, next_access))
+                else:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO persistent_route_cache
+                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                         total_cost, source, access_count, last_accessed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                COALESCE((SELECT access_count FROM persistent_route_cache
+                                         WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                                         AND routing_mode=? AND vehicle_type=?), 0) + 1,
+                                CURRENT_TIMESTAMP)
+                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                          json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
+                          caz_cost, total_cost, source, start_lat, start_lon, end_lat, end_lon,
+                          routing_mode, vehicle_type))
 
                 conn.commit()
             return True
@@ -449,9 +481,49 @@ class CostCalculator:
             logger.error(f"[Cache] Error caching route to DB: {e}")
             return False
 
-    def get_cached_route_from_db(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
-                                routing_mode: str, vehicle_type: str) -> Optional[Dict[str, Any]]:
-        """Retrieve a cached route from the database."""
+    def get_cached_route_from_db(
+        self,
+        cache_key: str,
+        *,
+        max_age_hours: int = 24,
+    ) -> Optional[Dict[str, Any]]:
+        """Retrieve a cached route from the database by full preference-aware cache key."""
+        if not cache_key:
+            return None
+        try:
+            with db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    SELECT route_data FROM persistent_route_cache
+                    WHERE cache_key=? AND cache_key IS NOT NULL
+                    AND datetime(last_accessed) > datetime('now', ?)
+                ''', (cache_key, f'-{max_age_hours} hours'))
+
+                result = cursor.fetchone()
+                if result:
+                    route_data_str = result[0]
+                    cursor.execute('''
+                        UPDATE persistent_route_cache
+                        SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                        WHERE cache_key=?
+                    ''', (cache_key,))
+                    conn.commit()
+                    parsed = json.loads(route_data_str)
+                    if isinstance(parsed, dict):
+                        parsed['db_cached'] = True
+                    return parsed
+
+            return None
+        except Exception as e:
+            logger.error(f"[Cache] Error retrieving cached route: {e}")
+            return None
+
+    def get_cached_route_from_db_legacy(
+        self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
+        routing_mode: str, vehicle_type: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Legacy coord-only DB cache lookup (pre-cache_key rows)."""
         try:
             with db_connection() as conn:
                 cursor = conn.cursor()

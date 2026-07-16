@@ -77,6 +77,11 @@ class TestParseRouteRequestAvoidPoints(unittest.TestCase):
         p = parse_route_request({**BASE, 'enable_hazard_avoidance': False})
         self.assertFalse(p.enable_hazard_avoidance)
 
+    def test_reroute_flags_parsed(self):
+        p = parse_route_request({**BASE, 'force_refresh': True, 'is_reroute': True})
+        self.assertTrue(p.force_refresh)
+        self.assertTrue(p.is_reroute)
+
 
 class TestParseRouteRequestStops(unittest.TestCase):
     def test_total_stop_time_defaults_to_15_per_stop(self):

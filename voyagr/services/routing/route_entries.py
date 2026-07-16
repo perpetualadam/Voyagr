@@ -26,6 +26,64 @@ from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers
 logger = logging.getLogger('voyagr_web')
 
 
+def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert GraphHopper instructions + max_speed details into Valhalla-shaped maneuvers."""
+    gh_geometry = graphhopper_route.get('geometry', '')
+    if not gh_geometry:
+        return []
+
+    gh_coords = _polyline_module.decode(gh_geometry, precision=5)
+    gh_geometry_p6 = _polyline_module.encode(gh_coords, precision=6)
+    gh_coords_p6 = _polyline_module.decode(gh_geometry_p6, precision=6)
+
+    gh_max_speed_segments: List = []
+    try:
+        details = graphhopper_route.get('details') or {}
+        for seg in (details.get('max_speed') or []):
+            if isinstance(seg, list) and len(seg) >= 3:
+                frm, to, val = seg[0], seg[1], seg[2]
+                if isinstance(val, (int, float)) and val > 0:
+                    gh_max_speed_segments.append((int(frm), int(to), float(val)))
+    except Exception:
+        gh_max_speed_segments = []
+
+    def _speed_limit_kmh(point_idx: int) -> Optional[int]:
+        for frm, to, val in gh_max_speed_segments:
+            if frm <= point_idx < to:
+                return round(val)
+        return None
+
+    gh_maneuvers: List[Dict[str, Any]] = []
+    for instr in graphhopper_route.get('instructions', []):
+        sign = instr.get('sign', 0)
+        valhalla_type = GH_SIGN_TO_VALHALLA.get(sign, 8)
+        interval = instr.get('interval') or [0, 0]
+        begin_src = interval[0] if interval else 0
+        end_src = interval[1] if len(interval) > 1 else begin_src
+        begin_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, begin_src)
+        end_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, end_src)
+        instr_text = instr.get('text', '')
+        maneuver: Dict[str, Any] = {
+            'instruction': instr_text,
+            'verbal_pre_transition_instruction': instr_text,
+            'distance': instr.get('distance', 0) / 1000.0,
+            'time': instr.get('time', 0) / 1000.0,
+            'type': valhalla_type,
+            'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
+            'begin_shape_index': begin_idx,
+            'end_shape_index': end_idx,
+        }
+        sl_kmh = _speed_limit_kmh(begin_src)
+        if sl_kmh is not None:
+            maneuver['speed_limit'] = sl_kmh
+        street_label = instr.get('street_name', '') or ''
+        gh_rc = infer_road_class_from_names(street_label, maneuver.get('street_names'))
+        if gh_rc:
+            maneuver['road_class'] = gh_rc
+        gh_maneuvers.append(maneuver)
+    return gh_maneuvers
+
+
 def _first_leg_shape(trip: Dict[str, Any]) -> Optional[str]:
     for leg in (trip or {}).get('legs', []) or []:
         if 'shape' in leg:
@@ -124,6 +182,8 @@ def build_graphhopper_optimised_route_entry(
     include_caz: bool,
     caz_exempt: bool,
     traffic_multiplier: float = 1.0,
+    traffic_level: str = 'N/A',
+    include_traffic_fields: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Turn a successful ``route_with_graphhopper()`` result into the same route-dict
@@ -154,55 +214,12 @@ def build_graphhopper_optimised_route_entry(
 
         gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
         gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
+        base_duration_min = gh_duration_min
         gh_duration_min = gh_duration_min * traffic_multiplier
 
-        gh_max_speed_segments: List = []
-        try:
-            details = graphhopper_route.get('details') or {}
-            for seg in (details.get('max_speed') or []):
-                if isinstance(seg, list) and len(seg) >= 3:
-                    frm, to, val = seg[0], seg[1], seg[2]
-                    if isinstance(val, (int, float)) and val > 0:
-                        gh_max_speed_segments.append((int(frm), int(to), float(val)))
-        except Exception:
-            gh_max_speed_segments = []
+        gh_maneuvers = maneuvers_from_graphhopper_route(graphhopper_route)
 
-        def _speed_limit_kmh(point_idx: int) -> Optional[int]:
-            for frm, to, val in gh_max_speed_segments:
-                if frm <= point_idx < to:
-                    return round(val)
-            return None
-
-        gh_maneuvers = []
-        for instr in graphhopper_route.get('instructions', []):
-            sign = instr.get('sign', 0)
-            valhalla_type = GH_SIGN_TO_VALHALLA.get(sign, 8)
-            interval = instr.get('interval') or [0, 0]
-            begin_src = interval[0] if interval else 0
-            end_src = interval[1] if len(interval) > 1 else begin_src
-            begin_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, begin_src)
-            end_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, end_src)
-            instr_text = instr.get('text', '')
-            maneuver: Dict[str, Any] = {
-                'instruction': instr_text,
-                'verbal_pre_transition_instruction': instr_text,
-                'distance': instr.get('distance', 0) / 1000.0,
-                'time': instr.get('time', 0) / 1000.0,
-                'type': valhalla_type,
-                'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
-                'begin_shape_index': begin_idx,
-                'end_shape_index': end_idx,
-            }
-            sl_kmh = _speed_limit_kmh(begin_src)
-            if sl_kmh is not None:
-                maneuver['speed_limit'] = sl_kmh
-            street_label = instr.get('street_name', '') or ''
-            gh_rc = infer_road_class_from_names(street_label, maneuver.get('street_names'))
-            if gh_rc:
-                maneuver['road_class'] = gh_rc
-            gh_maneuvers.append(maneuver)
-
-        return {
+        entry: Dict[str, Any] = {
             'id': 0,
             'name': '⚡ Optimised',
             'distance_km': round(gh_distance_km, 2),
@@ -219,6 +236,13 @@ def build_graphhopper_optimised_route_entry(
             'maneuvers': gh_maneuvers,
             'source': 'GraphHopper',
         }
+        if graphhopper_route.get('custom_model_applied'):
+            entry['camera_exclusions_applied'] = True
+        if include_traffic_fields:
+            entry['base_duration_minutes'] = round(base_duration_min, 0)
+            entry['traffic_multiplier'] = round(traffic_multiplier, 2)
+            entry['traffic_level'] = traffic_level
+        return entry
     except Exception as e:
         logger.warning(f"[GRAPHHOPPER] build_graphhopper_optimised_route_entry failed: {e}")
         return None

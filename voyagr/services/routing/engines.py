@@ -220,7 +220,15 @@ def route_with_graphhopper(
     railway_crossing_hazards: Optional[list] = None,
     avoid_caz_zones: bool = False,
     avoid_points: Optional[list] = None,
+    incident_hazards: Optional[Dict[str, list]] = None,
     camera_hazards: Optional[Dict[str, list]] = None,
+    avoid_tolls: bool = False,
+    avoid_motorways: bool = False,
+    avoid_ferries: bool = False,
+    avoid_unpaved: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    route_optimization: str = 'fastest',
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -239,6 +247,7 @@ def route_with_graphhopper(
         Route data dict or None if failed
     """
     try:
+        from voyagr.services.routing.costing import build_graphhopper_costing_preference_model
         from voyagr.services.hazards import (
             merge_graphhopper_custom_model_parts,
             build_graphhopper_caz_avoidance_model,
@@ -287,20 +296,36 @@ def route_with_graphhopper(
             # Congested/closed segments — penalise (not hard-block) so the optimised route
             # prefers to route around them when a reasonable alternative exists.
             osm_dynamic['avoid_point'] = avoid_points
+        if incident_hazards:
+            for bucket, items in incident_hazards.items():
+                if items:
+                    osm_dynamic[bucket] = items
 
         tl_rx_model: Optional[Dict[str, Any]] = None
         if osm_dynamic:
             tl_rx_model = gh_build_hazard_model(
                 osm_dynamic,
                 route_bbox=route_bbox,
-                max_hazards=22,
+                max_hazards=28,
             ) or None
 
         caz_model: Optional[Dict[str, Any]] = None
         if avoid_caz_zones:
             caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
 
-        custom_model = merge_graphhopper_custom_model_parts(cam_model, tl_rx_model, caz_model)
+        costing_model = build_graphhopper_costing_preference_model(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            avoid_unpaved=avoid_unpaved,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            route_optimization=route_optimization,
+        ) or None
+
+        custom_model = merge_graphhopper_custom_model_parts(
+            cam_model, tl_rx_model, caz_model, costing_model,
+        )
         if custom_model:
             payload["custom_model"] = custom_model
             logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
@@ -324,7 +349,21 @@ def route_with_graphhopper(
             if response.status_code == 200:
                 custom_model_applied = True
             else:
-                logger.warning(f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); retrying GET(no custom_model)")
+                from voyagr.services.routing.graphhopper_fallback import (
+                    should_refuse_graphhopper_unfiltered_fallback,
+                )
+                if should_refuse_graphhopper_unfiltered_fallback(
+                    custom_model, custom_model_applied=False,
+                ):
+                    logger.warning(
+                        f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); "
+                        "refusing unfiltered fallback — caller should use Valhalla"
+                    )
+                    return None
+                logger.warning(
+                    f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); "
+                    "retrying GET (costing-only custom model)"
+                )
                 response = None
 
         if response is None:
@@ -372,6 +411,7 @@ def route_with_graphhopper(
                     'bbox': path.get('bbox', []),
                     'camera_avoidance': custom_model_applied,
                     'custom_model_applied': custom_model_applied,
+                    'custom_model_requested': bool(custom_model),
                 }
 
                 logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")
@@ -407,6 +447,13 @@ def attempt_graphhopper_camera_route(
     avoid_railway_crossings: bool,
     apply_caz_routing_avoidance: bool,
     avoid_points: Optional[List[Dict[str, Any]]],
+    avoid_tolls: bool = False,
+    avoid_motorways: bool = False,
+    avoid_ferries: bool = False,
+    avoid_unpaved: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    route_optimization: str = 'fastest',
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Try GraphHopper first (car-only) when camera avoidance is enabled.
@@ -431,6 +478,10 @@ def attempt_graphhopper_camera_route(
             for k in CAMERA_HAZARD_BUCKETS
             if hazards.get(k)
         } if avoid_cameras else None
+        _incident_gh = None
+        if enable_hazard_avoidance:
+            from voyagr.services.hazards import extract_graphhopper_live_incident_hazards
+            _incident_gh = extract_graphhopper_live_incident_hazards(hazards) or None
         graphhopper_route = route_with_graphhopper(
             start_lat, start_lon, end_lat, end_lon,
             enable_camera_avoidance=avoid_cameras,
@@ -439,7 +490,15 @@ def attempt_graphhopper_camera_route(
             railway_crossing_hazards=_rx_gh if _rx_gh else None,
             avoid_caz_zones=apply_caz_routing_avoidance,
             avoid_points=avoid_points if avoid_points else None,
+            incident_hazards=_incident_gh,
             camera_hazards=_cam_gh if _cam_gh and any(_cam_gh.values()) else None,
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            avoid_unpaved=avoid_unpaved,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            route_optimization=route_optimization,
         )
         if graphhopper_route and graphhopper_route.get('success'):
             logger.info("[GRAPHHOPPER] ✅ Route found with camera avoidance")

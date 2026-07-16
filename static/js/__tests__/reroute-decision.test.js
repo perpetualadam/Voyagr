@@ -416,6 +416,36 @@ describe('reroute retry and notification helpers', () => {
         expect(fallback.newRoute.name).toBe('Fastest');
     });
 
+    test('buildAutomaticRerouteOutcomePlan prefers GraphHopper Optimised by source', () => {
+        const matched = RD.buildAutomaticRerouteOutcomePlan({
+            success: true,
+            routes: [
+                { name: '\u26a1 Optimised', source: 'Valhalla', distance_km: 10, duration_minutes: 20 },
+                { name: '\u26a1 Optimised', source: 'GraphHopper', distance_km: 12, duration_minutes: 22 },
+            ],
+        }, {
+            previousRouteName: '\u26a1 Optimised',
+            previousRouteSource: 'GraphHopper',
+            convertDistance: (km) => km.toFixed(1),
+            distUnit: 'km',
+            now: 70000,
+        });
+        expect(matched.newRoute.source).toBe('GraphHopper');
+        expect(matched.newRoute.distance_km).toBe(12);
+    });
+
+    test('pickRerouteRouteFromResponse matches engine family', () => {
+        const routes = [
+            { name: '\u26a1 Optimised', source: 'Valhalla' },
+            { name: '\u26a1 Optimised', source: 'GraphHopper' },
+        ];
+        expect(RD.pickRerouteRouteFromResponse(routes, {
+            previousRouteName: '\u26a1 Optimised',
+            previousRouteSource: 'GraphHopper',
+        }).source).toBe('GraphHopper');
+        expect(RD.routeSourcesMatch('GraphHopper+Valhalla', 'GraphHopper')).toBe(true);
+    });
+
     test('buildAutomaticRerouteOutcomePlan returns failure with first-attempt notification', () => {
         const plan = RD.buildAutomaticRerouteOutcomePlan({ success: false, error: 'timeout' }, {
             rerouteFailureRetryCount: 0,
@@ -835,5 +865,60 @@ describe('buildRouteDeviationStateApplyPlan', () => {
         expect(stateApply.triggerReroute).toBe(true);
         expect(stateApply.incrementRerouteAttemptCount).toBe(true);
         expect(stateApply.logDeviationLine).toContain('attempt #2');
+    });
+});
+
+describe('route source matching and guard plans', () => {
+    test('routeSourcesMatch handles Valhalla and OSRM families', () => {
+        expect(RD.routeSourcesMatch('Valhalla', 'Valhalla')).toBe(true);
+        expect(RD.routeSourcesMatch('Valhalla', 'GraphHopper')).toBe(false);
+        expect(RD.routeSourcesMatch('OSRM', 'OSRM')).toBe(true);
+        expect(RD.routeSourcesMatch('OSRM', 'Valhalla')).toBe(false);
+        expect(RD.routeSourcesMatch('', 'Valhalla')).toBe(true);
+        expect(RD.routeSourcesMatch('Valhalla', '')).toBe(false);
+    });
+
+    test('buildAutomaticRerouteGuardPlan aborts without destination or route context', () => {
+        expect(RD.buildAutomaticRerouteGuardPlan({ destination: null, hasRouteContext: true }).action)
+            .toBe('abort');
+        expect(RD.buildAutomaticRerouteGuardPlan({ destination: '51,0', hasRouteContext: false }).action)
+            .toBe('abort');
+    });
+
+    test('pickRerouteRouteFromResponse returns null for empty routes', () => {
+        expect(RD.pickRerouteRouteFromResponse([], {})).toBeNull();
+        expect(RD.pickRerouteRouteFromResponse([{ name: 'Fastest' }], { preferPrimary: true }).name)
+            .toBe('Fastest');
+    });
+});
+
+describe('reroute response and map update helpers', () => {
+    test('resolveRouteManeuversFromPayload reads legs maneuvers', () => {
+        const plan = RD.buildRouteMapUpdateStatePlan(
+            { legs: [{ maneuvers: [{ instruction: 'Turn left' }] }], distance_km: 5, duration_minutes: 10 },
+            { destination: '51,0' },
+            { now: 1000, hasCurrentGps: true, convertDistance: (km) => km.toFixed(1), distUnit: 'km' }
+        );
+        expect(plan.maneuvers.steps).toHaveLength(1);
+        expect(plan.maneuvers.source).toBe('legs');
+    });
+
+    test('buildAutomaticRerouteResponsePlans bundles outcome and apply', () => {
+        const bundled = RD.buildAutomaticRerouteResponsePlans({
+            success: true,
+            routes: [{ distance_km: 4, duration_minutes: 8 }],
+        }, { convertDistance: (km) => km.toFixed(1), distUnit: 'km', now: 5000 });
+        expect(bundled.outcome.ok).toBe(true);
+        expect(bundled.apply.action).toBe('apply');
+    });
+
+    test('buildAutomaticRerouteErrorResponsePlans bundles error apply', () => {
+        const bundled = RD.buildAutomaticRerouteErrorResponsePlans({ rerouteFailureRetryCount: 0 });
+        expect(bundled.errPlan.ok).toBe(false);
+        expect(bundled.apply.kind).toBe('failure');
+    });
+
+    test('buildAutomaticRerouteResultExecutePlan skips non-apply actions', () => {
+        expect(RD.buildAutomaticRerouteResultExecutePlan({ action: 'skip' }).shouldApply).toBe(false);
     });
 });

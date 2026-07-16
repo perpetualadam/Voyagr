@@ -136,6 +136,17 @@ describe('route comparison and selection helpers', () => {
             .toBe('Fastest');
     });
 
+    test('pickRouteMatchingPreviousSelection prefers matching engine source', () => {
+        const routes = [
+            { name: '\u26a1 Optimised', source: 'Valhalla' },
+            { name: '\u26a1 Optimised', source: 'GraphHopper' },
+        ];
+        expect(RS.pickRouteMatchingPreviousSelection(routes, {
+            previousRouteName: '\u26a1 Optimised',
+            previousRouteSource: 'GraphHopper',
+        }).source).toBe('GraphHopper');
+    });
+
     test('orderWaypointsGreedy visits nearest intermediate points', () => {
         const ordered = RS.orderWaypointsGreedy(0, 0, 10, 10, [
             { lat: 1, lon: 1, type: 'via' },

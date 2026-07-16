@@ -1390,6 +1390,7 @@
                 rerouteFailureRetryCount: rt().g('rerouteFailureRetryCount'),
                 now: Date.now(),
                 previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
+                previousRouteSource: window.lastCalculatedRoute ? window.lastCalculatedRoute.source : '',
             });
             applyAutomaticRerouteResult({
                 apply: responsePlans.apply,

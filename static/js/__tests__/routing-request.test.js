@@ -136,6 +136,18 @@ describe('hazard avoidance helpers', () => {
             () => true
         )).toBe(true);
     });
+
+    test('isRerouteHazardAvoidanceEnabled matches initial route for live hazard prefs', () => {
+        const storage = mockStorage({
+            pref_cameras: 'false',
+            pref_caz: 'false',
+            pref_trafficLightsAvoid: 'false',
+            pref_railwayCrossingsAvoid: 'false',
+            pref_accidents: 'true',
+        });
+        expect(RR.isRerouteHazardAvoidanceEnabled(storage, () => false)).toBe(true);
+        expect(RR.isInitialRouteHazardAvoidanceEnabled(storage)).toBe(true);
+    });
 });
 
 describe('normalizeAvoidPoints', () => {
@@ -170,6 +182,8 @@ describe('buildRerouteRequestBody', () => {
         expect(body.include_caz).toBe(false);
         expect(body.routing_mode).toBe('auto');
         expect(body.avoid_tolls).toBe(true);
+        expect(body.force_refresh).toBe(true);
+        expect(body.is_reroute).toBe(true);
     });
 });
 
@@ -182,11 +196,24 @@ describe('multimodal route bodies', () => {
             includeTolls: true, avoidTolls: false, avoidCaz: true,
             enableHazardAvoidance: true,
             avoidCameras: true, avoidTrafficLights: true, avoidRailwayCrossings: false,
+            avoidMotorways: true,
+            avoidFerries: true,
+            routePrefs: {
+                preferScenic: true,
+                preferQuiet: false,
+                avoidUnpaved: true,
+                routeOptimization: 'eco',
+                maxDetour: 30,
+            },
         });
         expect(body.routing_mode).toBe('auto');
         expect(body.fuel_price).toBe(1.5);
         expect(body.enable_hazard_avoidance).toBe(true);
         expect(body.avoid_railway_crossings).toBe(false);
+        expect(body.avoid_motorways).toBe(true);
+        expect(body.prefer_scenic).toBe(true);
+        expect(body.route_optimization).toBe('eco');
+        expect(body.max_detour).toBe(30);
     });
 
     test('buildMultimodalWalkingLegBody maps pedestrian leg fields', () => {
