@@ -30,6 +30,7 @@
         html: 'VoyagrHtml',
         recentDestinations: 'VoyagrRecentDestinations',
         domHelpers: 'VoyagrDomHelpers',
+        navMenu: 'VoyagrNavMenu',
         routePrefs: 'VoyagrRoutePrefs',
         theme: 'VoyagrTheme',
         routeSelection: 'VoyagrRouteSelection',

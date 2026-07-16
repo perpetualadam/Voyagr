@@ -30,4 +30,19 @@ describe('nav-menu module', () => {
         expect(NavMenu.buildNavMenuToggleDebouncedPlan(1000, 500).shouldToggle).toBe(true);
         expect(NavMenu.buildNavMenuToggleDebouncedPlan(1000, 500).nextToggleAtMs).toBe(1000);
     });
+
+    test('buildNavMenuToggleDebouncedPlan prevents double-fire within 400ms', () => {
+        // Simulate mobile tap firing both touchend and click ~50ms apart
+        const firstTap = NavMenu.buildNavMenuToggleDebouncedPlan(1000, 0);
+        expect(firstTap.shouldToggle).toBe(true);
+        expect(firstTap.nextToggleAtMs).toBe(1000);
+
+        // Second event 50ms later should be blocked
+        const secondTap = NavMenu.buildNavMenuToggleDebouncedPlan(1050, 1000);
+        expect(secondTap.shouldToggle).toBe(false);
+
+        // Event after debounce window should be allowed
+        const thirdTap = NavMenu.buildNavMenuToggleDebouncedPlan(1450, 1000);
+        expect(thirdTap.shouldToggle).toBe(true);
+    });
 });

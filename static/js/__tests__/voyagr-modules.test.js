@@ -29,6 +29,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrHtml = require('../modules/util/html');
         global.VoyagrRecentDestinations = require('../modules/navigation/recent-destinations');
         global.VoyagrDomHelpers = require('../modules/ui/dom-helpers');
+        global.VoyagrNavMenu = require('../modules/ui/nav-menu');
         global.VoyagrRoutePrefs = require('../modules/navigation/route-prefs');
         global.VoyagrTheme = require('../modules/ui/theme');
         global.VoyagrRouteSelection = require('../modules/navigation/route-selection');
