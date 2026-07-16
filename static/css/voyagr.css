@@ -17,6 +17,8 @@ html {
     --safe-area-inset-right: env(safe-area-inset-right, 0px);
     /* Collapsed bottom-sheet peek height (handle + header); keep in sync with dom-helpers BOTTOM_SHEET_PEEK_HEIGHT_PX */
     --bottom-sheet-peek-height: 110px;
+    /* Journey summary bar content height (padding + values); used to lift map/FAB controls during navigation */
+    --journey-summary-bar-height: 64px;
 }
 
 html,
@@ -225,7 +227,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1;
+    /* No z-index: MapLibre zoom/compass controls must stack above the bottom sheet (see .maplibregl-ctrl-group). */
 }
 
 /* Floating action buttons */
@@ -2919,7 +2921,7 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
    ============================================ */
 
 /* Z-Index Hierarchy (organized layers):
-   1     - Map base
+   (none) - Map base (#map — no z-index so MapLibre controls can stack above the sheet)
    10    - Route overlays, markers
    100   - Journey summary bar (when bottom sheet is expanded)
    110   - Bottom sheet
@@ -2959,6 +2961,22 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
     height: 44px !important;
 }
 
+/* Keep zoom/compass above collapsed bottom-sheet peek on all viewports */
+.maplibregl-ctrl-bottom-left {
+    bottom: calc(var(--bottom-sheet-peek-height, 110px) + var(--safe-area-inset-bottom, 0px) + 8px) !important;
+    left: 10px !important;
+}
+
+/* During navigation, lift map controls above the journey summary bar */
+body.voyagr-journey-summary-visible .maplibregl-ctrl-bottom-left {
+    bottom: calc(
+        var(--bottom-sheet-peek-height, 110px) +
+        var(--journey-summary-bar-height, 64px) +
+        var(--safe-area-inset-bottom, 0px) +
+        12px
+    ) !important;
+}
+
 /* ============================================
    Mobile Layout - 768px Breakpoint
    ============================================ */
@@ -2970,11 +2988,6 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
     }
 
 
-    /* MapLibre controls - ensure adequate spacing from bottom sheet */
-    .maplibregl-ctrl-bottom-left {
-        bottom: calc(120px + env(safe-area-inset-bottom, 0px)) !important;
-        left: 10px !important;
-    }
 }
 
 /* ============================================
@@ -3011,18 +3024,11 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
 
     /* Navigation control buttons - adjust for small screens */
     .nav-control-buttons {
-        bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
         right: 10px !important;
     }
 
-    /* MapLibre controls - move up to avoid FAB overlap */
-    .maplibregl-ctrl-bottom-left {
-        bottom: calc(180px + env(safe-area-inset-bottom, 0px)) !important;
-    }
-
-    /* Ensure FAB buttons don't overlap with journey bar */
     .fab-container {
-        bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+        right: calc(10px + var(--safe-area-inset-right, 0px));
     }
 }
 
@@ -3058,7 +3064,33 @@ body.voyagr-has-offline-banner #speedWidget {
 
 /* Navigation Control Buttons */
 .nav-control-buttons {
+    position: absolute;
+    bottom: calc(100px + var(--safe-area-inset-bottom, 0px));
+    right: calc(20px + var(--safe-area-inset-right, 0px));
     z-index: 200 !important;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Keep right-side nav FABs above journey summary (distance / ETA) during turn-by-turn */
+body.voyagr-journey-summary-visible .nav-control-buttons,
+body.voyagr-journey-summary-visible .fab-container {
+    bottom: calc(
+        var(--bottom-sheet-peek-height, 110px) +
+        var(--journey-summary-bar-height, 64px) +
+        var(--safe-area-inset-bottom, 0px) +
+        12px
+    );
+}
+
+body.voyagr-journey-summary-visible .nav-control-buttons {
+    bottom: calc(
+        var(--bottom-sheet-peek-height, 110px) +
+        var(--journey-summary-bar-height, 64px) +
+        var(--safe-area-inset-bottom, 0px) +
+        12px
+    ) !important;
 }
 
 /* ============================================
