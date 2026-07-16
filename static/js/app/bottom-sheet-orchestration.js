@@ -94,12 +94,18 @@
         let pointerId = null;
         let isDragging = false;
         let suppressClick = false;
-        // True once a pointer sequence (tap or drag) has driven the toggle, so the
-        // browser's synthesized click is ignored. When Pointer Events do not fire
-        // at all (some mobile WebViews on non-button divs), this stays false and
-        // the click fallback drives the toggle instead.
         let pointerHandled = false;
+        let gestureConsumed = false;
+        let touchTapStartY = 0;
+        let touchTapActive = false;
         options = options || {};
+
+        const gestureEndOpts = () => ({
+            thresholdPx: initPlan.dragThresholdPx,
+            collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
+            expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
+            tapLogMessage: options.tapLogMessage,
+        });
 
         const applyDragVisual = (diff) => {
             applyBottomSheetDragVisualFromPlan(
@@ -113,14 +119,18 @@
         };
 
         const finishGesture = (diff) => {
-            applyBottomSheetGestureEndFromPlan(
-                domHelpers.buildBottomSheetGestureEndPlan(diff, isDragging, getBottomSheetIsExpanded(), {
-                    thresholdPx: initPlan.dragThresholdPx,
-                    collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
-                    expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
-                    tapLogMessage: options.tapLogMessage,
-                })
+            const entry = domHelpers.buildBottomSheetGestureEndPlan(
+                diff,
+                isDragging,
+                getBottomSheetIsExpanded(),
+                gestureEndOpts()
             );
+            if (domHelpers.buildBottomSheetGestureConsumedPlan(entry).consumed) {
+                gestureConsumed = true;
+                suppressClick = true;
+                pointerHandled = true;
+            }
+            applyBottomSheetGestureEndFromPlan(entry);
         };
 
         const resetGesture = () => {
@@ -129,20 +139,27 @@
         };
 
         el.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
+            if (!domHelpers.buildBottomSheetPointerDownAllowedPlan({
+                pointerType: e.pointerType,
+                button: e.button,
+            }).allowed) {
+                return;
+            }
             if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
 
             pointerId = e.pointerId;
             isDragging = false;
             suppressClick = false;
             pointerHandled = false;
+            gestureConsumed = false;
             setBottomSheetStartY(e.clientY);
             setBottomSheetCurrentY(getBottomSheetStartY());
 
-            // Capture touch/pen pointers immediately so the drag stream survives on
-            // mobile (the element uses touch-action:none). Mouse is left uncaptured
-            // because capturing it suppresses Firefox's synthesized click.
             if (e.pointerType && e.pointerType !== 'mouse'
+                && domHelpers.buildBottomSheetPointerCaptureOnDownPlan({
+                    pointerType: e.pointerType,
+                    userAgent: initPlan.userAgent,
+                }).shouldCapture
                 && typeof el.setPointerCapture === 'function') {
                 try { el.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
             }
@@ -156,6 +173,8 @@
                 startY: getBottomSheetStartY(),
                 currentY: e.clientY,
                 isDragging: isDragging,
+                pointerType: e.pointerType,
+                touchTapSlopPx: initPlan.touchTapSlopPx,
             });
             const wasDragging = isDragging;
             isDragging = movePlan.isDragging;
@@ -163,11 +182,8 @@
 
             if (!movePlan.shouldApplyDrag) return;
 
-            // Mouse is captured lazily once a real drag starts (touch/pen were
-            // already captured on pointerdown). Capturing the mouse on down would
-            // suppress Firefox's synthesized click and break tap toggling.
-            if (!wasDragging && e.pointerType === 'mouse'
-                && typeof el.setPointerCapture === 'function') {
+            // Mouse and Firefox touch defer capture until a real drag starts.
+            if (!wasDragging && typeof el.setPointerCapture === 'function') {
                 try { el.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
             }
             applyDragVisual(movePlan.diff);
@@ -177,10 +193,6 @@
             if (pointerId == null || e.pointerId !== pointerId) return;
 
             const diff = e.clientY - getBottomSheetStartY();
-            // A completed pointer sequence drives the toggle/snap directly; the
-            // synthesized click that follows must not toggle again.
-            suppressClick = true;
-            pointerHandled = true;
             finishGesture(diff);
             resetGesture();
 
@@ -192,14 +204,12 @@
         const onPointerCancel = (e) => {
             if (pointerId == null || e.pointerId !== pointerId) return;
 
-            // The gesture was aborted by the browser. If we were mid-drag, revert
-            // the transform to the sheet's committed state; a not-yet-dragging
-            // cancel is treated as a tap so the toggle is not lost on mobile.
             const wasDragging = isDragging;
-            suppressClick = true;
-            pointerHandled = true;
             if (wasDragging) {
                 bottomSheet.style.transform = '';
+                gestureConsumed = true;
+                suppressClick = true;
+                pointerHandled = true;
             } else {
                 finishGesture(e.clientY - getBottomSheetStartY());
             }
@@ -213,13 +223,48 @@
         el.addEventListener('pointerup', onPointerEnd);
         el.addEventListener('pointercancel', onPointerCancel);
 
+        if (options.useTouchTapFallback) {
+            el.addEventListener('touchstart', (e) => {
+                if (e.touches.length !== 1) return;
+                if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
+                touchTapStartY = e.touches[0].clientY;
+                touchTapActive = true;
+            }, { passive: true });
+
+            el.addEventListener('touchend', (e) => {
+                if (!touchTapActive) return;
+                touchTapActive = false;
+                if (gestureConsumed || pointerHandled) return;
+                if (options.shouldIgnoreTarget && options.shouldIgnoreTarget(e.target)) return;
+
+                const touch = e.changedTouches[0];
+                if (!touch) return;
+
+                const diff = touch.clientY - touchTapStartY;
+                const entry = domHelpers.buildBottomSheetGestureEndPlan(
+                    diff,
+                    false,
+                    getBottomSheetIsExpanded(),
+                    gestureEndOpts()
+                );
+                if (!domHelpers.buildBottomSheetGestureConsumedPlan(entry).consumed) return;
+
+                applyBottomSheetGestureEndFromPlan(entry);
+                suppressClick = true;
+                pointerHandled = true;
+            }, { passive: true });
+
+            el.addEventListener('touchcancel', () => {
+                touchTapActive = false;
+            }, { passive: true });
+        }
+
         if (options.useClickFallback) {
             el.addEventListener('click', (e) => {
-                // A pointer sequence already handled this interaction (tap toggled
-                // on pointerup, or a drag snapped); swallow the synthesized click.
                 if (suppressClick || pointerHandled) {
                     suppressClick = false;
                     pointerHandled = false;
+                    gestureConsumed = false;
                     e.preventDefault();
                     e.stopPropagation();
                     return;
@@ -228,8 +273,6 @@
                     e.stopPropagation();
                     return;
                 }
-                // Fallback path: Pointer Events did not fire (e.g. some mobile
-                // WebViews on non-button divs) — drive the toggle from click.
                 e.stopPropagation();
                 applyBottomSheetClickToggleFromPlan(
                     domHelpers.buildBottomSheetHandleClickEntryOrchestrationPlan(getBottomSheetIsExpanded(), {
@@ -322,7 +365,9 @@
         const bottomSheet = document.getElementById('bottomSheet');
         const handle = document.querySelector('.bottom-sheet-handle');
         const header = document.querySelector('.bottom-sheet-header');
-        const initPlan = domHelpers.buildBottomSheetFullInitOrchestrationPlan(!!bottomSheet, !!handle);
+        const initPlan = domHelpers.buildBottomSheetFullInitOrchestrationPlan(!!bottomSheet, !!handle, {
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        });
 
         console.log(initPlan.initLogMessage, { bottomSheet, handle, header });
 
@@ -333,12 +378,14 @@
 
         bindBottomSheetPointerGesture(handle, bottomSheet, initPlan, {
             useClickFallback: true,
+            useTouchTapFallback: initPlan.touchTapFallback,
             tapLogMessage: initPlan.handleClickLogMessage,
         });
 
         if (header) {
             bindBottomSheetPointerGesture(header, bottomSheet, initPlan, {
                 useClickFallback: true,
+                useTouchTapFallback: initPlan.touchTapFallback,
                 shouldIgnoreTarget: (target) => !!domHelpers.closest(target, initPlan.headerButtonIgnoreSelector),
                 tapLogMessage: initPlan.handleClickLogMessage,
             });
