@@ -216,6 +216,7 @@ describe('dom-helpers', () => {
         expect(expandedNav.navFabDisplays.find((item) => item.id === 'zoomFollowToggle').display).toBe('none');
         expect(expandedNav.navFabDisplays.find((item) => item.id === 'endNavigationBtn').display).toBe('block');
         expect(expandedNav.alwaysHideWhenExpanded[0].action).toBe('hide');
+        expect(expandedNav.collapseNavMenu).toBe(true);
 
         const idle = Dom.buildBottomSheetOverlapFabDisplayPlan({
             sheetExpanded: false,
@@ -223,6 +224,23 @@ describe('dom-helpers', () => {
         });
         expect(idle.alwaysHideWhenExpanded[0].action).toBe('clearDisplay');
         expect(idle.navFabDisplays.every((item) => item.display === 'none')).toBe(true);
+        expect(idle.collapseNavMenu).toBe(false);
+    });
+
+    test('buildToggleNavMenuEntryOrchestrationPlan expands and collapses menu', () => {
+        const expand = Dom.buildToggleNavMenuEntryOrchestrationPlan(true);
+        expect(expand.collected.expand).toBe(true);
+        expect(expand.execute.expand).toBe(true);
+        expect(expand.execute.ariaExpanded).toBe('true');
+
+        const collapse = Dom.buildToggleNavMenuEntryOrchestrationPlan(false);
+        expect(collapse.collected.expand).toBe(false);
+        expect(collapse.execute.collapse).toBe(true);
+        expect(collapse.execute.ariaExpanded).toBe('false');
+
+        const forced = Dom.buildCollapseNavMenuExecutePlan();
+        expect(forced.collapse).toBe(true);
+        expect(forced.ariaExpanded).toBe('false');
     });
 
     test('buildExpandBottomSheetExecutePlan and toggle collect plan', () => {
