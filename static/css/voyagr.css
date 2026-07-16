@@ -3005,9 +3005,9 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
         width: auto !important;
     }
 
-    /* Navigation control buttons - moderate adjustment for small screens */
+    /* Navigation control buttons - positioned above FAB container on small screens */
     .nav-control-buttons {
-        bottom: calc(125px + env(safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(300px + env(safe-area-inset-bottom, 0px)) !important;
         right: 10px !important;
     }
 
@@ -3056,7 +3056,7 @@ body.voyagr-has-offline-banner #speedWidget {
 /* Navigation Control Buttons */
 .nav-control-buttons {
     position: absolute;
-    bottom: calc(115px + var(--safe-area-inset-bottom, 0px));
+    bottom: calc(320px + var(--safe-area-inset-bottom, 0px));
     right: calc(20px + var(--safe-area-inset-right, 0px));
     z-index: 200 !important;
     display: flex;
