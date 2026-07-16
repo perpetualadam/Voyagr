@@ -36,6 +36,7 @@
     var SWAP_LOCATIONS_FLASH_MS = 300;
     var BOTTOM_SHEET_DRAG_THRESHOLD_PX = 50;
     var BOTTOM_SHEET_TAP_SLOP_PX = 10;
+    var BOTTOM_SHEET_TOUCH_TAP_SLOP_PX = 18;
     var BOTTOM_SHEET_PEEK_HEIGHT_PX = 110;
     var BOTTOM_SHEET_ID = 'bottomSheet';
     var BOTTOM_SHEET_EXPANDED_CLASS = 'expanded';
@@ -120,6 +121,9 @@
         var currentY = input.currentY != null ? input.currentY : startY;
         var diff = currentY - startY;
         var slop = input.tapSlopPx != null ? input.tapSlopPx : BOTTOM_SHEET_TAP_SLOP_PX;
+        if (input.pointerType === 'touch') {
+            slop = input.touchTapSlopPx != null ? input.touchTapSlopPx : BOTTOM_SHEET_TOUCH_TAP_SLOP_PX;
+        }
         var isDragging = !!input.isDragging;
 
         if (!isDragging && Math.abs(diff) > slop) {
@@ -134,6 +138,64 @@
     }
 
     /**
+     * Whether a pointerdown should start a bottom-sheet gesture.
+     * Touch pointers may report button -1 on some UAs; only filter mouse buttons.
+     * @param {Object} [input]
+     * @param {string} [input.pointerType]
+     * @param {number} [input.button]
+     * @returns {Object}
+     */
+    function buildBottomSheetPointerDownAllowedPlan(input) {
+        input = input || {};
+        if (input.pointerType === 'mouse' && input.button != null && input.button !== 0) {
+            return { allowed: false };
+        }
+        return { allowed: true };
+    }
+
+    /**
+     * Whether to capture the pointer on pointerdown (touch/pen).
+     * Firefox defers capture until drag starts to avoid lost taps on mobile.
+     * @param {Object} [input]
+     * @param {string} [input.pointerType]
+     * @param {string} [input.userAgent]
+     * @returns {Object}
+     */
+    function buildBottomSheetPointerCaptureOnDownPlan(input) {
+        input = input || {};
+        if (!input.pointerType || input.pointerType === 'mouse') {
+            return { shouldCapture: false };
+        }
+        var ua = String(input.userAgent || '');
+        if (/firefox|fxios/i.test(ua)) {
+            return { shouldCapture: false };
+        }
+        return { shouldCapture: true };
+    }
+
+    /**
+     * Whether touchend should drive tap fallback (Firefox mobile).
+     * @param {string} [userAgent]
+     * @returns {Object}
+     */
+    function buildBottomSheetTouchTapFallbackPlan(userAgent) {
+        var ua = String(userAgent || '');
+        return { enabled: /firefox|fxios/i.test(ua) };
+    }
+
+    /**
+     * Whether a completed gesture plan actually toggled or snapped the sheet.
+     * @param {Object|null|undefined} entry
+     * @returns {Object}
+     */
+    function buildBottomSheetGestureConsumedPlan(entry) {
+        if (!entry) return { consumed: false };
+        if (entry.kind === 'tap' && entry.shouldToggle) return { consumed: true };
+        if (entry.shouldCollapse || entry.shouldExpand) return { consumed: true };
+        return { consumed: false };
+    }
+
+    /**
      * End-of-gesture plan: tap toggles; drag snaps open/closed.
      * @param {number} diff
      * @param {boolean} isDragging
@@ -143,6 +205,8 @@
      */
     function buildBottomSheetGestureEndPlan(diff, isDragging, isExpanded, opts) {
         opts = opts || {};
+        var thresholdPx = opts.thresholdPx != null ? opts.thresholdPx : BOTTOM_SHEET_DRAG_THRESHOLD_PX;
+
         if (!isDragging) {
             return {
                 kind: 'tap',
@@ -154,6 +218,19 @@
         }
 
         var finish = buildBottomSheetDragFinishEntryOrchestrationPlan(diff, isExpanded, opts);
+        // Imprecise mobile taps can exceed tap slop but stay below swipe threshold.
+        // Treat those as taps so the synthesized click fallback is not swallowed.
+        if (finish.snap.action === 'revert' && Math.abs(diff) < thresholdPx) {
+            return {
+                kind: 'tap',
+                shouldToggle: true,
+                action: isExpanded ? 'collapse' : 'expand',
+                logMessage: opts.tapLogMessage,
+                logState: isExpanded,
+                promotedFromDragRevert: true,
+            };
+        }
+
         return Object.assign({ kind: 'drag' }, finish);
     }
 
@@ -215,19 +292,24 @@
      * @param {boolean} hasHandle
      * @returns {Object}
      */
-    function buildBottomSheetFullInitOrchestrationPlan(hasBottomSheet, hasHandle) {
+    function buildBottomSheetFullInitOrchestrationPlan(hasBottomSheet, hasHandle, opts) {
+        opts = opts || {};
         var base = buildBottomSheetInitOrchestrationPlan(hasBottomSheet, hasHandle);
         if (!base.shouldInit) {
             return Object.assign({}, base, {
                 missingElementsErrorLog: '[BottomSheet] ERROR: bottomSheet or handle not found!',
             });
         }
+        var userAgent = opts.userAgent != null ? String(opts.userAgent) : '';
         return Object.assign({}, base, {
             headerSelector: BOTTOM_SHEET_HEADER_SELECTOR,
             contentSelector: BOTTOM_SHEET_CONTENT_SELECTOR,
             headerButtonIgnoreSelector: 'button',
             dragCollapsePreviewMaxPx: BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX,
+            touchTapSlopPx: BOTTOM_SHEET_TOUCH_TAP_SLOP_PX,
             focusExpandInputIds: BOTTOM_SHEET_FOCUS_EXPAND_INPUT_IDS.slice(),
+            touchTapFallback: buildBottomSheetTouchTapFallbackPlan(userAgent).enabled,
+            userAgent: userAgent,
             initLogMessage: '[BottomSheet] Initializing...',
             missingElementsErrorLog: '[BottomSheet] ERROR: bottomSheet or handle not found!',
             handleClickLogMessage: '[BottomSheet] Handle clicked, expanded:',
@@ -544,6 +626,7 @@
         SWAP_LOCATIONS_FLASH_MS: SWAP_LOCATIONS_FLASH_MS,
         BOTTOM_SHEET_DRAG_THRESHOLD_PX: BOTTOM_SHEET_DRAG_THRESHOLD_PX,
         BOTTOM_SHEET_TAP_SLOP_PX: BOTTOM_SHEET_TAP_SLOP_PX,
+        BOTTOM_SHEET_TOUCH_TAP_SLOP_PX: BOTTOM_SHEET_TOUCH_TAP_SLOP_PX,
         BOTTOM_SHEET_PEEK_HEIGHT_PX: BOTTOM_SHEET_PEEK_HEIGHT_PX,
         BOTTOM_SHEET_ID: BOTTOM_SHEET_ID,
         BOTTOM_SHEET_EXPANDED_CLASS: BOTTOM_SHEET_EXPANDED_CLASS,
@@ -554,6 +637,10 @@
         buildBottomSheetDragStartAllowedPlan: buildBottomSheetDragStartAllowedPlan,
         buildBottomSheetDragSnapPlan: buildBottomSheetDragSnapPlan,
         buildBottomSheetGestureMovePlan: buildBottomSheetGestureMovePlan,
+        buildBottomSheetPointerDownAllowedPlan: buildBottomSheetPointerDownAllowedPlan,
+        buildBottomSheetPointerCaptureOnDownPlan: buildBottomSheetPointerCaptureOnDownPlan,
+        buildBottomSheetTouchTapFallbackPlan: buildBottomSheetTouchTapFallbackPlan,
+        buildBottomSheetGestureConsumedPlan: buildBottomSheetGestureConsumedPlan,
         buildBottomSheetGestureEndPlan: buildBottomSheetGestureEndPlan,
         buildBottomSheetDragVisualFeedbackPlan: buildBottomSheetDragVisualFeedbackPlan,
         buildBottomSheetHeaderClickAllowedPlan: buildBottomSheetHeaderClickAllowedPlan,
