@@ -14,6 +14,7 @@ describe('map-overlay-toggles module', () => {
         expect(execute.mapAction).toBe('clearCameraMarkers');
         expect(execute.saveAllSettings).toBe(true);
         expect(execute.storageKey).toBe(OT.SHOW_CAMERAS_STORAGE_KEY);
+        expect(execute.fabToggleIds).toEqual([OT.SHOW_CAMERAS_FAB_ID]);
     });
 
     test('isOsmOverlayBboxTooLarge rejects wide viewport queries', () => {
@@ -69,7 +70,8 @@ describe('map-overlay-toggles module', () => {
         });
         expect(init.shouldInit).toBe(true);
         expect(init.cameraMoveDebounceMs).toBe(500);
-        expect(init.toggles.length).toBe(3);
+        expect(init.toggles.length).toBe(4);
+        expect(init.toggles.some((toggle) => toggle.id === OT.SHOW_CAMERAS_FAB_ID)).toBe(true);
         expect(init.initialFetches.cameras).toBe(true);
     });
 

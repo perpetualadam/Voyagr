@@ -13,14 +13,23 @@
 
         var navButtons = document.getElementById(execute.navControlButtonsId);
         var toggle = document.getElementById(execute.navMenuToggleId);
+        var menu = execute.navControlMenuSelector
+            ? document.querySelector(execute.navControlMenuSelector)
+            : null;
         if (!navButtons) return;
 
         if (execute.expand) {
             navButtons.classList.remove(execute.collapsedClass);
             navButtons.classList.add(execute.expandedClass);
+            if (menu && execute.navControlMenuOpenClass) {
+                menu.classList.add(execute.navControlMenuOpenClass);
+            }
         } else if (execute.collapse) {
             navButtons.classList.remove(execute.expandedClass);
             navButtons.classList.add(execute.collapsedClass);
+            if (menu && execute.navControlMenuOpenClass) {
+                menu.classList.remove(execute.navControlMenuOpenClass);
+            }
         }
 
         if (toggle && execute.ariaExpanded != null) {

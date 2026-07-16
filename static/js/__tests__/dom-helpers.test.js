@@ -231,6 +231,7 @@ describe('dom-helpers', () => {
         const expand = Dom.buildToggleNavMenuEntryOrchestrationPlan(true);
         expect(expand.collected.expand).toBe(true);
         expect(expand.execute.expand).toBe(true);
+        expect(expand.execute.navControlMenuOpenClass).toBe('nav-control-menu--open');
         expect(expand.execute.ariaExpanded).toBe('true');
 
         const collapse = Dom.buildToggleNavMenuEntryOrchestrationPlan(false);
