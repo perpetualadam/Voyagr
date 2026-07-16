@@ -231,7 +231,7 @@ body {
 /* Floating action buttons */
 .fab-container {
     position: absolute;
-    bottom: calc(100px + var(--safe-area-inset-bottom, 0px));
+    bottom: calc(115px + var(--safe-area-inset-bottom, 0px));
     right: calc(20px + var(--safe-area-inset-right, 0px));
     z-index: 150;
     /* z-index: 150 in mobile layout hierarchy */
@@ -2826,8 +2826,8 @@ html.dark-mode, body.dark-mode .instruction-item-status.current-status {
 
 .journey-summary-bar {
     position: absolute;
-    /* Sit above collapsed sheet peek so ETA stays visible and sheet handle stays tappable */
-    bottom: calc(var(--bottom-sheet-peek-height, 110px) + var(--safe-area-inset-bottom, 0px));
+    /* Positioned slightly lower to reduce overlap with map icons while keeping ETA visible */
+    bottom: calc(var(--bottom-sheet-peek-height, 110px) - 8px + var(--safe-area-inset-bottom, 0px));
     left: 0;
     right: 0;
     z-index: 120;
@@ -2970,9 +2970,9 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
     }
 
 
-    /* MapLibre controls - ensure adequate spacing from bottom sheet */
+    /* MapLibre controls - moderate spacing to avoid bottom sheet while staying clear of icons */
     .maplibregl-ctrl-bottom-left {
-        bottom: calc(120px + env(safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(125px + env(safe-area-inset-bottom, 0px)) !important;
         left: 10px !important;
     }
 }
@@ -3009,20 +3009,21 @@ html.dark-mode, body.dark-mode .journey-summary-bar {
         width: auto !important;
     }
 
-    /* Navigation control buttons - adjust for small screens */
+    /* Navigation control buttons - moderate adjustment for small screens */
     .nav-control-buttons {
-        bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(125px + env(safe-area-inset-bottom, 0px)) !important;
         right: 10px !important;
     }
 
-    /* MapLibre controls - move up to avoid FAB overlap */
+    /* MapLibre controls - moderate spacing to avoid overlap */
     .maplibregl-ctrl-bottom-left {
-        bottom: calc(180px + env(safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(125px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
-    /* Ensure FAB buttons don't overlap with journey bar */
+    /* FAB buttons - moderate clearance */
     .fab-container {
-        bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(125px + env(safe-area-inset-bottom, 0px));
+        right: calc(10px + var(--safe-area-inset-right, 0px));
     }
 }
 
@@ -3058,7 +3059,13 @@ body.voyagr-has-offline-banner #speedWidget {
 
 /* Navigation Control Buttons */
 .nav-control-buttons {
+    position: absolute;
+    bottom: calc(115px + var(--safe-area-inset-bottom, 0px));
+    right: calc(20px + var(--safe-area-inset-right, 0px));
     z-index: 200 !important;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 /* ============================================
