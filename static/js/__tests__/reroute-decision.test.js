@@ -530,10 +530,40 @@ describe('reroute retry and notification helpers', () => {
         const execute = RD.buildUpdateRouteOnMapExecutePlan(state);
         expect(execute.mountActiveNavRoute).toBe(true);
         expect(execute.polylineDecodePrecision).toBe(6);
+        expect(execute.refreshRouteTraffic).toBe(true);
 
         const post = RD.buildRouteMapUpdatePostApplyPlan(state, { currentLat: 51.5, currentLon: -0.1 });
         expect(post.refreshTurnWidget).toBe(true);
         expect(post.updateTripInfo).toBe(true);
+    });
+
+    test('buildRouteMapUpdateStatePlan honours the reroute route geometry precision', () => {
+        // GraphHopper ⚡ Optimised and Valhalla routes are served re-encoded at p6.
+        const gh = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', geometry_precision: 6, source: 'GraphHopper' },
+            {},
+            { now: 1000 }
+        );
+        expect(gh.polylineDecodePrecision).toBe(6);
+        expect(gh.lastCalculatedRoutePatch.geometry_precision).toBe(6);
+
+        // OSRM fallback routes are p5 — decoding them at 6 draws an invisible polyline.
+        const osrm = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', geometry_precision: 5, source: 'OSRM' },
+            { geometry_precision: 6 },
+            { now: 1000 }
+        );
+        expect(osrm.polylineDecodePrecision).toBe(5);
+        expect(osrm.lastCalculatedRoutePatch.geometry_precision).toBe(5);
+        expect(RD.buildUpdateRouteOnMapExecutePlan(osrm).polylineDecodePrecision).toBe(5);
+
+        // The orchestration layer may pass an explicitly resolved precision.
+        const resolved = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', source: 'OSRM (Fallback)' },
+            {},
+            { now: 1000, polylineDecodePrecision: 5 }
+        );
+        expect(resolved.polylineDecodePrecision).toBe(5);
     });
 
     test('buildRouteMapUpdateStateApplySectionsPlan and speed/progress helpers', () => {

@@ -895,6 +895,8 @@ function getRerouteMapOrchestrationRuntime() {
             decodePolyline,
             navActiveRouteColor,
             bringNavRouteAboveTrafficEdges,
+            clearRouteTrafficLayers: () => VoyagrTrafficOrchestration.clearRouteTrafficLayers(),
+            fetchAndDisplayRouteTraffic: () => VoyagrTrafficOrchestration.fetchAndDisplayRouteTraffic(),
             resetVehicleMarkerDisplayState,
             applySpeedLimitFetchResetFromPlan,
             primeVehicleMarkerOnRoute,
