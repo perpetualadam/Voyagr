@@ -918,10 +918,15 @@
             ? opts.convertDistance(newRoute.distance_km)
             : String(newRoute.distance_km);
         var distUnit = opts.distUnit || 'km';
+        // Engine parity: honour the route's own geometry precision (GraphHopper Optimised
+        // and Valhalla routes are p6, OSRM fallback routes are p5) instead of assuming 6.
+        var polylinePrecision = Number.isFinite(opts.polylineDecodePrecision)
+            ? opts.polylineDecodePrecision
+            : (Number.isFinite(newRoute.geometry_precision) ? newRoute.geometry_precision : 6);
 
         return {
             maneuvers: maneuvers,
-            polylineDecodePrecision: 6,
+            polylineDecodePrecision: polylinePrecision,
             vehicleMarkerReset: true,
             speedLimitReset: true,
             roadNameReset: true,
@@ -945,6 +950,7 @@
             },
             lastCalculatedRoutePatch: Object.assign({}, prevRoute, newRoute, {
                 geometry: newRoute.geometry,
+                geometry_precision: polylinePrecision,
                 distance: displayDist + ' ' + distUnit,
                 time: String(newRoute.duration_minutes != null ? newRoute.duration_minutes : 0) + ' minutes',
                 destination: prevRoute.destination,
@@ -967,6 +973,10 @@
             polylineDecodePrecision: statePlan.polylineDecodePrecision || 6,
             mountActiveNavRoute: true,
             bringNavRouteAboveTraffic: true,
+            // Along-route traffic edges belong to the old geometry after a reroute;
+            // clear and refetch them so congestion colouring follows the new route
+            // (parity for GraphHopper Optimised and Valhalla routes alike).
+            refreshRouteTraffic: true,
             applyRouteMapUpdateState: true,
             polylineLogPrefix: '[Reroute] Route polyline decoded:',
         };

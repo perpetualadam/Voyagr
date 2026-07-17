@@ -234,6 +234,7 @@
             hasCurrentGps: rt().getCurrentLat() != null && rt().getCurrentLon() != null,
             convertDistance: rt().call.convertDistance,
             distUnit: rt().call.getDistanceUnit(),
+            polylineDecodePrecision: rt().routeSelection().resolvePerRouteGeometryPrecision(newRoute),
         });
         var execute = RD.buildUpdateRouteOnMapExecutePlan(plan);
 
@@ -263,6 +264,10 @@
         }
         if (execute.bringNavRouteAboveTraffic) {
             rt().call.bringNavRouteAboveTrafficEdges();
+        }
+        if (execute.refreshRouteTraffic) {
+            rt().call.clearRouteTrafficLayers();
+            rt().call.fetchAndDisplayRouteTraffic();
         }
 
         if (execute.applyRouteMapUpdateState) {
