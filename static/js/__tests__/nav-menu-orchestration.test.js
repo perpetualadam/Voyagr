@@ -24,7 +24,7 @@ describe('nav-menu-orchestration DOM event handling', () => {
 
         document.body.innerHTML = '';
 
-        // Create DOM structure
+        // Match production DOM: toggle and panel are children of .nav-control-menu
         toggle = document.createElement('button');
         toggle.id = 'navMenuToggle';
         toggle.setAttribute('aria-expanded', 'false');
@@ -37,9 +37,8 @@ describe('nav-menu-orchestration DOM event handling', () => {
 
         menu = document.createElement('div');
         menu.className = 'nav-control-menu';
-
-        document.body.appendChild(toggle);
-        document.body.appendChild(navButtons);
+        menu.appendChild(navButtons);
+        menu.appendChild(toggle);
         document.body.appendChild(menu);
 
         // Reset mock time
@@ -50,13 +49,16 @@ describe('nav-menu-orchestration DOM event handling', () => {
         Date.now = originalDateNow;
     });
 
-    test('initNavMenu binds touchend and click listeners', () => {
+    function dispatchTouchEnd(target) {
+        const event = new Event('touchend', { bubbles: true, cancelable: true });
+        target.dispatchEvent(event);
+        return event;
+    }
+
+    test('initNavMenu binds toggle listeners', () => {
         Orchestration.initNavMenu();
-        
-        // Verify button is bound
+
         expect(toggle.dataset.voyagrNavMenuBound).toBe('1');
-        
-        // Verify initial state is collapsed
         expect(toggle.getAttribute('aria-expanded')).toBe('false');
         expect(navButtons.hasAttribute('hidden')).toBe(true);
     });
@@ -64,10 +66,10 @@ describe('nav-menu-orchestration DOM event handling', () => {
     test('initNavMenu does not double-bind', () => {
         Orchestration.initNavMenu();
         const firstBound = toggle.dataset.voyagrNavMenuBound;
-        
+
         Orchestration.initNavMenu();
         const secondBound = toggle.dataset.voyagrNavMenuBound;
-        
+
         expect(firstBound).toBe(secondBound);
         expect(secondBound).toBe('1');
     });
@@ -76,10 +78,8 @@ describe('nav-menu-orchestration DOM event handling', () => {
         Orchestration.initNavMenu();
 
         mockNow = 1000;
-        const event = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(event);
+        dispatchTouchEnd(toggle);
 
-        // Menu should be open
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
         expect(navButtons.hasAttribute('hidden')).toBe(false);
         expect(navButtons.classList.contains('nav-menu-expanded')).toBe(true);
@@ -88,14 +88,13 @@ describe('nav-menu-orchestration DOM event handling', () => {
         expect(toggle.textContent).toBe('✕');
     });
 
-    test('single click opens menu', () => {
+    test('single click opens menu when pointer path did not run', () => {
         Orchestration.initNavMenu();
 
         mockNow = 1000;
         const event = new Event('click', { bubbles: true, cancelable: true });
         toggle.dispatchEvent(event);
 
-        // Menu should be open
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
         expect(navButtons.hasAttribute('hidden')).toBe(false);
         expect(toggle.textContent).toBe('✕');
@@ -104,20 +103,14 @@ describe('nav-menu-orchestration DOM event handling', () => {
     test('mobile double-fire: touchend then click leaves menu open', () => {
         Orchestration.initNavMenu();
 
-        // Simulate mobile tap: touchend fires first at t=1000
         mockNow = 1000;
-        const touchEvent = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(touchEvent);
-
-        // Menu should be open after touchend
+        dispatchTouchEnd(toggle);
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-        // Simulate synthetic click 50ms later (typical mobile behavior) at t=1050
         mockNow = 1050;
         const clickEvent = new Event('click', { bubbles: true, cancelable: true });
         toggle.dispatchEvent(clickEvent);
 
-        // Menu should STILL be open (debounce prevented double-toggle)
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
         expect(navButtons.classList.contains('nav-menu-expanded')).toBe(true);
         expect(menu.classList.contains('nav-control-menu--open')).toBe(true);
@@ -126,38 +119,28 @@ describe('nav-menu-orchestration DOM event handling', () => {
     test('rapid taps do not flicker menu open/closed', () => {
         Orchestration.initNavMenu();
 
-        // First tap opens at t=1000
         mockNow = 1000;
-        const tap1 = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(tap1);
+        dispatchTouchEnd(toggle);
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-        // Second tap 100ms later is blocked by debounce at t=1100
         mockNow = 1100;
-        const tap2 = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(tap2);
-        expect(toggle.getAttribute('aria-expanded')).toBe('true'); // Still open
+        dispatchTouchEnd(toggle);
+        expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-        // Third tap 200ms after first (still within 400ms) is also blocked at t=1200
         mockNow = 1200;
-        const tap3 = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(tap3);
-        expect(toggle.getAttribute('aria-expanded')).toBe('true'); // Still open
+        dispatchTouchEnd(toggle);
+        expect(toggle.getAttribute('aria-expanded')).toBe('true');
     });
 
     test('tap after debounce window allows toggle', () => {
         Orchestration.initNavMenu();
 
-        // First tap opens at t=1000
         mockNow = 1000;
-        const tap1 = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(tap1);
+        dispatchTouchEnd(toggle);
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-        // Tap after 400ms debounce window should close at t=1450
         mockNow = 1450;
-        const tap2 = new Event('touchend', { bubbles: true, cancelable: true });
-        toggle.dispatchEvent(tap2);
+        dispatchTouchEnd(toggle);
         expect(toggle.getAttribute('aria-expanded')).toBe('false');
         expect(navButtons.hasAttribute('hidden')).toBe(true);
         expect(toggle.textContent).toBe('☰');
@@ -166,16 +149,23 @@ describe('nav-menu-orchestration DOM event handling', () => {
     test('collapseNavMenu forces menu closed', () => {
         Orchestration.initNavMenu();
 
-        // Open menu first at t=1000
         mockNow = 1000;
         const openEvent = new Event('click', { bubbles: true, cancelable: true });
         toggle.dispatchEvent(openEvent);
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-        // Force collapse
         Orchestration.collapseNavMenu();
         expect(toggle.getAttribute('aria-expanded')).toBe('false');
         expect(navButtons.hasAttribute('hidden')).toBe(true);
         expect(menu.classList.contains('nav-control-menu--open')).toBe(false);
+    });
+
+    test('initNavMenu no-ops when VoyagrNavMenu is missing', () => {
+        jest.resetModules();
+        delete global.VoyagrNavMenu;
+        Orchestration = require('../app/nav-menu-orchestration.js');
+
+        expect(() => Orchestration.initNavMenu()).not.toThrow();
+        expect(toggle.dataset.voyagrNavMenuBound).toBeUndefined();
     });
 });

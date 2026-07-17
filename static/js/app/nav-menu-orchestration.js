@@ -6,14 +6,16 @@
 
     var NAV_MENU_BOUND_DATASET = 'voyagrNavMenuBound';
     var lastNavMenuToggleAtMs = 0;
+    var pointerToggleHandled = false;
 
     function NM() {
         return root.VoyagrNavMenu;
     }
 
     function readNavMenuOpen(toggle) {
-        if (!toggle) return false;
-        return NM().resolveNavMenuOpenFromAriaExpanded(toggle.getAttribute('aria-expanded'));
+        var navMenu = NM();
+        if (!toggle || !navMenu) return false;
+        return navMenu.resolveNavMenuOpenFromAriaExpanded(toggle.getAttribute('aria-expanded'));
     }
 
     function applyNavMenuStateFromPlan(execute) {
@@ -48,6 +50,8 @@
 
     function toggleNavMenu() {
         var navMenu = NM();
+        if (!navMenu) return;
+
         var toggle = document.getElementById(navMenu.NAV_MENU_TOGGLE_ID);
         if (!toggle) return;
 
@@ -60,25 +64,65 @@
     }
 
     function collapseNavMenu() {
-        applyNavMenuStateFromPlan(NM().buildCollapseNavMenuExecutePlan());
+        var navMenu = NM();
+        if (!navMenu) return;
+        applyNavMenuStateFromPlan(navMenu.buildCollapseNavMenuExecutePlan());
     }
 
     function initNavMenu() {
         var navMenu = NM();
+        if (!navMenu) {
+            console.warn('[NavMenu] VoyagrNavMenu module missing; menu toggle not bound');
+            return;
+        }
+
         var toggle = document.getElementById(navMenu.NAV_MENU_TOGGLE_ID);
         if (!toggle || toggle.dataset[NAV_MENU_BOUND_DATASET] === '1') return;
         toggle.dataset[NAV_MENU_BOUND_DATASET] = '1';
 
         applyNavMenuStateFromPlan(navMenu.buildCollapseNavMenuExecutePlan());
 
-        function handleToggle(event) {
-            event.preventDefault();
-            event.stopPropagation();
+        function runToggle(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
             toggleNavMenu();
         }
 
-        toggle.addEventListener('touchend', handleToggle, { passive: false });
-        toggle.addEventListener('click', handleToggle);
+        function handleEarlyToggle(event) {
+            // Treat missing isPrimary as primary (synthetic/test events).
+            if (event && event.isPrimary === false) return;
+            if (event && event.pointerType === 'mouse'
+                && event.button != null && event.button !== 0) {
+                return;
+            }
+            pointerToggleHandled = true;
+            runToggle(event);
+            // Keep the flag long enough to swallow the synthetic click that follows
+            // touchend/pointerup on mobile (including Firefox).
+            setTimeout(function () {
+                pointerToggleHandled = false;
+            }, 50);
+        }
+
+        // pointerup covers mouse/pen/touch when Pointer Events work. touchend remains
+        // as a Firefox fallback when pointercancel suppresses pointerup. click covers
+        // desktop and any UA that synthesizes click without earlier pointer/touch ends.
+        // Debounce + pointerToggleHandled prevent open-then-immediate-close.
+        if (typeof window !== 'undefined' && window.PointerEvent) {
+            toggle.addEventListener('pointerup', handleEarlyToggle);
+        }
+        toggle.addEventListener('touchend', handleEarlyToggle, { passive: false });
+        toggle.addEventListener('click', function (event) {
+            if (pointerToggleHandled) {
+                pointerToggleHandled = false;
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+            runToggle(event);
+        });
     }
 
     var api = {

@@ -198,6 +198,64 @@
     }
 
     /**
+     * Selectors that must keep receiving touchmove (sheet chrome, FABs, form controls).
+     * Body-level pull-to-refresh preventDefault must not cancel these — Firefox turns
+     * cancelled touchmoves into pointercancel and dead sheet/menu gestures.
+     */
+    var PULL_TO_REFRESH_TOUCHMOVE_ALLOW_SELECTORS = [
+        '.bottom-sheet-handle',
+        '.bottom-sheet-header',
+        '.bottom-sheet-content',
+        '.nav-control-menu',
+        '.fab',
+        'button',
+        'a',
+        'input',
+        'textarea',
+        'select',
+        'label',
+    ];
+
+    /**
+     * Whether a touchmove target should skip body pull-to-refresh preventDefault.
+     * @param {*} rawTarget - event.target
+     * @param {Object} [opts]
+     * @param {function(*, string): Element|null} [opts.closestFn]
+     * @returns {Object}
+     */
+    function buildPullToRefreshTouchMoveAllowPlan(rawTarget, opts) {
+        opts = opts || {};
+        var closestFn = typeof opts.closestFn === 'function' ? opts.closestFn : closest;
+        for (var i = 0; i < PULL_TO_REFRESH_TOUCHMOVE_ALLOW_SELECTORS.length; i++) {
+            if (closestFn(rawTarget, PULL_TO_REFRESH_TOUCHMOVE_ALLOW_SELECTORS[i])) {
+                return { allowNativeTouchMove: true };
+            }
+        }
+        return { allowNativeTouchMove: false };
+    }
+
+    /**
+     * Finish plan when the browser aborts a sheet pointer gesture (common on Firefox
+     * after touchmove preventDefault). Prefer last known Y over cancel-event coords.
+     * @param {Object} [input]
+     * @param {number} [input.startY]
+     * @param {number} [input.lastClientY]
+     * @param {number} [input.eventClientY]
+     * @returns {Object}
+     */
+    function buildBottomSheetPointerCancelFinishPlan(input) {
+        input = input || {};
+        var startY = input.startY != null ? input.startY : 0;
+        var lastY = input.lastClientY;
+        var eventY = input.eventClientY;
+        var endY = lastY != null ? lastY : (eventY != null ? eventY : startY);
+        return {
+            shouldFinish: true,
+            diff: endY - startY,
+        };
+    }
+
+    /**
      * Whether a completed gesture plan actually toggled or snapped the sheet.
      * @param {Object|null|undefined} entry
      * @returns {Object}
@@ -691,6 +749,7 @@
         NAV_MENU_EXPANDED_CLASS: NAV_MENU_EXPANDED_CLASS,
         JOURNEY_SUMMARY_VISIBLE_BODY_CLASS: JOURNEY_SUMMARY_VISIBLE_BODY_CLASS,
         BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX: BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX,
+        PULL_TO_REFRESH_TOUCHMOVE_ALLOW_SELECTORS: PULL_TO_REFRESH_TOUCHMOVE_ALLOW_SELECTORS,
         buildBottomSheetInitOrchestrationPlan: buildBottomSheetInitOrchestrationPlan,
         buildBottomSheetFullInitOrchestrationPlan: buildBottomSheetFullInitOrchestrationPlan,
         buildBottomSheetDragStartAllowedPlan: buildBottomSheetDragStartAllowedPlan,
@@ -699,6 +758,8 @@
         buildBottomSheetPointerDownAllowedPlan: buildBottomSheetPointerDownAllowedPlan,
         buildBottomSheetPointerCaptureOnDownPlan: buildBottomSheetPointerCaptureOnDownPlan,
         buildBottomSheetTouchTapFallbackPlan: buildBottomSheetTouchTapFallbackPlan,
+        buildPullToRefreshTouchMoveAllowPlan: buildPullToRefreshTouchMoveAllowPlan,
+        buildBottomSheetPointerCancelFinishPlan: buildBottomSheetPointerCancelFinishPlan,
         buildBottomSheetGestureConsumedPlan: buildBottomSheetGestureConsumedPlan,
         buildBottomSheetGestureEndPlan: buildBottomSheetGestureEndPlan,
         buildBottomSheetDragVisualFeedbackPlan: buildBottomSheetDragVisualFeedbackPlan,
