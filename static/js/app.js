@@ -33,8 +33,12 @@ function initializeApp() {
         loadAllSettings();
         console.log('[App] Settings loaded');
 
-        // Initialize UI components
-        initBottomSheet();
+        // Initialize UI components (isolate failures so one control does not block the other)
+        try {
+            initBottomSheet();
+        } catch (e) {
+            console.warn('[App] Bottom sheet init:', e);
+        }
         try {
             if (typeof initNavMenu === 'function') {
                 initNavMenu();

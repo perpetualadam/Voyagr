@@ -180,10 +180,14 @@
         }
 
         document.body.addEventListener('touchmove', (e) => {
-            if (rt().domHelpers().closest(e.target, '.bottom-sheet-content')) {
+            // Do not cancel touchmoves on sheet chrome / FABs / controls. Firefox maps
+            // preventDefault(touchmove) to pointercancel, which killed bottom-sheet and
+            // hamburger gestures while pull-to-refresh blocking was still desired on the map.
+            const allowPlan = rt().domHelpers().buildPullToRefreshTouchMoveAllowPlan(e.target);
+            if (allowPlan.allowNativeTouchMove) {
                 return;
             }
-            if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+            if (window.scrollY === 0 && e.touches[0] && e.touches[0].clientY > 0) {
                 e.preventDefault();
             }
         }, { passive: false });

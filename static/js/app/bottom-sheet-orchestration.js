@@ -98,6 +98,7 @@
         let gestureConsumed = false;
         let touchTapStartY = 0;
         let touchTapActive = false;
+        let lastClientY = 0;
         options = options || {};
 
         const gestureEndOpts = () => ({
@@ -152,6 +153,7 @@
             suppressClick = false;
             pointerHandled = false;
             gestureConsumed = false;
+            lastClientY = e.clientY;
             setBottomSheetStartY(e.clientY);
             setBottomSheetCurrentY(getBottomSheetStartY());
 
@@ -169,6 +171,7 @@
         el.addEventListener('pointermove', (e) => {
             if (pointerId == null || e.pointerId !== pointerId) return;
 
+            lastClientY = e.clientY;
             const movePlan = domHelpers.buildBottomSheetGestureMovePlan({
                 startY: getBottomSheetStartY(),
                 currentY: e.clientY,
@@ -192,6 +195,7 @@
         const onPointerEnd = (e) => {
             if (pointerId == null || e.pointerId !== pointerId) return;
 
+            lastClientY = e.clientY;
             const diff = e.clientY - getBottomSheetStartY();
             finishGesture(diff);
             resetGesture();
@@ -204,15 +208,14 @@
         const onPointerCancel = (e) => {
             if (pointerId == null || e.pointerId !== pointerId) return;
 
-            const wasDragging = isDragging;
-            if (wasDragging) {
-                bottomSheet.style.transform = '';
-                gestureConsumed = true;
-                suppressClick = true;
-                pointerHandled = true;
-            } else {
-                finishGesture(e.clientY - getBottomSheetStartY());
-            }
+            // Firefox often cancels the pointer after a body touchmove preventDefault.
+            // Finish with last known Y so taps/swipes still expand/collapse the sheet.
+            const cancelPlan = domHelpers.buildBottomSheetPointerCancelFinishPlan({
+                startY: getBottomSheetStartY(),
+                lastClientY: lastClientY,
+                eventClientY: e.clientY,
+            });
+            finishGesture(cancelPlan.diff);
             resetGesture();
 
             if (typeof el.releasePointerCapture === 'function' && el.hasPointerCapture(e.pointerId)) {

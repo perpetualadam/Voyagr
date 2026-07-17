@@ -188,6 +188,33 @@ describe('dom-helpers', () => {
             .toBe(false);
     });
 
+    test('buildPullToRefreshTouchMoveAllowPlan allows sheet chrome and nav menu', () => {
+        document.body.innerHTML = `
+            <div class="bottom-sheet-handle" id="handle"></div>
+            <button class="fab" id="fab"></button>
+            <div id="map"></div>
+        `;
+        expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
+            document.getElementById('handle')
+        ).allowNativeTouchMove).toBe(true);
+        expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
+            document.getElementById('fab')
+        ).allowNativeTouchMove).toBe(true);
+        expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
+            document.getElementById('map')
+        ).allowNativeTouchMove).toBe(false);
+    });
+
+    test('buildBottomSheetPointerCancelFinishPlan prefers last known Y', () => {
+        const plan = Dom.buildBottomSheetPointerCancelFinishPlan({
+            startY: 100,
+            lastClientY: 40,
+            eventClientY: 0,
+        });
+        expect(plan.shouldFinish).toBe(true);
+        expect(plan.diff).toBe(-60);
+    });
+
     test('buildBottomSheetDragVisualFeedbackPlan clamps expand preview', () => {
         const down = Dom.buildBottomSheetDragVisualFeedbackPlan({ diff: 30, isExpanded: true });
         expect(down.shouldApplyTransform).toBe(true);
