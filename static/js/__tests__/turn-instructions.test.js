@@ -609,6 +609,36 @@ describe('buildDetectUpcomingTurnTickPlan', () => {
         expect(TI.buildDetectUpcomingTurnTickPlan({ routeInProgress: false }).action).toBe('skip');
     });
 
+    test('skips when snap helper is missing', () => {
+        expect(TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: polyline,
+        }).action).toBe('skip');
+    });
+
+    test('re-syncs search start to vehicle snap when turn-detect cursor drifts ahead', () => {
+        let usedSearchStart = null;
+        const tick = TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: polyline,
+            routeSteps: steps,
+            userLat: 51.5,
+            userLon: -0.1,
+            lastTurnDetectRouteVertexIndex: 40,
+            lastSnappedRouteIndex: 0,
+            snapToRoutePolyline: (_lat, _lon, _poly, searchStart) => {
+                usedSearchStart = searchStart;
+                return { index: 0, t: 0 };
+            },
+            distanceAlongRouteToVertexMeters: () => 200,
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(usedSearchStart).toBe(0);
+        expect(tick.action).toBe('detected');
+        expect(tick.statePatch.lastTurnDetectRouteVertexIndex).toBe(0);
+    });
+
     test('detects in-range maneuver and patches state', () => {
         const tick = TI.buildDetectUpcomingTurnTickPlan({
             routeInProgress: true,
