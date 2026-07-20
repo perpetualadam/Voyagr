@@ -581,6 +581,31 @@ describe('buildNavSpeedLimitTickPlan', () => {
         });
         expect(plan.valhallaSpeedLimitMph).toBeNull();
     });
+
+    test('does not prefer edge hint over an existing API limit on maneuver change', () => {
+        const calls = [];
+        SG.buildNavSpeedLimitTickPlan({
+            routeInProgress: true,
+            isTrackingActive: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            currentRouteSteps: [{
+                begin_shape_index: 0,
+                speed_limit: 70,
+                road_class: 'primary',
+            }],
+            lastSnappedRouteIndex: 0,
+            displaySpeedMph: 28,
+            currentSpeedLimitMph: 30,
+            lastActiveManeuverIdx: -1,
+            resolveRoadType: () => 'primary',
+            pickDisplaySpeedLimitMph: (api, val, _rt, _region, opts) => {
+                calls.push({ api, val, prefer: !!(opts && opts.preferValhallaOverApi) });
+                return opts && opts.preferValhallaOverApi ? val : api;
+            },
+        });
+        expect(calls[0].prefer).toBe(false);
+        expect(calls[0].api).toBe(30);
+    });
 });
 
 describe('buildVehicleDisplayCoordinatesPlan', () => {

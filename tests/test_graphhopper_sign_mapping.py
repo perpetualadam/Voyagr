@@ -39,6 +39,7 @@ class TestGraphHopperSignMapping(unittest.TestCase):
         self.assertEqual(gh_sign_to_valhalla_type(4), 4)    # Destination
         self.assertEqual(gh_sign_to_valhalla_type(5), 0)    # None (via)
         self.assertEqual(gh_sign_to_valhalla_type(6), 26)   # Roundabout enter
+        self.assertEqual(gh_sign_to_valhalla_type(-6), 27)  # Roundabout exit
 
     def test_unknown_sign_defaults_to_continue(self):
         self.assertEqual(gh_sign_to_valhalla_type(999), 8)
@@ -51,6 +52,9 @@ class TestGraphHopperSignMapping(unittest.TestCase):
         # Guards against re-introducing a divergent inline copy in the web app.
         import voyagr_web
         self.assertIs(voyagr_web.GH_SIGN_TO_VALHALLA, GH_SIGN_TO_VALHALLA)
+
+    def test_roundabout_exit_is_in_shared_map(self):
+        self.assertEqual(GH_SIGN_TO_VALHALLA[-6], 27)
 
 
 if __name__ == '__main__':

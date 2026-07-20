@@ -564,10 +564,16 @@ describe('turn detection helpers', () => {
         expect(TI.getTurnDetectionMaxDistanceMeters('right')).toBe(750);
     });
 
-    test('advanceMonotonicTurnDetectIndex never moves backward', () => {
+    test('advanceMonotonicTurnDetectIndex allows small rewind then locks large jumps', () => {
+        // Within the small rewind window — sync to live snap (fixes instruction lag).
         expect(TI.advanceMonotonicTurnDetectIndex(10, 15)).toEqual({
-            userRouteIndex: 15,
-            lastTurnDetectRouteVertexIndex: 15,
+            userRouteIndex: 10,
+            lastTurnDetectRouteVertexIndex: 10,
+        });
+        // Large backward jump still locked (GPS noise / loop).
+        expect(TI.advanceMonotonicTurnDetectIndex(1, 20)).toEqual({
+            userRouteIndex: 20,
+            lastTurnDetectRouteVertexIndex: 20,
         });
         expect(TI.advanceMonotonicTurnDetectIndex(20, 15)).toEqual({
             userRouteIndex: 20,

@@ -732,17 +732,34 @@
         return 750;
     }
 
+    /** Max vertices the turn-detect cursor may rewind when GPS snap is behind. */
+    var TURN_DETECT_MAX_REWIND_VERTICES = 8;
+    /** Re-sync turn-detect to the vehicle snap when they diverge by more than this. */
+    var TURN_DETECT_VEHICLE_SYNC_VERTICES = 12;
+
     /**
-     * Lock turn-detection progress forward so snap index never moves backward on curves.
+     * Lock turn-detection progress forward so snap index never moves backward on curves,
+     * while allowing a small rewind when the live snap is slightly behind the locked
+     * cursor (common on sparse GraphHopper polylines — prevents voice/text lagging the map).
      * @param {number} snapIndex
      * @param {number} lastIndex
+     * @param {object} [opts]
+     * @param {number} [opts.maxRewindVertices]
      * @returns {{ userRouteIndex: number, lastTurnDetectRouteVertexIndex: number }}
      */
-    function advanceMonotonicTurnDetectIndex(snapIndex, lastIndex) {
+    function advanceMonotonicTurnDetectIndex(snapIndex, lastIndex, opts) {
+        opts = opts || {};
+        var maxRewind = opts.maxRewindVertices != null
+            ? opts.maxRewindVertices
+            : TURN_DETECT_MAX_REWIND_VERTICES;
         var userRouteIndex = snapIndex;
         var nextLast = lastIndex;
         if (userRouteIndex < lastIndex) {
-            userRouteIndex = lastIndex;
+            if (lastIndex - userRouteIndex <= maxRewind) {
+                nextLast = userRouteIndex;
+            } else {
+                userRouteIndex = lastIndex;
+            }
         } else {
             nextLast = userRouteIndex;
         }
@@ -917,15 +934,25 @@
             return { action: 'skip', reason: 'no-snap' };
         }
 
+        // Keep turn-detect search seeded near the vehicle marker snap so text/voice
+        // distance stays aligned with the map position (esp. GraphHopper Optimised).
+        var searchStart = opts.lastTurnDetectRouteVertexIndex || 0;
+        if (Number.isFinite(opts.lastSnappedRouteIndex)) {
+            var vehicleSnapIdx = opts.lastSnappedRouteIndex;
+            if (Math.abs(searchStart - vehicleSnapIdx) > TURN_DETECT_VEHICLE_SYNC_VERTICES) {
+                searchStart = vehicleSnapIdx;
+            }
+        }
+
         var turnSnap = opts.snapToRoutePolyline(
             opts.userLat,
             opts.userLon,
             opts.routePolyline,
-            opts.lastTurnDetectRouteVertexIndex
+            searchStart
         );
         var indexPlan = advanceMonotonicTurnDetectIndex(
             turnSnap.index,
-            opts.lastTurnDetectRouteVertexIndex
+            searchStart
         );
 
         var steps = opts.routeSteps;

@@ -93,8 +93,17 @@
             routeSteps: rt().getCurrentRouteSteps(),
             currentStepIndex: rt().getCurrentStepIndex(),
             routePolyline: rt().getRoutePolyline(),
+            lastSnappedRouteIndex: rt().getLastSnappedRouteIndex
+                ? rt().getLastSnappedRouteIndex()
+                : 0,
             roadType: rt().call.getCurrentRoadType() || 'unknown',
             calculateDistance: rt().call.calculateDistanceMeters,
+            snapToRoutePolyline: rt().routeGeometry
+                ? (a, b, c, d) => rt().routeGeometry().snapToRoutePolyline(a, b, c, d)
+                : null,
+            distanceAlongRouteToVertexMeters: rt().routeGeometry
+                ? (poly, snap, idx) => rt().routeGeometry().distanceAlongRouteToVertexMeters(poly, snap, idx)
+                : null,
             cacheLookup: function (key) { return laneGuidanceCache.get(key); },
         });
 

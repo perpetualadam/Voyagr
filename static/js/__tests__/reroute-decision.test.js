@@ -531,6 +531,7 @@ describe('reroute retry and notification helpers', () => {
         expect(execute.mountActiveNavRoute).toBe(true);
         expect(execute.polylineDecodePrecision).toBe(6);
         expect(execute.refreshRouteTraffic).toBe(true);
+        expect(execute.clearAllRouteArtifacts).toBe(true);
 
         const post = RD.buildRouteMapUpdatePostApplyPlan(state, { currentLat: 51.5, currentLon: -0.1 });
         expect(post.refreshTurnWidget).toBe(true);

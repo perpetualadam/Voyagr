@@ -300,6 +300,7 @@
             userLat: userLat,
             userLon: userLon,
             lastTurnDetectRouteVertexIndex: rt().getLastTurnDetectRouteVertexIndex(),
+            lastSnappedRouteIndex: rt().getLastSnappedRouteIndex(),
             snapToRoutePolyline: (lat, lon, poly, idx) => RG.snapToRoutePolyline(lat, lon, poly, idx),
             distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters.bind(RG),
             bearing: RG.bearing.bind(RG),
