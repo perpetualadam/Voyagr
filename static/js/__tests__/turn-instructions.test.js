@@ -564,10 +564,16 @@ describe('turn detection helpers', () => {
         expect(TI.getTurnDetectionMaxDistanceMeters('right')).toBe(750);
     });
 
-    test('advanceMonotonicTurnDetectIndex never moves backward', () => {
+    test('advanceMonotonicTurnDetectIndex allows small rewind then locks large jumps', () => {
+        // Within the small rewind window — sync to live snap (fixes instruction lag).
         expect(TI.advanceMonotonicTurnDetectIndex(10, 15)).toEqual({
-            userRouteIndex: 15,
-            lastTurnDetectRouteVertexIndex: 15,
+            userRouteIndex: 10,
+            lastTurnDetectRouteVertexIndex: 10,
+        });
+        // Large backward jump still locked (GPS noise / loop).
+        expect(TI.advanceMonotonicTurnDetectIndex(1, 20)).toEqual({
+            userRouteIndex: 20,
+            lastTurnDetectRouteVertexIndex: 20,
         });
         expect(TI.advanceMonotonicTurnDetectIndex(20, 15)).toEqual({
             userRouteIndex: 20,
@@ -601,6 +607,36 @@ describe('buildDetectUpcomingTurnTickPlan', () => {
 
     test('skips when route is not active', () => {
         expect(TI.buildDetectUpcomingTurnTickPlan({ routeInProgress: false }).action).toBe('skip');
+    });
+
+    test('skips when snap helper is missing', () => {
+        expect(TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: polyline,
+        }).action).toBe('skip');
+    });
+
+    test('re-syncs search start to vehicle snap when turn-detect cursor drifts ahead', () => {
+        let usedSearchStart = null;
+        const tick = TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: polyline,
+            routeSteps: steps,
+            userLat: 51.5,
+            userLon: -0.1,
+            lastTurnDetectRouteVertexIndex: 40,
+            lastSnappedRouteIndex: 0,
+            snapToRoutePolyline: (_lat, _lon, _poly, searchStart) => {
+                usedSearchStart = searchStart;
+                return { index: 0, t: 0 };
+            },
+            distanceAlongRouteToVertexMeters: () => 200,
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(usedSearchStart).toBe(0);
+        expect(tick.action).toBe('detected');
+        expect(tick.statePatch.lastTurnDetectRouteVertexIndex).toBe(0);
     });
 
     test('detects in-range maneuver and patches state', () => {

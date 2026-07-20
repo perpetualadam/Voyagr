@@ -969,6 +969,10 @@
         statePlan = statePlan || {};
         return {
             resetVoiceAnnouncementState: true,
+            // Clear preview/comparison polyline-* and route-layer-* artifacts left from
+            // route selection; otherwise the original Optimised line stays visible after
+            // a deviation reroute while only the in-memory routePolyline updates.
+            clearAllRouteArtifacts: true,
             removeExistingRouteLayer: true,
             polylineDecodePrecision: statePlan.polylineDecodePrecision || 6,
             mountActiveNavRoute: true,

@@ -27,7 +27,14 @@ logger = logging.getLogger('voyagr_web')
 
 
 def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Convert GraphHopper instructions + max_speed details into Valhalla-shaped maneuvers."""
+    """Convert GraphHopper instructions + max_speed details into Valhalla-shaped maneuvers.
+
+    Long GraphHopper "continue" instructions often span several posted-limit zones.
+    When ``details.max_speed`` changes inside an instruction interval we emit synthetic
+    Continue (type 8) maneuvers at each change so the active-edge speed limit tracks
+    the snapped shape index instead of sticking to the limit at the instruction start
+    (e.g. 70 mph NSL leaking into a following 30 mph zone).
+    """
     gh_geometry = graphhopper_route.get('geometry', '')
     if not gh_geometry:
         return []
@@ -53,6 +60,28 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
                 return round(val)
         return None
 
+    def _speed_changes_inside(begin_src: int, end_src: int) -> List[tuple]:
+        """Return (src_idx, kmh) for max_speed segment starts strictly inside the interval."""
+        changes = []
+        for frm, _to, val in gh_max_speed_segments:
+            if begin_src < frm < end_src:
+                changes.append((frm, round(val)))
+        changes.sort(key=lambda item: item[0])
+        return changes
+
+    def _exit_count(instr: Dict[str, Any]) -> int:
+        for key in ('exit_number', 'roundabout_exit_count', 'exited'):
+            raw = instr.get(key)
+            if raw is None:
+                continue
+            try:
+                n = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if n > 0:
+                return n
+        return 0
+
     gh_maneuvers: List[Dict[str, Any]] = []
     for instr in graphhopper_route.get('instructions', []):
         sign = instr.get('sign', 0)
@@ -63,24 +92,50 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
         begin_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, begin_src)
         end_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, end_src)
         instr_text = instr.get('text', '')
+        street_label = instr.get('street_name', '') or ''
+        street_names = [street_label] if street_label else []
+        gh_rc = infer_road_class_from_names(street_label, street_names)
+        exit_count = _exit_count(instr)
+
         maneuver: Dict[str, Any] = {
             'instruction': instr_text,
             'verbal_pre_transition_instruction': instr_text,
             'distance': instr.get('distance', 0) / 1000.0,
             'time': instr.get('time', 0) / 1000.0,
             'type': valhalla_type,
-            'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
+            'street_names': street_names,
             'begin_shape_index': begin_idx,
             'end_shape_index': end_idx,
         }
         sl_kmh = _speed_limit_kmh(begin_src)
         if sl_kmh is not None:
             maneuver['speed_limit'] = sl_kmh
-        street_label = instr.get('street_name', '') or ''
-        gh_rc = infer_road_class_from_names(street_label, maneuver.get('street_names'))
         if gh_rc:
             maneuver['road_class'] = gh_rc
+        if exit_count > 0 and valhalla_type in (26, 27):
+            maneuver['roundabout_exit_count'] = exit_count
         gh_maneuvers.append(maneuver)
+
+        # Synthetic continues at posted-limit changes inside this instruction.
+        for change_src, change_kmh in _speed_changes_inside(begin_src, end_src):
+            change_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, change_src)
+            if change_idx <= begin_idx:
+                continue
+            speed_maneuver: Dict[str, Any] = {
+                'instruction': '',
+                'verbal_pre_transition_instruction': '',
+                'distance': 0,
+                'time': 0,
+                'type': 8,  # Continue — skipped by turn detection
+                'street_names': street_names,
+                'begin_shape_index': change_idx,
+                'end_shape_index': end_idx,
+                'speed_limit': change_kmh,
+            }
+            if gh_rc:
+                speed_maneuver['road_class'] = gh_rc
+            gh_maneuvers.append(speed_maneuver)
+
     return gh_maneuvers
 
 

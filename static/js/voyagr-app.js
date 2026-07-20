@@ -897,6 +897,22 @@ function getRerouteMapOrchestrationRuntime() {
             bringNavRouteAboveTrafficEdges,
             clearRouteTrafficLayers: () => VoyagrTrafficOrchestration.clearRouteTrafficLayers(),
             fetchAndDisplayRouteTraffic: () => VoyagrTrafficOrchestration.fetchAndDisplayRouteTraffic(),
+            clearAllRouteLayersFromMap,
+            clearAllRouteLayerHandles: () => {
+                const layers = VoyagrRouteComparisonOrchestration.getAllRouteLayers();
+                (layers || []).forEach((layer) => {
+                    if (layer && typeof layer.remove === 'function') {
+                        try { layer.remove(); } catch (_e) { /* ignore */ }
+                    }
+                });
+                // Empty the in-memory handle list via the comparison orchestrator's clearer.
+                if (typeof VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan === 'function') {
+                    VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan({
+                        clearAllRouteLayerHandles: true,
+                        clearRouteLayerHandle: false,
+                    });
+                }
+            },
             resetVehicleMarkerDisplayState,
             applySpeedLimitFetchResetFromPlan,
             primeVehicleMarkerOnRoute,
@@ -1638,10 +1654,12 @@ function addCurrentToFavorites() {
 function getLaneGuidanceOrchestrationRuntime() {
     return {
         laneGuidance: () => _laneGuidance(),
+        routeGeometry: () => _routeGeometry(),
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
         getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        getLastSnappedRouteIndex: () => VoyagrNavigationLifecycleOrchestration.getLastSnappedRouteIndex(),
         call: {
             calculateDistanceMeters,
             getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),

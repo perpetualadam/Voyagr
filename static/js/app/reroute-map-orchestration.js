@@ -242,9 +242,24 @@
             resetVoiceAnnouncementStateForNewRoute();
         }
 
+        if (execute.clearAllRouteArtifacts) {
+            try {
+                if (typeof rt().call.clearAllRouteLayersFromMap === 'function') {
+                    rt().call.clearAllRouteLayersFromMap();
+                }
+                if (typeof rt().call.clearAllRouteLayerHandles === 'function') {
+                    rt().call.clearAllRouteLayerHandles();
+                }
+            } catch (e) {
+                console.warn('[Reroute] Failed clearing previous route layers:', e);
+            }
+            rt().setRouteLayer(null);
+        }
+
         var routeLayer = rt().getRouteLayer();
         if (execute.removeExistingRouteLayer && routeLayer && typeof routeLayer.remove === 'function') {
             routeLayer.remove();
+            rt().setRouteLayer(null);
         }
 
         var routePolyline = rt().call.decodePolyline(newRoute.geometry, execute.polylineDecodePrecision);

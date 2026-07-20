@@ -1381,9 +1381,15 @@
 
         var resetFetchState = activeManeuverIdx >= 0 && activeManeuverIdx !== opts.lastActiveManeuverIdx;
         var pickFn = opts.pickDisplaySpeedLimitMph;
+        // Only prefer the edge hint when we have no API/cached limit yet. Preferring
+        // a stale GraphHopper begin-of-instruction 70 mph over a live OSM/TomTom 30
+        // is what kept NSL showing after entering a 30 zone.
+        var preferEdgeHint = resetFetchState
+            && valhallaSpeedLimitMph != null
+            && !(opts.currentSpeedLimitMph > 0);
         var shownLimit = typeof pickFn === 'function'
             ? pickFn(opts.currentSpeedLimitMph, valhallaSpeedLimitMph, roadType, opts.lastSpeedLimitRegion, {
-                preferValhallaOverApi: resetFetchState && valhallaSpeedLimitMph != null,
+                preferValhallaOverApi: preferEdgeHint,
             })
             : (opts.currentSpeedLimitMph && opts.currentSpeedLimitMph > 0
                 ? opts.currentSpeedLimitMph

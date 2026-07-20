@@ -319,6 +319,46 @@ describe('lane guidance fetch tick plan', () => {
         expect(d).toBeLessThan(9999);
     });
 
+    test('computeDistanceToManeuverMeters prefers along-route distance when snap helpers exist', () => {
+        const d = LG.computeDistanceToManeuverMeters(
+            51.5,
+            -0.1,
+            steps,
+            0,
+            polyline,
+            () => 999,
+            {
+                searchStartIndex: 0,
+                snapToRoutePolyline: () => ({ index: 0, t: 0.2 }),
+                distanceAlongRouteToVertexMeters: () => 180,
+            }
+        );
+        expect(d).toBe(180);
+    });
+
+    test('buildLaneGuidanceFetchTickPlan uses along-route distance in fetch payload', () => {
+        const tick = LG.buildLaneGuidanceFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'left',
+            now: 10_000,
+            lastFetch: 0,
+            lastPosition: null,
+            lastManeuver: '',
+            routeSteps: steps,
+            currentStepIndex: 0,
+            routePolyline: polyline,
+            lastSnappedRouteIndex: 0,
+            calculateDistance: () => 999,
+            snapToRoutePolyline: () => ({ index: 0, t: 0 }),
+            distanceAlongRouteToVertexMeters: () => 220,
+        });
+        expect(tick.action).toBe('fetch');
+        expect(tick.distToManeuver).toBe(220);
+        expect(tick.url).toContain('distance=220');
+    });
+
     test('buildLaneGuidanceFetchTickPlan skips throttled fetches', () => {
         const tick = LG.buildLaneGuidanceFetchTickPlan({
             lat: 51.5,

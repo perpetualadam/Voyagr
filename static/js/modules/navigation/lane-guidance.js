@@ -238,22 +238,41 @@
     }
 
     /**
-     * Crow-flies distance (m) from current position to the next maneuver shape index.
+     * Distance (m) from current position to the next maneuver shape index.
+     * Prefers along-route distance when snap helpers are provided (accurate on curves);
+     * falls back to crow-flies otherwise.
      * @param {number} lat
      * @param {number} lon
      * @param {Array<Object>|null|undefined} routeSteps
      * @param {number} currentStepIndex
      * @param {Array<[number,number]>|null|undefined} routePolyline
      * @param {function(number,number,number,number): number} calculateDistance
+     * @param {Object} [opts]
+     * @param {function(number,number,Array,number): {index:number,t?:number}} [opts.snapToRoutePolyline]
+     * @param {function(Array, Object, number): number} [opts.distanceAlongRouteToVertexMeters]
+     * @param {number} [opts.searchStartIndex]
      * @returns {number}
      */
-    function computeDistanceToManeuverMeters(lat, lon, routeSteps, currentStepIndex, routePolyline, calculateDistance) {
+    function computeDistanceToManeuverMeters(lat, lon, routeSteps, currentStepIndex, routePolyline, calculateDistance, opts) {
         if (!routeSteps || !routePolyline || routeSteps.length === 0) return 9999;
         if (currentStepIndex >= routeSteps.length) return 9999;
         var nextStep = routeSteps[currentStepIndex];
         if (!nextStep) return 9999;
         var shapeIdx = nextStep.begin_shape_index || 0;
         if (shapeIdx >= routePolyline.length) return 9999;
+        opts = opts || {};
+        if (typeof opts.snapToRoutePolyline === 'function'
+                && typeof opts.distanceAlongRouteToVertexMeters === 'function') {
+            var snap = opts.snapToRoutePolyline(
+                lat,
+                lon,
+                routePolyline,
+                opts.searchStartIndex || 0
+            );
+            if (snap) {
+                return opts.distanceAlongRouteToVertexMeters(routePolyline, snap, shapeIdx);
+            }
+        }
         var pt = routePolyline[shapeIdx];
         if (!pt || pt.length < 2) return 9999;
         if (typeof calculateDistance !== 'function') return 9999;
@@ -304,7 +323,12 @@
             opts.routeSteps,
             opts.currentStepIndex,
             opts.routePolyline,
-            opts.calculateDistance
+            opts.calculateDistance,
+            {
+                snapToRoutePolyline: opts.snapToRoutePolyline,
+                distanceAlongRouteToVertexMeters: opts.distanceAlongRouteToVertexMeters,
+                searchStartIndex: opts.lastSnappedRouteIndex || 0,
+            }
         );
 
         var statePatch = {

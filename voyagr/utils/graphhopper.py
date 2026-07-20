@@ -10,7 +10,7 @@ Valhalla maneuver type reference (subset used here):
     9  SlightRight      10  Right             11  SharpRight
     12 UturnRight       13  UturnLeft         14  SharpLeft
     15 Left             16  SlightLeft        23  StayRight
-    24 StayLeft         26  RoundaboutEnter
+    24 StayLeft         26  RoundaboutEnter   27  RoundaboutExit
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ GH_SIGN_TO_VALHALLA = {
     -98: 13,  # U-turn (unknown)   -> Uturn Left
     -8: 13,   # U-turn left        -> Uturn Left
     -7: 24,   # Keep left          -> Stay Left
+    -6: 27,   # Leave roundabout   -> Roundabout Exit
     -3: 14,   # Sharp left         -> Sharp Left
     -2: 15,   # Left               -> Left
     -1: 16,   # Slight left        -> Slight Left

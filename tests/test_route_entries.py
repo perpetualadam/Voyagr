@@ -95,5 +95,87 @@ class BuildValhallaRouteEntryTest(unittest.TestCase):
         self.assertEqual(len(e['hazards']), 1)
 
 
+class ManeuversFromGraphhopperRouteTest(unittest.TestCase):
+    def test_speed_limit_changes_emit_synthetic_continues(self):
+        """Long continues that span max_speed zones get intermediate type-8 maneuvers."""
+        import polyline as pl
+        from voyagr.services.routing.route_entries import maneuvers_from_graphhopper_route
+
+        # Five collinear points — enough vertices for interval + speed change.
+        coords = [(51.50 + i * 0.001, -0.10) for i in range(5)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [
+                {
+                    'sign': 0,
+                    'text': 'Continue',
+                    'street_name': 'A Road',
+                    'distance': 400,
+                    'time': 30,
+                    'interval': [0, 4],
+                },
+                {
+                    'sign': 4,
+                    'text': 'Arrive',
+                    'street_name': '',
+                    'distance': 0,
+                    'time': 0,
+                    'interval': [4, 4],
+                },
+            ],
+            # max_speed: 112 km/h (≈70 mph) then 48 km/h (≈30 mph) mid-instruction
+            'details': {
+                'max_speed': [
+                    [0, 2, 112],
+                    [2, 5, 48],
+                ],
+            },
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        # Primary continue + synthetic continue at speed change + arrive
+        self.assertGreaterEqual(len(maneuvers), 3)
+        self.assertEqual(maneuvers[0]['speed_limit'], 112)
+        speed_changes = [m for m in maneuvers if m.get('type') == 8 and m.get('speed_limit') == 48]
+        self.assertEqual(len(speed_changes), 1)
+        self.assertGreater(speed_changes[0]['begin_shape_index'], maneuvers[0]['begin_shape_index'])
+
+    def test_roundabout_exit_sign_and_exit_number(self):
+        import polyline as pl
+        from voyagr.services.routing.route_entries import maneuvers_from_graphhopper_route
+
+        coords = [(51.5, -0.1), (51.501, -0.1), (51.502, -0.1)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [
+                {
+                    'sign': 6,
+                    'text': 'Enter roundabout',
+                    'street_name': '',
+                    'distance': 50,
+                    'time': 5,
+                    'interval': [0, 1],
+                    'exit_number': 2,
+                },
+                {
+                    'sign': -6,
+                    'text': 'Exit roundabout',
+                    'street_name': 'High St',
+                    'distance': 30,
+                    'time': 3,
+                    'interval': [1, 2],
+                    'exit_number': 2,
+                },
+            ],
+            'details': {},
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        self.assertEqual(maneuvers[0]['type'], 26)
+        self.assertEqual(maneuvers[0]['roundabout_exit_count'], 2)
+        self.assertEqual(maneuvers[1]['type'], 27)
+        self.assertEqual(maneuvers[1]['roundabout_exit_count'], 2)
+
+
 if __name__ == '__main__':
     unittest.main()
