@@ -372,12 +372,11 @@
         var avgSpeedKmh = 0;
         if (haveRealDistance && elapsedMin != null) {
             out.distance_km = Number(traveledKm.toFixed(2));
-            out.duration_minutes = Math.round(elapsedMin);
-            if (out.duration_minutes > 0 && out.distance_km > 0) {
-                avgSpeedKmh = out.distance_km / (out.duration_minutes / 60);
-                if (!Number.isFinite(avgSpeedKmh) || avgSpeedKmh > MAX_PLAUSIBLE_AVG_KMH) {
-                    avgSpeedKmh = Math.min(Math.max(avgSpeedKmh, 0), MAX_PLAUSIBLE_AVG_KMH);
-                }
+            out.duration_minutes = Math.max(1, Math.round(elapsedMin));
+            // Use precise elapsed minutes for avg — rounding display time skewed short trips.
+            avgSpeedKmh = out.distance_km / (elapsedMin / 60);
+            if (!Number.isFinite(avgSpeedKmh) || avgSpeedKmh > MAX_PLAUSIBLE_AVG_KMH) {
+                avgSpeedKmh = Math.min(Math.max(avgSpeedKmh, 0), MAX_PLAUSIBLE_AVG_KMH);
             }
             return { patch: out, avgSpeedKmh: avgSpeedKmh };
         }
@@ -403,8 +402,6 @@
         if (!routeData) {
             return { visible: false };
         }
-        var distanceKm = routeData.distance_km || 0;
-        var durationMin = routeData.duration_minutes || 0;
         var cost = routeData.total_cost || 0;
         var traveled = buildTraveledJourneyRoutePatch(
             routeData,
@@ -412,6 +409,12 @@
             opts.navStartedAt,
             opts.now
         );
+        var distanceKm = (traveled.patch && traveled.patch.distance_km != null)
+            ? traveled.patch.distance_km
+            : (routeData.distance_km || 0);
+        var durationMin = (traveled.patch && traveled.patch.duration_minutes != null)
+            ? traveled.patch.duration_minutes
+            : (routeData.duration_minutes || 0);
         var avgSpeedKmh = traveled.avgSpeedKmh;
         var displayDist = typeof opts.convertDistance === 'function'
             ? opts.convertDistance(distanceKm)
@@ -423,7 +426,7 @@
         var currencySymbol = opts.currencySymbol || '£';
         var speedText = typeof opts.convertSpeed === 'function'
             ? opts.convertSpeed(avgSpeedKmh)
-            : String(avgSpeedKmh);
+            : (Number.isFinite(avgSpeedKmh) ? avgSpeedKmh.toFixed(1) : String(avgSpeedKmh));
         var speedUnit = opts.speedUnit || 'km/h';
         return {
             visible: true,
@@ -469,6 +472,9 @@
             modalId: 'journeySummaryModal',
             switchTab: 'navigation',
             clearForm: true,
+            releaseWakeLock: true,
+            wakeLockReleaseLog: '[Screen Wake Lock] Screen lock released after journey summary',
+            wakeLockReleaseErrorLogPrefix: '[Screen Wake Lock] Error releasing wake lock:',
         };
     }
 

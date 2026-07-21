@@ -320,8 +320,19 @@ describe('map-controls module', () => {
             updatePending: false,
         });
         expect(lifecycle.persistCompletedTrip).toBe(true);
+        expect(lifecycle.showJourneySummary).toBe(true);
         expect(lifecycle.stopAutoTraffic).toBe(true);
+        // Keep screen awake on the journey-end summary; release happens on Done.
+        expect(lifecycle.releaseWakeLock).toBe(false);
         expect(MC.buildNavStopStateResetPlan().routeInProgress).toBe(false);
+
+        const stopWithoutSummary = MC.buildNavStopLifecycleExecutePlan({
+            routeInProgress: false,
+            lastCalculatedRoute: null,
+            hasWakeLock: true,
+        });
+        expect(stopWithoutSummary.showJourneySummary).toBe(false);
+        expect(stopWithoutSummary.releaseWakeLock).toBe(true);
     });
 
     test('buildNavStopEntryOrchestrationPlan bundles preflight and services', () => {
