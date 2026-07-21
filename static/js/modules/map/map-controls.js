@@ -592,7 +592,8 @@
             showJourneySummary: wasNavigating,
             stopGpsTracking: true,
             hideRoadNameBar: true,
-            releaseWakeLock: !!o.hasWakeLock,
+            // Keep wake lock while the journey-end summary is shown; release on Done.
+            releaseWakeLock: !!o.hasWakeLock && !wasNavigating,
             stopLiveDataRefresh: true,
             clearInitialEtaAnnouncement: true,
             stopAutoTraffic: true,

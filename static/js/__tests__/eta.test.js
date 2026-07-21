@@ -265,15 +265,31 @@ describe('journey summary helpers', () => {
     });
 
     test('buildTraveledJourneyRoutePatch substitutes distance and time together', () => {
+        const now = Date.now();
         const result = ETA.buildTraveledJourneyRoutePatch(
             { distance_km: 20, duration_minutes: 30 },
             8000,
-            Date.now() - 15 * 60000
+            now - 12 * 60000,
+            now
         );
         expect(result.patch).not.toBeNull();
         expect(result.patch.distance_km).toBe(8);
-        expect(result.patch.duration_minutes).toBeGreaterThan(0);
-        expect(result.avgSpeedKmh).toBeGreaterThan(0);
+        expect(result.patch.duration_minutes).toBe(12);
+        // Avg uses precise elapsed (12.0 min), not only the rounded display minutes.
+        expect(result.avgSpeedKmh).toBeCloseTo(40, 5);
+    });
+
+    test('buildTraveledJourneyRoutePatch avg uses precise elapsed not rounded minutes', () => {
+        const now = Date.now();
+        // 5 km in 7.5 minutes → true avg 40 km/h. Rounded display time is 8 min.
+        const result = ETA.buildTraveledJourneyRoutePatch(
+            { distance_km: 20, duration_minutes: 30 },
+            5000,
+            now - 7.5 * 60000,
+            now
+        );
+        expect(result.patch.duration_minutes).toBe(8);
+        expect(result.avgSpeedKmh).toBeCloseTo(40, 5);
     });
 
     test('buildTraveledJourneyRoutePatch keeps planned values without real driven distance', () => {
@@ -307,6 +323,27 @@ describe('journey summary helpers', () => {
         expect(plan.avgSpeedText).toMatch(/mph$/);
     });
 
+    test('buildJourneySummaryModalApplyPlan prefers traveled distance and time', () => {
+        const now = Date.parse('2026-07-21T12:00:00.000Z');
+        const plan = ETA.buildJourneySummaryModalApplyPlan(
+            { distance_km: 20, duration_minutes: 30, total_cost: 5 },
+            {
+                traveledMeters: 10000,
+                navStartedAt: now - 15 * 60000,
+                now,
+                convertDistance: (km) => Number(km).toFixed(1),
+                distUnit: 'km',
+                convertSpeed: (kmh) => Number(kmh).toFixed(1),
+                speedUnit: 'km/h',
+                currencySymbol: '£',
+                adjustCost: (c) => c,
+            }
+        );
+        expect(plan.distanceText).toBe('10.0 km');
+        expect(plan.timeText).toBe('15 min');
+        expect(plan.avgSpeedText).toBe('40.0 km/h');
+    });
+
     test('buildJourneySummaryModalApplyPlan returns not visible without route data', () => {
         expect(ETA.buildJourneySummaryModalApplyPlan(null, {})).toEqual({ visible: false });
     });
@@ -330,6 +367,7 @@ describe('journey summary helpers', () => {
         expect(execute.modalId).toBe('journeySummaryModal');
         expect(execute.switchTab).toBe('navigation');
         expect(execute.clearForm).toBe(true);
+        expect(execute.releaseWakeLock).toBe(true);
     });
 
     test('buildAnnounceETAIfNeededPlan gates on interval and route state', () => {

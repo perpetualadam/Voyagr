@@ -167,12 +167,26 @@
         if (execute.logMessage) console.log(execute.logMessage);
     }
 
+    function releaseScreenWakeLockFromPlan(execute) {
+        if (!execute || !execute.releaseWakeLock || !window.screenWakeLock) return;
+        window.screenWakeLock.release()
+            .then(() => {
+                if (execute.wakeLockReleaseLog) console.log(execute.wakeLockReleaseLog);
+                window.screenWakeLock = null;
+            })
+            .catch((err) => {
+                console.log(execute.wakeLockReleaseErrorLogPrefix || '[Screen Wake Lock] Error releasing wake lock:', err);
+            });
+    }
+
     function closeJourneySummary() {
         const execute = ETA().buildCloseJourneySummaryExecutePlan();
         if (!execute.shouldClose) return;
 
         const modal = document.getElementById(execute.modalId);
         if (modal) modal.style.display = 'none';
+
+        releaseScreenWakeLockFromPlan(execute);
 
         if (execute.switchTab) rt().call.switchTab(execute.switchTab);
         if (execute.clearForm) rt().call.clearForm();
