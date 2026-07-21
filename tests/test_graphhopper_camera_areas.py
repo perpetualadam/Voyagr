@@ -65,7 +65,7 @@ class TestCameraAreaBboxFiltering:
         rule = model['priority'][0]['if']
         assert 'in_camera_area_10' in rule
         assert 'in_camera_area_20' not in rule
-        assert model['priority'][0]['multiply_by'] == '0.01'
+        assert model['priority'][0]['multiply_by'] == '0'
 
 
 class TestCombinedCameraModel:
@@ -88,9 +88,14 @@ class TestCombinedCameraModel:
         }
         model = hz.build_graphhopper_combined_camera_model(camera_hazards, bbox)
         assert any('in_hazard_' in r.get('if', '') for r in model.get('priority', []))
+        assert all(
+            r.get('multiply_by') == hz.GRAPHHOPPER_HAZARD_BLOCK_MULTIPLY_BY
+            for r in model.get('priority', [])
+        )
 
-    def test_area_sections_without_scdb(self, sample_camera_areas):
+    def test_area_sections_hard_block_cameras(self, sample_camera_areas):
         bbox = {'min_lat': 53.45, 'max_lat': 53.65, 'min_lon': -1.6, 'max_lon': -1.3}
         model = hz.build_graphhopper_combined_camera_model(None, bbox)
+        assert model['priority'][0]['multiply_by'] == '0'
         assert 'in_camera_area_10' in model['priority'][0]['if']
         assert 'areas' not in model

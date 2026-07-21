@@ -424,6 +424,9 @@ GRAPHOPPER_HAZARD_WEIGHTS: Dict[str, float] = {
     'debris': 15.0,
 }
 MIN_GRAPHOPPER_HAZARD_WEIGHT = 15.0
+# Valhalla-style hard block: edges inside hazard polygons are unusable (not merely costly).
+# If GraphHopper cannot find a path, engines refuse unfiltered fallback and Valhalla takes over.
+GRAPHHOPPER_HAZARD_BLOCK_MULTIPLY_BY = '0'
 
 # TomTom / live-incident buckets merged into GraphHopper custom models (Valhalla parity).
 GRAPHHOPPER_LIVE_INCIDENT_BUCKETS: Tuple[str, ...] = (
@@ -446,7 +449,7 @@ def extract_graphhopper_live_incident_hazards(
 def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                                    route_bbox: Optional[Dict[str, float]] = None,
                                    max_hazards: int = 25) -> Dict[str, Any]:
-    """Build GraphHopper Custom Model to avoid hazards using circular zones."""
+    """Build GraphHopper custom model that hard-blocks hazards via circular zones."""
     try:
         all_hazards = []
         hazard_weights = dict(GRAPHOPPER_HAZARD_WEIGHTS)
@@ -496,17 +499,18 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                 "geometry": {"type": "Polygon", "coordinates": [coordinates]}
             })
 
-            if hazard['weight'] >= 100:
-                multiplier = 0.05
-            elif hazard['weight'] >= 50:
-                multiplier = 0.1
-            else:
-                multiplier = 0.3
-
-            priority_rules.append({"if": f"in_{area_id}", "multiply_by": str(multiplier)})
+            # Hard-block like Valhalla exclude_locations (soft 0.01/0.1 still let
+            # cameras through when the detour looked too costly).
+            priority_rules.append({
+                "if": f"in_{area_id}",
+                "multiply_by": GRAPHHOPPER_HAZARD_BLOCK_MULTIPLY_BY,
+            })
 
         custom_model = {"priority": priority_rules, "areas": areas_geojson}
-        logger.info(f"[CUSTOM_MODEL] Built model with {len(all_hazards)} hazard areas")
+        logger.info(
+            f"[CUSTOM_MODEL] Built hard-block model with {len(all_hazards)} hazard areas "
+            f"(multiply_by={GRAPHHOPPER_HAZARD_BLOCK_MULTIPLY_BY})"
+        )
         return custom_model
 
     except Exception as e:
@@ -586,10 +590,11 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
 
 def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     """
-    Build GraphHopper custom model referencing server-side UK camera grid sections.
+    Build GraphHopper custom model that hard-blocks server-side UK camera grid sections.
 
     GraphHopper loads camera_areas.geojson at startup; each feature camera_area_N exposes
     in_camera_area_N in the custom model. We filter sections by route bbox for performance.
+    multiply_by=0 matches Valhalla exclude_locations behaviour (road unusable, not merely costly).
     """
     try:
         total_areas = get_graphhopper_camera_areas_count()
@@ -628,8 +633,13 @@ def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, floa
             return {}
 
         condition_str = ' || '.join(area_conditions)
+        # Hard-block camera zones (Valhalla exclude_locations parity). Soft 0.01
+        # still allowed Optimised through cameras when the detour looked expensive.
         return {
-            'priority': [{'if': condition_str, 'multiply_by': '0.01'}],
+            'priority': [{
+                'if': condition_str,
+                'multiply_by': GRAPHHOPPER_HAZARD_BLOCK_MULTIPLY_BY,
+            }],
         }
 
     except Exception as e:

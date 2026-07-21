@@ -295,8 +295,7 @@ def route_with_graphhopper(
         if railway_crossing_hazards:
             osm_dynamic['railway_crossing'] = railway_crossing_hazards
         if avoid_points:
-            # Congested/closed segments — penalise (not hard-block) so the optimised route
-            # prefers to route around them when a reasonable alternative exists.
+            # Congested/closed segments — hard-block like Valhalla exclude_locations.
             osm_dynamic['avoid_point'] = avoid_points
         if incident_hazards:
             for bucket, items in incident_hazards.items():
