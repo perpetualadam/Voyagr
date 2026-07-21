@@ -168,10 +168,10 @@ def merge_graphhopper_optimised_route(
         if gh_hazard_count > gh_baseline:
             logger.warning(
                 '[GRAPHHOPPER] Optimised (%s) has %d cameras vs baseline %d — '
-                'keeping as primary option anyway',
+                'skipping so Valhalla exclude_locations can provide Optimised',
                 log_label, gh_hazard_count, gh_baseline,
             )
-            gh_route_entry['routing_preferences_limited'] = True
+            return routes
 
         routes = [r for r in routes if not is_primary_optimised_route(r)]
         routes.insert(0, gh_route_entry)

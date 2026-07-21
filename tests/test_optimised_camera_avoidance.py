@@ -20,12 +20,21 @@ from voyagr.services.routing.optimised_route import (
 
 
 class TestGraphhopperQualifiesAsOptimised:
-    def test_qualifies_when_custom_model_applied(self):
+    def test_qualifies_when_camera_avoidance_applied(self):
+        gh = {'success': True, 'camera_avoidance': True, 'custom_model_applied': True}
+        assert graphhopper_qualifies_as_optimised(gh, avoid_cameras=True) is True
+
+    def test_rejects_costing_only_custom_model_when_avoiding_cameras(self):
+        # custom_model_applied can be true for tolls/CAZ without any camera model
+        gh = {'success': True, 'camera_avoidance': False, 'custom_model_applied': True}
+        assert graphhopper_qualifies_as_optimised(gh, avoid_cameras=True) is False
+
+    def test_legacy_payload_uses_custom_model_applied(self):
         gh = {'success': True, 'custom_model_applied': True}
         assert graphhopper_qualifies_as_optimised(gh, avoid_cameras=True) is True
 
     def test_rejects_unfiltered_fallback_when_avoiding_cameras(self):
-        gh = {'success': True, 'custom_model_applied': False}
+        gh = {'success': True, 'camera_avoidance': False, 'custom_model_applied': False}
         assert graphhopper_qualifies_as_optimised(gh, avoid_cameras=True) is False
 
     def test_qualifies_without_camera_avoidance_setting(self):
@@ -194,18 +203,29 @@ class TestOptimisedRouteQualification:
             'hazard_count': 10,
             'camera_exclusions_applied': True,
         }
-        gh = {'success': True, 'custom_model_applied': True}
+        gh = {'success': True, 'custom_model_applied': True, 'camera_avoidance': True}
         assert optimised_route_entry_qualifies(
             route, graphhopper_route=gh, baseline_hazard_count=5, avoid_cameras=True,
         ) is False
 
-    def test_keeps_graphhopper_optimised_even_with_more_cameras_than_baseline(self):
+    def test_rejects_graphhopper_optimised_with_more_cameras_than_baseline(self):
         route = {
             'name': PRIMARY_OPTIMISED_NAME,
             'source': 'GraphHopper',
             'hazard_count': 10,
         }
-        gh = {'success': True, 'custom_model_applied': True}
+        gh = {'success': True, 'custom_model_applied': True, 'camera_avoidance': True}
+        assert optimised_route_entry_qualifies(
+            route, graphhopper_route=gh, baseline_hazard_count=5, avoid_cameras=True,
+        ) is False
+
+    def test_keeps_graphhopper_optimised_at_or_below_baseline(self):
+        route = {
+            'name': PRIMARY_OPTIMISED_NAME,
+            'source': 'GraphHopper',
+            'hazard_count': 3,
+        }
+        gh = {'success': True, 'custom_model_applied': True, 'camera_avoidance': True}
         assert optimised_route_entry_qualifies(
             route, graphhopper_route=gh, baseline_hazard_count=5, avoid_cameras=True,
         ) is True
@@ -221,13 +241,14 @@ class TestOptimisedRouteQualification:
         assert len(pruned) == 1
         assert pruned[0]['name'] == 'Fastest'
 
-    def test_prune_keeps_graphhopper_optimised(self):
+    def test_prune_drops_weak_graphhopper_optimised(self):
         routes = [
             {'name': 'Fastest', 'hazard_count': 3},
             {'name': PRIMARY_OPTIMISED_NAME, 'source': 'GraphHopper', 'hazard_count': 10},
         ]
-        gh = {'success': True, 'custom_model_applied': True}
+        gh = {'success': True, 'custom_model_applied': True, 'camera_avoidance': True}
         pruned = prune_non_qualifying_optimised_routes(
             routes, graphhopper_route=gh, avoid_cameras=True,
         )
-        assert len(pruned) == 2
+        assert len(pruned) == 1
+        assert pruned[0]['name'] == 'Fastest'

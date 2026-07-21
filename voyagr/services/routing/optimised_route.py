@@ -583,6 +583,9 @@ def graphhopper_qualifies_as_optimised(
         return False
     if not avoid_cameras:
         return True
+    # Prefer the explicit camera flag; fall back to custom_model_applied for older payloads.
+    if 'camera_avoidance' in graphhopper_route:
+        return bool(graphhopper_route.get('camera_avoidance'))
     return bool(graphhopper_route.get('custom_model_applied'))
 
 
@@ -612,12 +615,15 @@ def optimised_route_entry_qualifies(
     if not is_primary_optimised_route(route):
         return True
 
+    # Soft GraphHopper penalties can still leave more cameras than Fast/Short —
+    # never brand that path as Optimised; Valhalla ensure can replace it.
+    if int(route.get('hazard_count') or 0) > baseline_hazard_count:
+        return False
+
     source = route.get('source')
     if source == 'GraphHopper':
         return graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=True)
     if source == 'Valhalla':
-        if int(route.get('hazard_count') or 0) > baseline_hazard_count:
-            return False
         return bool(route.get('camera_exclusions_applied'))
     return False
 
