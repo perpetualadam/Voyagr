@@ -36,6 +36,27 @@ def test_post_failure_with_areas_returns_none(mock_cam_model, mock_post, mock_ge
 
 @patch('voyagr.services.routing.engines.requests.get')
 @patch('voyagr.services.routing.engines.requests.post')
+@patch('voyagr.services.routing.engines.USE_GRAPHHOPPER_CAMERA_AVOIDANCE', True)
+@patch('voyagr.services.hazards.build_graphhopper_combined_camera_model')
+def test_post_failure_with_server_side_camera_priority_returns_none(mock_cam_model, mock_post, mock_get):
+    """UK production models: in_camera_area_N priority only (no areas in JSON)."""
+    mock_cam_model.return_value = {
+        'priority': [{'if': 'in_camera_area_1 || in_camera_area_2', 'multiply_by': '0.01'}],
+    }
+    mock_post.return_value = _mock_response(400, text='custom model failed')
+
+    result = route_with_graphhopper(
+        51.5, -0.1, 51.6, -0.2,
+        enable_camera_avoidance=True,
+        route_bbox={'min_lat': 51.5, 'max_lat': 51.6, 'min_lon': -0.2, 'max_lon': -0.1},
+    )
+
+    assert result is None
+    mock_get.assert_not_called()
+
+
+@patch('voyagr.services.routing.engines.requests.get')
+@patch('voyagr.services.routing.engines.requests.post')
 @patch('voyagr.services.routing.costing.build_graphhopper_costing_preference_model')
 def test_post_failure_costing_only_falls_back_to_get(mock_costing, mock_post, mock_get):
     mock_costing.return_value = {
