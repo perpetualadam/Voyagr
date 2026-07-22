@@ -104,6 +104,12 @@ describe('refineManeuverDirection', () => {
     test('does not change residential left turn', () => {
         expect(TI.refineManeuverDirection(15, 'left', 'residential')).toBe('left');
     });
+    test('stay/slight on motorway stay as keep (not exit)', () => {
+        expect(TI.refineManeuverDirection(9, 'slight_right', 'motorway')).toBe('slight_right');
+        expect(TI.refineManeuverDirection(23, 'slight_right', 'motorway')).toBe('slight_right');
+        expect(TI.refineManeuverDirection(16, 'slight_left', 'motorway')).toBe('slight_left');
+        expect(TI.refineManeuverDirection(24, 'slight_left', 'trunk')).toBe('slight_left');
+    });
 });
 
 describe('buildTurnDisplayInstruction', () => {
@@ -195,15 +201,21 @@ describe('refineManeuverDirection', () => {
         expect(TI.refineManeuverDirection(10, 'exit_right', 'motorway')).toBe('exit_right');
     });
 
-    test('motorway right-family maneuver types become exit_right', () => {
-        [18, 9, 23, 10].forEach((t) => {
+    test('motorway right-family ramp/turn become exit_right; stay/slight keep', () => {
+        [18, 10].forEach((t) => {
             expect(TI.refineManeuverDirection(t, 'right', 'motorway')).toBe('exit_right');
+        });
+        [9, 23].forEach((t) => {
+            expect(TI.refineManeuverDirection(t, 'slight_right', 'motorway')).toBe('slight_right');
         });
     });
 
-    test('motorway left-family maneuver types become exit_left', () => {
-        [19, 16, 24, 15, 14].forEach((t) => {
+    test('motorway left-family ramp/turn become exit_left; stay/slight keep', () => {
+        [19, 15, 14].forEach((t) => {
             expect(TI.refineManeuverDirection(t, 'left', 'motorway')).toBe('exit_left');
+        });
+        [16, 24].forEach((t) => {
+            expect(TI.refineManeuverDirection(t, 'slight_left', 'motorway')).toBe('slight_left');
         });
     });
 

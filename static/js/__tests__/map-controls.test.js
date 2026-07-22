@@ -270,6 +270,9 @@ describe('map-controls module', () => {
         expect(execute.shouldInit).toBe(true);
         expect(execute.geometry).toBe('abc');
         expect(execute.primeVehicleWhenPositionKnown).toBe(true);
+        expect(execute.clearPreviewRouteLayers).toBe(true);
+        expect(execute.mountActiveNavRoute).toBe(true);
+        expect(execute.bringNavRouteAboveTraffic).toBe(true);
         expect(execute.invalidGeometryStatusMessage).toContain('Invalid');
         expect(execute.decodeGeometryErrorStatusMessage).toContain('decode');
     });

@@ -94,6 +94,57 @@
         }
     }
 
+    function clearPreviewRouteLayersForNavStart() {
+        try {
+            if (typeof rt().call.clearAllRouteLayersFromMap === 'function') {
+                rt().call.clearAllRouteLayersFromMap();
+            }
+            if (typeof rt().call.clearAllRouteLayerHandles === 'function') {
+                rt().call.clearAllRouteLayerHandles();
+            }
+        } catch (e) {
+            console.warn('[Navigation] Failed clearing preview route layers:', e);
+        }
+        if (typeof rt().setRouteLayer === 'function') {
+            const existing = typeof rt().getRouteLayer === 'function' ? rt().getRouteLayer() : null;
+            if (existing && typeof existing.remove === 'function') {
+                try { existing.remove(); } catch (_e) { /* ignore */ }
+            }
+            rt().setRouteLayer(null);
+        }
+    }
+
+    function mountActiveNavRouteLayerFromPolyline(routePolyline, execute) {
+        if (!routePolyline || routePolyline.length < 2) return false;
+        if (!rt().getMap() || typeof rt().getMapLibreHelpers !== 'function') return false;
+
+        const MT = root.VoyagrMapTheme;
+        const mapTheme = MT && typeof MT.readStoredMapTheme === 'function'
+            ? MT.readStoredMapTheme()
+            : ((typeof localStorage !== 'undefined' && localStorage.getItem('mapTheme')) || 'standard');
+        const mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
+            routePolyline: routePolyline,
+            navRouteColor: typeof rt().call.navActiveRouteColor === 'function'
+                ? rt().call.navActiveRouteColor()
+                : undefined,
+            mapTheme: mapTheme,
+        });
+        if (!mount.valid) return false;
+
+        const layer = rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style);
+        if (typeof rt().setRouteLayer === 'function') {
+            rt().setRouteLayer(layer);
+        }
+        if (execute && execute.navRouteMountLogPrefix) {
+            console.log(execute.navRouteMountLogPrefix, routePolyline.length, 'points');
+        }
+        if (execute && execute.bringNavRouteAboveTraffic
+            && typeof rt().call.bringNavRouteAboveTrafficEdges === 'function') {
+            rt().call.bringNavRouteAboveTrafficEdges();
+        }
+        return !!(layer && layer._added !== false);
+    }
+
     function applyNavStartPolylineFromPlan(execute, stateInit) {
         if (!execute || !execute.shouldInit) return false;
 
@@ -124,6 +175,15 @@
                 console.error(execute.emptyPolylineErrorLog);
                 rt().call.showStatus(execute.invalidGeometryStatusMessage, 'error');
                 return false;
+            }
+
+            // Replace comparison/preview polylines with the single owned nav route layer
+            // that matches the maneuvers / text instructions just loaded into memory.
+            if (execute.clearPreviewRouteLayers) {
+                clearPreviewRouteLayersForNavStart();
+            }
+            if (execute.mountActiveNavRoute) {
+                mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
             }
 
             if (execute.primeVehicleWhenPositionKnown && rt().getCurrentLat() != null && rt().getCurrentLon() != null) {

@@ -242,6 +242,25 @@
             resetVoiceAnnouncementStateForNewRoute();
         }
 
+        // Decode first. Clearing before a failed/invisible decode was leaving turn text
+        // on the original route while the map line vanished.
+        var routePolyline = rt().call.decodePolyline(newRoute.geometry, execute.polylineDecodePrecision);
+        var minPoints = execute.minPolylinePoints != null ? execute.minPolylinePoints : 2;
+        if (execute.abortIfDecodeInvalid && (!routePolyline || routePolyline.length < minPoints)) {
+            console.warn(
+                (execute.invalidDecodeLogPrefix || '[Reroute] Invalid polyline (') +
+                (routePolyline ? routePolyline.length : 0) +
+                ' points, precision ' + execute.polylineDecodePrecision + ')'
+            );
+            if (execute.invalidDecodeStatusMessage && typeof rt().call.showStatus === 'function') {
+                rt().call.showStatus(execute.invalidDecodeStatusMessage, 'warning');
+            }
+            return;
+        }
+
+        rt().setRoutePolyline(routePolyline);
+        console.log(execute.polylineLogPrefix + ' ' + routePolyline.length + ' points');
+
         if (execute.clearAllRouteArtifacts) {
             try {
                 if (typeof rt().call.clearAllRouteLayersFromMap === 'function') {
@@ -262,10 +281,6 @@
             rt().setRouteLayer(null);
         }
 
-        var routePolyline = rt().call.decodePolyline(newRoute.geometry, execute.polylineDecodePrecision);
-        rt().setRoutePolyline(routePolyline);
-        console.log(execute.polylineLogPrefix + ' ' + routePolyline.length + ' points');
-
         if (execute.mountActiveNavRoute) {
             var mapTheme = storedMapTheme();
             var mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
@@ -273,9 +288,13 @@
                 navRouteColor: rt().call.navActiveRouteColor(),
                 mapTheme: mapTheme,
             });
-            rt().setRouteLayer(
-                rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style)
-            );
+            if (mount.valid) {
+                rt().setRouteLayer(
+                    rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style)
+                );
+            } else {
+                console.warn('[Reroute] Active nav route mount plan invalid — polyline not drawn');
+            }
         }
         if (execute.bringNavRouteAboveTraffic) {
             rt().call.bringNavRouteAboveTrafficEdges();
