@@ -23,6 +23,7 @@ from voyagr.utils.geometry import get_distance_between_points
 from voyagr.services.geocoding import (
     build_nominatim_structured_params,
     dedupe_results,
+    looks_like_uk_postcode_query,
     nominatim_extra_params_for_query,
     parse_address_query,
     query_has_house_number,
@@ -38,6 +39,7 @@ NOMINATIM_BASE_URL = os.getenv('NOMINATIM_URL', 'https://nominatim.openstreetmap
 NOMINATIM_COUNTRYCODES = os.getenv('NOMINATIM_COUNTRYCODES', '').strip()
 NOMINATIM_LANGUAGE = os.getenv('NOMINATIM_LANGUAGE', 'en').strip()
 OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter').strip()
+POSTCODES_IO_BASE_URL = os.getenv('POSTCODES_IO_URL', 'https://api.postcodes.io').strip().rstrip('/')
 
 
 def _nominatim_headers() -> dict:
@@ -58,6 +60,116 @@ def _nominatim_email_params(params: dict) -> None:
     email = os.getenv('NOMINATIM_EMAIL', '').strip()
     if email:
         params['email'] = email
+
+
+def _postcodes_io_geocode(query: str) -> list:
+    """
+    Resolve UK unit postcodes and outward codes via postcodes.io.
+
+    Returns Nominatim-shaped dicts so ranking/dedupe/UI stay unchanged.
+    Free public API (no key); fails soft when unreachable.
+    """
+    parsed = parse_address_query(query)
+    if not parsed.postcode:
+        # Only call when the whole query looks like a UK postcode / outcode.
+        if not looks_like_uk_postcode_query(query):
+            return []
+        # Re-parse after stripping separators so compact forms still work.
+        compact = re.sub(r'[-\s.]+', '', (query or '').strip())
+        parsed = parse_address_query(compact)
+        if not parsed.postcode:
+            return []
+
+    code = parsed.postcode_display or parsed.postcode
+    code_path = requests.utils.quote(code.replace(' ', ''))
+    headers = {
+        'User-Agent': 'Voyagr/1.0 (+https://github.com/perpetualadam/Voyagr)',
+        'Accept': 'application/json',
+    }
+
+    def _unit_result(result: dict) -> dict:
+        postcode = result.get('postcode') or parsed.postcode_display or parsed.postcode
+        district = result.get('admin_district') or result.get('parish') or ''
+        region = result.get('region') or result.get('country') or ''
+        parts = [p for p in (postcode, district, region, 'United Kingdom') if p]
+        return {
+            'lat': str(result['latitude']),
+            'lon': str(result['longitude']),
+            'display_name': ', '.join(parts),
+            'name': postcode,
+            'type': 'postcode',
+            'class': 'place',
+            'importance': 0.9,
+            'address': {
+                'postcode': postcode,
+                'city': district or '',
+                'state': region or '',
+                'country': 'United Kingdom',
+                'country_code': 'gb',
+            },
+            '_source': 'postcodes_io',
+        }
+
+    def _outcode_result(result: dict) -> dict:
+        outcode = result.get('outcode') or parsed.postcode_display or parsed.postcode
+        districts = result.get('admin_district') or []
+        if isinstance(districts, str):
+            districts = [districts]
+        district = districts[0] if districts else ''
+        countries = result.get('country') or []
+        if isinstance(countries, str):
+            countries = [countries]
+        country = countries[0] if countries else 'England'
+        parts = [p for p in (outcode, district, country, 'United Kingdom') if p]
+        return {
+            'lat': str(result['latitude']),
+            'lon': str(result['longitude']),
+            'display_name': ', '.join(parts),
+            'name': outcode,
+            'type': 'postcode',
+            'class': 'place',
+            'importance': 0.75,
+            'address': {
+                'postcode': outcode,
+                'city': district or '',
+                'state': country or '',
+                'country': 'United Kingdom',
+                'country_code': 'gb',
+            },
+            '_source': 'postcodes_io',
+        }
+
+    try:
+        if parsed.postcode_kind == 'outward':
+            url = f"{POSTCODES_IO_BASE_URL}/outcodes/{code_path}"
+            resp = requests.get(url, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                body = resp.json() or {}
+                result = body.get('result') or {}
+                if result.get('latitude') is not None and result.get('longitude') is not None:
+                    return [_outcode_result(result)]
+            return []
+
+        url = f"{POSTCODES_IO_BASE_URL}/postcodes/{code_path}"
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            body = resp.json() or {}
+            result = body.get('result') or {}
+            if result.get('latitude') is not None and result.get('longitude') is not None:
+                return [_unit_result(result)]
+
+        # Fallback: treat as outcode if unit lookup failed (e.g. LS1 typed alone
+        # but somehow classified as unit — defensive).
+        url = f"{POSTCODES_IO_BASE_URL}/outcodes/{code_path}"
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            body = resp.json() or {}
+            result = body.get('result') or {}
+            if result.get('latitude') is not None and result.get('longitude') is not None:
+                return [_outcode_result(result)]
+    except Exception as e:
+        logger.debug(f"[Geocode] postcodes.io error: {e}")
+    return []
 
 
 def _has_house_number(query: str) -> bool:
@@ -86,8 +198,11 @@ def _tomtom_geocode(query: str, limit: int) -> list:
     try:
         url = f"https://api.tomtom.com/search/2/search/{requests.utils.quote(query)}.json"
         params = {'key': api_key, 'limit': limit, 'language': NOMINATIM_LANGUAGE}
-        if NOMINATIM_COUNTRYCODES:
-            params['countrySet'] = NOMINATIM_COUNTRYCODES.upper()
+        country_set = NOMINATIM_COUNTRYCODES.upper() if NOMINATIM_COUNTRYCODES else ''
+        if not country_set and looks_like_uk_postcode_query(query):
+            country_set = 'GB'
+        if country_set:
+            params['countrySet'] = country_set
         resp = requests.get(url, params=params, timeout=8)
         if resp.status_code != 200:
             return []
@@ -101,6 +216,7 @@ def _tomtom_geocode(query: str, limit: int) -> list:
             street = addr.get('streetName', '')
             city = addr.get('municipality', '')
             country = addr.get('country', '')
+            postcode = addr.get('postalCode') or addr.get('extendedPostalCode') or ''
             freeform = addr.get('freeformAddress', '')
             name_parts = []
             if house_num:
@@ -117,6 +233,11 @@ def _tomtom_geocode(query: str, limit: int) -> list:
                 address_obj['city'] = city
             if country:
                 address_obj['country'] = country
+            if postcode:
+                address_obj['postcode'] = postcode
+            country_code = (addr.get('countryCode') or '').lower()
+            if country_code:
+                address_obj['country_code'] = country_code
             results.append({
                 'lat': str(pos['lat']),
                 'lon': str(pos['lon']),
@@ -135,8 +256,9 @@ def _tomtom_geocode(query: str, limit: int) -> list:
 @search_bp.route('/geocode', methods=['GET'])
 def geocode():
     """
-    Server-side geocoding proxy: queries Nominatim, then TomTom when Nominatim
-    is empty, fails HTTP, or throws; also merges TomTom for house-number queries
+    Server-side geocoding proxy: queries postcodes.io for UK postcodes,
+    Nominatim for general addresses, then TomTom when Nominatim is empty,
+    fails HTTP, or throws; also merges TomTom for house-number queries
     with no Nominatim house match.
 
     Query params:
@@ -144,9 +266,11 @@ def geocode():
       - limit: number of results (default 8; max 10)
     Returns: Nominatim-style JSON array
 
+    UK unit and outward postcodes (e.g. SW1A 1AA, LS1) resolve via
+    postcodes.io when present, with Nominatim biased to countrycodes=gb.
+
     Nominatim search features not used here (could improve business/POI lookup):
-      structured forward geocode (street/city/postcode/country params instead of q);
-      viewbox + bounded=1 for map-biased search; dedupe=1; extratags=1; namedetails=1;
+      viewbox + bounded=1 for map-biased search; extratags=1; namedetails=1;
       polygon_geojson / polygon_kml; layer= / featuretype= filters; /lookup by osm ids;
       /details endpoint; email= for usage policy. Reverse uses addressdetails only.
     """
@@ -165,6 +289,17 @@ def geocode():
         fetch_limit = max(limit, 10)
         parsed = parse_address_query(q)
 
+        data: list = []
+        nominatim_http_ok = False
+
+        # Dedicated UK postcode provider first — reliable for unit + outward codes
+        # even when Nominatim is rate-limited, self-hosted without GB data, or
+        # returns foreign homonyms for short outcodes like LS1.
+        if looks_like_uk_postcode_query(q) or parsed.postcode:
+            pc_results = _postcodes_io_geocode(q)
+            if pc_results:
+                data = dedupe_results(pc_results)
+
         params = {
             'q': q,
             'format': 'json',
@@ -175,16 +310,24 @@ def geocode():
         if NOMINATIM_COUNTRYCODES:
             params['countrycodes'] = NOMINATIM_COUNTRYCODES
 
-        data: list = []
-        nominatim_http_ok = False
-
         batch, ok = _nominatim_search(params, headers)
-        data = dedupe_results(batch)
+        if batch:
+            data = dedupe_results(list(data) + list(batch))
         nominatim_http_ok = nominatim_http_ok or ok
 
-        if (not data) and (',' not in q) and (not NOMINATIM_COUNTRYCODES):
+        # UK free-text retry when empty and not already country-filtered.
+        already_gb = (params.get('countrycodes') or '').lower() == 'gb'
+        if (not data) and (',' not in q) and (not NOMINATIM_COUNTRYCODES) and (not already_gb):
             retry_params = dict(params)
             retry_params['q'] = f"{q}, United Kingdom"
+            batch, ok = _nominatim_search(retry_params, headers)
+            if batch:
+                data = dedupe_results(list(batch) + list(data))
+            nominatim_http_ok = nominatim_http_ok or ok
+        elif (not data) and looks_like_uk_postcode_query(q) and not already_gb:
+            retry_params = dict(params)
+            retry_params['q'] = f"{q}, United Kingdom"
+            retry_params['countrycodes'] = 'gb'
             batch, ok = _nominatim_search(retry_params, headers)
             if batch:
                 data = dedupe_results(list(batch) + list(data))
@@ -194,6 +337,8 @@ def geocode():
         if structured:
             if NOMINATIM_COUNTRYCODES:
                 structured['countrycodes'] = NOMINATIM_COUNTRYCODES
+            elif looks_like_uk_postcode_query(q) or parsed.postcode:
+                structured['countrycodes'] = 'gb'
             batch, ok = _nominatim_search(structured, headers)
             if batch:
                 data = dedupe_results(list(batch) + list(data))
