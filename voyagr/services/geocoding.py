@@ -12,9 +12,22 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-# UK postcode (outward + inward)
+# UK unit postcode (outward + inward). Allows optional space/hyphen/dot separator.
+# Includes the special-case GIR 0AA.
 _UK_POSTCODE_RE = re.compile(
-    r'\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b',
+    r'\b(GIR\s*0AA|(?:[A-Z]{1,2}\d[A-Z\d]?)\s*[-\s.]?\d[A-Z]{2})\b',
+    re.IGNORECASE,
+)
+
+# UK outward code only (district/area), e.g. LS1, SW1A, EC1A, GIR.
+_UK_OUTCODE_RE = re.compile(
+    r'^(GIR|[A-Z]{1,2}\d[A-Z\d]?)$',
+    re.IGNORECASE,
+)
+
+# Partial UK postcode while typing (outward + incomplete inward).
+_UK_PARTIAL_POSTCODE_RE = re.compile(
+    r'^(GIR|[A-Z]{1,2}\d[A-Z\d]?)(?:\s*[-\s.]?(?:\d[A-Z]{0,2})?)?$',
     re.IGNORECASE,
 )
 
@@ -47,6 +60,8 @@ class ParsedQuery:
     postcode: str  # normalised (no spaces) for matching
     postcode_display: str  # formatted for Nominatim structured search
     is_business: bool
+    # '' | 'unit' (full postcode) | 'outward' (district only, e.g. LS1)
+    postcode_kind: str = ''
 
 
 def normalize_house_number(value: str) -> str:
@@ -55,22 +70,74 @@ def normalize_house_number(value: str) -> str:
     return s
 
 
+def format_uk_postcode_display(raw_match: str) -> str:
+    """Normalise a matched UK postcode to 'OUTWARD INWARD' display form."""
+    display = (raw_match or '').upper().strip()
+    display = re.sub(r'[-\s.]+', '', display)
+    if display == 'GIR0AA':
+        return 'GIR 0AA'
+    if len(display) >= 5:
+        return display[:-3] + ' ' + display[-3:]
+    return display
+
+
 def extract_uk_postcode(query: str) -> Tuple[str, str, str]:
-    """Return (normalised, display, query_with_postcode_removed)."""
+    """Return (normalised, display, query_with_postcode_removed).
+
+    Prefers a full unit postcode. If the whole query is only an outward code
+    (e.g. ``LS1`` / ``SW1A``), treat that as the postcode so callers can bias
+    search to the UK and avoid structured ``street=LS1`` lookups.
+    """
     m = _UK_POSTCODE_RE.search(query)
-    if not m:
-        return '', '', query
-    display = m.group(1).upper().strip()
-    display = re.sub(r'\s+', ' ', display)
-    if ' ' not in display and len(display) >= 5:
-        display = display[:-3] + ' ' + display[-3:]
-    normalised = display.replace(' ', '').upper()
-    cleaned = (query[: m.start()] + query[m.end() :]).strip(' ,')
-    return normalised, display, cleaned
+    if m:
+        display = format_uk_postcode_display(m.group(1))
+        normalised = display.replace(' ', '').upper()
+        cleaned = (query[: m.start()] + query[m.end() :]).strip(' ,')
+        return normalised, display, cleaned
+
+    stripped = (query or '').strip()
+    m_out = _UK_OUTCODE_RE.match(stripped)
+    if m_out:
+        display = m_out.group(1).upper()
+        return display, display, ''
+
+    return '', '', query
+
+
+def looks_like_uk_postcode_query(query: str) -> bool:
+    """True when the query is (or clearly contains) a UK postcode / outcode."""
+    q = (query or '').strip()
+    if not q:
+        return False
+    if _UK_POSTCODE_RE.search(q):
+        return True
+    if _UK_OUTCODE_RE.match(q):
+        return True
+    # Compact full postcode without separators, e.g. sw1a1aa
+    compact = re.sub(r'[-\s.]+', '', q)
+    if _UK_POSTCODE_RE.fullmatch(compact) or _UK_OUTCODE_RE.match(compact):
+        return True
+    return False
+
+
+def looks_like_partial_uk_postcode(query: str) -> bool:
+    """True for incomplete UK postcodes typed during autocomplete (SW1A 1A)."""
+    q = (query or '').strip()
+    if not q:
+        return False
+    # Full unit / outward codes are handled separately; not "partial".
+    if looks_like_uk_postcode_query(q):
+        return False
+    compact = re.sub(r'\s+', ' ', q)
+    return bool(_UK_PARTIAL_POSTCODE_RE.match(compact))
 
 
 def query_has_house_number(query: str) -> bool:
     q = query.strip()
+    # Mid-typed / postcode-only queries must not be treated as house numbers
+    # (Nominatim layer=address would filter out postcode results).
+    if looks_like_uk_postcode_query(q) or looks_like_partial_uk_postcode(q):
+        return False
     if _LEADING_NUMBER_RE.match(q):
         return True
     if _TRAILING_NUMBER_RE.search(q):
@@ -87,25 +154,50 @@ def parse_address_query(query: str) -> ParsedQuery:
     """Best-effort parse of a free-form UK-style address string."""
     raw = (query or '').strip()
     postcode, postcode_display, remainder = extract_uk_postcode(raw)
+    postcode_kind = ''
+    if postcode:
+        # Outward-only when display has no inward part (no space / short).
+        if ' ' in postcode_display:
+            postcode_kind = 'unit'
+        else:
+            postcode_kind = 'outward'
+
     parts = [p.strip() for p in remainder.split(',') if p.strip()]
 
     house_number = ''
     street = ''
     city = ''
 
+    # Pure postcode / outcode query: do not invent a street from the code itself.
+    if postcode and not parts:
+        return ParsedQuery(
+            raw=raw,
+            house_number='',
+            street='',
+            city='',
+            postcode=postcode,
+            postcode_display=postcode_display,
+            is_business=False,
+            postcode_kind=postcode_kind,
+        )
+
     if parts:
         first = parts[0]
-        m_lead = _LEADING_NUMBER_RE.match(first)
-        if m_lead:
-            house_number = normalize_house_number(m_lead.group(1))
-            street = first[m_lead.end() :].strip(' ,')
+        # Avoid treating trailing digits of a partial postcode remnant as a house number.
+        if looks_like_partial_uk_postcode(first) or looks_like_uk_postcode_query(first):
+            street = first
         else:
-            m_trail = re.search(r'\b(\d+\s*[a-zA-Z]?)\s*$', first)
-            if m_trail:
-                house_number = normalize_house_number(m_trail.group(1))
-                street = first[: m_trail.start()].strip(' ,')
+            m_lead = _LEADING_NUMBER_RE.match(first)
+            if m_lead:
+                house_number = normalize_house_number(m_lead.group(1))
+                street = first[m_lead.end() :].strip(' ,')
             else:
-                street = first
+                m_trail = re.search(r'\b(\d+\s*[a-zA-Z]?)\s*$', first)
+                if m_trail:
+                    house_number = normalize_house_number(m_trail.group(1))
+                    street = first[: m_trail.start()].strip(' ,')
+                else:
+                    street = first
 
         if len(parts) >= 2:
             city = parts[-1] if len(parts) == 2 else ', '.join(parts[1:])
@@ -118,11 +210,15 @@ def parse_address_query(query: str) -> ParsedQuery:
         postcode=postcode,
         postcode_display=postcode_display,
         is_business=is_business_or_industrial_query(raw),
+        postcode_kind=postcode_kind,
     )
 
 
 def build_nominatim_structured_params(parsed: ParsedQuery) -> Optional[Dict[str, str]]:
     """Nominatim structured search params when we have street and/or postcode."""
+    # Outward-only codes are not valid Nominatim postalcode= values; skip structured.
+    if parsed.postcode_kind == 'outward' and not parsed.street:
+        return None
     if not parsed.street and not parsed.postcode:
         return None
 
@@ -141,10 +237,14 @@ def build_nominatim_structured_params(parsed: ParsedQuery) -> Optional[Dict[str,
 
     if street_line:
         params['street'] = street_line
-    if parsed.postcode_display:
+    if parsed.postcode_display and parsed.postcode_kind != 'outward':
         params['postalcode'] = parsed.postcode_display
     if parsed.city:
         params['city'] = parsed.city
+
+    # Structured search with only an outward code left nothing useful.
+    if 'street' not in params and 'postalcode' not in params:
+        return None
 
     return params
 
@@ -158,7 +258,12 @@ def _postcode_matches(parsed: ParsedQuery, addr: Dict[str, Any]) -> bool:
         return False
     for key in ('postcode', 'postal_code'):
         val = (addr.get(key) or '').replace(' ', '').upper()
-        if val and val == parsed.postcode:
+        if not val:
+            continue
+        if val == parsed.postcode:
+            return True
+        # Outward-only query: accept any result in that district.
+        if parsed.postcode_kind == 'outward' and val.startswith(parsed.postcode):
             return True
     return False
 
@@ -202,6 +307,20 @@ def score_geocode_result(parsed: ParsedQuery, result: Dict[str, Any]) -> float:
         score += 80.0
     elif parsed.postcode and parsed.postcode[:3] in display.replace(' ', '').upper():
         score += 25.0
+
+    # Prefer dedicated postcode hits (Nominatim type=postcode / postcodes.io).
+    if parsed.postcode and rtype == 'postcode':
+        score += 50.0
+    if result.get('_source') == 'postcodes_io' and parsed.postcode:
+        score += 40.0
+
+    # Prefer GB results when the query looks like a UK postcode.
+    country_code = (addr.get('country_code') or '').lower()
+    if parsed.postcode:
+        if country_code == 'gb':
+            score += 35.0
+        elif country_code and country_code != 'gb':
+            score -= 40.0
 
     if _road_matches(parsed, addr, display):
         score += 40.0
@@ -293,6 +412,10 @@ def nominatim_extra_params_for_query(query: str) -> Dict[str, str]:
     """Optional Nominatim query params to tighten free-text search."""
     parsed = parse_address_query(query)
     extra: Dict[str, str] = {'dedupe': '1'}
-    if parsed.house_number:
+    # House-number layer filter must not apply to postcode / partial postcode queries.
+    if parsed.house_number and not parsed.postcode and not looks_like_partial_uk_postcode(query):
         extra['layer'] = 'address'
+    if looks_like_uk_postcode_query(query) or looks_like_partial_uk_postcode(query):
+        # Bias free-text Nominatim toward UK when the query is postcode-like.
+        extra['countrycodes'] = 'gb'
     return extra

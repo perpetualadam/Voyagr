@@ -18,6 +18,7 @@
         var category = result.category || '';
 
         if (type === 'house' || category === 'building') return '🏠';
+        if (type === 'postcode' || category === 'postcode') return '📫';
         if (type === 'street' || category === 'highway') return '🛣️';
         if (type === 'city' || type === 'town' || category === 'place') return '🏙️';
         if (type === 'restaurant' || category === 'amenity') return '🍽️';
@@ -135,8 +136,12 @@
      */
     function resolveGeocodeResultDisplayName(result) {
         result = result || {};
-        var name = result.name || (result.address && result.address.road) ||
-            (result.address && result.address.city) || result.display_name || 'Location';
+        var name = result.name ||
+            (result.address && result.address.postcode) ||
+            (result.address && result.address.road) ||
+            (result.address && result.address.city) ||
+            result.display_name ||
+            'Location';
         var houseNum = result.address && result.address.house_number;
         if (houseNum && !String(name).startsWith(String(houseNum))) {
             name = houseNum + ' ' + name;

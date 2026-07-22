@@ -7,6 +7,7 @@ const { escapeHtml } = require('../modules/util/html.js');
 describe('search-autocomplete module', () => {
     test('getLocationIcon maps known types', () => {
         expect(SA.getLocationIcon({ type: 'house' })).toBe('🏠');
+        expect(SA.getLocationIcon({ type: 'postcode' })).toBe('📫');
         expect(SA.getLocationIcon({ type: 'fuel' })).toBe('⛽');
         expect(SA.getLocationIcon({ category: 'hospital' })).toBe('🏥');
         expect(SA.getLocationIcon({})).toBe('📍');
@@ -66,6 +67,11 @@ describe('search-autocomplete module', () => {
             name: 'High Street',
             address: { house_number: '10', road: 'High Street' },
         })).toBe('10 High Street');
+        expect(SA.resolveGeocodeResultDisplayName({
+            type: 'postcode',
+            address: { postcode: 'SW1A 1AA' },
+            display_name: 'SW1A 1AA, Westminster, United Kingdom',
+        })).toBe('SW1A 1AA');
         const longName = 'x'.repeat(80);
         expect(SA.resolveGeocodeResultShortAddress({ display_name: longName }, 60)).toBe('x'.repeat(60) + '...');
     });
