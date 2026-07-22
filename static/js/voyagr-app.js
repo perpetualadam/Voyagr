@@ -926,6 +926,7 @@ function getRerouteMapOrchestrationRuntime() {
             setLastLaneVoiceKey: (val) => VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(val),
             resolveGpsRouteSnapForTick,
             applyVehicleMarkerFromTickPlan,
+            showStatus,
         },
     };
 }
@@ -2608,6 +2609,9 @@ function getNavigationLifecycleOrchestrationRuntime() {
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
         getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
+        setRouteLayer: (val) => VoyagrCalculateRouteOrchestration.setRouteLayer(val),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
@@ -2638,6 +2642,23 @@ function getNavigationLifecycleOrchestrationRuntime() {
             precacheRouteTiles,
             primeVehicleMarkerOnRoute,
             showStatus,
+            clearAllRouteLayersFromMap,
+            clearAllRouteLayerHandles: () => {
+                const layers = VoyagrRouteComparisonOrchestration.getAllRouteLayers();
+                (layers || []).forEach((layer) => {
+                    if (layer && typeof layer.remove === 'function') {
+                        try { layer.remove(); } catch (_e) { /* ignore */ }
+                    }
+                });
+                if (typeof VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan === 'function') {
+                    VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan({
+                        clearAllRouteLayerHandles: true,
+                        clearRouteLayerHandle: false,
+                    });
+                }
+            },
+            navActiveRouteColor,
+            bringNavRouteAboveTrafficEdges,
             applyZoomFollowButtonUi,
             updateRoadReportFabVisibility,
             updateRecenterButtonVisibility,

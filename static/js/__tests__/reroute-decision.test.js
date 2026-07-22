@@ -529,6 +529,9 @@ describe('reroute retry and notification helpers', () => {
         );
         const execute = RD.buildUpdateRouteOnMapExecutePlan(state);
         expect(execute.mountActiveNavRoute).toBe(true);
+        expect(execute.decodeBeforeClear).toBe(true);
+        expect(execute.abortIfDecodeInvalid).toBe(true);
+        expect(execute.minPolylinePoints).toBe(2);
         expect(execute.polylineDecodePrecision).toBe(6);
         expect(execute.refreshRouteTraffic).toBe(true);
         expect(execute.clearAllRouteArtifacts).toBe(true);

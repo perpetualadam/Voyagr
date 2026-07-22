@@ -969,6 +969,9 @@
         statePlan = statePlan || {};
         return {
             resetVoiceAnnouncementState: true,
+            // Decode+validate before clearing so a bad geometry response cannot wipe the
+            // visible line and leave only in-memory turn text (invisible remount).
+            decodeBeforeClear: true,
             // Clear preview/comparison polyline-* and route-layer-* artifacts left from
             // route selection; otherwise the original Optimised line stays visible after
             // a deviation reroute while only the in-memory routePolyline updates.
@@ -977,6 +980,10 @@
             polylineDecodePrecision: statePlan.polylineDecodePrecision || 6,
             mountActiveNavRoute: true,
             bringNavRouteAboveTraffic: true,
+            minPolylinePoints: 2,
+            abortIfDecodeInvalid: true,
+            invalidDecodeLogPrefix: '[Reroute] Refusing to clear map — decoded polyline invalid (',
+            invalidDecodeStatusMessage: 'Could not update route line — keeping previous route on map',
             // Along-route traffic edges belong to the old geometry after a reroute;
             // clear and refetch them so congestion colouring follows the new route
             // (parity for GraphHopper Optimised and Valhalla routes alike).

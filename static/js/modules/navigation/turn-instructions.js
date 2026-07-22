@@ -186,7 +186,10 @@
     }
 
     /**
-     * Promote ramp/turn types to exit_left/exit_right when leaving a motorway/trunk.
+     * Promote true departures to exit_left/exit_right when leaving a motorway/trunk.
+     * Stay/slight (keep-lane / fork-on-carriageway) stay as keep left/right — promoting
+     * them to "exit" is wrong when the driver is already on the correct road and only
+     * needs to keep right/left for a merge or lane split.
      * @param {number} type - Valhalla maneuver type.
      * @param {string|null} direction - Base direction key from maneuverTypeToDirectionKey.
      * @param {string|null} roadClass - Valhalla road_class for the maneuver edge.
@@ -196,8 +199,9 @@
         if (!direction || !isMotorwayRoadClass(roadClass)) return direction;
         if (direction === 'exit_left' || direction === 'exit_right') return direction;
 
-        if (type === 18 || type === 9 || type === 23 || type === 10) return 'exit_right';
-        if (type === 19 || type === 16 || type === 24 || type === 15 || type === 14) return 'exit_left';
+        // Ramp / hard turn: leaving the road → exit. Stay (23/24) and Slight (9/16) → keep.
+        if (type === 18 || type === 10) return 'exit_right';
+        if (type === 19 || type === 15 || type === 14) return 'exit_left';
         return direction;
     }
 

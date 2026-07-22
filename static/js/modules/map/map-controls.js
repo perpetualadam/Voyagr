@@ -948,11 +948,18 @@
             navPrecision: stateInit.navPrecision,
             persistActiveRoute: !!stateInit.persistActiveRoute,
             precacheTiles: !!stateInit.precacheTiles,
+            // Own the visible nav line: clear comparison/preview polylines and mount the
+            // active route as routeLayer so instructions and the map stay in sync, and so
+            // style-load / reroute recovery can redraw from the owned layer.
+            clearPreviewRouteLayers: true,
+            mountActiveNavRoute: true,
+            bringNavRouteAboveTraffic: true,
             polylineDecodeLogPrefix: stateInit.polylineDecodeLogPrefix,
             maneuversLogPrefix: stateInit.maneuversLogPrefix,
             emptyPolylineErrorLog: stateInit.emptyPolylineErrorLog,
             decodeGeometryErrorLogPrefix: stateInit.decodeGeometryErrorLogPrefix,
             persistedPolylineLogSuffix: 'points (persisted polyline)',
+            navRouteMountLogPrefix: '[Navigation] Active route layer mounted:',
             primeVehicleWhenPositionKnown: true,
             resetSnappedIndexWhenNoPosition: true,
             invalidGeometryStatusMessage: getNavStartInvalidGeometryStatusMessage(),
