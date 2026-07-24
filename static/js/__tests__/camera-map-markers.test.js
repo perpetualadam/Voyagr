@@ -19,7 +19,7 @@ describe('camera-map-markers module', () => {
 
     test('buildCameraMarkerHtml wraps SVG with marker styling', () => {
         const html = CAM.buildCameraMarkerHtml(config, '<svg></svg>');
-        expect(html).toContain('32px');
+        expect(html).toContain('26px');
         expect(html).toContain(config.bgColor);
         expect(html).toContain('<svg></svg>');
     });
@@ -28,6 +28,12 @@ describe('camera-map-markers module', () => {
         const html = CAM.buildCameraMarkerPopupHtml(config, '<svg></svg>', 'A40 westbound');
         expect(html).toContain('Speed camera');
         expect(html).toContain('A40 westbound');
+    });
+
+    test('exported camera marker dimensions are ~20% smaller', () => {
+        expect(CAM.CAMERA_MARKER_ICON_SIZE).toEqual([26, 26]);
+        expect(CAM.CAMERA_MARKER_ICON_ANCHOR).toEqual([13, 13]);
+        expect(CAM.CAMERA_HAZARD_MARKER_ICON_SIZE).toEqual([22, 22]);
     });
 
     test('buildCameraMarkersMountSpecs resolves style and builds marker specs', () => {
@@ -39,14 +45,14 @@ describe('camera-map-markers module', () => {
         ], styleMap, {
             normalizeBucket: (b) => b,
             markerClassName: 'camera-marker',
-            markerSvgSize: 20,
-            popupSvgSize: 24,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
+            markerSvgSize: 16,
+            popupSvgSize: 19,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
         });
         expect(specs).toHaveLength(1);
         expect(specs[0].lat).toBe(51.5);
-        expect(specs[0].html).toContain('32px');
+        expect(specs[0].html).toContain('26px');
         expect(specs[0].popup).toContain('M1');
     });
 });

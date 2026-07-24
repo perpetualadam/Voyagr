@@ -5,6 +5,31 @@
 (function (root) {
     'use strict';
 
+    function resolveCameraOverlayMarkerDimensions() {
+        var cam = (typeof VoyagrCameraMapMarkers !== 'undefined') ? VoyagrCameraMapMarkers : null;
+        if (!cam && typeof module !== 'undefined' && module.exports) {
+            try {
+                cam = require('./camera-map-markers.js');
+            } catch (e) {
+                cam = null;
+            }
+        }
+        if (cam && cam.CAMERA_MARKER_ICON_SIZE) {
+            return {
+                iconSize: cam.CAMERA_MARKER_ICON_SIZE,
+                iconAnchor: cam.CAMERA_MARKER_ICON_ANCHOR,
+                markerSvgSize: cam.CAMERA_MAP_LAYER_MARKER_SVG_SIZE,
+                popupSvgSize: cam.CAMERA_MAP_LAYER_POPUP_SVG_SIZE,
+            };
+        }
+        return {
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            markerSvgSize: 19,
+            popupSvgSize: 26,
+        };
+    }
+
     var SHOW_CAMERAS_STORAGE_KEY = 'showCamerasEnabled';
     var SHOW_CAMERAS_TOGGLE_ID = 'showCamerasToggle';
     var SHOW_CAMERAS_FAB_ID = 'showCamerasFab';
@@ -362,15 +387,16 @@
                 locationKey: key,
             });
         });
+        var cameraDims = resolveCameraOverlayMarkerDimensions();
         return {
             shouldDisplay: items.length > 0,
             clearMarkers: items.length === 0,
             items: items,
             markerClassName: CAMERA_MARKER_CLASS,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            markerSvgSize: 24,
-            popupSvgSize: 32,
+            iconSize: cameraDims.iconSize,
+            iconAnchor: cameraDims.iconAnchor,
+            markerSvgSize: cameraDims.markerSvgSize,
+            popupSvgSize: cameraDims.popupSvgSize,
             displayedLogPrefix: '[Cameras] Displayed ',
             displayedLogSuffix: ' camera markers',
         };

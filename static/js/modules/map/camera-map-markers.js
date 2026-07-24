@@ -5,6 +5,18 @@
 (function (root) {
     'use strict';
 
+    // Marker dimensions (~20% smaller than original 32×32 pill / 20×20 SVG)
+    var CAMERA_MARKER_PILL_SIZE = 26;
+    var CAMERA_MARKER_ICON_SIZE = [26, 26];
+    var CAMERA_MARKER_ICON_ANCHOR = [13, 13];
+    var CAMERA_MARKER_DEFAULT_SVG_SIZE = 16;
+    var CAMERA_MARKER_DEFAULT_POPUP_SVG_SIZE = 19;
+    var CAMERA_MAP_LAYER_MARKER_SVG_SIZE = 19;
+    var CAMERA_MAP_LAYER_POPUP_SVG_SIZE = 26;
+    var CAMERA_HAZARD_MARKER_PILL_SIZE = 22;
+    var CAMERA_HAZARD_MARKER_ICON_SIZE = [22, 22];
+    var CAMERA_HAZARD_MARKER_SVG_SIZE = 16;
+
     /**
      * @param {string} svg
      * @param {number} width
@@ -22,8 +34,9 @@
      * @param {string} svgForMarker
      * @returns {string}
      */
-    function buildCameraMarkerHtml(config, svgForMarker, darkBasemap) {
+    function buildCameraMarkerHtml(config, svgForMarker, darkBasemap, pillSize) {
         config = config || {};
+        var size = pillSize != null ? pillSize : CAMERA_MARKER_PILL_SIZE;
         var shadow = darkBasemap
             ? '0 0 0 2px rgba(255,255,255,0.45), 0 2px 10px rgba(0,0,0,0.75);'
             : '0 4px 10px rgba(0,0,0,0.4);';
@@ -32,8 +45,8 @@
                 'background: ' + (config.bgColor || '#fff') + ';' +
                 'border: 2px solid ' + (config.color || '#333') + ';' +
                 'border-radius: 4px;' +
-                'width: 32px;' +
-                'height: 32px;' +
+                'width: ' + size + 'px;' +
+                'height: ' + size + 'px;' +
                 'display: flex;' +
                 'align-items: center;' +
                 'justify-content: center;' +
@@ -83,8 +96,8 @@
         var normalize = typeof opts.normalizeBucket === 'function'
             ? opts.normalizeBucket
             : function (bucket) { return bucket; };
-        var markerSvgSize = opts.markerSvgSize != null ? opts.markerSvgSize : 20;
-        var popupSvgSize = opts.popupSvgSize != null ? opts.popupSvgSize : 24;
+        var markerSvgSize = opts.markerSvgSize != null ? opts.markerSvgSize : CAMERA_MARKER_DEFAULT_SVG_SIZE;
+        var popupSvgSize = opts.popupSvgSize != null ? opts.popupSvgSize : CAMERA_MARKER_DEFAULT_POPUP_SVG_SIZE;
         var fallback = styleMap.camera_speed || {};
 
         return (items || []).map(function (camera) {
@@ -108,6 +121,16 @@
     }
 
     var api = {
+        CAMERA_MARKER_PILL_SIZE: CAMERA_MARKER_PILL_SIZE,
+        CAMERA_MARKER_ICON_SIZE: CAMERA_MARKER_ICON_SIZE,
+        CAMERA_MARKER_ICON_ANCHOR: CAMERA_MARKER_ICON_ANCHOR,
+        CAMERA_MARKER_DEFAULT_SVG_SIZE: CAMERA_MARKER_DEFAULT_SVG_SIZE,
+        CAMERA_MARKER_DEFAULT_POPUP_SVG_SIZE: CAMERA_MARKER_DEFAULT_POPUP_SVG_SIZE,
+        CAMERA_MAP_LAYER_MARKER_SVG_SIZE: CAMERA_MAP_LAYER_MARKER_SVG_SIZE,
+        CAMERA_MAP_LAYER_POPUP_SVG_SIZE: CAMERA_MAP_LAYER_POPUP_SVG_SIZE,
+        CAMERA_HAZARD_MARKER_PILL_SIZE: CAMERA_HAZARD_MARKER_PILL_SIZE,
+        CAMERA_HAZARD_MARKER_ICON_SIZE: CAMERA_HAZARD_MARKER_ICON_SIZE,
+        CAMERA_HAZARD_MARKER_SVG_SIZE: CAMERA_HAZARD_MARKER_SVG_SIZE,
         scaleHazardMarkerSvg: scaleHazardMarkerSvg,
         buildCameraMarkerHtml: buildCameraMarkerHtml,
         buildCameraMarkerPopupHtml: buildCameraMarkerPopupHtml,
