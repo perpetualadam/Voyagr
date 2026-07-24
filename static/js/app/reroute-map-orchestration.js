@@ -408,8 +408,10 @@
     }
 
     function redrawNavigationOverlaysAfterMapRecovery(reason) {
-        if (!rt().getRouteInProgress()) return;
-        redrawNavigationRouteLayer(reason);
+        if (!rt().getRouteInProgress() && !rt().getIsTrackingActive()) return;
+        if (rt().getRouteInProgress()) {
+            redrawNavigationRouteLayer(reason);
+        }
         redrawNavigationVehicleMarker(reason);
         var lat = rt().getCurrentLat();
         var lon = rt().getCurrentLon();

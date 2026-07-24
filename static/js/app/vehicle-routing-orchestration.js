@@ -50,12 +50,8 @@
             || getVehicleIcons()[getCurrentVehicleType()]
             || getVehicleIcons().petrol_diesel;
 
-        const currentUserMarker = rt().getCurrentUserMarker();
-        if (currentUserMarker) {
-            if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
-            rt().setCurrentUserMarker(null);
-        }
-
+        // The live map marker uses the delta SVG arrow, not these legacy icon paths.
+        // Keep the marker on the map when vehicle type or routing mode changes.
         rt().setCurrentUserMarkerIcon(iconPath);
         console.log('[Marker] Icon updated to:', iconPath);
     }

@@ -175,17 +175,24 @@
         if (!markerTick) return;
 
         if (markerTick.action === 'update') {
-            getCurrentUserMarker().setLngLat(markerTick.lngLat);
-            const markerEl = getCurrentUserMarker().getElement ? getCurrentUserMarker().getElement() : null;
+            const marker = getCurrentUserMarker();
+            marker.setLngLat(markerTick.lngLat);
+            const markerEl = marker.getElement ? marker.getElement() : null;
             if (markerEl) {
                 const inner = markerEl.querySelector('div');
                 if (inner) {
                     inner.style.transform = `rotate(${markerTick.rotationDeg}deg)`;
                 }
             }
-            getCurrentUserMarker().heading = markerTick.heading;
-            getCurrentUserMarker().speed = markerTick.speed;
-            getCurrentUserMarker().accuracy = markerTick.accuracy;
+            marker.heading = markerTick.heading;
+            marker.speed = markerTick.speed;
+            marker.accuracy = markerTick.accuracy;
+            if (markerTick.reattachToMap) {
+                const map = rt().g('map');
+                if (map && !marker._map && typeof marker.addTo === 'function') {
+                    marker.addTo(map);
+                }
+            }
             return;
         }
 
@@ -212,10 +219,12 @@
      */
     function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accuracy) {
         const SGpos = sgModule();
+        const currentMarker = getCurrentUserMarker();
         const markerTick = SGpos
             ? SGpos.buildVehicleMarkerTickPlan({
-                hasMarker: !!getCurrentUserMarker(),
-                canSetLngLat: !!(getCurrentUserMarker() && typeof getCurrentUserMarker().setLngLat === 'function'),
+                hasMarker: !!currentMarker,
+                canSetLngLat: !!(currentMarker && typeof currentMarker.setLngLat === 'function'),
+                markerOnMap: !!(currentMarker && currentMarker._map),
                 markerLat,
                 markerLon,
                 heading,

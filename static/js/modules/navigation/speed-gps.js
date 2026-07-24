@@ -784,6 +784,7 @@
                 heading: opts.heading,
                 speed: opts.speed,
                 accuracy: opts.accuracy,
+                reattachToMap: !!(opts.hasMarker && opts.canSetLngLat && opts.markerOnMap === false),
             };
         }
 
