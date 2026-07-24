@@ -9,8 +9,8 @@ let layerCounter = 0;
 const activeLayers = new Map();
 const activeMarkers = new Map();
 
-/** Base-map road stroke scale (OpenMapTiles `transportation` layers). 2.8 ≈ prior 2× default + 40%. */
-const BASE_MAP_ROAD_LINE_WIDTH_SCALE = 2.8;
+/** Base-map road stroke scale (OpenMapTiles `transportation` layers). 3.92 ≈ prior 2.8× + 40%. */
+const BASE_MAP_ROAD_LINE_WIDTH_SCALE = 3.92;
 
 /**
  * Strip an existing ['*', factor, base] road-width wrapper so scale can be updated idempotently.
@@ -74,8 +74,8 @@ function applyTransportationRoadLineWidthScale(mapInstance, factor) {
 
 // ===== POLYLINE FUNCTIONS =====
 
-/** Route / overlay polyline stroke scale — matches the ~40% base-road visibility boost. */
-const POLYLINE_LINE_WIDTH_SCALE = 1.4;
+/** Route / overlay polyline stroke scale — tracks base-road scale so routes cover widened roads. */
+const POLYLINE_LINE_WIDTH_SCALE = BASE_MAP_ROAD_LINE_WIDTH_SCALE / 1.4;
 
 /**
  * MapLibre line-width expression.
