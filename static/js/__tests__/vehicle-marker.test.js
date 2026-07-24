@@ -11,6 +11,12 @@ describe('vehicle-marker module', () => {
         expect(svg).not.toContain('<img');
     });
 
+    test('exported vehicle marker dimensions are ~60% smaller than legacy 60px', () => {
+        expect(VM.VEHICLE_MARKER_SIZE).toBe(24);
+        expect(VM.VEHICLE_MARKER_ICON_SIZE).toEqual([24, 24]);
+        expect(VM.VEHICLE_MARKER_ICON_ANCHOR).toEqual([12, 12]);
+    });
+
     test('buildVehicleMarkerPopupHtml includes speed, heading, and accuracy', () => {
         const html = VM.buildVehicleMarkerPopupHtml({
             iconEmoji: '🚗',
