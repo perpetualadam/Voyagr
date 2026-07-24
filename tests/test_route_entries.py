@@ -176,6 +176,45 @@ class ManeuversFromGraphhopperRouteTest(unittest.TestCase):
         self.assertEqual(maneuvers[1]['type'], 27)
         self.assertEqual(maneuvers[1]['roundabout_exit_count'], 2)
 
+    def test_right_turn_attaches_valhalla_shaped_lanes(self):
+        import polyline as pl
+        from voyagr.services.routing.route_entries import maneuvers_from_graphhopper_route
+
+        coords = [(51.5, -0.1), (51.501, -0.1), (51.502, -0.1)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [
+                {
+                    'sign': 2,
+                    'text': 'Turn right',
+                    'street_name': 'A Road',
+                    'distance': 120,
+                    'time': 10,
+                    'interval': [0, 1],
+                    'turn_lanes': 'left|through|right',
+                },
+                {
+                    'sign': 4,
+                    'text': 'Arrive',
+                    'street_name': '',
+                    'distance': 0,
+                    'time': 0,
+                    'interval': [2, 2],
+                },
+            ],
+            'details': {
+                'lanes': [[0, 3, 3]],
+                'road_class': [[0, 3, 'PRIMARY']],
+            },
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        turn = maneuvers[0]
+        self.assertEqual(turn['type'], 10)
+        self.assertIn('lanes', turn)
+        self.assertEqual(len(turn['lanes']), 3)
+        self.assertTrue(turn['lanes'][2]['active'])
+
 
 if __name__ == '__main__':
     unittest.main()

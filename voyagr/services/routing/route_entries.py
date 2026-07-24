@@ -19,6 +19,7 @@ import polyline as _polyline_module
 
 from voyagr.utils.geometry import decode_route_geometry
 from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
+from voyagr.utils.lane_maneuvers import attach_lanes_to_graphhopper_maneuver
 from voyagr.utils.osrm import infer_road_class_from_names
 from voyagr.services.hazards import get_hazards_on_route, score_route_by_hazards
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers
@@ -114,6 +115,13 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
             maneuver['road_class'] = gh_rc
         if exit_count > 0 and valhalla_type in (26, 27):
             maneuver['roundabout_exit_count'] = exit_count
+        attach_lanes_to_graphhopper_maneuver(
+            maneuver,
+            instr,
+            valhalla_type=valhalla_type,
+            path_details=graphhopper_route.get('details') or {},
+            shape_index_src=begin_src,
+        )
         gh_maneuvers.append(maneuver)
 
         # Synthetic continues at posted-limit changes inside this instruction.

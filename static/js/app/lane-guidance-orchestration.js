@@ -11,6 +11,8 @@
     var lastLaneGuidancePosition = null;
     var lastLaneVoiceKey = '';
     var laneGuidanceCache = new Map();
+    var lockedLaneGuidance = null;
+    var lockedLaneStepIndex = -1;
 
     function rt() {
         if (!runtime) {
@@ -34,6 +36,52 @@
             const firstKey = laneGuidanceCache.keys().next().value;
             laneGuidanceCache.delete(firstKey);
         }
+    }
+
+    function getRoutingManeuverLanes() {
+        var steps = rt().getCurrentRouteSteps();
+        var idx = rt().getCurrentStepIndex();
+        if (!steps || idx == null || idx < 0 || idx >= steps.length) return null;
+        var step = steps[idx];
+        return step && step.lanes ? step.lanes : null;
+    }
+
+    function finalizeLaneGuidanceForRender(data, maneuver, roundaboutExitCount, distToManeuver) {
+        var laneGuidance = LG();
+        var stepIndex = rt().getCurrentStepIndex();
+        var roadType = rt().call.getCurrentRoadType() || 'unknown';
+        var routingLanes = getRoutingManeuverLanes();
+
+        var hybrid = laneGuidance.buildHybridLaneGuidance({
+            routingManeuverLanes: routingLanes,
+            apiData: data && data.success !== false ? data : null,
+            maneuver: maneuver,
+            distanceToManeuver: distToManeuver,
+            roundaboutExitCount: roundaboutExitCount,
+            roadType: roadType,
+        });
+
+        var stability = laneGuidance.buildLaneGuidanceStabilityPlan({
+            newGuidance: hybrid,
+            lockedGuidance: lockedLaneGuidance,
+            distanceToManeuver: distToManeuver,
+            maneuverStepIndex: stepIndex,
+            maneuver: maneuver,
+            roundaboutExitCount: roundaboutExitCount,
+            routeRecalculated: false,
+            maneuverCompleted: false,
+        });
+
+        if (stability.action === 'clear') {
+            lockedLaneGuidance = null;
+            lockedLaneStepIndex = -1;
+            return null;
+        }
+        if (stability.lockedGuidance) {
+            lockedLaneGuidance = stability.lockedGuidance;
+            lockedLaneStepIndex = stability.lockedStepIndex;
+        }
+        return stability.guidance;
     }
 
     function renderLaneGuidanceUI(data) {
@@ -117,7 +165,13 @@
         lastLaneGuidancePosition = apply.statePatch.lastPosition;
 
         if (apply.kind === 'render-cached') {
-            renderLaneGuidanceUI(apply.renderPayload);
+            var cachedFinal = finalizeLaneGuidanceForRender(
+                apply.renderPayload,
+                maneuver,
+                roundaboutExitCount,
+                apply.renderPayload.distance_to_maneuver
+            );
+            renderLaneGuidanceUI(cachedFinal);
             return;
         }
 
@@ -133,11 +187,18 @@
                 distToManeuver: fetchPlan.distToManeuver,
                 roundaboutExitCount: fetchPlan.roundaboutExitCount,
                 roadType: fetchPlan.roadType,
+                routingManeuverLanes: getRoutingManeuverLanes(),
             });
             laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
             pruneLaneGuidanceCache();
             if (outcome.warnLine) console.warn(outcome.warnLine);
-            renderLaneGuidanceUI(outcome.renderData);
+            var finalData = finalizeLaneGuidanceForRender(
+                outcome.renderData,
+                fetchPlan.maneuver,
+                fetchPlan.roundaboutExitCount,
+                fetchPlan.distToManeuver
+            );
+            renderLaneGuidanceUI(finalData);
         };
 
         fetch(fetchPlan.url, controller ? { signal: controller.signal } : undefined)
@@ -152,16 +213,34 @@
                     roundaboutExitCount: fetchPlan.roundaboutExitCount,
                     roadType: fetchPlan.roadType,
                     errorReason: 'no data',
+                    routingManeuverLanes: getRoutingManeuverLanes(),
                 });
                 laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
                 pruneLaneGuidanceCache();
                 if (outcome.warnLine) console.warn(outcome.warnLine);
-                renderLaneGuidanceUI(outcome.renderData);
+                var finalData = finalizeLaneGuidanceForRender(
+                    outcome.renderData,
+                    fetchPlan.maneuver,
+                    fetchPlan.roundaboutExitCount,
+                    fetchPlan.distToManeuver
+                );
+                renderLaneGuidanceUI(finalData);
             })
             .catch(function (error) {
                 if (timeoutId) clearTimeout(timeoutId);
                 useFallback((error && error.name === 'AbortError') ? 'timeout' : (error && error.message) || 'error');
             });
+    }
+
+    function resetLaneGuidanceForNewRoute() {
+        lockedLaneGuidance = null;
+        lockedLaneStepIndex = -1;
+        laneGuidanceCache.clear();
+        lastLaneGuidanceFetch = 0;
+        lastLaneGuidanceManeuver = '';
+        lastLaneGuidancePosition = null;
+        clearLastLaneVoiceKey();
+        renderLaneGuidanceUI(null);
     }
 
     function clearLastLaneVoiceKey() {
@@ -184,6 +263,7 @@
         bind: bind,
         updateLaneGuidance: updateLaneGuidance,
         renderLaneGuidanceUI: renderLaneGuidanceUI,
+        resetLaneGuidanceForNewRoute: resetLaneGuidanceForNewRoute,
         clearLastLaneVoiceKey: clearLastLaneVoiceKey,
         getLastLaneVoiceKey: getLastLaneVoiceKey,
         setLastLaneVoiceKey: setLastLaneVoiceKey,

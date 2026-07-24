@@ -273,7 +273,7 @@ def route_with_graphhopper(
             "elevation": False,
             # Ask GraphHopper for per-edge speed limits so the optimised route can supply a
             # speed-limit hint to the widget (parity with Valhalla's maneuver speed_limit).
-            "details": ["max_speed"]
+            "details": ["max_speed", "lanes", "road_class"]
         }
 
         custom_model: Optional[Dict[str, Any]] = None
@@ -376,7 +376,7 @@ def route_with_graphhopper(
                 "instructions": "true",
                 "points_encoded": "true",
                 "elevation": "false",
-                "details": "max_speed",
+                "details": ["max_speed", "lanes", "road_class"],
             }
             response = requests.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
