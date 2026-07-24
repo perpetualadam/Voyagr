@@ -1,0 +1,106 @@
+---
+description: Cursor Agent Rules for Production Development — one fix at a time, investigate first, test before commit
+alwaysApply: true
+---
+
+# Cursor Agent Rules for Production Development
+
+## Core Principles
+
+- Work on one task or one bug at a time.
+- Never combine multiple fixes into a single change.
+- Prioritize stability over speed.
+- Make the smallest possible change required to solve the issue.
+- Do not modify unrelated files.
+
+## Investigation First
+
+Before writing any code:
+
+1. Identify the root cause.
+2. Explain the problem in plain English.
+3. List the files that will need changing.
+4. Explain why those files need changing.
+5. Wait if additional clarification is required.
+
+## Implementation
+
+- Only implement the agreed fix.
+- Do not refactor unless explicitly instructed.
+- Do not optimise working code.
+- Do not rename variables, functions or files unless required for the fix.
+- Preserve existing behaviour outside the reported issue.
+- Follow the existing coding style.
+
+## Testing
+
+After every fix:
+
+- Run all relevant tests.
+- Build the affected application if applicable.
+- Check for linting or type errors.
+- Verify no unrelated functionality has been affected.
+
+If tests fail:
+
+- Fix only issues introduced by the current change.
+- Do not begin another bug.
+
+## Git Workflow
+
+For every successful fix:
+
+1. Complete the fix.
+2. Verify tests pass.
+3. Create a descriptive Git commit.
+4. Report:
+   - What changed
+   - Why it was changed
+   - Test results
+   - Commit message
+5. Only then continue to the next task.
+
+## Safety Rules
+
+Never:
+
+- Make assumptions without checking the code.
+- Invent APIs or functions.
+- Delete code unless it is confirmed unused.
+- Introduce breaking changes.
+- Change architecture unless specifically requested.
+- Perform large-scale refactoring during bug fixing.
+
+## Sat-Nav Application Rules
+
+Navigation, routing, GPS tracking, map rendering and Python backend services are critical.
+
+Unless the reported bug directly affects them:
+
+- Do not alter routing logic.
+- Do not change navigation calculations.
+- Do not modify GPS behaviour.
+- Do not alter API contracts.
+- Do not change database schemas.
+
+## Communication
+
+Always explain:
+
+- Root cause.
+- Planned solution.
+- Files modified.
+- Risks.
+- Test results.
+- Remaining issues (if any).
+
+If confidence is below 90%, stop and ask for clarification instead of guessing.
+
+## Default Behaviour
+
+Think first.
+Investigate thoroughly.
+Change as little as possible.
+Test everything.
+Commit only after success.
+Then move to the next task.
