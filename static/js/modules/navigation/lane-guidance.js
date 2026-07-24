@@ -350,6 +350,22 @@
     }
 
     /**
+     * Numeric rank for hybrid source priority (routing > OSM > estimated).
+     * @param {Object|null|undefined} data
+     * @returns {number}
+     */
+    function laneGuidanceSourceRank(data) {
+        if (!data) return 0;
+        if (data.source === 'routing' || data.has_routing_lanes) return 3;
+        if (data.source === 'osm_turn_lanes' || data.source === 'osm_lanes'
+            || data.has_osm_data || data.has_turn_lanes) {
+            return 2;
+        }
+        if (data.source === 'estimated' || data.estimated === true) return 1;
+        return 0;
+    }
+
+    /**
      * Stability plan: lock lane selection within ~400 m of the junction.
      * @param {Object} opts
      * @returns {Object}
@@ -377,7 +393,11 @@
             var lockedData = locked.data || locked;
             var newConf = newGuidance ? (newGuidance.confidence || 0) : 0;
             var lockedConf = lockedData.confidence || 0;
-            if (newGuidance && newConf >= lockedConf + LANE_LOCK_UPGRADE_DELTA) {
+            var higherSource = newGuidance
+                && laneGuidanceSourceRank(newGuidance) > laneGuidanceSourceRank(lockedData);
+            var confidenceUpgrade = newGuidance
+                && newConf >= lockedConf + LANE_LOCK_UPGRADE_DELTA;
+            if (higherSource || confidenceUpgrade) {
                 return {
                     action: 'lock',
                     guidance: newGuidance,
