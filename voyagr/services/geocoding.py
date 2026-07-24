@@ -25,6 +25,16 @@ _UK_OUTCODE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Royal Mail single-letter postcode areas (outward only); e.g. B1, M1, W1 — not A1 (A road).
+_VALID_SINGLE_LETTER_POSTCODE_AREAS = frozenset('BEGLMNSW')
+
+# Outward codes that are valid postcodes but are more often UK motorway designations in search.
+_MOTORWAY_AMBIGUOUS_OUTCODES = frozenset({
+    'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M11', 'M18', 'M20', 'M23', 'M25', 'M26', 'M27',
+    'M32', 'M40', 'M42', 'M45', 'M50', 'M53', 'M56', 'M60', 'M62', 'M65', 'M66', 'M67',
+    'M69', 'M73', 'M74', 'M77', 'M80', 'M90',
+})
+
 # Partial UK postcode while typing (outward + incomplete inward).
 _UK_PARTIAL_POSTCODE_RE = re.compile(
     r'^(GIR|[A-Z]{1,2}\d[A-Z\d]?)(?:\s*[-\s.]?(?:\d[A-Z]{0,2})?)?$',
@@ -70,6 +80,35 @@ def normalize_house_number(value: str) -> str:
     return s
 
 
+def _is_plausible_uk_outward_code(code: str) -> bool:
+    """False for A-road style tokens (A1) and other non-Royal-Mail outward codes."""
+    c = (code or '').upper().strip()
+    if c == 'GIR':
+        return True
+    m = re.match(r'^([A-Z]{1,2})(\d)([A-Z\d]?)$', c)
+    if not m:
+        return False
+    letters = m.group(1)
+    if len(letters) == 1:
+        return letters in _VALID_SINGLE_LETTER_POSTCODE_AREAS
+    return True
+
+
+def _is_motorway_ambiguous_outcode(code: str) -> bool:
+    """Outward codes that collide with famous motorway names (M1, M25, …)."""
+    return (code or '').upper().strip() in _MOTORWAY_AMBIGUOUS_OUTCODES
+
+
+def _accept_outward_only_postcode(code: str) -> bool:
+    """Whether a whole-query outward token should be treated as a UK postcode."""
+    c = (code or '').upper().strip()
+    if not _is_plausible_uk_outward_code(c):
+        return False
+    if _is_motorway_ambiguous_outcode(c):
+        return False
+    return True
+
+
 def format_uk_postcode_display(raw_match: str) -> str:
     """Normalise a matched UK postcode to 'OUTWARD INWARD' display form."""
     display = (raw_match or '').upper().strip()
@@ -99,7 +138,8 @@ def extract_uk_postcode(query: str) -> Tuple[str, str, str]:
     m_out = _UK_OUTCODE_RE.match(stripped)
     if m_out:
         display = m_out.group(1).upper()
-        return display, display, ''
+        if _accept_outward_only_postcode(display):
+            return display, display, ''
 
     return '', '', query
 
@@ -111,11 +151,15 @@ def looks_like_uk_postcode_query(query: str) -> bool:
         return False
     if _UK_POSTCODE_RE.search(q):
         return True
-    if _UK_OUTCODE_RE.match(q):
+    m_out = _UK_OUTCODE_RE.match(q)
+    if m_out and _accept_outward_only_postcode(m_out.group(1)):
         return True
     # Compact full postcode without separators, e.g. sw1a1aa
     compact = re.sub(r'[-\s.]+', '', q)
-    if _UK_POSTCODE_RE.fullmatch(compact) or _UK_OUTCODE_RE.match(compact):
+    if _UK_POSTCODE_RE.fullmatch(compact):
+        return True
+    m_compact = _UK_OUTCODE_RE.match(compact)
+    if m_compact and _accept_outward_only_postcode(m_compact.group(1)):
         return True
     return False
 
