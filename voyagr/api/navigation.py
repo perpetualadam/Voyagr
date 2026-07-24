@@ -218,33 +218,40 @@ def get_lane_guidance():
             confidence,
         )
 
-        lane_name = _descriptive_lane_name(
-            recommended_lane or 1, total_lanes
-        ) if recommended_lane else ''
+        show_lane_guidance = (
+            confidence >= 70 and total_lanes > 1 and bool(recommended_lanes)
+        )
 
-        if distance_to_maneuver <= 100:
-            urgency = 'now'
-            urgency_text = f'Get in the {lane_name} now!'
-        elif distance_to_maneuver <= 300:
-            urgency = 'soon'
-            urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
-        elif distance_to_maneuver <= 800:
-            urgency = 'ahead'
-            urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
-        elif distance_to_maneuver <= 1500:
-            urgency = 'info'
-            urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
+        if show_lane_guidance:
+            lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+
+            if distance_to_maneuver <= 100:
+                urgency = 'now'
+                urgency_text = f'Get in the {lane_name} now!'
+            elif distance_to_maneuver <= 300:
+                urgency = 'soon'
+                urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
+            elif distance_to_maneuver <= 800:
+                urgency = 'ahead'
+                urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
+            elif distance_to_maneuver <= 1500:
+                urgency = 'info'
+                urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
+            else:
+                urgency = 'none'
+                urgency_text = ''
+
+            if next_maneuver == 'straight' or distance_to_maneuver > 1500:
+                guidance_text = 'Stay in current lane'
+            elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
+                exit_ordinal = _ordinal(roundabout_exit_count)
+                guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
+            else:
+                guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
         else:
             urgency = 'none'
             urgency_text = ''
-
-        if next_maneuver == 'straight' or distance_to_maneuver > 1500:
             guidance_text = 'Stay in current lane'
-        elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
-            exit_ordinal = _ordinal(roundabout_exit_count)
-            guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
-        else:
-            guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
 
         return jsonify({
             'success': True,
@@ -265,7 +272,7 @@ def get_lane_guidance():
             'has_osm_data': has_osm_data,
             'has_turn_lanes': has_turn_lanes,
             'roundabout_exit_count': roundabout_exit_count,
-            'show_lane_guidance': confidence >= 70 and total_lanes > 1 and bool(recommended_lanes),
+            'show_lane_guidance': show_lane_guidance,
         })
     except Exception as e:
         logger.error(f"[Lane Guidance] Error: {e}")

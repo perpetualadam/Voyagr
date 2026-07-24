@@ -13,6 +13,9 @@ They lock in the corrections made for:
 """
 
 import unittest
+from unittest.mock import patch
+
+from flask import Flask
 
 from voyagr.api.navigation import (
     _parse_turn_lanes,
@@ -23,6 +26,8 @@ from voyagr.api.navigation import (
     _descriptive_lane_name,
     _apply_confidence_lane_selection,
     _score_lane_guidance_confidence,
+    get_lane_guidance,
+    navigation_bp,
 )
 
 
@@ -152,6 +157,31 @@ class TestDescriptiveLaneName(unittest.TestCase):
         self.assertEqual(_descriptive_lane_name(1, 3), 'left lane')
         self.assertEqual(_descriptive_lane_name(3, 3), 'right lane')
         self.assertEqual(_descriptive_lane_name(2, 3), 'middle lane')
+
+
+class TestLowConfidenceGuidanceCopy(unittest.TestCase):
+    """Sub-70 confidence must not emit lane-specific urgency/guidance copy."""
+
+    def test_estimated_guidance_uses_neutral_copy_when_lanes_hidden(self):
+        app = Flask(__name__)
+        app.register_blueprint(navigation_bp, url_prefix='/api')
+        with app.test_request_context(
+            '/api/lane-guidance?lat=51.5&lon=-0.1&maneuver=left&distance=200&road_type=unknown'
+        ):
+            with patch('voyagr.api.navigation._fetch_osm_lane_data', return_value=None):
+                data = get_lane_guidance().get_json()
+
+        self.assertTrue(data['success'])
+        self.assertLess(data['confidence'], 70)
+        self.assertFalse(data['show_lane_guidance'])
+        self.assertIsNone(data['recommended_lane'])
+        self.assertEqual(data['urgency'], 'none')
+        self.assertEqual(data['urgency_text'], '')
+        self.assertEqual(data['guidance_text'], 'Stay in current lane')
+        self.assertFalse(data['lane_change_needed'])
+        combined = data['urgency_text'] + data['guidance_text']
+        self.assertNotIn('  ', combined)
+        self.assertNotRegex(combined, r'\bthe\s+in\b')
 
 
 class TestConfidenceLaneSelection(unittest.TestCase):
