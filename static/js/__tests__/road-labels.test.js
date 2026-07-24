@@ -131,8 +131,8 @@ describe('MapLibreHelpers road-label functions (real implementation)', () => {
     });
 
     describe('base road line-width scale', () => {
-        test('BASE_MAP_ROAD_LINE_WIDTH_SCALE is ~40% above the prior 2× default', () => {
-            expect(Helpers.BASE_MAP_ROAD_LINE_WIDTH_SCALE).toBeCloseTo(2.8, 5);
+        test('BASE_MAP_ROAD_LINE_WIDTH_SCALE is ~40% above the prior 2.8× scale', () => {
+            expect(Helpers.BASE_MAP_ROAD_LINE_WIDTH_SCALE).toBeCloseTo(3.92, 5);
         });
 
         test('baseLineWidthExpression unwraps an existing scale wrapper', () => {
