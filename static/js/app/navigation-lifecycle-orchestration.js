@@ -145,6 +145,22 @@
         return !!(layer && layer._added !== false);
     }
 
+    function scheduleNavRouteMountRetry(execute) {
+        if (!execute || execute.routeMountRetryDelayMs == null) return;
+        var delayMs = execute.routeMountRetryDelayMs;
+        var retryReason = execute.routeMountRetryReason || 'nav-start-mount-retry';
+        setTimeout(function () {
+            try {
+                if (!getRouteInProgress()) return;
+                if (typeof rt().call.redrawNavigationRouteLayer === 'function') {
+                    rt().call.redrawNavigationRouteLayer(retryReason);
+                }
+            } catch (e) {
+                console.warn('[Navigation] Route layer mount retry failed:', e);
+            }
+        }, delayMs);
+    }
+
     function applyNavStartPolylineFromPlan(execute, stateInit) {
         if (!execute || !execute.shouldInit) return false;
 
@@ -183,7 +199,17 @@
                 clearPreviewRouteLayersForNavStart();
             }
             if (execute.mountActiveNavRoute) {
-                mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
+                var routeMounted = mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
+                if (!routeMounted) {
+                    console.warn(execute.routeMountFailedLog || '[Navigation] Active route layer mount failed');
+                    if (execute.routeMountFailedStatusMessage) {
+                        rt().call.showStatus(
+                            execute.routeMountFailedStatusMessage,
+                            execute.routeMountFailedStatusType || 'warning'
+                        );
+                    }
+                    scheduleNavRouteMountRetry(execute);
+                }
             }
 
             if (execute.primeVehicleWhenPositionKnown && rt().getCurrentLat() != null && rt().getCurrentLon() != null) {
