@@ -746,6 +746,38 @@ describe('buildVehicleMarkerTickPlan', () => {
         expect(plan.lat).toBe(51.5);
         expect(plan.lon).toBe(-0.1);
     });
+
+    test('flags reattach when marker exists but is detached from map', () => {
+        const plan = SG.buildVehicleMarkerTickPlan({
+            hasMarker: true,
+            canSetLngLat: true,
+            markerOnMap: false,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            heading: 90,
+            speed: 5,
+            accuracy: 10,
+            mapBearing: 0,
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.reattachToMap).toBe(true);
+    });
+
+    test('does not flag reattach when marker is still on the map', () => {
+        const plan = SG.buildVehicleMarkerTickPlan({
+            hasMarker: true,
+            canSetLngLat: true,
+            markerOnMap: true,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            heading: 90,
+            speed: 5,
+            accuracy: 10,
+            mapBearing: 0,
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.reattachToMap).toBe(false);
+    });
 });
 
 describe('buildNavigationVehicleMarkerRedrawPlan', () => {
