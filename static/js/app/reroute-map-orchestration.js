@@ -145,6 +145,10 @@
     }
 
     function resetVoiceAnnouncementStateForNewRoute() {
+        if (root.VoyagrLaneGuidanceOrchestration &&
+                typeof root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute === 'function') {
+            root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();
+        }
         applyVoiceAnnouncementStateResetFromPlan(
             rt().voiceAnnouncements().buildVoiceAnnouncementStateResetExecutePlan(Date.now())
         );

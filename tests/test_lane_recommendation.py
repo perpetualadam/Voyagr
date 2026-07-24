@@ -17,9 +17,12 @@ import unittest
 from voyagr.api.navigation import (
     _parse_turn_lanes,
     _recommend_lane_from_turn_lanes,
+    _recommend_lanes_from_turn_lanes,
     _get_recommended_lane_simple,
     _normalize_lane_maneuver_for_uk,
     _descriptive_lane_name,
+    _apply_confidence_lane_selection,
+    _score_lane_guidance_confidence,
 )
 
 
@@ -149,6 +152,30 @@ class TestDescriptiveLaneName(unittest.TestCase):
         self.assertEqual(_descriptive_lane_name(1, 3), 'left lane')
         self.assertEqual(_descriptive_lane_name(3, 3), 'right lane')
         self.assertEqual(_descriptive_lane_name(2, 3), 'middle lane')
+
+
+class TestConfidenceLaneSelection(unittest.TestCase):
+    def test_high_confidence_single_lane(self):
+        lanes, primary = _apply_confidence_lane_selection([1, 2], 95)
+        self.assertEqual(lanes, [1])
+        self.assertEqual(primary, 1)
+
+    def test_medium_confidence_multiple_lanes(self):
+        lanes, primary = _apply_confidence_lane_selection([2, 3], 82)
+        self.assertEqual(lanes, [2, 3])
+        self.assertEqual(primary, 2)
+
+    def test_low_confidence_hides_lanes(self):
+        lanes, primary = _apply_confidence_lane_selection([1], 65)
+        self.assertEqual(lanes, [])
+        self.assertIsNone(primary)
+
+    def test_turn_lanes_score_highest(self):
+        self.assertEqual(_score_lane_guidance_confidence(True, True, 'primary', 'left', 3), 95)
+
+    def test_recommend_lanes_returns_all_tied_best_lanes(self):
+        dirs = _parse_turn_lanes('through|through|right', 3)
+        self.assertEqual(_recommend_lanes_from_turn_lanes(dirs, 'straight'), [1, 2])
 
 
 if __name__ == '__main__':

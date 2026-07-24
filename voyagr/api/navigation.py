@@ -159,6 +159,109 @@ def _parse_turn_lanes(turn_lanes_str, total_lanes):
     return [p.split(';') for p in parts]
 
 
+def _recommend_lanes_from_turn_lanes(lane_dirs, maneuver, roundabout_exit_count=0):
+    """Return all lanes (1-based) that best match the manoeuvre from OSM turn:lanes."""
+    if not lane_dirs:
+        return []
+
+    maneuver_map = {
+        'left': ['left', 'slight_left'],
+        'sharp_left': ['sharp_left', 'left', 'slight_left'],
+        'slight_left': ['slight_left', 'left'],
+        'right': ['right', 'slight_right'],
+        'sharp_right': ['sharp_right', 'right', 'slight_right'],
+        'slight_right': ['slight_right', 'right'],
+        'straight': ['through', 'none', ''],
+        'exit_right': ['right', 'slight_right', 'merge_to_right'],
+        'exit_left': ['left', 'slight_left', 'merge_to_left'],
+        'exit': ['right', 'slight_right'],
+        'merge': ['through', 'none', ''],
+        'uturn': ['reverse', 'left', 'slight_left'],
+        'destination': ['through', 'none', ''],
+    }
+
+    if maneuver == 'roundabout':
+        if roundabout_exit_count <= 1:
+            maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
+        elif roundabout_exit_count == 2:
+            maneuver_map['roundabout'] = ['through', 'none', '', 'slight_left', 'slight_right']
+        else:
+            maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
+
+    wanted = maneuver_map.get(maneuver, ['through', 'none', ''])
+    best_score = -1
+    lane_scores = []
+    for idx, dirs in enumerate(lane_dirs):
+        lane_score = 0
+        for w_idx, w in enumerate(wanted):
+            if w in dirs:
+                lane_score = len(wanted) - w_idx
+                break
+        lane_scores.append((idx + 1, lane_score))
+        if lane_score > best_score:
+            best_score = lane_score
+
+    if best_score <= 0:
+        return []
+
+    return [lane for lane, score in lane_scores if score == best_score]
+
+
+def _estimate_candidate_lanes_uk(maneuver, total_lanes, roundabout_exit_count=0):
+    """UK heuristic candidate lanes when no turn:lanes markings exist."""
+    if total_lanes <= 1:
+        return [1]
+    if maneuver == 'roundabout' and roundabout_exit_count > 0:
+        if roundabout_exit_count <= 2:
+            return [1]
+        if roundabout_exit_count >= 3:
+            return [total_lanes]
+        return [1]
+    if maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
+        return [1, 2] if total_lanes >= 3 else [1]
+    if maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit', 'uturn'):
+        return [total_lanes - 1, total_lanes] if total_lanes >= 3 else [total_lanes]
+    if maneuver == 'merge':
+        return [1, total_lanes] if total_lanes >= 3 else [max(1, (total_lanes + 1) // 2)]
+    return [max(1, (total_lanes + 1) // 2)]
+
+
+def _score_lane_guidance_confidence(has_turn_lanes, has_osm_data, highway_type, maneuver, total_lanes):
+    """Confidence score (0–100) for lane guidance display thresholds."""
+    if has_turn_lanes:
+        return 95
+    if has_osm_data:
+        return 78
+    if _is_motorway_highway(highway_type):
+        if maneuver in ('exit_left', 'exit_right', 'exit', 'merge', 'roundabout'):
+            return 76
+        if maneuver.startswith('slight_'):
+            return 74
+        if total_lanes >= 3:
+            return 72
+        return 68
+    if maneuver == 'roundabout' and total_lanes >= 2:
+        return 80
+    if total_lanes >= 3 and maneuver in (
+        'left', 'right', 'sharp_left', 'sharp_right', 'exit_left', 'exit_right'
+    ):
+        return 72
+    if maneuver in ('exit_left', 'exit_right', 'exit', 'merge'):
+        return 71
+    return 65
+
+
+def _apply_confidence_lane_selection(recommended_lanes, confidence):
+    """Apply 90+ single-lane / 70–89 multi-lane display bands."""
+    if not recommended_lanes:
+        return [], None
+    if confidence >= 90:
+        return [recommended_lanes[0]], recommended_lanes[0]
+    if confidence >= 70:
+        return recommended_lanes, recommended_lanes[0]
+    return [], None
+
+
 def _recommend_lane_from_turn_lanes(lane_dirs, maneuver, roundabout_exit_count=0):
     """Given parsed turn:lanes and a maneuver, pick the best lane index (1-based).
 
@@ -303,19 +406,37 @@ def get_lane_guidance():
                     'primary': 'through'
                 })
 
-        # Determine recommended lane
+        # Determine recommended lane(s)
         recommended_lane = None
+        candidate_lanes = []
         if parsed_lanes:
-            recommended_lane = _recommend_lane_from_turn_lanes(
+            candidate_lanes = _recommend_lanes_from_turn_lanes(
                 parsed_lanes, lane_maneuver, roundabout_exit_count
             )
+            recommended_lane = candidate_lanes[0] if candidate_lanes else None
 
         if recommended_lane is None:
             recommended_lane = _get_recommended_lane_simple(
                 lane_maneuver, total_lanes, roundabout_exit_count
             )
+            candidate_lanes = _estimate_candidate_lanes_uk(
+                lane_maneuver, total_lanes, roundabout_exit_count
+            )
 
-        lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+        has_turn_lanes = parsed_lanes is not None
+        has_osm_data = osm_data is not None
+        confidence = _score_lane_guidance_confidence(
+            has_turn_lanes, has_osm_data, highway_type, lane_maneuver, total_lanes
+        )
+        source = 'osm_turn_lanes' if has_turn_lanes else ('osm_lanes' if has_osm_data else 'estimated')
+        recommended_lanes, recommended_lane = _apply_confidence_lane_selection(
+            candidate_lanes or ([recommended_lane] if recommended_lane else []),
+            confidence,
+        )
+
+        lane_name = _descriptive_lane_name(
+            recommended_lane or 1, total_lanes
+        ) if recommended_lane else ''
 
         if distance_to_maneuver <= 100:
             urgency = 'now'
@@ -345,6 +466,9 @@ def get_lane_guidance():
             'success': True,
             'total_lanes': total_lanes,
             'recommended_lane': recommended_lane,
+            'recommended_lanes': recommended_lanes,
+            'confidence': confidence,
+            'source': source,
             'lane_arrows': lane_arrows,
             'lane_change_needed': True if urgency in ('now', 'soon', 'ahead') else False,
             'next_maneuver': next_maneuver,
@@ -354,9 +478,10 @@ def get_lane_guidance():
             'guidance_text': guidance_text,
             'road_name': road_name,
             'highway_type': highway_type,
-            'has_osm_data': osm_data is not None,
-            'has_turn_lanes': parsed_lanes is not None,
+            'has_osm_data': has_osm_data,
+            'has_turn_lanes': has_turn_lanes,
             'roundabout_exit_count': roundabout_exit_count,
+            'show_lane_guidance': confidence >= 70 and total_lanes > 1 and bool(recommended_lanes),
         })
     except Exception as e:
         logger.error(f"[Lane Guidance] Error: {e}")
