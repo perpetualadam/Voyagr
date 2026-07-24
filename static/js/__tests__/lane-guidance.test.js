@@ -860,11 +860,34 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             urgency: 'soon',
             show_lane_guidance: true,
         };
-        expect(LG.buildLaneGuidanceStabilityPlan({
+        const recalcPlan = LG.buildLaneGuidanceStabilityPlan({
             routeRecalculated: true,
             newGuidance: guidance,
             maneuverStepIndex: 1,
-        }).action).toBe('lock');
+            distanceToManeuver: 300,
+        });
+        expect(recalcPlan.action).toBe('lock');
+        expect(recalcPlan.lockedGuidance).toEqual({
+            data: guidance,
+            lockedStepIndex: 1,
+        });
+
+        const afterRecalc = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: {
+                total_lanes: 3,
+                recommended_lanes: [3],
+                recommended_lane: 3,
+                confidence: 70,
+                show_lane_guidance: true,
+            },
+            lockedGuidance: recalcPlan.lockedGuidance,
+            distanceToManeuver: 250,
+            maneuverStepIndex: 1,
+            maneuver: 'right',
+            roundaboutExitCount: 0,
+        });
+        expect(afterRecalc.action).toBe('use-locked');
+        expect(afterRecalc.guidance.recommended_lanes).toEqual([2]);
 
         expect(LG.buildLaneGuidanceStabilityPlan({
             maneuverCompleted: true,
