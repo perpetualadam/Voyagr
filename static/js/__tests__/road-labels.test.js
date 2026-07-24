@@ -141,6 +141,14 @@ describe('MapLibreHelpers road-label functions (real implementation)', () => {
             expect(Helpers.baseLineWidthExpression(inner)).toEqual(inner);
         });
 
+        test('POLYLINE_LINE_WIDTH_SCALE tracks base road scale for route coverage', () => {
+            expect(Helpers.POLYLINE_LINE_WIDTH_SCALE).toBeCloseTo(
+                Helpers.BASE_MAP_ROAD_LINE_WIDTH_SCALE / 1.4,
+                5
+            );
+            expect(Helpers.POLYLINE_LINE_WIDTH_SCALE).toBeCloseTo(2.8, 5);
+        });
+
         test('buildZoomScaledLineWidth applies POLYLINE_LINE_WIDTH_SCALE at z12', () => {
             const expr = Helpers.buildZoomScaledLineWidth(10);
             expect(expr[0]).toBe('interpolate');

@@ -74,8 +74,8 @@ function applyTransportationRoadLineWidthScale(mapInstance, factor) {
 
 // ===== POLYLINE FUNCTIONS =====
 
-/** Route / overlay polyline stroke scale — matches the ~40% base-road visibility boost. */
-const POLYLINE_LINE_WIDTH_SCALE = 1.96;
+/** Route / overlay polyline stroke scale — tracks base-road scale so routes cover widened roads. */
+const POLYLINE_LINE_WIDTH_SCALE = BASE_MAP_ROAD_LINE_WIDTH_SCALE / 1.4;
 
 /**
  * MapLibre line-width expression.
