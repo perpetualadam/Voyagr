@@ -162,7 +162,7 @@
     }
 
     function applyNavStartPolylineFromPlan(execute, stateInit) {
-        if (!execute || !execute.shouldInit) return false;
+        if (!execute || !execute.shouldInit) return { ok: false };
 
         try {
             if (execute.usePersistedPolyline && execute.persistedPolyline) {
@@ -190,9 +190,10 @@
             if (!activeRoutePolyline || activeRoutePolyline.length === 0) {
                 console.error(execute.emptyPolylineErrorLog);
                 rt().call.showStatus(execute.invalidGeometryStatusMessage, 'error');
-                return false;
+                return { ok: false };
             }
 
+            var routeMountFailed = false;
             // Replace comparison/preview polylines with the single owned nav route layer
             // that matches the maneuvers / text instructions just loaded into memory.
             if (execute.clearPreviewRouteLayers) {
@@ -201,6 +202,7 @@
             if (execute.mountActiveNavRoute) {
                 var routeMounted = mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
                 if (!routeMounted) {
+                    routeMountFailed = true;
                     console.warn(execute.routeMountFailedLog || '[Navigation] Active route layer mount failed');
                     if (execute.routeMountFailedStatusMessage) {
                         rt().call.showStatus(
@@ -217,11 +219,11 @@
             } else if (execute.resetSnappedIndexWhenNoPosition) {
                 setLastSnappedRouteIndex(0);
             }
-            return true;
+            return { ok: true, routeMountFailed: routeMountFailed };
         } catch (e) {
             console.error(execute.decodeGeometryErrorLogPrefix, e);
             rt().call.showStatus(execute.decodeGeometryErrorStatusMessage, 'error');
-            return false;
+            return { ok: false };
         }
     }
 
@@ -268,8 +270,9 @@
         if (fabExecute.updateSpeedWidget) rt().call.updateSpeedWidgetVisibility();
     }
 
-    function applyNavStartServicesFromPlan(services) {
+    function applyNavStartServicesFromPlan(services, options) {
         if (!services) return;
+        options = options || {};
 
         const lifecycle = services.lifecycle || {};
         if (lifecycle.startGpsIfInactive) rt().call.startGPSTracking();
@@ -351,7 +354,9 @@
             if (navStartFeedback.speakMessage) {
                 rt().call.speakMessage(navStartFeedback.speakMessage);
             }
-            rt().call.showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
+            if (!options.routeMountFailed) {
+                rt().call.showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
+            }
         }
 
         const volumeHintSchedule = rt().deviceEnvironment().buildNavStartVolumeHintSchedulePlan({
@@ -500,11 +505,11 @@
         const stateInit = entry.stateInit;
         applyNavStartRuntimeFromPlan(MC().buildNavStartRuntimeApplyPlan(stateInit));
 
-        const polylineOk = applyNavStartPolylineFromPlan(
+        const polylineResult = applyNavStartPolylineFromPlan(
             MC().buildNavStartPolylineInitExecutePlan(stateInit),
             stateInit
         );
-        if (!polylineOk) return;
+        if (!polylineResult.ok) return;
 
         applyNavStartWakeLockFromPlan(stateInit, 'wakeLock' in navigator);
 
@@ -520,7 +525,9 @@
             mapFollowingActive: rt().getMapFollowingActive(),
             driverPerspectiveActive: rt().call.shouldUsePitchedDrivingCamera(),
             wakeLockApiAvailable: 'wakeLock' in navigator,
-        }));
+        }), {
+            routeMountFailed: !!polylineResult.routeMountFailed,
+        });
     }
 
     function stopTurnByTurnNavigation() {
