@@ -2659,6 +2659,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
             },
             navActiveRouteColor,
             bringNavRouteAboveTrafficEdges,
+            redrawNavigationRouteLayer,
             applyZoomFollowButtonUi,
             updateRoadReportFabVisibility,
             updateRecenterButtonVisibility,

@@ -273,6 +273,8 @@ describe('map-controls module', () => {
         expect(execute.clearPreviewRouteLayers).toBe(true);
         expect(execute.mountActiveNavRoute).toBe(true);
         expect(execute.bringNavRouteAboveTraffic).toBe(true);
+        expect(execute.routeMountRetryDelayMs).toBe(500);
+        expect(execute.routeMountFailedStatusMessage).toContain('retry');
         expect(execute.invalidGeometryStatusMessage).toContain('Invalid');
         expect(execute.decodeGeometryErrorStatusMessage).toContain('decode');
     });
