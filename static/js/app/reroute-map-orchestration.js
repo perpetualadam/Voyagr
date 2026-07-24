@@ -353,7 +353,7 @@
     }
 
     function redrawNavigationVehicleMarker(reason) {
-        if (!rt().getRouteInProgress() || !rt().getMap()) return;
+        if ((!rt().getRouteInProgress() && !rt().getIsTrackingActive()) || !rt().getMap()) return;
         var lat = rt().getCurrentLat();
         var lon = rt().getCurrentLon();
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
