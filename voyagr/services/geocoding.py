@@ -253,6 +253,21 @@ def _token_set(text: str) -> set:
     return {t for t in re.split(r'[\s,]+', (text or '').lower()) if len(t) > 2}
 
 
+def _normalised_outward_code(postcode: str) -> str:
+    """Extract the outward district from a normalised UK postcode (no spaces)."""
+    val = (postcode or '').replace(' ', '').upper()
+    if not val:
+        return ''
+    if val == 'GIR0AA':
+        return 'GIR'
+    m = re.match(r'^(?:GIR0AA|([A-Z]{1,2}\d[A-Z\d]?)(\d[A-Z]{2}))$', val)
+    if m:
+        return m.group(1)
+    if _UK_OUTCODE_RE.match(val):
+        return val
+    return ''
+
+
 def _postcode_matches(parsed: ParsedQuery, addr: Dict[str, Any]) -> bool:
     if not parsed.postcode:
         return False
@@ -262,9 +277,10 @@ def _postcode_matches(parsed: ParsedQuery, addr: Dict[str, Any]) -> bool:
             continue
         if val == parsed.postcode:
             return True
-        # Outward-only query: accept any result in that district.
-        if parsed.postcode_kind == 'outward' and val.startswith(parsed.postcode):
-            return True
+        # Outward-only query: match the district exactly (LS1 ≠ LS10).
+        if parsed.postcode_kind == 'outward':
+            if _normalised_outward_code(val) == parsed.postcode:
+                return True
     return False
 
 
@@ -305,8 +321,13 @@ def score_geocode_result(parsed: ParsedQuery, result: Dict[str, Any]) -> float:
 
     if _postcode_matches(parsed, addr):
         score += 80.0
-    elif parsed.postcode and parsed.postcode[:3] in display.replace(' ', '').upper():
-        score += 25.0
+    elif parsed.postcode:
+        display_compact = display.replace(' ', '').upper()
+        if parsed.postcode_kind == 'outward':
+            if _normalised_outward_code(display_compact) == parsed.postcode:
+                score += 25.0
+        elif parsed.postcode[:3] in display_compact:
+            score += 25.0
 
     # Prefer dedicated postcode hits (Nominatim type=postcode / postcodes.io).
     if parsed.postcode and rtype == 'postcode':

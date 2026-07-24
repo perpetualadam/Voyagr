@@ -218,6 +218,29 @@ class TestRanking:
         ranked = rank_geocode_results(query, [foreign, uk])
         assert ranked[0]['address']['country_code'] == 'gb'
 
+    def test_outward_ls1_does_not_match_ls10_district(self):
+        query = 'LS1'
+        ls10 = {
+            'lat': '53.81',
+            'lon': '-1.54',
+            'type': 'postcode',
+            'importance': 0.7,
+            'display_name': 'LS10 2AB, Leeds',
+            'address': {'postcode': 'LS10 2AB', 'city': 'Leeds', 'country_code': 'gb'},
+        }
+        ls1 = {
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'postcode',
+            'importance': 0.5,
+            'display_name': 'LS1, Leeds, United Kingdom',
+            'address': {'postcode': 'LS1', 'city': 'Leeds', 'country_code': 'gb'},
+            '_source': 'postcodes_io',
+        }
+        ranked = rank_geocode_results(query, [ls10, ls1])
+        assert ranked[0]['address']['postcode'].replace(' ', '').startswith('LS1')
+        assert not ranked[0]['address']['postcode'].replace(' ', '').startswith('LS10')
+
     def test_disambiguates_same_street_different_cities(self):
         query = '12 High Street, Sheffield'
         mexborough = {
