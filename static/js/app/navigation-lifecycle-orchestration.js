@@ -131,7 +131,8 @@
         });
         if (!mount.valid) return false;
 
-        const layer = rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style);
+        const helpers = rt().getMapLibreHelpers();
+        const layer = helpers.addPolyline(rt().getMap(), mount.polyline, mount.style);
         if (typeof rt().setRouteLayer === 'function') {
             rt().setRouteLayer(layer);
         }
@@ -142,7 +143,9 @@
             && typeof rt().call.bringNavRouteAboveTrafficEdges === 'function') {
             rt().call.bringNavRouteAboveTrafficEdges();
         }
-        return !!(layer && layer._added !== false);
+        return typeof helpers.isPolylineLayerMountOk === 'function'
+            ? helpers.isPolylineLayerMountOk(layer)
+            : !!(layer && (layer._pending || layer._added !== false));
     }
 
     function scheduleNavRouteMountRetry(execute) {

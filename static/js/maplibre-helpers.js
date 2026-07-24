@@ -294,12 +294,23 @@ function createPendingLayer(mapInstance, id, lngLatCoords, options = {}) {
         outlineId: options.outlineColor ? `${id}-outline` : null,
         _coords: lngLatCoords,
         _added: false,
+        _pending: true,
         // removeMapLayer already strips the matching `-outline` layer/source.
         remove: function() { removeMapLayer(mapInstance, id); },
         getBounds: function() { return computeBounds(lngLatCoords); }
     };
     activeLayers.set(id, layer);
     return layer;
+}
+
+/**
+ * Whether addPolyline queued or completed a mount (vs. a hard error layer).
+ * Pending layers use _added: false until the style loads but already defer adds.
+ */
+function isPolylineLayerMountOk(layer) {
+    if (!layer) return false;
+    if (layer._pending) return true;
+    return layer._added !== false;
 }
 
 /**
@@ -1171,6 +1182,7 @@ window.MapLibreHelpers = {
     buildZoomScaledLineWidth,
     applyTransportationRoadLineWidthScale,
     addPolyline,
+    isPolylineLayerMountOk,
     removeMapLayer,
     createMarker,
     createCircleMarker,

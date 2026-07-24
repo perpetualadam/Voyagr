@@ -11,6 +11,7 @@ global.VoyagrTurnInstructions = require('../modules/navigation/turn-instructions
 global.VoyagrMapTheme = {
     readStoredMapTheme: () => 'standard',
 };
+require('../maplibre-helpers.js');
 
 describe('navigation-lifecycle-orchestration nav start status', () => {
     let NavigationLifecycle;
@@ -21,6 +22,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
         overrides = overrides || {};
         showStatus = jest.fn();
         addPolyline = overrides.addPolyline || jest.fn(() => ({ _added: true }));
+        const redrawNavigationRouteLayer = overrides.redrawNavigationRouteLayer || jest.fn();
 
         const noop = jest.fn();
         NavigationLifecycle.bind({
@@ -44,7 +46,10 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             getZoomAndFollowEnabled: () => true,
             getMapFollowingActive: () => false,
             getMap: () => ({}),
-            getMapLibreHelpers: () => ({ addPolyline }),
+            getMapLibreHelpers: () => ({
+                addPolyline,
+                isPolylineLayerMountOk: window.MapLibreHelpers.isPolylineLayerMountOk,
+            }),
             getRouteLayer: () => null,
             setRouteLayer: noop,
             setMapFollowingActive: noop,
@@ -63,7 +68,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
                 clearAllRouteLayerHandles: noop,
                 navActiveRouteColor: () => '#3388ff',
                 bringNavRouteAboveTrafficEdges: noop,
-                redrawNavigationRouteLayer: noop,
+                redrawNavigationRouteLayer,
                 showStatus,
                 sendNotification: noop,
                 speakMessage: noop,
@@ -127,6 +132,31 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             expect.stringContaining('Turn-by-turn navigation active'),
             'success'
         );
+    });
+
+    test('deferred pending route layer mount does not schedule redraw retry', () => {
+        const redrawNavigationRouteLayer = jest.fn();
+        bindRuntime({
+            addPolyline: jest.fn(() => ({ _added: false, _pending: true })),
+            redrawNavigationRouteLayer,
+        });
+
+        NavigationLifecycle.startTurnByTurnNavigation({
+            geometry: 'encoded',
+            maneuvers: [{ type: 1, instruction: 'Turn left' }],
+        });
+
+        expect(showStatus).toHaveBeenCalledWith(
+            expect.stringContaining('Turn-by-turn navigation active'),
+            'success'
+        );
+        expect(showStatus).not.toHaveBeenCalledWith(
+            expect.stringContaining('retry'),
+            'warning'
+        );
+
+        jest.advanceTimersByTime(500);
+        expect(redrawNavigationRouteLayer).not.toHaveBeenCalled();
     });
 
     test('successful route layer mount still shows navigation active status', () => {
