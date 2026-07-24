@@ -58,20 +58,11 @@ def test_post_failure_with_server_side_camera_priority_returns_none(mock_cam_mod
 @patch('voyagr.services.routing.engines.requests.get')
 @patch('voyagr.services.routing.engines.requests.post')
 @patch('voyagr.services.routing.costing.build_graphhopper_costing_preference_model')
-def test_post_failure_costing_only_falls_back_to_get(mock_costing, mock_post, mock_get):
+def test_post_failure_hard_costing_refuses_unfiltered_get(mock_costing, mock_post, mock_get):
     mock_costing.return_value = {
         'priority': [{'if': 'road_class == MOTORWAY', 'multiply_by': '0.01'}],
     }
     mock_post.return_value = _mock_response(400, text='unsupported')
-    mock_get.return_value = _mock_response(200, json_data={
-        'paths': [{
-            'distance': 5000,
-            'time': 300000,
-            'points': 'encoded',
-            'instructions': [],
-            'details': {},
-        }],
-    })
 
     result = route_with_graphhopper(
         51.5, -0.1, 51.6, -0.2,
@@ -79,8 +70,5 @@ def test_post_failure_costing_only_falls_back_to_get(mock_costing, mock_post, mo
         avoid_motorways=True,
     )
 
-    assert result is not None
-    assert result['success'] is True
-    assert result['custom_model_applied'] is False
-    assert result['custom_model_requested'] is True
-    mock_get.assert_called()
+    assert result is None
+    mock_get.assert_not_called()
