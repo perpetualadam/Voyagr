@@ -34,7 +34,7 @@
 
     function getOsmTrafficLightMarkerInnerSVG() {
         if (typeof TrafficLights !== 'undefined' && TrafficLights.createIconSVG) {
-            return TrafficLights.createIconSVG('none', 14, 32);
+            return TrafficLights.createIconSVG('none', OSM.OSM_TRAFFIC_LIGHT_INNER_SVG_WIDTH, OSM.OSM_TRAFFIC_LIGHT_INNER_SVG_HEIGHT);
         }
         return rt().osmMapIcons().buildOsmTrafficLightFallbackSvg();
     }
