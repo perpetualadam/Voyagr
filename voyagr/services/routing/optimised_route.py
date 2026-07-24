@@ -583,7 +583,7 @@ def graphhopper_qualifies_as_optimised(
         return False
     if not avoid_cameras:
         return True
-    return bool(graphhopper_route.get('custom_model_applied'))
+    return bool(graphhopper_route.get('camera_avoidance'))
 
 
 def baseline_camera_hazard_count(routes: List[Dict[str, Any]]) -> int:
