@@ -11,10 +11,10 @@ describe('vehicle-marker module', () => {
         expect(svg).not.toContain('<img');
     });
 
-    test('exported vehicle marker dimensions are ~60% smaller than legacy 60px', () => {
-        expect(VM.VEHICLE_MARKER_SIZE).toBe(24);
-        expect(VM.VEHICLE_MARKER_ICON_SIZE).toEqual([24, 24]);
-        expect(VM.VEHICLE_MARKER_ICON_ANCHOR).toEqual([12, 12]);
+    test('exported vehicle marker dimensions are ~48% smaller than legacy 60px', () => {
+        expect(VM.VEHICLE_MARKER_SIZE).toBe(31);
+        expect(VM.VEHICLE_MARKER_ICON_SIZE).toEqual([31, 31]);
+        expect(VM.VEHICLE_MARKER_ICON_ANCHOR).toEqual([15.5, 15.5]);
     });
 
     test('buildVehicleMarkerPopupHtml includes speed, heading, and accuracy', () => {
