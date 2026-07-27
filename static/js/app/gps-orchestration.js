@@ -179,6 +179,9 @@
             marker.setLngLat(markerTick.lngLat);
             const markerEl = marker.getElement ? marker.getElement() : null;
             if (markerEl) {
+                if (typeof rt().call.syncVehicleMarkerElementSize === 'function') {
+                    rt().call.syncVehicleMarkerElementSize(markerEl);
+                }
                 const inner = markerEl.querySelector('div');
                 if (inner) {
                     inner.style.transform = `rotate(${markerTick.rotationDeg}deg)`;

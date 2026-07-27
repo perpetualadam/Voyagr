@@ -1501,6 +1501,12 @@ function getGpsOrchestrationRuntime() {
             applySmartZoomWithAnimation,
             getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
             createVehicleMarker,
+            syncVehicleMarkerElementSize: (el) => {
+                const vm = _vehicleMarker();
+                if (vm && typeof vm.applyVehicleMarkerElementSize === 'function') {
+                    vm.applyVehicleMarkerElementSize(el);
+                }
+            },
             calculateDistanceMeters,
             convertDistance,
             getDistanceUnit,
