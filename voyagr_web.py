@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 import json
 import sqlite3
+import sys
 from datetime import datetime
 import threading
 import math
@@ -20,6 +21,16 @@ from functools import wraps
 from collections import OrderedDict
 import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
+
+# Under `python voyagr_web.py` (the Procfile entrypoint) this file runs as __main__,
+# leaving sys.modules['voyagr_web'] unset. The routing services import it lazily by
+# name at request time, which would execute the file a second time and build a
+# duplicate set of module-level singletons — a second route cache, cost calculator
+# and blueprint wiring. The later registration wins, so /api/cache-clear and the
+# preference-change invalidation would then target a cache nothing reads from.
+# Aliasing the running module keeps both names pointing at one instance.
+if __name__ == '__main__':
+    sys.modules.setdefault('voyagr_web', sys.modules['__main__'])
 
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
