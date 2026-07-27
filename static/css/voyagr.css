@@ -1909,7 +1909,11 @@ h1 {
 
 /* Vehicle Marker Icon - Custom SVG with directional indicator */
 /* 3D Aerial View: Icon tilts with map for realistic top-down perspective */
+/* Size comes from vehicle-marker.js (--vehicle-marker-size); the literal is only a
+   fallback for the first paint before applyVehicleMarkerElementSize runs. */
 .vehicle-marker-icon {
+    width: var(--vehicle-marker-size, 31px);
+    height: var(--vehicle-marker-size, 31px);
     background: none !important;
     border: none !important;
     box-shadow: none !important;
