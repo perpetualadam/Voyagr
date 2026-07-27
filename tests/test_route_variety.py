@@ -63,6 +63,18 @@ class TestRouteVariety(unittest.TestCase):
         assert len(out) == 2
         assert out[1]['name'] == PRIMARY_OPTIMISED_NAME
 
+    def test_dedupe_keeps_fastest_when_optimised_already_first(self):
+        """Regression: Optimised-first must not collapse a similar Fastest."""
+        routes = [
+            {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 12},
+            _route('Fastest', SHAPE_A, duration=10, route_id=2),
+            _route('Alternate', SHAPE_A, duration=11, route_id=3),
+        ]
+        out = dedupe_similar_routes(routes)
+        names = [r['name'] for r in out]
+        self.assertEqual(names, [PRIMARY_OPTIMISED_NAME, 'Fastest'])
+
     def test_max_detour_keeps_optimised_even_when_slow(self):
         routes = [
             _route('Fastest', SHAPE_A, duration=10, route_id=1),
@@ -103,6 +115,31 @@ class TestRouteVariety(unittest.TestCase):
         out = finalize_route_variety(routes, max_detour_percent=20)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['name'], 'Fastest')
+
+    def test_finalize_keeps_fastest_and_pins_similar_optimised(self):
+        """Route preview needs >=2 options when Optimised ≈ Fastest."""
+        routes = [
+            _route('Fastest', SHAPE_A, duration=10, route_id=1),
+            {'id': 2, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 12},
+        ]
+        out = finalize_route_variety(routes, max_detour_percent=20)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
+        self.assertEqual(out[1]['name'], 'Fastest')
+        self.assertEqual(out[0]['id'], 1)
+        self.assertEqual(out[1]['id'], 2)
+
+    def test_finalize_keeps_both_when_optimised_already_first(self):
+        routes = [
+            {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 12},
+            _route('Fastest', SHAPE_A, duration=10, route_id=2),
+        ]
+        out = finalize_route_variety(routes, max_detour_percent=20)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
+        self.assertEqual(out[1]['name'], 'Fastest')
 
     def test_should_append_when_three_similar_routes(self):
         routes = [

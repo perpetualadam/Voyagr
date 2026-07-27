@@ -68,6 +68,10 @@ def dedupe_similar_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     The first route (Fastest / primary) and any ⚡ Optimised options are always
     retained — Optimised is the primary camera-avoidance product route.
+
+    Similarity is judged only against non-Optimised peers so a geometrically
+    similar Fastest is not dropped when Optimised is already first (e.g. after
+    GraphHopper merge or ``pin_optimised_route_first``).
     """
     if len(routes) <= 1:
         return routes
@@ -76,7 +80,8 @@ def dedupe_similar_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if is_primary_optimised_route(route):
             kept.append(route)
             continue
-        if all(routes_are_distinct(route, existing) for existing in kept):
+        peers = [existing for existing in kept if not is_primary_optimised_route(existing)]
+        if not peers or all(routes_are_distinct(route, existing) for existing in peers):
             kept.append(route)
     for idx, route in enumerate(kept):
         route['id'] = idx + 1
@@ -138,9 +143,15 @@ def finalize_route_variety(
     *,
     max_detour_percent: int,
 ) -> List[Dict[str, Any]]:
-    """Last-pass dedupe + max-detour filter before returning to the client."""
+    """
+    Last-pass dedupe + max-detour filter, then pin ⚡ Optimised first.
+
+    Pin runs after filters so Optimised-as-primary cannot collapse a similar
+    Fastest during dedupe; the client still sees Optimised as the top option.
+    """
     routes = dedupe_similar_routes(routes)
     routes = filter_routes_by_max_detour(routes, max_detour_percent)
+    routes = pin_optimised_route_first(routes)
     return routes
 
 
