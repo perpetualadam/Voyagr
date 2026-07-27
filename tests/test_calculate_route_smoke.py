@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import voyagr_web as vw
 from voyagr.services.routing.optimised_route import QUIET_ROUTE_NAME, SCENIC_ROUTE_NAME
+from tests.test_persistent_route_cache import _make_db as _make_route_cache_db
 
 # Distinct shapes (precision 6) for the same Doncaster-area origin/destination, so the
 # preference requests come back as genuinely different paths rather than near-copies.
@@ -127,6 +128,83 @@ class RoutePreviewVarietySmokeTest(unittest.TestCase):
         })
         self.assertIn(QUIET_ROUTE_NAME, names)
         self.assertGreater(len(names), 1)
+
+
+class _SingleRouteResp:
+    """Valhalla stub that answers every costing with the same single path."""
+
+    status_code = 200
+    text = ''
+
+    def __init__(self, payload=None):
+        self._body = _trip(FASTEST_SHAPE, 24.0, 1800)
+
+    def json(self):
+        return self._body
+
+
+class RouteCacheFreshnessSmokeTest(unittest.TestCase):
+    """
+    A cached single-route payload must not outlive the preferences it was built for.
+
+    The persistent cache is keyed on preferences, but a coordinate-only fallback
+    used to answer keyed misses, so the first payload stored for a pair of
+    coordinates was replayed no matter what the user changed — which is what made
+    the preview keep showing one route after the variety fixes shipped.
+    """
+
+    def setUp(self):
+        self.client = vw.app.test_client()
+        vw.route_cache.clear()
+        self.conn = _make_route_cache_db()
+        patcher = patch('voyagr.services.costs.db_connection')
+        mock_db = patcher.start()
+        self.addCleanup(patcher.stop)
+        mock_db.return_value.__enter__.return_value = self.conn
+        mock_db.return_value.__exit__.return_value = None
+
+    def _post(self, body, valhalla_resp):
+        def fake_post(url, json=None, **kwargs):
+            return valhalla_resp(json)
+
+        with patch.object(vw, 'route_with_graphhopper', return_value=None), \
+             patch.object(vw, 'fetch_hazards_for_route', return_value={}), \
+             patch.object(vw, 'fetch_tomtom_incidents', return_value={}), \
+             patch.object(vw, 'get_traffic_duration_multiplier', return_value=(1.0, 'N/A')), \
+             patch.object(vw.requests, 'post', side_effect=fake_post), \
+             patch.object(vw.requests, 'get', return_value=_FakeResp()):
+            r = self.client.post('/api/route', json=body)
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertTrue(d.get('success'), f"error: {d.get('error')}")
+        return d
+
+    @staticmethod
+    def _body(**overrides):
+        body = {
+            'start': '53.536,-1.380', 'end': '53.517,-1.150',
+            'routing_mode': 'auto', 'enable_hazard_avoidance': False,
+        }
+        body.update(overrides)
+        return body
+
+    def test_changed_preferences_are_not_answered_from_the_previous_route(self):
+        first = self._post(self._body(avoid_tolls=False), _SingleRouteResp)
+        self.assertEqual(len(first['routes']), 1)
+
+        second = self._post(self._body(avoid_tolls=True), _PreferenceAwareResp)
+
+        self.assertFalse(second.get('cached'))
+        self.assertGreater(len(second['routes']), 1)
+        self.assertIn(QUIET_ROUTE_NAME, [r.get('name') for r in second['routes']])
+
+    def test_same_preferences_still_reuse_the_cached_route(self):
+        self._post(self._body(), _SingleRouteResp)
+        vw.route_cache.clear()  # force the DB tier to answer
+
+        again = self._post(self._body(), _SingleRouteResp)
+
+        self.assertTrue(again.get('cached'))
 
 
 class CalculateRouteSmokeTest(unittest.TestCase):

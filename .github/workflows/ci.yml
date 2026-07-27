@@ -99,6 +99,7 @@ jobs:
           tests/test_route_enrichment.py
           tests/test_osrm_fallback.py
           tests/test_hazards_dedup.py
+          tests/test_persistent_route_cache.py
           tests/test_calculate_route_smoke.py
           tests/test_optimised_camera_avoidance.py
           tests/test_graphhopper_shape_index.py
