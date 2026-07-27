@@ -141,6 +141,36 @@ class TestRouteVariety(unittest.TestCase):
         self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
         self.assertEqual(out[1]['name'], 'Fastest')
 
+    def test_max_detour_uses_fastest_baseline_not_optimised(self):
+        """Regression: Optimised-first must not drop a modestly slower Fastest."""
+        routes = [
+            {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 12.0, 'duration_minutes': 18},
+            _route('Fastest', SHAPE_B, duration=22, distance=11.0, route_id=2),
+            _route('Alternate', SHAPE_C, duration=24, distance=13.0, route_id=3),
+            _route('Slow', SHAPE_C, duration=40, distance=20.0, route_id=4),
+        ]
+        # Fastest is ~22% slower than Optimised; old bug used Optimised as baseline
+        # and dropped Fastest under max_detour=20 → single preview option.
+        out = filter_routes_by_max_detour(routes, 20)
+        names = [r['name'] for r in out]
+        self.assertEqual(names[0], PRIMARY_OPTIMISED_NAME)
+        self.assertIn('Fastest', names)
+        self.assertIn('Alternate', names)  # ~9% over Fastest baseline
+        self.assertNotIn('Slow', names)
+
+    def test_finalize_keeps_fastest_when_optimised_quicker(self):
+        routes = [
+            {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 12.0, 'duration_minutes': 18,
+             'source': 'GraphHopper'},
+            _route('Fastest', SHAPE_B, duration=22, distance=11.0, route_id=2),
+        ]
+        out = finalize_route_variety(routes, max_detour_percent=20)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
+        self.assertEqual(out[1]['name'], 'Fastest')
+
     def test_should_append_when_three_similar_routes(self):
         routes = [
             _route('Fastest', SHAPE_A, route_id=1),

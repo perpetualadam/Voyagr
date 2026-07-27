@@ -88,23 +88,54 @@ def dedupe_similar_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return kept
 
 
+def _is_fastest_route(route: Dict[str, Any]) -> bool:
+    return (route.get('name') or '').strip() == 'Fastest'
+
+
+def _max_detour_baseline_minutes(routes: List[Dict[str, Any]]) -> float:
+    """
+    Duration baseline for max-detour filtering.
+
+    Use Fastest (or the quickest non-Optimised option) — never ⚡ Optimised.
+    Optimised is often ``routes[0]`` after GraphHopper merge / hazard reorder, but
+    it is a camera-avoidance product pin, not the ETA reference. Measuring Fastest
+    against Optimised collapses the preview to a single option whenever Optimised
+    is modestly quicker.
+    """
+    fastest = next((r for r in routes if _is_fastest_route(r)), None)
+    if fastest is not None:
+        baseline = _duration_minutes(fastest)
+        if baseline > 0:
+            return baseline
+
+    non_optimised = [
+        _duration_minutes(r)
+        for r in routes
+        if not is_primary_optimised_route(r) and _duration_minutes(r) > 0
+    ]
+    if non_optimised:
+        return min(non_optimised)
+
+    return _duration_minutes(routes[0]) if routes else 0.0
+
+
 def filter_routes_by_max_detour(
     routes: List[Dict[str, Any]],
     max_detour_percent: int,
 ) -> List[Dict[str, Any]]:
     """
-    Drop alternates whose duration exceeds the primary route by more than
-    ``max_detour_percent``. The primary route is always kept.
+    Drop alternates whose duration exceeds the Fastest (time) baseline by more
+    than ``max_detour_percent``. Fastest and ⚡ Optimised are always kept.
     """
     if not routes or max_detour_percent >= 100:
         return routes
-    baseline_min = _duration_minutes(routes[0])
+    baseline_min = _max_detour_baseline_minutes(routes)
     if baseline_min <= 0:
         return routes
 
     kept: List[Dict[str, Any]] = [routes[0]]
     for route in routes[1:]:
-        if is_primary_optimised_route(route):
+        if is_primary_optimised_route(route) or _is_fastest_route(route):
             kept.append(route)
             continue
         dur = _duration_minutes(route)
@@ -147,7 +178,9 @@ def finalize_route_variety(
     Last-pass dedupe + max-detour filter, then pin ⚡ Optimised first.
 
     Pin runs after filters so Optimised-as-primary cannot collapse a similar
-    Fastest during dedupe; the client still sees Optimised as the top option.
+    Fastest during dedupe; max-detour uses Fastest (not Optimised) as the ETA
+    baseline so a camera-safer Optimised pin cannot cull the time option.
+    The client still sees Optimised as the top option.
     """
     routes = dedupe_similar_routes(routes)
     routes = filter_routes_by_max_detour(routes, max_detour_percent)
