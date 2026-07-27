@@ -65,10 +65,16 @@ class RouteEnrichmentContext:
 def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
     """Common kwargs shared by all three ensure_* helpers.
 
+    The traffic factors are included so routes these helpers fetch are scaled like
+    the ones already in the list; a free-flow duration among traffic-adjusted peers
+    understates the option and skews the max-detour comparison.
+
     Note: ``graphhopper_route`` is intentionally NOT included — only
     ``ensure_optimised_camera_avoiding_route`` accepts it (scenic/quiet do not).
     """
     return {
+        'traffic_multiplier': ctx.traffic_multiplier,
+        'traffic_level': ctx.traffic_level,
         'url': ctx.url,
         'headers': ctx.headers,
         'route_locations': ctx.route_locations,

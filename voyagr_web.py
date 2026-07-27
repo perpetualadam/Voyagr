@@ -1409,9 +1409,25 @@ def calculate_route():
         # Defaults if Valhalla try exits early; overwritten when waypoints are processed.
         route_locations = [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}]
         has_waypoints = False
-        # Default traffic factors so the retry/recovery paths (which run only when the
-        # main success block never set them) always have a defined value.
-        traffic_multiplier, traffic_level = 1.0, 'N/A'
+
+        # One traffic factor per response, resolved at most once and only when a route
+        # was actually built. Every option must be scaled by the same value: the
+        # preview shows them side by side and filter_routes_by_max_detour measures
+        # them against each other, so mixing adjusted and free-flow durations both
+        # misreports ETAs and makes the detour cull depend on the time of day.
+        # get_traffic_duration_multiplier is uncached and hits TomTom when a key is
+        # configured, so it must not be called per route.
+        resolved_traffic_factors: List[Tuple[float, str]] = []
+
+        def traffic_factors() -> Tuple[float, str]:
+            """(multiplier, level) for this request; walking/cycling are never adjusted."""
+            if not resolved_traffic_factors:
+                resolved_traffic_factors.append(
+                    get_traffic_duration_multiplier(start_lat, start_lon)
+                    if valhalla_costing == 'auto' else (1.0, 'N/A')
+                )
+            return resolved_traffic_factors[0]
+
         try:
             url = f"{VALHALLA_URL}/route"
 
@@ -1585,11 +1601,10 @@ def calculate_route():
                     # Walking/cycling times should not be adjusted by road traffic
                     # ================================================================
                     base_time_minutes = route_data['trip']['summary']['time'] / 60
+                    traffic_multiplier, traffic_level = traffic_factors()
                     if valhalla_costing == 'auto':
-                        traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
                         logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {base_time_minutes * traffic_multiplier:.0f}min")
                     else:
-                        traffic_multiplier, traffic_level = 1.0, 'N/A'
                         logger.info(f"[ETA] {valhalla_costing}: {base_time_minutes:.0f} min (no traffic adjustment)")
 
                     # Main route entry. Cost + hazard + maneuver assembly is shared with the
@@ -1649,6 +1664,8 @@ def calculate_route():
                         avoid_motorways=avoid_motorways,
                         avoid_ferries=avoid_ferries,
                         avoid_unpaved=avoid_unpaved,
+                        traffic_multiplier=traffic_multiplier,
+                        traffic_level=traffic_level,
                     )
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
@@ -1778,11 +1795,14 @@ def calculate_route():
                                 print(f"[Valhalla] RETRY SUCCESS: Route found with {retry_limit} exclusions")
 
                                 # Process the retry response via the shared route-entry
-                                # builder (no traffic adjustment; maneuver lengths in metres,
-                                # matching the previous inline retry behaviour).
+                                # builder (maneuver lengths in metres, matching the
+                                # previous inline retry behaviour).
+                                retry_multiplier, retry_traffic_level = traffic_factors()
                                 routes = [build_valhalla_route_entry(
                                     trip=retry_data['trip'], name='Fastest', route_id=1,
-                                    traffic_multiplier=1.0, include_traffic_fields=False,
+                                    traffic_multiplier=retry_multiplier,
+                                    traffic_level=retry_traffic_level,
+                                    include_traffic_fields=True,
                                     maneuver_length_in_meters=True,
                                     hazards=hazards, cost_calculator=cost_calculator,
                                     vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
@@ -1796,7 +1816,7 @@ def calculate_route():
                                 routes.extend(build_valhalla_alternate_route_entries(
                                     retry_data,
                                     first_route_id=2,
-                                    traffic_multiplier=1.0,
+                                    traffic_multiplier=retry_multiplier,
                                     maneuver_length_in_meters=True,
                                     hazards=hazards, cost_calculator=cost_calculator,
                                     vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
@@ -1815,7 +1835,8 @@ def calculate_route():
                                     fuel_price=fuel_price, energy_efficiency=energy_efficiency,
                                     electricity_price=electricity_price, include_tolls=include_tolls,
                                     include_caz=include_caz, caz_exempt=caz_exempt,
-                                    traffic_multiplier=traffic_multiplier,
+                                    traffic_multiplier=retry_multiplier,
+                                    traffic_level=retry_traffic_level,
                                     max_detour=max_detour,
                                     valhalla_costing=valhalla_costing,
                                     prefer_scenic=prefer_scenic,
@@ -1894,9 +1915,7 @@ def calculate_route():
             recovery_data: Optional[Dict[str, Any]] = None
             if graphhopper_route and graphhopper_route.get('success'):
                 try:
-                    tr_mult = 1.0
-                    if valhalla_costing == 'auto':
-                        tr_mult, _ = get_traffic_duration_multiplier(start_lat, start_lon)
+                    tr_mult, tr_level = traffic_factors()
                     gh_entry = None
                     if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                         gh_entry = build_graphhopper_optimised_route_entry(
@@ -1912,6 +1931,8 @@ def calculate_route():
                             include_caz=include_caz,
                             caz_exempt=caz_exempt,
                             traffic_multiplier=tr_mult,
+                            traffic_level=tr_level,
+                            include_traffic_fields=True,
                         )
                     routes_out: List[Dict[str, Any]] = []
                     if gh_entry:
@@ -1957,6 +1978,7 @@ def calculate_route():
                                 include_tolls=include_tolls,
                                 include_caz=include_caz,
                                 caz_exempt=caz_exempt,
+                                traffic_factors=(tr_mult, tr_level),
                             )
                             if v_routes:
                                 routes_out.extend(v_routes)
@@ -1977,6 +1999,8 @@ def calculate_route():
                             fuel_price=fuel_price, energy_efficiency=energy_efficiency,
                             electricity_price=electricity_price, include_tolls=include_tolls,
                             include_caz=include_caz, caz_exempt=caz_exempt,
+                            traffic_multiplier=tr_mult,
+                            traffic_level=tr_level,
                             max_detour=max_detour,
                             valhalla_costing=valhalla_costing,
                             prefer_scenic=prefer_scenic,

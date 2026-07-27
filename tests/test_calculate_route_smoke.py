@@ -130,6 +130,77 @@ class RoutePreviewVarietySmokeTest(unittest.TestCase):
         self.assertGreater(len(names), 1)
 
 
+class RouteEtaComparabilitySmokeTest(unittest.TestCase):
+    """
+    Every option in one response must be scaled by the same traffic multiplier.
+
+    Fastest and the Valhalla alternates were traffic-adjusted while 🌿 Scenic,
+    🛤️ Quiet and ⚡ Optimised kept their free-flow times, so the preview compared
+    adjusted ETAs against unadjusted ones and understated the slower options.
+    """
+
+    MULTIPLIER = 1.35
+    LEVEL = 'Peak Hours'
+
+    def setUp(self):
+        self.client = vw.app.test_client()
+
+    def _routes(self, **body_overrides):
+        def fake_post(url, json=None, **kwargs):
+            return _PreferenceAwareResp(json)
+
+        body = {
+            'start': '53.536,-1.380', 'end': '53.517,-1.150',
+            'routing_mode': 'auto', 'enable_hazard_avoidance': False,
+            'force_refresh': True,
+        }
+        body.update(body_overrides)
+
+        with patch.object(vw, 'route_with_graphhopper', return_value=None), \
+             patch.object(vw, 'fetch_hazards_for_route', return_value={}), \
+             patch.object(vw, 'fetch_tomtom_incidents', return_value={}), \
+             patch.object(vw, 'get_traffic_duration_multiplier',
+                          return_value=(self.MULTIPLIER, self.LEVEL)) as traffic:
+            with patch.object(vw.requests, 'post', side_effect=fake_post), \
+                 patch.object(vw.requests, 'get', return_value=_FakeResp()):
+                r = self.client.post('/api/route', json=body)
+            self.traffic_calls = traffic.call_count
+
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertTrue(d.get('success'), f"error: {d.get('error')}")
+        return d['routes']
+
+    def test_every_option_reports_the_same_traffic_scaling(self):
+        routes = self._routes()
+        self.assertGreater(len(routes), 1)
+        for route in routes:
+            with self.subTest(route=route.get('name')):
+                self.assertEqual(route.get('traffic_multiplier'), self.MULTIPLIER)
+                self.assertEqual(route.get('traffic_level'), self.LEVEL)
+                self.assertEqual(
+                    route['duration_minutes'],
+                    round(route['base_duration_minutes'] * self.MULTIPLIER),
+                )
+
+    def test_preference_options_survive_honest_traffic_scaling(self):
+        """🛤️ Quiet is 40% over Fastest once both are scaled — it must still be offered."""
+        names = [r.get('name') for r in self._routes()]
+        self.assertIn(QUIET_ROUTE_NAME, names)
+        self.assertIn(SCENIC_ROUTE_NAME, names)
+
+    def test_traffic_is_resolved_once_per_request(self):
+        self._routes()
+        self.assertEqual(self.traffic_calls, 1)
+
+    def test_walking_routes_are_never_traffic_adjusted(self):
+        routes = self._routes(routing_mode='pedestrian', vehicle_type='pedestrian')
+        self.assertEqual(self.traffic_calls, 0)
+        for route in routes:
+            with self.subTest(route=route.get('name')):
+                self.assertEqual(route['duration_minutes'], route['base_duration_minutes'])
+
+
 class _SingleRouteResp:
     """Valhalla stub that answers every costing with the same single path."""
 

@@ -20,7 +20,20 @@ from voyagr.services.routing.optimised_route import (
 
 # 🌿 Scenic / 🛤️ Quiet down-weight motorways on purpose, so they cost more time than
 # the user's plain "Max Detour Allowed" slider intends for incidental alternates.
-PREFERENCE_ROUTE_DETOUR_MULTIPLIER = 2.0
+#
+# A floor rather than a multiple of the user's cap: the cap answers "how far out of my
+# way for a quicker road", while these options answer "offer me a calmer road even if
+# it costs time". Motorway-avoiding costing typically lands 25-50% over Fastest, so
+# this keeps them offered while still excluding the genuinely unreasonable — a route
+# that takes twice as long is not an alternative anyone would pick.
+#
+# Sizing note: this used to be twice the user's cap, applied to durations that mixed
+# traffic-adjusted and free-flow values. Because the baseline was inflated and these
+# options were not, the effective tolerance drifted with the time of day (~40% off-peak
+# to ~89% at a 1.35x peak, and up to ~180% if the multiplier hit its 2.0 cap). Now that
+# every option is scaled identically the comparison is honest, so the tolerance has to
+# be stated outright instead of falling out of the traffic conditions.
+PREFERENCE_ROUTE_MIN_DETOUR_PERCENT = 75.0
 
 # The route preview is a chooser: collapsing it to one option removes the point.
 MIN_PREVIEW_ROUTE_OPTIONS = 2
@@ -110,12 +123,13 @@ def _detour_allowance_percent(route: Dict[str, Any], max_detour_percent: int) ->
 
     🌿 Scenic and 🛤️ Quiet are fetched with costing that down-weights motorways, so
     they are slower than Fastest by design — at the default 20% cap they were culled
-    immediately after being requested and never reached the preview. They get
-    ``PREFERENCE_ROUTE_DETOUR_MULTIPLIER`` times the user's allowance so the option
-    is attainable, while a 0% cap still means "no detour at all".
+    immediately after being requested and never reached the preview. They get at least
+    ``PREFERENCE_ROUTE_MIN_DETOUR_PERCENT`` so the option is attainable regardless of
+    traffic, and more when the user's own allowance is wider. A 0% cap still means
+    "no detour at all".
     """
-    if _is_preference_variety_route(route):
-        return max_detour_percent * PREFERENCE_ROUTE_DETOUR_MULTIPLIER
+    if _is_preference_variety_route(route) and max_detour_percent > 0:
+        return max(float(max_detour_percent), PREFERENCE_ROUTE_MIN_DETOUR_PERCENT)
     return float(max_detour_percent)
 
 
@@ -221,6 +235,9 @@ def finalize_route_variety(
     baseline so a camera-safer Optimised pin cannot cull the time option, and
     gives 🌿 Scenic / 🛤️ Quiet the wider preference allowance so those options
     survive the default cap. The client still sees Optimised as the top option.
+
+    Durations are only comparable because every option in a response is scaled by
+    the same traffic multiplier; see ``PREFERENCE_ROUTE_MIN_DETOUR_PERCENT``.
     """
     routes = dedupe_similar_routes(routes)
     routes = filter_routes_by_max_detour(routes, max_detour_percent)

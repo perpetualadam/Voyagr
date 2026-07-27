@@ -334,12 +334,15 @@ def ensure_costing_preference_variety_routes(
     avoid_unpaved: bool = False,
     route_optimization: str = 'fastest',
     min_distinct: int = MIN_PREFERENCE_VARIETY_DISTINCT,
+    traffic_multiplier: float = 1.0,
+    traffic_level: str = 'N/A',
 ) -> List[Dict[str, Any]]:
     """
     Ensure 🛤️ Quiet and 🌿 Scenic costing-preference routes are offered when possible.
 
     Replaces the former 📏 Shortest option. Each preference route is fetched only
-    when missing and geometrically distinct from existing options.
+    when missing and geometrically distinct from existing options, and is scaled by
+    the same traffic multiplier as the rest of the response.
     """
     if has_waypoints or valhalla_costing != 'auto' or not routes:
         return routes
@@ -387,6 +390,8 @@ def ensure_costing_preference_variety_routes(
             include_tolls=include_tolls,
             include_caz=include_caz,
             caz_exempt=caz_exempt,
+            traffic_multiplier=traffic_multiplier,
+            traffic_level=traffic_level,
         )
 
     return routes
@@ -417,6 +422,8 @@ def _append_preference_route_if_distinct(
     include_tolls: bool,
     include_caz: bool,
     caz_exempt: bool,
+    traffic_multiplier: float = 1.0,
+    traffic_level: str = 'N/A',
 ) -> List[Dict[str, Any]]:
     """Fetch one Scenic/Quiet route and append when distinct from existing options."""
     if any((r.get('name') or '').strip() == name for r in routes):
@@ -443,6 +450,7 @@ def _append_preference_route_if_distinct(
         fuel_price=fuel_price, energy_efficiency=energy_efficiency,
         electricity_price=electricity_price, include_tolls=include_tolls,
         include_caz=include_caz, caz_exempt=caz_exempt,
+        traffic_multiplier=traffic_multiplier, traffic_level=traffic_level,
     )
     if not entry:
         return routes
@@ -675,11 +683,16 @@ def ensure_optimised_camera_avoiding_route(
     include_tolls: bool,
     include_caz: bool,
     caz_exempt: bool,
+    traffic_multiplier: float = 1.0,
+    traffic_level: str = 'N/A',
 ) -> List[Dict[str, Any]]:
     """
     Ensure a ⚡ Optimised route exists that avoids cameras like Fast/Short routes.
     Prunes Optimised entries that lack real avoidance, then adds Valhalla auto with
     exclude_locations (no bare fallback) when no qualifying Optimised remains.
+
+    The route is scaled by the response's traffic multiplier: it is usually pinned
+    first, so its duration becomes the headline ETA.
     """
     if not (enable_hazard_avoidance and avoid_cameras):
         return routes
@@ -727,6 +740,7 @@ def ensure_optimised_camera_avoiding_route(
         fuel_price=fuel_price, energy_efficiency=energy_efficiency,
         electricity_price=electricity_price, include_tolls=include_tolls,
         include_caz=include_caz, caz_exempt=caz_exempt,
+        traffic_multiplier=traffic_multiplier, traffic_level=traffic_level,
     )
     if entry and int(entry.get('hazard_count') or 0) <= baseline:
         entry['camera_exclusions_applied'] = True

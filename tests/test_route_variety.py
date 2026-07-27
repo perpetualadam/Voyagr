@@ -198,6 +198,63 @@ class TestRouteVariety(unittest.TestCase):
         self.assertNotIn('Alternate', names)
         self.assertIn(QUIET_ROUTE_NAME, names)
 
+    def test_max_detour_keeps_preference_routes_under_a_tight_cap(self):
+        """A tight cap is about quicker roads; Quiet/Scenic are asked for despite the time."""
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route(QUIET_ROUTE_NAME, SHAPE_B, duration=48, distance=27.0, route_id=2),
+            _route(SCENIC_ROUTE_NAME, SHAPE_C, duration=51, distance=29.0, route_id=3),
+        ]
+        # 60% and 70% over Fastest — far past a 5% cap, inside the preference floor.
+        names = [r['name'] for r in filter_routes_by_max_detour(routes, 5)]
+        self.assertIn(QUIET_ROUTE_NAME, names)
+        self.assertIn(SCENIC_ROUTE_NAME, names)
+
+    def test_max_detour_drops_preference_routes_beyond_the_floor(self):
+        """The floor is a tolerance, not an exemption: twice as long is not an option."""
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route(QUIET_ROUTE_NAME, SHAPE_B, duration=45, distance=27.0, route_id=2),
+            _route(SCENIC_ROUTE_NAME, SHAPE_C, duration=90, distance=52.0, route_id=3),
+        ]
+        # Quiet is 50% over, Scenic 200% over.
+        names = [r['name'] for r in filter_routes_by_max_detour(routes, 20)]
+        self.assertIn(QUIET_ROUTE_NAME, names)
+        self.assertNotIn(SCENIC_ROUTE_NAME, names)
+
+    def test_max_detour_lets_a_generous_user_cap_beat_the_floor(self):
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route(QUIET_ROUTE_NAME, SHAPE_B, duration=57, distance=31.0, route_id=2),
+        ]
+        # 90% over Fastest: past the floor, inside a 95% cap.
+        self.assertIn(QUIET_ROUTE_NAME, [r['name'] for r in filter_routes_by_max_detour(routes, 95)])
+
+    def test_max_detour_decision_is_independent_of_traffic_scaling(self):
+        """
+        The same routes must survive whether durations are free-flow or traffic-scaled.
+
+        Every option in a response is scaled by one multiplier, so scaling cannot
+        change which options are offered. It used to: the baseline was inflated while
+        Quiet and Scenic were not, so the effective tolerance drifted with the traffic.
+        """
+        def routes_at(multiplier):
+            return [
+                _route('Fastest', SHAPE_A, duration=30 * multiplier, distance=24.0, route_id=1),
+                _route(QUIET_ROUTE_NAME, SHAPE_B, duration=48 * multiplier, distance=27.0, route_id=2),
+                _route('Alternate', SHAPE_C, duration=39 * multiplier, distance=29.0, route_id=3),
+            ]
+
+        free_flow = [r['name'] for r in filter_routes_by_max_detour(routes_at(1.0), 20)]
+        peak = [r['name'] for r in filter_routes_by_max_detour(routes_at(1.35), 20)]
+        heavy = [r['name'] for r in filter_routes_by_max_detour(routes_at(2.0), 20)]
+
+        self.assertEqual(free_flow, peak)
+        self.assertEqual(free_flow, heavy)
+        # Quiet (60% over) is kept by the preference floor, Alternate (30% over) dropped.
+        self.assertIn(QUIET_ROUTE_NAME, free_flow)
+        self.assertNotIn('Alternate', free_flow)
+
     def test_max_detour_respects_zero_allowance_for_preference_routes(self):
         routes = [
             _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
