@@ -130,31 +130,87 @@ def _camera_area_indices_for_bbox(
     return sorted(set(indices))
 
 
+def camera_map_data_filters_are_selective() -> bool:
+    """
+    True when Settings → Map data filters has disabled at least one camera_* type.
+
+    UK camera_area_N sections are type-agnostic (all SCDB types in a grid cell). When the
+    user turns types off, GraphHopper must use preference-filtered SCDB zones instead of
+    (or without) those sections so disabled types are not hard-blocked.
+    """
+    try:
+        from voyagr.config import CAMERA_HAZARD_BUCKETS
+
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT hazard_type, enabled FROM hazard_preferences "
+                "WHERE hazard_type LIKE 'camera_%' OR hazard_type = 'camera'"
+            )
+            rows = cursor.fetchall()
+        if not rows:
+            return False
+        pref_on = {h[0]: bool(h[1]) for h in rows}
+        for bucket in CAMERA_HAZARD_BUCKETS:
+            if bucket in pref_on and not pref_on[bucket]:
+                return True
+        if pref_on.get('camera') is False:
+            return True
+        return False
+    except Exception as e:
+        logger.warning('[HAZARDS] camera_map_data_filters_are_selective: %s', e)
+        return False
+
+
 def build_graphhopper_combined_camera_model(
     camera_hazards: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     route_bbox: Optional[Dict[str, float]] = None,
     *,
     max_scdb_hazards: int = 40,
     use_area_sections: bool = True,
+    selective_filters: Optional[bool] = None,
+    start_lat: Optional[float] = None,
+    start_lon: Optional[float] = None,
+    end_lat: Optional[float] = None,
+    end_lon: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
-    GraphHopper camera avoidance: UK grid sections (camera_area_N on server) plus optional
-    SCDB inline zones for map-data filter precision. Area sections are primary — they
-    cover all cameras in populated grid cells, not just the top 40 by weight.
+    GraphHopper camera avoidance for ⚡ Optimised.
+
+    - UK grid sections (camera_area_N) cover all cameras in populated cells (not just top N).
+    - Preference-filtered SCDB inline zones apply Settings → Map data filters and catch
+      live DB cameras missing from the static area snapshot.
+    - When map-data filters disable any camera type, skip type-agnostic area sections and
+      use SCDB zones only (higher cap) so selected types are blocked and disabled are not.
     """
     parts: List[Optional[Dict[str, Any]]] = []
-    if use_area_sections:
+    has_filtered = bool(camera_hazards and any(camera_hazards.values()))
+    if selective_filters is None:
+        selective_filters = camera_map_data_filters_are_selective() if has_filtered else False
+
+    # Area sections are all-types; skip them when the user has turned subtypes off.
+    if use_area_sections and not selective_filters:
         area_model = build_graphhopper_camera_avoidance_model(route_bbox)
         if area_model:
             parts.append(area_model)
-    # SCDB inline zones only when server-side area sections are unavailable (non-UK / empty bbox).
-    # Merging both inflates the custom model and can cause GraphHopper POST failures on dense routes.
-    if not parts and camera_hazards and any(camera_hazards.values()):
+
+    if has_filtered:
+        # Broader SCDB cap when areas are unavailable or skipped for filter precision.
+        scdb_cap = max_scdb_hazards
+        if selective_filters or not parts:
+            scdb_cap = max(max_scdb_hazards, 80)
         filtered = build_graphhopper_filtered_camera_model(
-            camera_hazards, route_bbox=route_bbox, max_hazards=max_scdb_hazards,
+            camera_hazards,
+            route_bbox=route_bbox,
+            max_hazards=scdb_cap,
+            start_lat=start_lat,
+            start_lon=start_lon,
+            end_lat=end_lat,
+            end_lon=end_lon,
         )
         if filtered:
             parts.append(filtered)
+
     return merge_graphhopper_custom_model_parts(*parts) or {}
 
 
@@ -398,13 +454,24 @@ def build_graphhopper_filtered_camera_model(
     hazards: Dict[str, List[Dict[str, Any]]],
     route_bbox: Optional[Dict[str, float]] = None,
     max_hazards: int = 40,
+    *,
+    start_lat: Optional[float] = None,
+    start_lon: Optional[float] = None,
+    end_lat: Optional[float] = None,
+    end_lon: Optional[float] = None,
 ) -> Dict[str, Any]:
     """GraphHopper avoidance zones for enabled camera_* buckets (respects map-data filters)."""
     camera_only = {k: list(hazards.get(k, [])) for k in CAMERA_HAZARD_BUCKET_KEYS if hazards.get(k)}
     if not any(camera_only.values()):
         return {}
     return build_graphhopper_custom_model(
-        camera_only, route_bbox=route_bbox, max_hazards=max_hazards
+        camera_only,
+        route_bbox=route_bbox,
+        max_hazards=max_hazards,
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
     )
 
 
@@ -448,11 +515,20 @@ def extract_graphhopper_live_incident_hazards(
 
 def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                                    route_bbox: Optional[Dict[str, float]] = None,
-                                   max_hazards: int = 25) -> Dict[str, Any]:
+                                   max_hazards: int = 25,
+                                   *,
+                                   start_lat: Optional[float] = None,
+                                   start_lon: Optional[float] = None,
+                                   end_lat: Optional[float] = None,
+                                   end_lon: Optional[float] = None) -> Dict[str, Any]:
     """Build GraphHopper custom model that hard-blocks hazards via circular zones."""
     try:
         all_hazards = []
         hazard_weights = dict(GRAPHOPPER_HAZARD_WEIGHTS)
+        has_corridor = (
+            start_lat is not None and start_lon is not None
+            and end_lat is not None and end_lon is not None
+        )
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
@@ -469,9 +545,38 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                         if not (route_bbox['min_lat'] - lat_margin <= hazard['lat'] <= route_bbox['max_lat'] + lat_margin and
                                 route_bbox['min_lon'] - lon_margin <= hazard['lon'] <= route_bbox['max_lon'] + lon_margin):
                             continue
-                    all_hazards.append({'lat': hazard['lat'], 'lon': hazard['lon'], 'type': hazard_type, 'weight': weight})
+                    distance_to_route = float('inf')
+                    if has_corridor:
+                        dx = end_lon - start_lon
+                        dy = end_lat - start_lat
+                        px = hazard['lon'] - start_lon
+                        py = hazard['lat'] - start_lat
+                        line_length_sq = dx * dx + dy * dy
+                        if line_length_sq > 0:
+                            t = max(0, min(1, (px * dx + py * dy) / line_length_sq))
+                            closest_lon = start_lon + t * dx
+                            closest_lat = start_lat + t * dy
+                            distance_to_route = get_distance_between_points(
+                                hazard['lat'], hazard['lon'], closest_lat, closest_lon,
+                            )
+                        else:
+                            distance_to_route = get_distance_between_points(
+                                hazard['lat'], hazard['lon'], start_lat, start_lon,
+                            )
+                    all_hazards.append({
+                        'lat': hazard['lat'],
+                        'lon': hazard['lon'],
+                        'type': hazard_type,
+                        'weight': weight,
+                        'distance_to_route': distance_to_route,
+                    })
 
-        all_hazards.sort(key=lambda h: h['weight'], reverse=True)
+        if has_corridor:
+            # Prefer cameras near the A→B corridor so the capped SCDB list blocks
+            # selected map-data points that matter for this journey (Valhalla parity).
+            all_hazards.sort(key=lambda h: (h['distance_to_route'], -h['weight']))
+        else:
+            all_hazards.sort(key=lambda h: h['weight'], reverse=True)
         all_hazards = all_hazards[:max_hazards]
 
         if not all_hazards:

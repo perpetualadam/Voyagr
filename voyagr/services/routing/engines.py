@@ -284,10 +284,22 @@ def route_with_graphhopper(
             cam_model = build_graphhopper_combined_camera_model(
                 camera_hazards if camera_hazards and any(camera_hazards.values()) else None,
                 route_bbox=route_bbox,
+                start_lat=start_lat,
+                start_lon=start_lon,
+                end_lat=end_lat,
+                end_lon=end_lon,
             ) or None
             if cam_model:
                 camera_model_included = True
-                logger.info('[GRAPHHOPPER] Using UK camera area sections (+ SCDB filters when enabled)')
+                rules = ' '.join(
+                    str(r.get('if', '')) for r in (cam_model.get('priority') or [])
+                )
+                has_areas = 'in_camera_area_' in rules
+                has_scdb = 'in_hazard_' in rules
+                logger.info(
+                    '[GRAPHHOPPER] Camera model: area_sections=%s scdb_filters=%s',
+                    has_areas, has_scdb,
+                )
 
         osm_dynamic: Dict[str, list] = {}
         if traffic_light_hazards:
