@@ -7,8 +7,9 @@ name: CI
 #         lane guidance, speed-limit detector)
 #       * routing-service suites guarding the /api/route modularization (request
 #         parsing, Valhalla payloads/classifier/POST, route entries, response
-#         envelope, maneuvers, OSRM fallback, hazard dedup, enrichment, and a
-#         Flask-level smoke of calculate_route with mocked engines)
+#         envelope, maneuvers, OSRM fallback, hazard dedup, enrichment, route
+#         preview variety/costing preferences, and a Flask-level smoke of
+#         calculate_route with mocked engines)
 #     All chosen suites exercise real module logic and tolerate missing network/DB
 #     (live Overpass/TomTom calls and absent hazard_preferences fall back to
 #     defaults), so they stay green offline. Suites needing the Kivy/satnav desktop
@@ -89,6 +90,9 @@ jobs:
           tests/test_valhalla_excludes.py
           tests/test_graphhopper_attempt.py
           tests/test_route_discovery.py
+          tests/test_route_variety.py
+          tests/test_preference_route_variety.py
+          tests/test_route_costing_options.py
           tests/test_osrm_maneuvers.py
           tests/test_route_entries.py
           tests/test_route_success_response.py
