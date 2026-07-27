@@ -11,10 +11,21 @@ describe('vehicle-marker module', () => {
         expect(svg).not.toContain('<img');
     });
 
-    test('exported vehicle marker dimensions are ~30% larger than legacy 60px', () => {
-        expect(VM.VEHICLE_MARKER_SIZE).toBe(78);
-        expect(VM.VEHICLE_MARKER_ICON_SIZE).toEqual([78, 78]);
-        expect(VM.VEHICLE_MARKER_ICON_ANCHOR).toEqual([39, 39]);
+    test('exported vehicle marker dimensions are 24px + ~30%', () => {
+        expect(VM.VEHICLE_MARKER_SIZE).toBe(31);
+        expect(VM.VEHICLE_MARKER_ICON_SIZE).toEqual([31, 31]);
+        expect(VM.VEHICLE_MARKER_ICON_ANCHOR).toEqual([15.5, 15.5]);
+    });
+
+    test('applyVehicleMarkerElementSize sizes root and inner wrapper from one constant', () => {
+        const el = document.createElement('div');
+        el.innerHTML = '<div style="width:24px;height:24px"><svg></svg></div>';
+        VM.applyVehicleMarkerElementSize(el);
+        expect(el.style.width).toBe('31px');
+        expect(el.style.height).toBe('31px');
+        expect(el.querySelector('div').style.width).toBe('100%');
+        expect(el.querySelector('div').style.height).toBe('100%');
+        expect(el.style.getPropertyValue('--vehicle-marker-shadow-width')).toBe('21px');
     });
 
     test('buildVehicleMarkerPopupHtml includes speed, heading, and accuracy', () => {
