@@ -1072,6 +1072,7 @@ from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_r
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
 from voyagr.services.routing.route_entries import (
     build_graphhopper_optimised_route_entry,
+    build_valhalla_alternate_route_entries,
     build_valhalla_route_entry,
 )
 # FallbackChainOptimizer / get_traffic_duration_multiplier live in
@@ -1599,20 +1600,16 @@ def calculate_route():
                     hazard_count = routes[0].get('hazard_count', 0)
 
                     # Alternative routes (if available) - Valhalla uses 'alternates' not 'alternatives'
-                    if 'alternates' in route_data:
-                        route_names = ['Alternate', 'Balanced', 'Alternative']
-                        for idx, alt_route in enumerate(route_data['alternates'][:3]):
-                            if 'trip' in alt_route and 'summary' in alt_route['trip']:
-                                alt_name = route_names[idx] if idx < len(route_names) else f'Alternative {idx}'
-                                routes.append(build_valhalla_route_entry(
-                                    trip=alt_route['trip'], name=alt_name, route_id=idx + 2,
-                                    traffic_multiplier=traffic_multiplier,
-                                    hazards=hazards, cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price, include_tolls=include_tolls,
-                                    include_caz=include_caz, caz_exempt=caz_exempt,
-                                ))
+                    routes.extend(build_valhalla_alternate_route_entries(
+                        route_data,
+                        first_route_id=2,
+                        traffic_multiplier=traffic_multiplier,
+                        hazards=hazards, cost_calculator=cost_calculator,
+                        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price, include_tolls=include_tolls,
+                        include_caz=include_caz, caz_exempt=caz_exempt,
+                    ))
 
                     routes = dedupe_similar_routes(routes)
 
@@ -1783,6 +1780,19 @@ def calculate_route():
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                 )]
                                 logger.info(f"[VALHALLA] Retry route has {len(routes[0].get('maneuvers') or [])} maneuvers")
+                                # The retry payload asks for alternates too; offer them
+                                # instead of leaving the preview with a lone Fastest.
+                                routes.extend(build_valhalla_alternate_route_entries(
+                                    retry_data,
+                                    first_route_id=2,
+                                    traffic_multiplier=1.0,
+                                    maneuver_length_in_meters=True,
+                                    hazards=hazards, cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price, include_tolls=include_tolls,
+                                    include_caz=include_caz, caz_exempt=caz_exempt,
+                                ))
 
                                 retry_enrich = RouteEnrichmentContext(
                                     url=url, headers=headers, route_locations=route_locations,

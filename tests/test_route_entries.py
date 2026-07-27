@@ -2,7 +2,10 @@
 
 import unittest
 
-from voyagr.services.routing.route_entries import build_valhalla_route_entry
+from voyagr.services.routing.route_entries import (
+    build_valhalla_alternate_route_entries,
+    build_valhalla_route_entry,
+)
 
 
 class _FakeCostCalc:
@@ -93,6 +96,62 @@ class BuildValhallaRouteEntryTest(unittest.TestCase):
         self.assertEqual(e['hazard_penalty_seconds'], 240)
         self.assertEqual(e['hazard_count'], 3)
         self.assertEqual(len(e['hazards']), 1)
+
+
+class BuildValhallaAlternateRouteEntriesTest(unittest.TestCase):
+    """Every 2-point car payload asks Valhalla for alternates; they must be offered."""
+
+    def test_offers_each_alternate_with_its_own_name_and_id(self):
+        route_data = {
+            'trip': _trip(),
+            'alternates': [{'trip': _trip()}, {'trip': _trip()}, {'trip': _trip()}],
+        }
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+        )
+        self.assertEqual([e['name'] for e in entries], ['Alternate', 'Balanced', 'Alternative'])
+        self.assertEqual([e['id'] for e in entries], [2, 3, 4])
+
+    def test_applies_traffic_multiplier_to_alternate_durations(self):
+        route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()}]}
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.5, **COMMON,
+        )
+        self.assertEqual(entries[0]['duration_minutes'], 15)  # 10 min base * 1.5
+
+    def test_no_alternates_yields_no_entries(self):
+        self.assertEqual(
+            build_valhalla_alternate_route_entries(
+                {'trip': _trip()}, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+            ),
+            [],
+        )
+
+    def test_skips_malformed_alternates_without_a_trip_summary(self):
+        route_data = {
+            'trip': _trip(),
+            'alternates': [{}, {'trip': {'legs': []}}, {'trip': _trip()}],
+        }
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+        )
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['name'], 'Alternate')
+
+    def test_caps_alternates_at_the_named_set(self):
+        route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()} for _ in range(6)]}
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+        )
+        self.assertEqual(len(entries), 3)
+
+    def test_maneuver_length_in_meters_propagates_to_alternates(self):
+        route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()}]}
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0,
+            maneuver_length_in_meters=True, **COMMON,
+        )
+        self.assertEqual(entries[0]['maneuvers'][0]['distance'], 10000.0)
 
 
 class ManeuversFromGraphhopperRouteTest(unittest.TestCase):

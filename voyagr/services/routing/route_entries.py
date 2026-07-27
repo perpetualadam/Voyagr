@@ -231,6 +231,63 @@ def build_valhalla_route_entry(
     return entry
 
 
+#: Display names for Valhalla ``alternates``, in the order Valhalla returns them.
+VALHALLA_ALTERNATE_ROUTE_NAMES = ('Alternate', 'Balanced', 'Alternative')
+
+
+def build_valhalla_alternate_route_entries(
+    route_data: Dict[str, Any],
+    *,
+    first_route_id: int,
+    traffic_multiplier: float,
+    hazards: Dict[str, Any],
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+    maneuver_length_in_meters: bool = False,
+    max_alternates: int = len(VALHALLA_ALTERNATE_ROUTE_NAMES),
+) -> List[Dict[str, Any]]:
+    """
+    Build route entries for the ``alternates`` of a Valhalla ``/route`` response.
+
+    Every payload Voyagr sends for a 2-point car route asks for ``alternates``, so
+    each response-handling path should offer them; dropping them leaves the preview
+    with only the routes the ensure_*/discovery helpers manage to synthesise.
+    """
+    entries: List[Dict[str, Any]] = []
+    for alt_route in (route_data or {}).get('alternates') or []:
+        if len(entries) >= max_alternates:
+            break
+        trip = (alt_route or {}).get('trip')
+        if not trip or 'summary' not in trip:
+            continue
+        # Named by kept position, not source index, so a malformed alternate does
+        # not leave the survivors with gaps in their names or ids.
+        idx = len(entries)
+        name = (
+            VALHALLA_ALTERNATE_ROUTE_NAMES[idx]
+            if idx < len(VALHALLA_ALTERNATE_ROUTE_NAMES)
+            else f'Alternative {idx}'
+        )
+        entries.append(build_valhalla_route_entry(
+            trip=trip, name=name, route_id=first_route_id + idx,
+            traffic_multiplier=traffic_multiplier,
+            maneuver_length_in_meters=maneuver_length_in_meters,
+            hazards=hazards, cost_calculator=cost_calculator,
+            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+            electricity_price=electricity_price, include_tolls=include_tolls,
+            include_caz=include_caz, caz_exempt=caz_exempt,
+        ))
+    return entries
+
+
 def build_graphhopper_optimised_route_entry(
     graphhopper_route: Dict[str, Any],
     hazards: Dict[str, List[Dict[str, Any]]],
