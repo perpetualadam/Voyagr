@@ -1912,8 +1912,8 @@ h1 {
 /* Size comes from vehicle-marker.js (--vehicle-marker-size); the literal is only a
    fallback for the first paint before applyVehicleMarkerElementSize runs. */
 .vehicle-marker-icon {
-    width: var(--vehicle-marker-size, 31px);
-    height: var(--vehicle-marker-size, 31px);
+    width: var(--vehicle-marker-size, 42.37px);
+    height: var(--vehicle-marker-size, 42.37px);
     background: none !important;
     border: none !important;
     box-shadow: none !important;
@@ -1966,11 +1966,11 @@ h1 {
 .maplibregl-marker.vehicle-marker-icon::after {
     content: '';
     position: absolute;
-    bottom: calc(-1 * var(--vehicle-marker-shadow-offset, 2px));
+    bottom: calc(-1 * var(--vehicle-marker-shadow-offset, 2.73px));
     left: 50%;
     transform: translateX(-50%);
-    width: var(--vehicle-marker-shadow-width, 21px);
-    height: var(--vehicle-marker-shadow-height, 4px);
+    width: var(--vehicle-marker-shadow-width, 28.7px);
+    height: var(--vehicle-marker-shadow-height, 5.47px);
     background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4) 0%, transparent 70%);
     border-radius: 50%;
     opacity: 0.6;

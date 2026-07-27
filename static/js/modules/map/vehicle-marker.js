@@ -5,14 +5,6 @@
 (function (root) {
     'use strict';
 
-    /** Painted height of the vehicle delta in CSS pixels (24px + ~30%). */
-    var VEHICLE_MARKER_SIZE = 31;
-    var VEHICLE_MARKER_ICON_SIZE = [VEHICLE_MARKER_SIZE, VEHICLE_MARKER_SIZE];
-    var VEHICLE_MARKER_ICON_ANCHOR = [VEHICLE_MARKER_SIZE / 2, VEHICLE_MARKER_SIZE / 2];
-    var VEHICLE_MARKER_SHADOW_WIDTH = 21;
-    var VEHICLE_MARKER_SHADOW_HEIGHT = 4;
-    var VEHICLE_MARKER_SHADOW_OFFSET = 2;
-
     /** Delta outline drawn on a 0–100 design grid. */
     var ARROW_PATH = 'M50 5 C 55 28 68 62 89 95 C 70 83 58 79 50 79 C 42 79 30 83 11 95 C 32 62 45 28 50 5 Z';
     var ARROW_STROKE_WIDTH = 4;
@@ -33,6 +25,68 @@
         height: ARROW_FILL_BOX.height + ARROW_STROKE_WIDTH,
     };
     var ARROW_VIEW_BOX = [ARROW_INK_BOX.x, ARROW_INK_BOX.y, ARROW_INK_BOX.width, ARROW_INK_BOX.height].join(' ');
+
+    /** Fraction of the route line's width the delta overhangs on each side. */
+    var POLYLINE_OVERHANG_FRACTION = 0.1;
+    /** Mirrors maplibre-helpers POLYLINE_LINE_WIDTH_SCALE when that script has not run yet. */
+    var FALLBACK_POLYLINE_WIDTH_SCALE = 2.8;
+    /** Mirrors the casing weight from route-selection buildNavActiveRoutePolylineStyle(). */
+    var FALLBACK_NAV_ROUTE_CASING_WEIGHT = 11;
+    /** Ground-shadow ellipse proportions, kept at the ratios tuned for a 31px marker. */
+    var SHADOW_WIDTH_FRACTION = 21 / 31;
+    var SHADOW_HEIGHT_FRACTION = 4 / 31;
+    var SHADOW_OFFSET_FRACTION = 2 / 31;
+
+    /**
+     * @param {number} value
+     * @returns {number}
+     */
+    function roundToHundredths(value) {
+        return Math.round(value * 100) / 100;
+    }
+
+    /**
+     * On-screen width of the active navigation route line, casing included, at the zooms
+     * drivers navigate at (z12–z17, where buildZoomScaledLineWidth holds the base width).
+     * Read live so the marker tracks the route line, with literal fallbacks for module
+     * consumers that load vehicle-marker.js on its own.
+     * @returns {number} Width in CSS pixels.
+     */
+    function getNavRoutePolylineWidth() {
+        var helpers = root.MapLibreHelpers;
+        var routes = root.VoyagrRouteSelection;
+        var scale = helpers && Number.isFinite(helpers.POLYLINE_LINE_WIDTH_SCALE)
+            ? helpers.POLYLINE_LINE_WIDTH_SCALE
+            : FALLBACK_POLYLINE_WIDTH_SCALE;
+        var casing = FALLBACK_NAV_ROUTE_CASING_WEIGHT;
+        if (routes && typeof routes.buildNavActiveRoutePolylineStyle === 'function') {
+            // No theme argument resolves the default (light) basemap style.
+            var style = routes.buildNavActiveRoutePolylineStyle();
+            if (style && Number.isFinite(style.outlineWeight)) casing = style.outlineWeight;
+        }
+        return casing * scale;
+    }
+
+    /**
+     * Square marker box whose painted delta overhangs the route line by
+     * POLYLINE_OVERHANG_FRACTION on each side. The delta paints narrower than it is tall
+     * (ARROW_INK_BOX aspect), so the box is scaled up from the target width.
+     * @param {number} [polylineWidth] - Route line width in CSS pixels.
+     * @returns {number} Marker box size in CSS pixels.
+     */
+    function getVehicleMarkerSizeForPolylineWidth(polylineWidth) {
+        var lineWidth = Number.isFinite(polylineWidth) ? polylineWidth : getNavRoutePolylineWidth();
+        var paintedWidth = lineWidth * (1 + 2 * POLYLINE_OVERHANG_FRACTION);
+        return roundToHundredths(paintedWidth * (ARROW_INK_BOX.height / ARROW_INK_BOX.width));
+    }
+
+    /** Marker box in CSS pixels; the delta paints this tall and 82/94 of it wide. */
+    var VEHICLE_MARKER_SIZE = getVehicleMarkerSizeForPolylineWidth();
+    var VEHICLE_MARKER_ICON_SIZE = [VEHICLE_MARKER_SIZE, VEHICLE_MARKER_SIZE];
+    var VEHICLE_MARKER_ICON_ANCHOR = [VEHICLE_MARKER_SIZE / 2, VEHICLE_MARKER_SIZE / 2];
+    var VEHICLE_MARKER_SHADOW_WIDTH = roundToHundredths(VEHICLE_MARKER_SIZE * SHADOW_WIDTH_FRACTION);
+    var VEHICLE_MARKER_SHADOW_HEIGHT = roundToHundredths(VEHICLE_MARKER_SIZE * SHADOW_HEIGHT_FRACTION);
+    var VEHICLE_MARKER_SHADOW_OFFSET = roundToHundredths(VEHICLE_MARKER_SIZE * SHADOW_OFFSET_FRACTION);
 
     /**
      * Apply marker dimensions on the MapLibre root element so CSS and inline HTML stay in sync.
@@ -109,8 +163,11 @@
         VEHICLE_MARKER_SHADOW_HEIGHT: VEHICLE_MARKER_SHADOW_HEIGHT,
         VEHICLE_MARKER_SHADOW_OFFSET: VEHICLE_MARKER_SHADOW_OFFSET,
         VEHICLE_MARKER_VIEW_BOX: ARROW_VIEW_BOX,
+        VEHICLE_MARKER_POLYLINE_OVERHANG_FRACTION: POLYLINE_OVERHANG_FRACTION,
         applyVehicleMarkerElementSize: applyVehicleMarkerElementSize,
         buildVehicleArrowSvg: buildVehicleArrowSvg,
+        getNavRoutePolylineWidth: getNavRoutePolylineWidth,
+        getVehicleMarkerSizeForPolylineWidth: getVehicleMarkerSizeForPolylineWidth,
         getVehicleArrowPaintedSize: getVehicleArrowPaintedSize,
         buildVehicleMarkerPopupHtml: buildVehicleMarkerPopupHtml,
     };
