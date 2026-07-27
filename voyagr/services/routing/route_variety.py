@@ -9,7 +9,7 @@ fetch genuinely distinct costing modes (🌿 Scenic / 🛤️ Quiet), and applie
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from voyagr.services.routing.optimised_route import (
     QUIET_ROUTE_NAME,
@@ -17,6 +17,13 @@ from voyagr.services.routing.optimised_route import (
     is_primary_optimised_route,
     routes_are_distinct,
 )
+
+# 🌿 Scenic / 🛤️ Quiet down-weight motorways on purpose, so they cost more time than
+# the user's plain "Max Detour Allowed" slider intends for incidental alternates.
+PREFERENCE_ROUTE_DETOUR_MULTIPLIER = 2.0
+
+# The route preview is a chooser: collapsing it to one option removes the point.
+MIN_PREVIEW_ROUTE_OPTIONS = 2
 
 
 def count_distinct_routes(routes: List[Dict[str, Any]]) -> int:
@@ -92,6 +99,26 @@ def _is_fastest_route(route: Dict[str, Any]) -> bool:
     return (route.get('name') or '').strip() == 'Fastest'
 
 
+def _is_preference_variety_route(route: Dict[str, Any]) -> bool:
+    """True for the named costing-preference options (🌿 Scenic / 🛤️ Quiet)."""
+    return (route.get('name') or '').strip() in (SCENIC_ROUTE_NAME, QUIET_ROUTE_NAME)
+
+
+def _detour_allowance_percent(route: Dict[str, Any], max_detour_percent: int) -> float:
+    """
+    Detour allowance for one option.
+
+    🌿 Scenic and 🛤️ Quiet are fetched with costing that down-weights motorways, so
+    they are slower than Fastest by design — at the default 20% cap they were culled
+    immediately after being requested and never reached the preview. They get
+    ``PREFERENCE_ROUTE_DETOUR_MULTIPLIER`` times the user's allowance so the option
+    is attainable, while a 0% cap still means "no detour at all".
+    """
+    if _is_preference_variety_route(route):
+        return max_detour_percent * PREFERENCE_ROUTE_DETOUR_MULTIPLIER
+    return float(max_detour_percent)
+
+
 def _max_detour_baseline_minutes(routes: List[Dict[str, Any]]) -> float:
     """
     Duration baseline for max-detour filtering.
@@ -125,7 +152,12 @@ def filter_routes_by_max_detour(
 ) -> List[Dict[str, Any]]:
     """
     Drop alternates whose duration exceeds the Fastest (time) baseline by more
-    than ``max_detour_percent``. Fastest and ⚡ Optimised are always kept.
+    than their detour allowance. Fastest and ⚡ Optimised are always kept, and
+    🌿 Scenic / 🛤️ Quiet get the wider preference allowance.
+
+    When filtering would leave a single option, the closest-to-baseline dropped
+    route is restored so the preview always offers a choice between the distinct
+    paths the router actually found.
     """
     if not routes or max_detour_percent >= 100:
         return routes
@@ -134,6 +166,7 @@ def filter_routes_by_max_detour(
         return routes
 
     kept: List[Dict[str, Any]] = [routes[0]]
+    dropped: List[Tuple[float, Dict[str, Any]]] = []
     for route in routes[1:]:
         if is_primary_optimised_route(route) or _is_fastest_route(route):
             kept.append(route)
@@ -143,8 +176,14 @@ def filter_routes_by_max_detour(
             kept.append(route)
             continue
         detour_pct = ((dur - baseline_min) / baseline_min) * 100.0
-        if detour_pct <= max_detour_percent:
+        if detour_pct <= _detour_allowance_percent(route, max_detour_percent):
             kept.append(route)
+        else:
+            dropped.append((detour_pct, route))
+
+    if len(kept) < MIN_PREVIEW_ROUTE_OPTIONS and dropped:
+        closest = min(dropped, key=lambda pair: pair[0])
+        kept.append(closest[1])
 
     for idx, route in enumerate(kept):
         route['id'] = idx + 1
@@ -179,8 +218,9 @@ def finalize_route_variety(
 
     Pin runs after filters so Optimised-as-primary cannot collapse a similar
     Fastest during dedupe; max-detour uses Fastest (not Optimised) as the ETA
-    baseline so a camera-safer Optimised pin cannot cull the time option.
-    The client still sees Optimised as the top option.
+    baseline so a camera-safer Optimised pin cannot cull the time option, and
+    gives 🌿 Scenic / 🛤️ Quiet the wider preference allowance so those options
+    survive the default cap. The client still sees Optimised as the top option.
     """
     routes = dedupe_similar_routes(routes)
     routes = filter_routes_by_max_detour(routes, max_detour_percent)

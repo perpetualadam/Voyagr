@@ -12,7 +12,11 @@ from voyagr.services.routing.route_variety import (
     pin_optimised_route_first,
     should_append_distinct_valhalla_route_types,
 )
-from voyagr.services.routing.optimised_route import PRIMARY_OPTIMISED_NAME
+from voyagr.services.routing.optimised_route import (
+    PRIMARY_OPTIMISED_NAME,
+    QUIET_ROUTE_NAME,
+    SCENIC_ROUTE_NAME,
+)
 
 COORDS_A = [(51.50, -0.12), (51.51, -0.11), (51.52, -0.10)]
 COORDS_B = [(51.50, -0.12), (51.51, -0.15), (51.52, -0.18)]
@@ -170,6 +174,64 @@ class TestRouteVariety(unittest.TestCase):
         self.assertEqual(len(out), 2)
         self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
         self.assertEqual(out[1]['name'], 'Fastest')
+
+    def test_max_detour_keeps_quiet_route_at_default_cap(self):
+        """🛤️ Quiet trades time for calmer roads, so it must survive the 20% default."""
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route(QUIET_ROUTE_NAME, SHAPE_B, duration=42, distance=27.0, route_id=2),
+            _route(SCENIC_ROUTE_NAME, SHAPE_C, duration=38, distance=29.0, route_id=3),
+        ]
+        out = filter_routes_by_max_detour(routes, 20)
+        names = [r['name'] for r in out]
+        self.assertIn(QUIET_ROUTE_NAME, names)
+        self.assertIn(SCENIC_ROUTE_NAME, names)
+
+    def test_max_detour_still_drops_unnamed_alternate_at_default_cap(self):
+        """The wider allowance is only for the named preference options."""
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route('Alternate', SHAPE_B, duration=42, distance=27.0, route_id=2),
+            _route(QUIET_ROUTE_NAME, SHAPE_C, duration=42, distance=29.0, route_id=3),
+        ]
+        names = [r['name'] for r in filter_routes_by_max_detour(routes, 20)]
+        self.assertNotIn('Alternate', names)
+        self.assertIn(QUIET_ROUTE_NAME, names)
+
+    def test_max_detour_respects_zero_allowance_for_preference_routes(self):
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route(QUIET_ROUTE_NAME, SHAPE_B, duration=42, distance=27.0, route_id=2),
+            _route(SCENIC_ROUTE_NAME, SHAPE_C, duration=50, distance=29.0, route_id=3),
+        ]
+        names = [r['name'] for r in filter_routes_by_max_detour(routes, 0)]
+        # A 0% cap means no detour at all; the preview keeps the closest option only.
+        self.assertEqual(names, ['Fastest', QUIET_ROUTE_NAME])
+
+    def test_max_detour_restores_closest_option_instead_of_collapsing(self):
+        """A very slow Quiet still beats showing a single option."""
+        routes = [
+            _route('Fastest', SHAPE_A, duration=30, distance=24.0, route_id=1),
+            _route(QUIET_ROUTE_NAME, SHAPE_B, duration=70, distance=31.0, route_id=2),
+            _route(SCENIC_ROUTE_NAME, SHAPE_C, duration=95, distance=40.0, route_id=3),
+        ]
+        out = filter_routes_by_max_detour(routes, 20)
+        self.assertEqual([r['name'] for r in out], ['Fastest', QUIET_ROUTE_NAME])
+        self.assertEqual([r['id'] for r in out], [1, 2])
+
+    def test_finalize_offers_quiet_alongside_optimised_and_fastest(self):
+        routes = [
+            {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
+             'geometry_precision': 6, 'distance_km': 25.0, 'duration_minutes': 33,
+             'source': 'GraphHopper'},
+            _route('Fastest', SHAPE_B, duration=30, distance=24.0, route_id=2),
+            _route(QUIET_ROUTE_NAME, SHAPE_C, duration=42, distance=27.0, route_id=3),
+        ]
+        out = finalize_route_variety(routes, max_detour_percent=20)
+        names = [r['name'] for r in out]
+        self.assertEqual(names[0], PRIMARY_OPTIMISED_NAME)
+        self.assertIn('Fastest', names)
+        self.assertIn(QUIET_ROUTE_NAME, names)
 
     def test_should_append_when_three_similar_routes(self):
         routes = [
