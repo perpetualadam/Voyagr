@@ -115,9 +115,14 @@ class BuildValhallaAlternateRouteEntriesTest(unittest.TestCase):
     def test_applies_traffic_multiplier_to_alternate_durations(self):
         route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()}]}
         entries = build_valhalla_alternate_route_entries(
-            route_data, first_route_id=2, traffic_multiplier=1.5, **COMMON,
+            route_data, first_route_id=2, traffic_multiplier=1.5,
+            traffic_level='Peak Hours', **COMMON,
         )
         self.assertEqual(entries[0]['duration_minutes'], 15)  # 10 min base * 1.5
+        # Recorded so the response states how each option's duration was derived.
+        self.assertEqual(entries[0]['base_duration_minutes'], 10)
+        self.assertEqual(entries[0]['traffic_multiplier'], 1.5)
+        self.assertEqual(entries[0]['traffic_level'], 'Peak Hours')
 
     def test_no_alternates_yields_no_entries(self):
         self.assertEqual(

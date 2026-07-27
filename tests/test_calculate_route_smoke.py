@@ -130,6 +130,20 @@ class RoutePreviewVarietySmokeTest(unittest.TestCase):
         self.assertGreater(len(names), 1)
 
 
+class _PreferenceAwareRespWithAlternates(_PreferenceAwareResp):
+    """As _PreferenceAwareResp, but the plain auto request also returns an alternate."""
+
+    ALTERNATE_SHAPE = '_oqbeB~hfsA_hd@_neFo|_@_wyE'
+
+    def __init__(self, payload):
+        super().__init__(payload)
+        auto_opts = ((payload or {}).get('costing_options') or {}).get('auto') or {}
+        plain = 'use_living_streets' not in auto_opts and auto_opts.get('use_highways') != 0.2
+        if plain and (payload or {}).get('alternates'):
+            self._body = dict(self._body)
+            self._body['alternates'] = [_trip(self.ALTERNATE_SHAPE, 26.0, 1980)]  # 33 min
+
+
 class RouteEtaComparabilitySmokeTest(unittest.TestCase):
     """
     Every option in one response must be scaled by the same traffic multiplier.
@@ -147,7 +161,7 @@ class RouteEtaComparabilitySmokeTest(unittest.TestCase):
 
     def _routes(self, **body_overrides):
         def fake_post(url, json=None, **kwargs):
-            return _PreferenceAwareResp(json)
+            return _PreferenceAwareRespWithAlternates(json)
 
         body = {
             'start': '53.536,-1.380', 'end': '53.517,-1.150',

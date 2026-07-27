@@ -240,6 +240,7 @@ def build_valhalla_alternate_route_entries(
     *,
     first_route_id: int,
     traffic_multiplier: float,
+    traffic_level: str = 'N/A',
     hazards: Dict[str, Any],
     cost_calculator: Any,
     vehicle_type: str,
@@ -259,6 +260,9 @@ def build_valhalla_alternate_route_entries(
     Every payload Voyagr sends for a 2-point car route asks for ``alternates``, so
     each response-handling path should offer them; dropping them leaves the preview
     with only the routes the ensure_*/discovery helpers manage to synthesise.
+
+    Each entry records the traffic scaling it was given, so a response states how
+    every option's duration was derived rather than only the primary route's.
     """
     entries: List[Dict[str, Any]] = []
     for alt_route in (route_data or {}).get('alternates') or []:
@@ -278,6 +282,8 @@ def build_valhalla_alternate_route_entries(
         entries.append(build_valhalla_route_entry(
             trip=trip, name=name, route_id=first_route_id + idx,
             traffic_multiplier=traffic_multiplier,
+            traffic_level=traffic_level,
+            include_traffic_fields=True,
             maneuver_length_in_meters=maneuver_length_in_meters,
             hazards=hazards, cost_calculator=cost_calculator,
             vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
