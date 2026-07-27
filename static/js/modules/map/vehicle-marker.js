@@ -5,12 +5,12 @@
 (function (root) {
     'use strict';
 
-    /** Vehicle delta marker size in CSS pixels (~48% smaller than legacy 60px). */
-    var VEHICLE_MARKER_SIZE = 31;
+    /** Vehicle delta marker size in CSS pixels (legacy 60px + ~30%). */
+    var VEHICLE_MARKER_SIZE = 78;
     var VEHICLE_MARKER_ICON_SIZE = [VEHICLE_MARKER_SIZE, VEHICLE_MARKER_SIZE];
     var VEHICLE_MARKER_ICON_ANCHOR = [VEHICLE_MARKER_SIZE / 2, VEHICLE_MARKER_SIZE / 2];
-    var VEHICLE_MARKER_SHADOW_WIDTH = 21;
-    var VEHICLE_MARKER_SHADOW_HEIGHT = 4;
+    var VEHICLE_MARKER_SHADOW_WIDTH = 52;
+    var VEHICLE_MARKER_SHADOW_HEIGHT = 10;
 
     /**
      * Starfleet-delta-style arrowhead SVG pointing north; container rotation sets heading.
@@ -22,7 +22,7 @@
                 'xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" ' +
                 'style="display:block;width:100%;height:100%;overflow:visible;">' +
                 '<path d="M50 5 C 55 28 68 62 89 95 C 70 83 58 79 50 79 C 42 79 30 83 11 95 C 32 62 45 28 50 5 Z" ' +
-                    'fill="#1E88E5" stroke="#FFFFFF" stroke-width="4" ' +
+                    'fill="#1E88E5" stroke="#FFFFFF" stroke-width="8" ' +
                     'stroke-linejoin="round" stroke-linecap="round"></path>' +
             '</svg>'
         );
