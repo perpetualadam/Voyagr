@@ -1910,8 +1910,8 @@ h1 {
 /* Vehicle Marker Icon - Custom SVG with directional indicator */
 /* 3D Aerial View: Icon tilts with map for realistic top-down perspective */
 .vehicle-marker-icon {
-    width: 24px !important;
-    height: 24px !important;
+    width: 31px !important;
+    height: 31px !important;
     background: none !important;
     border: none !important;
     box-shadow: none !important;
@@ -1965,8 +1965,8 @@ h1 {
     bottom: -2px;
     left: 50%;
     transform: translateX(-50%);
-    width: 16px;
-    height: 3px;
+    width: 21px;
+    height: 4px;
     background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4) 0%, transparent 70%);
     border-radius: 50%;
     opacity: 0.6;
