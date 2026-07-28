@@ -93,4 +93,63 @@ describe('reroute-map-orchestration map recovery overlays', () => {
         expect(applyVehicleMarkerFromTickPlan).toHaveBeenCalledTimes(1);
         expect(updateTurnWidgetFromPosition).toHaveBeenCalledWith(51.5, -0.1);
     });
+
+    test('redrawNavigationOverlaysAfterMapRecovery retries route remount during navigation', () => {
+        jest.useFakeTimers();
+        routeInProgress = true;
+        global.VoyagrMapRecovery = {
+            buildNavOverlayRedrawRetryDelaysMs: () => [100, 200],
+        };
+
+        const guardPlan = jest.fn(() => ({ shouldRedraw: true }));
+        const mountPlan = jest.fn(() => ({
+            polyline: [[-0.1, 51.5], [-0.2, 51.6]],
+            style: { color: '#2563EB', weight: 8 },
+        }));
+        const addPolyline = jest.fn(() => ({ remove: jest.fn() }));
+        const bringNavRouteAboveTrafficEdges = jest.fn();
+        let routeLayer = { remove: jest.fn() };
+
+        RerouteMap.bind({
+            getRouteInProgress: () => routeInProgress,
+            getIsTrackingActive: () => false,
+            getMap: () => ({ getBearing: () => 0 }),
+            getCurrentLat: () => 51.5,
+            getCurrentLon: () => -0.1,
+            getCurrentUserMarker: () => currentUserMarker,
+            getRoutePolyline: () => [[51.5, -0.1], [51.6, -0.2]],
+            getLastSnappedRouteIndex: () => 0,
+            getRouteLayer: () => routeLayer,
+            setRouteLayer: (layer) => { routeLayer = layer; },
+            speedGps: () => SG,
+            routeGeometry: () => ({
+                bearing: () => 45,
+                blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+            }),
+            routeSelection: () => ({
+                buildNavRouteLayerRedrawGuardPlan: guardPlan,
+                buildNavActiveRouteLayerMountPlan: mountPlan,
+                buildNavActiveRoutePolylineStyle: () => ({ color: '#2563EB', weight: 8 }),
+            }),
+            getMapLibreHelpers: () => ({ addPolyline }),
+            call: {
+                resolveGpsRouteSnapForTick: () => null,
+                applyVehicleMarkerFromTickPlan,
+                updateTurnWidgetFromPosition,
+                bringNavRouteAboveTrafficEdges,
+                navActiveRouteColor: () => '#2563EB',
+            },
+        });
+
+        RerouteMap.redrawNavigationOverlaysAfterMapRecovery('soft style reload');
+        expect(addPolyline).toHaveBeenCalledTimes(1);
+
+        jest.advanceTimersByTime(100);
+        expect(addPolyline).toHaveBeenCalledTimes(2);
+        jest.advanceTimersByTime(100);
+        expect(addPolyline).toHaveBeenCalledTimes(3);
+
+        delete global.VoyagrMapRecovery;
+        jest.useRealTimers();
+    });
 });

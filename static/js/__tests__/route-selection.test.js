@@ -218,6 +218,22 @@ describe('route comparison and selection helpers', () => {
         expect(plan.geoJsonFeature.geometry.coordinates).toHaveLength(2);
     });
 
+    test('buildRouteLayerStyle emphasises selected route over index-0 primary', () => {
+        const selectedAlt = RS.buildRouteLayerStyle(1, 1);
+        const unselectedPrimary = RS.buildRouteLayerStyle(0, 1);
+        const unselectedPeer = RS.buildRouteLayerStyle(2, 1);
+        expect(selectedAlt.weight).toBe(10);
+        expect(selectedAlt.opacity).toBe(1);
+        expect(unselectedPrimary.weight).toBe(6);
+        expect(unselectedPrimary.opacity).toBe(0.7);
+        expect(unselectedPeer.weight).toBe(unselectedPrimary.weight);
+    });
+
+    test('buildRouteLayerMountOrder paints selected route last (on top)', () => {
+        expect(RS.buildRouteLayerMountOrder(3, 1)).toEqual([0, 2, 1]);
+        expect(RS.buildRouteLayerMountOrder(2, 0)).toEqual([1, 0]);
+    });
+
     test('findFirstTextSymbolLayerId returns first label layer id', () => {
         expect(RS.findFirstTextSymbolLayerId([
             { id: 'roads', type: 'line' },
@@ -1861,7 +1877,7 @@ describe('route overview and single-route display plans', () => {
         expect(apply.beforeId).toBe('label-layer');
     });
 
-    test('buildDoAddRouteLayersBatchPlan returns reverse-order apply layers', () => {
+    test('buildDoAddRouteLayersBatchPlan mounts selected route last for z-order', () => {
         const batch = RS.buildDoAddRouteLayersBatchPlan(
             [
                 { name: 'A', polyline: [[1, 2], [3, 4]] },
@@ -1871,8 +1887,10 @@ describe('route overview and single-route display plans', () => {
             [{ type: 'symbol', layout: { 'text-field': 'x' }, id: 'labels' }]
         );
         expect(batch.layers).toHaveLength(2);
-        expect(batch.layers[0].routeIndex).toBe(1);
-        expect(batch.layers[1].routeIndex).toBe(0);
+        expect(batch.mountOrder).toEqual([0, 1]);
+        expect(batch.layers[0].routeIndex).toBe(0);
+        expect(batch.layers[1].routeIndex).toBe(1);
+        expect(batch.layers[1].paint.lineWeight).toBeGreaterThan(batch.layers[0].paint.lineWeight);
     });
 
     test('buildDoAddRouteLayersBatchExecutePlan adds log metadata per layer step', () => {

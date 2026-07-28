@@ -72,6 +72,8 @@
 
     /**
      * Line style for a route preview/alternative layer on the map.
+     * Selected route is always visually strongest; non-selected peers share equal weight
+     * so index-0 / Valhalla primary does not outrank the user's preview selection.
      * @param {number} index
      * @param {number} selectedRouteIndex
      * @param {string[]} [routeColors]
@@ -82,12 +84,34 @@
         var contrast = resolveRouteContrastPlan(mapTheme);
         var colors = contrast.darkBasemap ? contrast.routeColors : (routeColors || ROUTE_COLORS);
         var weightBoost = contrast.darkBasemap ? (contrast.routeWeightBoost || 0) : 0;
-        var baseWeight = (index === selectedRouteIndex) ? 10 : (index === 0 ? 8 : 6);
+        var selected = index === selectedRouteIndex;
+        var baseWeight = selected ? 10 : 6;
         return {
             color: resolveRouteColor(index, colors),
             weight: baseWeight + weightBoost,
-            opacity: contrast.darkBasemap ? (contrast.routeOpacity || 1.0) : ((index === selectedRouteIndex) ? 1.0 : 0.85),
+            opacity: contrast.darkBasemap ? (contrast.routeOpacity || 1.0) : (selected ? 1.0 : 0.7),
         };
+    }
+
+    /**
+     * Mount order for multi-route preview layers: non-selected first, selected last
+     * so the chosen route paints on top (MapLibre last-before-labels wins z-order).
+     * @param {number} routeCount
+     * @param {number} selectedRouteIndex
+     * @returns {number[]}
+     */
+    function buildRouteLayerMountOrder(routeCount, selectedRouteIndex) {
+        var n = Math.max(0, Number(routeCount) || 0);
+        var selected = Number(selectedRouteIndex);
+        if (!Number.isFinite(selected) || selected < 0 || selected >= n) {
+            selected = 0;
+        }
+        var order = [];
+        for (var i = 0; i < n; i++) {
+            if (i !== selected) order.push(i);
+        }
+        if (n > 0) order.push(selected);
+        return order;
     }
 
     /**
@@ -3672,18 +3696,20 @@
     }
 
     /**
-     * Batch apply plans for doAddRouteLayers (reverse index order).
+     * Batch apply plans for doAddRouteLayers (selected last / on top).
      * @param {Array<Object>} routeOptions
      * @param {number} selectedRouteIndex
      * @param {Array<Object>} [styleLayers]
-     * @returns {{ beforeId: string|undefined, layers: Array<Object> }}
+     * @returns {{ beforeId: string|undefined, layers: Array<Object>, mountOrder: number[] }}
      */
     function buildDoAddRouteLayersBatchPlan(routeOptions, selectedRouteIndex, styleLayers, opts) {
         opts = opts || {};
         var routes = routeOptions || [];
         var beforeId = findFirstTextSymbolLayerId(styleLayers);
+        var mountOrder = buildRouteLayerMountOrder(routes.length, selectedRouteIndex);
         var layers = [];
-        for (var i = routes.length - 1; i >= 0; i--) {
+        for (var oi = 0; oi < mountOrder.length; oi++) {
+            var i = mountOrder[oi];
             var mountPlan = buildRouteLayerMountPlan(routes[i], i, selectedRouteIndex, {
                 routeColors: opts.routeColors,
                 mapTheme: opts.mapTheme,
@@ -3695,6 +3721,7 @@
         return {
             beforeId: beforeId,
             layers: layers,
+            mountOrder: mountOrder,
         };
     }
 
@@ -4402,6 +4429,7 @@
         computeRouteTotalCost: computeRouteTotalCost,
         resolveRouteColor: resolveRouteColor,
         buildRouteLayerStyle: buildRouteLayerStyle,
+        buildRouteLayerMountOrder: buildRouteLayerMountOrder,
         latLonPolylineToLngLatCoords: latLonPolylineToLngLatCoords,
         buildRouteLineGeoJsonFeature: buildRouteLineGeoJsonFeature,
         findFirstTextSymbolLayerId: findFirstTextSymbolLayerId,

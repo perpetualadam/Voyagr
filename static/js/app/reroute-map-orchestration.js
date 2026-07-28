@@ -411,6 +411,24 @@
         if (!rt().getRouteInProgress() && !rt().getIsTrackingActive()) return;
         if (rt().getRouteInProgress()) {
             redrawNavigationRouteLayer(reason);
+            // Soft style reload / radio-swap recover often races style.load; retry
+            // remount so the nav polyline is not left blank after basemap returns.
+            var MR = root.VoyagrMapRecovery;
+            var retryDelays = MR && typeof MR.buildNavOverlayRedrawRetryDelaysMs === 'function'
+                ? MR.buildNavOverlayRedrawRetryDelaysMs()
+                : [700, 2000];
+            for (var ri = 0; ri < retryDelays.length; ri++) {
+                (function (delayMs) {
+                    setTimeout(function () {
+                        try {
+                            if (!rt().getRouteInProgress()) return;
+                            redrawNavigationRouteLayer(
+                                (reason || 'map recover') + ' retry+' + delayMs + 'ms'
+                            );
+                        } catch (_) { /* ignore */ }
+                    }, delayMs);
+                })(retryDelays[ri]);
+            }
         }
         redrawNavigationVehicleMarker(reason);
         var lat = rt().getCurrentLat();
