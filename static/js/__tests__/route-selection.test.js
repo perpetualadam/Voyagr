@@ -234,6 +234,19 @@ describe('route comparison and selection helpers', () => {
         expect(RS.buildRouteLayerMountOrder(2, 0)).toEqual([1, 0]);
     });
 
+    test('orderRouteLayerIdsSelectedLast undoes unshift-style handle order', () => {
+        // Handles registered with unshift after selected-last mount look like
+        // [selected, ..., firstMounted]; bringRoutesToTop must move selected last.
+        expect(RS.orderRouteLayerIdsSelectedLast(
+            ['route-layer-1', 'route-layer-2', 'route-layer-0'],
+            1
+        )).toEqual(['route-layer-2', 'route-layer-0', 'route-layer-1']);
+        expect(RS.orderRouteLayerIdsSelectedLast(
+            ['route-layer-0', 'route-layer-2', 'route-layer-1'],
+            1
+        )).toEqual(['route-layer-0', 'route-layer-2', 'route-layer-1']);
+    });
+
     test('findFirstTextSymbolLayerId returns first label layer id', () => {
         expect(RS.findFirstTextSymbolLayerId([
             { id: 'roads', type: 'line' },
@@ -1891,6 +1904,27 @@ describe('route overview and single-route display plans', () => {
         expect(batch.layers[0].routeIndex).toBe(0);
         expect(batch.layers[1].routeIndex).toBe(1);
         expect(batch.layers[1].paint.lineWeight).toBeGreaterThan(batch.layers[0].paint.lineWeight);
+    });
+
+    test('buildBringRoutesToTopDispatchPlan moves selected route last after unshift handles', () => {
+        // Simulate allRouteLayers built via unshift while mounting selected last:
+        // mount [0,2,1] + unshift => descriptors [1,2,0]; selected must still move last.
+        const plan = RS.buildBringRoutesToTopDispatchPlan(
+            [
+                { id: 'route-layer-1' },
+                { id: 'route-layer-2' },
+                { id: 'route-layer-0' },
+            ],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+            { selectedRouteIndex: 1 }
+        );
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.layerIds).toEqual([
+            'route-layer-2',
+            'route-layer-0',
+            'route-layer-1',
+        ]);
+        expect(plan.beforeId).toBe('labels');
     });
 
     test('buildDoAddRouteLayersBatchExecutePlan adds log metadata per layer step', () => {

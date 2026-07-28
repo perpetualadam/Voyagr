@@ -115,6 +115,27 @@
     }
 
     /**
+     * Order route layer ids for moveLayer bring-to-top: selected id last so it
+     * ends above peers (MapLibre last move before labels wins z-order).
+     * Non route-layer-* ids keep relative order among the non-selected group.
+     * @param {Array<string>} layerIds
+     * @param {number} selectedRouteIndex
+     * @returns {string[]}
+     */
+    function orderRouteLayerIdsSelectedLast(layerIds, selectedRouteIndex) {
+        var ids = layerIds || [];
+        var selectedId = 'route-layer-' + selectedRouteIndex;
+        var selected = [];
+        var others = [];
+        for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            if (id === selectedId) selected.push(id);
+            else others.push(id);
+        }
+        return others.concat(selected);
+    }
+
+    /**
      * Convert [lat, lon] polyline to MapLibre [lon, lat] coordinates.
      * @param {Array<[number,number]>} polylinePoints
      * @returns {Array<[number,number]>}
@@ -3583,11 +3604,15 @@
 
     /**
      * Layer reorder plan to keep route lines above traffic overlays.
+     * Selected preview route is moved last so it stays painted on top.
      * @param {Array<{ id?: string }>} layerDescriptors
      * @param {Array<Object>} [styleLayers]
+     * @param {Object} [opts]
+     * @param {number} [opts.selectedRouteIndex]
      * @returns {Object}
      */
-    function buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers) {
+    function buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers, opts) {
+        opts = opts || {};
         var layers = layerDescriptors || [];
         var layerIds = [];
         layers.forEach(function (layer) {
@@ -3595,6 +3620,10 @@
         });
         if (layerIds.length === 0) {
             return { shouldRun: false };
+        }
+        var selected = Number(opts.selectedRouteIndex);
+        if (Number.isFinite(selected)) {
+            layerIds = orderRouteLayerIdsSelectedLast(layerIds, selected);
         }
         return {
             shouldRun: true,
@@ -3612,10 +3641,12 @@
      * Execute plan for bringRoutesToTop retry loop and label anchoring.
      * @param {Array<{ id?: string }>} layerDescriptors
      * @param {Array<Object>} [styleLayers]
+     * @param {Object} [opts]
+     * @param {number} [opts.selectedRouteIndex]
      * @returns {Object}
      */
-    function buildBringRoutesToTopExecutePlan(layerDescriptors, styleLayers) {
-        var dispatch = buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers);
+    function buildBringRoutesToTopExecutePlan(layerDescriptors, styleLayers, opts) {
+        var dispatch = buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers, opts);
         if (!dispatch.shouldRun) {
             return { shouldExecute: false };
         }
@@ -3857,6 +3888,7 @@
      * @param {number} [opts.layerCount]
      * @param {Array<{ id?: string }>} [opts.layerDescriptors]
      * @param {Array<Object>} [opts.styleLayers]
+     * @param {number} [opts.selectedRouteIndex]
      * @returns {Object}
      */
     function buildBringRoutesToTopEntryOrchestrationPlan(opts) {
@@ -3864,7 +3896,9 @@
         var layerCount = opts.layerCount || 0;
         return {
             orch: buildBringRoutesToTopOrchestrationPlan(layerCount),
-            execute: buildBringRoutesToTopExecutePlan(opts.layerDescriptors, opts.styleLayers),
+            execute: buildBringRoutesToTopExecutePlan(opts.layerDescriptors, opts.styleLayers, {
+                selectedRouteIndex: opts.selectedRouteIndex,
+            }),
             requiresMap: true,
         };
     }
@@ -4430,6 +4464,7 @@
         resolveRouteColor: resolveRouteColor,
         buildRouteLayerStyle: buildRouteLayerStyle,
         buildRouteLayerMountOrder: buildRouteLayerMountOrder,
+        orderRouteLayerIdsSelectedLast: orderRouteLayerIdsSelectedLast,
         latLonPolylineToLngLatCoords: latLonPolylineToLngLatCoords,
         buildRouteLineGeoJsonFeature: buildRouteLineGeoJsonFeature,
         findFirstTextSymbolLayerId: findFirstTextSymbolLayerId,
