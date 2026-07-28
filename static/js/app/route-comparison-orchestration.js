@@ -201,7 +201,9 @@ function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
         }, mountPlan.beforeId);
 
         if (mountPlan.registerLayerHandle) {
-            allRouteLayers.unshift({
+            // Append in mount order (selected last) so bringRoutesToTop moves
+            // the chosen preview route last and it stays painted on top.
+            allRouteLayers.push({
                 id: layerId,
                 remove: () => {
                     if (map.getLayer(layerId)) map.removeLayer(layerId);
@@ -499,6 +501,7 @@ function collectBringRoutesToTopInput() {
         layerCount: allRouteLayers?.length || 0,
         layerDescriptors: allRouteLayers,
         styleLayers: style && style.layers ? style.layers : null,
+        selectedRouteIndex: getSelectedRouteIndex(),
     };
 }
 
