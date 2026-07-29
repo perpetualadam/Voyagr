@@ -41,11 +41,14 @@
     /**
      * Decide whether to restart geolocation watch after background/screen-off.
      * startGPSTracking() is a UI toggle and must not be used for resume recovery.
+     * Respect trackingStoppedByUser so an intentional stop during turn-by-turn is
+     * not silently undone by foreground resume / ensureGPSTracking.
      * @param {Object} [opts]
      * @param {boolean} [opts.geolocationAvailable]
      * @param {boolean} [opts.documentVisible]
      * @param {boolean} [opts.routeInProgress]
      * @param {boolean} [opts.isTrackingActive]
+     * @param {boolean} [opts.trackingStoppedByUser]
      * @param {boolean} [opts.hasGpsWatchId]
      * @param {number|null|undefined} [opts.lastFixAgeMs]
      * @param {boolean} [opts.forceRestart]
@@ -63,6 +66,12 @@
         }
         if (opts.documentVisible === false) {
             return { shouldRestart: false, reason: 'hidden' };
+        }
+        // User turned tracking off (including mid-navigation). Resume/ensure must
+        // not revive the watch. Geolocation-error recovery never sets this flag;
+        // stopGPSTracking also clears the error-retry timer.
+        if (opts.trackingStoppedByUser) {
+            return { shouldRestart: false, reason: 'user_stopped' };
         }
 
         var needsTracking = !!(opts.routeInProgress || opts.isTrackingActive);

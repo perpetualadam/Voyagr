@@ -12,6 +12,8 @@
     var smoothDisplayLon = null;
     var trackingHistory = [];
     var isTrackingActive = false;
+    /** True after stopGPSTracking(); cleared when a watch is started again. */
+    var gpsTrackingStoppedByUser = false;
     var gpsWatchId = null;
     var lastGpsFixAtMs = 0;
     var gpsWatchStartedAtMs = 0;
@@ -23,6 +25,8 @@
     function setTrackingHistory(val) { trackingHistory = val; }
     function getIsTrackingActive() { return isTrackingActive; }
     function setIsTrackingActive(val) { isTrackingActive = !!val; }
+    function getGpsTrackingStoppedByUser() { return gpsTrackingStoppedByUser; }
+    function setGpsTrackingStoppedByUser(val) { gpsTrackingStoppedByUser = !!val; }
     function getGpsWatchId() { return gpsWatchId; }
     function setGpsWatchId(val) { gpsWatchId = val; }
     function getLastGpsFixAtMs() { return lastGpsFixAtMs; }
@@ -805,6 +809,7 @@
 
         clearGpsEnsureRetryTimer();
         clearGpsWatchHandle();
+        setGpsTrackingStoppedByUser(false);
         setIsTrackingActive(true);
         setLastGpsFixAtMs(0);
         gpsWatchStartedAtMs = Date.now();
@@ -860,6 +865,7 @@
                     (typeof document === 'undefined' || document.visibilityState !== 'hidden'),
                 routeInProgress: !!rt().g('routeInProgress'),
                 isTrackingActive: getIsTrackingActive(),
+                trackingStoppedByUser: getGpsTrackingStoppedByUser(),
                 hasGpsWatchId: getGpsWatchId() != null,
                 lastFixAgeMs: getLastGpsFixAgeMs(),
                 forceRestart: !!opts.forceRestart,
@@ -922,6 +928,7 @@
     function stopGPSTracking() {
         clearGpsEnsureRetryTimer();
         clearGpsWatchHandle();
+        setGpsTrackingStoppedByUser(true);
         setIsTrackingActive(false);
         setLastGpsFixAtMs(0);
         gpsWatchStartedAtMs = 0;
@@ -1844,6 +1851,8 @@
         setTrackingHistory: setTrackingHistory,
         getIsTrackingActive: getIsTrackingActive,
         setIsTrackingActive: setIsTrackingActive,
+        getGpsTrackingStoppedByUser: getGpsTrackingStoppedByUser,
+        setGpsTrackingStoppedByUser: setGpsTrackingStoppedByUser,
         getGpsWatchId: getGpsWatchId,
         setGpsWatchId: setGpsWatchId,
         getCurrentUserMarker: getCurrentUserMarker,

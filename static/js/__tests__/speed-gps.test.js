@@ -642,13 +642,39 @@ describe('buildGpsTrackingEnsurePlan', () => {
             hasGpsWatchId: false,
         })).toMatchObject({ shouldRestart: true, reason: 'missing_watch', resetDisplayState: true });
 
+        // Geolocation error can clear isTrackingActive while nav continues — resume
+        // should revive unless the user explicitly stopped tracking.
         expect(SG.buildGpsTrackingEnsurePlan({
             geolocationAvailable: true,
             documentVisible: true,
             routeInProgress: true,
             isTrackingActive: false,
+            trackingStoppedByUser: false,
             hasGpsWatchId: true,
         })).toMatchObject({ shouldRestart: true, reason: 'inactive' });
+    });
+
+    test('does not restart after user stops tracking during navigation', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: false,
+            trackingStoppedByUser: true,
+            hasGpsWatchId: false,
+        })).toMatchObject({ shouldRestart: false, reason: 'user_stopped' });
+
+        // forceRestart must not override an intentional stop (error-retry timer is
+        // cleared by stopGPSTracking, but guard the plan anyway).
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: false,
+            trackingStoppedByUser: true,
+            hasGpsWatchId: false,
+            forceRestart: true,
+        })).toMatchObject({ shouldRestart: false, reason: 'user_stopped' });
     });
 
     test('restarts stale watches and leaves healthy watches alone', () => {
