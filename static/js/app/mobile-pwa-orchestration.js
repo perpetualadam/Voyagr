@@ -296,6 +296,8 @@
     /**
      * After returning from another app / screen-off, restore GPS watch and wake lock
      * so the vehicle marker keeps updating through arrival.
+     * ensureGPSTracking is a no-op when the user intentionally stopped tracking
+     * (including mid turn-by-turn); it only revives watches still wanted.
      * @param {string} [reason]
      */
     function applyNavigationForegroundResume(reason) {
