@@ -371,6 +371,8 @@
                 : null;
             var map = rt().getMap();
 
+            // Prefer current GPS/route-snap coords on recovery. Using smooth-only
+            // re-pins the icon at a pre-pause location after screen-off/background.
             var redraw = SG.buildNavigationVehicleMarkerRedrawPlan({
                 lat: lat,
                 lon: lon,
@@ -383,8 +385,7 @@
                 prevSnapBlendWeightState: root.VoyagrGpsOrchestration.getSnapBlendWeightState(),
                 smoothDisplayLat: root.VoyagrGpsOrchestration.getSmoothDisplayLat(),
                 smoothDisplayLon: root.VoyagrGpsOrchestration.getSmoothDisplayLon(),
-                useSmoothCoordsOnly: root.VoyagrGpsOrchestration.getSmoothDisplayLat() != null
-                    && root.VoyagrGpsOrchestration.getSmoothDisplayLon() != null,
+                useSmoothCoordsOnly: false,
                 speedMph: speed,
                 speed: speed,
                 hasMarker: !!currentUserMarker,

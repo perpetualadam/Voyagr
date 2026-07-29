@@ -77,6 +77,24 @@ describe('reroute-map-orchestration map recovery overlays', () => {
         expect(currentUserMarker.addTo).toHaveBeenCalledTimes(1);
     });
 
+    test('redrawNavigationVehicleMarker follows current GPS instead of stale smooth coords', () => {
+        isTrackingActive = true;
+        global.VoyagrGpsOrchestration.getSmoothDisplayLat = () => 51.4;
+        global.VoyagrGpsOrchestration.getSmoothDisplayLon = () => -0.2;
+
+        RerouteMap.redrawNavigationVehicleMarker('foreground resume');
+
+        expect(applyVehicleMarkerFromTickPlan).toHaveBeenCalledTimes(1);
+        const markerTick = applyVehicleMarkerFromTickPlan.mock.calls[0][0];
+        // Current GPS from runtime is 51.5/-0.1; must not stay pinned at smooth 51.4/-0.2.
+        expect(markerTick.action).toBe('update');
+        // Blends toward current GPS (urgent jump), not pinned at stale smooth coords.
+        expect(markerTick.lngLat[1]).toBeGreaterThan(51.45);
+        expect(markerTick.lngLat[0]).toBeGreaterThan(-0.15);
+        expect(markerTick.lngLat[1]).not.toBeCloseTo(51.4, 3);
+        expect(markerTick.lngLat[0]).not.toBeCloseTo(-0.2, 3);
+    });
+
     test('redrawNavigationVehicleMarker skips when neither route nor tracking is active', () => {
         RerouteMap.redrawNavigationVehicleMarker('style.load');
 
