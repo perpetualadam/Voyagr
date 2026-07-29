@@ -632,6 +632,66 @@ describe('buildVehicleDisplayCoordinatesPlan', () => {
     });
 });
 
+describe('buildGpsTrackingEnsurePlan', () => {
+    test('restarts when navigating but GPS watch is missing or inactive', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: false,
+        })).toMatchObject({ shouldRestart: true, reason: 'missing_watch', resetDisplayState: true });
+
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: false,
+            hasGpsWatchId: true,
+        })).toMatchObject({ shouldRestart: true, reason: 'inactive' });
+    });
+
+    test('restarts stale watches and leaves healthy watches alone', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: true,
+            lastFixAgeMs: 60000,
+            staleAfterMs: 15000,
+        })).toMatchObject({ shouldRestart: true, reason: 'stale_fix' });
+
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: true,
+            lastFixAgeMs: 2000,
+            staleAfterMs: 15000,
+        })).toMatchObject({ shouldRestart: false, reason: 'healthy' });
+    });
+
+    test('does not restart when document is hidden or tracking is not needed', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: false,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: false,
+        }).shouldRestart).toBe(false);
+
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: false,
+            isTrackingActive: false,
+            hasGpsWatchId: false,
+        }).shouldRestart).toBe(false);
+    });
+});
+
 describe('buildGpsTrackingPositionTickPlan', () => {
     test('returns marker position and state patch from snapped route', () => {
         const tick = SG.buildGpsTrackingPositionTickPlan({

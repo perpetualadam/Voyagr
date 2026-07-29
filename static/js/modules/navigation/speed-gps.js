@@ -34,7 +34,65 @@
         REVERSE_INDEX_MAX_SPEED_MPH: 2,
         SNAP_NEAR_ROUTE_FORCE_METERS: 130,
         SNAP_LOCK_ACC_SCALE: 1.5,
+        /** Restart watchPosition if no fix arrives for this long during nav/tracking. */
+        GPS_ENSURE_STALE_FIX_MS: 45000,
     };
+
+    /**
+     * Decide whether to restart geolocation watch after background/screen-off.
+     * startGPSTracking() is a UI toggle and must not be used for resume recovery.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.geolocationAvailable]
+     * @param {boolean} [opts.documentVisible]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {boolean} [opts.isTrackingActive]
+     * @param {boolean} [opts.hasGpsWatchId]
+     * @param {number|null|undefined} [opts.lastFixAgeMs]
+     * @param {boolean} [opts.forceRestart]
+     * @param {number} [opts.staleAfterMs]
+     * @returns {Object}
+     */
+    function buildGpsTrackingEnsurePlan(opts) {
+        opts = opts || {};
+        var staleAfterMs = opts.staleAfterMs != null
+            ? opts.staleAfterMs
+            : DEFAULTS.GPS_ENSURE_STALE_FIX_MS;
+
+        if (!opts.geolocationAvailable) {
+            return { shouldRestart: false, reason: 'no_geolocation' };
+        }
+        if (opts.documentVisible === false) {
+            return { shouldRestart: false, reason: 'hidden' };
+        }
+
+        var needsTracking = !!(opts.routeInProgress || opts.isTrackingActive);
+        if (!needsTracking && !opts.forceRestart) {
+            return { shouldRestart: false, reason: 'not_needed' };
+        }
+
+        var missingWatch = !opts.hasGpsWatchId;
+        var inactive = !opts.isTrackingActive;
+        var stale = Number.isFinite(opts.lastFixAgeMs) && opts.lastFixAgeMs >= staleAfterMs;
+
+        if (!opts.forceRestart && !missingWatch && !inactive && !stale) {
+            return { shouldRestart: false, reason: 'healthy' };
+        }
+
+        var reason = opts.forceRestart ? 'force'
+            : missingWatch ? 'missing_watch'
+            : inactive ? 'inactive'
+            : stale ? 'stale_fix'
+            : 'restart';
+
+        return {
+            shouldRestart: true,
+            clearExistingWatch: true,
+            resetDisplayState: true,
+            quietStatus: true,
+            reason: reason,
+            logMessage: '[GPS] Restarting watch (' + reason + ')',
+        };
+    }
 
     var TYPICAL_MPH_LIMITS = [20, 30, 40, 50, 60, 70];
     /** km/h → mph */
@@ -1059,6 +1117,7 @@
         buildGpsCoordSampleStateApplyPlan: buildGpsCoordSampleStateApplyPlan,
         buildGpsPositionTickPlan: buildGpsPositionTickPlan,
         buildGpsPositionStateApplyPlan: buildGpsPositionStateApplyPlan,
+        buildGpsTrackingEnsurePlan: buildGpsTrackingEnsurePlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
         buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,

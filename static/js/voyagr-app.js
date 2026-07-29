@@ -1526,6 +1526,7 @@ function getGpsOrchestrationRuntime() {
 }
 
 function startGPSTracking() { VoyagrGpsOrchestration.startGPSTracking(); }
+function ensureGPSTracking(opts) { return VoyagrGpsOrchestration.ensureGPSTracking(opts); }
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
     return VoyagrGpsOrchestration.calculateDistanceMeters(lat1, lon1, lat2, lon2);
 }
@@ -2954,9 +2955,13 @@ function getMobilePwaOrchestrationRuntime() {
         getMap: () => map,
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getGpsWatchId: () => VoyagrGpsOrchestration.getGpsWatchId(),
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         call: {
             collapseBottomSheet,
             startGPSTracking,
+            ensureGPSTracking,
+            ensureNavWakeLock: (opts) => VoyagrNavigationLifecycleOrchestration.ensureNavWakeLock(opts),
+            redrawNavigationVehicleMarker,
         },
     };
 }
