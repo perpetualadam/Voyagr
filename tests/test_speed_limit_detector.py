@@ -79,10 +79,21 @@ class TestSpeedLimitDetector(unittest.TestCase):
     def test_default_speed_limits(self):
         """Test default speed limits for road types."""
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['motorway'], 70)
-        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['trunk_road'], 70)
+        # Single-carriageway NSL; dual NSL is usually tagged GB:nsl_dual.
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['trunk_road'], 60)
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['primary_road'], 50)
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['secondary_road'], 50)
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['residential'], 30)
+
+    def test_uk_nsl_zone_tags_parse_to_correct_mph(self):
+        """GB:nsl_single must not fall through to trunk→70 inference."""
+        from speed_limit_detector import _parse_osm_maxspeed_to_mph
+        self.assertEqual(_parse_osm_maxspeed_to_mph('GB:nsl_single', 'uk'), 60)
+        self.assertEqual(_parse_osm_maxspeed_to_mph('GB:nsl_dual', 'uk'), 70)
+        self.assertEqual(_parse_osm_maxspeed_to_mph('GB:motorway', 'uk'), 70)
+        self.assertEqual(_parse_osm_maxspeed_to_mph('GB:urban', 'uk'), 30)
+        self.assertEqual(_parse_osm_maxspeed_to_mph('30 mph', 'uk'), 30)
+        self.assertEqual(_parse_osm_maxspeed_to_mph('60 mph', 'uk'), 60)
     
     def test_vehicle_specific_speed_limits(self):
         """Vehicle type is echoed; posted limits are not capped by vehicle class."""

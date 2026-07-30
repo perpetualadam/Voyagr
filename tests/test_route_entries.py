@@ -199,8 +199,9 @@ class ManeuversFromGraphhopperRouteTest(unittest.TestCase):
         maneuvers = maneuvers_from_graphhopper_route(route)
         # Primary continue + synthetic continue at speed change + arrive
         self.assertGreaterEqual(len(maneuvers), 3)
-        self.assertEqual(maneuvers[0]['speed_limit'], 112)
-        speed_changes = [m for m in maneuvers if m.get('type') == 8 and m.get('speed_limit') == 48]
+        # Maneuver speed_limit is stored in mph (not raw GraphHopper km/h).
+        self.assertEqual(maneuvers[0]['speed_limit'], 70)
+        speed_changes = [m for m in maneuvers if m.get('type') == 8 and m.get('speed_limit') == 30]
         self.assertEqual(len(speed_changes), 1)
         self.assertGreater(speed_changes[0]['begin_shape_index'], maneuvers[0]['begin_shape_index'])
 
