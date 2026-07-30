@@ -386,18 +386,33 @@
             stepIndex = opts.currentStepIndex;
         }
 
+        var spd = Number(opts.gpsSpeedMph);
+
         if (stepIndex >= 0 && opts.currentRouteSteps && stepIndex < opts.currentRouteSteps.length) {
             var step = opts.currentRouteSteps[stepIndex];
+            // Prefer explicit edge road_class (GraphHopper details / Valhalla) over
+            // street-name hints so a long Optimised "Continue" that enters a
+            // residential zone does not keep classifying as motorway/A-road.
+            if (step.road_class) return step.road_class;
             var fromStreet = inferRoadClassFromStreetNames(step.begin_street_names || step.street_names);
             if (fromStreet) return fromStreet;
             var inferred = inferRoadClassFromManeuver(step);
             if (inferred) return inferred;
-            if (step.road_class) return step.road_class;
         }
 
-        if (opts.lastDetectedRoadType) return opts.lastDetectedRoadType;
+        // Drop stale motorway/trunk detections once GPS is clearly urban — otherwise
+        // Optimised routes keep fetching/displaying 70 mph after leaving the M-road.
+        var last = opts.lastDetectedRoadType;
+        if (last) {
+            var lastLow = String(last).toLowerCase();
+            var staleHighway = (lastLow === 'motorway' || lastLow === 'motorway_link'
+                || lastLow === 'trunk' || lastLow === 'trunk_link'
+                || lastLow === 'trunk_road');
+            if (!(staleHighway && Number.isFinite(spd) && spd < 45)) {
+                return last;
+            }
+        }
 
-        var spd = Number(opts.gpsSpeedMph);
         if (Number.isFinite(spd) && spd >= 70) return 'motorway';
         if (Number.isFinite(spd) && spd >= 50) return 'primary';
 

@@ -25,8 +25,11 @@ GH_ROAD_CLASS_TO_VOYAGR = {
     'SECONDARY': 'secondary',
     'SECONDARY_LINK': 'secondary',
     'TERTIARY': 'tertiary',
+    'TERTIARY_LINK': 'tertiary',
     'RESIDENTIAL': 'residential',
     'UNCLASSIFIED': 'unclassified',
+    'LIVING_STREET': 'living_street',
+    'SERVICE': 'service',
 }
 
 

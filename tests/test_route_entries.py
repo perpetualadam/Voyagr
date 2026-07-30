@@ -205,6 +205,81 @@ class ManeuversFromGraphhopperRouteTest(unittest.TestCase):
         self.assertEqual(len(speed_changes), 1)
         self.assertGreater(speed_changes[0]['begin_shape_index'], maneuvers[0]['begin_shape_index'])
 
+    def test_road_class_from_details_and_changes_emit_synthetics(self):
+        """Optimised routes must track edge road_class so 70 does not stick on residential."""
+        import polyline as pl
+        from voyagr.services.routing.route_entries import maneuvers_from_graphhopper_route
+
+        coords = [(51.50 + i * 0.001, -0.10) for i in range(5)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [
+                {
+                    'sign': 0,
+                    'text': 'Continue',
+                    'street_name': 'High Street',
+                    'distance': 400,
+                    'time': 30,
+                    'interval': [0, 4],
+                },
+                {
+                    'sign': 4,
+                    'text': 'Arrive',
+                    'street_name': '',
+                    'distance': 0,
+                    'time': 0,
+                    'interval': [4, 4],
+                },
+            ],
+            'details': {
+                'max_speed': [
+                    [0, 2, 112],  # 70 mph
+                    [2, 5, 48],   # 30 mph
+                ],
+                'road_class': [
+                    [0, 2, 'MOTORWAY'],
+                    [2, 5, 'RESIDENTIAL'],
+                ],
+            },
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        self.assertEqual(maneuvers[0]['road_class'], 'motorway')
+        self.assertEqual(maneuvers[0]['speed_limit'], 70)
+        residential = [
+            m for m in maneuvers
+            if m.get('type') == 8 and m.get('road_class') == 'residential'
+        ]
+        self.assertEqual(len(residential), 1)
+        self.assertEqual(residential[0]['speed_limit'], 30)
+
+    def test_70_kmh_snaps_to_40_not_70_mph(self):
+        """Bare GraphHopper 70 km/h must not display as 70 mph."""
+        import polyline as pl
+        from voyagr.services.routing.route_entries import (
+            _gh_kmh_to_signed_mph,
+            maneuvers_from_graphhopper_route,
+        )
+
+        self.assertEqual(_gh_kmh_to_signed_mph(70), 40)
+        self.assertEqual(_gh_kmh_to_signed_mph(96.56), 60)
+        self.assertEqual(_gh_kmh_to_signed_mph(112.65), 70)
+        self.assertEqual(_gh_kmh_to_signed_mph(48.28), 30)
+
+        coords = [(51.50, -0.10), (51.501, -0.10)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [{
+                'sign': 0, 'text': 'Continue', 'street_name': 'Lane',
+                'distance': 100, 'time': 10, 'interval': [0, 1],
+            }],
+            'details': {'max_speed': [[0, 2, 70]], 'road_class': [[0, 2, 'RESIDENTIAL']]},
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        self.assertEqual(maneuvers[0]['speed_limit'], 40)
+        self.assertEqual(maneuvers[0]['road_class'], 'residential')
+
     def test_roundabout_exit_sign_and_exit_number(self):
         import polyline as pl
         from voyagr.services.routing.route_entries import maneuvers_from_graphhopper_route
