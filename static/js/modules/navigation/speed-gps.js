@@ -208,9 +208,11 @@
     function isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
         if (!Number.isFinite(mph) || mph <= 0 || mph > 100) return false;
         var rc = String(roadClass || '').toLowerCase();
-        if (rc === 'motorway' && mph < 30) return false;
-        if (rc === 'trunk' && mph < 25) return false;
+        if ((rc === 'motorway' || rc === 'motorway_link') && mph < 30) return false;
+        if ((rc === 'trunk' || rc === 'trunk_link' || rc === 'trunk_road') && mph < 25) return false;
         if ((rc === 'residential' || rc === 'service' || rc === 'living_street') && mph > 50) return false;
+        // Local / minor classes should not show motorway NSL 70 (common Optimised leak).
+        if ((rc === 'tertiary' || rc === 'unclassified') && mph >= 70) return false;
         if (mph < 10 && gpsSpeedMph > 25) return false;
         return true;
     }
@@ -259,18 +261,30 @@
 
         var asKmhMph = Math.round(raw * 0.621371);
         var asDirectMph = Math.round(raw);
+        var directTypical = TYPICAL_MPH_LIMITS.indexOf(asDirectMph) >= 0;
+        var kmhTypical = TYPICAL_MPH_LIMITS.indexOf(asKmhMph) >= 0;
 
-        if (TYPICAL_MPH_LIMITS.indexOf(asDirectMph) >= 0 && TYPICAL_MPH_LIMITS.indexOf(asKmhMph) < 0) {
+        // GraphHopper/OSRM store mph; Valhalla may still send km/h (48 → 30).
+        // Prefer the interpretation that lands on a typical signed limit.
+        if (directTypical && !kmhTypical) {
             if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
                 return asDirectMph;
             }
         }
-
-        if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
+        if (kmhTypical && !directTypical) {
+            if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
+                return asKmhMph;
+            }
+        }
+        // Raw values above UK NSL mph range are almost certainly km/h.
+        if (asDirectMph > 80 && isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
             return asKmhMph;
         }
         if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
             return asDirectMph;
+        }
+        if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
+            return asKmhMph;
         }
         return null;
     }

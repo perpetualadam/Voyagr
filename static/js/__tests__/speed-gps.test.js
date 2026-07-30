@@ -38,6 +38,10 @@ describe('normalizeManeuverSpeedLimitMph', () => {
     test('treats 30 as mph on residential (not 19 from km/h conversion)', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(30, 'residential', 28)).toBe(30);
     });
+    test('treats GraphHopper mph 60/70 as mph (not km/h)', () => {
+        expect(SG.normalizeManeuverSpeedLimitMph(60, 'primary', 50)).toBe(60);
+        expect(SG.normalizeManeuverSpeedLimitMph(70, 'motorway', 65)).toBe(70);
+    });
     test('converts 48 km/h to ~30 mph on motorway', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(48, 'motorway', 60)).toBe(30);
     });
@@ -54,6 +58,11 @@ describe('normalizeManeuverSpeedLimitMph', () => {
 describe('sanitizeApiSpeedLimitMph', () => {
     test('rejects 70 mph on residential from stale API/cache', () => {
         expect(SG.sanitizeApiSpeedLimitMph(70, 'residential', 0)).toBeNull();
+    });
+    test('rejects 70 mph on tertiary/unclassified (Optimised local leak)', () => {
+        expect(SG.isPlausibleEdgeSpeedLimitMph(70, 'tertiary', 28)).toBe(false);
+        expect(SG.isPlausibleEdgeSpeedLimitMph(70, 'unclassified', 28)).toBe(false);
+        expect(SG.isPlausibleEdgeSpeedLimitMph(60, 'tertiary', 45)).toBe(true);
     });
     test('accepts 30 mph on residential', () => {
         expect(SG.sanitizeApiSpeedLimitMph(30, 'residential', 28)).toBe(30);
