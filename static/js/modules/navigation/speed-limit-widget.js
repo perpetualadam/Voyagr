@@ -53,8 +53,9 @@
 
     var ROAD_TYPE_DEFAULT_MPH_UK = {
         motorway: 70,
-        trunk_road: 70,
-        trunk: 70,
+        // Single-carriageway NSL; dual NSL is usually posted/tagged explicitly.
+        trunk_road: 60,
+        trunk: 60,
         primary_road: 50,
         primary: 50,
         secondary_road: 50,
@@ -151,7 +152,8 @@
             return { limitMph: null, roadType: roadType, source: null, region: null };
         }
         var payload = data.data;
-        var apiRoadType = payload.detected_road_type || payload.road_type || roadType;
+        var clientRoadType = roadType || 'unknown';
+        var apiRoadType = payload.detected_road_type || payload.road_type || clientRoadType;
         var source = payload.source || payload.posted_limit_source || 'api';
         var authoritative = /tomtom|osm|road-type-default|highway-inferred/i.test(String(source));
         var limitMph = coerceApiSpeedLimitMph(
@@ -165,9 +167,19 @@
                 );
             }
         }
+        // Reject motorway-class limits when the active edge is clearly local
+        // (bad TomTom snap / invented detected_road_type used to show 70 in 30 zones).
+        if (limitMph != null
+                && clientRoadType
+                && clientRoadType !== 'unknown'
+                && speedGpsModule
+                && typeof speedGpsModule.isPlausibleEdgeSpeedLimitMph === 'function'
+                && !speedGpsModule.isPlausibleEdgeSpeedLimitMph(limitMph, clientRoadType, gpsSpeedMph)) {
+            limitMph = null;
+        }
         return {
             limitMph: limitMph,
-            roadType: apiRoadType,
+            roadType: (limitMph != null ? apiRoadType : clientRoadType) || apiRoadType,
             source: source,
             region: payload.speed_limit_region || null
         };

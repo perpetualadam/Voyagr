@@ -55,18 +55,26 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
     except Exception:
         gh_max_speed_segments = []
 
-    def _speed_limit_kmh(point_idx: int) -> Optional[int]:
+    def _kmh_to_signed_mph(kmh: float) -> int:
+        """GraphHopper details.max_speed is km/h; store mph so the widget does not
+        treat values like 70 km/h as 70 mph (a common 30/40/60→70 misread)."""
+        return int(round(float(kmh) * 0.621371))
+
+    def _speed_limit_mph(point_idx: int) -> Optional[int]:
         for frm, to, val in gh_max_speed_segments:
             if frm <= point_idx < to:
-                return round(val)
+                mph = _kmh_to_signed_mph(val)
+                return mph if mph > 0 else None
         return None
 
     def _speed_changes_inside(begin_src: int, end_src: int) -> List[tuple]:
-        """Return (src_idx, kmh) for max_speed segment starts strictly inside the interval."""
+        """Return (src_idx, mph) for max_speed segment starts strictly inside the interval."""
         changes = []
         for frm, _to, val in gh_max_speed_segments:
             if begin_src < frm < end_src:
-                changes.append((frm, round(val)))
+                mph = _kmh_to_signed_mph(val)
+                if mph > 0:
+                    changes.append((frm, mph))
         changes.sort(key=lambda item: item[0])
         return changes
 
@@ -108,9 +116,9 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
             'begin_shape_index': begin_idx,
             'end_shape_index': end_idx,
         }
-        sl_kmh = _speed_limit_kmh(begin_src)
-        if sl_kmh is not None:
-            maneuver['speed_limit'] = sl_kmh
+        sl_mph = _speed_limit_mph(begin_src)
+        if sl_mph is not None:
+            maneuver['speed_limit'] = sl_mph
         if gh_rc:
             maneuver['road_class'] = gh_rc
         if exit_count > 0 and valhalla_type in (26, 27):
@@ -125,7 +133,7 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
         gh_maneuvers.append(maneuver)
 
         # Synthetic continues at posted-limit changes inside this instruction.
-        for change_src, change_kmh in _speed_changes_inside(begin_src, end_src):
+        for change_src, change_mph in _speed_changes_inside(begin_src, end_src):
             change_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, change_src)
             if change_idx <= begin_idx:
                 continue
@@ -138,7 +146,7 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
                 'street_names': street_names,
                 'begin_shape_index': change_idx,
                 'end_shape_index': end_idx,
-                'speed_limit': change_kmh,
+                'speed_limit': change_mph,
             }
             if gh_rc:
                 speed_maneuver['road_class'] = gh_rc
