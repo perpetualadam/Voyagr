@@ -38,12 +38,23 @@ describe('normalizeManeuverSpeedLimitMph', () => {
     test('treats 30 as mph on residential (not 19 from km/h conversion)', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(30, 'residential', 28)).toBe(30);
     });
-    test('treats GraphHopper mph 60/70 as mph (not km/h)', () => {
+    test('treats GraphHopper/OSRM mph 60/70 as mph (not km/h)', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(60, 'primary', 50)).toBe(60);
         expect(SG.normalizeManeuverSpeedLimitMph(70, 'motorway', 65)).toBe(70);
     });
-    test('converts 48 km/h to ~30 mph on motorway', () => {
-        expect(SG.normalizeManeuverSpeedLimitMph(48, 'motorway', 60)).toBe(30);
+    test('keeps 65 and 62 mph as mph (not ~40 from km/h reinterpretation)', () => {
+        expect(SG.normalizeManeuverSpeedLimitMph(65, 'motorway', 60)).toBe(65);
+        expect(SG.normalizeManeuverSpeedLimitMph(65, 'trunk', 55)).toBe(65);
+        expect(SG.normalizeManeuverSpeedLimitMph(62, 'motorway', 60)).toBe(62);
+        expect(SG.normalizeManeuverSpeedLimitMph(62, 'primary', 50)).toBe(62);
+    });
+    test('keeps server-converted 30 mph from former 48 km/h as mph', () => {
+        // Valhalla/GH/OSRM convert km/h→mph at the source; client must not re-convert.
+        expect(SG.normalizeManeuverSpeedLimitMph(30, 'motorway', 60)).toBe(30);
+    });
+    test('converts leftover unconverted km/h above signed mph range', () => {
+        expect(SG.normalizeManeuverSpeedLimitMph(112, 'motorway', 65)).toBe(70);
+        expect(SG.normalizeManeuverSpeedLimitMph(100, 'motorway', 60)).toBe(62);
     });
     test('rejects implausible motorway limit', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(5, 'motorway', 65)).toBeNull();

@@ -103,9 +103,10 @@
         };
     }
 
-    var TYPICAL_MPH_LIMITS = [20, 30, 40, 50, 60, 70];
     /** km/h → mph */
     var KMH_TO_MPH = 0.621371192237334;
+    /** Above UK/US signed mph range — leftover unconverted km/h from older payloads. */
+    var MANEUVER_SPEED_LIMIT_LIKELY_KMH_THRESHOLD = 80;
     /** Values above this in coords.speed are almost certainly km/h, not m/s (~123 mph). */
     var COORD_SPEED_LIKELY_KMH_THRESHOLD = 55;
 
@@ -259,30 +260,22 @@
         var raw = Number(rawSl);
         if (!Number.isFinite(raw) || raw <= 0) return null;
 
-        var asKmhMph = Math.round(raw * 0.621371);
         var asDirectMph = Math.round(raw);
-        var directTypical = TYPICAL_MPH_LIMITS.indexOf(asDirectMph) >= 0;
-        var kmhTypical = TYPICAL_MPH_LIMITS.indexOf(asKmhMph) >= 0;
+        var asKmhMph = Math.round(raw * KMH_TO_MPH);
 
-        // GraphHopper/OSRM store mph; Valhalla may still send km/h (48 → 30).
-        // Prefer the interpretation that lands on a typical signed limit.
-        if (directTypical && !kmhTypical) {
-            if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
-                return asDirectMph;
-            }
-        }
-        if (kmhTypical && !directTypical) {
+        // GraphHopper, OSRM, and Valhalla maneuvers now store mph at the source.
+        // Do not reinterpret mid-range mph (e.g. 65 / 62) as km/h → ~40 mph.
+        // Only convert values above the signed-mph range (leftover km/h payloads).
+        if (asDirectMph > MANEUVER_SPEED_LIMIT_LIKELY_KMH_THRESHOLD) {
             if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
                 return asKmhMph;
             }
-        }
-        // Raw values above UK NSL mph range are almost certainly km/h.
-        if (asDirectMph > 80 && isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
-            return asKmhMph;
+            return null;
         }
         if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
             return asDirectMph;
         }
+        // Rare: implausible as mph but plausible if an unconverted km/h slipped through.
         if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
             return asKmhMph;
         }
