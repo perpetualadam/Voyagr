@@ -213,6 +213,19 @@
     }
 
     /**
+     * Primary recommended lane for urgency/guidance copy.
+     * Prefer explicit `recommended_lane` (e.g. centre for merge) over candidates[0].
+     * @param {Object} data
+     * @returns {number|null}
+     */
+    function getPrimaryRecommendedLane(data) {
+        if (!data) return null;
+        if (data.recommended_lane != null) return data.recommended_lane;
+        var lanes = getRecommendedLaneNumbers(data);
+        return lanes.length ? lanes[0] : null;
+    }
+
+    /**
      * Multi-lane dual-carriageway-style approaches: 2nd+ roundabout exits need the
      * right lane early (motorway slip → dual approach). 1st exit stays left; quiet
      * residential approaches keep classic UK "2nd = left / ahead".
@@ -320,8 +333,7 @@
         var lanes = getRecommendedLaneNumbers(out);
         if (lanes.length === 0) return out;
 
-        // Prefer an explicit primary (e.g. centre for merge) over candidates[0].
-        var primary = (out.recommended_lane != null) ? out.recommended_lane : lanes[0];
+        var primary = getPrimaryRecommendedLane(out);
 
         if (confidence >= LANE_CONFIDENCE_HIGH) {
             out.recommended_lanes = [primary];
@@ -393,7 +405,7 @@
         }
 
         var lanePos = laneNameFor(
-            getRecommendedLaneNumbers(base)[0] || base.recommended_lane || 1,
+            getPrimaryRecommendedLane(base) || 1,
             base.total_lanes
         );
         var urgencyFields = laneUrgencyFields(dist, lanePos, maneuver, exitCount);
@@ -480,8 +492,10 @@
      */
     function refreshLockedGuidanceUrgency(locked, distance, maneuver, exitCount) {
         if (!locked) return null;
-        var lanes = getRecommendedLaneNumbers(locked);
-        var lanePos = laneNameFor(lanes[0] || locked.recommended_lane || 1, locked.total_lanes);
+        var lanePos = laneNameFor(
+            getPrimaryRecommendedLane(locked) || 1,
+            locked.total_lanes
+        );
         return Object.assign({}, locked, laneUrgencyFields(distance, lanePos, maneuver, exitCount));
     }
 
@@ -1107,6 +1121,7 @@
         scoreEstimatedLaneConfidence: scoreEstimatedLaneConfidence,
         isLaneGuidanceValuableManeuver: isLaneGuidanceValuableManeuver,
         getRecommendedLaneNumbers: getRecommendedLaneNumbers,
+        getPrimaryRecommendedLane: getPrimaryRecommendedLane,
         estimateCandidateLanesUK: estimateCandidateLanesUK,
         getRecommendedLaneSimple: getRecommendedLaneSimple,
         roundaboutPrefersRightLane: roundaboutPrefersRightLane,
