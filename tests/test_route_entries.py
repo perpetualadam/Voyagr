@@ -2,7 +2,10 @@
 
 import unittest
 
-from voyagr.services.routing.route_entries import build_valhalla_route_entry
+from voyagr.services.routing.route_entries import (
+    build_valhalla_alternate_route_entries,
+    build_valhalla_route_entry,
+)
 
 
 class _FakeCostCalc:
@@ -95,6 +98,67 @@ class BuildValhallaRouteEntryTest(unittest.TestCase):
         self.assertEqual(len(e['hazards']), 1)
 
 
+class BuildValhallaAlternateRouteEntriesTest(unittest.TestCase):
+    """Every 2-point car payload asks Valhalla for alternates; they must be offered."""
+
+    def test_offers_each_alternate_with_its_own_name_and_id(self):
+        route_data = {
+            'trip': _trip(),
+            'alternates': [{'trip': _trip()}, {'trip': _trip()}, {'trip': _trip()}],
+        }
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+        )
+        self.assertEqual([e['name'] for e in entries], ['Alternate', 'Balanced', 'Alternative'])
+        self.assertEqual([e['id'] for e in entries], [2, 3, 4])
+
+    def test_applies_traffic_multiplier_to_alternate_durations(self):
+        route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()}]}
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.5,
+            traffic_level='Peak Hours', **COMMON,
+        )
+        self.assertEqual(entries[0]['duration_minutes'], 15)  # 10 min base * 1.5
+        # Recorded so the response states how each option's duration was derived.
+        self.assertEqual(entries[0]['base_duration_minutes'], 10)
+        self.assertEqual(entries[0]['traffic_multiplier'], 1.5)
+        self.assertEqual(entries[0]['traffic_level'], 'Peak Hours')
+
+    def test_no_alternates_yields_no_entries(self):
+        self.assertEqual(
+            build_valhalla_alternate_route_entries(
+                {'trip': _trip()}, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+            ),
+            [],
+        )
+
+    def test_skips_malformed_alternates_without_a_trip_summary(self):
+        route_data = {
+            'trip': _trip(),
+            'alternates': [{}, {'trip': {'legs': []}}, {'trip': _trip()}],
+        }
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+        )
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['name'], 'Alternate')
+
+    def test_caps_alternates_at_the_named_set(self):
+        route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()} for _ in range(6)]}
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0, **COMMON,
+        )
+        self.assertEqual(len(entries), 3)
+
+    def test_maneuver_length_in_meters_propagates_to_alternates(self):
+        route_data = {'trip': _trip(), 'alternates': [{'trip': _trip()}]}
+        entries = build_valhalla_alternate_route_entries(
+            route_data, first_route_id=2, traffic_multiplier=1.0,
+            maneuver_length_in_meters=True, **COMMON,
+        )
+        self.assertEqual(entries[0]['maneuvers'][0]['distance'], 10000.0)
+
+
 class ManeuversFromGraphhopperRouteTest(unittest.TestCase):
     def test_speed_limit_changes_emit_synthetic_continues(self):
         """Long continues that span max_speed zones get intermediate type-8 maneuvers."""
@@ -135,10 +199,86 @@ class ManeuversFromGraphhopperRouteTest(unittest.TestCase):
         maneuvers = maneuvers_from_graphhopper_route(route)
         # Primary continue + synthetic continue at speed change + arrive
         self.assertGreaterEqual(len(maneuvers), 3)
-        self.assertEqual(maneuvers[0]['speed_limit'], 112)
-        speed_changes = [m for m in maneuvers if m.get('type') == 8 and m.get('speed_limit') == 48]
+        # Maneuver speed_limit is stored in mph (not raw GraphHopper km/h).
+        self.assertEqual(maneuvers[0]['speed_limit'], 70)
+        speed_changes = [m for m in maneuvers if m.get('type') == 8 and m.get('speed_limit') == 30]
         self.assertEqual(len(speed_changes), 1)
         self.assertGreater(speed_changes[0]['begin_shape_index'], maneuvers[0]['begin_shape_index'])
+
+    def test_road_class_from_details_and_changes_emit_synthetics(self):
+        """Optimised routes must track edge road_class so 70 does not stick on residential."""
+        import polyline as pl
+        from voyagr.services.routing.route_entries import maneuvers_from_graphhopper_route
+
+        coords = [(51.50 + i * 0.001, -0.10) for i in range(5)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [
+                {
+                    'sign': 0,
+                    'text': 'Continue',
+                    'street_name': 'High Street',
+                    'distance': 400,
+                    'time': 30,
+                    'interval': [0, 4],
+                },
+                {
+                    'sign': 4,
+                    'text': 'Arrive',
+                    'street_name': '',
+                    'distance': 0,
+                    'time': 0,
+                    'interval': [4, 4],
+                },
+            ],
+            'details': {
+                'max_speed': [
+                    [0, 2, 112],  # 70 mph
+                    [2, 5, 48],   # 30 mph
+                ],
+                'road_class': [
+                    [0, 2, 'MOTORWAY'],
+                    [2, 5, 'RESIDENTIAL'],
+                ],
+            },
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        self.assertEqual(maneuvers[0]['road_class'], 'motorway')
+        self.assertEqual(maneuvers[0]['speed_limit'], 70)
+        residential = [
+            m for m in maneuvers
+            if m.get('type') == 8 and m.get('road_class') == 'residential'
+        ]
+        self.assertEqual(len(residential), 1)
+        self.assertEqual(residential[0]['speed_limit'], 30)
+
+    def test_70_kmh_snaps_to_40_not_70_mph(self):
+        """Bare GraphHopper 70 km/h must not display as 70 mph."""
+        import polyline as pl
+        from voyagr.services.routing.route_entries import (
+            _gh_kmh_to_signed_mph,
+            maneuvers_from_graphhopper_route,
+        )
+
+        self.assertEqual(_gh_kmh_to_signed_mph(70), 40)
+        self.assertEqual(_gh_kmh_to_signed_mph(96.56), 60)
+        self.assertEqual(_gh_kmh_to_signed_mph(112.65), 70)
+        self.assertEqual(_gh_kmh_to_signed_mph(48.28), 30)
+
+        coords = [(51.50, -0.10), (51.501, -0.10)]
+        geometry = pl.encode(coords, precision=5)
+        route = {
+            'geometry': geometry,
+            'instructions': [{
+                'sign': 0, 'text': 'Continue', 'street_name': 'Lane',
+                'distance': 100, 'time': 10, 'interval': [0, 1],
+            }],
+            'details': {'max_speed': [[0, 2, 70]], 'road_class': [[0, 2, 'RESIDENTIAL']]},
+        }
+        maneuvers = maneuvers_from_graphhopper_route(route)
+        self.assertEqual(maneuvers[0]['speed_limit'], 40)
+        self.assertEqual(maneuvers[0]['road_class'], 'residential')
 
     def test_roundabout_exit_sign_and_exit_number(self):
         import polyline as pl

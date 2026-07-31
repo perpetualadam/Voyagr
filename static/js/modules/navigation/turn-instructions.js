@@ -1103,6 +1103,131 @@
     }
 
     /**
+     * How far ahead (m) lane guidance may pre-position for an upcoming critical maneuver.
+     * Roundabouts/exits need earlier commitment than ordinary turns — drivers leaving a
+     * motorway onto a dual approach already expect to be in the correct lane.
+     */
+    var LANE_LOOKAHEAD_ROUNDABOUT_MAX_M = 2000;
+    var LANE_LOOKAHEAD_EXIT_MAX_M = 2500;
+    var LANE_LOOKAHEAD_TURN_MAX_M = 1200;
+
+    /**
+     * @param {Object|null|undefined} step
+     * @returns {number} Step length in metres (Voyagr stores Valhalla/GH distances in km).
+     */
+    function stepDistanceMeters(step) {
+        var d = Number(step && step.distance) || 0;
+        if (!(d > 0)) return 0;
+        return d * 1000;
+    }
+
+    /**
+     * @param {string} maneuverDir
+     * @returns {boolean} True when the current step does not itself demand a side lane.
+     */
+    function isLaneNeutralManeuverDir(maneuverDir) {
+        return !maneuverDir || maneuverDir === 'straight' || maneuverDir === 'through';
+    }
+
+    /**
+     * @param {string} maneuverDir
+     * @param {number} exitCount
+     * @returns {boolean}
+     */
+    function isLaneCriticalLookaheadTarget(maneuverDir, exitCount) {
+        if (!maneuverDir || isLaneNeutralManeuverDir(maneuverDir)) return false;
+        if (maneuverDir === 'roundabout') return (exitCount || 0) >= 1;
+        return [
+            'left', 'right', 'sharp_left', 'sharp_right',
+            'exit', 'exit_left', 'exit_right', 'uturn', 'merge',
+            'slight_left', 'slight_right',
+        ].indexOf(maneuverDir) >= 0;
+    }
+
+    /**
+     * @param {string} maneuverDir
+     * @returns {number}
+     */
+    function laneLookaheadMaxMetersFor(maneuverDir) {
+        if (maneuverDir === 'roundabout') return LANE_LOOKAHEAD_ROUNDABOUT_MAX_M;
+        if (maneuverDir === 'exit' || maneuverDir === 'exit_left' || maneuverDir === 'exit_right') {
+            return LANE_LOOKAHEAD_EXIT_MAX_M;
+        }
+        return LANE_LOOKAHEAD_TURN_MAX_M;
+    }
+
+    /**
+     * When the active step is a continue/straight, borrow lane intent from the next
+     * critical maneuver (especially roundabout 2nd+/3rd+ exits) so drivers pre-position
+     * instead of being told "stay left" until the last moment.
+     *
+     * @param {Array<Object>} steps
+     * @param {number} stepIndex
+     * @param {string} [roadClass]
+     * @returns {{ maneuverDir: string, roundaboutExitCount: number, stepIndex: number, lookAhead: boolean }}
+     */
+    function resolveLaneGuidanceTargetFromSteps(steps, stepIndex, roadClass) {
+        var idx = stepIndex != null ? stepIndex : 0;
+        var current = steps && steps[idx];
+        if (!current) {
+            return { maneuverDir: 'straight', roundaboutExitCount: 0, stepIndex: idx, lookAhead: false };
+        }
+
+        var maneuverDir = maneuverTypeToLaneDirectionKey(current.type || 0);
+        if (roadClass) {
+            maneuverDir = refineLaneManeuverForUK(maneuverDir, roadClass);
+        }
+        var exitCount = 0;
+        if (maneuverDir === 'roundabout') {
+            exitCount = effectiveRoundaboutExitCountFromSteps(steps, idx);
+        }
+
+        if (!isLaneNeutralManeuverDir(maneuverDir)) {
+            return {
+                maneuverDir: maneuverDir,
+                roundaboutExitCount: exitCount,
+                stepIndex: idx,
+                lookAhead: false,
+            };
+        }
+
+        var gapMeters = 0;
+        for (var j = idx + 1; j < steps.length; j++) {
+            // Distance along the current (neutral) step plus any intervening neutrals.
+            gapMeters += stepDistanceMeters(steps[j - 1]);
+            var cand = steps[j];
+            var candDir = maneuverTypeToLaneDirectionKey(cand.type || 0);
+            var candRoad = cand.road_class || roadClass;
+            if (candRoad) {
+                candDir = refineLaneManeuverForUK(candDir, candRoad);
+            }
+            var candExit = 0;
+            if (candDir === 'roundabout') {
+                candExit = effectiveRoundaboutExitCountFromSteps(steps, j);
+            }
+            if (!isLaneCriticalLookaheadTarget(candDir, candExit)) {
+                continue;
+            }
+            if (gapMeters > laneLookaheadMaxMetersFor(candDir)) {
+                break;
+            }
+            return {
+                maneuverDir: candDir,
+                roundaboutExitCount: candExit,
+                stepIndex: j,
+                lookAhead: true,
+            };
+        }
+
+        return {
+            maneuverDir: maneuverDir,
+            roundaboutExitCount: exitCount,
+            stepIndex: idx,
+            lookAhead: false,
+        };
+    }
+
+    /**
      * Lane-guidance inputs for one GPS tick (maneuver direction + roundabout exits).
      * @param {Object} opts
      * @returns {Object}
@@ -1119,19 +1244,18 @@
             return { action: 'skip', reason: 'no-step' };
         }
 
-        var maneuverDir = maneuverTypeToLaneDirectionKey(nextStep.type || 0);
-        if (opts.roadClass) {
-            maneuverDir = refineLaneManeuverForUK(maneuverDir, opts.roadClass);
-        }
-        var exitCount = 0;
-        if (maneuverDir === 'roundabout') {
-            exitCount = effectiveRoundaboutExitCountFromSteps(opts.routeSteps, stepIndex);
-        }
+        var target = resolveLaneGuidanceTargetFromSteps(
+            opts.routeSteps,
+            stepIndex,
+            opts.roadClass
+        );
 
         return {
             action: 'update',
-            maneuverDir: maneuverDir,
-            roundaboutExitCount: exitCount,
+            maneuverDir: target.maneuverDir,
+            roundaboutExitCount: target.roundaboutExitCount,
+            guidanceStepIndex: target.stepIndex,
+            lookAhead: !!target.lookAhead,
         };
     }
 
@@ -1148,6 +1272,8 @@
             action: 'apply',
             maneuverDir: tick.maneuverDir,
             roundaboutExitCount: tick.roundaboutExitCount,
+            guidanceStepIndex: tick.guidanceStepIndex,
+            lookAhead: !!tick.lookAhead,
         };
     }
 
@@ -1159,6 +1285,9 @@
         buildTurnWidgetTickPlan: buildTurnWidgetTickPlan,
         buildLaneGuidanceTickPlan: buildLaneGuidanceTickPlan,
         buildLaneGuidanceTickApplyPlan: buildLaneGuidanceTickApplyPlan,
+        resolveLaneGuidanceTargetFromSteps: resolveLaneGuidanceTargetFromSteps,
+        isLaneNeutralManeuverDir: isLaneNeutralManeuverDir,
+        LANE_LOOKAHEAD_ROUNDABOUT_MAX_M: LANE_LOOKAHEAD_ROUNDABOUT_MAX_M,
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
         maneuverTypeToLaneDirectionKey: maneuverTypeToLaneDirectionKey,

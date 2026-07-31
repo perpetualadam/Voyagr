@@ -37,7 +37,9 @@ describe('speed-limit-widget module', () => {
         expect(SL.pickDisplaySpeedLimitMph(null, null, 'unknown', 'uk', { allowRoadTypeFallback: true })).toBeNull();
     });
 
-    test('parseSpeedLimitApiResponse trusts server motorway limits with detected road type', () => {
+    test('parseSpeedLimitApiResponse rejects motorway 70 when active edge is residential', () => {
+        // Bad TomTom snaps used to invent detected_road_type=motorway and show
+        // 70 mph on signed 30 mph streets near the destination.
         const parsed = SL.parseSpeedLimitApiResponse({
             success: true,
             data: {
@@ -45,9 +47,28 @@ describe('speed-limit-widget module', () => {
                 detected_road_type: 'motorway',
                 source: 'TomTom-SnapToRoads'
             }
-        }, 'residential', 65, SG);
+        }, 'residential', 28, SG);
+        expect(parsed.limitMph).toBeNull();
+    });
+
+    test('parseSpeedLimitApiResponse accepts motorway 70 when client edge is motorway', () => {
+        const parsed = SL.parseSpeedLimitApiResponse({
+            success: true,
+            data: {
+                speed_limit_mph: 70,
+                detected_road_type: 'motorway',
+                source: 'TomTom-SnapToRoads'
+            }
+        }, 'motorway', 65, SG);
         expect(parsed.limitMph).toBe(70);
         expect(parsed.roadType).toBe('motorway');
+    });
+
+    test('inferRoadTypeDefaultLimitMph uses 60 for UK trunk (single-carriageway NSL)', () => {
+        expect(SL.inferRoadTypeDefaultLimitMph('trunk', 'uk')).toBe(60);
+        expect(SL.inferRoadTypeDefaultLimitMph('trunk_road', 'uk')).toBe(60);
+        expect(SL.inferRoadTypeDefaultLimitMph('motorway', 'uk')).toBe(70);
+        expect(SL.inferRoadTypeDefaultLimitMph('residential', 'uk')).toBe(30);
     });
 
     test('formatSpeedForWidget converts mph to km/h display', () => {
@@ -184,6 +205,31 @@ describe('speed-limit-widget module', () => {
         expect(apply.statePatch.currentSpeedLimitMph).toBe(70);
         expect(apply.widgetUpdate.shownLimit).toBe(70);
         expect(apply.cacheHint.limitMph).toBe(70);
+    });
+
+    test('buildSpeedLimitApiSuccessApplyPlan keeps edge 30 over weak road-type 60', () => {
+        // Trunk/primary road-type defaults must not re-stick NSL 60 after the
+        // active maneuver already entered a signed 30 mph zone.
+        const apply = SL.buildSpeedLimitApiSuccessApplyPlan({
+            data: {
+                success: true,
+                data: {
+                    speed_limit_mph: 60,
+                    road_type: 'trunk',
+                    source: 'road-type-default',
+                },
+            },
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'trunk',
+            valhallaSpeedLimit: 30,
+            currentSpeedMph: 28,
+            currentGpsSpeedMph: 27,
+            speedGpsModule: SG,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.widgetUpdate.shownLimit).toBe(30);
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(30);
     });
 
     test('buildSpeedLimitFetchFallbackApplyPlan prefers cached limit', () => {

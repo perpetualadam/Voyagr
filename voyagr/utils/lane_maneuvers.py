@@ -25,8 +25,11 @@ GH_ROAD_CLASS_TO_VOYAGR = {
     'SECONDARY': 'secondary',
     'SECONDARY_LINK': 'secondary',
     'TERTIARY': 'tertiary',
+    'TERTIARY_LINK': 'tertiary',
     'RESIDENTIAL': 'residential',
     'UNCLASSIFIED': 'unclassified',
+    'LIVING_STREET': 'living_street',
+    'SERVICE': 'service',
 }
 
 
@@ -84,7 +87,9 @@ def recommend_lanes_from_turn_lanes(
         if roundabout_exit_count <= 1:
             maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
         elif roundabout_exit_count == 2:
-            maneuver_map['roundabout'] = ['through', 'none', '', 'slight_left', 'slight_right']
+            # Prefer through, but allow right — dual approaches often mark 2nd exit
+            # on the right-hand lane; left-turn-only lanes are still avoided.
+            maneuver_map['roundabout'] = ['through', 'right', 'slight_right', 'none', '', 'slight_left']
         else:
             maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
 
@@ -116,13 +121,35 @@ def recommend_lane_from_turn_lanes(
     return lanes[0] if lanes else None
 
 
-def estimate_candidate_lanes_uk(maneuver: str, total_lanes: int, roundabout_exit_count: int = 0) -> List[int]:
+def roundabout_prefers_right_lane(
+    exit_count: int,
+    total_lanes: int,
+    road_type: Optional[str] = None,
+) -> bool:
+    """True when a multi-lane dual-style approach should pre-position right for 2nd+ exits."""
+    if exit_count < 2 or total_lanes < 2:
+        return False
+    if exit_count >= 3:
+        return True
+    rt = str(road_type or '').lower()
+    return rt in (
+        'motorway', 'motorway_link',
+        'trunk', 'trunk_link', 'trunk_road',
+        'primary', 'primary_road',
+        'secondary', 'secondary_road',
+    )
+
+
+def estimate_candidate_lanes_uk(
+    maneuver: str,
+    total_lanes: int,
+    roundabout_exit_count: int = 0,
+    road_type: Optional[str] = None,
+) -> List[int]:
     if total_lanes <= 1:
         return [1]
     if maneuver == 'roundabout' and roundabout_exit_count > 0:
-        if roundabout_exit_count <= 2:
-            return [1]
-        if roundabout_exit_count >= 3:
+        if roundabout_prefers_right_lane(roundabout_exit_count, total_lanes, road_type):
             return [total_lanes]
         return [1]
     if maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
@@ -134,21 +161,30 @@ def estimate_candidate_lanes_uk(maneuver: str, total_lanes: int, roundabout_exit
     return [max(1, (total_lanes + 1) // 2)]
 
 
-def get_recommended_lane_simple(maneuver: str, total_lanes: int, roundabout_exit_count: int = 0) -> int:
+def get_recommended_lane_simple(
+    maneuver: str,
+    total_lanes: int,
+    roundabout_exit_count: int = 0,
+    road_type: Optional[str] = None,
+) -> int:
     """Single-lane UK heuristic fallback (rightmost for right, leftmost for left)."""
-    if total_lanes <= 1:
+    lanes = estimate_candidate_lanes_uk(maneuver, total_lanes, roundabout_exit_count, road_type)
+    if not lanes:
         return 1
-    if maneuver == 'roundabout' and roundabout_exit_count > 0:
-        if roundabout_exit_count <= 2:
-            return 1
-        return total_lanes
-    if maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
-        return 1
-    if maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit'):
-        return total_lanes
-    if maneuver in ('straight', 'merge'):
+    # Merge candidates on 3+ lanes are edge lanes [1, total]; the primary stays the
+    # centre-lane middle heuristic (same as straight / pre-refactor behaviour).
+    if maneuver == 'merge':
         return max(1, (total_lanes + 1) // 2)
-    return max(1, (total_lanes + 1) // 2)
+    # Candidate lists for right-side manoeuvres are ordered left→right; the primary
+    # recommendation is the rightmost acceptable lane.
+    if maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit', 'uturn'):
+        return lanes[-1]
+    if (
+        maneuver == 'roundabout'
+        and roundabout_prefers_right_lane(roundabout_exit_count, total_lanes, road_type)
+    ):
+        return lanes[-1]
+    return lanes[0]
 
 
 def score_lane_guidance_confidence(
@@ -184,13 +220,18 @@ def score_lane_guidance_confidence(
 def apply_confidence_lane_selection(
     recommended_lanes: List[int],
     confidence: int,
+    preferred_primary: Optional[int] = None,
 ) -> Tuple[List[int], Optional[int]]:
     if not recommended_lanes:
         return [], None
+    if preferred_primary is not None:
+        primary = preferred_primary
+    else:
+        primary = recommended_lanes[0]
     if confidence >= 90:
-        return [recommended_lanes[0]], recommended_lanes[0]
+        return [primary], primary
     if confidence >= 70:
-        return recommended_lanes, recommended_lanes[0]
+        return recommended_lanes, primary
     return [], None
 
 
@@ -360,7 +401,9 @@ def build_lanes_for_maneuver(
     if lane_dirs:
         recommended = recommend_lanes_from_turn_lanes(lane_dirs, lane_maneuver, exit_count)
     else:
-        recommended = estimate_candidate_lanes_uk(lane_maneuver, total_lanes, exit_count)
+        recommended = estimate_candidate_lanes_uk(
+            lane_maneuver, total_lanes, exit_count, road_class
+        )
 
     if not recommended:
         return None

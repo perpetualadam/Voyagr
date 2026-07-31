@@ -19,22 +19,36 @@ import polyline as _polyline_module
 
 from voyagr.utils.geometry import decode_route_geometry
 from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
-from voyagr.utils.lane_maneuvers import attach_lanes_to_graphhopper_maneuver
+from voyagr.utils.lane_maneuvers import (
+    attach_lanes_to_graphhopper_maneuver,
+    map_graphhopper_road_class,
+    path_detail_value_at_index,
+)
 from voyagr.utils.osrm import infer_road_class_from_names
 from voyagr.services.hazards import get_hazards_on_route, score_route_by_hazards
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers
 
 logger = logging.getLogger('voyagr_web')
 
+# Typical UK signed limits — snap GraphHopper km/h → mph to these so the widget
+# never treats raw 70 km/h as 70 mph, and 96/112 km/h land on 60/70 cleanly.
+_UK_SIGNED_MPH = (20, 30, 40, 50, 60, 70)
+
+
+def _gh_kmh_to_signed_mph(kmh: float) -> int:
+    """Convert GraphHopper details.max_speed (km/h) to a plausible signed mph."""
+    mph = float(kmh) * 0.621371
+    return int(min(_UK_SIGNED_MPH, key=lambda x: abs(x - mph)))
+
 
 def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert GraphHopper instructions + max_speed details into Valhalla-shaped maneuvers.
 
     Long GraphHopper "continue" instructions often span several posted-limit zones.
-    When ``details.max_speed`` changes inside an instruction interval we emit synthetic
-    Continue (type 8) maneuvers at each change so the active-edge speed limit tracks
-    the snapped shape index instead of sticking to the limit at the instruction start
-    (e.g. 70 mph NSL leaking into a following 30 mph zone).
+    When ``details.max_speed`` or ``details.road_class`` changes inside an instruction
+    we emit synthetic Continue (type 8) maneuvers so the active-edge speed limit and
+    road class track the snapped shape index instead of sticking to the instruction
+    start (e.g. motorway/NSL 70 mph leaking into a following 30 mph residential zone).
     """
     gh_geometry = graphhopper_route.get('geometry', '')
     if not gh_geometry:
@@ -44,9 +58,9 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
     gh_geometry_p6 = _polyline_module.encode(gh_coords, precision=6)
     gh_coords_p6 = _polyline_module.decode(gh_geometry_p6, precision=6)
 
+    details = graphhopper_route.get('details') or {}
     gh_max_speed_segments: List = []
     try:
-        details = graphhopper_route.get('details') or {}
         for seg in (details.get('max_speed') or []):
             if isinstance(seg, list) and len(seg) >= 3:
                 frm, to, val = seg[0], seg[1], seg[2]
@@ -55,20 +69,45 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
     except Exception:
         gh_max_speed_segments = []
 
-    def _speed_limit_kmh(point_idx: int) -> Optional[int]:
+    road_class_segments = details.get('road_class') or []
+
+    def _speed_limit_mph(point_idx: int) -> Optional[int]:
         for frm, to, val in gh_max_speed_segments:
             if frm <= point_idx < to:
-                return round(val)
+                mph = _gh_kmh_to_signed_mph(val)
+                return mph if mph > 0 else None
         return None
 
-    def _speed_changes_inside(begin_src: int, end_src: int) -> List[tuple]:
-        """Return (src_idx, kmh) for max_speed segment starts strictly inside the interval."""
-        changes = []
+    def _road_class_at(point_idx: int, street_label: str, street_names: List[str]) -> Optional[str]:
+        # Prefer GraphHopper edge class (covers residential / service) over M/A/B name hints.
+        from_details = map_graphhopper_road_class(
+            path_detail_value_at_index(road_class_segments, point_idx)
+        )
+        if from_details:
+            return from_details
+        return infer_road_class_from_names(street_label, street_names)
+
+    def _change_points_inside(begin_src: int, end_src: int) -> List[tuple]:
+        """Return sorted (src_idx, mph|None, road_class|None) for edge changes inside interval."""
+        points: Dict[int, Dict[str, Any]] = {}
         for frm, _to, val in gh_max_speed_segments:
             if begin_src < frm < end_src:
-                changes.append((frm, round(val)))
-        changes.sort(key=lambda item: item[0])
-        return changes
+                mph = _gh_kmh_to_signed_mph(val)
+                if mph > 0:
+                    points.setdefault(frm, {})['speed_limit'] = mph
+        for seg in road_class_segments:
+            if not isinstance(seg, (list, tuple)) or len(seg) < 3:
+                continue
+            frm = int(seg[0])
+            if begin_src < frm < end_src:
+                mapped = map_graphhopper_road_class(seg[2])
+                if mapped:
+                    points.setdefault(frm, {})['road_class'] = mapped
+        out = []
+        for src in sorted(points):
+            meta = points[src]
+            out.append((src, meta.get('speed_limit'), meta.get('road_class')))
+        return out
 
     def _exit_count(instr: Dict[str, Any]) -> int:
         for key in ('exit_number', 'roundabout_exit_count', 'exited'):
@@ -95,7 +134,7 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
         instr_text = instr.get('text', '')
         street_label = instr.get('street_name', '') or ''
         street_names = [street_label] if street_label else []
-        gh_rc = infer_road_class_from_names(street_label, street_names)
+        gh_rc = _road_class_at(begin_src, street_label, street_names)
         exit_count = _exit_count(instr)
 
         maneuver: Dict[str, Any] = {
@@ -108,9 +147,9 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
             'begin_shape_index': begin_idx,
             'end_shape_index': end_idx,
         }
-        sl_kmh = _speed_limit_kmh(begin_src)
-        if sl_kmh is not None:
-            maneuver['speed_limit'] = sl_kmh
+        sl_mph = _speed_limit_mph(begin_src)
+        if sl_mph is not None:
+            maneuver['speed_limit'] = sl_mph
         if gh_rc:
             maneuver['road_class'] = gh_rc
         if exit_count > 0 and valhalla_type in (26, 27):
@@ -119,16 +158,20 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
             maneuver,
             instr,
             valhalla_type=valhalla_type,
-            path_details=graphhopper_route.get('details') or {},
+            path_details=details,
             shape_index_src=begin_src,
         )
         gh_maneuvers.append(maneuver)
 
-        # Synthetic continues at posted-limit changes inside this instruction.
-        for change_src, change_kmh in _speed_changes_inside(begin_src, end_src):
+        # Synthetic continues at posted-limit / road-class changes inside this instruction.
+        for change_src, change_mph, change_rc in _change_points_inside(begin_src, end_src):
             change_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, change_src)
             if change_idx <= begin_idx:
                 continue
+            # Fill missing fields from the edge at the change point so a road-class-only
+            # change still carries the correct speed, and vice versa.
+            edge_mph = change_mph if change_mph is not None else _speed_limit_mph(change_src)
+            edge_rc = change_rc or _road_class_at(change_src, street_label, street_names)
             speed_maneuver: Dict[str, Any] = {
                 'instruction': '',
                 'verbal_pre_transition_instruction': '',
@@ -138,10 +181,11 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
                 'street_names': street_names,
                 'begin_shape_index': change_idx,
                 'end_shape_index': end_idx,
-                'speed_limit': change_kmh,
             }
-            if gh_rc:
-                speed_maneuver['road_class'] = gh_rc
+            if edge_mph is not None:
+                speed_maneuver['speed_limit'] = edge_mph
+            if edge_rc:
+                speed_maneuver['road_class'] = edge_rc
             gh_maneuvers.append(speed_maneuver)
 
     return gh_maneuvers
@@ -229,6 +273,69 @@ def build_valhalla_route_entry(
         entry['traffic_multiplier'] = round(traffic_multiplier, 2)
         entry['traffic_level'] = traffic_level
     return entry
+
+
+#: Display names for Valhalla ``alternates``, in the order Valhalla returns them.
+VALHALLA_ALTERNATE_ROUTE_NAMES = ('Alternate', 'Balanced', 'Alternative')
+
+
+def build_valhalla_alternate_route_entries(
+    route_data: Dict[str, Any],
+    *,
+    first_route_id: int,
+    traffic_multiplier: float,
+    traffic_level: str = 'N/A',
+    hazards: Dict[str, Any],
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+    maneuver_length_in_meters: bool = False,
+    max_alternates: int = len(VALHALLA_ALTERNATE_ROUTE_NAMES),
+) -> List[Dict[str, Any]]:
+    """
+    Build route entries for the ``alternates`` of a Valhalla ``/route`` response.
+
+    Every payload Voyagr sends for a 2-point car route asks for ``alternates``, so
+    each response-handling path should offer them; dropping them leaves the preview
+    with only the routes the ensure_*/discovery helpers manage to synthesise.
+
+    Each entry records the traffic scaling it was given, so a response states how
+    every option's duration was derived rather than only the primary route's.
+    """
+    entries: List[Dict[str, Any]] = []
+    for alt_route in (route_data or {}).get('alternates') or []:
+        if len(entries) >= max_alternates:
+            break
+        trip = (alt_route or {}).get('trip')
+        if not trip or 'summary' not in trip:
+            continue
+        # Named by kept position, not source index, so a malformed alternate does
+        # not leave the survivors with gaps in their names or ids.
+        idx = len(entries)
+        name = (
+            VALHALLA_ALTERNATE_ROUTE_NAMES[idx]
+            if idx < len(VALHALLA_ALTERNATE_ROUTE_NAMES)
+            else f'Alternative {idx}'
+        )
+        entries.append(build_valhalla_route_entry(
+            trip=trip, name=name, route_id=first_route_id + idx,
+            traffic_multiplier=traffic_multiplier,
+            traffic_level=traffic_level,
+            include_traffic_fields=True,
+            maneuver_length_in_meters=maneuver_length_in_meters,
+            hazards=hazards, cost_calculator=cost_calculator,
+            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+            electricity_price=electricity_price, include_tolls=include_tolls,
+            include_caz=include_caz, caz_exempt=caz_exempt,
+        ))
+    return entries
 
 
 def build_graphhopper_optimised_route_entry(

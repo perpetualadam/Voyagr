@@ -102,7 +102,7 @@ def nearest_shape_index(
 
 
 def parse_osrm_maxspeed_kmh(entry: Any) -> Optional[int]:
-    """Parse an OSRM maxspeed annotation entry to km/h (Valhalla maneuver convention)."""
+    """Parse an OSRM maxspeed annotation entry to km/h (converted to mph on maneuvers)."""
     if not entry or not isinstance(entry, dict):
         return None
     if entry.get('unknown'):
@@ -217,7 +217,11 @@ def build_osrm_maneuvers(
 
             sl_kmh = _speed_limit_at_index(maxspeed_segments, begin_idx)
             if sl_kmh is not None:
-                maneuver['speed_limit'] = sl_kmh
+                # Store mph (same convention as GraphHopper maneuvers) so the
+                # widget does not treat 70 km/h as 70 mph.
+                mph = int(round(float(sl_kmh) * 0.621371))
+                if mph > 0:
+                    maneuver['speed_limit'] = mph
 
             maneuvers.append(maneuver)
 

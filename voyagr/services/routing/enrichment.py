@@ -65,10 +65,16 @@ class RouteEnrichmentContext:
 def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
     """Common kwargs shared by all three ensure_* helpers.
 
+    The traffic factors are included so routes these helpers fetch are scaled like
+    the ones already in the list; a free-flow duration among traffic-adjusted peers
+    understates the option and skews the max-detour comparison.
+
     Note: ``graphhopper_route`` is intentionally NOT included — only
     ``ensure_optimised_camera_avoiding_route`` accepts it (scenic/quiet do not).
     """
     return {
+        'traffic_multiplier': ctx.traffic_multiplier,
+        'traffic_level': ctx.traffic_level,
         'url': ctx.url,
         'headers': ctx.headers,
         'route_locations': ctx.route_locations,
@@ -204,7 +210,7 @@ def apply_valhalla_route_enrichment(
     ensure Scenic/Quiet preference routes, camera proximity scores,
     hazard-penalty reorder + id renumber.
     """
-    from voyagr.services.routing.route_variety import finalize_route_variety, pin_optimised_route_first
+    from voyagr.services.routing.route_variety import finalize_route_variety
     import voyagr_web as vw
 
     ensure_kw = _ensure_kwargs(ctx)
@@ -235,6 +241,6 @@ def apply_valhalla_route_enrichment(
         for idx, route in enumerate(routes):
             route['id'] = idx + 1
 
-    routes = pin_optimised_route_first(routes)
+    # finalize dedupes/filters then pins Optimised first (pin must not precede dedupe).
     routes = finalize_route_variety(routes, max_detour_percent=ctx.max_detour)
     return routes

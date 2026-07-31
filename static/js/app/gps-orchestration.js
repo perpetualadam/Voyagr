@@ -12,7 +12,12 @@
     var smoothDisplayLon = null;
     var trackingHistory = [];
     var isTrackingActive = false;
+    /** True after stopGPSTracking(); cleared when a watch is started again. */
+    var gpsTrackingStoppedByUser = false;
     var gpsWatchId = null;
+    var lastGpsFixAtMs = 0;
+    var gpsWatchStartedAtMs = 0;
+    var gpsEnsureRetryTimer = null;
     var currentUserMarker = null;
     var currentUserMarkerIcon = null;
 
@@ -20,8 +25,20 @@
     function setTrackingHistory(val) { trackingHistory = val; }
     function getIsTrackingActive() { return isTrackingActive; }
     function setIsTrackingActive(val) { isTrackingActive = !!val; }
+    function getGpsTrackingStoppedByUser() { return gpsTrackingStoppedByUser; }
+    function setGpsTrackingStoppedByUser(val) { gpsTrackingStoppedByUser = !!val; }
     function getGpsWatchId() { return gpsWatchId; }
     function setGpsWatchId(val) { gpsWatchId = val; }
+    function getLastGpsFixAtMs() { return lastGpsFixAtMs; }
+    function setLastGpsFixAtMs(val) { lastGpsFixAtMs = Number(val) || 0; }
+    function getLastGpsFixAgeMs(nowMs) {
+        var now = Number.isFinite(nowMs) ? nowMs : Date.now();
+        if (lastGpsFixAtMs) return Math.max(0, now - lastGpsFixAtMs);
+        // No fix yet on this watch: age from watch start so a stalled new watch
+        // can be detected without restarting immediately on every resume event.
+        if (gpsWatchStartedAtMs) return Math.max(0, now - gpsWatchStartedAtMs);
+        return null;
+    }
     function getCurrentUserMarker() { return currentUserMarker; }
     function setCurrentUserMarker(val) { currentUserMarker = val; }
     function getCurrentUserMarkerIcon() { return currentUserMarkerIcon; }
@@ -175,17 +192,27 @@
         if (!markerTick) return;
 
         if (markerTick.action === 'update') {
-            getCurrentUserMarker().setLngLat(markerTick.lngLat);
-            const markerEl = getCurrentUserMarker().getElement ? getCurrentUserMarker().getElement() : null;
+            const marker = getCurrentUserMarker();
+            marker.setLngLat(markerTick.lngLat);
+            const markerEl = marker.getElement ? marker.getElement() : null;
             if (markerEl) {
+                if (typeof rt().call.syncVehicleMarkerElementSize === 'function') {
+                    rt().call.syncVehicleMarkerElementSize(markerEl);
+                }
                 const inner = markerEl.querySelector('div');
                 if (inner) {
                     inner.style.transform = `rotate(${markerTick.rotationDeg}deg)`;
                 }
             }
-            getCurrentUserMarker().heading = markerTick.heading;
-            getCurrentUserMarker().speed = markerTick.speed;
-            getCurrentUserMarker().accuracy = markerTick.accuracy;
+            marker.heading = markerTick.heading;
+            marker.speed = markerTick.speed;
+            marker.accuracy = markerTick.accuracy;
+            if (markerTick.reattachToMap) {
+                const map = rt().g('map');
+                if (map && !marker._map && typeof marker.addTo === 'function') {
+                    marker.addTo(map);
+                }
+            }
             return;
         }
 
@@ -212,10 +239,12 @@
      */
     function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accuracy) {
         const SGpos = sgModule();
+        const currentMarker = getCurrentUserMarker();
         const markerTick = SGpos
             ? SGpos.buildVehicleMarkerTickPlan({
-                hasMarker: !!getCurrentUserMarker(),
-                canSetLngLat: !!(getCurrentUserMarker() && typeof getCurrentUserMarker().setLngLat === 'function'),
+                hasMarker: !!currentMarker,
+                canSetLngLat: !!(currentMarker && typeof currentMarker.setLngLat === 'function'),
+                markerOnMap: !!(currentMarker && currentMarker._map),
                 markerLat,
                 markerLon,
                 heading,
@@ -457,7 +486,8 @@
                     lon,
                     heading,
                     laneApply.maneuverDir,
-                    laneApply.roundaboutExitCount
+                    laneApply.roundaboutExitCount,
+                    laneApply.guidanceStepIndex
                 );
             }
         }
@@ -737,6 +767,132 @@
         applyGpsTrackingSideEffectsFromPosition(pos);
     }
 
+    function clearGpsEnsureRetryTimer() {
+        if (gpsEnsureRetryTimer != null) {
+            clearTimeout(gpsEnsureRetryTimer);
+            gpsEnsureRetryTimer = null;
+        }
+    }
+
+    function clearGpsWatchHandle() {
+        if (getGpsWatchId() !== null && navigator.geolocation) {
+            try {
+                navigator.geolocation.clearWatch(getGpsWatchId());
+            } catch (_) { /* ignore */ }
+        }
+        setGpsWatchId(null);
+    }
+
+    function scheduleGpsEnsureRetryAfterError() {
+        clearGpsEnsureRetryTimer();
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        if (!rt().g('routeInProgress') && !getIsTrackingActive()) return;
+        gpsEnsureRetryTimer = setTimeout(function () {
+            gpsEnsureRetryTimer = null;
+            try {
+                ensureGPSTracking({ forceRestart: true, documentVisible: true });
+            } catch (_) { /* ignore */ }
+        }, 2500);
+    }
+
+    /**
+     * Start a fresh watchPosition without UI-toggle stop behavior.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.quietStatus]
+     * @param {boolean} [opts.resetDisplayState]
+     */
+    function beginGpsWatch(opts) {
+        opts = opts || {};
+        if (!navigator.geolocation) {
+            rt().call.showStatus('Geolocation not supported', 'error');
+            return false;
+        }
+
+        clearGpsEnsureRetryTimer();
+        clearGpsWatchHandle();
+        setGpsTrackingStoppedByUser(false);
+        setIsTrackingActive(true);
+        setLastGpsFixAtMs(0);
+        gpsWatchStartedAtMs = Date.now();
+
+        if (opts.resetDisplayState) {
+            resetVehicleMarkerDisplayState();
+        }
+
+        setGpsWatchId(navigator.geolocation.watchPosition(
+            (position) => {
+                setLastGpsFixAtMs(Date.now());
+                applyGpsTrackingTick(position);
+            },
+            (error) => {
+                const message = (error && error.message) ? error.message : 'unknown';
+                console.warn('[GPS] watchPosition error:', message);
+                rt().call.showStatus('GPS Error: ' + message, 'error');
+                clearGpsWatchHandle();
+                setIsTrackingActive(false);
+                gpsWatchStartedAtMs = 0;
+                if (rt().g('routeInProgress')) {
+                    scheduleGpsEnsureRetryAfterError();
+                }
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        ));
+
+        if (!opts.quietStatus) {
+            rt().call.showStatus('🎯 GPS Tracking started...', 'success');
+        }
+        return true;
+    }
+
+    /**
+     * Ensure GPS watch is alive after app resume / screen-off.
+     * Unlike startGPSTracking(), this never toggles tracking off.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.forceRestart]
+     * @param {boolean} [opts.documentVisible]
+     * @returns {Object} ensure plan
+     */
+    function ensureGPSTracking(opts) {
+        opts = opts || {};
+        const SG = sgModule();
+        const plan = SG && typeof SG.buildGpsTrackingEnsurePlan === 'function'
+            ? SG.buildGpsTrackingEnsurePlan({
+                geolocationAvailable: typeof navigator !== 'undefined' && !!navigator.geolocation,
+                documentVisible: opts.documentVisible !== false &&
+                    (typeof document === 'undefined' || document.visibilityState !== 'hidden'),
+                routeInProgress: !!rt().g('routeInProgress'),
+                isTrackingActive: getIsTrackingActive(),
+                trackingStoppedByUser: getGpsTrackingStoppedByUser(),
+                hasGpsWatchId: getGpsWatchId() != null,
+                lastFixAgeMs: getLastGpsFixAgeMs(),
+                forceRestart: !!opts.forceRestart,
+                staleAfterMs: opts.staleAfterMs,
+            })
+            : { shouldRestart: false, reason: 'no_module' };
+
+        if (!plan.shouldRestart) {
+            return plan;
+        }
+
+        if (plan.logMessage) console.log(plan.logMessage);
+
+        if (plan.resetDisplayState) {
+            // Drop stale smoothed marker coords so the icon can catch up to the
+            // next real fix instead of freezing at the pre-pause location.
+            resetVehicleMarkerDisplayState();
+        }
+
+        beginGpsWatch({
+            quietStatus: plan.quietStatus !== false,
+            resetDisplayState: false,
+        });
+        return plan;
+    }
+
     /**
      * startGPSTracking function
      * @function startGPSTracking
@@ -748,12 +904,12 @@
             return;
         }
 
+        // UI toggle: second tap stops tracking.
         if (getIsTrackingActive()) {
             stopGPSTracking();
             return;
         }
 
-        setIsTrackingActive(true);
         setTrackingHistory([]);
         rt().s('_lastGoodRawPickMph',  0);
         rt().s('_consecutiveDisplacementMoves',  0);
@@ -762,21 +918,7 @@
         resetVehicleMarkerDisplayState();
         window.__voyagrLastFollowEaseAt = 0;
         window.__voyagrLastFollowCenterGeo = null;
-        rt().call.showStatus('🎯 GPS Tracking started...', 'success');
-
-        // Watch position with high accuracy
-        setGpsWatchId(navigator.geolocation.watchPosition(
-            (position) => applyGpsTrackingTick(position),
-            (error) => {
-                rt().call.showStatus('GPS Error: ' + error.message, 'error');
-                setIsTrackingActive(false);
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            }
-        ));
+        beginGpsWatch({ quietStatus: false, resetDisplayState: false });
     }
 
     /**
@@ -785,11 +927,12 @@
      * @returns {*} Return value description
      */
     function stopGPSTracking() {
-        if (getGpsWatchId() !== null) {
-            navigator.geolocation.clearWatch(getGpsWatchId());
-            setGpsWatchId(null);
-        }
+        clearGpsEnsureRetryTimer();
+        clearGpsWatchHandle();
+        setGpsTrackingStoppedByUser(true);
         setIsTrackingActive(false);
+        setLastGpsFixAtMs(0);
+        gpsWatchStartedAtMs = 0;
         resetVehicleMarkerDisplayState();
         // Hide speed widget when tracking stops (use consolidated function)
         rt().call.updateSpeedWidgetVisibility();
@@ -1675,6 +1818,10 @@
         getVehicleDisplayCoordinates: getVehicleDisplayCoordinates,
         startGPSTracking: startGPSTracking,
         stopGPSTracking: stopGPSTracking,
+        ensureGPSTracking: ensureGPSTracking,
+        getLastGpsFixAtMs: getLastGpsFixAtMs,
+        setLastGpsFixAtMs: setLastGpsFixAtMs,
+        getLastGpsFixAgeMs: getLastGpsFixAgeMs,
         applyVehicleMarkerFromTickPlan: applyVehicleMarkerFromTickPlan,
         applySpeedLimitFetchResetFromPlan: applySpeedLimitFetchResetFromPlan,
         resetVehicleMarkerDisplayState: resetVehicleMarkerDisplayState,
@@ -1705,6 +1852,8 @@
         setTrackingHistory: setTrackingHistory,
         getIsTrackingActive: getIsTrackingActive,
         setIsTrackingActive: setIsTrackingActive,
+        getGpsTrackingStoppedByUser: getGpsTrackingStoppedByUser,
+        setGpsTrackingStoppedByUser: setGpsTrackingStoppedByUser,
         getGpsWatchId: getGpsWatchId,
         setGpsWatchId: setGpsWatchId,
         getCurrentUserMarker: getCurrentUserMarker,

@@ -201,10 +201,10 @@ def get_lane_guidance():
 
         if recommended_lane is None:
             recommended_lane = _get_recommended_lane_simple(
-                lane_maneuver, total_lanes, roundabout_exit_count
+                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
             )
             candidate_lanes = _estimate_candidate_lanes_uk(
-                lane_maneuver, total_lanes, roundabout_exit_count
+                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
             )
 
         has_turn_lanes = parsed_lanes is not None
@@ -213,38 +213,48 @@ def get_lane_guidance():
             has_turn_lanes, has_osm_data, highway_type, lane_maneuver, total_lanes
         )
         source = 'osm_turn_lanes' if has_turn_lanes else ('osm_lanes' if has_osm_data else 'estimated')
+        # Keep get_recommended_lane_simple's primary (e.g. centre for merge) even when
+        # candidate lists are edge-ordered like [1, total_lanes].
         recommended_lanes, recommended_lane = _apply_confidence_lane_selection(
             candidate_lanes or ([recommended_lane] if recommended_lane else []),
             confidence,
+            preferred_primary=recommended_lane,
         )
 
-        lane_name = _descriptive_lane_name(
-            recommended_lane or 1, total_lanes
-        ) if recommended_lane else ''
+        show_lane_guidance = (
+            confidence >= 70 and total_lanes > 1 and bool(recommended_lanes)
+        )
 
-        if distance_to_maneuver <= 100:
-            urgency = 'now'
-            urgency_text = f'Get in the {lane_name} now!'
-        elif distance_to_maneuver <= 300:
-            urgency = 'soon'
-            urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
-        elif distance_to_maneuver <= 800:
-            urgency = 'ahead'
-            urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
-        elif distance_to_maneuver <= 1500:
-            urgency = 'info'
-            urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
+        if show_lane_guidance:
+            lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+
+            if distance_to_maneuver <= 100:
+                urgency = 'now'
+                urgency_text = f'Get in the {lane_name} now!'
+            elif distance_to_maneuver <= 300:
+                urgency = 'soon'
+                urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
+            elif distance_to_maneuver <= 800:
+                urgency = 'ahead'
+                urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
+            elif distance_to_maneuver <= 1500:
+                urgency = 'info'
+                urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
+            else:
+                urgency = 'none'
+                urgency_text = ''
+
+            if next_maneuver == 'straight' or distance_to_maneuver > 1500:
+                guidance_text = 'Stay in current lane'
+            elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
+                exit_ordinal = _ordinal(roundabout_exit_count)
+                guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
+            else:
+                guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
         else:
             urgency = 'none'
             urgency_text = ''
-
-        if next_maneuver == 'straight' or distance_to_maneuver > 1500:
             guidance_text = 'Stay in current lane'
-        elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
-            exit_ordinal = _ordinal(roundabout_exit_count)
-            guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
-        else:
-            guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
 
         return jsonify({
             'success': True,
@@ -265,7 +275,7 @@ def get_lane_guidance():
             'has_osm_data': has_osm_data,
             'has_turn_lanes': has_turn_lanes,
             'roundabout_exit_count': roundabout_exit_count,
-            'show_lane_guidance': confidence >= 70 and total_lanes > 1 and bool(recommended_lanes),
+            'show_lane_guidance': show_lane_guidance,
         })
     except Exception as e:
         logger.error(f"[Lane Guidance] Error: {e}")

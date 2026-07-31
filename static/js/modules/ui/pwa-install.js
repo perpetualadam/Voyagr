@@ -58,17 +58,39 @@
 
     /**
      * Plan when a new service worker controller takes over.
+     *
+     * ``controllerchange`` also fires the first time a service worker claims the
+     * page, which is not an update: the page was just loaded from the network, so
+     * there is nothing newer to apply. Reloading then throws away whatever the user
+     * did in the first seconds after load — a route they had just calculated
+     * included, leaving the preview blank. Only a controller that *replaces* an
+     * earlier one means new code is waiting, so the reload is gated on
+     * ``hadControllerAtStartup``.
+     *
+     * A genuine update still waits when the user has something on screen: mid
+     * navigation, or with a calculated route in the preview they have not started.
+     *
      * @param {Object} [input]
+     * @param {boolean} [input.hadControllerAtStartup] - a worker already controlled the page on load
      * @param {boolean} [input.routeInProgress]
+     * @param {boolean} [input.hasCalculatedRoute] - a route preview is on screen
      * @returns {Object}
      */
     function buildServiceWorkerControllerChangePlan(input) {
         input = input || {};
-        if (input.routeInProgress) {
+        if (!input.hadControllerAtStartup) {
+            return {
+                action: 'none',
+                logMessage: '[PWA] Service worker took control (first install) — no reload needed',
+            };
+        }
+        if (input.routeInProgress || input.hasCalculatedRoute) {
             return {
                 action: 'defer',
                 setUpdatePending: true,
-                statusMessage: '✅ Update available. Will apply after navigation.',
+                statusMessage: input.routeInProgress
+                    ? '✅ Update available. Will apply after navigation.'
+                    : '✅ Update available. Will apply once you finish with this route.',
                 statusType: 'info',
                 logMessage: '[PWA] New service worker activated',
             };

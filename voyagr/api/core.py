@@ -16,6 +16,7 @@ from typing import Optional
 
 from flask import Blueprint, jsonify, render_template, current_app, Response, make_response
 
+from voyagr.deployed_version import build_deployed_version_payload
 from voyagr.discoverability import block_search_indexing
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.index_page_context import build_index_template_kwargs, tomtom_client_surface
@@ -37,6 +38,21 @@ def index():
     html = render_template('index.html', **build_index_template_kwargs())
     response = make_response(html)
     # Shell HTML is server-rendered (wake/Sherpa flags, keys). Do not cache at CDN or browser.
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
+@core_bp.route('/api/deployed-version')
+def get_deployed_version():
+    """Report the commit the running server was deployed from.
+
+    Production is updated by hand on the VPS, so a merged change is not necessarily
+    a live one. Compare this against the latest commit on main to tell the
+    difference without SSH access.
+    """
+    response = jsonify(build_deployed_version_payload())
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'

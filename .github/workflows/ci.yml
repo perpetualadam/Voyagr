@@ -7,8 +7,9 @@ name: CI
 #         lane guidance, speed-limit detector)
 #       * routing-service suites guarding the /api/route modularization (request
 #         parsing, Valhalla payloads/classifier/POST, route entries, response
-#         envelope, maneuvers, OSRM fallback, hazard dedup, enrichment, and a
-#         Flask-level smoke of calculate_route with mocked engines)
+#         envelope, maneuvers, OSRM fallback, hazard dedup, enrichment, route
+#         preview variety/costing preferences, and a Flask-level smoke of
+#         calculate_route with mocked engines)
 #     All chosen suites exercise real module logic and tolerate missing network/DB
 #     (live Overpass/TomTom calls and absent hazard_preferences fall back to
 #     defaults), so they stay green offline. Suites needing the Kivy/satnav desktop
@@ -29,12 +30,12 @@ jobs:
     name: Frontend (Jest + coverage)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       # --ignore-scripts skips the picovoice postinstall sync (not needed for tests).
@@ -49,7 +50,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: js-coverage
           path: coverage/
@@ -59,10 +60,10 @@ jobs:
     name: Backend (pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -89,12 +90,18 @@ jobs:
           tests/test_valhalla_excludes.py
           tests/test_graphhopper_attempt.py
           tests/test_route_discovery.py
+          tests/test_route_variety.py
+          tests/test_preference_route_variety.py
+          tests/test_route_costing_options.py
           tests/test_osrm_maneuvers.py
           tests/test_route_entries.py
           tests/test_route_success_response.py
           tests/test_route_enrichment.py
           tests/test_osrm_fallback.py
           tests/test_hazards_dedup.py
+          tests/test_persistent_route_cache.py
+          tests/test_route_cache_invalidation.py
+          tests/test_deployed_version.py
           tests/test_calculate_route_smoke.py
           tests/test_optimised_camera_avoidance.py
           tests/test_graphhopper_shape_index.py

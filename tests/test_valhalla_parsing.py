@@ -128,7 +128,7 @@ def test_route_json_passes_decoded_coords_to_cost_calculator():
     assert first_lon == pytest.approx(COORDS[0][1], abs=1e-4)
 
 
-def test_trip_entry_shape_and_no_traffic_multiplier():
+def test_trip_entry_shape_defaults_to_free_flow_duration():
     trip_json = {'trip': _trip(8.0, 480, maneuvers=[
         {'instruction': 'Turn left', 'type': 15, 'length': 1.0, 'time': 60},
     ])}
@@ -140,11 +140,49 @@ def test_trip_entry_shape_and_no_traffic_multiplier():
     assert entry['id'] == 7
     assert entry['name'] == 'Shortest'
     assert entry['distance_km'] == 8.0
-    assert entry['duration_minutes'] == 8  # 480s / 60, no traffic multiplier
+    assert entry['duration_minutes'] == 8  # 480s / 60, no multiplier supplied
+    assert entry['base_duration_minutes'] == 8
+    assert entry['traffic_multiplier'] == 1.0
     assert entry['source'] == 'Valhalla'
     assert entry['geometry_precision'] == 6
     # maneuver_length_in_meters=True => 1.0 km -> 1000.0 m
     assert entry['maneuvers'][0]['distance'] == 1000.0
+
+
+def test_trip_entry_applies_the_callers_traffic_multiplier():
+    """🌿 Scenic / 🛤️ Quiet / ⚡ Optimised come from here and sit beside Fastest."""
+    entry = valhalla_trip_json_to_std_route_entry(
+        '🛤️ Quiet', {'trip': _trip(8.0, 480)}, 3, hazards={},
+        cost_calculator=StubCostCalculator(),
+        traffic_multiplier=1.35, traffic_level='Peak Hours', **COST_KWARGS,
+    )
+    assert entry['duration_minutes'] == 11  # 8 min * 1.35, rounded
+    assert entry['base_duration_minutes'] == 8
+    assert entry['traffic_multiplier'] == 1.35
+    assert entry['traffic_level'] == 'Peak Hours'
+
+
+def test_route_json_uses_supplied_traffic_factors_without_a_lookup(monkeypatch):
+    """One request resolves traffic once; the parser must not look it up again."""
+    import voyagr.services.routing.valhalla_parsing as vp
+
+    def fail(*a, **k):
+        raise AssertionError('traffic must not be resolved again')
+
+    monkeypatch.setattr(vp, 'get_traffic_duration_multiplier', fail)
+
+    routes = valhalla_route_json_to_standard_routes(
+        {'trip': _trip(10.0, 600), 'alternates': [{'trip': _trip(12.0, 720)}]},
+        valhalla_costing='auto', start_lat=51.5, start_lon=-0.12,
+        hazards={}, cost_calculator=StubCostCalculator(),
+        traffic_factors=(1.5, 'Heavy'), **COST_KWARGS,
+    )
+
+    assert [r['duration_minutes'] for r in routes] == [15, 18]  # 10 and 12 min * 1.5
+    # Both options record the same scaling, so the client can compare them.
+    assert [r['traffic_multiplier'] for r in routes] == [1.5, 1.5]
+    assert [r['traffic_level'] for r in routes] == ['Heavy', 'Heavy']
+    assert [r['base_duration_minutes'] for r in routes] == [10, 12]
 
 
 def test_trip_entry_none_guards():

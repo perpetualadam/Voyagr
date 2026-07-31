@@ -64,6 +64,12 @@
         if (serviceWorkerInitBound || !('serviceWorker' in navigator)) return;
         serviceWorkerInitBound = true;
 
+        // Captured before any worker can claim this page: a page served by an
+        // existing worker has a controller from the start, whereas on a first
+        // install it stays null until the new worker takes over. Only the latter
+        // fires controllerchange without there being newer code to apply.
+        var hadControllerAtStartup = !!navigator.serviceWorker.controller;
+
         window.addEventListener('load', () => {
             const regPlan = PWA().buildServiceWorkerRegistrationExecutePlan();
             navigator.serviceWorker.register(regPlan.scriptPath)
@@ -96,7 +102,9 @@
 
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             const change = PWA().buildServiceWorkerControllerChangePlan({
+                hadControllerAtStartup: hadControllerAtStartup,
                 routeInProgress: rt().getRouteInProgress(),
+                hasCalculatedRoute: !!window.lastCalculatedRoute,
             });
             console.log(change.logMessage);
 

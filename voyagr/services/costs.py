@@ -266,16 +266,21 @@ def invalidate_hazard_cache() -> bool:
 
 
 def invalidate_route_cache() -> bool:
-    """Invalidate route cache when preferences change."""
+    """
+    Drop every persistent route cache row.
+
+    Called when hazard/routing preferences change, so every stored ``route_data``
+    was computed under superseded settings. Deleting only rows that had gone
+    untouched for 24 hours left the routes the user actually drives — the ones
+    refreshing ``last_accessed`` on every request — pinned to their old option
+    list, so preference changes appeared to do nothing.
+    """
     try:
         with db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                DELETE FROM persistent_route_cache
-                WHERE last_accessed < datetime('now', '-24 hours')
-            ''')
+            cursor.execute('DELETE FROM persistent_route_cache')
             conn.commit()
-        logger.info("Route cache invalidated and old routes cleaned")
+        logger.info("Route cache invalidated (all persistent rows dropped)")
         return True
     except Exception as e:
         logger.error(f"Error invalidating route cache: {e}")
@@ -487,7 +492,15 @@ class CostCalculator:
         *,
         max_age_hours: int = 24,
     ) -> Optional[Dict[str, Any]]:
-        """Retrieve a cached route from the database by full preference-aware cache key."""
+        """
+        Retrieve a cached route from the database by full preference-aware cache key.
+
+        Freshness is judged from when the row was written, not from
+        ``last_accessed`` — this method refreshes ``last_accessed`` on every hit,
+        so ages measured against it never elapse for a route the user recalculates
+        regularly, and the row would be served indefinitely (including route
+        option lists produced by superseded app versions).
+        """
         if not cache_key:
             return None
         try:
@@ -497,7 +510,7 @@ class CostCalculator:
                 cursor.execute('''
                     SELECT route_data FROM persistent_route_cache
                     WHERE cache_key=? AND cache_key IS NOT NULL
-                    AND datetime(last_accessed) > datetime('now', ?)
+                    AND datetime(COALESCE(created_at, last_accessed)) > datetime('now', ?)
                 ''', (cache_key, f'-{max_age_hours} hours'))
 
                 result = cursor.fetchone()
@@ -522,8 +535,19 @@ class CostCalculator:
     def get_cached_route_from_db_legacy(
         self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
         routing_mode: str, vehicle_type: str,
+        *,
+        max_age_hours: int = 24,
     ) -> Optional[Dict[str, Any]]:
-        """Legacy coord-only DB cache lookup (pre-cache_key rows)."""
+        """
+        Legacy coord-only DB cache lookup, restricted to pre-migration rows.
+
+        This match ignores route preferences, so it must only ever answer for rows
+        written before ``cache_key`` existed. Without the ``cache_key IS NULL``
+        guard it also matched preference-keyed rows, which made it a coordinate-only
+        back door: a deliberate keyed miss (changed preferences, expired row) fell
+        straight through to whatever was last stored for those coordinates. It is
+        age-bounded like the keyed lookup for the same reason.
+        """
         try:
             with db_connection() as conn:
                 cursor = conn.cursor()
@@ -531,8 +555,10 @@ class CostCalculator:
                 cursor.execute('''
                     SELECT route_data, access_count FROM persistent_route_cache
                     WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                    AND routing_mode=? AND vehicle_type=?
-                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
+                    AND routing_mode=? AND vehicle_type=? AND cache_key IS NULL
+                    AND datetime(COALESCE(created_at, last_accessed)) > datetime('now', ?)
+                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                      f'-{max_age_hours} hours'))
 
                 result = cursor.fetchone()
                 if result:
@@ -541,7 +567,7 @@ class CostCalculator:
                         UPDATE persistent_route_cache
                         SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
                         WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                        AND routing_mode=? AND vehicle_type=?
+                        AND routing_mode=? AND vehicle_type=? AND cache_key IS NULL
                     ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
                     conn.commit()
                     return json.loads(route_data_str)

@@ -787,7 +787,9 @@
                 newRoute: newRoute,
                 hazardCount: hazardCount,
                 hazardsList: hazardsList,
-                preferPrimaryRouteOnNextNavUpdate: true,
+                // Keep name+source matching on the next in-nav pick. Forcing routes[0]
+                // after deviation was flipping GraphHopper Optimised onto Valhalla primary.
+                preferPrimaryRouteOnNextNavUpdate: false,
                 clearFailureRetries: true,
                 showUnavoidableHazards: hazardCount > 0,
                 voice: voice,

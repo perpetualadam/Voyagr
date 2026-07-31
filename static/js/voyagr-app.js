@@ -1501,6 +1501,12 @@ function getGpsOrchestrationRuntime() {
             applySmartZoomWithAnimation,
             getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
             createVehicleMarker,
+            syncVehicleMarkerElementSize: (el) => {
+                const vm = _vehicleMarker();
+                if (vm && typeof vm.applyVehicleMarkerElementSize === 'function') {
+                    vm.applyVehicleMarkerElementSize(el);
+                }
+            },
             calculateDistanceMeters,
             convertDistance,
             getDistanceUnit,
@@ -1520,6 +1526,7 @@ function getGpsOrchestrationRuntime() {
 }
 
 function startGPSTracking() { VoyagrGpsOrchestration.startGPSTracking(); }
+function ensureGPSTracking(opts) { return VoyagrGpsOrchestration.ensureGPSTracking(opts); }
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
     return VoyagrGpsOrchestration.calculateDistanceMeters(lat1, lon1, lat2, lon2);
 }
@@ -1669,8 +1676,10 @@ function getLaneGuidanceOrchestrationRuntime() {
     };
 }
 
-function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
-    return VoyagrLaneGuidanceOrchestration.updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount);
+function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount, guidanceStepIndex) {
+    return VoyagrLaneGuidanceOrchestration.updateLaneGuidance(
+        lat, lon, heading, maneuver, roundaboutExitCount, guidanceStepIndex
+    );
 }
 
 function renderLaneGuidanceUI(data) {
@@ -2948,9 +2957,13 @@ function getMobilePwaOrchestrationRuntime() {
         getMap: () => map,
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getGpsWatchId: () => VoyagrGpsOrchestration.getGpsWatchId(),
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         call: {
             collapseBottomSheet,
             startGPSTracking,
+            ensureGPSTracking,
+            ensureNavWakeLock: (opts) => VoyagrNavigationLifecycleOrchestration.ensureNavWakeLock(opts),
+            redrawNavigationVehicleMarker,
         },
     };
 }

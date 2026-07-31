@@ -25,6 +25,7 @@ from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.geometry import get_distance_between_points
 from voyagr.utils.rate_limiting import RateLimiter, rate_limit
 from voyagr.services import invalidate_hazard_cache, invalidate_route_cache
+from voyagr.api.routing import clear_route_cache
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,10 @@ def hazard_preferences():
             conn.commit()
             invalidate_hazard_cache()
             invalidate_route_cache()
+            # Penalties feed route scoring/ordering, and the in-memory cache key
+            # does not encode them — without this the previous option list is
+            # replayed for up to an hour after the change.
+            clear_route_cache()
 
             return jsonify({'success': True, 'message': f'Updated {hazard_type}'})
     except Exception as e:
