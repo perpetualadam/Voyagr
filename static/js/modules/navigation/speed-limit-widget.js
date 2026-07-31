@@ -415,17 +415,36 @@
         );
         var region = parsed.region || opts.lastSpeedLimitRegion;
         var roadType = parsed.roadType || opts.roadType;
+        // Road-class / highway inference is a coarse fallback. When the active
+        // maneuver edge already has a posted-limit hint (e.g. GH max_speed → 30),
+        // do not let primary/trunk defaults (50/60) overwrite it and stick NSL
+        // through a signed 30 zone until a later 40 mph fetch happens to succeed.
+        var weakSource = /road-type-default|highway-inferred/i.test(String(parsed.source || ''));
+        var edgeHint = Number(opts.valhallaSpeedLimit);
+        var preferEdgeOverWeakApi = weakSource
+            && Number.isFinite(edgeHint)
+            && edgeHint > 0
+            && parsed.limitMph != null
+            && Number(parsed.limitMph) !== edgeHint;
         var displayLimit = pickDisplaySpeedLimitMph(
             parsed.limitMph,
             opts.valhallaSpeedLimit,
             roadType,
             region,
-            { allowRoadTypeFallback: parsed.limitMph == null }
+            {
+                allowRoadTypeFallback: parsed.limitMph == null,
+                preferValhallaOverApi: preferEdgeOverWeakApi,
+            }
         );
         var statePatch = {};
         if (parsed.roadType) statePatch.lastDetectedRoadType = parsed.roadType;
         if (parsed.region) statePatch.lastSpeedLimitRegion = parsed.region;
-        if (parsed.limitMph != null) {
+        // Persist what the widget shows so a weak API 60 cannot re-stick after we
+        // preferred the edge 30 for display.
+        if (displayLimit != null && displayLimit > 0) {
+            statePatch.currentLimitMph = displayLimit;
+            statePatch.currentSpeedLimitMph = displayLimit;
+        } else if (parsed.limitMph != null) {
             statePatch.currentLimitMph = parsed.limitMph;
             statePatch.currentSpeedLimitMph = parsed.limitMph;
         }
@@ -439,8 +458,8 @@
             cacheHint: parsed.limitMph != null ? {
                 lat: opts.lat,
                 lon: opts.lon,
-                limitMph: parsed.limitMph,
-                source: parsed.source || 'api',
+                limitMph: preferEdgeOverWeakApi ? displayLimit : parsed.limitMph,
+                source: preferEdgeOverWeakApi ? 'edge-hint' : (parsed.source || 'api'),
             } : null,
         };
     }
