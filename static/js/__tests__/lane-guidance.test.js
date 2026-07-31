@@ -910,6 +910,35 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
         );
         expect(mergeEnriched.recommended_lanes).toEqual([1, 3]);
         expect(mergeEnriched.recommended_lane).toBe(2);
+
+        // Primary is centre even when candidate list starts with left.
+        expect(LG.getPrimaryRecommendedLane({
+            recommended_lanes: [1, 3],
+            recommended_lane: 2,
+        })).toBe(2);
+        expect(LG.getPrimaryRecommendedLane({ recommended_lanes: [1, 3] })).toBe(1);
+        expect(LG.getPrimaryRecommendedLane(null)).toBeNull();
+    });
+
+    test('merge hybrid urgency uses centre primary, not recommended_lanes[0]', () => {
+        const hybrid = LG.buildHybridLaneGuidance({
+            apiData: {
+                success: true,
+                total_lanes: 3,
+                has_osm_data: true,
+                has_turn_lanes: false,
+                recommended_lane: 2,
+                recommended_lanes: [1, 3],
+                confidence: 80,
+            },
+            maneuver: 'merge',
+            distanceToManeuver: 200,
+            roadType: 'motorway',
+        });
+        expect(hybrid.recommended_lane).toBe(2);
+        expect(hybrid.recommended_lanes).toEqual([1, 3]);
+        expect(hybrid.urgency_text).toBe('Move to the middle lane');
+        expect(hybrid.guidance_text).toBe('Use the middle lane');
     });
 
     test('applyConfidenceLaneSelection hides below threshold', () => {
@@ -1003,6 +1032,17 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
 
     test('refreshLockedGuidanceUrgency returns null for missing lock', () => {
         expect(LG.refreshLockedGuidanceUrgency(null, 100, 'left', 0)).toBeNull();
+    });
+
+    test('refreshLockedGuidanceUrgency prefers recommended_lane over candidates[0]', () => {
+        const refreshed = LG.refreshLockedGuidanceUrgency({
+            total_lanes: 3,
+            recommended_lanes: [1, 3],
+            recommended_lane: 2,
+            confidence: 80,
+        }, 200, 'merge', 0);
+        expect(refreshed.urgency_text).toBe('Move to the middle lane');
+        expect(refreshed.guidance_text).toBe('Use the middle lane');
     });
 
     test('badge hides for routing and OSM sources', () => {
