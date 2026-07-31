@@ -451,7 +451,10 @@
                 && laneGuidanceSourceRank(newGuidance) > laneGuidanceSourceRank(lockedData);
             var confidenceUpgrade = newGuidance
                 && newConf >= lockedConf + LANE_LOCK_UPGRADE_DELTA;
-            if (higherSource || confidenceUpgrade) {
+            // Match first-time lock: never replace visible locked guidance with
+            // a payload that fails the overlay display gate (low confidence,
+            // show_lane_guidance false, empty recommendations, etc.).
+            if ((higherSource || confidenceUpgrade) && shouldShow(newGuidance)) {
                 return {
                     action: 'lock',
                     guidance: newGuidance,
