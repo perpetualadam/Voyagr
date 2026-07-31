@@ -213,9 +213,12 @@ def get_lane_guidance():
             has_turn_lanes, has_osm_data, highway_type, lane_maneuver, total_lanes
         )
         source = 'osm_turn_lanes' if has_turn_lanes else ('osm_lanes' if has_osm_data else 'estimated')
+        # Keep get_recommended_lane_simple's primary (e.g. centre for merge) even when
+        # candidate lists are edge-ordered like [1, total_lanes].
         recommended_lanes, recommended_lane = _apply_confidence_lane_selection(
             candidate_lanes or ([recommended_lane] if recommended_lane else []),
             confidence,
+            preferred_primary=recommended_lane,
         )
 
         show_lane_guidance = (

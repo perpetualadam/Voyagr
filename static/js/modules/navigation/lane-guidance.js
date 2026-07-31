@@ -260,6 +260,30 @@
     }
 
     /**
+     * Single-lane UK heuristic primary (mirrors get_recommended_lane_simple).
+     * Merge candidates on 3+ lanes are edges; primary stays the centre lane.
+     * @param {string} maneuver
+     * @param {number} totalLanes
+     * @param {number} exitCount
+     * @param {string} [roadType]
+     * @returns {number}
+     */
+    function getRecommendedLaneSimple(maneuver, totalLanes, exitCount, roadType) {
+        var lanes = estimateCandidateLanesUK(maneuver, totalLanes, exitCount || 0, roadType);
+        if (!lanes.length) return 1;
+        if (maneuver === 'merge') {
+            return Math.max(1, Math.ceil(totalLanes / 2));
+        }
+        if (['right', 'slight_right', 'sharp_right', 'exit_right', 'exit', 'uturn'].indexOf(maneuver) >= 0) {
+            return lanes[lanes.length - 1];
+        }
+        if (maneuver === 'roundabout' && roundaboutPrefersRightLane(exitCount || 0, totalLanes, roadType)) {
+            return lanes[lanes.length - 1];
+        }
+        return lanes[0];
+    }
+
+    /**
      * Attach `recommended_lanes` from lane_arrows / heuristics when missing.
      * @param {Object} guidance
      * @param {string} maneuver
@@ -272,14 +296,15 @@
         if (getRecommendedLaneNumbers(out).length > 0) return out;
 
         var total = out.total_lanes || 0;
+        var road = roadType || out.highway_type || out.road_type;
         var candidates = estimateCandidateLanesUK(
             maneuver,
             total,
             exitCount || 0,
-            roadType || out.highway_type || out.road_type
+            road
         );
         out.recommended_lanes = candidates;
-        out.recommended_lane = candidates[0];
+        out.recommended_lane = getRecommendedLaneSimple(maneuver, total, exitCount || 0, road);
         return out;
     }
 
@@ -295,12 +320,15 @@
         var lanes = getRecommendedLaneNumbers(out);
         if (lanes.length === 0) return out;
 
+        // Prefer an explicit primary (e.g. centre for merge) over candidates[0].
+        var primary = (out.recommended_lane != null) ? out.recommended_lane : lanes[0];
+
         if (confidence >= LANE_CONFIDENCE_HIGH) {
-            out.recommended_lanes = [lanes[0]];
-            out.recommended_lane = lanes[0];
+            out.recommended_lanes = [primary];
+            out.recommended_lane = primary;
         } else if (confidence >= LANE_CONFIDENCE_DISPLAY_MIN) {
             out.recommended_lanes = lanes.slice();
-            out.recommended_lane = lanes[0];
+            out.recommended_lane = primary;
         } else {
             out.recommended_lanes = [];
             out.recommended_lane = null;
@@ -1080,6 +1108,7 @@
         isLaneGuidanceValuableManeuver: isLaneGuidanceValuableManeuver,
         getRecommendedLaneNumbers: getRecommendedLaneNumbers,
         estimateCandidateLanesUK: estimateCandidateLanesUK,
+        getRecommendedLaneSimple: getRecommendedLaneSimple,
         roundaboutPrefersRightLane: roundaboutPrefersRightLane,
         enrichGuidanceWithRecommendedLanes: enrichGuidanceWithRecommendedLanes,
         applyConfidenceLaneSelection: applyConfidenceLaneSelection,

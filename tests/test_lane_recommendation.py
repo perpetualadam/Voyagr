@@ -23,6 +23,7 @@ from voyagr.api.navigation import (
     _recommend_lane_from_turn_lanes,
     _recommend_lanes_from_turn_lanes,
     _get_recommended_lane_simple,
+    _estimate_candidate_lanes_uk,
     _normalize_lane_maneuver_for_uk,
     _descriptive_lane_name,
     _apply_confidence_lane_selection,
@@ -51,6 +52,15 @@ class TestSimpleLaneFallback(unittest.TestCase):
         self.assertEqual(_get_recommended_lane_simple('straight', 3), 2)
         # 4 lanes: (4 + 1)//2 = 2
         self.assertEqual(_get_recommended_lane_simple('straight', 4), 2)
+
+    def test_merge_uses_centre_lane_not_first_candidate(self):
+        # Candidates for 3+ lane merges are edge lanes [1, total]; primary must stay
+        # the centre-lane middle heuristic, not lanes[0] (== 1).
+        self.assertEqual(_estimate_candidate_lanes_uk('merge', 3), [1, 3])
+        self.assertEqual(_get_recommended_lane_simple('merge', 3), 2)
+        self.assertEqual(_estimate_candidate_lanes_uk('merge', 4), [1, 4])
+        self.assertEqual(_get_recommended_lane_simple('merge', 4), 2)
+        self.assertEqual(_get_recommended_lane_simple('merge', 2), 1)
 
     def test_roundabout_first_exit_uses_left_lane(self):
         self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 1), 1)
@@ -205,6 +215,15 @@ class TestConfidenceLaneSelection(unittest.TestCase):
     def test_medium_confidence_multiple_lanes(self):
         lanes, primary = _apply_confidence_lane_selection([2, 3], 82)
         self.assertEqual(lanes, [2, 3])
+        self.assertEqual(primary, 2)
+
+    def test_preferred_primary_kept_for_merge_candidates(self):
+        # Edge candidates with centre preferred primary (merge on 3+ lanes).
+        lanes, primary = _apply_confidence_lane_selection([1, 3], 76, preferred_primary=2)
+        self.assertEqual(lanes, [1, 3])
+        self.assertEqual(primary, 2)
+        lanes, primary = _apply_confidence_lane_selection([1, 3], 95, preferred_primary=2)
+        self.assertEqual(lanes, [2])
         self.assertEqual(primary, 2)
 
     def test_low_confidence_hides_lanes(self):

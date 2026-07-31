@@ -810,6 +810,10 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
         expect(LG.estimateCandidateLanesUK('through', 4, 0)).toEqual([2]);
         expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(true);
         expect(LG.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(false);
+        // Merge candidates are edges; primary is centre (not candidates[0]).
+        expect(LG.getRecommendedLaneSimple('merge', 3, 0)).toBe(2);
+        expect(LG.getRecommendedLaneSimple('merge', 4, 0)).toBe(2);
+        expect(LG.getRecommendedLaneSimple('right', 3, 0)).toBe(3);
     });
 
     test('getRecommendedLaneNumbers and enrichGuidanceWithRecommendedLanes', () => {
@@ -823,11 +827,20 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             0
         );
         expect(enriched.recommended_lanes).toEqual([2, 3]);
+        expect(enriched.recommended_lane).toBe(3);
         expect(LG.enrichGuidanceWithRecommendedLanes(
             { total_lanes: 3, recommended_lanes: [2] },
             'right',
             0
         ).recommended_lanes).toEqual([2]);
+
+        const mergeEnriched = LG.enrichGuidanceWithRecommendedLanes(
+            { total_lanes: 3 },
+            'merge',
+            0
+        );
+        expect(mergeEnriched.recommended_lanes).toEqual([1, 3]);
+        expect(mergeEnriched.recommended_lane).toBe(2);
     });
 
     test('applyConfidenceLaneSelection hides below threshold', () => {
