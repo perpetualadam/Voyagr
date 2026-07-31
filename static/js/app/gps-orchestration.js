@@ -486,7 +486,8 @@
                     lon,
                     heading,
                     laneApply.maneuverDir,
-                    laneApply.roundaboutExitCount
+                    laneApply.roundaboutExitCount,
+                    laneApply.guidanceStepIndex
                 );
             }
         }

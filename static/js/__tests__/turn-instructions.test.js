@@ -452,6 +452,55 @@ describe('buildLaneGuidanceTickPlan', () => {
         expect(plan.roundaboutExitCount).toBe(0);
     });
 
+    test('looks ahead from continue to upcoming roundabout needing right lane', () => {
+        // Drivers on a continue after leaving a motorway must pre-position right
+        // for 2nd+/3rd+ exits instead of being told "stay left" until the last moment.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 1.2, road_class: 'primary' }, // 1.2 km continue
+                { type: 26, distance: 0.1, roundabout_exit_count: 3, road_class: 'primary' },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'primary',
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('looks ahead to 2nd-exit roundabout on dual approach', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.8 },
+                { type: 26, roundabout_exit_count: 0 },
+                { type: 27, roundabout_exit_count: 2 },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'trunk',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(2);
+        expect(plan.lookAhead).toBe(true);
+    });
+
+    test('does not look ahead past the roundabout distance budget', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 3.5 }, // 3.5 km > 2 km lookahead
+                { type: 26, roundabout_exit_count: 3 },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'primary',
+        });
+        expect(plan.maneuverDir).toBe('straight');
+        expect(plan.lookAhead).toBe(false);
+    });
+
     test('slight_right on 2-lane primary becomes straight for lane guidance', () => {
         const plan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
@@ -483,10 +532,14 @@ describe('buildLaneGuidanceTickApplyPlan', () => {
             action: 'update',
             maneuverDir: 'left',
             roundaboutExitCount: 2,
+            guidanceStepIndex: 4,
+            lookAhead: true,
         });
         expect(apply.action).toBe('apply');
         expect(apply.maneuverDir).toBe('left');
         expect(apply.roundaboutExitCount).toBe(2);
+        expect(apply.guidanceStepIndex).toBe(4);
+        expect(apply.lookAhead).toBe(true);
     });
 });
 

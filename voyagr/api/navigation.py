@@ -201,10 +201,10 @@ def get_lane_guidance():
 
         if recommended_lane is None:
             recommended_lane = _get_recommended_lane_simple(
-                lane_maneuver, total_lanes, roundabout_exit_count
+                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
             )
             candidate_lanes = _estimate_candidate_lanes_uk(
-                lane_maneuver, total_lanes, roundabout_exit_count
+                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
             )
 
         has_turn_lanes = parsed_lanes is not None
