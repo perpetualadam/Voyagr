@@ -171,6 +171,10 @@ def get_recommended_lane_simple(
     lanes = estimate_candidate_lanes_uk(maneuver, total_lanes, roundabout_exit_count, road_type)
     if not lanes:
         return 1
+    # Merge candidates on 3+ lanes are edge lanes [1, total]; the primary stays the
+    # centre-lane middle heuristic (same as straight / pre-refactor behaviour).
+    if maneuver == 'merge':
+        return max(1, (total_lanes + 1) // 2)
     # Candidate lists for right-side manoeuvres are ordered left→right; the primary
     # recommendation is the rightmost acceptable lane.
     if maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit', 'uturn'):
@@ -216,13 +220,18 @@ def score_lane_guidance_confidence(
 def apply_confidence_lane_selection(
     recommended_lanes: List[int],
     confidence: int,
+    preferred_primary: Optional[int] = None,
 ) -> Tuple[List[int], Optional[int]]:
     if not recommended_lanes:
         return [], None
+    if preferred_primary is not None:
+        primary = preferred_primary
+    else:
+        primary = recommended_lanes[0]
     if confidence >= 90:
-        return [recommended_lanes[0]], recommended_lanes[0]
+        return [primary], primary
     if confidence >= 70:
-        return recommended_lanes, recommended_lanes[0]
+        return recommended_lanes, primary
     return [], None
 
 
