@@ -392,10 +392,12 @@
             base.confidence = Math.min(base.confidence || 0, LANE_CONFIDENCE_DISPLAY_MIN - 1);
         }
 
-        var lanePos = laneNameFor(
-            getRecommendedLaneNumbers(base)[0] || base.recommended_lane || 1,
-            base.total_lanes
-        );
+        // Prefer explicit primary (e.g. centre for merge) over candidates[0].
+        var hybridLanes = getRecommendedLaneNumbers(base);
+        var primaryLane = (base.recommended_lane != null)
+            ? base.recommended_lane
+            : (hybridLanes[0] || 1);
+        var lanePos = laneNameFor(primaryLane, base.total_lanes);
         var urgencyFields = laneUrgencyFields(dist, lanePos, maneuver, exitCount);
         for (var k in urgencyFields) {
             if (Object.prototype.hasOwnProperty.call(urgencyFields, k)) base[k] = urgencyFields[k];
@@ -481,7 +483,11 @@
     function refreshLockedGuidanceUrgency(locked, distance, maneuver, exitCount) {
         if (!locked) return null;
         var lanes = getRecommendedLaneNumbers(locked);
-        var lanePos = laneNameFor(lanes[0] || locked.recommended_lane || 1, locked.total_lanes);
+        // Prefer explicit primary (e.g. centre for merge) over candidates[0].
+        var primaryLane = (locked.recommended_lane != null)
+            ? locked.recommended_lane
+            : (lanes[0] || 1);
+        var lanePos = laneNameFor(primaryLane, locked.total_lanes);
         return Object.assign({}, locked, laneUrgencyFields(distance, lanePos, maneuver, exitCount));
     }
 

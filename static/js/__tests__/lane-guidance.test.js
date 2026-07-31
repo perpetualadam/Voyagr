@@ -913,6 +913,53 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
         expect(LG.refreshLockedGuidanceUrgency(null, 100, 'left', 0)).toBeNull();
     });
 
+    test('urgency text uses primary lane when candidates list starts with a different lane', () => {
+        // OSM medium-confidence merge: candidates [1, 3], primary centre (2).
+        const mergeHybrid = LG.buildHybridLaneGuidance({
+            apiData: {
+                success: true,
+                total_lanes: 3,
+                has_osm_data: true,
+                has_turn_lanes: false,
+            },
+            maneuver: 'merge',
+            distanceToManeuver: 250,
+            roadType: 'motorway',
+        });
+        expect(mergeHybrid.recommended_lanes).toEqual([1, 3]);
+        expect(mergeHybrid.recommended_lane).toBe(2);
+        expect(mergeHybrid.urgency_text).toContain('middle lane');
+        expect(mergeHybrid.guidance_text).toContain('middle lane');
+
+        // Right turn: candidates [2, 3], primary rightmost (3).
+        const rightHybrid = LG.buildHybridLaneGuidance({
+            apiData: {
+                success: true,
+                total_lanes: 3,
+                has_osm_data: true,
+                has_turn_lanes: false,
+            },
+            maneuver: 'right',
+            distanceToManeuver: 250,
+            roadType: 'motorway',
+        });
+        expect(rightHybrid.recommended_lanes).toEqual([2, 3]);
+        expect(rightHybrid.recommended_lane).toBe(3);
+        expect(rightHybrid.urgency_text).toContain('right lane');
+
+        const refreshed = LG.refreshLockedGuidanceUrgency(
+            {
+                total_lanes: 3,
+                recommended_lanes: [1, 3],
+                recommended_lane: 2,
+            },
+            80,
+            'merge',
+            0
+        );
+        expect(refreshed.urgency_text).toBe('Get in the middle lane now!');
+    });
+
     test('badge hides for routing and OSM sources', () => {
         expect(LG.badge({ source: 'routing' }).visible).toBe(false);
         expect(LG.badge({ source: 'osm_turn_lanes' }).visible).toBe(false);
