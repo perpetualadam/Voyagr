@@ -46,10 +46,20 @@
         return step && step.lanes ? step.lanes : null;
     }
 
+    /**
+     * Road class for lane heuristics must track the guidance/lookahead step, not only
+     * the active continue — otherwise roundaboutPrefersRightLane sees residential
+     * while distance/lanes already target a dual primary/trunk roundabout.
+     */
+    function resolveGuidanceRoadType(guidanceStepIndex) {
+        var idx = guidanceStepIndex != null ? guidanceStepIndex : undefined;
+        return rt().call.getCurrentRoadType(idx) || 'unknown';
+    }
+
     function finalizeLaneGuidanceForRender(data, maneuver, roundaboutExitCount, distToManeuver, guidanceStepIndex) {
         var laneGuidance = LG();
         var stepIndex = guidanceStepIndex != null ? guidanceStepIndex : rt().getCurrentStepIndex();
-        var roadType = rt().call.getCurrentRoadType() || 'unknown';
+        var roadType = resolveGuidanceRoadType(guidanceStepIndex);
         var routingLanes = getRoutingManeuverLanes(stepIndex);
 
         var hybrid = laneGuidance.buildHybridLaneGuidance({
@@ -149,7 +159,8 @@
             lastSnappedRouteIndex: rt().getLastSnappedRouteIndex
                 ? rt().getLastSnappedRouteIndex()
                 : 0,
-            roadType: rt().call.getCurrentRoadType() || 'unknown',
+            // Match finalizeLaneGuidanceForRender: class from the lookahead target step.
+            roadType: resolveGuidanceRoadType(guidanceStepIndex),
             calculateDistance: rt().call.calculateDistanceMeters,
             snapToRoutePolyline: rt().routeGeometry
                 ? (a, b, c, d) => rt().routeGeometry().snapToRoutePolyline(a, b, c, d)
