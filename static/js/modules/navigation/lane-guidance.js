@@ -419,7 +419,7 @@
             return {
                 action: 'lock',
                 guidance: newGuidance,
-                lockedGuidance: newGuidance,
+                lockedGuidance: { data: newGuidance, lockedStepIndex: stepIndex },
                 lockedStepIndex: stepIndex,
             };
         }
