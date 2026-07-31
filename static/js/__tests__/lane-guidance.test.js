@@ -786,6 +786,48 @@ describe('confidence-based hybrid lane guidance', () => {
         expect(plan.guidance.recommended_lanes).toEqual([2]);
     });
 
+    test('stability plan does not upgrade to higher-source guidance that fails shouldShow', () => {
+        const locked = {
+            data: {
+                total_lanes: 3,
+                recommended_lanes: [3],
+                recommended_lane: 3,
+                confidence: 80,
+                urgency: 'soon',
+                source: 'estimated',
+                estimated: true,
+                show_lane_guidance: true,
+            },
+            lockedStepIndex: 2,
+        };
+        const lowConfidenceOsm = {
+            total_lanes: 3,
+            recommended_lanes: [1],
+            recommended_lane: 1,
+            confidence: LG.LANE_CONFIDENCE_DISPLAY_MIN - 5,
+            urgency: 'soon',
+            source: 'osm_turn_lanes',
+            has_osm_data: true,
+            has_turn_lanes: true,
+            show_lane_guidance: true,
+        };
+        expect(LG.shouldShow(locked.data)).toBe(true);
+        expect(LG.shouldShow(lowConfidenceOsm)).toBe(false);
+
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: lowConfidenceOsm,
+            lockedGuidance: locked,
+            distanceToManeuver: 200,
+            maneuverStepIndex: 2,
+            maneuver: 'right',
+            roundaboutExitCount: 0,
+        });
+        expect(plan.action).toBe('use-locked');
+        expect(plan.guidance.recommended_lanes).toEqual([3]);
+        expect(plan.guidance.source).toBe('estimated');
+        expect(LG.shouldShow(plan.guidance)).toBe(true);
+    });
+
     test('laneIndicators highlights all recommended lanes', () => {
         const inds = LG.laneIndicators({
             total_lanes: 3,
