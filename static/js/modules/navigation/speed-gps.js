@@ -1409,7 +1409,7 @@
      * @param {string|null} [opts.lastSpeedLimitRegion]
      * @param {number} [opts.lastActiveManeuverIdx]
      * @param {function(number, number): string} [opts.resolveRoadType]
-     * @param {function(number|null, number|null, string, string|null): number|null} [opts.pickDisplaySpeedLimitMph]
+     * @param {function(number|null, number|null, string, string|null, Object=): number|null} [opts.pickDisplaySpeedLimitMph]
      * @returns {Object}
      */
     function buildNavSpeedLimitTickPlan(opts) {

@@ -31,6 +31,15 @@ describe('speed-limit-widget module', () => {
         expect(SL.pickDisplaySpeedLimitMph(null, 60)).toBe(60);
     });
 
+    test('pickDisplaySpeedLimitMph prefers edge hint when preferValhallaOverApi is set', () => {
+        // Live GPS must forward this options bag from buildNavSpeedLimitTickPlan
+        // so a sticky API 60 does not win over a signed 30 on maneuver change.
+        expect(SL.pickDisplaySpeedLimitMph(60, 30, 'primary', 'uk', {
+            preferValhallaOverApi: true,
+        })).toBe(30);
+        expect(SL.pickDisplaySpeedLimitMph(60, 30, 'primary', 'uk')).toBe(60);
+    });
+
     test('pickDisplaySpeedLimitMph falls back to road-type default when allowed', () => {
         expect(SL.pickDisplaySpeedLimitMph(null, null, 'motorway', 'uk', { allowRoadTypeFallback: true })).toBe(70);
         expect(SL.pickDisplaySpeedLimitMph(null, null, 'motorway', 'uk')).toBeNull();
