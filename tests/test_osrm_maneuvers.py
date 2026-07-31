@@ -102,7 +102,7 @@ class TestBuildOsrmManeuvers(unittest.TestCase):
             self.ROUTE_COORDS, -0.11, 51.51
         ))
         self.assertEqual(maneuvers[1]['road_class'], 'motorway')
-        self.assertEqual(maneuvers[1]['speed_limit'], 48)
+        self.assertEqual(maneuvers[1]['speed_limit'], 30)  # 48 km/h → mph
         self.assertEqual(maneuvers[1]['type'], 10)
         self.assertTrue(maneuvers[2]['instruction'].lower().startswith('you have arrived'))
 

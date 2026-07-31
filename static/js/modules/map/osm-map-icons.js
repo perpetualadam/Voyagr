@@ -23,10 +23,16 @@
      * Fallback vertical traffic-light SVG when TrafficLights module is unavailable.
      * @returns {string}
      */
+    var OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE = [21, 30];
+    var OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR = [11, 15];
+    var OSM_TRAFFIC_LIGHT_INNER_SVG_WIDTH = 11;
+    var OSM_TRAFFIC_LIGHT_INNER_SVG_HEIGHT = 26;
+    var OSM_TRAFFIC_LIGHT_PILL_BORDER_RADIUS = 8;
+
     function buildOsmTrafficLightFallbackSvg() {
         return (
-            '<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" ' +
-                'preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:14px;height:32px">' +
+            '<svg viewBox="0 0 16 36" width="' + OSM_TRAFFIC_LIGHT_INNER_SVG_WIDTH + '" height="' + OSM_TRAFFIC_LIGHT_INNER_SVG_HEIGHT + '" xmlns="http://www.w3.org/2000/svg" ' +
+                'preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:' + OSM_TRAFFIC_LIGHT_INNER_SVG_WIDTH + 'px;height:' + OSM_TRAFFIC_LIGHT_INNER_SVG_HEIGHT + 'px">' +
                 '<rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/>' +
                 '<circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/>' +
                 '<circle cx="8" cy="18" r="4.2" fill="#f59e0b"/>' +
@@ -42,15 +48,12 @@
     function buildOsmTrafficLightMarkerPillHtml(innerSvg) {
         return (
             '<div class="osm-traffic-light-pill" style="box-sizing:border-box;width:100%;height:100%;' +
-                'background:#e8f5e9;border:2px solid #2e7d32;border-radius:10px;display:flex;align-items:center;' +
+                'background:#e8f5e9;border:2px solid #2e7d32;border-radius:' + OSM_TRAFFIC_LIGHT_PILL_BORDER_RADIUS + 'px;display:flex;align-items:center;' +
                 'justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">' +
                 (innerSvg || '') +
             '</div>'
         );
     }
-
-    var OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE = [26, 38];
-    var OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR = [13, 19];
 
     /**
      * @param {string} iconSvg
@@ -86,7 +89,7 @@
      * @returns {string}
      */
     function buildOsmTrafficLightPopupIconWrapperHtml(pillHtml) {
-        return '<div style="width:26px;height:38px;margin:0 auto;">' + (pillHtml || '') + '</div>';
+        return '<div style="width:' + OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE[0] + 'px;height:' + OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE[1] + 'px;margin:0 auto;">' + (pillHtml || '') + '</div>';
     }
 
     /**
@@ -97,7 +100,7 @@
         var pill = pillHtml || '';
         return (
             '<div style="text-align:center;font-size:12px;max-width:200px;">' +
-                '<div style="width:26px;height:38px;margin:0 auto 6px;">' + pill + '</div>' +
+                '<div style="width:' + OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE[0] + 'px;height:' + OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE[1] + 'px;margin:0 auto 6px;">' + pill + '</div>' +
                 '<strong>Traffic light</strong>' +
             '</div>'
         );
@@ -109,6 +112,9 @@
         buildOsmTrafficLightMarkerPillHtml: buildOsmTrafficLightMarkerPillHtml,
         OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE: OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
         OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR: OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR,
+        OSM_TRAFFIC_LIGHT_INNER_SVG_WIDTH: OSM_TRAFFIC_LIGHT_INNER_SVG_WIDTH,
+        OSM_TRAFFIC_LIGHT_INNER_SVG_HEIGHT: OSM_TRAFFIC_LIGHT_INNER_SVG_HEIGHT,
+        OSM_TRAFFIC_LIGHT_PILL_BORDER_RADIUS: OSM_TRAFFIC_LIGHT_PILL_BORDER_RADIUS,
         buildOsmTrafficLightPopupIconWrapperHtml: buildOsmTrafficLightPopupIconWrapperHtml,
         buildRailwayCrossingMarkerHtml: buildRailwayCrossingMarkerHtml,
         buildRailwayCrossingPopupHtml: buildRailwayCrossingPopupHtml,

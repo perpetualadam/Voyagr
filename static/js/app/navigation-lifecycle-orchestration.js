@@ -131,7 +131,8 @@
         });
         if (!mount.valid) return false;
 
-        const layer = rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style);
+        const helpers = rt().getMapLibreHelpers();
+        const layer = helpers.addPolyline(rt().getMap(), mount.polyline, mount.style);
         if (typeof rt().setRouteLayer === 'function') {
             rt().setRouteLayer(layer);
         }
@@ -142,11 +143,29 @@
             && typeof rt().call.bringNavRouteAboveTrafficEdges === 'function') {
             rt().call.bringNavRouteAboveTrafficEdges();
         }
-        return !!(layer && layer._added !== false);
+        return typeof helpers.isPolylineLayerMountOk === 'function'
+            ? helpers.isPolylineLayerMountOk(layer)
+            : !!(layer && (layer._pending || layer._added !== false));
+    }
+
+    function scheduleNavRouteMountRetry(execute) {
+        if (!execute || execute.routeMountRetryDelayMs == null) return;
+        var delayMs = execute.routeMountRetryDelayMs;
+        var retryReason = execute.routeMountRetryReason || 'nav-start-mount-retry';
+        setTimeout(function () {
+            try {
+                if (!getRouteInProgress()) return;
+                if (typeof rt().call.redrawNavigationRouteLayer === 'function') {
+                    rt().call.redrawNavigationRouteLayer(retryReason);
+                }
+            } catch (e) {
+                console.warn('[Navigation] Route layer mount retry failed:', e);
+            }
+        }, delayMs);
     }
 
     function applyNavStartPolylineFromPlan(execute, stateInit) {
-        if (!execute || !execute.shouldInit) return false;
+        if (!execute || !execute.shouldInit) return { ok: false };
 
         try {
             if (execute.usePersistedPolyline && execute.persistedPolyline) {
@@ -174,16 +193,28 @@
             if (!activeRoutePolyline || activeRoutePolyline.length === 0) {
                 console.error(execute.emptyPolylineErrorLog);
                 rt().call.showStatus(execute.invalidGeometryStatusMessage, 'error');
-                return false;
+                return { ok: false };
             }
 
+            var routeMountFailed = false;
             // Replace comparison/preview polylines with the single owned nav route layer
             // that matches the maneuvers / text instructions just loaded into memory.
             if (execute.clearPreviewRouteLayers) {
                 clearPreviewRouteLayersForNavStart();
             }
             if (execute.mountActiveNavRoute) {
-                mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
+                var routeMounted = mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
+                if (!routeMounted) {
+                    routeMountFailed = true;
+                    console.warn(execute.routeMountFailedLog || '[Navigation] Active route layer mount failed');
+                    if (execute.routeMountFailedStatusMessage) {
+                        rt().call.showStatus(
+                            execute.routeMountFailedStatusMessage,
+                            execute.routeMountFailedStatusType || 'warning'
+                        );
+                    }
+                    scheduleNavRouteMountRetry(execute);
+                }
             }
 
             if (execute.primeVehicleWhenPositionKnown && rt().getCurrentLat() != null && rt().getCurrentLon() != null) {
@@ -191,18 +222,19 @@
             } else if (execute.resetSnappedIndexWhenNoPosition) {
                 setLastSnappedRouteIndex(0);
             }
-            return true;
+            return { ok: true, routeMountFailed: routeMountFailed };
         } catch (e) {
             console.error(execute.decodeGeometryErrorLogPrefix, e);
             rt().call.showStatus(execute.decodeGeometryErrorStatusMessage, 'error');
-            return false;
+            return { ok: false };
         }
     }
 
-    function applyNavStartWakeLockFromPlan(stateInit, wakeLockApiAvailable) {
-        const wakeLockExecute = MC().buildNavStartWakeLockExecutePlan(!!wakeLockApiAvailable, stateInit);
-        if (!wakeLockExecute.shouldRequest) {
-            if (wakeLockExecute.unsupportedLog) console.log(wakeLockExecute.unsupportedLog);
+    function requestWakeLockFromExecutePlan(wakeLockExecute) {
+        if (!wakeLockExecute || !wakeLockExecute.shouldRequest) {
+            if (wakeLockExecute && wakeLockExecute.unsupportedLog) {
+                console.log(wakeLockExecute.unsupportedLog);
+            }
             return;
         }
 
@@ -210,15 +242,54 @@
             .then((wakeLock) => {
                 window[wakeLockExecute.windowProperty] = wakeLock;
                 console.log(wakeLockExecute.acquireLog);
-                rt().call.showStatus(wakeLockExecute.successStatusMessage, wakeLockExecute.successStatusType);
+                if (wakeLockExecute.successStatusMessage && !wakeLockExecute.quietStatus) {
+                    rt().call.showStatus(
+                        wakeLockExecute.successStatusMessage,
+                        wakeLockExecute.successStatusType || 'success'
+                    );
+                }
 
                 wakeLock.addEventListener('release', () => {
                     console.log(wakeLockExecute.releaseLog);
+                    if (window[wakeLockExecute.windowProperty] === wakeLock) {
+                        window[wakeLockExecute.windowProperty] = null;
+                    }
+                    // Screen/system can release the lock while nav continues; retry if still visible.
+                    if (typeof document !== 'undefined' &&
+                        document.visibilityState === 'visible' &&
+                        getRouteInProgress()) {
+                        setTimeout(function () {
+                            try { ensureNavWakeLock(); } catch (_) { /* ignore */ }
+                        }, 500);
+                    }
                 });
             })
             .catch((err) => {
                 console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
             });
+    }
+
+    function applyNavStartWakeLockFromPlan(stateInit, wakeLockApiAvailable) {
+        const wakeLockExecute = MC().buildNavStartWakeLockExecutePlan(!!wakeLockApiAvailable, stateInit);
+        requestWakeLockFromExecutePlan(wakeLockExecute);
+    }
+
+    /**
+     * Reacquire wake lock after app foreground / screen wake during navigation.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.documentVisible]
+     */
+    function ensureNavWakeLock(opts) {
+        opts = opts || {};
+        const plan = MC().buildNavForegroundWakeLockEnsurePlan({
+            documentVisible: opts.documentVisible !== false &&
+                (typeof document === 'undefined' || document.visibilityState !== 'hidden'),
+            routeInProgress: getRouteInProgress(),
+            wakeLockApiAvailable: typeof navigator !== 'undefined' && 'wakeLock' in navigator,
+            hasWakeLock: !!window.screenWakeLock,
+        });
+        requestWakeLockFromExecutePlan(plan);
+        return plan;
     }
 
     function applyNavStartFabDomFromPlan(fabExecute) {
@@ -242,8 +313,9 @@
         if (fabExecute.updateSpeedWidget) rt().call.updateSpeedWidgetVisibility();
     }
 
-    function applyNavStartServicesFromPlan(services) {
+    function applyNavStartServicesFromPlan(services, options) {
         if (!services) return;
+        options = options || {};
 
         const lifecycle = services.lifecycle || {};
         if (lifecycle.startGpsIfInactive) rt().call.startGPSTracking();
@@ -325,7 +397,9 @@
             if (navStartFeedback.speakMessage) {
                 rt().call.speakMessage(navStartFeedback.speakMessage);
             }
-            rt().call.showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
+            if (!options.routeMountFailed) {
+                rt().call.showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
+            }
         }
 
         const volumeHintSchedule = rt().deviceEnvironment().buildNavStartVolumeHintSchedulePlan({
@@ -474,11 +548,11 @@
         const stateInit = entry.stateInit;
         applyNavStartRuntimeFromPlan(MC().buildNavStartRuntimeApplyPlan(stateInit));
 
-        const polylineOk = applyNavStartPolylineFromPlan(
+        const polylineResult = applyNavStartPolylineFromPlan(
             MC().buildNavStartPolylineInitExecutePlan(stateInit),
             stateInit
         );
-        if (!polylineOk) return;
+        if (!polylineResult.ok) return;
 
         applyNavStartWakeLockFromPlan(stateInit, 'wakeLock' in navigator);
 
@@ -494,7 +568,9 @@
             mapFollowingActive: rt().getMapFollowingActive(),
             driverPerspectiveActive: rt().call.shouldUsePitchedDrivingCamera(),
             wakeLockApiAvailable: 'wakeLock' in navigator,
-        }));
+        }), {
+            routeMountFailed: !!polylineResult.routeMountFailed,
+        });
     }
 
     function stopTurnByTurnNavigation() {
@@ -541,6 +617,7 @@
         bind: bind,
         startTurnByTurnNavigation: startTurnByTurnNavigation,
         stopTurnByTurnNavigation: stopTurnByTurnNavigation,
+        ensureNavWakeLock: ensureNavWakeLock,
         updateTurnGuidance: updateTurnGuidance,
         getRouteStarted: getRouteStarted,
         setRouteStarted: setRouteStarted,

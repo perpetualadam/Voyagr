@@ -129,15 +129,18 @@ describe('buildDeterministicLaneGuidance', () => {
         expect(g.recommended_lane).toBe(2);
     });
 
-    test('roundabout with 3+ exits goes right, 1 exit goes left, 2 stays through', () => {
+    test('roundabout 1st exit left; 2nd+/3rd+ right on multi-lane dual approaches', () => {
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 3, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('right');
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 1, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('left');
-        // A 2-exit roundabout keeps the recommended lane "through" (no found non-through arrow).
-        const two = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
-        expect(two.lane_arrows.every((a) => a.primary === 'through')).toBe(true);
-        expect(two.recommended_lane).toBe(1); // exitCount < 3 => leftmost
+        // Dual primary/trunk approaches: 2nd exit pre-positions right (not last-minute left).
+        const twoPrimary = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
+        expect(twoPrimary.recommended_lane).toBe(2);
+        expect(twoPrimary.lane_arrows.find((a) => a.primary !== 'through').primary).toBe('right');
+        // Quiet residential keeps classic UK 2nd-exit = left/ahead.
+        const twoRes = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'residential');
+        expect(twoRes.recommended_lane).toBe(1);
     });
 
     test('uturn recommends the rightmost lane (UK)', () => {
@@ -168,7 +171,21 @@ describe('view-model: shouldShow', () => {
         expect(LG.shouldShow({ total_lanes: 3, urgency: 'none' })).toBe(false);
     });
     test('shown for a multi-lane road with an approaching maneuver', () => {
-        expect(LG.shouldShow({ total_lanes: 3, urgency: 'soon' })).toBe(true);
+        expect(LG.shouldShow({
+            total_lanes: 3,
+            urgency: 'soon',
+            confidence: 92,
+            recommended_lanes: [2],
+            show_lane_guidance: true,
+        })).toBe(true);
+    });
+    test('hidden when confidence is below display threshold', () => {
+        expect(LG.shouldShow({
+            total_lanes: 3,
+            urgency: 'soon',
+            confidence: 65,
+            recommended_lanes: [1],
+        })).toBe(false);
     });
     test('null data is hidden', () => {
         expect(LG.shouldShow(null)).toBe(false);
@@ -214,7 +231,9 @@ describe('view-model: displayText', () => {
 describe('view-model: laneIndicators', () => {
     test('marks the recommended lane and carries the arrow glyph', () => {
         const data = {
-            total_lanes: 3, recommended_lane: 3, has_turn_lanes: true,
+            total_lanes: 3, recommended_lane: 3, recommended_lanes: [3],
+            confidence: 95, show_lane_guidance: true,
+            has_turn_lanes: true,
             lane_arrows: [
                 { arrow: '↑', directions: ['through'] },
                 { arrow: '↑', directions: ['through'] },
@@ -477,14 +496,25 @@ describe('buildLaneGuidanceFetchStateApplyPlan', () => {
 
 describe('buildLaneGuidanceFetchOutcomePlan', () => {
     test('caches successful API data for render', () => {
-        const data = { success: true, total_lanes: 3, recommended_lane: 2, urgency: 'soon' };
+        const data = {
+            success: true,
+            total_lanes: 3,
+            recommended_lane: 2,
+            recommended_lanes: [2],
+            urgency: 'soon',
+            has_turn_lanes: true,
+            has_osm_data: true,
+        };
         const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
             apiSuccess: true,
             apiData: data,
+            maneuver: 'right',
+            distToManeuver: 120,
+            roadType: 'motorway',
             now: 10_000,
         });
         expect(outcome.action).toBe('cache-and-render');
-        expect(outcome.renderData).toBe(data);
+        expect(outcome.renderData.confidence).toBeGreaterThanOrEqual(70);
         expect(outcome.cacheEntry.fallback).toBe(false);
     });
 
@@ -504,12 +534,22 @@ describe('buildLaneGuidanceFetchOutcomePlan', () => {
 });
 
 describe('lane guidance UI and voice apply plans', () => {
+    function hybridLeftPrimary(dist) {
+        return LG.buildHybridLaneGuidance({
+            maneuver: 'left',
+            distanceToManeuver: dist,
+            roundaboutExitCount: 0,
+            roadType: 'primary',
+            routingManeuverLanes: [{ active: true }, { active: false }],
+        });
+    }
+
     test('buildLaneGuidanceUiApplyPlan hides single-lane guidance', () => {
         expect(LG.buildLaneGuidanceUiApplyPlan({ total_lanes: 1, urgency: 'none' }).visible).toBe(false);
     });
 
     test('buildLaneGuidanceUiApplyPlan includes indicators for multi-lane roads', () => {
-        const data = LG.buildDeterministicLaneGuidance('left', 120, 0, 'primary');
+        const data = hybridLeftPrimary(120);
         const plan = LG.buildLaneGuidanceUiApplyPlan(data);
         expect(plan.visible).toBe(true);
         expect(plan.indicators.length).toBeGreaterThan(1);
@@ -522,7 +562,7 @@ describe('lane guidance UI and voice apply plans', () => {
     });
 
     test('buildLaneGuidanceDomApplyPlan includes indicator nodes and voice plan', () => {
-        const data = LG.buildDeterministicLaneGuidance('left', 120, 0, 'primary');
+        const data = hybridLeftPrimary(120);
         const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, '');
         expect(domPlan.action).toBe('show');
         expect(domPlan.indicators.length).toBeGreaterThan(1);
@@ -535,7 +575,7 @@ describe('lane guidance UI and voice apply plans', () => {
     });
 
     test('buildLaneGuidanceDomStateApplyPlan maps show plan with optional voice', () => {
-        const data = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
+        const data = hybridLeftPrimary(80);
         const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, '');
         const apply = LG.buildLaneGuidanceDomStateApplyPlan(domPlan, { voiceEnabled: true });
         expect(apply.action).toBe('show');
@@ -545,14 +585,14 @@ describe('lane guidance UI and voice apply plans', () => {
     });
 
     test('buildLaneGuidanceDomStateApplyPlan omits voice when disabled', () => {
-        const data = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
+        const data = hybridLeftPrimary(80);
         const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, '');
         const apply = LG.buildLaneGuidanceDomStateApplyPlan(domPlan, { voiceEnabled: false });
         expect(apply.voice).toBeNull();
     });
 
     test('buildLaneVoiceAnnouncementPlan returns message for urgent lane change', () => {
-        const data = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
+        const data = hybridLeftPrimary(80);
         const plan = LG.buildLaneVoiceAnnouncementPlan(data, '');
         expect(plan).not.toBeNull();
         expect(plan.message).toContain('lane');
@@ -564,5 +604,443 @@ describe('lane guidance UI and voice apply plans', () => {
         expect(LG.resolveLanePositionLabel(1, 3)).toBe('left');
         expect(LG.resolveLanePositionLabel(2, 3)).toBe('middle');
         expect(LG.resolveLanePositionLabel(3, 3)).toBe('right');
+    });
+});
+
+describe('confidence-based hybrid lane guidance', () => {
+    test('routing lanes take priority over API and estimation', () => {
+        const hybrid = LG.buildHybridLaneGuidance({
+            routingManeuverLanes: [{ active: false }, { active: true }],
+            apiData: {
+                success: true,
+                total_lanes: 3,
+                recommended_lane: 1,
+                has_turn_lanes: true,
+                has_osm_data: true,
+            },
+            maneuver: 'right',
+            distanceToManeuver: 200,
+            roadType: 'motorway',
+        });
+        expect(hybrid.source).toBe('routing');
+        expect(hybrid.recommended_lanes).toEqual([2]);
+        expect(hybrid.confidence).toBeGreaterThanOrEqual(90);
+    });
+
+    test('estimated 2-lane primary left turn stays hidden (low confidence)', () => {
+        const hybrid = LG.buildHybridLaneGuidance({
+            maneuver: 'left',
+            distanceToManeuver: 200,
+            roadType: 'primary',
+        });
+        expect(hybrid.confidence).toBeLessThan(LG.LANE_CONFIDENCE_DISPLAY_MIN);
+        expect(LG.shouldShow(hybrid)).toBe(false);
+    });
+
+    test('motorway exit estimation can show with multiple lanes at medium confidence', () => {
+        const hybrid = LG.buildHybridLaneGuidance({
+            maneuver: 'exit_right',
+            distanceToManeuver: 250,
+            roadType: 'motorway',
+        });
+        expect(hybrid.confidence).toBeGreaterThanOrEqual(LG.LANE_CONFIDENCE_DISPLAY_MIN);
+        expect(hybrid.recommended_lanes.length).toBeGreaterThanOrEqual(1);
+        expect(LG.shouldShow(hybrid)).toBe(true);
+    });
+
+    test('high confidence highlights a single lane', () => {
+        const out = LG.applyConfidenceLaneSelection({
+            confidence: 95,
+            recommended_lanes: [1, 2],
+            recommended_lane: 1,
+            total_lanes: 3,
+        });
+        expect(out.recommended_lanes).toEqual([1]);
+    });
+
+    test('medium confidence keeps multiple acceptable lanes', () => {
+        const out = LG.applyConfidenceLaneSelection({
+            confidence: 82,
+            recommended_lanes: [2, 3],
+            recommended_lane: 2,
+            total_lanes: 3,
+        });
+        expect(out.recommended_lanes).toEqual([2, 3]);
+    });
+
+    test('stability plan locks guidance within lock distance', () => {
+        const guidance = {
+            total_lanes: 3,
+            recommended_lanes: [3],
+            recommended_lane: 3,
+            confidence: 95,
+            urgency: 'soon',
+            show_lane_guidance: true,
+        };
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: guidance,
+            lockedGuidance: null,
+            distanceToManeuver: 350,
+            maneuverStepIndex: 2,
+        });
+        expect(plan.action).toBe('lock');
+        expect(plan.guidance.recommended_lanes).toEqual([3]);
+    });
+
+    test('stability plan keeps locked lanes when GPS updates arrive nearby', () => {
+        const locked = {
+            data: {
+                total_lanes: 3,
+                recommended_lanes: [1],
+                recommended_lane: 1,
+                confidence: 95,
+                urgency: 'soon',
+                show_lane_guidance: true,
+            },
+            lockedStepIndex: 2,
+        };
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: {
+                total_lanes: 3,
+                recommended_lanes: [2],
+                recommended_lane: 2,
+                confidence: 76,
+                show_lane_guidance: true,
+            },
+            lockedGuidance: locked,
+            distanceToManeuver: 200,
+            maneuverStepIndex: 2,
+            maneuver: 'left',
+            roundaboutExitCount: 0,
+        });
+        expect(plan.action).toBe('use-locked');
+        expect(plan.guidance.recommended_lanes).toEqual([1]);
+    });
+
+    test('stability plan upgrades locked OSM guidance when routing lanes arrive', () => {
+        const locked = {
+            data: {
+                total_lanes: 3,
+                recommended_lanes: [1],
+                recommended_lane: 1,
+                confidence: 95,
+                source: 'osm_turn_lanes',
+                has_osm_data: true,
+                has_turn_lanes: true,
+                show_lane_guidance: true,
+            },
+            lockedStepIndex: 2,
+        };
+        const routingHybrid = LG.buildHybridLaneGuidance({
+            routingManeuverLanes: [{ active: false }, { active: true }, { active: false }],
+            apiData: locked.data,
+            maneuver: 'right',
+            distanceToManeuver: 200,
+            roadType: 'motorway',
+        });
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: routingHybrid,
+            lockedGuidance: locked,
+            distanceToManeuver: 200,
+            maneuverStepIndex: 2,
+            maneuver: 'right',
+            roundaboutExitCount: 0,
+        });
+        expect(routingHybrid.source).toBe('routing');
+        expect(routingHybrid.confidence).toBeLessThan(locked.data.confidence + LG.LANE_LOCK_UPGRADE_DELTA);
+        expect(plan.action).toBe('lock');
+        expect(plan.guidance.source).toBe('routing');
+        expect(plan.guidance.recommended_lanes).toEqual([2]);
+    });
+
+    test('stability plan does not downgrade locked routing to estimated', () => {
+        const locked = {
+            data: {
+                total_lanes: 3,
+                recommended_lanes: [2],
+                recommended_lane: 2,
+                confidence: 92,
+                source: 'routing',
+                has_routing_lanes: true,
+                show_lane_guidance: true,
+            },
+            lockedStepIndex: 2,
+        };
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: {
+                total_lanes: 3,
+                recommended_lanes: [1],
+                recommended_lane: 1,
+                confidence: 99,
+                source: 'estimated',
+                estimated: true,
+                show_lane_guidance: true,
+            },
+            lockedGuidance: locked,
+            distanceToManeuver: 200,
+            maneuverStepIndex: 2,
+            maneuver: 'left',
+            roundaboutExitCount: 0,
+        });
+        expect(plan.action).toBe('use-locked');
+        expect(plan.guidance.recommended_lanes).toEqual([2]);
+    });
+
+    test('laneIndicators highlights all recommended lanes', () => {
+        const inds = LG.laneIndicators({
+            total_lanes: 3,
+            recommended_lanes: [1, 2],
+            recommended_lane: 1,
+            has_turn_lanes: true,
+            lane_arrows: [
+                { arrow: '←', directions: ['left'] },
+                { arrow: '↑', directions: ['through'] },
+                { arrow: '→', directions: ['right'] },
+            ],
+        });
+        expect(inds[0].recommended).toBe(true);
+        expect(inds[1].recommended).toBe(true);
+        expect(inds[2].recommended).toBe(false);
+    });
+});
+
+describe('lane-guidance hybrid helpers (coverage)', () => {
+    test('extractRoutingLaneGuidance handles all routing lane shapes', () => {
+        expect(LG.extractRoutingLaneGuidance(null)).toBeNull();
+        expect(LG.extractRoutingLaneGuidance([{ active: true }])).toBeNull();
+
+        const multiActive = LG.extractRoutingLaneGuidance([
+            { active: true }, { active: true }, { active: false },
+        ]);
+        expect(multiActive.confidence).toBe(88);
+        expect(multiActive.recommended_lanes).toEqual([1, 2]);
+
+        const validSingle = LG.extractRoutingLaneGuidance([
+            { valid_indications: [] }, { valid_indications: ['right'] },
+        ]);
+        expect(validSingle.confidence).toBe(92);
+        expect(validSingle.recommended_lanes).toEqual([2]);
+
+        const validMulti = LG.extractRoutingLaneGuidance([
+            { valid_indications: ['left'] }, { valid_indications: ['right'] },
+        ]);
+        expect(validMulti.confidence).toBe(82);
+
+        const noSignal = LG.extractRoutingLaneGuidance([
+            null, { valid_indications: [] },
+        ]);
+        expect(noSignal).toBeNull();
+    });
+
+    test('scoreApiLaneGuidanceConfidence and scoreEstimatedLaneConfidence branches', () => {
+        expect(LG.scoreApiLaneGuidanceConfidence(null)).toBe(0);
+        expect(LG.scoreApiLaneGuidanceConfidence({ has_turn_lanes: true })).toBe(95);
+        expect(LG.scoreApiLaneGuidanceConfidence({ has_osm_data: true })).toBe(78);
+
+        const threeLane = { total_lanes: 3 };
+        expect(LG.scoreEstimatedLaneConfidence(null, 'left', 'primary')).toBe(0);
+        expect(LG.scoreEstimatedLaneConfidence({ total_lanes: 1 }, 'left', 'primary')).toBe(0);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'exit_right', 'motorway')).toBe(76);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'slight_right', 'motorway')).toBe(74);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'through', 'motorway')).toBe(72);
+        expect(LG.scoreEstimatedLaneConfidence({ total_lanes: 2 }, 'through', 'motorway')).toBe(68);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'roundabout', 'primary')).toBe(80);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'left', 'primary')).toBe(72);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'exit', 'secondary')).toBe(71);
+        expect(LG.scoreEstimatedLaneConfidence(threeLane, 'through', 'primary')).toBe(65);
+    });
+
+    test('isLaneGuidanceValuableManeuver and estimateCandidateLanesUK branches', () => {
+        expect(LG.isLaneGuidanceValuableManeuver({ totalLanes: 1 })).toBe(false);
+        expect(LG.isLaneGuidanceValuableManeuver({ totalLanes: 3, hasRoutingLanes: true })).toBe(true);
+        expect(LG.isLaneGuidanceValuableManeuver({
+            totalLanes: 3, maneuver: 'slight_right', roadType: 'motorway',
+        })).toBe(true);
+        expect(LG.isLaneGuidanceValuableManeuver({
+            totalLanes: 3, maneuver: 'through', roadType: 'motorway',
+        })).toBe(true);
+        expect(LG.isLaneGuidanceValuableManeuver({
+            totalLanes: 2, maneuver: 'left', roadType: 'primary',
+        })).toBe(false);
+        expect(LG.isLaneGuidanceValuableManeuver({
+            totalLanes: 3, maneuver: 'left', roadType: 'primary',
+        })).toBe(true);
+        expect(LG.isLaneGuidanceValuableManeuver({
+            totalLanes: 2, maneuver: 'exit', roadType: 'primary',
+        })).toBe(true);
+
+        expect(LG.estimateCandidateLanesUK('roundabout', 3, 1)).toEqual([1]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 3, 3)).toEqual([3]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'primary')).toEqual([2]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'residential')).toEqual([1]);
+        expect(LG.estimateCandidateLanesUK('left', 3, 0)).toEqual([1, 2]);
+        expect(LG.estimateCandidateLanesUK('right', 2, 0)).toEqual([2]);
+        expect(LG.estimateCandidateLanesUK('merge', 3, 0)).toEqual([1, 3]);
+        expect(LG.estimateCandidateLanesUK('through', 4, 0)).toEqual([2]);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(false);
+        // Merge candidates are edges; primary is centre (not candidates[0]).
+        expect(LG.getRecommendedLaneSimple('merge', 3, 0)).toBe(2);
+        expect(LG.getRecommendedLaneSimple('merge', 4, 0)).toBe(2);
+        expect(LG.getRecommendedLaneSimple('right', 3, 0)).toBe(3);
+    });
+
+    test('getRecommendedLaneNumbers and enrichGuidanceWithRecommendedLanes', () => {
+        expect(LG.getRecommendedLaneNumbers(null)).toEqual([]);
+        expect(LG.getRecommendedLaneNumbers({ recommended_lane: 2 })).toEqual([2]);
+        expect(LG.getRecommendedLaneNumbers({ recommended_lanes: [1, 3] })).toEqual([1, 3]);
+
+        const enriched = LG.enrichGuidanceWithRecommendedLanes(
+            { total_lanes: 3 },
+            'right',
+            0
+        );
+        expect(enriched.recommended_lanes).toEqual([2, 3]);
+        expect(enriched.recommended_lane).toBe(3);
+        expect(LG.enrichGuidanceWithRecommendedLanes(
+            { total_lanes: 3, recommended_lanes: [2] },
+            'right',
+            0
+        ).recommended_lanes).toEqual([2]);
+
+        const mergeEnriched = LG.enrichGuidanceWithRecommendedLanes(
+            { total_lanes: 3 },
+            'merge',
+            0
+        );
+        expect(mergeEnriched.recommended_lanes).toEqual([1, 3]);
+        expect(mergeEnriched.recommended_lane).toBe(2);
+    });
+
+    test('applyConfidenceLaneSelection hides below threshold', () => {
+        const out = LG.applyConfidenceLaneSelection({
+            confidence: 60,
+            recommended_lanes: [1],
+            recommended_lane: 1,
+            total_lanes: 3,
+        });
+        expect(out.recommended_lanes).toEqual([]);
+        expect(out.recommended_lane).toBeNull();
+    });
+
+    test('buildHybridLaneGuidance uses API OSM lanes and enriches missing recommended_lanes', () => {
+        const hybrid = LG.buildHybridLaneGuidance({
+            apiData: {
+                success: true,
+                total_lanes: 3,
+                has_osm_data: true,
+                has_turn_lanes: false,
+                recommended_lane: 2,
+            },
+            maneuver: 'straight',
+            distanceToManeuver: 400,
+            roadType: 'motorway',
+        });
+        expect(hybrid.source).toBe('osm_lanes');
+        expect(hybrid.confidence).toBe(78);
+    });
+
+    test('buildLaneGuidanceStabilityPlan route recalc, clear, upgrade, and update paths', () => {
+        const guidance = {
+            total_lanes: 3,
+            recommended_lanes: [2],
+            recommended_lane: 2,
+            confidence: 95,
+            urgency: 'soon',
+            show_lane_guidance: true,
+        };
+        const recalcPlan = LG.buildLaneGuidanceStabilityPlan({
+            routeRecalculated: true,
+            newGuidance: guidance,
+            maneuverStepIndex: 1,
+            distanceToManeuver: 300,
+        });
+        expect(recalcPlan.action).toBe('lock');
+        expect(recalcPlan.lockedGuidance).toEqual({
+            data: guidance,
+            lockedStepIndex: 1,
+        });
+
+        const afterRecalc = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: {
+                total_lanes: 3,
+                recommended_lanes: [3],
+                recommended_lane: 3,
+                confidence: 70,
+                show_lane_guidance: true,
+            },
+            lockedGuidance: recalcPlan.lockedGuidance,
+            distanceToManeuver: 250,
+            maneuverStepIndex: 1,
+            maneuver: 'right',
+            roundaboutExitCount: 0,
+        });
+        expect(afterRecalc.action).toBe('use-locked');
+        expect(afterRecalc.guidance.recommended_lanes).toEqual([2]);
+
+        expect(LG.buildLaneGuidanceStabilityPlan({
+            maneuverCompleted: true,
+            newGuidance: guidance,
+        }).action).toBe('clear');
+
+        const upgraded = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: { ...guidance, confidence: 95, recommended_lanes: [3], recommended_lane: 3 },
+            lockedGuidance: { data: { ...guidance, confidence: 75 }, lockedStepIndex: 2 },
+            distanceToManeuver: 250,
+            maneuverStepIndex: 2,
+        });
+        expect(upgraded.action).toBe('lock');
+        expect(upgraded.guidance.recommended_lanes).toEqual([3]);
+
+        const updated = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: guidance,
+            lockedGuidance: null,
+            distanceToManeuver: 900,
+            maneuverStepIndex: 2,
+        });
+        expect(updated.action).toBe('update');
+    });
+
+    test('refreshLockedGuidanceUrgency returns null for missing lock', () => {
+        expect(LG.refreshLockedGuidanceUrgency(null, 100, 'left', 0)).toBeNull();
+    });
+
+    test('badge hides for routing and OSM sources', () => {
+        expect(LG.badge({ source: 'routing' }).visible).toBe(false);
+        expect(LG.badge({ source: 'osm_turn_lanes' }).visible).toBe(false);
+    });
+
+    test('resolveLanePositionLabel numbered lane on 4-lane road', () => {
+        expect(LG.resolveLanePositionLabel(2, 4)).toBe('lane 2');
+    });
+
+    test('buildLaneVoiceAnnouncementPlan multi-lane roundabout and ahead paths', () => {
+        const multi = Object.assign(
+            {},
+            LG.buildHybridLaneGuidance({
+                routingManeuverLanes: [
+                    { active: true }, { active: true }, { active: false },
+                ],
+                maneuver: 'roundabout',
+                roundaboutExitCount: 2,
+                distanceToManeuver: 80,
+                roadType: 'primary',
+            }),
+            { next_maneuver: 'roundabout' }
+        );
+        const plan = LG.buildLaneVoiceAnnouncementPlan(multi, '');
+        expect(plan.message).toContain('roundabout');
+
+        const ahead = LG.buildDeterministicLaneGuidance('exit_right', 600, 0, 'motorway');
+        const aheadHybrid = LG.buildHybridLaneGuidance({
+            maneuver: 'exit_right',
+            distanceToManeuver: 600,
+            roadType: 'motorway',
+        });
+        const aheadPlan = LG.buildLaneVoiceAnnouncementPlan(aheadHybrid, '');
+        expect(aheadPlan).not.toBeNull();
+        expect(aheadPlan.message).toContain('lane');
+
+        expect(LG.buildLaneVoiceAnnouncementPlan({ total_lanes: 3, confidence: 50 }, '')).toBeNull();
     });
 });

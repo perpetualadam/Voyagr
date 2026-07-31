@@ -69,8 +69,15 @@ def append_distinct_valhalla_route_types(
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
     avoid_unpaved: bool = False,
+    traffic_multiplier: float = 1.0,
+    traffic_level: str = 'N/A',
 ) -> List[Dict[str, Any]]:
-    """Add 🌿 Scenic, 🛤️ Quiet, and ⚡ Optimised Discovery routes (auto + hazard avoidance)."""
+    """
+    Add 🌿 Scenic, 🛤️ Quiet, and ⚡ Optimised Discovery routes (auto + hazard avoidance).
+
+    Every option is scaled by the caller's traffic multiplier so the preview compares
+    like with like against the Fastest route and its alternates.
+    """
     if not should_append_distinct_valhalla_route_types(
         routes,
         valhalla_costing=valhalla_costing,
@@ -128,6 +135,8 @@ def append_distinct_valhalla_route_types(
                 include_tolls=include_tolls,
                 include_caz=include_caz,
                 caz_exempt=caz_exempt,
+                traffic_multiplier=traffic_multiplier,
+                traffic_level=traffic_level,
             )
         except Exception as e:
             logger.warning('[VALHALLA] %s route failed: %s', name, e)
@@ -155,7 +164,8 @@ def append_distinct_valhalla_route_types(
                             trip=disc_data['trip'],
                             name='⚡ Optimised Discovery',
                             route_id=next_route_id,
-                            traffic_multiplier=1.0,
+                            traffic_multiplier=traffic_multiplier,
+                            traffic_level=traffic_level,
                             maneuver_length_in_meters=True,
                             hazards=hazards,
                             cost_calculator=cost_calculator,

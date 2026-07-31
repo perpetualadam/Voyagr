@@ -65,6 +65,7 @@
         mapOverlayToggles: 'VoyagrMapOverlayToggles',
         mapView3D: 'VoyagrMapView3D',
         mapTheme: 'VoyagrMapTheme',
+        mapRecovery: 'VoyagrMapRecovery',
         cameraMapMarkers: 'VoyagrCameraMapMarkers',
         hazardMapMarkers: 'VoyagrHazardMapMarkers',
         pwaInstall: 'VoyagrPwaInstall',

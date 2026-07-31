@@ -19,6 +19,17 @@ from flask import Blueprint, jsonify, request, send_file, after_this_request
 from voyagr.models import get_db_connection, return_db_connection, db_connection
 from voyagr.utils.rate_limiting import RateLimiter
 from voyagr.utils.admin_auth import register_admin_before_request
+from voyagr.utils.lane_maneuvers import (
+    apply_confidence_lane_selection as _apply_confidence_lane_selection,
+    estimate_candidate_lanes_uk as _estimate_candidate_lanes_uk,
+    get_recommended_lane_simple as _get_recommended_lane_simple,
+    is_motorway_road_type as _is_motorway_highway,
+    normalize_lane_maneuver_for_uk as _normalize_lane_maneuver_for_uk,
+    parse_turn_lanes as _parse_turn_lanes,
+    recommend_lane_from_turn_lanes as _recommend_lane_from_turn_lanes,
+    recommend_lanes_from_turn_lanes as _recommend_lanes_from_turn_lanes,
+    score_lane_guidance_confidence as _score_lane_guidance_confidence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,130 +133,6 @@ def _fetch_osm_lane_data(lat, lon):
         return None
 
 
-def _is_motorway_highway(highway_type):
-    """True for motorway/trunk (and link) road classes."""
-    if not highway_type:
-        return False
-    rc = str(highway_type).lower()
-    return rc in ('motorway', 'motorway_link', 'trunk', 'trunk_link')
-
-
-def _normalize_lane_maneuver_for_uk(maneuver, total_lanes, highway_type):
-    """On UK non-motorway two-lane roads, slight keep hints are lane-neutral.
-
-    Valhalla often emits slight_right/slight_left for gentle bearing changes on
-    A-roads where the Highway Code default is still the left lane unless markings
-    say otherwise. Treat those as straight for lane selection only.
-    """
-    if maneuver in ('through',):
-        return 'straight'
-    if _is_motorway_highway(highway_type):
-        return maneuver
-    if total_lanes <= 2 and maneuver in ('slight_right', 'slight_left'):
-        return 'straight'
-    return maneuver
-
-
-def _parse_turn_lanes(turn_lanes_str, total_lanes):
-    """Parse OSM turn:lanes tag into per-lane allowed directions.
-    Example: 'left|through|through;right' → [['left'], ['through'], ['through','right']]
-    """
-    if not turn_lanes_str:
-        return None
-    parts = turn_lanes_str.split('|')
-    if len(parts) != total_lanes:
-        # Mismatch – ignore
-        return None
-    return [p.split(';') for p in parts]
-
-
-def _recommend_lane_from_turn_lanes(lane_dirs, maneuver, roundabout_exit_count=0):
-    """Given parsed turn:lanes and a maneuver, pick the best lane index (1-based).
-
-    Roundabouts are resolved from the *exit* you leave by: the early exits leave to
-    the left, the middle exit(s) go straight through, later exits leave to the right.
-    This lets real lane markings win — e.g. when the left lane is "left-turn only" and
-    going straight ahead actually requires the middle/right lane.
-    """
-    if not lane_dirs:
-        return None
-
-    # Maneuver -> preferred OSM turn:lanes indications (most-preferred first). Every
-    # maneuver the client can send is recognised here so lane selection never silently
-    # falls back to "through" for a real turn (e.g. a sharp left used to do that).
-    maneuver_map = {
-        'left': ['left', 'slight_left'],
-        'sharp_left': ['sharp_left', 'left', 'slight_left'],
-        'slight_left': ['slight_left', 'left'],
-        'right': ['right', 'slight_right'],
-        'sharp_right': ['sharp_right', 'right', 'slight_right'],
-        'slight_right': ['slight_right', 'right'],
-        'straight': ['through', 'none', ''],
-        'exit_right': ['right', 'slight_right', 'merge_to_right'],
-        'exit_left': ['left', 'slight_left', 'merge_to_left'],
-        'exit': ['right', 'slight_right'],
-        'merge': ['through', 'none', ''],
-        'uturn': ['reverse', 'left', 'slight_left'],
-        'destination': ['through', 'none', ''],
-    }
-
-    # Roundabouts are exit-dependent, so their entry is derived and folded into the same
-    # map: early exits leave to the left, the middle exit goes straight through (never a
-    # turn-only lane), later exits leave to the right.
-    if maneuver == 'roundabout':
-        if roundabout_exit_count <= 1:
-            maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
-        elif roundabout_exit_count == 2:
-            maneuver_map['roundabout'] = ['through', 'none', '', 'slight_left', 'slight_right']
-        else:
-            maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
-
-    wanted = maneuver_map.get(maneuver, ['through', 'none', ''])
-
-    # Score each lane
-    best_lane = None
-    best_score = -1
-    for idx, dirs in enumerate(lane_dirs):
-        for w_idx, w in enumerate(wanted):
-            if w in dirs:
-                score = len(wanted) - w_idx  # Higher score for first preference
-                if score > best_score:
-                    best_score = score
-                    best_lane = idx + 1  # 1-based
-                break
-
-    return best_lane
-
-
-def _get_recommended_lane_simple(maneuver, total_lanes, roundabout_exit_count=0):
-    """Fallback lane recommendation when no OSM turn:lanes data is available.
-
-    For roundabouts (UK, left-hand traffic), per Highway Code:
-      Exit 1 (first/left exit)     -> left lane
-      Exit 2 (straight ahead)      -> left lane
-      Exit 3+ (right / full circle) -> right lane
-    Approaches up to and including "straight ahead" stay in the LEFT lane; only
-    exits past straight (turning right) use the right lane. This matches the
-    client's offline fallback. (Previously the 2nd exit on 3+ lane roundabouts
-    returned the middle lane, telling drivers "middle" when the answer was left.)
-    """
-    if total_lanes <= 1:
-        return 1
-
-    if maneuver == 'roundabout' and roundabout_exit_count > 0:
-        if roundabout_exit_count <= 2:
-            return 1  # 1st/2nd exit (left or straight ahead) -> left lane
-        return total_lanes  # 3rd+ exit (right) -> right lane
-    elif maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
-        return 1
-    elif maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit'):
-        return total_lanes
-    elif maneuver in ('straight', 'merge'):
-        return max(1, (total_lanes + 1) // 2)
-    else:
-        return max(1, (total_lanes + 1) // 2)
-
-
 @navigation_bp.route('/lane-guidance', methods=['GET'])
 def get_lane_guidance():
     """Get smart lane guidance for current location using OSM data and route context."""
@@ -303,48 +190,79 @@ def get_lane_guidance():
                     'primary': 'through'
                 })
 
-        # Determine recommended lane
+        # Determine recommended lane(s)
         recommended_lane = None
+        candidate_lanes = []
         if parsed_lanes:
-            recommended_lane = _recommend_lane_from_turn_lanes(
+            candidate_lanes = _recommend_lanes_from_turn_lanes(
                 parsed_lanes, lane_maneuver, roundabout_exit_count
             )
+            recommended_lane = candidate_lanes[0] if candidate_lanes else None
 
         if recommended_lane is None:
             recommended_lane = _get_recommended_lane_simple(
-                lane_maneuver, total_lanes, roundabout_exit_count
+                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
+            )
+            candidate_lanes = _estimate_candidate_lanes_uk(
+                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
             )
 
-        lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+        has_turn_lanes = parsed_lanes is not None
+        has_osm_data = osm_data is not None
+        confidence = _score_lane_guidance_confidence(
+            has_turn_lanes, has_osm_data, highway_type, lane_maneuver, total_lanes
+        )
+        source = 'osm_turn_lanes' if has_turn_lanes else ('osm_lanes' if has_osm_data else 'estimated')
+        # Keep get_recommended_lane_simple's primary (e.g. centre for merge) even when
+        # candidate lists are edge-ordered like [1, total_lanes].
+        recommended_lanes, recommended_lane = _apply_confidence_lane_selection(
+            candidate_lanes or ([recommended_lane] if recommended_lane else []),
+            confidence,
+            preferred_primary=recommended_lane,
+        )
 
-        if distance_to_maneuver <= 100:
-            urgency = 'now'
-            urgency_text = f'Get in the {lane_name} now!'
-        elif distance_to_maneuver <= 300:
-            urgency = 'soon'
-            urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
-        elif distance_to_maneuver <= 800:
-            urgency = 'ahead'
-            urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
-        elif distance_to_maneuver <= 1500:
-            urgency = 'info'
-            urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
+        show_lane_guidance = (
+            confidence >= 70 and total_lanes > 1 and bool(recommended_lanes)
+        )
+
+        if show_lane_guidance:
+            lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+
+            if distance_to_maneuver <= 100:
+                urgency = 'now'
+                urgency_text = f'Get in the {lane_name} now!'
+            elif distance_to_maneuver <= 300:
+                urgency = 'soon'
+                urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
+            elif distance_to_maneuver <= 800:
+                urgency = 'ahead'
+                urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
+            elif distance_to_maneuver <= 1500:
+                urgency = 'info'
+                urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
+            else:
+                urgency = 'none'
+                urgency_text = ''
+
+            if next_maneuver == 'straight' or distance_to_maneuver > 1500:
+                guidance_text = 'Stay in current lane'
+            elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
+                exit_ordinal = _ordinal(roundabout_exit_count)
+                guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
+            else:
+                guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
         else:
             urgency = 'none'
             urgency_text = ''
-
-        if next_maneuver == 'straight' or distance_to_maneuver > 1500:
             guidance_text = 'Stay in current lane'
-        elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
-            exit_ordinal = _ordinal(roundabout_exit_count)
-            guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
-        else:
-            guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
 
         return jsonify({
             'success': True,
             'total_lanes': total_lanes,
             'recommended_lane': recommended_lane,
+            'recommended_lanes': recommended_lanes,
+            'confidence': confidence,
+            'source': source,
             'lane_arrows': lane_arrows,
             'lane_change_needed': True if urgency in ('now', 'soon', 'ahead') else False,
             'next_maneuver': next_maneuver,
@@ -354,9 +272,10 @@ def get_lane_guidance():
             'guidance_text': guidance_text,
             'road_name': road_name,
             'highway_type': highway_type,
-            'has_osm_data': osm_data is not None,
-            'has_turn_lanes': parsed_lanes is not None,
+            'has_osm_data': has_osm_data,
+            'has_turn_lanes': has_turn_lanes,
             'roundabout_exit_count': roundabout_exit_count,
+            'show_lane_guidance': show_lane_guidance,
         })
     except Exception as e:
         logger.error(f"[Lane Guidance] Error: {e}")

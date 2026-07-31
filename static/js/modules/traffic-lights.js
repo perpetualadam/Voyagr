@@ -17,13 +17,20 @@ const TRAFFIC_LIGHT_STATES = {
     'unknown': { color: '#6b7280', activeLight: 'none', label: 'Unknown' }
 };
 
+// Marker dimensions (~20% smaller than original 26×38 pill / 14×32 icon)
+const TRAFFIC_LIGHT_PILL_WIDTH = 21;
+const TRAFFIC_LIGHT_PILL_HEIGHT = 30;
+const TRAFFIC_LIGHT_SVG_WIDTH = 11;
+const TRAFFIC_LIGHT_SVG_HEIGHT = 26;
+const TRAFFIC_LIGHT_PILL_BORDER_RADIUS = 8;
+
 /**
  * Vertical traffic-light icon (same geometry as OSM map markers — green frame, dark housing).
  * @param {string} activeLight - 'red' | 'yellow' | 'green' | 'none' (all lenses dim)
- * @param {number} width - Rendered width (default 14)
- * @param {number} height - Rendered height (default 32)
+ * @param {number} width - Rendered width (default 11)
+ * @param {number} height - Rendered height (default 26)
  */
-function createTrafficLightSVG(activeLight, width = 14, height = 32) {
+function createTrafficLightSVG(activeLight, width = TRAFFIC_LIGHT_SVG_WIDTH, height = TRAFFIC_LIGHT_SVG_HEIGHT) {
     const dimR = '#7f1d1d';
     const dimY = '#713f12';
     const dimG = '#14532d';
@@ -109,7 +116,7 @@ function addTrafficLight(light) {
             <div class="traffic-light-popup">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                     <div class="traffic-light-osm-wrap traffic-light-osm-wrap--popup">
-                        ${createTrafficLightSVG('none', 14, 32)}
+                        ${createTrafficLightSVG('none', TRAFFIC_LIGHT_SVG_WIDTH, TRAFFIC_LIGHT_SVG_HEIGHT)}
                     </div>
                     <strong>Traffic Light</strong>
                 </div>
@@ -379,11 +386,11 @@ if (typeof document !== 'undefined') {
 
         .traffic-light-osm-wrap {
             box-sizing: border-box;
-            width: 26px;
-            height: 38px;
+            width: ${TRAFFIC_LIGHT_PILL_WIDTH}px;
+            height: ${TRAFFIC_LIGHT_PILL_HEIGHT}px;
             background: #e8f5e9;
             border: 2px solid #2e7d32;
-            border-radius: 10px;
+            border-radius: ${TRAFFIC_LIGHT_PILL_BORDER_RADIUS}px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -391,8 +398,8 @@ if (typeof document !== 'undefined') {
         }
 
         .traffic-light-osm-wrap--popup {
-            width: 26px;
-            height: 38px;
+            width: ${TRAFFIC_LIGHT_PILL_WIDTH}px;
+            height: ${TRAFFIC_LIGHT_PILL_HEIGHT}px;
             flex-shrink: 0;
         }
 
@@ -404,10 +411,10 @@ if (typeof document !== 'undefined') {
         }
 
         .traffic-light-icon svg {
-            width: 14px !important;
-            height: 32px !important;
-            min-width: 14px;
-            min-height: 32px;
+            width: ${TRAFFIC_LIGHT_SVG_WIDTH}px !important;
+            height: ${TRAFFIC_LIGHT_SVG_HEIGHT}px !important;
+            min-width: ${TRAFFIC_LIGHT_SVG_WIDTH}px;
+            min-height: ${TRAFFIC_LIGHT_SVG_HEIGHT}px;
             flex-shrink: 0;
             filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
         }

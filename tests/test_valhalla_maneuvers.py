@@ -40,6 +40,17 @@ class ValhallaManeuverDictTest(unittest.TestCase):
         m = valhalla_maneuver_dict({'begin_street_names': ['M1'], 'type': 8})
         self.assertEqual(m.get('road_class'), 'motorway')
 
+    def test_speed_limit_converted_from_kmh_to_mph(self):
+        """Valhalla units=kilometers → store mph like GraphHopper/OSRM maneuvers."""
+        m = valhalla_maneuver_dict({'speed_limit': 48, 'type': 8})
+        self.assertEqual(m['speed_limit'], 30)
+        m70 = valhalla_maneuver_dict({'speed_limit': 112, 'type': 8})
+        self.assertEqual(m70['speed_limit'], 70)
+        m65 = valhalla_maneuver_dict({'speed_limit': 105, 'type': 8})
+        self.assertEqual(m65['speed_limit'], 65)
+        m_none = valhalla_maneuver_dict({'type': 8})
+        self.assertIsNone(m_none['speed_limit'])
+
 
 class ExtractValhallaManeuversTest(unittest.TestCase):
     def _trip(self):

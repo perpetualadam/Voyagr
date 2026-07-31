@@ -293,6 +293,28 @@ describe('resolveCurrentRoadType', () => {
         })).toBe('motorway');
     });
 
+    test('prefers explicit road_class over street-name for Optimised edges', () => {
+        expect(RG.resolveCurrentRoadType({
+            maneuverIdxOverride: 0,
+            currentRouteSteps: [{
+                road_class: 'residential',
+                street_names: ['A61'],
+                begin_street_names: ['A61'],
+            }],
+        })).toBe('residential');
+    });
+
+    test('drops stale motorway lastDetected at urban GPS speeds', () => {
+        expect(RG.resolveCurrentRoadType({
+            lastDetectedRoadType: 'motorway',
+            gpsSpeedMph: 28,
+        })).toBe('unknown');
+        expect(RG.resolveCurrentRoadType({
+            lastDetectedRoadType: 'motorway',
+            gpsSpeedMph: 65,
+        })).toBe('motorway');
+    });
+
     test('falls back to lastDetectedRoadType then GPS speed', () => {
         expect(RG.resolveCurrentRoadType({
             gpsSpeedMph: 70,

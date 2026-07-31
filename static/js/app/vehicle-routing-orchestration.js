@@ -50,12 +50,8 @@
             || getVehicleIcons()[getCurrentVehicleType()]
             || getVehicleIcons().petrol_diesel;
 
-        const currentUserMarker = rt().getCurrentUserMarker();
-        if (currentUserMarker) {
-            if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
-            rt().setCurrentUserMarker(null);
-        }
-
+        // The live map marker uses the delta SVG arrow, not these legacy icon paths.
+        // Keep the marker on the map when vehicle type or routing mode changes.
         rt().setCurrentUserMarkerIcon(iconPath);
         console.log('[Marker] Icon updated to:', iconPath);
     }
@@ -108,9 +104,13 @@
         const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
         const accuracyLabel = safeAccuracy != null ? '±' + safeAccuracy.toFixed(0) + 'm' : '—';
 
+        const vm = rt().vehicleMarker();
+        const markerSize = vm.VEHICLE_MARKER_SIZE || 24;
+        const markerHalf = markerSize / 2;
+
         const markerDiv = document.createElement('div');
-        markerDiv.style.width = '60px';
-        markerDiv.style.height = '60px';
+        markerDiv.style.width = '100%';
+        markerDiv.style.height = '100%';
         markerDiv.style.display = 'flex';
         markerDiv.style.alignItems = 'center';
         markerDiv.style.justifyContent = 'center';
@@ -123,7 +123,7 @@
         markerDiv.style.transition = 'transform 0.3s ease-out';
         markerDiv.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))';
         markerDiv.style.transformStyle = 'preserve-3d';
-        markerDiv.innerHTML = rt().vehicleMarker().buildVehicleArrowSvg();
+        markerDiv.innerHTML = vm.buildVehicleArrowSvg();
 
         const speedKmh = Number.isFinite(speed) ? (speed * 3.6).toFixed(1) : '0.0';
         const speedUnit = rt().call.getSpeedUnit();
@@ -131,12 +131,12 @@
 
         const marker = rt().getMapLibreHelpers().createMarker(lat, lon, {
             html: markerDiv.outerHTML,
-            iconSize: [60, 60],
-            iconAnchor: [30, 30],
+            iconSize: vm.VEHICLE_MARKER_ICON_SIZE || [markerSize, markerSize],
+            iconAnchor: vm.VEHICLE_MARKER_ICON_ANCHOR || [markerHalf, markerHalf],
             className: 'vehicle-marker-icon',
             rotationAlignment: 'map',
             pitchAlignment: 'map',
-            popup: rt().vehicleMarker().buildVehicleMarkerPopupHtml({
+            popup: vm.buildVehicleMarkerPopupHtml({
                 iconEmoji: iconEmoji,
                 displaySpeed: displaySpeed,
                 speedUnit: speedUnit,
@@ -144,6 +144,10 @@
                 accuracyLabel: accuracyLabel,
             }),
         });
+
+        if (typeof vm.applyVehicleMarkerElementSize === 'function' && typeof marker.getElement === 'function') {
+            vm.applyVehicleMarkerElementSize(marker.getElement());
+        }
 
         marker.heading = safeHeading;
         marker.speed = Number.isFinite(speed) ? speed : 0;

@@ -7,6 +7,31 @@
 
     var HAZARD_MARKER_ICON_SIZE = [28, 28];
 
+    function resolveCameraHazardMarkerDimensions() {
+        var cam = (typeof VoyagrCameraMapMarkers !== 'undefined') ? VoyagrCameraMapMarkers : null;
+        if (!cam && typeof module !== 'undefined' && module.exports) {
+            try {
+                cam = require('./camera-map-markers.js');
+            } catch (e) {
+                cam = null;
+            }
+        }
+        if (cam && cam.CAMERA_HAZARD_MARKER_ICON_SIZE) {
+            return {
+                iconSize: cam.CAMERA_HAZARD_MARKER_ICON_SIZE,
+                pillSize: cam.CAMERA_HAZARD_MARKER_PILL_SIZE,
+                svgSize: cam.CAMERA_HAZARD_MARKER_SVG_SIZE,
+                scaleSvg: cam.scaleHazardMarkerSvg,
+            };
+        }
+        return {
+            iconSize: [22, 22],
+            pillSize: 22,
+            svgSize: 16,
+            scaleSvg: null,
+        };
+    }
+
     var DEFAULT_HAZARD_MARKER_CONFIG = {
         emoji: '⚠️',
         color: '#ff9800',
@@ -90,15 +115,16 @@
      * @param {boolean} [darkBasemap]
      * @returns {string}
      */
-    function buildHazardSvgMarkerHtml(config, svg, darkBasemap) {
+    function buildHazardSvgMarkerHtml(config, svg, darkBasemap, pillSize) {
         config = config || {};
+        var size = pillSize != null ? pillSize : resolveCameraHazardMarkerDimensions().pillSize;
         return (
             '<div style="' +
                 'background: ' + (config.bgColor || '#fff3e0') + ';' +
                 'border: 2px solid ' + (config.color || '#ff9800') + ';' +
                 'border-radius: 4px;' +
-                'width: 28px;' +
-                'height: 28px;' +
+                'width: ' + size + 'px;' +
+                'height: ' + size + 'px;' +
                 'display: flex;' +
                 'align-items: center;' +
                 'justify-content: center;' +
@@ -278,9 +304,14 @@
                 markerIconSize = opts.osmTrafficLightIconSize || HAZARD_MARKER_ICON_SIZE;
                 popupIcon = opts.osmTrafficLightPopupIcon || opts.osmTrafficLightPillHtml;
             } else if (config.svg) {
-                markerHtml = buildHazardSvgMarkerHtml(config, config.svg, opts.darkBasemap);
-                markerIconSize = HAZARD_MARKER_ICON_SIZE;
-                popupIcon = config.svg;
+                var cameraDims = resolveCameraHazardMarkerDimensions();
+                var markerSvg = config.svg;
+                if (cameraDims.scaleSvg) {
+                    markerSvg = cameraDims.scaleSvg(config.svg, cameraDims.svgSize, cameraDims.svgSize);
+                }
+                markerHtml = buildHazardSvgMarkerHtml(config, markerSvg, opts.darkBasemap, cameraDims.pillSize);
+                markerIconSize = cameraDims.iconSize;
+                popupIcon = markerSvg;
             } else {
                 markerHtml = buildHazardEmojiMarkerHtml(config, opts.darkBasemap);
                 markerIconSize = HAZARD_MARKER_ICON_SIZE;

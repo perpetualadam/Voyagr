@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 import json
 import sqlite3
+import sys
 from datetime import datetime
 import threading
 import math
@@ -20,6 +21,16 @@ from functools import wraps
 from collections import OrderedDict
 import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
+
+# Under `python voyagr_web.py` (the Procfile entrypoint) this file runs as __main__,
+# leaving sys.modules['voyagr_web'] unset. The routing services import it lazily by
+# name at request time, which would execute the file a second time and build a
+# duplicate set of module-level singletons — a second route cache, cost calculator
+# and blueprint wiring. The later registration wins, so /api/cache-clear and the
+# preference-change invalidation would then target a cache nothing reads from.
+# Aliasing the running module keeps both names pointing at one instance.
+if __name__ == '__main__':
+    sys.modules.setdefault('voyagr_web', sys.modules['__main__'])
 
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
@@ -1072,6 +1083,7 @@ from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_r
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
 from voyagr.services.routing.route_entries import (
     build_graphhopper_optimised_route_entry,
+    build_valhalla_alternate_route_entries,
     build_valhalla_route_entry,
 )
 # FallbackChainOptimizer / get_traffic_duration_multiplier live in
@@ -1397,9 +1409,25 @@ def calculate_route():
         # Defaults if Valhalla try exits early; overwritten when waypoints are processed.
         route_locations = [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}]
         has_waypoints = False
-        # Default traffic factors so the retry/recovery paths (which run only when the
-        # main success block never set them) always have a defined value.
-        traffic_multiplier, traffic_level = 1.0, 'N/A'
+
+        # One traffic factor per response, resolved at most once and only when a route
+        # was actually built. Every option must be scaled by the same value: the
+        # preview shows them side by side and filter_routes_by_max_detour measures
+        # them against each other, so mixing adjusted and free-flow durations both
+        # misreports ETAs and makes the detour cull depend on the time of day.
+        # get_traffic_duration_multiplier is uncached and hits TomTom when a key is
+        # configured, so it must not be called per route.
+        resolved_traffic_factors: List[Tuple[float, str]] = []
+
+        def traffic_factors() -> Tuple[float, str]:
+            """(multiplier, level) for this request; walking/cycling are never adjusted."""
+            if not resolved_traffic_factors:
+                resolved_traffic_factors.append(
+                    get_traffic_duration_multiplier(start_lat, start_lon)
+                    if valhalla_costing == 'auto' else (1.0, 'N/A')
+                )
+            return resolved_traffic_factors[0]
+
         try:
             url = f"{VALHALLA_URL}/route"
 
@@ -1573,11 +1601,10 @@ def calculate_route():
                     # Walking/cycling times should not be adjusted by road traffic
                     # ================================================================
                     base_time_minutes = route_data['trip']['summary']['time'] / 60
+                    traffic_multiplier, traffic_level = traffic_factors()
                     if valhalla_costing == 'auto':
-                        traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
                         logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {base_time_minutes * traffic_multiplier:.0f}min")
                     else:
-                        traffic_multiplier, traffic_level = 1.0, 'N/A'
                         logger.info(f"[ETA] {valhalla_costing}: {base_time_minutes:.0f} min (no traffic adjustment)")
 
                     # Main route entry. Cost + hazard + maneuver assembly is shared with the
@@ -1599,20 +1626,17 @@ def calculate_route():
                     hazard_count = routes[0].get('hazard_count', 0)
 
                     # Alternative routes (if available) - Valhalla uses 'alternates' not 'alternatives'
-                    if 'alternates' in route_data:
-                        route_names = ['Alternate', 'Balanced', 'Alternative']
-                        for idx, alt_route in enumerate(route_data['alternates'][:3]):
-                            if 'trip' in alt_route and 'summary' in alt_route['trip']:
-                                alt_name = route_names[idx] if idx < len(route_names) else f'Alternative {idx}'
-                                routes.append(build_valhalla_route_entry(
-                                    trip=alt_route['trip'], name=alt_name, route_id=idx + 2,
-                                    traffic_multiplier=traffic_multiplier,
-                                    hazards=hazards, cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price, include_tolls=include_tolls,
-                                    include_caz=include_caz, caz_exempt=caz_exempt,
-                                ))
+                    routes.extend(build_valhalla_alternate_route_entries(
+                        route_data,
+                        first_route_id=2,
+                        traffic_multiplier=traffic_multiplier,
+                        traffic_level=traffic_level,
+                        hazards=hazards, cost_calculator=cost_calculator,
+                        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price, include_tolls=include_tolls,
+                        include_caz=include_caz, caz_exempt=caz_exempt,
+                    ))
 
                     routes = dedupe_similar_routes(routes)
 
@@ -1641,6 +1665,8 @@ def calculate_route():
                         avoid_motorways=avoid_motorways,
                         avoid_ferries=avoid_ferries,
                         avoid_unpaved=avoid_unpaved,
+                        traffic_multiplier=traffic_multiplier,
+                        traffic_level=traffic_level,
                     )
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
@@ -1770,11 +1796,14 @@ def calculate_route():
                                 print(f"[Valhalla] RETRY SUCCESS: Route found with {retry_limit} exclusions")
 
                                 # Process the retry response via the shared route-entry
-                                # builder (no traffic adjustment; maneuver lengths in metres,
-                                # matching the previous inline retry behaviour).
+                                # builder (maneuver lengths in metres, matching the
+                                # previous inline retry behaviour).
+                                retry_multiplier, retry_traffic_level = traffic_factors()
                                 routes = [build_valhalla_route_entry(
                                     trip=retry_data['trip'], name='Fastest', route_id=1,
-                                    traffic_multiplier=1.0, include_traffic_fields=False,
+                                    traffic_multiplier=retry_multiplier,
+                                    traffic_level=retry_traffic_level,
+                                    include_traffic_fields=True,
                                     maneuver_length_in_meters=True,
                                     hazards=hazards, cost_calculator=cost_calculator,
                                     vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
@@ -1783,6 +1812,20 @@ def calculate_route():
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                 )]
                                 logger.info(f"[VALHALLA] Retry route has {len(routes[0].get('maneuvers') or [])} maneuvers")
+                                # The retry payload asks for alternates too; offer them
+                                # instead of leaving the preview with a lone Fastest.
+                                routes.extend(build_valhalla_alternate_route_entries(
+                                    retry_data,
+                                    first_route_id=2,
+                                    traffic_multiplier=retry_multiplier,
+                                    traffic_level=retry_traffic_level,
+                                    maneuver_length_in_meters=True,
+                                    hazards=hazards, cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price, include_tolls=include_tolls,
+                                    include_caz=include_caz, caz_exempt=caz_exempt,
+                                ))
 
                                 retry_enrich = RouteEnrichmentContext(
                                     url=url, headers=headers, route_locations=route_locations,
@@ -1794,7 +1837,8 @@ def calculate_route():
                                     fuel_price=fuel_price, energy_efficiency=energy_efficiency,
                                     electricity_price=electricity_price, include_tolls=include_tolls,
                                     include_caz=include_caz, caz_exempt=caz_exempt,
-                                    traffic_multiplier=traffic_multiplier,
+                                    traffic_multiplier=retry_multiplier,
+                                    traffic_level=retry_traffic_level,
                                     max_detour=max_detour,
                                     valhalla_costing=valhalla_costing,
                                     prefer_scenic=prefer_scenic,
@@ -1873,9 +1917,7 @@ def calculate_route():
             recovery_data: Optional[Dict[str, Any]] = None
             if graphhopper_route and graphhopper_route.get('success'):
                 try:
-                    tr_mult = 1.0
-                    if valhalla_costing == 'auto':
-                        tr_mult, _ = get_traffic_duration_multiplier(start_lat, start_lon)
+                    tr_mult, tr_level = traffic_factors()
                     gh_entry = None
                     if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                         gh_entry = build_graphhopper_optimised_route_entry(
@@ -1891,6 +1933,8 @@ def calculate_route():
                             include_caz=include_caz,
                             caz_exempt=caz_exempt,
                             traffic_multiplier=tr_mult,
+                            traffic_level=tr_level,
+                            include_traffic_fields=True,
                         )
                     routes_out: List[Dict[str, Any]] = []
                     if gh_entry:
@@ -1936,6 +1980,7 @@ def calculate_route():
                                 include_tolls=include_tolls,
                                 include_caz=include_caz,
                                 caz_exempt=caz_exempt,
+                                traffic_factors=(tr_mult, tr_level),
                             )
                             if v_routes:
                                 routes_out.extend(v_routes)
@@ -1956,6 +2001,8 @@ def calculate_route():
                             fuel_price=fuel_price, energy_efficiency=energy_efficiency,
                             electricity_price=electricity_price, include_tolls=include_tolls,
                             include_caz=include_caz, caz_exempt=caz_exempt,
+                            traffic_multiplier=tr_mult,
+                            traffic_level=tr_level,
                             max_detour=max_detour,
                             valhalla_costing=valhalla_costing,
                             prefer_scenic=prefer_scenic,

@@ -218,6 +218,35 @@ describe('route comparison and selection helpers', () => {
         expect(plan.geoJsonFeature.geometry.coordinates).toHaveLength(2);
     });
 
+    test('buildRouteLayerStyle emphasises selected route over index-0 primary', () => {
+        const selectedAlt = RS.buildRouteLayerStyle(1, 1);
+        const unselectedPrimary = RS.buildRouteLayerStyle(0, 1);
+        const unselectedPeer = RS.buildRouteLayerStyle(2, 1);
+        expect(selectedAlt.weight).toBe(10);
+        expect(selectedAlt.opacity).toBe(1);
+        expect(unselectedPrimary.weight).toBe(6);
+        expect(unselectedPrimary.opacity).toBe(0.7);
+        expect(unselectedPeer.weight).toBe(unselectedPrimary.weight);
+    });
+
+    test('buildRouteLayerMountOrder paints selected route last (on top)', () => {
+        expect(RS.buildRouteLayerMountOrder(3, 1)).toEqual([0, 2, 1]);
+        expect(RS.buildRouteLayerMountOrder(2, 0)).toEqual([1, 0]);
+    });
+
+    test('orderRouteLayerIdsSelectedLast undoes unshift-style handle order', () => {
+        // Handles registered with unshift after selected-last mount look like
+        // [selected, ..., firstMounted]; bringRoutesToTop must move selected last.
+        expect(RS.orderRouteLayerIdsSelectedLast(
+            ['route-layer-1', 'route-layer-2', 'route-layer-0'],
+            1
+        )).toEqual(['route-layer-2', 'route-layer-0', 'route-layer-1']);
+        expect(RS.orderRouteLayerIdsSelectedLast(
+            ['route-layer-0', 'route-layer-2', 'route-layer-1'],
+            1
+        )).toEqual(['route-layer-0', 'route-layer-2', 'route-layer-1']);
+    });
+
     test('findFirstTextSymbolLayerId returns first label layer id', () => {
         expect(RS.findFirstTextSymbolLayerId([
             { id: 'roads', type: 'line' },
@@ -1861,7 +1890,7 @@ describe('route overview and single-route display plans', () => {
         expect(apply.beforeId).toBe('label-layer');
     });
 
-    test('buildDoAddRouteLayersBatchPlan returns reverse-order apply layers', () => {
+    test('buildDoAddRouteLayersBatchPlan mounts selected route last for z-order', () => {
         const batch = RS.buildDoAddRouteLayersBatchPlan(
             [
                 { name: 'A', polyline: [[1, 2], [3, 4]] },
@@ -1871,8 +1900,31 @@ describe('route overview and single-route display plans', () => {
             [{ type: 'symbol', layout: { 'text-field': 'x' }, id: 'labels' }]
         );
         expect(batch.layers).toHaveLength(2);
-        expect(batch.layers[0].routeIndex).toBe(1);
-        expect(batch.layers[1].routeIndex).toBe(0);
+        expect(batch.mountOrder).toEqual([0, 1]);
+        expect(batch.layers[0].routeIndex).toBe(0);
+        expect(batch.layers[1].routeIndex).toBe(1);
+        expect(batch.layers[1].paint.lineWeight).toBeGreaterThan(batch.layers[0].paint.lineWeight);
+    });
+
+    test('buildBringRoutesToTopDispatchPlan moves selected route last after unshift handles', () => {
+        // Simulate allRouteLayers built via unshift while mounting selected last:
+        // mount [0,2,1] + unshift => descriptors [1,2,0]; selected must still move last.
+        const plan = RS.buildBringRoutesToTopDispatchPlan(
+            [
+                { id: 'route-layer-1' },
+                { id: 'route-layer-2' },
+                { id: 'route-layer-0' },
+            ],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+            { selectedRouteIndex: 1 }
+        );
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.layerIds).toEqual([
+            'route-layer-2',
+            'route-layer-0',
+            'route-layer-1',
+        ]);
+        expect(plan.beforeId).toBe('labels');
     });
 
     test('buildDoAddRouteLayersBatchExecutePlan adds log metadata per layer step', () => {

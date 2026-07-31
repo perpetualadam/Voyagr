@@ -145,6 +145,10 @@
     }
 
     function resetVoiceAnnouncementStateForNewRoute() {
+        if (root.VoyagrLaneGuidanceOrchestration &&
+                typeof root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute === 'function') {
+            root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();
+        }
         applyVoiceAnnouncementStateResetFromPlan(
             rt().voiceAnnouncements().buildVoiceAnnouncementStateResetExecutePlan(Date.now())
         );
@@ -349,7 +353,7 @@
     }
 
     function redrawNavigationVehicleMarker(reason) {
-        if (!rt().getRouteInProgress() || !rt().getMap()) return;
+        if ((!rt().getRouteInProgress() && !rt().getIsTrackingActive()) || !rt().getMap()) return;
         var lat = rt().getCurrentLat();
         var lon = rt().getCurrentLon();
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
@@ -367,6 +371,8 @@
                 : null;
             var map = rt().getMap();
 
+            // Prefer current GPS/route-snap coords on recovery. Using smooth-only
+            // re-pins the icon at a pre-pause location after screen-off/background.
             var redraw = SG.buildNavigationVehicleMarkerRedrawPlan({
                 lat: lat,
                 lon: lon,
@@ -379,8 +385,7 @@
                 prevSnapBlendWeightState: root.VoyagrGpsOrchestration.getSnapBlendWeightState(),
                 smoothDisplayLat: root.VoyagrGpsOrchestration.getSmoothDisplayLat(),
                 smoothDisplayLon: root.VoyagrGpsOrchestration.getSmoothDisplayLon(),
-                useSmoothCoordsOnly: root.VoyagrGpsOrchestration.getSmoothDisplayLat() != null
-                    && root.VoyagrGpsOrchestration.getSmoothDisplayLon() != null,
+                useSmoothCoordsOnly: false,
                 speedMph: speed,
                 speed: speed,
                 hasMarker: !!currentUserMarker,
@@ -404,8 +409,28 @@
     }
 
     function redrawNavigationOverlaysAfterMapRecovery(reason) {
-        if (!rt().getRouteInProgress()) return;
-        redrawNavigationRouteLayer(reason);
+        if (!rt().getRouteInProgress() && !rt().getIsTrackingActive()) return;
+        if (rt().getRouteInProgress()) {
+            redrawNavigationRouteLayer(reason);
+            // Soft style reload / radio-swap recover often races style.load; retry
+            // remount so the nav polyline is not left blank after basemap returns.
+            var MR = root.VoyagrMapRecovery;
+            var retryDelays = MR && typeof MR.buildNavOverlayRedrawRetryDelaysMs === 'function'
+                ? MR.buildNavOverlayRedrawRetryDelaysMs()
+                : [700, 2000];
+            for (var ri = 0; ri < retryDelays.length; ri++) {
+                (function (delayMs) {
+                    setTimeout(function () {
+                        try {
+                            if (!rt().getRouteInProgress()) return;
+                            redrawNavigationRouteLayer(
+                                (reason || 'map recover') + ' retry+' + delayMs + 'ms'
+                            );
+                        } catch (_) { /* ignore */ }
+                    }, delayMs);
+                })(retryDelays[ri]);
+            }
+        }
         redrawNavigationVehicleMarker(reason);
         var lat = rt().getCurrentLat();
         var lon = rt().getCurrentLon();

@@ -53,8 +53,9 @@
 
     var ROAD_TYPE_DEFAULT_MPH_UK = {
         motorway: 70,
-        trunk_road: 70,
-        trunk: 70,
+        // Single-carriageway NSL; dual NSL is usually posted/tagged explicitly.
+        trunk_road: 60,
+        trunk: 60,
         primary_road: 50,
         primary: 50,
         secondary_road: 50,
@@ -151,7 +152,8 @@
             return { limitMph: null, roadType: roadType, source: null, region: null };
         }
         var payload = data.data;
-        var apiRoadType = payload.detected_road_type || payload.road_type || roadType;
+        var clientRoadType = roadType || 'unknown';
+        var apiRoadType = payload.detected_road_type || payload.road_type || clientRoadType;
         var source = payload.source || payload.posted_limit_source || 'api';
         var authoritative = /tomtom|osm|road-type-default|highway-inferred/i.test(String(source));
         var limitMph = coerceApiSpeedLimitMph(
@@ -165,9 +167,19 @@
                 );
             }
         }
+        // Reject motorway-class limits when the active edge is clearly local
+        // (bad TomTom snap / invented detected_road_type used to show 70 in 30 zones).
+        if (limitMph != null
+                && clientRoadType
+                && clientRoadType !== 'unknown'
+                && speedGpsModule
+                && typeof speedGpsModule.isPlausibleEdgeSpeedLimitMph === 'function'
+                && !speedGpsModule.isPlausibleEdgeSpeedLimitMph(limitMph, clientRoadType, gpsSpeedMph)) {
+            limitMph = null;
+        }
         return {
             limitMph: limitMph,
-            roadType: apiRoadType,
+            roadType: (limitMph != null ? apiRoadType : clientRoadType) || apiRoadType,
             source: source,
             region: payload.speed_limit_region || null
         };
@@ -403,17 +415,36 @@
         );
         var region = parsed.region || opts.lastSpeedLimitRegion;
         var roadType = parsed.roadType || opts.roadType;
+        // Road-class / highway inference is a coarse fallback. When the active
+        // maneuver edge already has a posted-limit hint (e.g. GH max_speed → 30),
+        // do not let primary/trunk defaults (50/60) overwrite it and stick NSL
+        // through a signed 30 zone until a later 40 mph fetch happens to succeed.
+        var weakSource = /road-type-default|highway-inferred/i.test(String(parsed.source || ''));
+        var edgeHint = Number(opts.valhallaSpeedLimit);
+        var preferEdgeOverWeakApi = weakSource
+            && Number.isFinite(edgeHint)
+            && edgeHint > 0
+            && parsed.limitMph != null
+            && Number(parsed.limitMph) !== edgeHint;
         var displayLimit = pickDisplaySpeedLimitMph(
             parsed.limitMph,
             opts.valhallaSpeedLimit,
             roadType,
             region,
-            { allowRoadTypeFallback: parsed.limitMph == null }
+            {
+                allowRoadTypeFallback: parsed.limitMph == null,
+                preferValhallaOverApi: preferEdgeOverWeakApi,
+            }
         );
         var statePatch = {};
         if (parsed.roadType) statePatch.lastDetectedRoadType = parsed.roadType;
         if (parsed.region) statePatch.lastSpeedLimitRegion = parsed.region;
-        if (parsed.limitMph != null) {
+        // Persist what the widget shows so a weak API 60 cannot re-stick after we
+        // preferred the edge 30 for display.
+        if (displayLimit != null && displayLimit > 0) {
+            statePatch.currentLimitMph = displayLimit;
+            statePatch.currentSpeedLimitMph = displayLimit;
+        } else if (parsed.limitMph != null) {
             statePatch.currentLimitMph = parsed.limitMph;
             statePatch.currentSpeedLimitMph = parsed.limitMph;
         }
@@ -427,8 +458,8 @@
             cacheHint: parsed.limitMph != null ? {
                 lat: opts.lat,
                 lon: opts.lon,
-                limitMph: parsed.limitMph,
-                source: parsed.source || 'api',
+                limitMph: preferEdgeOverWeakApi ? displayLimit : parsed.limitMph,
+                source: preferEdgeOverWeakApi ? 'edge-hint' : (parsed.source || 'api'),
             } : null,
         };
     }

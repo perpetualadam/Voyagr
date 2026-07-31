@@ -239,6 +239,36 @@ describe('map-controls module', () => {
         expect(unsupported.unsupportedLog).toBe('unsupported');
     });
 
+    test('buildNavForegroundWakeLockEnsurePlan reacquires only when navigating without a lock', () => {
+        expect(MC.buildNavForegroundWakeLockEnsurePlan({
+            documentVisible: true,
+            routeInProgress: true,
+            wakeLockApiAvailable: true,
+            hasWakeLock: false,
+        })).toMatchObject({ shouldRequest: true, reason: 'reacquire', quietStatus: true });
+
+        expect(MC.buildNavForegroundWakeLockEnsurePlan({
+            documentVisible: true,
+            routeInProgress: true,
+            wakeLockApiAvailable: true,
+            hasWakeLock: true,
+        }).shouldRequest).toBe(false);
+
+        expect(MC.buildNavForegroundWakeLockEnsurePlan({
+            documentVisible: false,
+            routeInProgress: true,
+            wakeLockApiAvailable: true,
+            hasWakeLock: false,
+        }).shouldRequest).toBe(false);
+
+        expect(MC.buildNavForegroundWakeLockEnsurePlan({
+            documentVisible: true,
+            routeInProgress: false,
+            wakeLockApiAvailable: true,
+            hasWakeLock: false,
+        }).shouldRequest).toBe(false);
+    });
+
     test('buildNavStartEntryOrchestrationPlan bundles preflight and state init', () => {
         expect(MC.buildNavStartEntryOrchestrationPlan(null).shouldStart).toBe(false);
         const entry = MC.buildNavStartEntryOrchestrationPlan(
@@ -273,6 +303,8 @@ describe('map-controls module', () => {
         expect(execute.clearPreviewRouteLayers).toBe(true);
         expect(execute.mountActiveNavRoute).toBe(true);
         expect(execute.bringNavRouteAboveTraffic).toBe(true);
+        expect(execute.routeMountRetryDelayMs).toBe(500);
+        expect(execute.routeMountFailedStatusMessage).toContain('retry');
         expect(execute.invalidGeometryStatusMessage).toContain('Invalid');
         expect(execute.decodeGeometryErrorStatusMessage).toContain('decode');
     });

@@ -34,11 +34,79 @@
         REVERSE_INDEX_MAX_SPEED_MPH: 2,
         SNAP_NEAR_ROUTE_FORCE_METERS: 130,
         SNAP_LOCK_ACC_SCALE: 1.5,
+        /** Restart watchPosition if no fix arrives for this long during nav/tracking. */
+        GPS_ENSURE_STALE_FIX_MS: 45000,
     };
 
-    var TYPICAL_MPH_LIMITS = [20, 30, 40, 50, 60, 70];
+    /**
+     * Decide whether to restart geolocation watch after background/screen-off.
+     * startGPSTracking() is a UI toggle and must not be used for resume recovery.
+     * Respect trackingStoppedByUser so an intentional stop during turn-by-turn is
+     * not silently undone by foreground resume / ensureGPSTracking.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.geolocationAvailable]
+     * @param {boolean} [opts.documentVisible]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {boolean} [opts.isTrackingActive]
+     * @param {boolean} [opts.trackingStoppedByUser]
+     * @param {boolean} [opts.hasGpsWatchId]
+     * @param {number|null|undefined} [opts.lastFixAgeMs]
+     * @param {boolean} [opts.forceRestart]
+     * @param {number} [opts.staleAfterMs]
+     * @returns {Object}
+     */
+    function buildGpsTrackingEnsurePlan(opts) {
+        opts = opts || {};
+        var staleAfterMs = opts.staleAfterMs != null
+            ? opts.staleAfterMs
+            : DEFAULTS.GPS_ENSURE_STALE_FIX_MS;
+
+        if (!opts.geolocationAvailable) {
+            return { shouldRestart: false, reason: 'no_geolocation' };
+        }
+        if (opts.documentVisible === false) {
+            return { shouldRestart: false, reason: 'hidden' };
+        }
+        // User turned tracking off (including mid-navigation). Resume/ensure must
+        // not revive the watch. Geolocation-error recovery never sets this flag;
+        // stopGPSTracking also clears the error-retry timer.
+        if (opts.trackingStoppedByUser) {
+            return { shouldRestart: false, reason: 'user_stopped' };
+        }
+
+        var needsTracking = !!(opts.routeInProgress || opts.isTrackingActive);
+        if (!needsTracking && !opts.forceRestart) {
+            return { shouldRestart: false, reason: 'not_needed' };
+        }
+
+        var missingWatch = !opts.hasGpsWatchId;
+        var inactive = !opts.isTrackingActive;
+        var stale = Number.isFinite(opts.lastFixAgeMs) && opts.lastFixAgeMs >= staleAfterMs;
+
+        if (!opts.forceRestart && !missingWatch && !inactive && !stale) {
+            return { shouldRestart: false, reason: 'healthy' };
+        }
+
+        var reason = opts.forceRestart ? 'force'
+            : missingWatch ? 'missing_watch'
+            : inactive ? 'inactive'
+            : stale ? 'stale_fix'
+            : 'restart';
+
+        return {
+            shouldRestart: true,
+            clearExistingWatch: true,
+            resetDisplayState: true,
+            quietStatus: true,
+            reason: reason,
+            logMessage: '[GPS] Restarting watch (' + reason + ')',
+        };
+    }
+
     /** km/h → mph */
     var KMH_TO_MPH = 0.621371192237334;
+    /** Above UK/US signed mph range — leftover unconverted km/h from older payloads. */
+    var MANEUVER_SPEED_LIMIT_LIKELY_KMH_THRESHOLD = 80;
     /** Values above this in coords.speed are almost certainly km/h, not m/s (~123 mph). */
     var COORD_SPEED_LIKELY_KMH_THRESHOLD = 55;
 
@@ -141,9 +209,11 @@
     function isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
         if (!Number.isFinite(mph) || mph <= 0 || mph > 100) return false;
         var rc = String(roadClass || '').toLowerCase();
-        if (rc === 'motorway' && mph < 30) return false;
-        if (rc === 'trunk' && mph < 25) return false;
+        if ((rc === 'motorway' || rc === 'motorway_link') && mph < 30) return false;
+        if ((rc === 'trunk' || rc === 'trunk_link' || rc === 'trunk_road') && mph < 25) return false;
         if ((rc === 'residential' || rc === 'service' || rc === 'living_street') && mph > 50) return false;
+        // Local / minor classes should not show motorway NSL 70 (common Optimised leak).
+        if ((rc === 'tertiary' || rc === 'unclassified') && mph >= 70) return false;
         if (mph < 10 && gpsSpeedMph > 25) return false;
         return true;
     }
@@ -190,20 +260,24 @@
         var raw = Number(rawSl);
         if (!Number.isFinite(raw) || raw <= 0) return null;
 
-        var asKmhMph = Math.round(raw * 0.621371);
         var asDirectMph = Math.round(raw);
+        var asKmhMph = Math.round(raw * KMH_TO_MPH);
 
-        if (TYPICAL_MPH_LIMITS.indexOf(asDirectMph) >= 0 && TYPICAL_MPH_LIMITS.indexOf(asKmhMph) < 0) {
-            if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
-                return asDirectMph;
+        // GraphHopper, OSRM, and Valhalla maneuvers now store mph at the source.
+        // Do not reinterpret mid-range mph (e.g. 65 / 62) as km/h → ~40 mph.
+        // Only convert values above the signed-mph range (leftover km/h payloads).
+        if (asDirectMph > MANEUVER_SPEED_LIMIT_LIKELY_KMH_THRESHOLD) {
+            if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
+                return asKmhMph;
             }
-        }
-
-        if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
-            return asKmhMph;
+            return null;
         }
         if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
             return asDirectMph;
+        }
+        // Rare: implausible as mph but plausible if an unconverted km/h slipped through.
+        if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
+            return asKmhMph;
         }
         return null;
     }
@@ -784,6 +858,7 @@
                 heading: opts.heading,
                 speed: opts.speed,
                 accuracy: opts.accuracy,
+                reattachToMap: !!(opts.hasMarker && opts.canSetLngLat && opts.markerOnMap === false),
             };
         }
 
@@ -1058,6 +1133,7 @@
         buildGpsCoordSampleStateApplyPlan: buildGpsCoordSampleStateApplyPlan,
         buildGpsPositionTickPlan: buildGpsPositionTickPlan,
         buildGpsPositionStateApplyPlan: buildGpsPositionStateApplyPlan,
+        buildGpsTrackingEnsurePlan: buildGpsTrackingEnsurePlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
         buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,
@@ -1381,19 +1457,26 @@
 
         var resetFetchState = activeManeuverIdx >= 0 && activeManeuverIdx !== opts.lastActiveManeuverIdx;
         var pickFn = opts.pickDisplaySpeedLimitMph;
-        // Only prefer the edge hint when we have no API/cached limit yet. Preferring
-        // a stale GraphHopper begin-of-instruction 70 mph over a live OSM/TomTom 30
-        // is what kept NSL showing after entering a 30 zone.
+        // On maneuver change, prefer the active-edge limit when it disagrees with the
+        // sticky API/cached value. GraphHopper synthetic continues (and new
+        // instructions) carry the posted limit at the change point — keeping a
+        // stale 60 mph through a signed 30 zone happened because we only preferred
+        // the edge when currentSpeedLimitMph was empty.
         var preferEdgeHint = resetFetchState
             && valhallaSpeedLimitMph != null
-            && !(opts.currentSpeedLimitMph > 0);
+            && (
+                !(opts.currentSpeedLimitMph > 0)
+                || Number(opts.currentSpeedLimitMph) !== Number(valhallaSpeedLimitMph)
+            );
         var shownLimit = typeof pickFn === 'function'
             ? pickFn(opts.currentSpeedLimitMph, valhallaSpeedLimitMph, roadType, opts.lastSpeedLimitRegion, {
                 preferValhallaOverApi: preferEdgeHint,
             })
-            : (opts.currentSpeedLimitMph && opts.currentSpeedLimitMph > 0
-                ? opts.currentSpeedLimitMph
-                : valhallaSpeedLimitMph);
+            : (preferEdgeHint
+                ? valhallaSpeedLimitMph
+                : (opts.currentSpeedLimitMph && opts.currentSpeedLimitMph > 0
+                    ? opts.currentSpeedLimitMph
+                    : valhallaSpeedLimitMph));
 
         return {
             showWidget: true,

@@ -75,6 +75,22 @@ class TestParseAddressQuery:
         assert p.postcode == 'SW1A'
         assert p.postcode_kind == 'outward'
 
+    def test_a_road_not_parsed_as_outcode(self):
+        p = parse_address_query('A1')
+        assert p.postcode == ''
+        assert p.postcode_kind == ''
+
+    def test_motorway_ambiguous_outcode_not_parsed(self):
+        p = parse_address_query('M1')
+        assert p.postcode == ''
+        p = parse_address_query('M25')
+        assert p.postcode == ''
+
+    def test_full_manchester_postcode_still_parsed(self):
+        p = parse_address_query('M1 1AD')
+        assert p.postcode == 'M11AD'
+        assert p.postcode_kind == 'unit'
+
 
 class TestHouseNumberDetection:
     def test_leading_number(self):
@@ -102,6 +118,12 @@ class TestUkPostcodeHelpers:
         assert looks_like_uk_postcode_query('GIR 0AA')
         assert not looks_like_uk_postcode_query('High Street')
         assert not looks_like_uk_postcode_query('SW1A 1A')
+        assert not looks_like_uk_postcode_query('A1')
+        assert not looks_like_uk_postcode_query('M1')
+        assert not looks_like_uk_postcode_query('M25')
+
+    def test_looks_like_uk_postcode_full_m1_unit(self):
+        assert looks_like_uk_postcode_query('M1 1AD')
 
     def test_looks_like_partial(self):
         assert looks_like_partial_uk_postcode('SW1A 1')
@@ -217,6 +239,29 @@ class TestRanking:
         }
         ranked = rank_geocode_results(query, [foreign, uk])
         assert ranked[0]['address']['country_code'] == 'gb'
+
+    def test_outward_ls1_does_not_match_ls10_district(self):
+        query = 'LS1'
+        ls10 = {
+            'lat': '53.81',
+            'lon': '-1.54',
+            'type': 'postcode',
+            'importance': 0.7,
+            'display_name': 'LS10 2AB, Leeds',
+            'address': {'postcode': 'LS10 2AB', 'city': 'Leeds', 'country_code': 'gb'},
+        }
+        ls1 = {
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'postcode',
+            'importance': 0.5,
+            'display_name': 'LS1, Leeds, United Kingdom',
+            'address': {'postcode': 'LS1', 'city': 'Leeds', 'country_code': 'gb'},
+            '_source': 'postcodes_io',
+        }
+        ranked = rank_geocode_results(query, [ls10, ls1])
+        assert ranked[0]['address']['postcode'].replace(' ', '').startswith('LS1')
+        assert not ranked[0]['address']['postcode'].replace(' ', '').startswith('LS10')
 
     def test_disambiguates_same_street_different_cities(self):
         query = '12 High Street, Sheffield'
