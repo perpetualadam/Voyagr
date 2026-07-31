@@ -169,7 +169,18 @@ def get_recommended_lane_simple(
 ) -> int:
     """Single-lane UK heuristic fallback (rightmost for right, leftmost for left)."""
     lanes = estimate_candidate_lanes_uk(maneuver, total_lanes, roundabout_exit_count, road_type)
-    return lanes[0] if lanes else 1
+    if not lanes:
+        return 1
+    # Candidate lists for right-side manoeuvres are ordered left→right; the primary
+    # recommendation is the rightmost acceptable lane.
+    if maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit', 'uturn'):
+        return lanes[-1]
+    if (
+        maneuver == 'roundabout'
+        and roundabout_prefers_right_lane(roundabout_exit_count, total_lanes, road_type)
+    ):
+        return lanes[-1]
+    return lanes[0]
 
 
 def score_lane_guidance_confidence(

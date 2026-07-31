@@ -426,6 +426,14 @@ describe('buildLaneGuidanceTickPlan', () => {
             .toBe('skip');
     });
 
+    test('skips when current step index is out of range', () => {
+        expect(TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [{ type: 8 }],
+            currentStepIndex: 5,
+        })).toMatchObject({ action: 'skip', reason: 'no-step' });
+    });
+
     test('resolves maneuver direction and roundabout exit count', () => {
         const steps = [
             { type: 26, roundabout_exit_count: 0 },
@@ -499,6 +507,57 @@ describe('buildLaneGuidanceTickPlan', () => {
         });
         expect(plan.maneuverDir).toBe('straight');
         expect(plan.lookAhead).toBe(false);
+    });
+
+    test('looks ahead to exit/right turns with larger distance budgets', () => {
+        const exitPlan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 2.2 }, // within exit budget (2.5 km), beyond roundabout
+                { type: 20, distance: 0.1 }, // exit_right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(exitPlan.maneuverDir).toBe('exit_right');
+        expect(exitPlan.lookAhead).toBe(true);
+
+        const turnPlan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.5 },
+                { type: 10, distance: 0.1 }, // right turn
+            ],
+            currentStepIndex: 0,
+        });
+        expect(turnPlan.maneuverDir).toBe('right');
+        expect(turnPlan.lookAhead).toBe(true);
+    });
+
+    test('skips intervening neutral continues when looking ahead', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.3 },
+                { type: 8, distance: 0.4 }, // intervening continue
+                { type: 26, roundabout_exit_count: 3 },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'primary',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.guidanceStepIndex).toBe(2);
+        expect(plan.lookAhead).toBe(true);
+    });
+
+    test('resolveLaneGuidanceTargetFromSteps handles missing step', () => {
+        expect(TI.resolveLaneGuidanceTargetFromSteps([], 0)).toMatchObject({
+            maneuverDir: 'straight',
+            lookAhead: false,
+        });
+        expect(TI.isLaneNeutralManeuverDir('straight')).toBe(true);
+        expect(TI.isLaneNeutralManeuverDir('roundabout')).toBe(false);
     });
 
     test('slight_right on 2-lane primary becomes straight for lane guidance', () => {
