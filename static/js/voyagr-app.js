@@ -1676,8 +1676,10 @@ function getLaneGuidanceOrchestrationRuntime() {
     };
 }
 
-function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
-    return VoyagrLaneGuidanceOrchestration.updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount);
+function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount, guidanceStepIndex) {
+    return VoyagrLaneGuidanceOrchestration.updateLaneGuidance(
+        lat, lon, heading, maneuver, roundaboutExitCount, guidanceStepIndex
+    );
 }
 
 function renderLaneGuidanceUI(data) {

@@ -5,7 +5,8 @@ These import the real functions used by the ``/api/lane-guidance`` endpoint
 scenario — not merely that the result is "in range" or "didn't crash".
 
 They lock in the corrections made for:
-  * roundabout 2nd exit -> LEFT lane (not middle), per UK Highway Code
+  * roundabout 1st exit -> LEFT; 2nd+ on multi-lane dual approaches -> RIGHT
+    (early pre-position after motorway slips); quiet residential 2nd -> LEFT
   * sharp_left / sharp_right honouring OSM ``turn:lanes`` instead of silently
     falling back to "through"
   * going straight ahead choosing a through lane when the left lane is
@@ -51,11 +52,16 @@ class TestSimpleLaneFallback(unittest.TestCase):
         # 4 lanes: (4 + 1)//2 = 2
         self.assertEqual(_get_recommended_lane_simple('straight', 4), 2)
 
-    def test_roundabout_first_and_second_exit_use_left_lane(self):
-        # THE FIX: 2nd exit (straight ahead) must be the LEFT lane, not middle.
+    def test_roundabout_first_exit_uses_left_lane(self):
         self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 1), 1)
-        self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 2), 1)
-        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2), 1)
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 1, 'primary'), 1)
+
+    def test_roundabout_second_exit_right_on_dual_approach_left_on_residential(self):
+        # Multi-lane primary/trunk: pre-position right for 2nd+ exits.
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2, 'primary'), 2)
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 2, 'trunk'), 3)
+        # Quiet residential keeps classic UK ahead/left for 2nd exit.
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2, 'residential'), 1)
 
     def test_roundabout_third_plus_exit_uses_right_lane(self):
         self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 3), 3)
@@ -140,6 +146,12 @@ class TestRecommendFromTurnLanes(unittest.TestCase):
     def test_roundabout_second_exit_takes_through_lane(self):
         # Straight-through exit should pick a through lane, skipping the left-turn-only lane.
         dirs = self._dirs('left|through|right', 3)
+        self.assertEqual(
+            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 2
+        )
+
+    def test_roundabout_second_exit_can_use_right_when_no_through(self):
+        dirs = self._dirs('left|right', 2)
         self.assertEqual(
             _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 2
         )

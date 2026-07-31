@@ -213,17 +213,38 @@
     }
 
     /**
+     * Multi-lane dual-carriageway-style approaches: 2nd+ roundabout exits need the
+     * right lane early (motorway slip → dual approach). 1st exit stays left; quiet
+     * residential approaches keep classic UK "2nd = left / ahead".
+     * @param {number} exitCount
+     * @param {number} totalLanes
+     * @param {string} [roadType]
+     * @returns {boolean}
+     */
+    function roundaboutPrefersRightLane(exitCount, totalLanes, roadType) {
+        if (!(exitCount >= 2) || !(totalLanes >= 2)) return false;
+        if (exitCount >= 3) return true;
+        var rt = String(roadType || '').toLowerCase();
+        return rt === 'motorway' || rt === 'motorway_link'
+            || rt === 'trunk' || rt === 'trunk_link' || rt === 'trunk_road'
+            || rt === 'primary' || rt === 'primary_road'
+            || rt === 'secondary' || rt === 'secondary_road';
+    }
+
+    /**
      * UK heuristic: candidate lanes for a manoeuvre (1-based indices).
      * @param {string} maneuver
      * @param {number} totalLanes
      * @param {number} exitCount
+     * @param {string} [roadType]
      * @returns {number[]}
      */
-    function estimateCandidateLanesUK(maneuver, totalLanes, exitCount) {
+    function estimateCandidateLanesUK(maneuver, totalLanes, exitCount, roadType) {
         if (totalLanes <= 1) return [1];
         if (maneuver === 'roundabout' && exitCount > 0) {
-            if (exitCount <= 2) return [1];
-            if (exitCount >= 3) return [totalLanes];
+            if (roundaboutPrefersRightLane(exitCount, totalLanes, roadType)) {
+                return [totalLanes];
+            }
             return [1];
         }
         if (['left', 'slight_left', 'sharp_left', 'exit_left'].indexOf(maneuver) >= 0) {
@@ -245,13 +266,18 @@
      * @param {number} exitCount
      * @returns {Object}
      */
-    function enrichGuidanceWithRecommendedLanes(guidance, maneuver, exitCount) {
+    function enrichGuidanceWithRecommendedLanes(guidance, maneuver, exitCount, roadType) {
         if (!guidance) return guidance;
         var out = Object.assign({}, guidance);
         if (getRecommendedLaneNumbers(out).length > 0) return out;
 
         var total = out.total_lanes || 0;
-        var candidates = estimateCandidateLanesUK(maneuver, total, exitCount || 0);
+        var candidates = estimateCandidateLanesUK(
+            maneuver,
+            total,
+            exitCount || 0,
+            roadType || out.highway_type || out.road_type
+        );
         out.recommended_lanes = candidates;
         out.recommended_lane = candidates[0];
         return out;
@@ -309,7 +335,7 @@
                     source: opts.apiData.source || (opts.apiData.has_turn_lanes ? 'osm_turn_lanes' : 'osm_lanes'),
                     estimated: opts.apiData.estimated === true,
                 });
-                base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount);
+                base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount, roadType);
             }
         }
         if (!base) {
@@ -319,7 +345,7 @@
                 confidence: estConfidence,
                 source: 'estimated',
             });
-            base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount);
+            base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount, roadType);
         }
 
         base = applyConfidenceLaneSelection(base);
@@ -488,8 +514,13 @@
         var lane;
         var dir = 'through';
         if (maneuver === 'roundabout' && exitCount > 0) {
-            lane = exitCount >= 3 ? totalLanes : 1;
-            dir = exitCount >= 3 ? 'right' : (exitCount <= 1 ? 'left' : 'through');
+            if (roundaboutPrefersRightLane(exitCount, totalLanes, roadType)) {
+                lane = totalLanes;
+                dir = 'right';
+            } else {
+                lane = 1;
+                dir = exitCount <= 1 ? 'left' : 'through';
+            }
         } else if (['left', 'slight_left', 'sharp_left', 'exit_left'].indexOf(maneuver) >= 0) {
             lane = 1;
             dir = maneuver.indexOf('slight') >= 0 ? 'slight_left' : 'left';
@@ -1049,6 +1080,7 @@
         isLaneGuidanceValuableManeuver: isLaneGuidanceValuableManeuver,
         getRecommendedLaneNumbers: getRecommendedLaneNumbers,
         estimateCandidateLanesUK: estimateCandidateLanesUK,
+        roundaboutPrefersRightLane: roundaboutPrefersRightLane,
         enrichGuidanceWithRecommendedLanes: enrichGuidanceWithRecommendedLanes,
         applyConfidenceLaneSelection: applyConfidenceLaneSelection,
         buildHybridLaneGuidance: buildHybridLaneGuidance,
