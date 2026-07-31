@@ -694,13 +694,14 @@ function initializeMap() {
                 }
             }, 250);
 
-            // Verification pass: if the map still hasn't finished loading tiles
-            // a few seconds later, try one more forced reload, then escalate
-            // to a soft style reload as a last resort. The soft reload has
-            // its own internal rate limits, so this can't loop.
+            // Verification pass: only retry / escalate when style is broken or
+            // tiles are stuck unloaded. `map.loaded() === false` alone is normal
+            // on slow 4G after a radio swap and must not trigger soft setStyle
+            // (which wipes the nav polyline and can leave labels-only basemap).
             if (window.__voyagrMapRecoverVerifyTimer) {
                 clearTimeout(window.__voyagrMapRecoverVerifyTimer);
             }
+            const recoverStartedAt = now;
             window.__voyagrMapRecoverVerifyTimer = setTimeout(() => {
                 window.__voyagrMapRecoverVerifyTimer = null;
                 try {
@@ -708,8 +709,17 @@ function initializeMap() {
                     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
                     if (voyagrMapShouldSkipAggressiveRecovery()) return;
                     const styleOk = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
+                    const tilesLoaded = typeof map.areTilesLoaded === 'function' ? map.areTilesLoaded() : null;
                     const allLoaded = typeof map.loaded === 'function' ? map.loaded() : true;
-                    if (styleOk && allLoaded) return; // healthy, nothing to do
+                    const MR = window.VoyagrMapRecovery;
+                    const shouldRetry = MR && typeof MR.shouldRetryForceReloadSources === 'function'
+                        ? MR.shouldRetryForceReloadSources({
+                            styleLoaded: styleOk,
+                            areTilesLoaded: tilesLoaded,
+                            mapLoaded: allLoaded,
+                        })
+                        : (!styleOk || tilesLoaded === false);
+                    if (!shouldRetry) return;
                     voyagrMapForceReloadAllSources((reason || 'verify') + ' (retry)');
                     if (window.__voyagrMapRecoverEscalateTimer) {
                         clearTimeout(window.__voyagrMapRecoverEscalateTimer);
@@ -721,15 +731,26 @@ function initializeMap() {
                             if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
                             if (voyagrMapShouldSkipAggressiveRecovery()) return;
                             const styleOk2 = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
+                            const tilesLoaded2 = typeof map.areTilesLoaded === 'function' ? map.areTilesLoaded() : null;
                             const allLoaded2 = typeof map.loaded === 'function' ? map.loaded() : true;
-                            if (styleOk2 && allLoaded2) return;
+                            const settleMs = (MR && MR.DEFAULT_SLOW_NETWORK_SETTLE_MS) || 12000;
+                            const shouldEscalate = MR && typeof MR.shouldEscalateSoftStyleReload === 'function'
+                                ? MR.shouldEscalateSoftStyleReload({
+                                    styleLoaded: styleOk2,
+                                    areTilesLoaded: tilesLoaded2,
+                                    mapLoaded: allLoaded2,
+                                    msSinceForceReload: Date.now() - recoverStartedAt,
+                                    slowNetworkSettleMs: settleMs,
+                                })
+                                : (!styleOk2 || tilesLoaded2 === false);
+                            if (!shouldEscalate) return;
                             if (typeof voyagrMapSoftStyleReload === 'function') {
                                 voyagrMapSoftStyleReload((reason || 'verify') + ' (escalate)');
                             }
                         } catch (_) { /* ignore */ }
-                    }, 6000);
+                    }, 8000);
                 } catch (_) { /* ignore */ }
-            }, 4000);
+            }, 5000);
 
             if (reason) {
                 console.log('[Map] recover after connectivity:', reason);
@@ -923,13 +944,17 @@ function initializeMap() {
                             if (_connRecoverTimer) {
                                 clearTimeout(_connRecoverTimer);
                             }
+                            const MR = window.VoyagrMapRecovery;
+                            const debounceMs = MR && typeof MR.resolveNetworkRecoverDebounceMs === 'function'
+                                ? MR.resolveNetworkRecoverDebounceMs(conn.effectiveType)
+                                : 450;
                             _connRecoverTimer = setTimeout(() => {
                                 _connRecoverTimer = null;
                                 voyagrMapRecoverAfterNetworkEvent(
                                     'networkinformation ' +
                                         String(conn.effectiveType || conn.type || 'change')
                                 );
-                            }, 450);
+                            }, debounceMs);
                         } catch (e) {
                             /* ignore */
                         }

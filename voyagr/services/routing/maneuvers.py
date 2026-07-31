@@ -9,9 +9,27 @@ was duplicated ~6 times) so it can be unit-tested offline and reused.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from voyagr.utils.osrm import infer_road_class_from_names
+
+# Voyagr requests Valhalla with units=kilometers, so maneuver speed_limit is km/h.
+# Convert to mph to match GraphHopper/OSRM maneuver convention for the widget.
+_KMH_TO_MPH = 0.621371
+
+
+def _valhalla_speed_limit_to_mph(raw: Any) -> Optional[int]:
+    """Convert Valhalla maneuver speed_limit (km/h) to mph, or None if absent/invalid."""
+    if raw is None or raw == '':
+        return None
+    try:
+        kmh = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if kmh <= 0:
+        return None
+    mph = int(round(kmh * _KMH_TO_MPH))
+    return mph if mph > 0 else None
 
 
 def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = False) -> Dict[str, Any]:
@@ -37,7 +55,7 @@ def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = Fa
         'begin_street_names': maneuver.get('begin_street_names', []),
         'begin_shape_index': maneuver.get('begin_shape_index', 0),
         'end_shape_index': maneuver.get('end_shape_index', 0),
-        'speed_limit': maneuver.get('speed_limit'),
+        'speed_limit': _valhalla_speed_limit_to_mph(maneuver.get('speed_limit')),
     }
     mt = maneuver.get('type', 0)
     rc = maneuver.get('roundabout_exit_count')

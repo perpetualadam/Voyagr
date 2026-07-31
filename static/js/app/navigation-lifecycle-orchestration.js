@@ -230,10 +230,11 @@
         }
     }
 
-    function applyNavStartWakeLockFromPlan(stateInit, wakeLockApiAvailable) {
-        const wakeLockExecute = MC().buildNavStartWakeLockExecutePlan(!!wakeLockApiAvailable, stateInit);
-        if (!wakeLockExecute.shouldRequest) {
-            if (wakeLockExecute.unsupportedLog) console.log(wakeLockExecute.unsupportedLog);
+    function requestWakeLockFromExecutePlan(wakeLockExecute) {
+        if (!wakeLockExecute || !wakeLockExecute.shouldRequest) {
+            if (wakeLockExecute && wakeLockExecute.unsupportedLog) {
+                console.log(wakeLockExecute.unsupportedLog);
+            }
             return;
         }
 
@@ -241,15 +242,54 @@
             .then((wakeLock) => {
                 window[wakeLockExecute.windowProperty] = wakeLock;
                 console.log(wakeLockExecute.acquireLog);
-                rt().call.showStatus(wakeLockExecute.successStatusMessage, wakeLockExecute.successStatusType);
+                if (wakeLockExecute.successStatusMessage && !wakeLockExecute.quietStatus) {
+                    rt().call.showStatus(
+                        wakeLockExecute.successStatusMessage,
+                        wakeLockExecute.successStatusType || 'success'
+                    );
+                }
 
                 wakeLock.addEventListener('release', () => {
                     console.log(wakeLockExecute.releaseLog);
+                    if (window[wakeLockExecute.windowProperty] === wakeLock) {
+                        window[wakeLockExecute.windowProperty] = null;
+                    }
+                    // Screen/system can release the lock while nav continues; retry if still visible.
+                    if (typeof document !== 'undefined' &&
+                        document.visibilityState === 'visible' &&
+                        getRouteInProgress()) {
+                        setTimeout(function () {
+                            try { ensureNavWakeLock(); } catch (_) { /* ignore */ }
+                        }, 500);
+                    }
                 });
             })
             .catch((err) => {
                 console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
             });
+    }
+
+    function applyNavStartWakeLockFromPlan(stateInit, wakeLockApiAvailable) {
+        const wakeLockExecute = MC().buildNavStartWakeLockExecutePlan(!!wakeLockApiAvailable, stateInit);
+        requestWakeLockFromExecutePlan(wakeLockExecute);
+    }
+
+    /**
+     * Reacquire wake lock after app foreground / screen wake during navigation.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.documentVisible]
+     */
+    function ensureNavWakeLock(opts) {
+        opts = opts || {};
+        const plan = MC().buildNavForegroundWakeLockEnsurePlan({
+            documentVisible: opts.documentVisible !== false &&
+                (typeof document === 'undefined' || document.visibilityState !== 'hidden'),
+            routeInProgress: getRouteInProgress(),
+            wakeLockApiAvailable: typeof navigator !== 'undefined' && 'wakeLock' in navigator,
+            hasWakeLock: !!window.screenWakeLock,
+        });
+        requestWakeLockFromExecutePlan(plan);
+        return plan;
     }
 
     function applyNavStartFabDomFromPlan(fabExecute) {
@@ -577,6 +617,7 @@
         bind: bind,
         startTurnByTurnNavigation: startTurnByTurnNavigation,
         stopTurnByTurnNavigation: stopTurnByTurnNavigation,
+        ensureNavWakeLock: ensureNavWakeLock,
         updateTurnGuidance: updateTurnGuidance,
         getRouteStarted: getRouteStarted,
         setRouteStarted: setRouteStarted,

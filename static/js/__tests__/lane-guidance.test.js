@@ -129,15 +129,18 @@ describe('buildDeterministicLaneGuidance', () => {
         expect(g.recommended_lane).toBe(2);
     });
 
-    test('roundabout with 3+ exits goes right, 1 exit goes left, 2 stays through', () => {
+    test('roundabout 1st exit left; 2nd+/3rd+ right on multi-lane dual approaches', () => {
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 3, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('right');
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 1, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('left');
-        // A 2-exit roundabout keeps the recommended lane "through" (no found non-through arrow).
-        const two = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
-        expect(two.lane_arrows.every((a) => a.primary === 'through')).toBe(true);
-        expect(two.recommended_lane).toBe(1); // exitCount < 3 => leftmost
+        // Dual primary/trunk approaches: 2nd exit pre-positions right (not last-minute left).
+        const twoPrimary = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
+        expect(twoPrimary.recommended_lane).toBe(2);
+        expect(twoPrimary.lane_arrows.find((a) => a.primary !== 'through').primary).toBe('right');
+        // Quiet residential keeps classic UK 2nd-exit = left/ahead.
+        const twoRes = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'residential');
+        expect(twoRes.recommended_lane).toBe(1);
     });
 
     test('uturn recommends the rightmost lane (UK)', () => {
@@ -868,10 +871,18 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
 
         expect(LG.estimateCandidateLanesUK('roundabout', 3, 1)).toEqual([1]);
         expect(LG.estimateCandidateLanesUK('roundabout', 3, 3)).toEqual([3]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'primary')).toEqual([2]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'residential')).toEqual([1]);
         expect(LG.estimateCandidateLanesUK('left', 3, 0)).toEqual([1, 2]);
         expect(LG.estimateCandidateLanesUK('right', 2, 0)).toEqual([2]);
         expect(LG.estimateCandidateLanesUK('merge', 3, 0)).toEqual([1, 3]);
         expect(LG.estimateCandidateLanesUK('through', 4, 0)).toEqual([2]);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(false);
+        // Merge candidates are edges; primary is centre (not candidates[0]).
+        expect(LG.getRecommendedLaneSimple('merge', 3, 0)).toBe(2);
+        expect(LG.getRecommendedLaneSimple('merge', 4, 0)).toBe(2);
+        expect(LG.getRecommendedLaneSimple('right', 3, 0)).toBe(3);
     });
 
     test('getRecommendedLaneNumbers and enrichGuidanceWithRecommendedLanes', () => {
@@ -885,11 +896,20 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             0
         );
         expect(enriched.recommended_lanes).toEqual([2, 3]);
+        expect(enriched.recommended_lane).toBe(3);
         expect(LG.enrichGuidanceWithRecommendedLanes(
             { total_lanes: 3, recommended_lanes: [2] },
             'right',
             0
         ).recommended_lanes).toEqual([2]);
+
+        const mergeEnriched = LG.enrichGuidanceWithRecommendedLanes(
+            { total_lanes: 3 },
+            'merge',
+            0
+        );
+        expect(mergeEnriched.recommended_lanes).toEqual([1, 3]);
+        expect(mergeEnriched.recommended_lane).toBe(2);
     });
 
     test('applyConfidenceLaneSelection hides below threshold', () => {
@@ -929,11 +949,34 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             urgency: 'soon',
             show_lane_guidance: true,
         };
-        expect(LG.buildLaneGuidanceStabilityPlan({
+        const recalcPlan = LG.buildLaneGuidanceStabilityPlan({
             routeRecalculated: true,
             newGuidance: guidance,
             maneuverStepIndex: 1,
-        }).action).toBe('lock');
+            distanceToManeuver: 300,
+        });
+        expect(recalcPlan.action).toBe('lock');
+        expect(recalcPlan.lockedGuidance).toEqual({
+            data: guidance,
+            lockedStepIndex: 1,
+        });
+
+        const afterRecalc = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: {
+                total_lanes: 3,
+                recommended_lanes: [3],
+                recommended_lane: 3,
+                confidence: 70,
+                show_lane_guidance: true,
+            },
+            lockedGuidance: recalcPlan.lockedGuidance,
+            distanceToManeuver: 250,
+            maneuverStepIndex: 1,
+            maneuver: 'right',
+            roundaboutExitCount: 0,
+        });
+        expect(afterRecalc.action).toBe('use-locked');
+        expect(afterRecalc.guidance.recommended_lanes).toEqual([2]);
 
         expect(LG.buildLaneGuidanceStabilityPlan({
             maneuverCompleted: true,

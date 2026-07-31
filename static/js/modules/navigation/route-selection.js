@@ -72,6 +72,8 @@
 
     /**
      * Line style for a route preview/alternative layer on the map.
+     * Selected route is always visually strongest; non-selected peers share equal weight
+     * so index-0 / Valhalla primary does not outrank the user's preview selection.
      * @param {number} index
      * @param {number} selectedRouteIndex
      * @param {string[]} [routeColors]
@@ -82,12 +84,55 @@
         var contrast = resolveRouteContrastPlan(mapTheme);
         var colors = contrast.darkBasemap ? contrast.routeColors : (routeColors || ROUTE_COLORS);
         var weightBoost = contrast.darkBasemap ? (contrast.routeWeightBoost || 0) : 0;
-        var baseWeight = (index === selectedRouteIndex) ? 10 : (index === 0 ? 8 : 6);
+        var selected = index === selectedRouteIndex;
+        var baseWeight = selected ? 10 : 6;
         return {
             color: resolveRouteColor(index, colors),
             weight: baseWeight + weightBoost,
-            opacity: contrast.darkBasemap ? (contrast.routeOpacity || 1.0) : ((index === selectedRouteIndex) ? 1.0 : 0.85),
+            opacity: contrast.darkBasemap ? (contrast.routeOpacity || 1.0) : (selected ? 1.0 : 0.7),
         };
+    }
+
+    /**
+     * Mount order for multi-route preview layers: non-selected first, selected last
+     * so the chosen route paints on top (MapLibre last-before-labels wins z-order).
+     * @param {number} routeCount
+     * @param {number} selectedRouteIndex
+     * @returns {number[]}
+     */
+    function buildRouteLayerMountOrder(routeCount, selectedRouteIndex) {
+        var n = Math.max(0, Number(routeCount) || 0);
+        var selected = Number(selectedRouteIndex);
+        if (!Number.isFinite(selected) || selected < 0 || selected >= n) {
+            selected = 0;
+        }
+        var order = [];
+        for (var i = 0; i < n; i++) {
+            if (i !== selected) order.push(i);
+        }
+        if (n > 0) order.push(selected);
+        return order;
+    }
+
+    /**
+     * Order route layer ids for moveLayer bring-to-top: selected id last so it
+     * ends above peers (MapLibre last move before labels wins z-order).
+     * Non route-layer-* ids keep relative order among the non-selected group.
+     * @param {Array<string>} layerIds
+     * @param {number} selectedRouteIndex
+     * @returns {string[]}
+     */
+    function orderRouteLayerIdsSelectedLast(layerIds, selectedRouteIndex) {
+        var ids = layerIds || [];
+        var selectedId = 'route-layer-' + selectedRouteIndex;
+        var selected = [];
+        var others = [];
+        for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            if (id === selectedId) selected.push(id);
+            else others.push(id);
+        }
+        return others.concat(selected);
     }
 
     /**
@@ -3559,11 +3604,15 @@
 
     /**
      * Layer reorder plan to keep route lines above traffic overlays.
+     * Selected preview route is moved last so it stays painted on top.
      * @param {Array<{ id?: string }>} layerDescriptors
      * @param {Array<Object>} [styleLayers]
+     * @param {Object} [opts]
+     * @param {number} [opts.selectedRouteIndex]
      * @returns {Object}
      */
-    function buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers) {
+    function buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers, opts) {
+        opts = opts || {};
         var layers = layerDescriptors || [];
         var layerIds = [];
         layers.forEach(function (layer) {
@@ -3571,6 +3620,10 @@
         });
         if (layerIds.length === 0) {
             return { shouldRun: false };
+        }
+        var selected = Number(opts.selectedRouteIndex);
+        if (Number.isFinite(selected)) {
+            layerIds = orderRouteLayerIdsSelectedLast(layerIds, selected);
         }
         return {
             shouldRun: true,
@@ -3588,10 +3641,12 @@
      * Execute plan for bringRoutesToTop retry loop and label anchoring.
      * @param {Array<{ id?: string }>} layerDescriptors
      * @param {Array<Object>} [styleLayers]
+     * @param {Object} [opts]
+     * @param {number} [opts.selectedRouteIndex]
      * @returns {Object}
      */
-    function buildBringRoutesToTopExecutePlan(layerDescriptors, styleLayers) {
-        var dispatch = buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers);
+    function buildBringRoutesToTopExecutePlan(layerDescriptors, styleLayers, opts) {
+        var dispatch = buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers, opts);
         if (!dispatch.shouldRun) {
             return { shouldExecute: false };
         }
@@ -3672,18 +3727,20 @@
     }
 
     /**
-     * Batch apply plans for doAddRouteLayers (reverse index order).
+     * Batch apply plans for doAddRouteLayers (selected last / on top).
      * @param {Array<Object>} routeOptions
      * @param {number} selectedRouteIndex
      * @param {Array<Object>} [styleLayers]
-     * @returns {{ beforeId: string|undefined, layers: Array<Object> }}
+     * @returns {{ beforeId: string|undefined, layers: Array<Object>, mountOrder: number[] }}
      */
     function buildDoAddRouteLayersBatchPlan(routeOptions, selectedRouteIndex, styleLayers, opts) {
         opts = opts || {};
         var routes = routeOptions || [];
         var beforeId = findFirstTextSymbolLayerId(styleLayers);
+        var mountOrder = buildRouteLayerMountOrder(routes.length, selectedRouteIndex);
         var layers = [];
-        for (var i = routes.length - 1; i >= 0; i--) {
+        for (var oi = 0; oi < mountOrder.length; oi++) {
+            var i = mountOrder[oi];
             var mountPlan = buildRouteLayerMountPlan(routes[i], i, selectedRouteIndex, {
                 routeColors: opts.routeColors,
                 mapTheme: opts.mapTheme,
@@ -3695,6 +3752,7 @@
         return {
             beforeId: beforeId,
             layers: layers,
+            mountOrder: mountOrder,
         };
     }
 
@@ -3830,6 +3888,7 @@
      * @param {number} [opts.layerCount]
      * @param {Array<{ id?: string }>} [opts.layerDescriptors]
      * @param {Array<Object>} [opts.styleLayers]
+     * @param {number} [opts.selectedRouteIndex]
      * @returns {Object}
      */
     function buildBringRoutesToTopEntryOrchestrationPlan(opts) {
@@ -3837,7 +3896,9 @@
         var layerCount = opts.layerCount || 0;
         return {
             orch: buildBringRoutesToTopOrchestrationPlan(layerCount),
-            execute: buildBringRoutesToTopExecutePlan(opts.layerDescriptors, opts.styleLayers),
+            execute: buildBringRoutesToTopExecutePlan(opts.layerDescriptors, opts.styleLayers, {
+                selectedRouteIndex: opts.selectedRouteIndex,
+            }),
             requiresMap: true,
         };
     }
@@ -4402,6 +4463,8 @@
         computeRouteTotalCost: computeRouteTotalCost,
         resolveRouteColor: resolveRouteColor,
         buildRouteLayerStyle: buildRouteLayerStyle,
+        buildRouteLayerMountOrder: buildRouteLayerMountOrder,
+        orderRouteLayerIdsSelectedLast: orderRouteLayerIdsSelectedLast,
         latLonPolylineToLngLatCoords: latLonPolylineToLngLatCoords,
         buildRouteLineGeoJsonFeature: buildRouteLineGeoJsonFeature,
         findFirstTextSymbolLayerId: findFirstTextSymbolLayerId,

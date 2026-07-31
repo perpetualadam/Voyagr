@@ -55,6 +55,14 @@ def set_route_cache(cache):
     _route_cache = cache
 
 
+def clear_route_cache() -> bool:
+    """Clear the in-memory route cache. Returns False when none is registered."""
+    if not _route_cache:
+        return False
+    _route_cache.clear()
+    return True
+
+
 def set_fallback_optimizer(optimizer):
     """Set the fallback optimizer instance."""
     global _fallback_optimizer

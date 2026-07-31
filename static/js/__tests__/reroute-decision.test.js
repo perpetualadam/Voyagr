@@ -399,6 +399,7 @@ describe('reroute retry and notification helpers', () => {
         expect(matched.ok).toBe(true);
         expect(matched.newRoute.name).toBe('\u26a1 Optimised');
         expect(matched.newRoute.distance_km).toBe(12);
+        expect(matched.preferPrimaryRouteOnNextNavUpdate).toBe(false);
 
         const fallback = RD.buildAutomaticRerouteOutcomePlan({
             success: true,
@@ -432,6 +433,7 @@ describe('reroute retry and notification helpers', () => {
         });
         expect(matched.newRoute.source).toBe('GraphHopper');
         expect(matched.newRoute.distance_km).toBe(12);
+        expect(matched.preferPrimaryRouteOnNextNavUpdate).toBe(false);
     });
 
     test('pickRerouteRouteFromResponse matches engine family', () => {

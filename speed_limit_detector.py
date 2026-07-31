@@ -31,10 +31,13 @@ SMART_MOTORWAYS = {
     'M62': {'sections': [(53.5, -2.0), (53.8, -1.5)], 'active': True},
 }
 
-# UK Default Speed Limits (mph) — last resort when no API/OSM data; many A/B roads are now 50 where NSL was once assumed 60
+# UK Default Speed Limits (mph) — last resort when no API/OSM data.
+# Trunk defaults to 60 (single-carriageway NSL); dual carriageways are usually
+# tagged GB:nsl_dual / TomTom 70 and take precedence when present.
+# Many A/B roads are now 50 where NSL was once assumed 60.
 DEFAULT_SPEED_LIMITS_UK = {
     'motorway': 70,
-    'trunk_road': 70,
+    'trunk_road': 60,
     'primary_road': 50,
     'secondary_road': 50,
     'residential': 30,
@@ -89,7 +92,8 @@ ROAD_TYPE_ALIASES = {
 HIGHWAY_INFERRED_MPH = {
     'uk': {
         'motorway': 70, 'motorway_link': 50,
-        'trunk': 70, 'trunk_link': 50,
+        # Single-carriageway NSL is 60; dual NSL is usually tagged GB:nsl_dual.
+        'trunk': 60, 'trunk_link': 50,
         'primary': 50, 'primary_link': 40,
         'secondary': 50, 'secondary_link': 40,
         # UK tertiary roads frequently pass through built-up areas where the
@@ -122,17 +126,85 @@ HIGHWAY_INFERRED_MPH = {
     },
 }
 
-# Vehicle-specific speed limits (mph)
+# Vehicle-specific speed limits (mph) — informational caps only; not applied to posted limits.
 VEHICLE_SPEED_LIMITS = {
-    'car': {'motorway': 70, 'trunk_road': 70, 'primary_road': 60},
-    'electric': {'motorway': 70, 'trunk_road': 70, 'primary_road': 60},
-    'hybrid': {'motorway': 70, 'trunk_road': 70, 'primary_road': 60},
-    'motorcycle': {'motorway': 70, 'trunk_road': 70, 'primary_road': 60},
-    'truck': {'motorway': 60, 'trunk_road': 60, 'primary_road': 50},
-    'van': {'motorway': 70, 'trunk_road': 70, 'primary_road': 60},
+    'car': {'motorway': 70, 'trunk_road': 60, 'primary_road': 60},
+    'electric': {'motorway': 70, 'trunk_road': 60, 'primary_road': 60},
+    'hybrid': {'motorway': 70, 'trunk_road': 60, 'primary_road': 60},
+    'motorcycle': {'motorway': 70, 'trunk_road': 60, 'primary_road': 60},
+    'truck': {'motorway': 60, 'trunk_road': 50, 'primary_road': 50},
+    'van': {'motorway': 70, 'trunk_road': 60, 'primary_road': 60},
     'bicycle': {'motorway': 0, 'trunk_road': 0, 'primary_road': 0},  # Not applicable
     'pedestrian': {'motorway': 0, 'trunk_road': 0, 'primary_road': 0},  # Not applicable
 }
+
+# OSM maxspeed zone / advisory presets → mph (UK-centric; used worldwide when tagged).
+OSM_MAXSPEED_ZONE_MPH = {
+    'gb:nsl_single': 60,
+    'gb:nsl_dual': 70,
+    'gb:motorway': 70,
+    'gb:urban': 30,
+    'gb:rural': 60,
+    'gb:national': 60,  # legacy; prefer nsl_single/dual when present
+    'gb:nsl': 60,
+    'gb:20': 20,
+    'gb:30': 30,
+    'gb:40': 40,
+    'gb:50': 50,
+    'gb:60': 60,
+    'gb:70': 70,
+    'nsl_single': 60,
+    'nsl_dual': 70,
+    'nsl': 60,
+    'uk:nsl_single': 60,
+    'uk:nsl_dual': 70,
+    'uk:motorway': 70,
+    'uk:urban': 30,
+    # zone:maxspeed / maxspeed:type style values (often without maxspeed=*)
+    'gb:zone20': 20,
+    'gb:zone30': 30,
+    'gb:zone40': 40,
+    'uk:zone20': 20,
+    'uk:zone30': 30,
+    'uk:zone40': 40,
+    'zone:20': 20,
+    'zone:30': 30,
+    'zone:40': 40,
+    'zone20': 20,
+    'zone30': 30,
+    'zone40': 40,
+}
+
+
+def _osm_zone_tag_to_mph(raw: Optional[str], region: str) -> Optional[int]:
+    """Parse zone:maxspeed / maxspeed:type / source:maxspeed zone presets to mph."""
+    if not raw:
+        return None
+    low = str(raw).strip().lower()
+    if not low or low in ('none', 'signals', 'walk', 'implicit', 'variable'):
+        return None
+    # source:maxspeed=GB:zone30 / UK:zone:30
+    low = low.replace('zone:', 'zone').replace('::', ':')
+    if low in OSM_MAXSPEED_ZONE_MPH:
+        return int(OSM_MAXSPEED_ZONE_MPH[low])
+    # Bare "30" / "20 mph" inside zone tags
+    return _parse_osm_maxspeed_to_mph(str(raw), region)
+
+
+def _osm_way_maxspeed_mph(tags: Dict, region: str) -> Optional[int]:
+    """Posted limit from way tags: maxspeed, then zone:maxspeed / maxspeed:type."""
+    if not tags:
+        return None
+    if 'maxspeed' in tags:
+        parsed = _parse_osm_maxspeed_to_mph(str(tags.get('maxspeed') or ''), region)
+        if parsed is not None:
+            return parsed
+    for key in ('zone:maxspeed', 'maxspeed:type', 'source:maxspeed'):
+        if key in tags:
+            parsed = _osm_zone_tag_to_mph(str(tags.get(key) or ''), region)
+            if parsed is not None:
+                return parsed
+    return None
 
 
 def _normalize_road_type(road_type: str) -> str:
@@ -192,15 +264,25 @@ def _region_from_lat_lon(lat: float, lon: float) -> str:
 
 
 def _parse_osm_maxspeed_to_mph(speed_str: str, region: str) -> Optional[int]:
-    """Parse OSM maxspeed tag to mph. Handles mph, km/h, and bare numbers (region-dependent)."""
+    """Parse OSM maxspeed tag to mph. Handles mph, km/h, zone presets, and bare numbers."""
     if not speed_str:
         return None
     raw = speed_str.strip()
     low = raw.lower()
     if low in ('none', 'signals', 'walk', 'implicit', 'variable'):
         return None
-    # Country-specific presets like DE:urban — skip numeric parse
-    if ':' in low.split()[0] and not any(ch.isdigit() for ch in low.split()[0]):
+
+    # UK national speed limit / urban zone presets (must run before the generic
+    # "country:tag" skip — GB:nsl_single was previously dropped and fell through
+    # to trunk→70 inference, showing 70 on signed 60 mph single carriageways).
+    zone_key = low.split()[0] if low else ''
+    if zone_key in OSM_MAXSPEED_ZONE_MPH:
+        return int(OSM_MAXSPEED_ZONE_MPH[zone_key])
+    if low == 'national' and region == 'uk':
+        return 60
+
+    # Other country-specific presets like DE:urban — skip numeric parse
+    if ':' in zone_key and not any(ch.isdigit() for ch in zone_key):
         return None
 
     has_mph = 'mph' in low
@@ -900,14 +982,17 @@ class SpeedLimitDetector:
                         if dist_km < best_highway_dist:
                             best_highway_dist = dist_km
                             best_highway_no_max = hw
-                        if 'maxspeed' not in tags:
+                        parsed = _osm_way_maxspeed_mph(tags, region)
+                        if parsed is None:
+                            if any(k in tags for k in ('maxspeed', 'zone:maxspeed', 'maxspeed:type')):
+                                logger.debug(
+                                    f"[Speed Limit] OSM speed tags not parsed: "
+                                    f"maxspeed={tags.get('maxspeed')!r} "
+                                    f"zone:maxspeed={tags.get('zone:maxspeed')!r} "
+                                    f"maxspeed:type={tags.get('maxspeed:type')!r}"
+                                )
                             continue
                         rank = HIGHWAY_RANK.get(hw, 0)
-                        speed_str = tags['maxspeed']
-                        parsed = _parse_osm_maxspeed_to_mph(speed_str, region)
-                        if parsed is None:
-                            logger.debug(f"[Speed Limit] OSM maxspeed not parsed: '{speed_str}'")
-                            continue
                         candidates.append((dist_km, rank, parsed, hw))
 
                     if candidates:
@@ -1038,17 +1123,29 @@ class SpeedLimitDetector:
             lat, lon, region, heading_deg=heading_deg
         )
         if snap_limit is not None and 5 <= snap_limit <= 100:
-            if snap_hw and not _is_plausible_limit_for_road_type(snap_limit, snap_hw):
+            # Never invent "motorway" from a bare 70 mph reading — UK dual NSL is
+            # also 70, and a bad snap next to an M-road was making 30 mph streets
+            # show 70 with detected_road_type=motorway (client then trusted it).
+            detected_snap = _normalize_road_type(snap_hw) if snap_hw else None
+            implausible_for_snap = (
+                detected_snap
+                and not _is_plausible_limit_for_road_type(snap_limit, detected_snap)
+            )
+            # Also reject against the client's active edge (residential/service/…).
+            implausible_for_client = (
+                norm_road != 'unknown'
+                and not _is_plausible_limit_for_road_type(snap_limit, road_type)
+            )
+            if implausible_for_snap or implausible_for_client:
+                reason = detected_snap or norm_road or road_type
                 logger.info(
-                    f"[Speed Limit] TomTom Snap {snap_limit} mph implausible for detected "
-                    f"{snap_hw}; trying Overpass"
+                    f"[Speed Limit] TomTom Snap {snap_limit} mph implausible for "
+                    f"{reason}; trying Overpass"
                 )
                 snap_limit = None
             else:
                 self._maybe_crosscheck_tomtom_vs_osm(snap_limit, lat, lon, region)
-                detected = _normalize_road_type(snap_hw) if snap_hw else (
-                    'motorway' if snap_limit >= 70 else norm_road
-                )
+                detected = detected_snap or norm_road
                 self._add_to_cache(cache_key, {
                     'speed_limit': snap_limit,
                     'timestamp': time.time(),

@@ -50,12 +50,8 @@
             || getVehicleIcons()[getCurrentVehicleType()]
             || getVehicleIcons().petrol_diesel;
 
-        const currentUserMarker = rt().getCurrentUserMarker();
-        if (currentUserMarker) {
-            if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
-            rt().setCurrentUserMarker(null);
-        }
-
+        // The live map marker uses the delta SVG arrow, not these legacy icon paths.
+        // Keep the marker on the map when vehicle type or routing mode changes.
         rt().setCurrentUserMarkerIcon(iconPath);
         console.log('[Marker] Icon updated to:', iconPath);
     }
@@ -113,8 +109,8 @@
         const markerHalf = markerSize / 2;
 
         const markerDiv = document.createElement('div');
-        markerDiv.style.width = markerSize + 'px';
-        markerDiv.style.height = markerSize + 'px';
+        markerDiv.style.width = '100%';
+        markerDiv.style.height = '100%';
         markerDiv.style.display = 'flex';
         markerDiv.style.alignItems = 'center';
         markerDiv.style.justifyContent = 'center';
@@ -148,6 +144,10 @@
                 accuracyLabel: accuracyLabel,
             }),
         });
+
+        if (typeof vm.applyVehicleMarkerElementSize === 'function' && typeof marker.getElement === 'function') {
+            vm.applyVehicleMarkerElementSize(marker.getElement());
+        }
 
         marker.heading = safeHeading;
         marker.speed = Number.isFinite(speed) ? speed : 0;

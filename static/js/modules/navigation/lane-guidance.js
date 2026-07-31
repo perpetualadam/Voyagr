@@ -213,17 +213,38 @@
     }
 
     /**
+     * Multi-lane dual-carriageway-style approaches: 2nd+ roundabout exits need the
+     * right lane early (motorway slip → dual approach). 1st exit stays left; quiet
+     * residential approaches keep classic UK "2nd = left / ahead".
+     * @param {number} exitCount
+     * @param {number} totalLanes
+     * @param {string} [roadType]
+     * @returns {boolean}
+     */
+    function roundaboutPrefersRightLane(exitCount, totalLanes, roadType) {
+        if (!(exitCount >= 2) || !(totalLanes >= 2)) return false;
+        if (exitCount >= 3) return true;
+        var rt = String(roadType || '').toLowerCase();
+        return rt === 'motorway' || rt === 'motorway_link'
+            || rt === 'trunk' || rt === 'trunk_link' || rt === 'trunk_road'
+            || rt === 'primary' || rt === 'primary_road'
+            || rt === 'secondary' || rt === 'secondary_road';
+    }
+
+    /**
      * UK heuristic: candidate lanes for a manoeuvre (1-based indices).
      * @param {string} maneuver
      * @param {number} totalLanes
      * @param {number} exitCount
+     * @param {string} [roadType]
      * @returns {number[]}
      */
-    function estimateCandidateLanesUK(maneuver, totalLanes, exitCount) {
+    function estimateCandidateLanesUK(maneuver, totalLanes, exitCount, roadType) {
         if (totalLanes <= 1) return [1];
         if (maneuver === 'roundabout' && exitCount > 0) {
-            if (exitCount <= 2) return [1];
-            if (exitCount >= 3) return [totalLanes];
+            if (roundaboutPrefersRightLane(exitCount, totalLanes, roadType)) {
+                return [totalLanes];
+            }
             return [1];
         }
         if (['left', 'slight_left', 'sharp_left', 'exit_left'].indexOf(maneuver) >= 0) {
@@ -239,21 +260,51 @@
     }
 
     /**
+     * Single-lane UK heuristic primary (mirrors get_recommended_lane_simple).
+     * Merge candidates on 3+ lanes are edges; primary stays the centre lane.
+     * @param {string} maneuver
+     * @param {number} totalLanes
+     * @param {number} exitCount
+     * @param {string} [roadType]
+     * @returns {number}
+     */
+    function getRecommendedLaneSimple(maneuver, totalLanes, exitCount, roadType) {
+        var lanes = estimateCandidateLanesUK(maneuver, totalLanes, exitCount || 0, roadType);
+        if (!lanes.length) return 1;
+        if (maneuver === 'merge') {
+            return Math.max(1, Math.ceil(totalLanes / 2));
+        }
+        if (['right', 'slight_right', 'sharp_right', 'exit_right', 'exit', 'uturn'].indexOf(maneuver) >= 0) {
+            return lanes[lanes.length - 1];
+        }
+        if (maneuver === 'roundabout' && roundaboutPrefersRightLane(exitCount || 0, totalLanes, roadType)) {
+            return lanes[lanes.length - 1];
+        }
+        return lanes[0];
+    }
+
+    /**
      * Attach `recommended_lanes` from lane_arrows / heuristics when missing.
      * @param {Object} guidance
      * @param {string} maneuver
      * @param {number} exitCount
      * @returns {Object}
      */
-    function enrichGuidanceWithRecommendedLanes(guidance, maneuver, exitCount) {
+    function enrichGuidanceWithRecommendedLanes(guidance, maneuver, exitCount, roadType) {
         if (!guidance) return guidance;
         var out = Object.assign({}, guidance);
         if (getRecommendedLaneNumbers(out).length > 0) return out;
 
         var total = out.total_lanes || 0;
-        var candidates = estimateCandidateLanesUK(maneuver, total, exitCount || 0);
+        var road = roadType || out.highway_type || out.road_type;
+        var candidates = estimateCandidateLanesUK(
+            maneuver,
+            total,
+            exitCount || 0,
+            road
+        );
         out.recommended_lanes = candidates;
-        out.recommended_lane = candidates[0];
+        out.recommended_lane = getRecommendedLaneSimple(maneuver, total, exitCount || 0, road);
         return out;
     }
 
@@ -269,12 +320,15 @@
         var lanes = getRecommendedLaneNumbers(out);
         if (lanes.length === 0) return out;
 
+        // Prefer an explicit primary (e.g. centre for merge) over candidates[0].
+        var primary = (out.recommended_lane != null) ? out.recommended_lane : lanes[0];
+
         if (confidence >= LANE_CONFIDENCE_HIGH) {
-            out.recommended_lanes = [lanes[0]];
-            out.recommended_lane = lanes[0];
+            out.recommended_lanes = [primary];
+            out.recommended_lane = primary;
         } else if (confidence >= LANE_CONFIDENCE_DISPLAY_MIN) {
             out.recommended_lanes = lanes.slice();
-            out.recommended_lane = lanes[0];
+            out.recommended_lane = primary;
         } else {
             out.recommended_lanes = [];
             out.recommended_lane = null;
@@ -309,7 +363,7 @@
                     source: opts.apiData.source || (opts.apiData.has_turn_lanes ? 'osm_turn_lanes' : 'osm_lanes'),
                     estimated: opts.apiData.estimated === true,
                 });
-                base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount);
+                base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount, roadType);
             }
         }
         if (!base) {
@@ -319,7 +373,7 @@
                 confidence: estConfidence,
                 source: 'estimated',
             });
-            base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount);
+            base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount, roadType);
         }
 
         base = applyConfidenceLaneSelection(base);
@@ -381,7 +435,7 @@
             return {
                 action: 'lock',
                 guidance: newGuidance,
-                lockedGuidance: newGuidance,
+                lockedGuidance: { data: newGuidance, lockedStepIndex: stepIndex },
                 lockedStepIndex: stepIndex,
             };
         }
@@ -508,8 +562,13 @@
         var lane;
         var dir = 'through';
         if (maneuver === 'roundabout' && exitCount > 0) {
-            lane = exitCount >= 3 ? totalLanes : 1;
-            dir = exitCount >= 3 ? 'right' : (exitCount <= 1 ? 'left' : 'through');
+            if (roundaboutPrefersRightLane(exitCount, totalLanes, roadType)) {
+                lane = totalLanes;
+                dir = 'right';
+            } else {
+                lane = 1;
+                dir = exitCount <= 1 ? 'left' : 'through';
+            }
         } else if (['left', 'slight_left', 'sharp_left', 'exit_left'].indexOf(maneuver) >= 0) {
             lane = 1;
             dir = maneuver.indexOf('slight') >= 0 ? 'slight_left' : 'left';
@@ -1069,6 +1128,8 @@
         isLaneGuidanceValuableManeuver: isLaneGuidanceValuableManeuver,
         getRecommendedLaneNumbers: getRecommendedLaneNumbers,
         estimateCandidateLanesUK: estimateCandidateLanesUK,
+        getRecommendedLaneSimple: getRecommendedLaneSimple,
+        roundaboutPrefersRightLane: roundaboutPrefersRightLane,
         enrichGuidanceWithRecommendedLanes: enrichGuidanceWithRecommendedLanes,
         applyConfidenceLaneSelection: applyConfidenceLaneSelection,
         buildHybridLaneGuidance: buildHybridLaneGuidance,

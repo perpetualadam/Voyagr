@@ -239,9 +239,9 @@
                         map.resize();
                     }
                 }
-                if (rt().getIsTrackingActive() && !rt().getGpsWatchId()) {
-                    rt().call.startGPSTracking();
-                }
+                // Resume GPS/wake-lock after background or screen-off. Do not call
+                // startGPSTracking() here — it toggles off when already active.
+                applyNavigationForegroundResume('visibilitychange');
             } else {
                 console.log('[Mobile] App went to background');
             }
@@ -254,6 +254,7 @@
                 }
                 window.__voyagrMapResizeAndRepaint();
             }
+            applyNavigationForegroundResume(ev.persisted ? 'pageshow-bfcache' : 'pageshow');
         });
 
         window.addEventListener('orientationchange', () => {
@@ -290,6 +291,37 @@
             return estimate;
         }
         return null;
+    }
+
+    /**
+     * After returning from another app / screen-off, restore GPS watch and wake lock
+     * so the vehicle marker keeps updating through arrival.
+     * ensureGPSTracking is a no-op when the user intentionally stopped tracking
+     * (including mid turn-by-turn); it only revives watches still wanted.
+     * @param {string} [reason]
+     */
+    function applyNavigationForegroundResume(reason) {
+        try {
+            if (typeof rt().call.ensureGPSTracking === 'function') {
+                const gpsPlan = rt().call.ensureGPSTracking({
+                    documentVisible: true,
+                    // Be quicker to revive a stalled watch after another app / screen-off.
+                    staleAfterMs: 15000,
+                });
+                if (gpsPlan && gpsPlan.shouldRestart) {
+                    console.log('[Mobile] GPS ensure on', reason || 'resume', gpsPlan.reason);
+                }
+            }
+            if (typeof rt().call.ensureNavWakeLock === 'function') {
+                rt().call.ensureNavWakeLock({ documentVisible: true });
+            }
+            if (typeof rt().call.redrawNavigationVehicleMarker === 'function' &&
+                (rt().getRouteInProgress() || rt().getIsTrackingActive())) {
+                rt().call.redrawNavigationVehicleMarker(reason || 'foreground resume');
+            }
+        } catch (e) {
+            console.warn('[Mobile] Foreground nav resume failed:', e);
+        }
     }
 
     function initInstallPromptListener() {

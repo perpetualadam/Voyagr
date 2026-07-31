@@ -38,8 +38,23 @@ describe('normalizeManeuverSpeedLimitMph', () => {
     test('treats 30 as mph on residential (not 19 from km/h conversion)', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(30, 'residential', 28)).toBe(30);
     });
-    test('converts 48 km/h to ~30 mph on motorway', () => {
-        expect(SG.normalizeManeuverSpeedLimitMph(48, 'motorway', 60)).toBe(30);
+    test('treats GraphHopper/OSRM mph 60/70 as mph (not km/h)', () => {
+        expect(SG.normalizeManeuverSpeedLimitMph(60, 'primary', 50)).toBe(60);
+        expect(SG.normalizeManeuverSpeedLimitMph(70, 'motorway', 65)).toBe(70);
+    });
+    test('keeps 65 and 62 mph as mph (not ~40 from km/h reinterpretation)', () => {
+        expect(SG.normalizeManeuverSpeedLimitMph(65, 'motorway', 60)).toBe(65);
+        expect(SG.normalizeManeuverSpeedLimitMph(65, 'trunk', 55)).toBe(65);
+        expect(SG.normalizeManeuverSpeedLimitMph(62, 'motorway', 60)).toBe(62);
+        expect(SG.normalizeManeuverSpeedLimitMph(62, 'primary', 50)).toBe(62);
+    });
+    test('keeps server-converted 30 mph from former 48 km/h as mph', () => {
+        // Valhalla/GH/OSRM convert km/h→mph at the source; client must not re-convert.
+        expect(SG.normalizeManeuverSpeedLimitMph(30, 'motorway', 60)).toBe(30);
+    });
+    test('converts leftover unconverted km/h above signed mph range', () => {
+        expect(SG.normalizeManeuverSpeedLimitMph(112, 'motorway', 65)).toBe(70);
+        expect(SG.normalizeManeuverSpeedLimitMph(100, 'motorway', 60)).toBe(62);
     });
     test('rejects implausible motorway limit', () => {
         expect(SG.normalizeManeuverSpeedLimitMph(5, 'motorway', 65)).toBeNull();
@@ -54,6 +69,11 @@ describe('normalizeManeuverSpeedLimitMph', () => {
 describe('sanitizeApiSpeedLimitMph', () => {
     test('rejects 70 mph on residential from stale API/cache', () => {
         expect(SG.sanitizeApiSpeedLimitMph(70, 'residential', 0)).toBeNull();
+    });
+    test('rejects 70 mph on tertiary/unclassified (Optimised local leak)', () => {
+        expect(SG.isPlausibleEdgeSpeedLimitMph(70, 'tertiary', 28)).toBe(false);
+        expect(SG.isPlausibleEdgeSpeedLimitMph(70, 'unclassified', 28)).toBe(false);
+        expect(SG.isPlausibleEdgeSpeedLimitMph(60, 'tertiary', 45)).toBe(true);
     });
     test('accepts 30 mph on residential', () => {
         expect(SG.sanitizeApiSpeedLimitMph(30, 'residential', 28)).toBe(30);
@@ -582,7 +602,36 @@ describe('buildNavSpeedLimitTickPlan', () => {
         expect(plan.valhallaSpeedLimitMph).toBeNull();
     });
 
-    test('does not prefer edge hint over an existing API limit on maneuver change', () => {
+    test('prefers edge hint over sticky API limit when maneuver speed zone changes', () => {
+        // Stale API/NSL 60 must not stick through a signed 30 zone when the
+        // active maneuver (e.g. GraphHopper synthetic continue) says 30.
+        const calls = [];
+        const plan = SG.buildNavSpeedLimitTickPlan({
+            routeInProgress: true,
+            isTrackingActive: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            currentRouteSteps: [{
+                begin_shape_index: 0,
+                speed_limit: 30,
+                road_class: 'primary',
+            }],
+            lastSnappedRouteIndex: 0,
+            displaySpeedMph: 28,
+            currentSpeedLimitMph: 60,
+            lastActiveManeuverIdx: -1,
+            resolveRoadType: () => 'primary',
+            pickDisplaySpeedLimitMph: (api, val, _rt, _region, opts) => {
+                calls.push({ api, val, prefer: !!(opts && opts.preferValhallaOverApi) });
+                return opts && opts.preferValhallaOverApi ? val : api;
+            },
+        });
+        expect(calls[0].prefer).toBe(true);
+        expect(calls[0].val).toBe(30);
+        expect(plan.shownLimit).toBe(30);
+        expect(plan.resetFetchState).toBe(true);
+    });
+
+    test('does not prefer edge hint when it matches the sticky API limit', () => {
         const calls = [];
         SG.buildNavSpeedLimitTickPlan({
             routeInProgress: true,
@@ -590,14 +639,14 @@ describe('buildNavSpeedLimitTickPlan', () => {
             routePolyline: [[51.5, -0.1], [51.6, -0.2]],
             currentRouteSteps: [{
                 begin_shape_index: 0,
-                speed_limit: 70,
-                road_class: 'primary',
+                speed_limit: 30,
+                road_class: 'residential',
             }],
             lastSnappedRouteIndex: 0,
             displaySpeedMph: 28,
             currentSpeedLimitMph: 30,
             lastActiveManeuverIdx: -1,
-            resolveRoadType: () => 'primary',
+            resolveRoadType: () => 'residential',
             pickDisplaySpeedLimitMph: (api, val, _rt, _region, opts) => {
                 calls.push({ api, val, prefer: !!(opts && opts.preferValhallaOverApi) });
                 return opts && opts.preferValhallaOverApi ? val : api;
@@ -629,6 +678,92 @@ describe('buildVehicleDisplayCoordinatesPlan', () => {
         });
         expect(coords.lat).toBe(51.4995);
         expect(coords.lon).toBe(-0.0995);
+    });
+});
+
+describe('buildGpsTrackingEnsurePlan', () => {
+    test('restarts when navigating but GPS watch is missing or inactive', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: false,
+        })).toMatchObject({ shouldRestart: true, reason: 'missing_watch', resetDisplayState: true });
+
+        // Geolocation error can clear isTrackingActive while nav continues — resume
+        // should revive unless the user explicitly stopped tracking.
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: false,
+            trackingStoppedByUser: false,
+            hasGpsWatchId: true,
+        })).toMatchObject({ shouldRestart: true, reason: 'inactive' });
+    });
+
+    test('does not restart after user stops tracking during navigation', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: false,
+            trackingStoppedByUser: true,
+            hasGpsWatchId: false,
+        })).toMatchObject({ shouldRestart: false, reason: 'user_stopped' });
+
+        // forceRestart must not override an intentional stop (error-retry timer is
+        // cleared by stopGPSTracking, but guard the plan anyway).
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: false,
+            trackingStoppedByUser: true,
+            hasGpsWatchId: false,
+            forceRestart: true,
+        })).toMatchObject({ shouldRestart: false, reason: 'user_stopped' });
+    });
+
+    test('restarts stale watches and leaves healthy watches alone', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: true,
+            lastFixAgeMs: 60000,
+            staleAfterMs: 15000,
+        })).toMatchObject({ shouldRestart: true, reason: 'stale_fix' });
+
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: true,
+            lastFixAgeMs: 2000,
+            staleAfterMs: 15000,
+        })).toMatchObject({ shouldRestart: false, reason: 'healthy' });
+    });
+
+    test('does not restart when document is hidden or tracking is not needed', () => {
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: false,
+            routeInProgress: true,
+            isTrackingActive: true,
+            hasGpsWatchId: false,
+        }).shouldRestart).toBe(false);
+
+        expect(SG.buildGpsTrackingEnsurePlan({
+            geolocationAvailable: true,
+            documentVisible: true,
+            routeInProgress: false,
+            isTrackingActive: false,
+            hasGpsWatchId: false,
+        }).shouldRestart).toBe(false);
     });
 });
 
@@ -745,6 +880,38 @@ describe('buildVehicleMarkerTickPlan', () => {
         expect(plan.action).toBe('create');
         expect(plan.lat).toBe(51.5);
         expect(plan.lon).toBe(-0.1);
+    });
+
+    test('flags reattach when marker exists but is detached from map', () => {
+        const plan = SG.buildVehicleMarkerTickPlan({
+            hasMarker: true,
+            canSetLngLat: true,
+            markerOnMap: false,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            heading: 90,
+            speed: 5,
+            accuracy: 10,
+            mapBearing: 0,
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.reattachToMap).toBe(true);
+    });
+
+    test('does not flag reattach when marker is still on the map', () => {
+        const plan = SG.buildVehicleMarkerTickPlan({
+            hasMarker: true,
+            canSetLngLat: true,
+            markerOnMap: true,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            heading: 90,
+            speed: 5,
+            accuracy: 10,
+            mapBearing: 0,
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.reattachToMap).toBe(false);
     });
 });
 

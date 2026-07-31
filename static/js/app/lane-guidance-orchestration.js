@@ -38,19 +38,29 @@
         }
     }
 
-    function getRoutingManeuverLanes() {
+    function getRoutingManeuverLanes(stepIndexOverride) {
         var steps = rt().getCurrentRouteSteps();
-        var idx = rt().getCurrentStepIndex();
+        var idx = stepIndexOverride != null ? stepIndexOverride : rt().getCurrentStepIndex();
         if (!steps || idx == null || idx < 0 || idx >= steps.length) return null;
         var step = steps[idx];
         return step && step.lanes ? step.lanes : null;
     }
 
-    function finalizeLaneGuidanceForRender(data, maneuver, roundaboutExitCount, distToManeuver) {
+    /**
+     * Road class for lane heuristics must track the guidance/lookahead step, not only
+     * the active continue — otherwise roundaboutPrefersRightLane sees residential
+     * while distance/lanes already target a dual primary/trunk roundabout.
+     */
+    function resolveGuidanceRoadType(guidanceStepIndex) {
+        var idx = guidanceStepIndex != null ? guidanceStepIndex : undefined;
+        return rt().call.getCurrentRoadType(idx) || 'unknown';
+    }
+
+    function finalizeLaneGuidanceForRender(data, maneuver, roundaboutExitCount, distToManeuver, guidanceStepIndex) {
         var laneGuidance = LG();
-        var stepIndex = rt().getCurrentStepIndex();
-        var roadType = rt().call.getCurrentRoadType() || 'unknown';
-        var routingLanes = getRoutingManeuverLanes();
+        var stepIndex = guidanceStepIndex != null ? guidanceStepIndex : rt().getCurrentStepIndex();
+        var roadType = resolveGuidanceRoadType(guidanceStepIndex);
+        var routingLanes = getRoutingManeuverLanes(stepIndex);
 
         var hybrid = laneGuidance.buildHybridLaneGuidance({
             routingManeuverLanes: routingLanes,
@@ -125,8 +135,9 @@
         }
     }
 
-    function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
+    function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount, guidanceStepIndex) {
         if (roundaboutExitCount === undefined) roundaboutExitCount = 0;
+        if (guidanceStepIndex === undefined) guidanceStepIndex = null;
 
         const tick = LG().buildLaneGuidanceFetchTickPlan({
             lat: lat,
@@ -139,12 +150,17 @@
             lastPosition: lastLaneGuidancePosition,
             lastManeuver: lastLaneGuidanceManeuver,
             routeSteps: rt().getCurrentRouteSteps(),
-            currentStepIndex: rt().getCurrentStepIndex(),
+            // Prefer the lookahead target step so distance/lanes track the roundabout/exit
+            // we are pre-positioning for, not a neutral continue.
+            currentStepIndex: guidanceStepIndex != null
+                ? guidanceStepIndex
+                : rt().getCurrentStepIndex(),
             routePolyline: rt().getRoutePolyline(),
             lastSnappedRouteIndex: rt().getLastSnappedRouteIndex
                 ? rt().getLastSnappedRouteIndex()
                 : 0,
-            roadType: rt().call.getCurrentRoadType() || 'unknown',
+            // Match finalizeLaneGuidanceForRender: class from the lookahead target step.
+            roadType: resolveGuidanceRoadType(guidanceStepIndex),
             calculateDistance: rt().call.calculateDistanceMeters,
             snapToRoutePolyline: rt().routeGeometry
                 ? (a, b, c, d) => rt().routeGeometry().snapToRoutePolyline(a, b, c, d)
@@ -169,7 +185,8 @@
                 apply.renderPayload,
                 maneuver,
                 roundaboutExitCount,
-                apply.renderPayload.distance_to_maneuver
+                apply.renderPayload.distance_to_maneuver,
+                guidanceStepIndex
             );
             renderLaneGuidanceUI(cachedFinal);
             return;
@@ -187,7 +204,7 @@
                 distToManeuver: fetchPlan.distToManeuver,
                 roundaboutExitCount: fetchPlan.roundaboutExitCount,
                 roadType: fetchPlan.roadType,
-                routingManeuverLanes: getRoutingManeuverLanes(),
+                routingManeuverLanes: getRoutingManeuverLanes(guidanceStepIndex),
             });
             laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
             pruneLaneGuidanceCache();
@@ -196,7 +213,8 @@
                 outcome.renderData,
                 fetchPlan.maneuver,
                 fetchPlan.roundaboutExitCount,
-                fetchPlan.distToManeuver
+                fetchPlan.distToManeuver,
+                guidanceStepIndex
             );
             renderLaneGuidanceUI(finalData);
         };
@@ -213,7 +231,7 @@
                     roundaboutExitCount: fetchPlan.roundaboutExitCount,
                     roadType: fetchPlan.roadType,
                     errorReason: 'no data',
-                    routingManeuverLanes: getRoutingManeuverLanes(),
+                    routingManeuverLanes: getRoutingManeuverLanes(guidanceStepIndex),
                 });
                 laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
                 pruneLaneGuidanceCache();
@@ -222,7 +240,8 @@
                     outcome.renderData,
                     fetchPlan.maneuver,
                     fetchPlan.roundaboutExitCount,
-                    fetchPlan.distToManeuver
+                    fetchPlan.distToManeuver,
+                    guidanceStepIndex
                 );
                 renderLaneGuidanceUI(finalData);
             })

@@ -1095,6 +1095,47 @@
         };
     }
 
+    /**
+     * Reacquire screen wake lock after background/screen-off during navigation.
+     * Wake Lock is released when the document is hidden; without this the screen
+     * can stay off and OS GPS/watchPosition stalls leave the vehicle icon frozen.
+     * @param {Object} [input]
+     * @param {boolean} [input.documentVisible]
+     * @param {boolean} [input.routeInProgress]
+     * @param {boolean} [input.wakeLockApiAvailable]
+     * @param {boolean} [input.hasWakeLock]
+     * @returns {Object}
+     */
+    function buildNavForegroundWakeLockEnsurePlan(input) {
+        input = input || {};
+        if (input.documentVisible === false) {
+            return { shouldRequest: false, reason: 'hidden' };
+        }
+        if (!input.routeInProgress) {
+            return { shouldRequest: false, reason: 'not_navigating' };
+        }
+        if (!input.wakeLockApiAvailable) {
+            return {
+                shouldRequest: false,
+                reason: 'unsupported',
+                unsupportedLog: '[Screen Wake Lock] Screen Wake Lock API not supported on this device',
+            };
+        }
+        if (input.hasWakeLock) {
+            return { shouldRequest: false, reason: 'already_held' };
+        }
+        return {
+            shouldRequest: true,
+            reason: 'reacquire',
+            lockType: 'screen',
+            windowProperty: 'screenWakeLock',
+            acquireLog: '[Screen Wake Lock] Re-acquired after foreground resume',
+            releaseLog: '[Screen Wake Lock] Screen lock released',
+            failureLogPrefix: '[Screen Wake Lock] Failed to re-acquire wake lock:',
+            quietStatus: true,
+        };
+    }
+
     var MAP_EXPLORE_HANDLERS_FLAG = '__voyagrMapExploreHandlersInitialized';
 
     /**
@@ -1566,6 +1607,7 @@
         buildNavStartFabDomExecutePlan: buildNavStartFabDomExecutePlan,
         buildNavStartDriverViewSchedulePlan: buildNavStartDriverViewSchedulePlan,
         buildNavStartWakeLockExecutePlan: buildNavStartWakeLockExecutePlan,
+        buildNavForegroundWakeLockEnsurePlan: buildNavForegroundWakeLockEnsurePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

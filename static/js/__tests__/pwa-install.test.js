@@ -35,13 +35,43 @@ describe('pwa-install module', () => {
     });
 
     test('buildServiceWorkerControllerChangePlan defers reload during navigation', () => {
-        const defer = PWA.buildServiceWorkerControllerChangePlan({ routeInProgress: true });
+        const defer = PWA.buildServiceWorkerControllerChangePlan({
+            hadControllerAtStartup: true,
+            routeInProgress: true,
+        });
         expect(defer.action).toBe('defer');
         expect(defer.setUpdatePending).toBe(true);
 
-        const reload = PWA.buildServiceWorkerControllerChangePlan({ routeInProgress: false });
+        const reload = PWA.buildServiceWorkerControllerChangePlan({
+            hadControllerAtStartup: true,
+            routeInProgress: false,
+        });
         expect(reload.action).toBe('reload');
         expect(reload.saveAppState).toBe(true);
+    });
+
+    test('buildServiceWorkerControllerChangePlan does not reload on first install', () => {
+        // The first worker to claim a page is not an update: the page was just
+        // loaded from the network, and reloading discards what the user has done
+        // since — including a route they had just calculated.
+        const first = PWA.buildServiceWorkerControllerChangePlan({
+            hadControllerAtStartup: false,
+            routeInProgress: false,
+        });
+        expect(first.action).toBe('none');
+        expect(first.reloadReason).toBeUndefined();
+        expect(first.saveAppState).toBeUndefined();
+    });
+
+    test('buildServiceWorkerControllerChangePlan defers an update while a route preview is up', () => {
+        const plan = PWA.buildServiceWorkerControllerChangePlan({
+            hadControllerAtStartup: true,
+            routeInProgress: false,
+            hasCalculatedRoute: true,
+        });
+        expect(plan.action).toBe('defer');
+        expect(plan.setUpdatePending).toBe(true);
+        expect(plan.statusMessage).toMatch(/route/i);
     });
 
     test('buildScheduleAppReloadPlan dedupes scheduled reloads', () => {

@@ -20,7 +20,7 @@ the encoded geometry), so these parsers are kept separate rather than merged.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import polyline
@@ -51,10 +51,15 @@ def valhalla_route_json_to_standard_routes(
     include_tolls: bool,
     include_caz: bool,
     caz_exempt: bool,
+    traffic_factors: Optional[Tuple[float, str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Parse a Valhalla /route JSON body (with 'trip') into the route option dicts used by /api/route.
     Used for the primary success path recovery duplicate and for baseline Valhalla after hazard-heavy failure.
+
+    ``traffic_factors`` lets the caller supply the ``(multiplier, level)`` pair the
+    rest of its response already used, so one request resolves traffic once and
+    every option is scaled identically. It is looked up here only when omitted.
     """
     routes: List[Dict[str, Any]] = []
     if 'trip' not in route_data or 'legs' not in route_data['trip']:
@@ -71,12 +76,13 @@ def valhalla_route_json_to_standard_routes(
             route_geometry = leg['shape']
             break
 
-    if valhalla_costing == 'auto':
+    if traffic_factors is not None:
+        traffic_multiplier, traffic_level = traffic_factors
+    elif valhalla_costing == 'auto':
         traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
-        time_minutes = base_time_minutes * traffic_multiplier
     else:
         traffic_multiplier, traffic_level = 1.0, 'N/A'
-        time_minutes = base_time_minutes
+    time_minutes = base_time_minutes * traffic_multiplier
 
     route_coords = decode_route_geometry(route_geometry, precision=6)
     costs = cost_calculator.calculate_costs(
@@ -154,6 +160,9 @@ def valhalla_route_json_to_standard_routes(
                 'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',
                 'distance_km': round(alt_distance_km, 2),
                 'duration_minutes': round(alt_time_minutes, 0),
+                'base_duration_minutes': round(alt_base_time_minutes, 0),
+                'traffic_multiplier': round(traffic_multiplier, 2),
+                'traffic_level': traffic_level,
                 'fuel_cost': round(alt_costs['fuel_cost'], 2),
                 'fuel_litres': round(alt_costs['fuel_litres'], 2),
                 'toll_cost': round(alt_costs['toll_cost'], 2),
@@ -186,8 +195,17 @@ def valhalla_trip_json_to_std_route_entry(
     include_tolls: bool,
     include_caz: bool,
     caz_exempt: bool,
+    traffic_multiplier: float = 1.0,
+    traffic_level: str = 'N/A',
 ) -> Optional[Dict[str, Any]]:
-    """Build a single /api/route-style route dict from Valhalla JSON containing trip+legs (e.g. auto_shorter)."""
+    """
+    Build a single /api/route-style route dict from Valhalla JSON containing trip+legs.
+
+    ``traffic_multiplier`` must be the one the rest of the response was scaled by.
+    The options built here (🌿 Scenic, 🛤️ Quiet, ⚡ Optimised) are compared against
+    Fastest by the max-detour filter and shown side by side in the preview, so a
+    free-flow duration here reads as a shorter trip than it is.
+    """
     if 'trip' not in trip_json or 'legs' not in trip_json['trip']:
         return None
     legs = trip_json['trip']['legs']
@@ -208,11 +226,16 @@ def valhalla_trip_json_to_std_route_entry(
     )
     route_maneuvers = extract_valhalla_maneuvers({'legs': legs}, length_in_meters=True)
 
+    base_time_minutes = sh_time / 60
+
     return {
         'id': route_id,
         'name': name,
         'distance_km': round(sh_dist, 2),
-        'duration_minutes': round(sh_time / 60, 0),
+        'duration_minutes': round(base_time_minutes * traffic_multiplier, 0),
+        'base_duration_minutes': round(base_time_minutes, 0),
+        'traffic_multiplier': round(traffic_multiplier, 2),
+        'traffic_level': traffic_level,
         'fuel_cost': round(costs['fuel_cost'], 2),
         'fuel_litres': round(costs['fuel_litres'], 2),
         'toll_cost': round(costs['toll_cost'], 2),
