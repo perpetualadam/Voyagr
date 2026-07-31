@@ -709,7 +709,8 @@
                 lastDetectedRoadType: rt().g('lastDetectedRoadType'),
             }),
             pickDisplaySpeedLimitMph: SL
-                ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
+                ? (api, val, rt, region, options) =>
+                    SL.pickDisplaySpeedLimitMph(api, val, rt, region, options)
                 : null,
         };
     }

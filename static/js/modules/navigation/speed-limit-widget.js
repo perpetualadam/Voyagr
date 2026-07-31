@@ -190,7 +190,7 @@
      * @param {number|null} valhallaLimitMph
      * @param {string} [roadType]
      * @param {string} [region]
-     * @param {{ allowRoadTypeFallback?: boolean }} [options]
+     * @param {{ allowRoadTypeFallback?: boolean, preferValhallaOverApi?: boolean }} [options]
      * @returns {number|null}
      */
     function pickDisplaySpeedLimitMph(apiLimitMph, valhallaLimitMph, roadType, region, options) {
