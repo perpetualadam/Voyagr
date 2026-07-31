@@ -207,6 +207,31 @@ describe('speed-limit-widget module', () => {
         expect(apply.cacheHint.limitMph).toBe(70);
     });
 
+    test('buildSpeedLimitApiSuccessApplyPlan keeps edge 30 over weak road-type 60', () => {
+        // Trunk/primary road-type defaults must not re-stick NSL 60 after the
+        // active maneuver already entered a signed 30 mph zone.
+        const apply = SL.buildSpeedLimitApiSuccessApplyPlan({
+            data: {
+                success: true,
+                data: {
+                    speed_limit_mph: 60,
+                    road_type: 'trunk',
+                    source: 'road-type-default',
+                },
+            },
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'trunk',
+            valhallaSpeedLimit: 30,
+            currentSpeedMph: 28,
+            currentGpsSpeedMph: 27,
+            speedGpsModule: SG,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.widgetUpdate.shownLimit).toBe(30);
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(30);
+    });
+
     test('buildSpeedLimitFetchFallbackApplyPlan prefers cached limit', () => {
         const apply = SL.buildSpeedLimitFetchFallbackApplyPlan({
             cachedLimitMph: 40,

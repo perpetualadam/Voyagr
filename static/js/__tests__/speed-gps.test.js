@@ -602,7 +602,36 @@ describe('buildNavSpeedLimitTickPlan', () => {
         expect(plan.valhallaSpeedLimitMph).toBeNull();
     });
 
-    test('does not prefer edge hint over an existing API limit on maneuver change', () => {
+    test('prefers edge hint over sticky API limit when maneuver speed zone changes', () => {
+        // Stale API/NSL 60 must not stick through a signed 30 zone when the
+        // active maneuver (e.g. GraphHopper synthetic continue) says 30.
+        const calls = [];
+        const plan = SG.buildNavSpeedLimitTickPlan({
+            routeInProgress: true,
+            isTrackingActive: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            currentRouteSteps: [{
+                begin_shape_index: 0,
+                speed_limit: 30,
+                road_class: 'primary',
+            }],
+            lastSnappedRouteIndex: 0,
+            displaySpeedMph: 28,
+            currentSpeedLimitMph: 60,
+            lastActiveManeuverIdx: -1,
+            resolveRoadType: () => 'primary',
+            pickDisplaySpeedLimitMph: (api, val, _rt, _region, opts) => {
+                calls.push({ api, val, prefer: !!(opts && opts.preferValhallaOverApi) });
+                return opts && opts.preferValhallaOverApi ? val : api;
+            },
+        });
+        expect(calls[0].prefer).toBe(true);
+        expect(calls[0].val).toBe(30);
+        expect(plan.shownLimit).toBe(30);
+        expect(plan.resetFetchState).toBe(true);
+    });
+
+    test('does not prefer edge hint when it matches the sticky API limit', () => {
         const calls = [];
         SG.buildNavSpeedLimitTickPlan({
             routeInProgress: true,
@@ -610,14 +639,14 @@ describe('buildNavSpeedLimitTickPlan', () => {
             routePolyline: [[51.5, -0.1], [51.6, -0.2]],
             currentRouteSteps: [{
                 begin_shape_index: 0,
-                speed_limit: 70,
-                road_class: 'primary',
+                speed_limit: 30,
+                road_class: 'residential',
             }],
             lastSnappedRouteIndex: 0,
             displaySpeedMph: 28,
             currentSpeedLimitMph: 30,
             lastActiveManeuverIdx: -1,
-            resolveRoadType: () => 'primary',
+            resolveRoadType: () => 'residential',
             pickDisplaySpeedLimitMph: (api, val, _rt, _region, opts) => {
                 calls.push({ api, val, prefer: !!(opts && opts.preferValhallaOverApi) });
                 return opts && opts.preferValhallaOverApi ? val : api;

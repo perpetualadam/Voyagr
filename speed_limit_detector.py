@@ -147,13 +147,64 @@ OSM_MAXSPEED_ZONE_MPH = {
     'gb:rural': 60,
     'gb:national': 60,  # legacy; prefer nsl_single/dual when present
     'gb:nsl': 60,
+    'gb:20': 20,
+    'gb:30': 30,
+    'gb:40': 40,
+    'gb:50': 50,
+    'gb:60': 60,
+    'gb:70': 70,
     'nsl_single': 60,
     'nsl_dual': 70,
     'nsl': 60,
     'uk:nsl_single': 60,
     'uk:nsl_dual': 70,
     'uk:motorway': 70,
+    'uk:urban': 30,
+    # zone:maxspeed / maxspeed:type style values (often without maxspeed=*)
+    'gb:zone20': 20,
+    'gb:zone30': 30,
+    'gb:zone40': 40,
+    'uk:zone20': 20,
+    'uk:zone30': 30,
+    'uk:zone40': 40,
+    'zone:20': 20,
+    'zone:30': 30,
+    'zone:40': 40,
+    'zone20': 20,
+    'zone30': 30,
+    'zone40': 40,
 }
+
+
+def _osm_zone_tag_to_mph(raw: Optional[str], region: str) -> Optional[int]:
+    """Parse zone:maxspeed / maxspeed:type / source:maxspeed zone presets to mph."""
+    if not raw:
+        return None
+    low = str(raw).strip().lower()
+    if not low or low in ('none', 'signals', 'walk', 'implicit', 'variable'):
+        return None
+    # source:maxspeed=GB:zone30 / UK:zone:30
+    low = low.replace('zone:', 'zone').replace('::', ':')
+    if low in OSM_MAXSPEED_ZONE_MPH:
+        return int(OSM_MAXSPEED_ZONE_MPH[low])
+    # Bare "30" / "20 mph" inside zone tags
+    return _parse_osm_maxspeed_to_mph(str(raw), region)
+
+
+def _osm_way_maxspeed_mph(tags: Dict, region: str) -> Optional[int]:
+    """Posted limit from way tags: maxspeed, then zone:maxspeed / maxspeed:type."""
+    if not tags:
+        return None
+    if 'maxspeed' in tags:
+        parsed = _parse_osm_maxspeed_to_mph(str(tags.get('maxspeed') or ''), region)
+        if parsed is not None:
+            return parsed
+    for key in ('zone:maxspeed', 'maxspeed:type', 'source:maxspeed'):
+        if key in tags:
+            parsed = _osm_zone_tag_to_mph(str(tags.get(key) or ''), region)
+            if parsed is not None:
+                return parsed
+    return None
 
 
 def _normalize_road_type(road_type: str) -> str:
@@ -931,14 +982,17 @@ class SpeedLimitDetector:
                         if dist_km < best_highway_dist:
                             best_highway_dist = dist_km
                             best_highway_no_max = hw
-                        if 'maxspeed' not in tags:
+                        parsed = _osm_way_maxspeed_mph(tags, region)
+                        if parsed is None:
+                            if any(k in tags for k in ('maxspeed', 'zone:maxspeed', 'maxspeed:type')):
+                                logger.debug(
+                                    f"[Speed Limit] OSM speed tags not parsed: "
+                                    f"maxspeed={tags.get('maxspeed')!r} "
+                                    f"zone:maxspeed={tags.get('zone:maxspeed')!r} "
+                                    f"maxspeed:type={tags.get('maxspeed:type')!r}"
+                                )
                             continue
                         rank = HIGHWAY_RANK.get(hw, 0)
-                        speed_str = tags['maxspeed']
-                        parsed = _parse_osm_maxspeed_to_mph(speed_str, region)
-                        if parsed is None:
-                            logger.debug(f"[Speed Limit] OSM maxspeed not parsed: '{speed_str}'")
-                            continue
                         candidates.append((dist_km, rank, parsed, hw))
 
                     if candidates:

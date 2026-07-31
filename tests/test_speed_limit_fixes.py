@@ -392,6 +392,44 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
         self.assertEqual(result.get('speed_limit_mph'), 30)
         self.assertIn(result.get('source'), ('OSM-maxspeed', 'osm'))
 
+    def test_osm_zone_maxspeed_gb30_without_maxspeed_tag(self):
+        """UK 30 zones often tag zone:maxspeed without maxspeed=*."""
+        from speed_limit_detector import _osm_way_maxspeed_mph
+
+        self.assertEqual(
+            _osm_way_maxspeed_mph({'highway': 'primary', 'zone:maxspeed': 'GB:30'}, 'uk'),
+            30,
+        )
+        self.assertEqual(
+            _osm_way_maxspeed_mph({'highway': 'residential', 'maxspeed:type': 'GB:zone30'}, 'uk'),
+            30,
+        )
+        self.assertEqual(
+            _osm_way_maxspeed_mph({'highway': 'primary', 'maxspeed': '40'}, 'uk'),
+            40,
+        )
+
+        detector = SpeedLimitDetector()
+        detector.speed_limit_cache.clear()
+        overpass_resp = Mock()
+        overpass_resp.status_code = 200
+        overpass_resp.json.return_value = {
+            'elements': [{
+                'geometry': [
+                    {'lat': 51.5074, 'lon': -0.1278},
+                    {'lat': 51.5075, 'lon': -0.1279},
+                ],
+                'tags': {'highway': 'primary', 'zone:maxspeed': 'GB:30'},
+            }]
+        }
+        with patch.dict(os.environ, {'TOMTOM_API_KEY': ''}, clear=False):
+            with patch('speed_limit_detector.requests.get', return_value=overpass_resp):
+                result = detector.get_speed_limit_for_location(
+                    51.5074, -0.1278, road_type='primary'
+                )
+        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertEqual(result.get('source'), 'OSM-maxspeed')
+
     def test_osm_nsl_single_not_inferred_as_70(self):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
