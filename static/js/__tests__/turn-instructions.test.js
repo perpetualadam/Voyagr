@@ -759,6 +759,31 @@ describe('buildLaneGuidanceTickPlan', () => {
         expect(plan.roundaboutExitCount).toBe(2);
         expect(plan.lookAhead).toBe(true);
     });
+
+    test('off-slip continue peeks past trunk keep-left to 3rd-exit roundabout', () => {
+        // Leaving the motorway: slip continue → trunk keep-left → roundabout 3rd exit.
+        // Joining-slip guard must not stop the loop on the trunk keep; peek to the
+        // roundabout so lane guidance preps right instead of staying neutral.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.25, road_class: 'motorway_link' },
+                { type: 16, distance: 0.15, road_class: 'trunk' }, // slight_left on trunk
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 3,
+                    road_class: 'trunk',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(2);
+    });
 });
 
 describe('buildLaneGuidanceTickApplyPlan', () => {
