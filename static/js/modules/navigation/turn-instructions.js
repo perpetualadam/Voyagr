@@ -1164,14 +1164,67 @@
     }
 
     /**
+     * Motorway/trunk departures that otherwise monopolise lane guidance with keep-left
+     * even when a 2nd+/3rd+ roundabout on the dual approach needs the right lane.
+     * @param {string} maneuverDir
+     * @returns {boolean}
+     */
+    function isMotorwayDepartLaneDir(maneuverDir) {
+        return [
+            'exit', 'exit_left', 'exit_right',
+            'slight_left', 'slight_right',
+            'left', 'right',
+        ].indexOf(maneuverDir) >= 0;
+    }
+
+    /**
+     * Next 2nd+/3rd+ roundabout within the roundabout lane-lookahead budget.
+     * Pure route-step logic — works offline when /api/lane-guidance is unreachable.
+     * @param {Array<Object>} steps
+     * @param {number} afterIndex - Start scanning after this step index.
+     * @param {string} [roadClass]
+     * @param {number} [startGapMeters] - Metres already accumulated before afterIndex+1.
+     * @returns {{ maneuverDir: string, roundaboutExitCount: number, stepIndex: number, lookAhead: boolean }|null}
+     */
+    function findRoundaboutLaneLookaheadTarget(steps, afterIndex, roadClass, startGapMeters) {
+        if (!steps || afterIndex == null || afterIndex < 0) return null;
+        var gapMeters = startGapMeters || 0;
+        for (var j = afterIndex + 1; j < steps.length; j++) {
+            gapMeters += stepDistanceMeters(steps[j - 1]);
+            if (gapMeters > LANE_LOOKAHEAD_ROUNDABOUT_MAX_M) break;
+            var cand = steps[j];
+            var candDir = maneuverTypeToLaneDirectionKey(cand.type || 0);
+            var candRoad = cand.road_class || roadClass;
+            if (candRoad) {
+                candDir = refineLaneManeuverForUK(candDir, candRoad);
+            }
+            if (candDir !== 'roundabout') continue;
+            var candExit = effectiveRoundaboutExitCountFromSteps(steps, j);
+            if (candExit >= 2) {
+                return {
+                    maneuverDir: 'roundabout',
+                    roundaboutExitCount: candExit,
+                    stepIndex: j,
+                    lookAhead: true,
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
      * When the active step is a continue/straight, borrow lane intent from the next
      * critical maneuver (especially roundabout 2nd+/3rd+ exits) so drivers pre-position
      * instead of being told "stay left" until the last moment.
      *
-     * Slip-road exception: while still on a motorway/trunk link, do not look ahead to
-     * main-carriageway keep/exit/turn maneuvers (e.g. "keep right" because left lanes
-     * later peel onto another motorway). Join first; left lane on the slip is fine.
-     * Lookahead may still target merge (joining) or maneuvers that remain on the link.
+     * Slip-road join exception: while on a motorway/trunk link joining the mainline, do
+     * not look ahead to main-carriageway keep-left/keep-right (left lanes peeling onto
+     * another motorway). Left lane on the joining slip is fine.
+     *
+     * Motorway leave → roundabout: off-slips and active exit steps must still look ahead
+     * to a 2nd+/3rd+ roundabout so lane guidance prefers right on the dual approach
+     * (turn widget / Then-row already show the exit). This uses cached route steps only,
+     * so it still works with no data connection.
      *
      * @param {Array<Object>} steps
      * @param {number} stepIndex
@@ -1196,6 +1249,17 @@
         }
 
         if (!isLaneNeutralManeuverDir(maneuverDir)) {
+            // Exit / keep-left is active, but Then often already shows the roundabout.
+            // Prefer 2nd+/3rd+ roundabout right-lane prep when the active step is already
+            // on the off-slip, or when it is a hard exit (driver committed to leaving).
+            // Do not override a distant motorway keep-left — still need left to leave.
+            var hardExit = maneuverDir === 'exit' || maneuverDir === 'exit_left'
+                || maneuverDir === 'exit_right';
+            if (isMotorwayDepartLaneDir(maneuverDir)
+                && (isSlipLinkRoadClass(currentRoad) || hardExit)) {
+                var fromExit = findRoundaboutLaneLookaheadTarget(steps, idx, roadClass, 0);
+                if (fromExit) return fromExit;
+            }
             return {
                 maneuverDir: maneuverDir,
                 roundaboutExitCount: exitCount,
@@ -1222,13 +1286,21 @@
             if (!isLaneCriticalLookaheadTarget(candDir, candExit)) {
                 continue;
             }
-            // On a slip road: allow merge (join) and same-link targets only. A later
-            // motorway keep-right must not force the right lane while joining.
-            if (fromSlip && !isSlipLinkRoadClass(candRoad) && candDir !== 'merge') {
+            // Joining slip: ignore mainline keep-left/right only. Still allow merge and
+            // roundabouts on the dual approach after leaving a motorway.
+            if (fromSlip && !isSlipLinkRoadClass(candRoad)
+                && (candDir === 'slight_left' || candDir === 'slight_right')) {
                 break;
             }
             if (gapMeters > laneLookaheadMaxMetersFor(candDir)) {
                 break;
+            }
+            // Off-slip continue: first hit may be a ramp/exit keep-left before the
+            // roundabout — peek past it so 3rd-exit right-lane prep is not delayed.
+            // From the motorway mainline, keep targeting the exit (need left first).
+            if (fromSlip && isMotorwayDepartLaneDir(candDir)) {
+                var beyond = findRoundaboutLaneLookaheadTarget(steps, j, roadClass, gapMeters);
+                if (beyond) return beyond;
             }
             return {
                 maneuverDir: candDir,
@@ -1316,6 +1388,8 @@
         getTurnDirectionText: getTurnDirectionText,
         isMotorwayRoadClass: isMotorwayRoadClass,
         isSlipLinkRoadClass: isSlipLinkRoadClass,
+        isMotorwayDepartLaneDir: isMotorwayDepartLaneDir,
+        findRoundaboutLaneLookaheadTarget: findRoundaboutLaneLookaheadTarget,
         refineManeuverDirection: refineManeuverDirection,
         refineLaneManeuverForUK: refineLaneManeuverForUK,
         getRoundaboutDirectionText: getRoundaboutDirectionText,
