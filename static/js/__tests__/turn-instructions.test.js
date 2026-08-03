@@ -579,6 +579,78 @@ describe('buildLaneGuidanceTickPlan', () => {
         });
         expect(plan.maneuverDir).toBe('slight_right');
     });
+
+    test('does not look ahead from slip road to later motorway keep-right', () => {
+        // Roundabout → motorway_link slip → motorway continue → keep right because
+        // left lanes peel onto another motorway. While still on the slip, left lane
+        // is fine for joining; do not force right for the later fork.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.4, road_class: 'motorway_link' }, // slip continue
+                { type: 8, distance: 0.5, road_class: 'motorway' }, // joined
+                { type: 23, distance: 0.1, road_class: 'motorway' }, // stay/keep right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('straight');
+        expect(plan.lookAhead).toBe(false);
+        expect(plan.guidanceStepIndex).toBe(0);
+    });
+
+    test('still looks ahead from slip road to merge onto motorway', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.3, road_class: 'motorway_link' },
+                { type: 25, distance: 0.1, road_class: 'motorway' }, // merge
+                { type: 23, distance: 0.1, road_class: 'motorway' }, // later keep right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('merge');
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('looks ahead to motorway keep-right once already on the motorway', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.5, road_class: 'motorway' },
+                { type: 23, distance: 0.1, road_class: 'motorway' }, // stay/keep right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(plan.maneuverDir).toBe('slight_right');
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('still looks ahead to keep-right fork that remains on the slip', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.2, road_class: 'motorway_link' },
+                { type: 23, distance: 0.1, road_class: 'motorway_link' },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('slight_right');
+        expect(plan.lookAhead).toBe(true);
+    });
+
+    test('isSlipLinkRoadClass recognises motorway and trunk links only', () => {
+        expect(TI.isSlipLinkRoadClass('motorway_link')).toBe(true);
+        expect(TI.isSlipLinkRoadClass('trunk_link')).toBe(true);
+        expect(TI.isSlipLinkRoadClass('motorway')).toBe(false);
+        expect(TI.isSlipLinkRoadClass('primary')).toBe(false);
+        expect(TI.isSlipLinkRoadClass('')).toBe(false);
+    });
 });
 
 describe('buildLaneGuidanceTickApplyPlan', () => {

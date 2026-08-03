@@ -185,6 +185,13 @@
         return rc === 'motorway' || rc === 'motorway_link' || rc === 'trunk' || rc === 'trunk_link';
     }
 
+    /** True for motorway/trunk slip roads (joining or leaving the main carriageway). */
+    function isSlipLinkRoadClass(roadClass) {
+        if (roadClass == null || roadClass === '') return false;
+        var rc = String(roadClass).toLowerCase();
+        return rc === 'motorway_link' || rc === 'trunk_link';
+    }
+
     /**
      * Promote true departures to exit_left/exit_right when leaving a motorway/trunk.
      * Stay/slight (keep-lane / fork-on-carriageway) stay as keep left/right — promoting
@@ -1161,6 +1168,11 @@
      * critical maneuver (especially roundabout 2nd+/3rd+ exits) so drivers pre-position
      * instead of being told "stay left" until the last moment.
      *
+     * Slip-road exception: while still on a motorway/trunk link, do not look ahead to
+     * main-carriageway keep/exit/turn maneuvers (e.g. "keep right" because left lanes
+     * later peel onto another motorway). Join first; left lane on the slip is fine.
+     * Lookahead may still target merge (joining) or maneuvers that remain on the link.
+     *
      * @param {Array<Object>} steps
      * @param {number} stepIndex
      * @param {string} [roadClass]
@@ -1173,9 +1185,10 @@
             return { maneuverDir: 'straight', roundaboutExitCount: 0, stepIndex: idx, lookAhead: false };
         }
 
+        var currentRoad = current.road_class || roadClass;
         var maneuverDir = maneuverTypeToLaneDirectionKey(current.type || 0);
-        if (roadClass) {
-            maneuverDir = refineLaneManeuverForUK(maneuverDir, roadClass);
+        if (currentRoad) {
+            maneuverDir = refineLaneManeuverForUK(maneuverDir, currentRoad);
         }
         var exitCount = 0;
         if (maneuverDir === 'roundabout') {
@@ -1191,13 +1204,14 @@
             };
         }
 
+        var fromSlip = isSlipLinkRoadClass(currentRoad);
         var gapMeters = 0;
         for (var j = idx + 1; j < steps.length; j++) {
             // Distance along the current (neutral) step plus any intervening neutrals.
             gapMeters += stepDistanceMeters(steps[j - 1]);
             var cand = steps[j];
-            var candDir = maneuverTypeToLaneDirectionKey(cand.type || 0);
             var candRoad = cand.road_class || roadClass;
+            var candDir = maneuverTypeToLaneDirectionKey(cand.type || 0);
             if (candRoad) {
                 candDir = refineLaneManeuverForUK(candDir, candRoad);
             }
@@ -1207,6 +1221,11 @@
             }
             if (!isLaneCriticalLookaheadTarget(candDir, candExit)) {
                 continue;
+            }
+            // On a slip road: allow merge (join) and same-link targets only. A later
+            // motorway keep-right must not force the right lane while joining.
+            if (fromSlip && !isSlipLinkRoadClass(candRoad) && candDir !== 'merge') {
+                break;
             }
             if (gapMeters > laneLookaheadMaxMetersFor(candDir)) {
                 break;
@@ -1296,6 +1315,7 @@
         formatTurnDistance: formatTurnDistance,
         getTurnDirectionText: getTurnDirectionText,
         isMotorwayRoadClass: isMotorwayRoadClass,
+        isSlipLinkRoadClass: isSlipLinkRoadClass,
         refineManeuverDirection: refineManeuverDirection,
         refineLaneManeuverForUK: refineLaneManeuverForUK,
         getRoundaboutDirectionText: getRoundaboutDirectionText,
