@@ -579,6 +579,186 @@ describe('buildLaneGuidanceTickPlan', () => {
         });
         expect(plan.maneuverDir).toBe('slight_right');
     });
+
+    test('does not look ahead from slip road to later motorway keep-right', () => {
+        // Roundabout → motorway_link slip → motorway continue → keep right because
+        // left lanes peel onto another motorway. While still on the slip, left lane
+        // is fine for joining; do not force right for the later fork.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.4, road_class: 'motorway_link' }, // slip continue
+                { type: 8, distance: 0.5, road_class: 'motorway' }, // joined
+                { type: 23, distance: 0.1, road_class: 'motorway' }, // stay/keep right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('straight');
+        expect(plan.lookAhead).toBe(false);
+        expect(plan.guidanceStepIndex).toBe(0);
+    });
+
+    test('still looks ahead from slip road to merge onto motorway', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.3, road_class: 'motorway_link' },
+                { type: 25, distance: 0.1, road_class: 'motorway' }, // merge
+                { type: 23, distance: 0.1, road_class: 'motorway' }, // later keep right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('merge');
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('looks ahead to motorway keep-right once already on the motorway', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.5, road_class: 'motorway' },
+                { type: 23, distance: 0.1, road_class: 'motorway' }, // stay/keep right
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(plan.maneuverDir).toBe('slight_right');
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('still looks ahead to keep-right fork that remains on the slip', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.2, road_class: 'motorway_link' },
+                { type: 23, distance: 0.1, road_class: 'motorway_link' },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('slight_right');
+        expect(plan.lookAhead).toBe(true);
+    });
+
+    test('isSlipLinkRoadClass recognises motorway and trunk links only', () => {
+        expect(TI.isSlipLinkRoadClass('motorway_link')).toBe(true);
+        expect(TI.isSlipLinkRoadClass('trunk_link')).toBe(true);
+        expect(TI.isSlipLinkRoadClass('motorway')).toBe(false);
+        expect(TI.isSlipLinkRoadClass('primary')).toBe(false);
+        expect(TI.isSlipLinkRoadClass('')).toBe(false);
+    });
+
+    test('looks ahead from off-slip continue to 3rd-exit roundabout (offline route steps)', () => {
+        // Motorway leave → short link continue → roundabout 3rd exit. Turn/Then may
+        // still mention the exit, but lane guidance must prep right for the roundabout.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.35, road_class: 'motorway_link' },
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 3,
+                    road_class: 'primary',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('active hard exit prefers following 3rd-exit roundabout for lanes', () => {
+        // Then-row shows "3rd exit" while current step is the motorway exit — without
+        // this peek, lane guidance stays on keep-left and the dual approach is too late.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 21, distance: 0.2, road_class: 'motorway' }, // exit_left
+                { type: 8, distance: 0.25, road_class: 'motorway_link' },
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 0,
+                    road_class: 'primary',
+                },
+                { type: 27, distance: 0.05, roundabout_exit_count: 3, road_class: 'primary' },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.lookAhead).toBe(true);
+    });
+
+    test('active keep-left on motorway mainline still targets the exit, not the roundabout', () => {
+        // Distant keep-left: driver still needs the left lane to leave the motorway.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 16, distance: 1.0, road_class: 'motorway' }, // slight_left
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 3,
+                    road_class: 'primary',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(plan.maneuverDir).toBe('slight_left');
+        expect(plan.lookAhead).toBe(false);
+    });
+
+    test('motorway continue still targets exit-left before a later roundabout', () => {
+        // From the mainline, leave left first; roundabout right-lane prep starts on the slip.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 0.8, road_class: 'motorway' },
+                { type: 21, distance: 0.2, road_class: 'motorway' },
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 3,
+                    road_class: 'primary',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(plan.maneuverDir).toBe('exit_left');
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+    });
+
+    test('active exit on off-slip peeks to 2nd-exit roundabout', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 19, distance: 0.15, road_class: 'motorway_link' }, // ramp left on slip
+                {
+                    type: 26,
+                    roundabout_exit_count: 2,
+                    road_class: 'trunk',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(2);
+        expect(plan.lookAhead).toBe(true);
+    });
 });
 
 describe('buildLaneGuidanceTickApplyPlan', () => {
