@@ -1286,21 +1286,23 @@
             if (!isLaneCriticalLookaheadTarget(candDir, candExit)) {
                 continue;
             }
-            // Joining slip: ignore mainline keep-left/right only. Still allow merge and
-            // roundabouts on the dual approach after leaving a motorway.
-            if (fromSlip && !isSlipLinkRoadClass(candRoad)
-                && (candDir === 'slight_left' || candDir === 'slight_right')) {
-                break;
-            }
             if (gapMeters > laneLookaheadMaxMetersFor(candDir)) {
                 break;
             }
             // Off-slip continue: first hit may be a ramp/exit keep-left before the
             // roundabout — peek past it so 3rd-exit right-lane prep is not delayed.
+            // Runs before the joining-slip guard: that keep may be on trunk/motorway
+            // (non-link), not only on the slip itself.
             // From the motorway mainline, keep targeting the exit (need left first).
             if (fromSlip && isMotorwayDepartLaneDir(candDir)) {
                 var beyond = findRoundaboutLaneLookaheadTarget(steps, j, roadClass, gapMeters);
                 if (beyond) return beyond;
+            }
+            // Joining slip: ignore mainline keep-left/right only (no roundabout beyond).
+            // Still allow merge and roundabouts on the dual approach after leaving.
+            if (fromSlip && !isSlipLinkRoadClass(candRoad)
+                && (candDir === 'slight_left' || candDir === 'slight_right')) {
+                break;
             }
             return {
                 maneuverDir: candDir,
