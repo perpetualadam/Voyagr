@@ -120,3 +120,67 @@ describe('lane-guidance-orchestration lookahead roadType', () => {
         expect(buildHybridSpy.mock.calls[0][0].roadType).toBe('residential');
     });
 });
+
+describe('lane-guidance-orchestration hides after maneuver complete', () => {
+    beforeEach(() => {
+        document.body.innerHTML = [
+            '<div id="laneGuidanceDisplay" class="lane-guidance-display show">',
+            '<span id="laneGuidanceBadge"></span>',
+            '<div id="laneVisual"><div class="lane-indicator recommended">←</div></div>',
+            '<div id="laneGuidanceText">Get in the left lane now!</div></div>',
+        ].join('');
+
+        global.fetch = jest.fn(function () {
+            return Promise.reject(new Error('network off in test'));
+        });
+
+        LaneGuidanceOrchestration.bind({
+            laneGuidance: () => LaneGuidance,
+            getCurrentRouteSteps: () => [
+                { type: 15, begin_shape_index: 1, road_class: 'primary', distance: 0.2 },
+                { type: 8, begin_shape_index: 2, road_class: 'primary', distance: 1.0 },
+            ],
+            getCurrentStepIndex: () => 0,
+            getRoutePolyline: () => [[51.50, -0.12], [51.51, -0.11], [51.52, -0.10]],
+            getLastSnappedRouteIndex: () => 1,
+            getVoiceAnnouncementsEnabled: () => false,
+            routeGeometry: () => ({
+                snapToRoutePolyline: () => ({ index: 1, t: 0 }),
+                distanceAlongRouteToVertexMeters: () => 0,
+            }),
+            call: {
+                getCurrentRoadType: () => 'primary',
+                calculateDistanceMeters: () => 5,
+                speakMessage: jest.fn(),
+            },
+        });
+        LaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();
+        // Restore visible UI after reset (reset hides it) so we assert a real hide transition.
+        const display = document.getElementById('laneGuidanceDisplay');
+        display.className = 'lane-guidance-display show';
+        document.getElementById('laneGuidanceText').textContent = 'Get in the left lane now!';
+    });
+
+    afterEach(() => {
+        delete global.fetch;
+        LaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();
+    });
+
+    test('hides overlay when along-route distance reports maneuver complete', async () => {
+        const display = document.getElementById('laneGuidanceDisplay');
+        expect(display.classList.contains('show')).toBe(true);
+
+        LaneGuidanceOrchestration.updateLaneGuidance(
+            51.51,
+            -0.11,
+            90,
+            'left',
+            0,
+            0
+        );
+
+        await flushPromises();
+
+        expect(display.classList.contains('show')).toBe(false);
+    });
+});

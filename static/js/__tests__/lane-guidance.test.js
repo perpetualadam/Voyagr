@@ -190,6 +190,26 @@ describe('view-model: shouldShow', () => {
     test('null data is hidden', () => {
         expect(LG.shouldShow(null)).toBe(false);
     });
+    test('hidden after maneuver is complete (distance at/past junction)', () => {
+        expect(LG.isLaneManeuverComplete(0)).toBe(true);
+        expect(LG.isLaneManeuverComplete(80)).toBe(false);
+        expect(LG.shouldShow({
+            total_lanes: 3,
+            urgency: 'now',
+            confidence: 92,
+            recommended_lanes: [1],
+            show_lane_guidance: true,
+            distance_to_maneuver: 0,
+        })).toBe(false);
+        expect(LG.shouldShow({
+            total_lanes: 3,
+            urgency: 'now',
+            confidence: 92,
+            recommended_lanes: [1],
+            show_lane_guidance: true,
+            distance_to_maneuver: 80,
+        })).toBe(true);
+    });
 });
 
 describe('view-model: badge', () => {
@@ -294,6 +314,17 @@ describe('lane guidance fetch throttle helpers', () => {
             maneuver: 'left',
             lastManeuver: 'left',
         })).toBe(false);
+        // Step advance must bust throttle so completed-maneuver UI can hide/refresh.
+        expect(LG.shouldSkipLaneGuidanceFetch({
+            now: 2000,
+            lastFetch: 0,
+            lastPosition: { lat: 1, lon: 1 },
+            distanceMovedMeters: 10,
+            maneuver: 'left',
+            lastManeuver: 'left',
+            currentStepIndex: 2,
+            lastStepIndex: 1,
+        })).toBe(false);
     });
 
     test('buildLaneGuidanceCacheKey and API URL', () => {
@@ -391,6 +422,30 @@ describe('lane guidance fetch tick plan', () => {
             calculateDistance: () => 10,
         });
         expect(tick.action).toBe('skip');
+    });
+
+    test('buildLaneGuidanceFetchTickPlan clears when maneuver is complete', () => {
+        const tick = LG.buildLaneGuidanceFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'left',
+            now: 5000,
+            lastFetch: 4900,
+            lastPosition: { lat: 51.5, lon: -0.1 },
+            lastManeuver: 'left',
+            routeSteps: steps,
+            currentStepIndex: 0,
+            routePolyline: polyline,
+            lastSnappedRouteIndex: 0,
+            calculateDistance: () => 10,
+            snapToRoutePolyline: () => ({ index: 1, t: 0 }),
+            // Past the maneuver vertex → along-route distance 0.
+            distanceAlongRouteToVertexMeters: () => 0,
+        });
+        expect(tick.action).toBe('clear');
+        expect(tick.reason).toBe('maneuver-complete');
+        expect(tick.distToManeuver).toBe(0);
     });
 
     test('buildLaneGuidanceFetchTickPlan returns fetch plan when cache is stale', () => {
@@ -491,6 +546,18 @@ describe('buildLaneGuidanceFetchStateApplyPlan', () => {
         expect(apply.kind).toBe('fetch');
         expect(apply.fetch.url).toContain('/api/lane-guidance');
         expect(apply.fetch.maneuver).toBe('right');
+    });
+
+    test('maps clear tick after maneuver complete', () => {
+        const apply = LG.buildLaneGuidanceFetchStateApplyPlan({
+            action: 'clear',
+            reason: 'maneuver-complete',
+            statePatch: { lastFetch: 1000, lastManeuver: 'left', lastPosition: { lat: 51, lon: 0 } },
+            distToManeuver: 0,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.kind).toBe('clear');
+        expect(apply.reason).toBe('maneuver-complete');
     });
 });
 
@@ -685,6 +752,62 @@ describe('confidence-based hybrid lane guidance', () => {
         });
         expect(plan.action).toBe('lock');
         expect(plan.guidance.recommended_lanes).toEqual([3]);
+    });
+
+    test('stability plan clears when maneuver distance is complete', () => {
+        const guidance = {
+            total_lanes: 3,
+            recommended_lanes: [3],
+            recommended_lane: 3,
+            confidence: 95,
+            urgency: 'now',
+            show_lane_guidance: true,
+        };
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: guidance,
+            lockedGuidance: {
+                data: guidance,
+                lockedStepIndex: 2,
+            },
+            distanceToManeuver: 0,
+            maneuverStepIndex: 2,
+            maneuver: 'left',
+        });
+        expect(plan.action).toBe('clear');
+        expect(plan.guidance).toBeNull();
+        expect(plan.lockedGuidance).toBeNull();
+    });
+
+    test('stability plan drops stale lock after step advances past maneuver', () => {
+        const locked = {
+            data: {
+                total_lanes: 3,
+                recommended_lanes: [1],
+                recommended_lane: 1,
+                confidence: 95,
+                urgency: 'now',
+                show_lane_guidance: true,
+            },
+            lockedStepIndex: 2,
+        };
+        const nextGuidance = {
+            total_lanes: 3,
+            recommended_lanes: [3],
+            recommended_lane: 3,
+            confidence: 90,
+            urgency: 'ahead',
+            show_lane_guidance: true,
+        };
+        const plan = LG.buildLaneGuidanceStabilityPlan({
+            newGuidance: nextGuidance,
+            lockedGuidance: locked,
+            distanceToManeuver: 900,
+            maneuverStepIndex: 3,
+            maneuver: 'right',
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.guidance.recommended_lanes).toEqual([3]);
+        expect(plan.lockedGuidance).toBeNull();
     });
 
     test('stability plan keeps locked lanes when GPS updates arrive nearby', () => {
