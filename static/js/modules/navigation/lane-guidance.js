@@ -33,6 +33,12 @@
     var LANE_LOCK_DISTANCE_M = 400;
     /** Confidence gain required to replace locked guidance. */
     var LANE_LOCK_UPGRADE_DELTA = 15;
+    /**
+     * Hide lane guidance once along-route distance is at/past the maneuver vertex.
+     * Route geometry clamps past-junction distance to 0, so this clears the overlay
+     * after the manoeuvre is complete instead of leaving urgency "now" on screen.
+     */
+    var LANE_GUIDANCE_COMPLETE_DISTANCE_M = 0;
 
     /** True for motorway/trunk (and link) road classes. */
     function isMotorwayRoadType(roadType) {
@@ -432,6 +438,18 @@
     }
 
     /**
+     * True when the driver is at or past the maneuver (lane UI should hide).
+     * @param {number|null|undefined} distanceToManeuver
+     * @returns {boolean}
+     */
+    function isLaneManeuverComplete(distanceToManeuver) {
+        if (distanceToManeuver == null || !Number.isFinite(Number(distanceToManeuver))) {
+            return false;
+        }
+        return Number(distanceToManeuver) <= LANE_GUIDANCE_COMPLETE_DISTANCE_M;
+    }
+
+    /**
      * Stability plan: lock lane selection within ~400 m of the junction.
      * @param {Object} opts
      * @returns {Object}
@@ -451,7 +469,11 @@
                 lockedStepIndex: stepIndex,
             };
         }
-        if (opts.maneuverCompleted) {
+        // Drop a lock belonging to a maneuver the navigator has already advanced past.
+        if (locked && locked.lockedStepIndex >= 0 && stepIndex > locked.lockedStepIndex) {
+            locked = null;
+        }
+        if (opts.maneuverCompleted || isLaneManeuverComplete(distance)) {
             return { action: 'clear', guidance: null, lockedGuidance: null, lockedStepIndex: -1 };
         }
 
@@ -501,7 +523,9 @@
             action: 'update',
             guidance: newGuidance,
             lockedGuidance: locked,
-            lockedStepIndex: opts.lockedStepIndex != null ? opts.lockedStepIndex : -1,
+            lockedStepIndex: locked && locked.lockedStepIndex != null
+                ? locked.lockedStepIndex
+                : -1,
         };
     }
 
@@ -631,13 +655,14 @@
 
     /**
      * @returns {boolean} Whether the lane overlay should be visible. Hidden on single-lane
-     *   roads or when no maneuver is approaching.
+     *   roads, when no maneuver is approaching, or after the maneuver is complete.
      */
     function shouldShow(data) {
         if (!data || data.total_lanes <= 1 || data.urgency === 'none') return false;
         if (data.show_lane_guidance === false) return false;
         if ((data.confidence || 0) < LANE_CONFIDENCE_DISPLAY_MIN) return false;
         if (getRecommendedLaneNumbers(data).length === 0) return false;
+        if (isLaneManeuverComplete(data.distance_to_maneuver)) return false;
         return true;
     }
 
@@ -720,7 +745,9 @@
         o = o || {};
         var posChanged = !o.lastPosition || o.distanceMovedMeters > LANE_GUIDANCE_POSITION_THRESHOLD_M;
         var maneuverChanged = o.maneuver !== o.lastManeuver;
-        return !posChanged && !maneuverChanged &&
+        var stepChanged = o.currentStepIndex != null && o.lastStepIndex != null
+            && o.currentStepIndex !== o.lastStepIndex;
+        return !posChanged && !maneuverChanged && !stepChanged &&
             (o.now - o.lastFetch) < LANE_GUIDANCE_FETCH_INTERVAL_MS;
     }
 
@@ -793,17 +820,7 @@
             );
         }
 
-        if (shouldSkipLaneGuidanceFetch({
-            now: now,
-            lastFetch: opts.lastFetch,
-            lastPosition: opts.lastPosition,
-            distanceMovedMeters: distanceMovedMeters,
-            maneuver: maneuver,
-            lastManeuver: opts.lastManeuver,
-        })) {
-            return { action: 'skip', reason: 'throttle' };
-        }
-
+        // Distance first so post-manoeuvre hide is not delayed by fetch throttle.
         var distToManeuver = computeDistanceToManeuverMeters(
             opts.lat,
             opts.lon,
@@ -822,7 +839,30 @@
             lastFetch: now,
             lastManeuver: maneuver,
             lastPosition: { lat: opts.lat, lon: opts.lon },
+            lastStepIndex: opts.currentStepIndex != null ? opts.currentStepIndex : null,
         };
+
+        if (isLaneManeuverComplete(distToManeuver)) {
+            return {
+                action: 'clear',
+                reason: 'maneuver-complete',
+                statePatch: statePatch,
+                distToManeuver: distToManeuver,
+            };
+        }
+
+        if (shouldSkipLaneGuidanceFetch({
+            now: now,
+            lastFetch: opts.lastFetch,
+            lastPosition: opts.lastPosition,
+            distanceMovedMeters: distanceMovedMeters,
+            maneuver: maneuver,
+            lastManeuver: opts.lastManeuver,
+            currentStepIndex: opts.currentStepIndex,
+            lastStepIndex: opts.lastStepIndex,
+        })) {
+            return { action: 'skip', reason: 'throttle' };
+        }
 
         var cacheKey = buildLaneGuidanceCacheKey(
             maneuver,
@@ -924,6 +964,15 @@
     function buildLaneGuidanceFetchStateApplyPlan(tick) {
         if (!tick || tick.action === 'skip') {
             return { action: 'skip', reason: tick && tick.reason };
+        }
+        if (tick.action === 'clear') {
+            return {
+                action: 'apply',
+                kind: 'clear',
+                reason: tick.reason || 'maneuver-complete',
+                statePatch: tick.statePatch || {},
+                distToManeuver: tick.distToManeuver,
+            };
         }
         var apply = {
             action: 'apply',
@@ -1138,6 +1187,8 @@
         LANE_CONFIDENCE_HIGH: LANE_CONFIDENCE_HIGH,
         LANE_LOCK_DISTANCE_M: LANE_LOCK_DISTANCE_M,
         LANE_LOCK_UPGRADE_DELTA: LANE_LOCK_UPGRADE_DELTA,
+        LANE_GUIDANCE_COMPLETE_DISTANCE_M: LANE_GUIDANCE_COMPLETE_DISTANCE_M,
+        isLaneManeuverComplete: isLaneManeuverComplete,
         isMotorwayRoadType: isMotorwayRoadType,
         extractRoutingLaneGuidance: extractRoutingLaneGuidance,
         scoreApiLaneGuidanceConfidence: scoreApiLaneGuidanceConfidence,

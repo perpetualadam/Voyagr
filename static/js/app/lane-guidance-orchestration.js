@@ -9,6 +9,7 @@
     var lastLaneGuidanceFetch = 0;
     var lastLaneGuidanceManeuver = '';
     var lastLaneGuidancePosition = null;
+    var lastLaneGuidanceStepIndex = null;
     var lastLaneVoiceKey = '';
     var laneGuidanceCache = new Map();
     var lockedLaneGuidance = null;
@@ -56,11 +57,22 @@
         return rt().call.getCurrentRoadType(idx) || 'unknown';
     }
 
+    function clearLockedLaneGuidance() {
+        lockedLaneGuidance = null;
+        lockedLaneStepIndex = -1;
+    }
+
     function finalizeLaneGuidanceForRender(data, maneuver, roundaboutExitCount, distToManeuver, guidanceStepIndex) {
         var laneGuidance = LG();
         var stepIndex = guidanceStepIndex != null ? guidanceStepIndex : rt().getCurrentStepIndex();
         var roadType = resolveGuidanceRoadType(guidanceStepIndex);
         var routingLanes = getRoutingManeuverLanes(stepIndex);
+
+        // Navigator advanced past the locked maneuver — drop stale lock so the
+        // completed junction's lane arrows cannot linger into the next step.
+        if (lockedLaneStepIndex >= 0 && stepIndex > lockedLaneStepIndex) {
+            clearLockedLaneGuidance();
+        }
 
         var hybrid = laneGuidance.buildHybridLaneGuidance({
             routingManeuverLanes: routingLanes,
@@ -79,17 +91,19 @@
             maneuver: maneuver,
             roundaboutExitCount: roundaboutExitCount,
             routeRecalculated: false,
-            maneuverCompleted: false,
+            maneuverCompleted: laneGuidance.isLaneManeuverComplete(distToManeuver),
         });
 
         if (stability.action === 'clear') {
-            lockedLaneGuidance = null;
-            lockedLaneStepIndex = -1;
+            clearLockedLaneGuidance();
             return null;
         }
         if (stability.lockedGuidance) {
             lockedLaneGuidance = stability.lockedGuidance;
             lockedLaneStepIndex = stability.lockedStepIndex;
+        } else {
+            // Stability dropped a stale lock (step advanced past the junction).
+            clearLockedLaneGuidance();
         }
         return stability.guidance;
     }
@@ -139,6 +153,10 @@
         if (roundaboutExitCount === undefined) roundaboutExitCount = 0;
         if (guidanceStepIndex === undefined) guidanceStepIndex = null;
 
+        const resolvedStepIndex = guidanceStepIndex != null
+            ? guidanceStepIndex
+            : rt().getCurrentStepIndex();
+
         const tick = LG().buildLaneGuidanceFetchTickPlan({
             lat: lat,
             lon: lon,
@@ -149,12 +167,11 @@
             lastFetch: lastLaneGuidanceFetch,
             lastPosition: lastLaneGuidancePosition,
             lastManeuver: lastLaneGuidanceManeuver,
+            lastStepIndex: lastLaneGuidanceStepIndex,
             routeSteps: rt().getCurrentRouteSteps(),
             // Prefer the lookahead target step so distance/lanes track the roundabout/exit
             // we are pre-positioning for, not a neutral continue.
-            currentStepIndex: guidanceStepIndex != null
-                ? guidanceStepIndex
-                : rt().getCurrentStepIndex(),
+            currentStepIndex: resolvedStepIndex,
             routePolyline: rt().getRoutePolyline(),
             lastSnappedRouteIndex: rt().getLastSnappedRouteIndex
                 ? rt().getLastSnappedRouteIndex()
@@ -179,6 +196,15 @@
         lastLaneGuidanceFetch = apply.statePatch.lastFetch;
         lastLaneGuidanceManeuver = apply.statePatch.lastManeuver;
         lastLaneGuidancePosition = apply.statePatch.lastPosition;
+        if (apply.statePatch.lastStepIndex != null) {
+            lastLaneGuidanceStepIndex = apply.statePatch.lastStepIndex;
+        }
+
+        if (apply.kind === 'clear') {
+            clearLockedLaneGuidance();
+            renderLaneGuidanceUI(null);
+            return;
+        }
 
         if (apply.kind === 'render-cached') {
             var cachedFinal = finalizeLaneGuidanceForRender(
@@ -252,12 +278,12 @@
     }
 
     function resetLaneGuidanceForNewRoute() {
-        lockedLaneGuidance = null;
-        lockedLaneStepIndex = -1;
+        clearLockedLaneGuidance();
         laneGuidanceCache.clear();
         lastLaneGuidanceFetch = 0;
         lastLaneGuidanceManeuver = '';
         lastLaneGuidancePosition = null;
+        lastLaneGuidanceStepIndex = null;
         clearLastLaneVoiceKey();
         renderLaneGuidanceUI(null);
     }
