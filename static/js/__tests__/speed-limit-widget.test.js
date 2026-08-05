@@ -241,6 +241,55 @@ describe('speed-limit-widget module', () => {
         expect(apply.statePatch.currentSpeedLimitMph).toBe(30);
     });
 
+    test('buildSpeedLimitApiSuccessApplyPlan keeps edge 30 over authoritative OSM 60', () => {
+        // A nearby NSL / wrong-way OSM hit must not inflate above the active
+        // signed edge after the widget already entered a 30 mph segment.
+        const apply = SL.buildSpeedLimitApiSuccessApplyPlan({
+            data: {
+                success: true,
+                data: {
+                    speed_limit_mph: 60,
+                    road_type: 'primary',
+                    source: 'OSM-maxspeed',
+                },
+            },
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'primary',
+            valhallaSpeedLimit: 30,
+            currentSpeedMph: 28,
+            currentGpsSpeedMph: 27,
+            speedGpsModule: SG,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.widgetUpdate.shownLimit).toBe(30);
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(30);
+        expect(apply.cacheHint.source).toBe('edge-hint');
+    });
+
+    test('buildSpeedLimitApiSuccessApplyPlan still accepts lower API than edge', () => {
+        // Unsigned freeflow edge 60 with a real posted OSM 30 must show 30.
+        const apply = SL.buildSpeedLimitApiSuccessApplyPlan({
+            data: {
+                success: true,
+                data: {
+                    speed_limit_mph: 30,
+                    road_type: 'primary',
+                    source: 'OSM-maxspeed',
+                },
+            },
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'primary',
+            valhallaSpeedLimit: 60,
+            currentSpeedMph: 28,
+            currentGpsSpeedMph: 27,
+            speedGpsModule: SG,
+        });
+        expect(apply.widgetUpdate.shownLimit).toBe(30);
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(30);
+    });
+
     test('buildSpeedLimitFetchFallbackApplyPlan prefers cached limit', () => {
         const apply = SL.buildSpeedLimitFetchFallbackApplyPlan({
             cachedLimitMph: 40,
@@ -251,6 +300,18 @@ describe('speed-limit-widget module', () => {
         expect(apply.action).toBe('apply');
         expect(apply.statePatch.currentSpeedLimitMph).toBe(40);
         expect(apply.widgetUpdate.shownLimit).toBe(40);
+    });
+
+    test('buildSpeedLimitFetchFallbackApplyPlan caps cached 60 to edge 30', () => {
+        const apply = SL.buildSpeedLimitFetchFallbackApplyPlan({
+            cachedLimitMph: 60,
+            valhallaSpeedLimit: 30,
+            roadType: 'primary',
+            currentGpsSpeedMph: 28,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.widgetUpdate.shownLimit).toBe(30);
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(30);
     });
 
     test('buildUpdateAllSpeedDisplaysExecutePlan refreshes widget with shown limit', () => {

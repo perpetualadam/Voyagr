@@ -655,6 +655,34 @@ describe('buildNavSpeedLimitTickPlan', () => {
         expect(calls[0].prefer).toBe(false);
         expect(calls[0].api).toBe(30);
     });
+
+    test('caps sticky API 60 to edge 30 on mid-maneuver ticks', () => {
+        // After an API refetch re-sticks NSL 60, later GPS ticks (same maneuver)
+        // must still prefer the active signed edge 30.
+        const calls = [];
+        const plan = SG.buildNavSpeedLimitTickPlan({
+            routeInProgress: true,
+            isTrackingActive: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            currentRouteSteps: [{
+                begin_shape_index: 0,
+                speed_limit: 30,
+                road_class: 'primary',
+            }],
+            lastSnappedRouteIndex: 0,
+            displaySpeedMph: 28,
+            currentSpeedLimitMph: 60,
+            lastActiveManeuverIdx: 0,
+            resolveRoadType: () => 'primary',
+            pickDisplaySpeedLimitMph: (api, val, _rt, _region, opts) => {
+                calls.push({ api, val, prefer: !!(opts && opts.preferValhallaOverApi) });
+                return opts && opts.preferValhallaOverApi ? val : api;
+            },
+        });
+        expect(plan.resetFetchState).toBe(false);
+        expect(calls[0].prefer).toBe(true);
+        expect(plan.shownLimit).toBe(30);
+    });
 });
 
 describe('buildVehicleDisplayCoordinatesPlan', () => {
