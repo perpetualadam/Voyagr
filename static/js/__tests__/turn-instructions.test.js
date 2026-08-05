@@ -461,8 +461,8 @@ describe('buildLaneGuidanceTickPlan', () => {
     });
 
     test('looks ahead from continue to upcoming roundabout needing right lane', () => {
-        // Drivers on a continue after leaving a motorway must pre-position right
-        // for 2nd+/3rd+ exits instead of being told "stay left" until the last moment.
+        // Drivers on a continue after leaving a motorway must pre-position for
+        // upcoming roundabout exits instead of ignoring them until the last moment.
         const plan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
             routeSteps: [

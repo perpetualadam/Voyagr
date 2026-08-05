@@ -129,18 +129,22 @@ describe('buildDeterministicLaneGuidance', () => {
         expect(g.recommended_lane).toBe(2);
     });
 
-    test('roundabout 1st exit left; 2nd+/3rd+ right on multi-lane dual approaches', () => {
+    test('roundabout 1st/2nd left-ahead; 3rd+ right on multi-lane approaches', () => {
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 3, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('right');
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 1, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('left');
-        // Dual primary/trunk approaches: 2nd exit pre-positions right (not last-minute left).
+        // 2nd exit = straight ahead on the left lane (not middle/right).
         const twoPrimary = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
-        expect(twoPrimary.recommended_lane).toBe(2);
-        expect(twoPrimary.lane_arrows.find((a) => a.primary !== 'through').primary).toBe('right');
-        // Quiet residential keeps classic UK 2nd-exit = left/ahead.
-        const twoRes = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'residential');
-        expect(twoRes.recommended_lane).toBe(1);
+        expect(twoPrimary.recommended_lane).toBe(1);
+        expect(twoPrimary.lane_arrows[0].primary).toBe('through');
+        expect(LG.laneNameFor(twoPrimary.recommended_lane, twoPrimary.total_lanes)).toBe('left lane');
+        const twoUnknown = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'unknown');
+        expect(twoUnknown.recommended_lane).toBe(1);
+        // 3rd+ is right even when road class is quiet/unknown.
+        const threeUnknown = LG.buildDeterministicLaneGuidance('roundabout', 200, 3, 'unknown');
+        expect(threeUnknown.recommended_lane).toBe(2);
+        expect(threeUnknown.lane_arrows.find((a) => a.primary !== 'through').primary).toBe('right');
     });
 
     test('uturn recommends the rightmost lane (UK)', () => {
@@ -715,6 +719,38 @@ describe('confidence-based hybrid lane guidance', () => {
         expect(LG.shouldShow(hybrid)).toBe(true);
     });
 
+    test('2nd-exit roundabout always recommends the left lane for straight ahead', () => {
+        expect(LG.isRoundaboutSecondExitStraight('roundabout', 2)).toBe(true);
+        expect(LG.isRoundaboutSecondExitStraight('roundabout', 3)).toBe(false);
+        expect(LG.isRoundaboutSecondExitStraight('left', 2)).toBe(false);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(false);
+        expect(LG.getRecommendedLaneSimple('roundabout', 2, 2, 'primary')).toBe(1);
+        expect(LG.getRecommendedLaneSimple('roundabout', 3, 3, 'primary')).toBe(3);
+
+        const estimated = LG.buildHybridLaneGuidance({
+            maneuver: 'roundabout',
+            roundaboutExitCount: 2,
+            distanceToManeuver: 200,
+            roadType: 'primary',
+        });
+        expect(estimated.recommended_lane).toBe(1);
+        expect(estimated.recommended_lanes).toEqual([1]);
+
+        // Routing may mark a middle/right through lane active — still pin to left.
+        const routingHybrid = LG.buildHybridLaneGuidance({
+            maneuver: 'roundabout',
+            roundaboutExitCount: 2,
+            distanceToManeuver: 200,
+            roadType: 'primary',
+            routingManeuverLanes: [
+                { valid_indications: ['through'] },
+                { active: true, valid_indications: ['through', 'right'] },
+            ],
+        });
+        expect(routingHybrid.recommended_lane).toBe(1);
+        expect(routingHybrid.recommended_lanes).toEqual([1]);
+    });
+
     test('high confidence highlights a single lane', () => {
         const out = LG.applyConfidenceLaneSelection({
             confidence: 95,
@@ -1036,14 +1072,17 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
 
         expect(LG.estimateCandidateLanesUK('roundabout', 3, 1)).toEqual([1]);
         expect(LG.estimateCandidateLanesUK('roundabout', 3, 3)).toEqual([3]);
-        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'primary')).toEqual([2]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'primary')).toEqual([1]);
         expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'residential')).toEqual([1]);
         expect(LG.estimateCandidateLanesUK('left', 3, 0)).toEqual([1, 2]);
         expect(LG.estimateCandidateLanesUK('right', 2, 0)).toEqual([2]);
         expect(LG.estimateCandidateLanesUK('merge', 3, 0)).toEqual([1, 3]);
         expect(LG.estimateCandidateLanesUK('through', 4, 0)).toEqual([2]);
-        expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(false);
         expect(LG.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(false);
+        expect(LG.roundaboutPrefersRightLane(3, 2, 'unknown')).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(1, 2, 'primary')).toBe(false);
+        expect(LG.roundaboutPrefersRightLane(3, 1, 'primary')).toBe(false);
         // Merge candidates are edges; primary is centre (not candidates[0]).
         expect(LG.getRecommendedLaneSimple('merge', 3, 0)).toBe(2);
         expect(LG.getRecommendedLaneSimple('merge', 4, 0)).toBe(2);
@@ -1220,23 +1259,43 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
     });
 
     test('buildLaneVoiceAnnouncementPlan multi-lane roundabout and ahead paths', () => {
-        const multi = Object.assign(
+        // Multi-lane voice join ("lane A or lane B") — use 3rd-exit right-side lanes.
+        const multi = {
+            total_lanes: 3,
+            recommended_lanes: [2, 3],
+            recommended_lane: 3,
+            next_maneuver: 'roundabout',
+            roundabout_exit_count: 3,
+            urgency: 'now',
+            confidence: 95,
+            show_lane_guidance: true,
+        };
+        const plan = LG.buildLaneVoiceAnnouncementPlan(multi, '');
+        expect(plan.message).toContain('roundabout');
+        expect(plan.message).toContain(' or ');
+
+        const soonRoundabout = Object.assign({}, multi, { urgency: 'soon' });
+        const soonPlan = LG.buildLaneVoiceAnnouncementPlan(soonRoundabout, '');
+        expect(soonPlan.message).toContain('roundabout ahead');
+
+        // 2nd exit is straight on the left lane — single-lane voice copy.
+        const secondExit = Object.assign(
             {},
             LG.buildHybridLaneGuidance({
                 routingManeuverLanes: [
-                    { active: true }, { active: true }, { active: false },
+                    { active: true }, { active: true },
                 ],
                 maneuver: 'roundabout',
                 roundaboutExitCount: 2,
                 distanceToManeuver: 80,
                 roadType: 'primary',
             }),
-            { next_maneuver: 'roundabout' }
+            { next_maneuver: 'roundabout', roundabout_exit_count: 2 }
         );
-        const plan = LG.buildLaneVoiceAnnouncementPlan(multi, '');
-        expect(plan.message).toContain('roundabout');
+        expect(secondExit.recommended_lanes).toEqual([1]);
+        const secondPlan = LG.buildLaneVoiceAnnouncementPlan(secondExit, '');
+        expect(secondPlan.message).toContain('left lane');
 
-        const ahead = LG.buildDeterministicLaneGuidance('exit_right', 600, 0, 'motorway');
         const aheadHybrid = LG.buildHybridLaneGuidance({
             maneuver: 'exit_right',
             distanceToManeuver: 600,
@@ -1247,5 +1306,7 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
         expect(aheadPlan.message).toContain('lane');
 
         expect(LG.buildLaneVoiceAnnouncementPlan({ total_lanes: 3, confidence: 50 }, '')).toBeNull();
+        expect(LG.scoreApiLaneGuidanceConfidence({})).toBe(0);
+        expect(LG.scoreApiLaneGuidanceConfidence({ has_osm_data: true })).toBe(78);
     });
 });

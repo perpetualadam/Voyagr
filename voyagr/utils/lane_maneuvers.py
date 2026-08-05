@@ -85,12 +85,14 @@ def recommend_lanes_from_turn_lanes(
 
     if maneuver == 'roundabout':
         if roundabout_exit_count <= 1:
+            # 1st exit = left turn.
             maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
         elif roundabout_exit_count == 2:
-            # Prefer through, but allow right — dual approaches often mark 2nd exit
-            # on the right-hand lane; left-turn-only lanes are still avoided.
-            maneuver_map['roundabout'] = ['through', 'right', 'slight_right', 'none', '', 'slight_left']
+            # 2nd exit = straight ahead on the left lane (UK). Prefer left/through;
+            # never prefer right for a 2nd-exit departure.
+            maneuver_map['roundabout'] = ['left', 'slight_left', 'through', 'none', '']
         else:
+            # 3rd+ exits = right-hand departure.
             maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
 
     wanted = maneuver_map.get(maneuver, ['through', 'none', ''])
@@ -118,7 +120,12 @@ def recommend_lane_from_turn_lanes(
     roundabout_exit_count: int = 0,
 ) -> Optional[int]:
     lanes = recommend_lanes_from_turn_lanes(lane_dirs, maneuver, roundabout_exit_count)
-    return lanes[0] if lanes else None
+    if not lanes:
+        return None
+    # 2nd-exit roundabout: straight on the left lane — always pick the leftmost match.
+    if maneuver == 'roundabout' and roundabout_exit_count == 2:
+        return min(lanes)
+    return lanes[0]
 
 
 def roundabout_prefers_right_lane(
@@ -126,18 +133,13 @@ def roundabout_prefers_right_lane(
     total_lanes: int,
     road_type: Optional[str] = None,
 ) -> bool:
-    """True when a multi-lane dual-style approach should pre-position right for 2nd+ exits."""
-    if exit_count < 2 or total_lanes < 2:
-        return False
-    if exit_count >= 3:
-        return True
-    rt = str(road_type or '').lower()
-    return rt in (
-        'motorway', 'motorway_link',
-        'trunk', 'trunk_link', 'trunk_road',
-        'primary', 'primary_road',
-        'secondary', 'secondary_road',
-    )
+    """True when a multi-lane approach should pre-position right for 3rd+ exits.
+
+    1st exit = left; 2nd exit = straight (usually left/ahead). ``road_type`` is
+    accepted for call-site parity but does not change the threshold.
+    """
+    _ = road_type  # API parity with JS / existing call sites
+    return exit_count >= 3 and total_lanes >= 2
 
 
 def estimate_candidate_lanes_uk(
