@@ -804,7 +804,12 @@
         for (var i = 0; i < steps.length; i++) {
             var maneuver = steps[i];
             var maneuverShapeIndex = maneuver.begin_shape_index || 0;
-            if (maneuverShapeIndex < userRouteIndex - 5) continue;
+            // Skip maneuvers the vehicle has already passed. The previous hold of
+            // `userRouteIndex - 5` kept completed turns on sparse GraphHopper
+            // geometry for seconds after the junction (banner stuck on "On" /
+            // the old instruction). At the junction vertex itself we still show
+            // the turn; once the snap advances past it, advance immediately.
+            if (maneuverShapeIndex < userRouteIndex) continue;
 
             var type = maneuver.type || 0;
             var direction = maneuverTypeToDirectionKey(type);
@@ -813,6 +818,14 @@
 
             var targetIndex = Math.min(maneuverShapeIndex, polyline.length - 1);
             var distanceToManeuver = distAlong ? distAlong(polyline, turnSnap, targetIndex) : 0;
+            // Along-route distance clamps to 0 at/past the junction. If the live
+            // snap is already past this vertex, treat the maneuver as complete
+            // even when the monotonic cursor has not caught up yet.
+            var snapIdx = (turnSnap && Number.isFinite(Number(turnSnap.index)))
+                ? Number(turnSnap.index)
+                : userRouteIndex;
+            if (distanceToManeuver <= 0 && maneuverShapeIndex < snapIdx) continue;
+
             var maxDetectionDistance = getTurnDetectionMaxDistanceMeters(direction);
 
             if (distanceToManeuver <= maxDetectionDistance) {
@@ -1113,8 +1126,10 @@
      * How far ahead (m) lane guidance may pre-position for an upcoming critical maneuver.
      * Roundabouts/exits need earlier commitment than ordinary turns — drivers leaving a
      * motorway onto a dual approach already expect to be in the correct lane.
+     * UK motorway off-slips to a terminal roundabout are often >2 km; keep the
+     * roundabout budget long enough to target right-lane prep as soon as the slip starts.
      */
-    var LANE_LOOKAHEAD_ROUNDABOUT_MAX_M = 2000;
+    var LANE_LOOKAHEAD_ROUNDABOUT_MAX_M = 4000;
     var LANE_LOOKAHEAD_EXIT_MAX_M = 2500;
     var LANE_LOOKAHEAD_TURN_MAX_M = 1200;
 
@@ -1165,7 +1180,7 @@
 
     /**
      * Motorway/trunk departures that otherwise monopolise lane guidance with keep-left
-     * even when a 2nd+/3rd+ roundabout on the dual approach needs the right lane.
+     * even when a later roundabout needs early lane prep (2nd = ahead/left, 3rd+ = right).
      * @param {string} maneuverDir
      * @returns {boolean}
      */
@@ -1178,7 +1193,7 @@
     }
 
     /**
-     * Next 2nd+/3rd+ roundabout within the roundabout lane-lookahead budget.
+     * Next 2nd+ roundabout within the roundabout lane-lookahead budget.
      * Pure route-step logic — works offline when /api/lane-guidance is unreachable.
      * @param {Array<Object>} steps
      * @param {number} afterIndex - Start scanning after this step index.
@@ -1222,9 +1237,8 @@
      * another motorway). Left lane on the joining slip is fine.
      *
      * Motorway leave → roundabout: off-slips and active exit steps must still look ahead
-     * to a 2nd+/3rd+ roundabout so lane guidance prefers right on the dual approach
-     * (turn widget / Then-row already show the exit). This uses cached route steps only,
-     * so it still works with no data connection.
+     * to a 2nd+/3rd+ roundabout so lane guidance can prep early (2nd = ahead/left,
+     * 3rd+ = right). This uses cached route steps only, so it still works offline.
      *
      * @param {Array<Object>} steps
      * @param {number} stepIndex
@@ -1250,7 +1264,7 @@
 
         if (!isLaneNeutralManeuverDir(maneuverDir)) {
             // Exit / keep-left is active, but Then often already shows the roundabout.
-            // Prefer 2nd+/3rd+ roundabout right-lane prep when the active step is already
+            // Prefer 2nd+/3rd+ roundabout lane prep when the active step is already
             // on the off-slip, or when it is a hard exit (driver committed to leaving).
             // Do not override a distant motorway keep-left — still need left to leave.
             var hardExit = maneuverDir === 'exit' || maneuverDir === 'exit_left'
@@ -1290,7 +1304,7 @@
                 break;
             }
             // Off-slip continue: first hit may be a ramp/exit keep-left before the
-            // roundabout — peek past it so 3rd-exit right-lane prep is not delayed.
+            // roundabout — peek past it so roundabout lane prep is not delayed.
             // Runs before the joining-slip guard: that keep may be on trunk/motorway
             // (non-link), not only on the slip itself.
             // From the motorway mainline, keep targeting the exit (need left first).

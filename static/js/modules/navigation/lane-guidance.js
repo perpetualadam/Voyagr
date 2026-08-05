@@ -232,22 +232,26 @@
     }
 
     /**
-     * Multi-lane dual-carriageway-style approaches: 2nd+ roundabout exits need the
-     * right lane early (motorway slip → dual approach). 1st exit stays left; quiet
-     * residential approaches keep classic UK "2nd = left / ahead".
+     * Multi-lane approaches: only 3rd+ roundabout exits need the right lane.
+     * 1st exit = left turn (left lane); 2nd exit = straight ahead on the left lane.
      * @param {number} exitCount
      * @param {number} totalLanes
-     * @param {string} [roadType]
+     * @param {string} [roadType] - retained for API parity; not used for the threshold
      * @returns {boolean}
      */
     function roundaboutPrefersRightLane(exitCount, totalLanes, roadType) {
-        if (!(exitCount >= 2) || !(totalLanes >= 2)) return false;
-        if (exitCount >= 3) return true;
-        var rt = String(roadType || '').toLowerCase();
-        return rt === 'motorway' || rt === 'motorway_link'
-            || rt === 'trunk' || rt === 'trunk_link' || rt === 'trunk_road'
-            || rt === 'primary' || rt === 'primary_road'
-            || rt === 'secondary' || rt === 'secondary_road';
+        void roadType;
+        return (exitCount >= 3) && (totalLanes >= 2);
+    }
+
+    /**
+     * True when this is a 2nd-exit roundabout (straight ahead → left lane).
+     * @param {string} maneuver
+     * @param {number} exitCount
+     * @returns {boolean}
+     */
+    function isRoundaboutSecondExitStraight(maneuver, exitCount) {
+        return maneuver === 'roundabout' && Number(exitCount) === 2;
     }
 
     /**
@@ -395,6 +399,13 @@
         }
 
         base = applyConfidenceLaneSelection(base);
+
+        // 2nd-exit roundabout = straight on the left lane. Routing/OSM can still
+        // highlight a middle/right through lane — pin the primary to lane 1.
+        if (isRoundaboutSecondExitStraight(maneuver, exitCount) && (base.total_lanes || 0) >= 2) {
+            base.recommended_lane = 1;
+            base.recommended_lanes = [1];
+        }
 
         var valuable = isLaneGuidanceValuableManeuver({
             totalLanes: base.total_lanes,
@@ -563,6 +574,13 @@
     }
 
     /**
+     * Info-urgency horizon (m). Ordinary turns hide beyond 1500 m; 2nd+/3rd+ roundabouts
+     * stay visible much earlier so motorway off-slip drivers get right-lane prep immediately.
+     */
+    var LANE_URGENCY_INFO_MAX_M = 1500;
+    var LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M = 4000;
+
+    /**
      * Distance-derived urgency fields (mirrors the backend thresholds). Recomputed from the
      * live distance so a cached lane structure never shows stale urgency as you approach.
      * @param {number} distance - Metres to the maneuver.
@@ -572,10 +590,13 @@
      */
     function laneUrgencyFields(distance, lanePos, maneuver, exitCount) {
         var urgency = 'none', urgency_text = '';
+        var infoMax = (maneuver === 'roundabout' && (exitCount || 0) >= 2)
+            ? LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M
+            : LANE_URGENCY_INFO_MAX_M;
         if (distance <= 100) { urgency = 'now'; urgency_text = 'Get in the ' + lanePos + ' now!'; }
         else if (distance <= 300) { urgency = 'soon'; urgency_text = 'Move to the ' + lanePos; }
         else if (distance <= 800) { urgency = 'ahead'; urgency_text = 'Prepare to use the ' + lanePos; }
-        else if (distance <= 1500) { urgency = 'info'; urgency_text = 'Stay in the ' + lanePos; }
+        else if (distance <= infoMax) { urgency = 'info'; urgency_text = 'Stay in the ' + lanePos; }
         var guidance_text = 'Use the ' + lanePos;
         if (maneuver === 'roundabout' && exitCount > 0) {
             guidance_text = 'Use the ' + lanePos + ' and take the ' + ordinal(exitCount) + ' exit';
@@ -607,6 +628,7 @@
                 lane = totalLanes;
                 dir = 'right';
             } else {
+                // 1st exit = left turn; 2nd exit = straight on the left lane.
                 lane = 1;
                 dir = exitCount <= 1 ? 'left' : 'through';
             }
@@ -1199,6 +1221,7 @@
         estimateCandidateLanesUK: estimateCandidateLanesUK,
         getRecommendedLaneSimple: getRecommendedLaneSimple,
         roundaboutPrefersRightLane: roundaboutPrefersRightLane,
+        isRoundaboutSecondExitStraight: isRoundaboutSecondExitStraight,
         enrichGuidanceWithRecommendedLanes: enrichGuidanceWithRecommendedLanes,
         applyConfidenceLaneSelection: applyConfidenceLaneSelection,
         buildHybridLaneGuidance: buildHybridLaneGuidance,
@@ -1208,6 +1231,8 @@
         ordinal: ordinal,
         laneNameFor: laneNameFor,
         laneUrgencyFields: laneUrgencyFields,
+        LANE_URGENCY_INFO_MAX_M: LANE_URGENCY_INFO_MAX_M,
+        LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M: LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M,
         buildDeterministicLaneGuidance: buildDeterministicLaneGuidance,
         shouldShow: shouldShow,
         badge: badge,

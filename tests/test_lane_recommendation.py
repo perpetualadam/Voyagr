@@ -5,8 +5,8 @@ These import the real functions used by the ``/api/lane-guidance`` endpoint
 scenario — not merely that the result is "in range" or "didn't crash".
 
 They lock in the corrections made for:
-  * roundabout 1st exit -> LEFT; 2nd+ on multi-lane dual approaches -> RIGHT
-    (early pre-position after motorway slips); quiet residential 2nd -> LEFT
+  * roundabout 1st exit -> LEFT; 2nd exit (straight) -> LEFT/AHEAD;
+    3rd+ exits -> RIGHT on multi-lane approaches
   * sharp_left / sharp_right honouring OSM ``turn:lanes`` instead of silently
     falling back to "through"
   * going straight ahead choosing a through lane when the left lane is
@@ -66,12 +66,11 @@ class TestSimpleLaneFallback(unittest.TestCase):
         self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 1), 1)
         self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 1, 'primary'), 1)
 
-    def test_roundabout_second_exit_right_on_dual_approach_left_on_residential(self):
-        # Multi-lane primary/trunk: pre-position right for 2nd+ exits.
-        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2, 'primary'), 2)
-        self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 2, 'trunk'), 3)
-        # Quiet residential keeps classic UK ahead/left for 2nd exit.
-        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2, 'residential'), 1)
+    def test_roundabout_second_exit_uses_left_ahead_lane(self):
+        # 2nd exit = straight ahead → left/ahead lane on multi-lane approaches.
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2, 'primary'), 1)
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 2, 'trunk'), 1)
+        self.assertEqual(_get_recommended_lane_simple('roundabout', 2, 2, 'unknown'), 1)
 
     def test_roundabout_third_plus_exit_uses_right_lane(self):
         self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 3), 3)
@@ -153,17 +152,23 @@ class TestRecommendFromTurnLanes(unittest.TestCase):
             _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=1), 1
         )
 
-    def test_roundabout_second_exit_takes_through_lane(self):
-        # Straight-through exit should pick a through lane, skipping the left-turn-only lane.
+    def test_roundabout_second_exit_takes_left_lane(self):
+        # 2nd exit = straight on the left lane, not middle through or right.
         dirs = self._dirs('left|through|right', 3)
         self.assertEqual(
-            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 2
+            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 1
         )
 
-    def test_roundabout_second_exit_can_use_right_when_no_through(self):
+    def test_roundabout_second_exit_prefers_leftmost_through(self):
+        dirs = self._dirs('through|through|right', 3)
+        self.assertEqual(
+            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 1
+        )
+
+    def test_roundabout_second_exit_can_use_left_when_no_through(self):
         dirs = self._dirs('left|right', 2)
         self.assertEqual(
-            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 2
+            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 1
         )
 
     def test_roundabout_late_exit_takes_right_lane(self):
@@ -204,6 +209,58 @@ class TestLowConfidenceGuidanceCopy(unittest.TestCase):
         combined = data['urgency_text'] + data['guidance_text']
         self.assertNotIn('  ', combined)
         self.assertNotRegex(combined, r'\bthe\s+in\b')
+
+
+class TestRoundaboutEarlyUrgency(unittest.TestCase):
+    """2nd+/3rd+ roundabouts keep info urgency on long motorway off-slips."""
+
+    def test_third_exit_roundabout_info_urgency_at_slip_entry_distance(self):
+        app = Flask(__name__)
+        app.register_blueprint(navigation_bp, url_prefix='/api')
+        osm = {
+            'total_lanes': 2,
+            'lanes_forward': 2,
+            'turn_lanes_forward': 'through|right',
+            'turn_lanes': 'through|right',
+            'name': 'Approach',
+            'highway': 'primary',
+        }
+        with app.test_request_context(
+            '/api/lane-guidance?lat=51.5&lon=-0.1'
+            '&maneuver=roundabout&distance=3200&road_type=primary'
+            '&roundabout_exit_count=3'
+        ):
+            with patch('voyagr.api.navigation._fetch_osm_lane_data', return_value=osm):
+                data = get_lane_guidance().get_json()
+
+        self.assertTrue(data['success'])
+        self.assertTrue(data['show_lane_guidance'])
+        self.assertEqual(data['urgency'], 'info')
+        self.assertIn('right lane', data['guidance_text'])
+        self.assertIn('3rd exit', data['guidance_text'])
+
+    def test_ordinary_right_turn_still_hides_beyond_1500m(self):
+        app = Flask(__name__)
+        app.register_blueprint(navigation_bp, url_prefix='/api')
+        osm = {
+            'total_lanes': 2,
+            'lanes_forward': 2,
+            'turn_lanes_forward': 'through|right',
+            'turn_lanes': 'through|right',
+            'name': 'High Street',
+            'highway': 'primary',
+        }
+        with app.test_request_context(
+            '/api/lane-guidance?lat=51.5&lon=-0.1'
+            '&maneuver=right&distance=3200&road_type=primary'
+        ):
+            with patch('voyagr.api.navigation._fetch_osm_lane_data', return_value=osm):
+                data = get_lane_guidance().get_json()
+
+        self.assertTrue(data['success'])
+        self.assertTrue(data['show_lane_guidance'])
+        self.assertEqual(data['urgency'], 'none')
+        self.assertEqual(data['guidance_text'], 'Stay in current lane')
 
 
 class TestConfidenceLaneSelection(unittest.TestCase):

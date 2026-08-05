@@ -461,8 +461,8 @@ describe('buildLaneGuidanceTickPlan', () => {
     });
 
     test('looks ahead from continue to upcoming roundabout needing right lane', () => {
-        // Drivers on a continue after leaving a motorway must pre-position right
-        // for 2nd+/3rd+ exits instead of being told "stay left" until the last moment.
+        // Drivers on a continue after leaving a motorway must pre-position for
+        // upcoming roundabout exits instead of ignoring them until the last moment.
         const plan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
             routeSteps: [
@@ -499,7 +499,7 @@ describe('buildLaneGuidanceTickPlan', () => {
         const plan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
             routeSteps: [
-                { type: 8, distance: 3.5 }, // 3.5 km > 2 km lookahead
+                { type: 8, distance: 5.0 }, // 5 km > 4 km roundabout lookahead
                 { type: 26, roundabout_exit_count: 3 },
             ],
             currentStepIndex: 0,
@@ -509,11 +509,35 @@ describe('buildLaneGuidanceTickPlan', () => {
         expect(plan.lookAhead).toBe(false);
     });
 
+    test('looks ahead from long motorway off-slip to 3rd-exit roundabout', () => {
+        // Long UK slips often exceed the old 2 km budget; right-lane prep must start
+        // as soon as the driver is on the link, not halfway down the dual approach.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 3.2, road_class: 'motorway_link' },
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 3,
+                    road_class: 'primary',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+        expect(3.2 * 1000).toBeLessThanOrEqual(TI.LANE_LOOKAHEAD_ROUNDABOUT_MAX_M);
+    });
+
     test('looks ahead to exit/right turns with larger distance budgets', () => {
         const exitPlan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
             routeSteps: [
-                { type: 8, distance: 2.2 }, // within exit budget (2.5 km), beyond roundabout
+                { type: 8, distance: 2.2 }, // within exit budget (2.5 km)
                 { type: 20, distance: 0.1 }, // exit_right
             ],
             currentStepIndex: 0,
@@ -924,6 +948,52 @@ describe('turn detection helpers', () => {
         expect(turn.direction).toBe('right');
         expect(turn.maneuverIndex).toBe(1);
         expect(turn.distance).toBe(200);
+    });
+
+    test('findUpcomingManeuverTurn advances past completed maneuver immediately', () => {
+        // Sparse GH geometry: old `userRouteIndex - 5` hold kept "Turn left"/"On"
+        // for several vertices after the junction. Once the snap is past the
+        // maneuver vertex, the banner must advance to the next turn.
+        const steps = [
+            { type: 8, begin_shape_index: 0 },
+            { type: 15, begin_shape_index: 2, instruction: 'Turn left', street_names: ['Old St'] },
+            { type: 10, begin_shape_index: 5, instruction: 'Turn right', street_names: ['Next St'] },
+        ];
+        const polyline = [
+            [51.50, -0.12],
+            [51.501, -0.119],
+            [51.502, -0.118],
+            [51.503, -0.117],
+            [51.504, -0.116],
+            [51.505, -0.115],
+        ];
+        const turn = TI.findUpcomingManeuverTurn(steps, 3, polyline, { index: 3, t: 0 }, {
+            // Past the left-turn vertex → along-route distance clamps to 0.
+            distanceAlongRouteToVertexMeters: (_poly, _snap, target) => (target <= 2 ? 0 : 180),
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(turn).not.toBeNull();
+        expect(turn.direction).toBe('right');
+        expect(turn.maneuverIndex).toBe(2);
+        expect(turn.streetName).toBe('Next St');
+        expect(turn.distance).toBe(180);
+    });
+
+    test('findUpcomingManeuverTurn still shows turn at the junction vertex', () => {
+        const steps = [
+            { type: 8, begin_shape_index: 0 },
+            { type: 15, begin_shape_index: 2, instruction: 'Turn left', street_names: ['High St'] },
+        ];
+        const polyline = [[51.50, -0.12], [51.501, -0.119], [51.502, -0.118]];
+        const turn = TI.findUpcomingManeuverTurn(steps, 2, polyline, { index: 2, t: 0 }, {
+            distanceAlongRouteToVertexMeters: () => 0,
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(turn).not.toBeNull();
+        expect(turn.direction).toBe('left');
+        expect(turn.maneuverIndex).toBe(1);
     });
 });
 
