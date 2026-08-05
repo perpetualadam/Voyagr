@@ -232,22 +232,26 @@
     }
 
     /**
-     * Multi-lane dual-carriageway-style approaches: 2nd+ roundabout exits need the
-     * right lane early (motorway slip → dual approach). 1st exit stays left; quiet
-     * residential approaches keep classic UK "2nd = left / ahead".
+     * Multi-lane approaches: only 3rd+ roundabout exits need the right lane.
+     * 1st exit = left turn (left lane); 2nd exit = straight ahead on the left lane.
      * @param {number} exitCount
      * @param {number} totalLanes
-     * @param {string} [roadType]
+     * @param {string} [roadType] - retained for API parity; not used for the threshold
      * @returns {boolean}
      */
     function roundaboutPrefersRightLane(exitCount, totalLanes, roadType) {
-        if (!(exitCount >= 2) || !(totalLanes >= 2)) return false;
-        if (exitCount >= 3) return true;
-        var rt = String(roadType || '').toLowerCase();
-        return rt === 'motorway' || rt === 'motorway_link'
-            || rt === 'trunk' || rt === 'trunk_link' || rt === 'trunk_road'
-            || rt === 'primary' || rt === 'primary_road'
-            || rt === 'secondary' || rt === 'secondary_road';
+        void roadType;
+        return (exitCount >= 3) && (totalLanes >= 2);
+    }
+
+    /**
+     * True when this is a 2nd-exit roundabout (straight ahead → left lane).
+     * @param {string} maneuver
+     * @param {number} exitCount
+     * @returns {boolean}
+     */
+    function isRoundaboutSecondExitStraight(maneuver, exitCount) {
+        return maneuver === 'roundabout' && Number(exitCount) === 2;
     }
 
     /**
@@ -395,6 +399,13 @@
         }
 
         base = applyConfidenceLaneSelection(base);
+
+        // 2nd-exit roundabout = straight on the left lane. Routing/OSM can still
+        // highlight a middle/right through lane — pin the primary to lane 1.
+        if (isRoundaboutSecondExitStraight(maneuver, exitCount) && (base.total_lanes || 0) >= 2) {
+            base.recommended_lane = 1;
+            base.recommended_lanes = [1];
+        }
 
         var valuable = isLaneGuidanceValuableManeuver({
             totalLanes: base.total_lanes,
@@ -617,6 +628,7 @@
                 lane = totalLanes;
                 dir = 'right';
             } else {
+                // 1st exit = left turn; 2nd exit = straight on the left lane.
                 lane = 1;
                 dir = exitCount <= 1 ? 'left' : 'through';
             }
@@ -1209,6 +1221,7 @@
         estimateCandidateLanesUK: estimateCandidateLanesUK,
         getRecommendedLaneSimple: getRecommendedLaneSimple,
         roundaboutPrefersRightLane: roundaboutPrefersRightLane,
+        isRoundaboutSecondExitStraight: isRoundaboutSecondExitStraight,
         enrichGuidanceWithRecommendedLanes: enrichGuidanceWithRecommendedLanes,
         applyConfidenceLaneSelection: applyConfidenceLaneSelection,
         buildHybridLaneGuidance: buildHybridLaneGuidance,

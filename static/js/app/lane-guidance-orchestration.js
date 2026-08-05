@@ -49,8 +49,8 @@
 
     /**
      * Road class for lane heuristics must track the guidance/lookahead step, not only
-     * the active continue — otherwise roundaboutPrefersRightLane sees residential
-     * while distance/lanes already target a dual primary/trunk roundabout.
+     * the active continue — lane count defaults and OSM context follow the target
+     * roundabout/exit step rather than a neutral continue.
      */
     function resolveGuidanceRoadType(guidanceStepIndex) {
         var idx = guidanceStepIndex != null ? guidanceStepIndex : undefined;
