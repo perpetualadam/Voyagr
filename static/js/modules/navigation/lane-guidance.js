@@ -254,6 +254,72 @@
         return maneuver === 'roundabout' && Number(exitCount) === 2;
     }
 
+    /** Directions that may take a 2nd-exit (straight) departure. */
+    var SECOND_EXIT_USABLE_DIRS = {
+        left: true,
+        slight_left: true,
+        through: true,
+        none: true,
+        '': true,
+    };
+
+    /**
+     * True when a direction list can serve a 2nd-exit roundabout departure.
+     * @param {Array<string>|null|undefined} dirs
+     * @returns {boolean}
+     */
+    function directionsAllowSecondExit(dirs) {
+        if (!Array.isArray(dirs) || dirs.length === 0) return false;
+        for (var i = 0; i < dirs.length; i++) {
+            if (SECOND_EXIT_USABLE_DIRS[dirs[i]]) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Leftmost lane usable for a 2nd-exit departure from routing/OSM markings.
+     * Falls back to 1 when markings are absent (UK left-ahead heuristic).
+     * @param {Array<Object>|null|undefined} routingLanes
+     * @param {Object|null|undefined} base
+     * @returns {number}
+     */
+    function resolveSecondExitPinnedLane(routingLanes, base) {
+        var usable = [];
+        var i;
+
+        if (Array.isArray(routingLanes) && routingLanes.length >= 2) {
+            for (i = 0; i < routingLanes.length; i++) {
+                var lane = routingLanes[i];
+                if (lane && directionsAllowSecondExit(lane.valid_indications)) {
+                    usable.push(i + 1);
+                }
+            }
+        }
+
+        if (!usable.length && base && base.has_turn_lanes && !base.has_routing_lanes) {
+            var arrows = base.lane_arrows;
+            if (Array.isArray(arrows) && arrows.length >= 2) {
+                for (i = 0; i < arrows.length; i++) {
+                    if (arrows[i] && directionsAllowSecondExit(arrows[i].directions)) {
+                        usable.push(i + 1);
+                    }
+                }
+            }
+            // OSM scoring already excluded lane 1 (e.g. right|through|through).
+            if (!usable.length) {
+                var scored = getRecommendedLaneNumbers(base);
+                if (scored.length > 0 && scored.indexOf(1) < 0) {
+                    usable = scored.slice();
+                }
+            }
+        }
+
+        if (usable.length > 0) {
+            return Math.min.apply(null, usable);
+        }
+        return 1;
+    }
+
     /**
      * UK heuristic: candidate lanes for a manoeuvre (1-based indices).
      * @param {string} maneuver
@@ -401,10 +467,12 @@
         base = applyConfidenceLaneSelection(base);
 
         // 2nd-exit roundabout = straight on the left lane. Routing/OSM can still
-        // highlight a middle/right through lane — pin the primary to lane 1.
+        // highlight a middle/right through lane — pin to the leftmost *usable*
+        // lane (lane 1 when it allows the exit; otherwise the leftmost candidate).
         if (isRoundaboutSecondExitStraight(maneuver, exitCount) && (base.total_lanes || 0) >= 2) {
-            base.recommended_lane = 1;
-            base.recommended_lanes = [1];
+            var pinLane = resolveSecondExitPinnedLane(opts.routingManeuverLanes, base);
+            base.recommended_lane = pinLane;
+            base.recommended_lanes = [pinLane];
         }
 
         var valuable = isLaneGuidanceValuableManeuver({

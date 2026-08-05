@@ -759,7 +759,8 @@ describe('confidence-based hybrid lane guidance', () => {
         expect(estimated.recommended_lane).toBe(1);
         expect(estimated.recommended_lanes).toEqual([1]);
 
-        // Routing may mark a middle/right through lane active — still pin to left.
+        // Routing may mark a middle/right through lane active — still pin to left
+        // when the left lane itself allows the 2nd-exit departure.
         const routingHybrid = LG.buildHybridLaneGuidance({
             maneuver: 'roundabout',
             roundaboutExitCount: 2,
@@ -772,6 +773,46 @@ describe('confidence-based hybrid lane guidance', () => {
         });
         expect(routingHybrid.recommended_lane).toBe(1);
         expect(routingHybrid.recommended_lanes).toEqual([1]);
+
+        // right|through|through: lane 1 is not usable for 2nd exit — keep leftmost through.
+        const rightOnlyLeft = LG.buildHybridLaneGuidance({
+            maneuver: 'roundabout',
+            roundaboutExitCount: 2,
+            distanceToManeuver: 200,
+            roadType: 'primary',
+            routingManeuverLanes: [
+                { valid_indications: ['right'] },
+                { active: true, valid_indications: ['through'] },
+                { valid_indications: ['through'] },
+            ],
+        });
+        expect(rightOnlyLeft.recommended_lane).toBe(2);
+        expect(rightOnlyLeft.recommended_lanes).toEqual([2]);
+
+        // OSM turn:lanes with the same markings must not be overwritten to lane 1.
+        const osmHybrid = LG.buildHybridLaneGuidance({
+            maneuver: 'roundabout',
+            roundaboutExitCount: 2,
+            distanceToManeuver: 200,
+            roadType: 'primary',
+            apiData: {
+                success: true,
+                total_lanes: 3,
+                recommended_lane: 2,
+                recommended_lanes: [2],
+                confidence: 95,
+                has_turn_lanes: true,
+                has_osm_data: true,
+                source: 'osm_turn_lanes',
+                lane_arrows: [
+                    { directions: ['right'], arrow: '→', primary: 'right' },
+                    { directions: ['through'], arrow: '↑', primary: 'through' },
+                    { directions: ['through'], arrow: '↑', primary: 'through' },
+                ],
+            },
+        });
+        expect(osmHybrid.recommended_lane).toBe(2);
+        expect(osmHybrid.recommended_lanes).toEqual([2]);
     });
 
     test('high confidence highlights a single lane', () => {
