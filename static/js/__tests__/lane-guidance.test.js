@@ -87,6 +87,29 @@ describe('laneUrgencyFields', () => {
         const f = LG.laneUrgencyFields(600, 'right lane', 'roundabout', 3);
         expect(f.guidance_text).toBe('Use the right lane and take the 3rd exit');
     });
+
+    test('2nd+/3rd+ roundabouts keep info urgency on long motorway slips', () => {
+        // Overlay hides when urgency is none; without an early horizon, right-lane
+        // prep stays invisible for the first kilometre+ of a typical off-slip.
+        expect(LG.laneUrgencyFields(3200, 'right lane', 'roundabout', 3).urgency).toBe('info');
+        expect(LG.laneUrgencyFields(3200, 'right lane', 'roundabout', 2).urgency).toBe('info');
+        expect(LG.laneUrgencyFields(3200, 'left lane', 'roundabout', 1).urgency).toBe('none');
+        expect(LG.laneUrgencyFields(3200, 'right lane', 'right', 0).urgency).toBe('none');
+        expect(LG.laneUrgencyFields(4500, 'right lane', 'roundabout', 3).urgency).toBe('none');
+        expect(LG.LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M).toBe(4000);
+    });
+
+    test('shouldShow keeps 3rd-exit right-lane prep visible at slip entry distance', () => {
+        const g = LG.buildDeterministicLaneGuidance('roundabout', 3200, 3, 'primary');
+        expect(g.recommended_lane).toBe(2);
+        expect(g.urgency).toBe('info');
+        // Estimated fallback alone is below display confidence; hybrid/API paths pin
+        // confidence. Assert the urgency gate that previously hid long-slip prep.
+        expect(LG.shouldShow(Object.assign({}, g, {
+            confidence: 80,
+            show_lane_guidance: true,
+        }))).toBe(true);
+    });
 });
 
 describe('buildDeterministicLaneGuidance', () => {

@@ -1126,8 +1126,10 @@
      * How far ahead (m) lane guidance may pre-position for an upcoming critical maneuver.
      * Roundabouts/exits need earlier commitment than ordinary turns — drivers leaving a
      * motorway onto a dual approach already expect to be in the correct lane.
+     * UK motorway off-slips to a terminal roundabout are often >2 km; keep the
+     * roundabout budget long enough to target right-lane prep as soon as the slip starts.
      */
-    var LANE_LOOKAHEAD_ROUNDABOUT_MAX_M = 2000;
+    var LANE_LOOKAHEAD_ROUNDABOUT_MAX_M = 4000;
     var LANE_LOOKAHEAD_EXIT_MAX_M = 2500;
     var LANE_LOOKAHEAD_TURN_MAX_M = 1200;
 

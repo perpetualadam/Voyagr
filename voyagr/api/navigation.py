@@ -227,6 +227,11 @@ def get_lane_guidance():
 
         if show_lane_guidance:
             lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+            # Match JS laneUrgencyFields: 2nd+/3rd+ roundabouts keep info urgency out to
+            # 4 km so motorway off-slip drivers see right-lane prep immediately.
+            info_max_m = 4000 if (
+                next_maneuver == 'roundabout' and roundabout_exit_count >= 2
+            ) else 1500
 
             if distance_to_maneuver <= 100:
                 urgency = 'now'
@@ -237,14 +242,14 @@ def get_lane_guidance():
             elif distance_to_maneuver <= 800:
                 urgency = 'ahead'
                 urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
-            elif distance_to_maneuver <= 1500:
+            elif distance_to_maneuver <= info_max_m:
                 urgency = 'info'
                 urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
             else:
                 urgency = 'none'
                 urgency_text = ''
 
-            if next_maneuver == 'straight' or distance_to_maneuver > 1500:
+            if next_maneuver == 'straight' or distance_to_maneuver > info_max_m:
                 guidance_text = 'Stay in current lane'
             elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
                 exit_ordinal = _ordinal(roundabout_exit_count)

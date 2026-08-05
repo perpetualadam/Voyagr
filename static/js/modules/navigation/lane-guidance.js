@@ -574,6 +574,13 @@
     }
 
     /**
+     * Info-urgency horizon (m). Ordinary turns hide beyond 1500 m; 2nd+/3rd+ roundabouts
+     * stay visible much earlier so motorway off-slip drivers get right-lane prep immediately.
+     */
+    var LANE_URGENCY_INFO_MAX_M = 1500;
+    var LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M = 4000;
+
+    /**
      * Distance-derived urgency fields (mirrors the backend thresholds). Recomputed from the
      * live distance so a cached lane structure never shows stale urgency as you approach.
      * @param {number} distance - Metres to the maneuver.
@@ -583,10 +590,13 @@
      */
     function laneUrgencyFields(distance, lanePos, maneuver, exitCount) {
         var urgency = 'none', urgency_text = '';
+        var infoMax = (maneuver === 'roundabout' && (exitCount || 0) >= 2)
+            ? LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M
+            : LANE_URGENCY_INFO_MAX_M;
         if (distance <= 100) { urgency = 'now'; urgency_text = 'Get in the ' + lanePos + ' now!'; }
         else if (distance <= 300) { urgency = 'soon'; urgency_text = 'Move to the ' + lanePos; }
         else if (distance <= 800) { urgency = 'ahead'; urgency_text = 'Prepare to use the ' + lanePos; }
-        else if (distance <= 1500) { urgency = 'info'; urgency_text = 'Stay in the ' + lanePos; }
+        else if (distance <= infoMax) { urgency = 'info'; urgency_text = 'Stay in the ' + lanePos; }
         var guidance_text = 'Use the ' + lanePos;
         if (maneuver === 'roundabout' && exitCount > 0) {
             guidance_text = 'Use the ' + lanePos + ' and take the ' + ordinal(exitCount) + ' exit';
@@ -1221,6 +1231,8 @@
         ordinal: ordinal,
         laneNameFor: laneNameFor,
         laneUrgencyFields: laneUrgencyFields,
+        LANE_URGENCY_INFO_MAX_M: LANE_URGENCY_INFO_MAX_M,
+        LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M: LANE_URGENCY_ROUNDABOUT_EARLY_INFO_MAX_M,
         buildDeterministicLaneGuidance: buildDeterministicLaneGuidance,
         shouldShow: shouldShow,
         badge: badge,

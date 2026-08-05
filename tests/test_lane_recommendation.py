@@ -211,6 +211,58 @@ class TestLowConfidenceGuidanceCopy(unittest.TestCase):
         self.assertNotRegex(combined, r'\bthe\s+in\b')
 
 
+class TestRoundaboutEarlyUrgency(unittest.TestCase):
+    """2nd+/3rd+ roundabouts keep info urgency on long motorway off-slips."""
+
+    def test_third_exit_roundabout_info_urgency_at_slip_entry_distance(self):
+        app = Flask(__name__)
+        app.register_blueprint(navigation_bp, url_prefix='/api')
+        osm = {
+            'total_lanes': 2,
+            'lanes_forward': 2,
+            'turn_lanes_forward': 'through|right',
+            'turn_lanes': 'through|right',
+            'name': 'Approach',
+            'highway': 'primary',
+        }
+        with app.test_request_context(
+            '/api/lane-guidance?lat=51.5&lon=-0.1'
+            '&maneuver=roundabout&distance=3200&road_type=primary'
+            '&roundabout_exit_count=3'
+        ):
+            with patch('voyagr.api.navigation._fetch_osm_lane_data', return_value=osm):
+                data = get_lane_guidance().get_json()
+
+        self.assertTrue(data['success'])
+        self.assertTrue(data['show_lane_guidance'])
+        self.assertEqual(data['urgency'], 'info')
+        self.assertIn('right lane', data['guidance_text'])
+        self.assertIn('3rd exit', data['guidance_text'])
+
+    def test_ordinary_right_turn_still_hides_beyond_1500m(self):
+        app = Flask(__name__)
+        app.register_blueprint(navigation_bp, url_prefix='/api')
+        osm = {
+            'total_lanes': 2,
+            'lanes_forward': 2,
+            'turn_lanes_forward': 'through|right',
+            'turn_lanes': 'through|right',
+            'name': 'High Street',
+            'highway': 'primary',
+        }
+        with app.test_request_context(
+            '/api/lane-guidance?lat=51.5&lon=-0.1'
+            '&maneuver=right&distance=3200&road_type=primary'
+        ):
+            with patch('voyagr.api.navigation._fetch_osm_lane_data', return_value=osm):
+                data = get_lane_guidance().get_json()
+
+        self.assertTrue(data['success'])
+        self.assertTrue(data['show_lane_guidance'])
+        self.assertEqual(data['urgency'], 'none')
+        self.assertEqual(data['guidance_text'], 'Stay in current lane')
+
+
 class TestConfidenceLaneSelection(unittest.TestCase):
     def test_high_confidence_single_lane(self):
         lanes, primary = _apply_confidence_lane_selection([1, 2], 95)
