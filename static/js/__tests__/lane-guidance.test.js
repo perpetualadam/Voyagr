@@ -134,10 +134,11 @@ describe('buildDeterministicLaneGuidance', () => {
             .find((a) => a.primary !== 'through').primary).toBe('right');
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 1, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('left');
-        // 2nd exit = straight ahead → left/ahead lane (not right).
+        // 2nd exit = straight ahead on the left lane (not middle/right).
         const twoPrimary = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
         expect(twoPrimary.recommended_lane).toBe(1);
         expect(twoPrimary.lane_arrows[0].primary).toBe('through');
+        expect(LG.laneNameFor(twoPrimary.recommended_lane, twoPrimary.total_lanes)).toBe('left lane');
         const twoUnknown = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'unknown');
         expect(twoUnknown.recommended_lane).toBe(1);
         // 3rd+ is right even when road class is quiet/unknown.
@@ -716,6 +717,34 @@ describe('confidence-based hybrid lane guidance', () => {
         expect(hybrid.confidence).toBeGreaterThanOrEqual(LG.LANE_CONFIDENCE_DISPLAY_MIN);
         expect(hybrid.recommended_lanes.length).toBeGreaterThanOrEqual(1);
         expect(LG.shouldShow(hybrid)).toBe(true);
+    });
+
+    test('2nd-exit roundabout always recommends the left lane for straight ahead', () => {
+        expect(LG.isRoundaboutSecondExitStraight('roundabout', 2)).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(false);
+
+        const estimated = LG.buildHybridLaneGuidance({
+            maneuver: 'roundabout',
+            roundaboutExitCount: 2,
+            distanceToManeuver: 200,
+            roadType: 'primary',
+        });
+        expect(estimated.recommended_lane).toBe(1);
+        expect(estimated.recommended_lanes).toEqual([1]);
+
+        // Routing may mark a middle/right through lane active — still pin to left.
+        const routingHybrid = LG.buildHybridLaneGuidance({
+            maneuver: 'roundabout',
+            roundaboutExitCount: 2,
+            distanceToManeuver: 200,
+            roadType: 'primary',
+            routingManeuverLanes: [
+                { valid_indications: ['through'] },
+                { active: true, valid_indications: ['through', 'right'] },
+            ],
+        });
+        expect(routingHybrid.recommended_lane).toBe(1);
+        expect(routingHybrid.recommended_lanes).toEqual([1]);
     });
 
     test('high confidence highlights a single lane', () => {

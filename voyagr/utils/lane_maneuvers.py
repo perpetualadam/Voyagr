@@ -88,9 +88,9 @@ def recommend_lanes_from_turn_lanes(
             # 1st exit = left turn.
             maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
         elif roundabout_exit_count == 2:
-            # 2nd exit = straight ahead; usually left/ahead lane (not right).
-            # Left-turn-only left lanes on roundabout approaches are rare.
-            maneuver_map['roundabout'] = ['through', 'slight_left', 'left', 'none', '']
+            # 2nd exit = straight ahead on the left lane (UK). Prefer left/through;
+            # never prefer right for a 2nd-exit departure.
+            maneuver_map['roundabout'] = ['left', 'slight_left', 'through', 'none', '']
         else:
             # 3rd+ exits = right-hand departure.
             maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
@@ -120,7 +120,12 @@ def recommend_lane_from_turn_lanes(
     roundabout_exit_count: int = 0,
 ) -> Optional[int]:
     lanes = recommend_lanes_from_turn_lanes(lane_dirs, maneuver, roundabout_exit_count)
-    return lanes[0] if lanes else None
+    if not lanes:
+        return None
+    # 2nd-exit roundabout: straight on the left lane — always pick the leftmost match.
+    if maneuver == 'roundabout' and roundabout_exit_count == 2:
+        return min(lanes)
+    return lanes[0]
 
 
 def roundabout_prefers_right_lane(

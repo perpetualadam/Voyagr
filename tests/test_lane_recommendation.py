@@ -152,11 +152,11 @@ class TestRecommendFromTurnLanes(unittest.TestCase):
             _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=1), 1
         )
 
-    def test_roundabout_second_exit_takes_through_lane(self):
-        # Straight-through 2nd exit: prefer through/ahead, not the right-turn lane.
+    def test_roundabout_second_exit_takes_left_lane(self):
+        # 2nd exit = straight on the left lane, not middle through or right.
         dirs = self._dirs('left|through|right', 3)
         self.assertEqual(
-            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 2
+            _recommend_lane_from_turn_lanes(dirs, 'roundabout', roundabout_exit_count=2), 1
         )
 
     def test_roundabout_second_exit_prefers_leftmost_through(self):
