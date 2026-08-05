@@ -213,6 +213,13 @@ describe('smoothDisplayCoordinate', () => {
         const urgent = SG.smoothDisplayCoordinate(51.0, 51.5, 80);
         expect(Math.abs(urgent - 51.5)).toBeLessThan(Math.abs(gentle - 51.5));
     });
+    test('default EMA closes most of the gap in one sample (low display lag)', () => {
+        // α=0.78 → 78% of the way to the target; old α=0.52 felt like GPS latency.
+        const next = SG.smoothDisplayCoordinate(0, 100, 0);
+        expect(next).toBeCloseTo(100 * SG.DEFAULTS.DISPLAY_POS_EMA_ALPHA, 5);
+        expect(SG.DEFAULTS.DISPLAY_POS_EMA_ALPHA).toBeGreaterThanOrEqual(0.75);
+        expect(SG.DEFAULTS.DISPLAY_POS_URGENT_JUMP_M).toBeLessThanOrEqual(25);
+    });
 });
 
 describe('stepSmoothGpsSpeedMph', () => {

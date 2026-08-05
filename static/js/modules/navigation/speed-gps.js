@@ -23,9 +23,11 @@
         SNAP_LOCK_HYSTERESIS_METERS: 18,
         SNAP_BLEND_EMA_ALPHA: 0.4,
         SNAP_HYSTERESIS_ON_THRESHOLD: 0.55,
-        DISPLAY_POS_EMA_ALPHA: 0.52,
-        DISPLAY_POS_URGENT_ALPHA: 0.88,
-        DISPLAY_POS_URGENT_JUMP_M: 40,
+        // Track snapped/GPS targets closely: α=0.52 left the marker ~1 sample behind
+        // (~tens of metres at motorway speed), which reads as GPS latency.
+        DISPLAY_POS_EMA_ALPHA: 0.78,
+        DISPLAY_POS_URGENT_ALPHA: 0.92,
+        DISPLAY_POS_URGENT_JUMP_M: 25,
         MS_TO_MPH: 2.237,
         DISPLACEMENT_MOVE_THRESHOLD: 3,
         DISPLACEMENT_NOISE_FLOOR_MOVING: 4,
