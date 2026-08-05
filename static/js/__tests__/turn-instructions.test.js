@@ -995,6 +995,38 @@ describe('turn detection helpers', () => {
         expect(turn.direction).toBe('left');
         expect(turn.maneuverIndex).toBe(1);
     });
+
+    test('findUpcomingManeuverTurn does not skip turns between live snap and monotonic lock', () => {
+        // Backward snap of 10 verts: > MAX_REWIND (8) so the lock stays at 20,
+        // but <= VEHICLE_SYNC (12) so searchStart is not re-synced. The upcoming
+        // maneuver at shape index 15 lies between snap (10) and lock (20) and
+        // must still be detected.
+        const indexPlan = TI.advanceMonotonicTurnDetectIndex(10, 20);
+        expect(indexPlan.userRouteIndex).toBe(20);
+
+        const steps = [
+            { type: 8, begin_shape_index: 0 },
+            { type: 10, begin_shape_index: 15, instruction: 'Turn right', street_names: ['Gap St'] },
+        ];
+        const polyline = Array.from({ length: 30 }, (_, i) => [51.5 + i * 0.001, -0.1]);
+        const turn = TI.findUpcomingManeuverTurn(
+            steps,
+            indexPlan.userRouteIndex,
+            polyline,
+            { index: 10, t: 0 },
+            {
+                distanceAlongRouteToVertexMeters: (_poly, _snap, target) =>
+                    Math.max(0, (target - 10) * 20),
+                getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+                resolveRoadClass: () => 'primary',
+            }
+        );
+        expect(turn).not.toBeNull();
+        expect(turn.direction).toBe('right');
+        expect(turn.maneuverIndex).toBe(1);
+        expect(turn.streetName).toBe('Gap St');
+        expect(turn.distance).toBe(100);
+    });
 });
 
 describe('buildDetectUpcomingTurnTickPlan', () => {
@@ -1036,6 +1068,34 @@ describe('buildDetectUpcomingTurnTickPlan', () => {
         expect(usedSearchStart).toBe(0);
         expect(tick.action).toBe('detected');
         expect(tick.statePatch.lastTurnDetectRouteVertexIndex).toBe(0);
+    });
+
+    test('detects maneuver between locked cursor and live snap after mid-sized rewind', () => {
+        // last=20, live snap=10: no vehicle re-sync (delta 10 <= 12), monotonic
+        // lock stays at 20 (> max rewind 8). Maneuver at 15 must still surface.
+        const longPolyline = Array.from({ length: 40 }, (_, i) => [51.5 + i * 0.001, -0.1]);
+        const gapSteps = [
+            { type: 8, begin_shape_index: 0 },
+            { type: 10, begin_shape_index: 15, instruction: 'Turn right', street_names: ['Gap St'] },
+        ];
+        const tick = TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: longPolyline,
+            routeSteps: gapSteps,
+            userLat: 51.51,
+            userLon: -0.1,
+            lastTurnDetectRouteVertexIndex: 20,
+            lastSnappedRouteIndex: 10,
+            snapToRoutePolyline: () => ({ index: 10, t: 0 }),
+            distanceAlongRouteToVertexMeters: (_poly, _snap, target) =>
+                Math.max(0, (target - 10) * 20),
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(tick.action).toBe('detected');
+        expect(tick.turnInfo.streetName).toBe('Gap St');
+        expect(tick.turnInfo.maneuverIndex).toBe(1);
+        expect(tick.statePatch.lastTurnDetectRouteVertexIndex).toBe(20);
     });
 
     test('detects in-range maneuver and patches state', () => {
