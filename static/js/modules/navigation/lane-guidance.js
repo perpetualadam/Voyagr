@@ -232,22 +232,18 @@
     }
 
     /**
-     * Multi-lane dual-carriageway-style approaches: 2nd+ roundabout exits need the
-     * right lane early (motorway slip → dual approach). 1st exit stays left; quiet
-     * residential approaches keep classic UK "2nd = left / ahead".
+     * Multi-lane approaches: 2nd+ roundabout exits need the right lane.
+     * UK dual approaches often mark left as left-turn-only and right as
+     * 2nd-exit/straight plus 3rd+ exits — waiting until 3+ left drivers in the
+     * wrong lane for ordinary 2nd-exit (straight) departures. 1st exit stays left.
      * @param {number} exitCount
      * @param {number} totalLanes
-     * @param {string} [roadType]
+     * @param {string} [roadType] - retained for API parity; not used for the threshold
      * @returns {boolean}
      */
     function roundaboutPrefersRightLane(exitCount, totalLanes, roadType) {
-        if (!(exitCount >= 2) || !(totalLanes >= 2)) return false;
-        if (exitCount >= 3) return true;
-        var rt = String(roadType || '').toLowerCase();
-        return rt === 'motorway' || rt === 'motorway_link'
-            || rt === 'trunk' || rt === 'trunk_link' || rt === 'trunk_road'
-            || rt === 'primary' || rt === 'primary_road'
-            || rt === 'secondary' || rt === 'secondary_road';
+        void roadType;
+        return (exitCount >= 2) && (totalLanes >= 2);
     }
 
     /**

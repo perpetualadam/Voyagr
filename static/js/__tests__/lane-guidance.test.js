@@ -129,18 +129,21 @@ describe('buildDeterministicLaneGuidance', () => {
         expect(g.recommended_lane).toBe(2);
     });
 
-    test('roundabout 1st exit left; 2nd+/3rd+ right on multi-lane dual approaches', () => {
+    test('roundabout 1st exit left; 2nd+ right on multi-lane approaches', () => {
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 3, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('right');
         expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 1, 'primary').lane_arrows
             .find((a) => a.primary !== 'through').primary).toBe('left');
-        // Dual primary/trunk approaches: 2nd exit pre-positions right (not last-minute left).
+        // 2nd exit pre-positions right (left is often left-turn-only on dual approaches).
         const twoPrimary = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
         expect(twoPrimary.recommended_lane).toBe(2);
         expect(twoPrimary.lane_arrows.find((a) => a.primary !== 'through').primary).toBe('right');
-        // Quiet residential keeps classic UK 2nd-exit = left/ahead.
+        // Same for residential / unknown road class — threshold is 2+, not 3+.
         const twoRes = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'residential');
-        expect(twoRes.recommended_lane).toBe(1);
+        expect(twoRes.recommended_lane).toBe(1); // residential defaults to 1 lane → no right prep
+        const twoUnknown = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'unknown');
+        expect(twoUnknown.recommended_lane).toBe(2);
+        expect(twoUnknown.lane_arrows.find((a) => a.primary !== 'through').primary).toBe('right');
     });
 
     test('uturn recommends the rightmost lane (UK)', () => {
@@ -1037,13 +1040,16 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
         expect(LG.estimateCandidateLanesUK('roundabout', 3, 1)).toEqual([1]);
         expect(LG.estimateCandidateLanesUK('roundabout', 3, 3)).toEqual([3]);
         expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'primary')).toEqual([2]);
-        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'residential')).toEqual([1]);
+        expect(LG.estimateCandidateLanesUK('roundabout', 2, 2, 'residential')).toEqual([2]);
         expect(LG.estimateCandidateLanesUK('left', 3, 0)).toEqual([1, 2]);
         expect(LG.estimateCandidateLanesUK('right', 2, 0)).toEqual([2]);
         expect(LG.estimateCandidateLanesUK('merge', 3, 0)).toEqual([1, 3]);
         expect(LG.estimateCandidateLanesUK('through', 4, 0)).toEqual([2]);
         expect(LG.roundaboutPrefersRightLane(2, 2, 'primary')).toBe(true);
-        expect(LG.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(false);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(2, 2, 'unknown')).toBe(true);
+        expect(LG.roundaboutPrefersRightLane(1, 2, 'primary')).toBe(false);
+        expect(LG.roundaboutPrefersRightLane(3, 1, 'primary')).toBe(false);
         // Merge candidates are edges; primary is centre (not candidates[0]).
         expect(LG.getRecommendedLaneSimple('merge', 3, 0)).toBe(2);
         expect(LG.getRecommendedLaneSimple('merge', 4, 0)).toBe(2);
