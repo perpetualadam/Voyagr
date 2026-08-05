@@ -90,15 +90,15 @@ describe('lane-guidance-orchestration lookahead roadType', () => {
         const hybridOpts = buildHybridSpy.mock.calls[0][0];
         expect(hybridOpts.roadType).toBe('primary');
         expect(hybridOpts.roundaboutExitCount).toBe(2);
-        // 2nd+ exits prefer right on any multi-lane approach (road class no longer gates).
-        expect(LaneGuidance.roundaboutPrefersRightLane(2, 2, 'residential')).toBe(true);
-        expect(LaneGuidance.roundaboutPrefersRightLane(2, 2, hybridOpts.roadType)).toBe(true);
+        // 2nd exit = straight → left/ahead; right prep starts at 3rd+.
+        expect(LaneGuidance.roundaboutPrefersRightLane(2, 2, hybridOpts.roadType)).toBe(false);
+        expect(LaneGuidance.roundaboutPrefersRightLane(3, 2, hybridOpts.roadType)).toBe(true);
         expect(LaneGuidance.estimateCandidateLanesUK(
             'roundabout',
             2,
             2,
             hybridOpts.roadType
-        )).toEqual([2]);
+        )).toEqual([1]);
     });
 
     test('without lookahead still resolves road type from the active step', async () => {

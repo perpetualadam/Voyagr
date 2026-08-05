@@ -232,10 +232,9 @@
     }
 
     /**
-     * Multi-lane approaches: 2nd+ roundabout exits need the right lane.
-     * UK dual approaches often mark left as left-turn-only and right as
-     * 2nd-exit/straight plus 3rd+ exits — waiting until 3+ left drivers in the
-     * wrong lane for ordinary 2nd-exit (straight) departures. 1st exit stays left.
+     * Multi-lane approaches: 3rd+ roundabout exits need the right lane.
+     * 1st exit = left turn (left lane); 2nd exit = straight ahead (usually left /
+     * ahead lane). Left-turn-only left lanes on roundabout approaches are rare.
      * @param {number} exitCount
      * @param {number} totalLanes
      * @param {string} [roadType] - retained for API parity; not used for the threshold
@@ -243,7 +242,7 @@
      */
     function roundaboutPrefersRightLane(exitCount, totalLanes, roadType) {
         void roadType;
-        return (exitCount >= 2) && (totalLanes >= 2);
+        return (exitCount >= 3) && (totalLanes >= 2);
     }
 
     /**

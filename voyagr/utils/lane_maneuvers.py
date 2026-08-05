@@ -85,10 +85,14 @@ def recommend_lanes_from_turn_lanes(
 
     if maneuver == 'roundabout':
         if roundabout_exit_count <= 1:
+            # 1st exit = left turn.
             maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
+        elif roundabout_exit_count == 2:
+            # 2nd exit = straight ahead; usually left/ahead lane (not right).
+            # Left-turn-only left lanes on roundabout approaches are rare.
+            maneuver_map['roundabout'] = ['through', 'slight_left', 'left', 'none', '']
         else:
-            # 2nd+ exits: prefer right. Dual approaches often mark left as
-            # left-turn-only and right as 2nd-exit/straight plus 3rd+ exits.
+            # 3rd+ exits = right-hand departure.
             maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
 
     wanted = maneuver_map.get(maneuver, ['through', 'none', ''])
@@ -124,14 +128,13 @@ def roundabout_prefers_right_lane(
     total_lanes: int,
     road_type: Optional[str] = None,
 ) -> bool:
-    """True when a multi-lane approach should pre-position right for 2nd+ exits.
+    """True when a multi-lane approach should pre-position right for 3rd+ exits.
 
-    ``road_type`` is accepted for call-site parity but does not gate the threshold:
-    waiting until 3+ left 2nd-exit (straight) traffic in the left/left-only lane on
-    typical dual approaches.
+    1st exit = left; 2nd exit = straight (usually left/ahead). ``road_type`` is
+    accepted for call-site parity but does not change the threshold.
     """
     _ = road_type  # API parity with JS / existing call sites
-    return exit_count >= 2 and total_lanes >= 2
+    return exit_count >= 3 and total_lanes >= 2
 
 
 def estimate_candidate_lanes_uk(
