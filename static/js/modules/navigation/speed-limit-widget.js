@@ -419,13 +419,17 @@
         // maneuver edge already has a posted-limit hint (e.g. GH max_speed → 30),
         // do not let primary/trunk defaults (50/60) overwrite it and stick NSL
         // through a signed 30 zone until a later 40 mph fetch happens to succeed.
+        // Also never let an authoritative OSM/TomTom result *inflate* above the
+        // active edge (sticky NSL 60 after a signed 30 segment) — a lower API
+        // value still wins so unsigned edges can be corrected downward.
         var weakSource = /road-type-default|highway-inferred/i.test(String(parsed.source || ''));
         var edgeHint = Number(opts.valhallaSpeedLimit);
-        var preferEdgeOverWeakApi = weakSource
-            && Number.isFinite(edgeHint)
-            && edgeHint > 0
-            && parsed.limitMph != null
-            && Number(parsed.limitMph) !== edgeHint;
+        var edgeOk = Number.isFinite(edgeHint) && edgeHint > 0;
+        var apiLimit = parsed.limitMph != null ? Number(parsed.limitMph) : NaN;
+        var apiInflatesAboveEdge = edgeOk && Number.isFinite(apiLimit) && apiLimit > edgeHint;
+        var preferEdgeOverApi = edgeOk
+            && Number.isFinite(apiLimit)
+            && (apiInflatesAboveEdge || (weakSource && apiLimit !== edgeHint));
         var displayLimit = pickDisplaySpeedLimitMph(
             parsed.limitMph,
             opts.valhallaSpeedLimit,
@@ -433,13 +437,13 @@
             region,
             {
                 allowRoadTypeFallback: parsed.limitMph == null,
-                preferValhallaOverApi: preferEdgeOverWeakApi,
+                preferValhallaOverApi: preferEdgeOverApi,
             }
         );
         var statePatch = {};
         if (parsed.roadType) statePatch.lastDetectedRoadType = parsed.roadType;
         if (parsed.region) statePatch.lastSpeedLimitRegion = parsed.region;
-        // Persist what the widget shows so a weak API 60 cannot re-stick after we
+        // Persist what the widget shows so a sticky API 60 cannot re-stick after we
         // preferred the edge 30 for display.
         if (displayLimit != null && displayLimit > 0) {
             statePatch.currentLimitMph = displayLimit;
@@ -458,8 +462,8 @@
             cacheHint: parsed.limitMph != null ? {
                 lat: opts.lat,
                 lon: opts.lon,
-                limitMph: preferEdgeOverWeakApi ? displayLimit : parsed.limitMph,
-                source: preferEdgeOverWeakApi ? 'edge-hint' : (parsed.source || 'api'),
+                limitMph: preferEdgeOverApi ? displayLimit : parsed.limitMph,
+                source: preferEdgeOverApi ? 'edge-hint' : (parsed.source || 'api'),
             } : null,
         };
     }
@@ -485,19 +489,24 @@
         if (fallbackLimit == null) {
             return { action: 'skip' };
         }
+        var edgeHint = Number(opts.valhallaSpeedLimit);
+        var preferEdge = Number.isFinite(edgeHint)
+            && edgeHint > 0
+            && Number(fallbackLimit) > edgeHint;
         var displayLimit = pickDisplaySpeedLimitMph(
             fallbackLimit,
             opts.valhallaSpeedLimit,
             opts.roadType,
             opts.lastSpeedLimitRegion,
-            { allowRoadTypeFallback: false }
+            { allowRoadTypeFallback: false, preferValhallaOverApi: preferEdge }
         );
+        var shown = displayLimit != null ? displayLimit : fallbackLimit;
         return {
             action: 'apply',
             statePatch: {
                 lastDetectedRoadType: opts.roadType,
-                currentLimitMph: fallbackLimit,
-                currentSpeedLimitMph: fallbackLimit,
+                currentLimitMph: shown,
+                currentSpeedLimitMph: shown,
             },
             widgetUpdate: {
                 displaySpeedMph: opts.currentGpsSpeedMph,

@@ -1457,16 +1457,17 @@
 
         var resetFetchState = activeManeuverIdx >= 0 && activeManeuverIdx !== opts.lastActiveManeuverIdx;
         var pickFn = opts.pickDisplaySpeedLimitMph;
-        // On maneuver change, prefer the active-edge limit when it disagrees with the
-        // sticky API/cached value. GraphHopper synthetic continues (and new
-        // instructions) carry the posted limit at the change point — keeping a
-        // stale 60 mph through a signed 30 zone happened because we only preferred
-        // the edge when currentSpeedLimitMph was empty.
-        var preferEdgeHint = resetFetchState
-            && valhallaSpeedLimitMph != null
+        // Prefer the active-edge limit when it disagrees with the sticky API/cached
+        // value on maneuver change (GraphHopper synthetic continues carry the posted
+        // limit at the change point). Also never keep a sticky value *above* the
+        // active edge on later ticks — after a brief edge-30 flash, a stale API/NSL
+        // 60 used to re-stick for the rest of a signed 30 zone.
+        var stickyLimit = Number(opts.currentSpeedLimitMph);
+        var stickyOk = Number.isFinite(stickyLimit) && stickyLimit > 0;
+        var preferEdgeHint = valhallaSpeedLimitMph != null
             && (
-                !(opts.currentSpeedLimitMph > 0)
-                || Number(opts.currentSpeedLimitMph) !== Number(valhallaSpeedLimitMph)
+                (resetFetchState && (!stickyOk || stickyLimit !== Number(valhallaSpeedLimitMph)))
+                || (stickyOk && stickyLimit > Number(valhallaSpeedLimitMph))
             );
         var shownLimit = typeof pickFn === 'function'
             ? pickFn(opts.currentSpeedLimitMph, valhallaSpeedLimitMph, roadType, opts.lastSpeedLimitRegion, {
