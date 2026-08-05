@@ -499,7 +499,7 @@ describe('buildLaneGuidanceTickPlan', () => {
         const plan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
             routeSteps: [
-                { type: 8, distance: 3.5 }, // 3.5 km > 2 km lookahead
+                { type: 8, distance: 5.0 }, // 5 km > 4 km roundabout lookahead
                 { type: 26, roundabout_exit_count: 3 },
             ],
             currentStepIndex: 0,
@@ -509,11 +509,35 @@ describe('buildLaneGuidanceTickPlan', () => {
         expect(plan.lookAhead).toBe(false);
     });
 
+    test('looks ahead from long motorway off-slip to 3rd-exit roundabout', () => {
+        // Long UK slips often exceed the old 2 km budget; right-lane prep must start
+        // as soon as the driver is on the link, not halfway down the dual approach.
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [
+                { type: 8, distance: 3.2, road_class: 'motorway_link' },
+                {
+                    type: 26,
+                    distance: 0.05,
+                    roundabout_exit_count: 3,
+                    road_class: 'primary',
+                },
+            ],
+            currentStepIndex: 0,
+            roadClass: 'motorway_link',
+        });
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+        expect(plan.lookAhead).toBe(true);
+        expect(plan.guidanceStepIndex).toBe(1);
+        expect(3.2 * 1000).toBeLessThanOrEqual(TI.LANE_LOOKAHEAD_ROUNDABOUT_MAX_M);
+    });
+
     test('looks ahead to exit/right turns with larger distance budgets', () => {
         const exitPlan = TI.buildLaneGuidanceTickPlan({
             routeInProgress: true,
             routeSteps: [
-                { type: 8, distance: 2.2 }, // within exit budget (2.5 km), beyond roundabout
+                { type: 8, distance: 2.2 }, // within exit budget (2.5 km)
                 { type: 20, distance: 0.1 }, // exit_right
             ],
             currentStepIndex: 0,
