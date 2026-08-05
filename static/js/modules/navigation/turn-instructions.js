@@ -801,6 +801,15 @@
         var resolveRoadClass = opts.resolveRoadClass || function (s) { return s.road_class || null; };
         var roundaboutExit = opts.effectiveRoundaboutExitCountFromSteps || effectiveRoundaboutExitCountFromSteps;
 
+        // Gate "already passed" on the live snap, not the monotonic lock.
+        // advanceMonotonicTurnDetectIndex can keep userRouteIndex at searchStart
+        // when a backward snap is > MAX_REWIND but within VEHICLE_SYNC; using the
+        // lock here skipped maneuvers whose begin_shape_index sat between snap
+        // and lock (no detection until the snap caught up).
+        var snapIdx = (turnSnap && Number.isFinite(Number(turnSnap.index)))
+            ? Number(turnSnap.index)
+            : userRouteIndex;
+
         for (var i = 0; i < steps.length; i++) {
             var maneuver = steps[i];
             var maneuverShapeIndex = maneuver.begin_shape_index || 0;
@@ -809,7 +818,7 @@
             // geometry for seconds after the junction (banner stuck on "On" /
             // the old instruction). At the junction vertex itself we still show
             // the turn; once the snap advances past it, advance immediately.
-            if (maneuverShapeIndex < userRouteIndex) continue;
+            if (maneuverShapeIndex < snapIdx) continue;
 
             var type = maneuver.type || 0;
             var direction = maneuverTypeToDirectionKey(type);
@@ -821,9 +830,6 @@
             // Along-route distance clamps to 0 at/past the junction. If the live
             // snap is already past this vertex, treat the maneuver as complete
             // even when the monotonic cursor has not caught up yet.
-            var snapIdx = (turnSnap && Number.isFinite(Number(turnSnap.index)))
-                ? Number(turnSnap.index)
-                : userRouteIndex;
             if (distanceToManeuver <= 0 && maneuverShapeIndex < snapIdx) continue;
 
             var maxDetectionDistance = getTurnDetectionMaxDistanceMeters(direction);
