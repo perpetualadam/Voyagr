@@ -400,7 +400,10 @@
         data = data || {};
         if (data.success) {
             return {
-                shouldShowStatus: false,
+                // Match road-report modal confirmation so voice reports are visible too
+                shouldShowStatus: true,
+                statusMessage: 'Thanks — report received.',
+                statusType: 'success',
                 logMessage: '[Voice] Hazard reported:',
                 logArgs: [data],
             };
