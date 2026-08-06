@@ -18,11 +18,28 @@
         high: 10,
     };
 
+    /** Allowed shake actions. Hazard report is voice/FAB only (hands-free while driving). */
+    var ALLOWED_GESTURE_ACTIONS = {
+        recalculate: true,
+        clear: true,
+    };
+
     var GESTURE_ACTION_STATUS_MESSAGES = {
         recalculate: '🔄 Recalculating route...',
-        report: '📍 Report hazard mode activated',
         clear: '🗑️ Route cleared',
     };
+
+    /**
+     * Normalize gesture action; legacy 'report' and unknowns fall back to recalculate.
+     * @param {*} action
+     * @returns {string}
+     */
+    function normalizeGestureAction(action) {
+        if (ALLOWED_GESTURE_ACTIONS[action]) {
+            return action;
+        }
+        return 'recalculate';
+    }
 
     /**
      * @param {Object} [input]
@@ -101,7 +118,7 @@
      */
     function buildGestureActionExecutePlan(input) {
         input = input || {};
-        var action = input.action || 'recalculate';
+        var action = normalizeGestureAction(input.action);
         return {
             shouldApply: true,
             action: action,
@@ -139,10 +156,11 @@
      */
     function buildUpdateGestureActionExecutePlan(input) {
         input = input || {};
+        var action = normalizeGestureAction(input.value);
         return {
             shouldApply: true,
-            action: input.value,
-            persistApiBody: { gesture_action: input.value },
+            action: action,
+            persistApiBody: { gesture_action: action },
             errorLogPrefix: 'Error updating gesture action:',
         };
     }
@@ -169,7 +187,7 @@
         input = input || {};
         var enabled = !!settings.gesture_enabled;
         var sensitivity = settings.gesture_sensitivity || 'medium';
-        var action = settings.gesture_action || 'recalculate';
+        var action = normalizeGestureAction(settings.gesture_action);
         return {
             shouldApply: true,
             enabled: enabled,
@@ -204,6 +222,7 @@
         GESTURE_SENSITIVITY_ID: GESTURE_SENSITIVITY_ID,
         GESTURE_ACTION_ID: GESTURE_ACTION_ID,
         GESTURE_SHAKE_THRESHOLDS: GESTURE_SHAKE_THRESHOLDS,
+        normalizeGestureAction: normalizeGestureAction,
         buildGestureShakeDetectionPlan: buildGestureShakeDetectionPlan,
         buildToggleGestureControlCollectPlan: buildToggleGestureControlCollectPlan,
         buildToggleGestureControlExecutePlan: buildToggleGestureControlExecutePlan,
