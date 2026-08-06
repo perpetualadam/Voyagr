@@ -71,17 +71,19 @@ All voice features from the native app have been successfully integrated into th
 **Works end-to-end today:**
 - "Report accident"
 - "Report crash"
-
-**Recognized by voice but not yet saved:**
 - "Report speed camera"
 - "Report traffic light camera"
 - "Report road closure"
 - "Report traffic jam"
 - "Report pothole"
-
-**Not yet recognized:**
 - "Report police"
 - "Report debris"
+
+**Recognized by voice but not yet saved:**
+- None currently.
+
+**Not yet recognized:**
+- None currently.
 
 ---
 

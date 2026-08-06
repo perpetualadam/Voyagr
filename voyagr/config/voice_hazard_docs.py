@@ -9,26 +9,24 @@ rejects. Tests import these constants to keep docs honest.
 from __future__ import annotations
 
 # Phrases docs may present as fully working (parse + community allowlist save).
+# Types must match classify_voice_hazard_report / ALLOWED_COMMUNITY_HAZARD_TYPES.
 DOCUMENTED_END_TO_END_VOICE_HAZARD_PHRASES = (
     ('report accident', 'accident'),
     ('report crash', 'accident'),
-)
-
-# Recognized by _parse_voice_command today, but hazard_type is not in
-# ALLOWED_COMMUNITY_HAZARD_TYPES so the report API rejects them.
-DOCUMENTED_PARSED_BUT_NOT_SAVED_VOICE_HAZARD_PHRASES = (
     ('report speed camera', 'speed_camera'),
     ('report traffic light camera', 'camera_red_light'),
-    ('report road closure', 'road_closure'),
-    ('report traffic jam', 'traffic'),
+    ('report road closure', 'closure'),
+    ('report traffic jam', 'congestion'),
     ('report pothole', 'pothole'),
+    ('report police', 'police'),
+    ('report debris', 'debris'),
 )
 
-# Listed historically in guides but not recognized by the web parser.
-DOCUMENTED_UNSUPPORTED_VOICE_HAZARD_PHRASES = (
-    'Report police',
-    'Report debris',
-)
+# Recognized by voice but rejected by /api/hazards/report — none currently.
+DOCUMENTED_PARSED_BUT_NOT_SAVED_VOICE_HAZARD_PHRASES = ()
+
+# Listed historically but not recognized — none currently.
+DOCUMENTED_UNSUPPORTED_VOICE_HAZARD_PHRASES = ()
 
 # Primary user/product docs that must follow the hazard-reporting status wording.
 PRIMARY_VOICE_HAZARD_DOC_PATHS = (
