@@ -38,8 +38,26 @@ describe('gesture-control module', () => {
     test('buildGestureActionExecutePlan maps actions to status and triggers', () => {
         expect(GC.buildGestureActionExecutePlan({ action: 'recalculate' }).triggerRecalculate).toBe(true);
         expect(GC.buildGestureActionExecutePlan({ action: 'clear' }).triggerClear).toBe(true);
-        expect(GC.buildGestureActionExecutePlan({ action: 'report' }).statusMessage)
-            .toContain('hazard');
+    });
+
+    test('legacy report shake action falls back to recalculate (hands-free hazard report)', () => {
+        expect(GC.normalizeGestureAction('report')).toBe('recalculate');
+        const execute = GC.buildGestureActionExecutePlan({ action: 'report' });
+        expect(execute.action).toBe('recalculate');
+        expect(execute.triggerRecalculate).toBe(true);
+        expect(execute.triggerClear).toBe(false);
+        expect(execute.statusMessage).toContain('Recalculating');
+
+        const applied = GC.buildApplyGestureSettingsFromApiExecutePlan({
+            gesture_enabled: true,
+            gesture_action: 'report',
+        }, { hasDeviceMotion: false });
+        expect(applied.action).toBe('recalculate');
+        expect(applied.actionSelect.value).toBe('recalculate');
+
+        const updated = GC.buildUpdateGestureActionExecutePlan({ value: 'report' });
+        expect(updated.action).toBe('recalculate');
+        expect(updated.persistApiBody.gesture_action).toBe('recalculate');
     });
 
     test('buildApplyGestureSettingsFromApiExecutePlan uses toggle button not checkbox', () => {
