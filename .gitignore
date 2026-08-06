@@ -94,9 +94,8 @@ satnav.db
 test_*.db
 *.ppn
 !static/vendor/picovoice/hey_satnav_wasm.ppn
-static/vendor/picovoice/porcupine-web.iife.js
-static/vendor/picovoice/web-voice-processor.iife.js
-static/vendor/picovoice/porcupine_params.pv
+# Picovoice browser IIFE + model are committed under static/vendor/picovoice/
+# (regenerate with: npm run picovoice:sync). Do not ignore those paths.
 voyagr_web_old.py
 voyagr_web_backup.py
 voyagr_web_backup*.py

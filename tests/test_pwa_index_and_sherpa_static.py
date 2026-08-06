@@ -59,6 +59,34 @@ def test_index_injects_picovoice_wake_globals(client):
     assert "VoyagrSherpaKwsLab" not in body
 
 
+def test_picovoice_vendor_assets_served(client):
+    """PWA Porcupine wake requires these static files (synced via npm run picovoice:sync)."""
+    paths = (
+        "/static/vendor/picovoice/porcupine-web.iife.js",
+        "/static/vendor/picovoice/web-voice-processor.iife.js",
+        "/static/vendor/picovoice/porcupine_params.pv",
+        "/static/vendor/picovoice/hey_satnav_wasm.ppn",
+    )
+    for path in paths:
+        rv = client.get(path)
+        assert rv.status_code == 200, path
+        assert len(rv.data) > 64, path
+
+
+def test_picovoice_web_assets_ok_requires_access_key(monkeypatch):
+    """Assets alone do not enable wake UI; PICOVOICE_ACCESS_KEY is still required."""
+    from voyagr.index_page_context import build_index_template_kwargs
+
+    monkeypatch.delenv("PICOVOICE_ACCESS_KEY", raising=False)
+    kwargs = build_index_template_kwargs()
+    assert kwargs["picovoice_web_assets_ok"] is False
+
+    monkeypatch.setenv("PICOVOICE_ACCESS_KEY", "test-access-key")
+    kwargs_with_key = build_index_template_kwargs()
+    assert kwargs_with_key["picovoice_web_assets_ok"] is True
+    assert kwargs_with_key["picovoice_access_key"] == "test-access-key"
+
+
 def test_sherpa_lab_page_static(client):
     rv = client.get("/static/sherpa-kws-spike.html")
     assert rv.status_code == 200
@@ -85,6 +113,8 @@ def test_manifest_and_service_worker(client):
     assert sw.status_code == 200
     assert b"serviceWorker" in sw.data or b"self" in sw.data
     assert b"porcupine-web.iife.js" in sw.data
+    assert b"porcupine_params.pv" in sw.data
+    assert b"hey_satnav_wasm.ppn" in sw.data
 
 
 def test_api_config_json(client):
