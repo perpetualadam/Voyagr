@@ -354,6 +354,7 @@
             };
         }
         if (action === 'report_hazard') {
+            var hazardType = data.hazard_type;
             return {
                 action: action,
                 shouldApply: true,
@@ -363,12 +364,13 @@
                 body: {
                     lat: runtime.currentLat,
                     lon: runtime.currentLon,
-                    hazard_type: data.hazard_type,
+                    hazard_type: hazardType,
                     description: data.description || '',
-                    severity: 'medium',
+                    // Match road-report modal: accidents are high severity
+                    severity: hazardType === 'accident' ? 'high' : 'medium',
                 },
                 logMessage: '[Voice] Reporting hazard:',
-                logArgs: [data.hazard_type],
+                logArgs: [hazardType],
             };
         }
         if (action === 'reroute') {
