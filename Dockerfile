@@ -16,6 +16,13 @@ COPY . .
 # Verify critical files exist
 RUN test -f voyagr_web.py || (echo "ERROR: voyagr_web.py not found" && exit 1)
 
+# Picovoice PWA wake-word bundles (from npm run picovoice:sync / postinstall)
+RUN test -f static/vendor/picovoice/porcupine-web.iife.js \
+    && test -f static/vendor/picovoice/web-voice-processor.iife.js \
+    && test -f static/vendor/picovoice/porcupine_params.pv \
+    && test -f static/vendor/picovoice/hey_satnav_wasm.ppn \
+    || (echo "ERROR: Picovoice vendor assets missing. Run: npm run picovoice:sync" && exit 1)
+
 # Expose port
 EXPOSE 5000
 
