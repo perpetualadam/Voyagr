@@ -168,6 +168,40 @@ describe('buildVoiceActionDispatchPlan', () => {
         expect(plan.body.lat).toBe(1);
     });
 
+    test('report_hazard action blocks fetch when GPS fix is missing', () => {
+        const cases = [
+            {},
+            { currentLat: null, currentLon: -0.1 },
+            { currentLat: 51.5, currentLon: null },
+            { currentLat: Number.NaN, currentLon: -0.1 },
+            { currentLat: 51.5, currentLon: Number.NaN },
+        ];
+        for (const runtime of cases) {
+            const plan = VC.buildVoiceActionDispatchPlan(
+                { action: 'report_hazard', hazard_type: 'police' },
+                runtime
+            );
+            expect(plan.fetchHazardReport).toBe(false);
+            expect(plan.shouldShowStatus).toBe(true);
+            expect(plan.statusType).toBe('warning');
+            expect(plan.statusMessage).toBe(
+                'Turn on GPS or wait for a position fix before reporting.'
+            );
+            expect(plan.speakMessageOverride).toBe(plan.statusMessage);
+            expect(plan.body).toBeUndefined();
+        }
+    });
+
+    test('report_hazard action allows zero coordinates as a valid GPS fix', () => {
+        const plan = VC.buildVoiceActionDispatchPlan(
+            { action: 'report_hazard', hazard_type: 'accident' },
+            { currentLat: 0, currentLon: 0 }
+        );
+        expect(plan.fetchHazardReport).toBe(true);
+        expect(plan.body.lat).toBe(0);
+        expect(plan.body.lon).toBe(0);
+    });
+
     test('buildVoiceHazardReportResponseExecutePlan warns on API error', () => {
         const execute = VC.buildVoiceHazardReportResponseExecutePlan({ success: false, error: 'too far' });
         expect(execute.shouldShowStatus).toBe(true);

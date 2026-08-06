@@ -248,8 +248,10 @@
                 const execute = voiceControl.buildVoiceCommandResultExecutePlan(data);
 
                 if (execute.shouldHandleAction) {
-                    handleVoiceAction(execute.payload);
-                    speakText(execute.speakMessage);
+                    const actionPlan = handleVoiceAction(execute.payload);
+                    speakText(
+                        (actionPlan && actionPlan.speakMessageOverride) || execute.speakMessage
+                    );
                 } else {
                     speakText(execute.speakMessage);
                     voyagrVoiceSetStatus(execute.statusMessage);
@@ -275,6 +277,10 @@
             } else {
                 console.log(plan.logMessage);
             }
+        }
+
+        if (plan.shouldShowStatus) {
+            rt().call.showStatus(plan.statusMessage, plan.statusType);
         }
 
         if (plan.endInputId && plan.endValue != null) {
@@ -320,11 +326,13 @@
     }
 
     function handleVoiceAction(data) {
-        applyVoiceActionFromPlan(VC().buildVoiceActionDispatchPlan(data, {
+        const plan = VC().buildVoiceActionDispatchPlan(data, {
             currentLat: rt().getCurrentLat(),
             currentLon: rt().getCurrentLon(),
             routeInProgress: rt().getRouteInProgress(),
-        }));
+        });
+        applyVoiceActionFromPlan(plan);
+        return plan;
     }
 
     function getVoiceRecognition() {
