@@ -354,6 +354,7 @@
             };
         }
         if (action === 'report_hazard') {
+            var hazardType = data.hazard_type;
             var lat = runtime.currentLat;
             var lon = runtime.currentLon;
             // Same GPS gate as the road-report modal: do not POST null/non-finite coords
@@ -382,12 +383,13 @@
                 body: {
                     lat: lat,
                     lon: lon,
-                    hazard_type: data.hazard_type,
+                    hazard_type: hazardType,
                     description: data.description || '',
-                    severity: 'medium',
+                    // Match road-report modal: accidents are high severity
+                    severity: hazardType === 'accident' ? 'high' : 'medium',
                 },
                 logMessage: '[Voice] Reporting hazard:',
-                logArgs: [data.hazard_type],
+                logArgs: [hazardType],
             };
         }
         if (action === 'reroute') {

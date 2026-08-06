@@ -166,6 +166,23 @@ describe('buildVoiceActionDispatchPlan', () => {
         expect(plan.fetchHazardReport).toBe(true);
         expect(plan.body.hazard_type).toBe('debris');
         expect(plan.body.lat).toBe(1);
+        expect(plan.body.severity).toBe('medium');
+    });
+
+    test('report_hazard action sets high severity for accidents like the modal', () => {
+        const accident = VC.buildVoiceActionDispatchPlan(
+            { action: 'report_hazard', hazard_type: 'accident' },
+            { currentLat: 51.5, currentLon: -0.1 }
+        );
+        expect(accident.fetchHazardReport).toBe(true);
+        expect(accident.body.hazard_type).toBe('accident');
+        expect(accident.body.severity).toBe('high');
+
+        const nonAccident = VC.buildVoiceActionDispatchPlan(
+            { action: 'report_hazard', hazard_type: 'pothole' },
+            { currentLat: 51.5, currentLon: -0.1 }
+        );
+        expect(nonAccident.body.severity).toBe('medium');
     });
 
     test('report_hazard action blocks fetch when GPS fix is missing', () => {
