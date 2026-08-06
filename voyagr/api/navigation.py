@@ -990,7 +990,8 @@ def _parse_voice_command(
                 return {
                     'success': True,
                     'action': 'report_hazard',
-                    'hazard_type': 'road_closure',
+                    # Canonical community type (matches road-report modal / allowlist)
+                    'hazard_type': 'closure',
                     'description': command[:240],
                     'message': 'Logging a road closure report.',
                 }
@@ -998,7 +999,8 @@ def _parse_voice_command(
                 return {
                     'success': True,
                     'action': 'report_hazard',
-                    'hazard_type': 'traffic',
+                    # Canonical community type (matches road-report modal / allowlist)
+                    'hazard_type': 'congestion',
                     'description': command[:240],
                     'message': 'Logging a traffic congestion report.',
                 }
