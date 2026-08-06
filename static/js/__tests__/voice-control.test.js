@@ -172,5 +172,17 @@ describe('buildVoiceActionDispatchPlan', () => {
         const execute = VC.buildVoiceHazardReportResponseExecutePlan({ success: false, error: 'too far' });
         expect(execute.shouldShowStatus).toBe(true);
         expect(execute.statusMessage).toContain('too far');
+        expect(execute.statusType).toBe('warning');
+    });
+
+    test('buildVoiceHazardReportResponseExecutePlan shows success status on API success', () => {
+        const execute = VC.buildVoiceHazardReportResponseExecutePlan({
+            success: true,
+            report_id: 42,
+        });
+        expect(execute.shouldShowStatus).toBe(true);
+        expect(execute.statusType).toBe('success');
+        expect(execute.statusMessage).toBe('Thanks — report received.');
+        expect(execute.logMessage).toContain('Hazard reported');
     });
 });
