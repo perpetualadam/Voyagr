@@ -10,6 +10,8 @@
     var VOICE_BTN_TEXT_ELEMENT_ID = 'voiceBtnText';
     var VOICE_FAB_ELEMENT_ID = 'voiceFab';
     var VOICE_TRANSCRIPT_ELEMENT_ID = 'voiceTranscript';
+    var HAZARD_CONFIRMATION_ELEMENT_ID = 'hazardConfirmation';
+    var HAZARD_CONFIRMATION_MESSAGE = 'Thanks — report received.';
 
     /**
      * Preflight for initializing Web Speech API recognition.
@@ -425,6 +427,11 @@
                 shouldShowStatus: true,
                 statusMessage: 'Thanks — report received.',
                 statusType: 'success',
+                // E2E / automation hook: visible confirmation after a successful voice report
+                shouldShowHazardConfirmation: true,
+                hazardConfirmationElementId: HAZARD_CONFIRMATION_ELEMENT_ID,
+                hazardConfirmationMessage: HAZARD_CONFIRMATION_MESSAGE,
+                hazardConfirmationHidden: false,
                 logMessage: '[Voice] Hazard reported:',
                 logArgs: [data],
             };
@@ -433,6 +440,9 @@
             shouldShowStatus: !!data.error,
             statusMessage: data.error ? 'Voice report: ' + data.error : '',
             statusType: 'warning',
+            shouldShowHazardConfirmation: false,
+            hazardConfirmationElementId: HAZARD_CONFIRMATION_ELEMENT_ID,
+            hazardConfirmationHidden: true,
             logMessage: '[Voice] Hazard reported:',
             logArgs: [data],
         };
@@ -451,12 +461,55 @@
         };
     }
 
+    /**
+     * Plan for test/automation helper that injects a spoken transcript.
+     * @param {string} transcript
+     * @returns {Object}
+     */
+    function buildSimulateVoiceInputPlan(transcript) {
+        var text = String(transcript == null ? '' : transcript).trim();
+        return {
+            shouldProcess: !!text,
+            transcript: text,
+        };
+    }
+
+    /**
+     * DOM execute plan for the hazard-confirmation test hook element.
+     * @param {Object} execute
+     * @returns {Object}
+     */
+    function buildVoiceHazardConfirmationDomExecutePlan(execute) {
+        execute = execute || {};
+        if (!execute.hazardConfirmationElementId) {
+            return { shouldUpdate: false };
+        }
+        if (execute.shouldShowHazardConfirmation) {
+            return {
+                shouldUpdate: true,
+                elementId: execute.hazardConfirmationElementId,
+                hidden: false,
+                text: execute.hazardConfirmationMessage || HAZARD_CONFIRMATION_MESSAGE,
+            };
+        }
+        if (execute.hazardConfirmationHidden) {
+            return {
+                shouldUpdate: true,
+                elementId: execute.hazardConfirmationElementId,
+                hidden: true,
+                text: '',
+            };
+        }
+        return { shouldUpdate: false };
+    }
+
     var api = {
         VOICE_STATUS_ELEMENT_ID: VOICE_STATUS_ELEMENT_ID,
         VOICE_BTN_ELEMENT_ID: VOICE_BTN_ELEMENT_ID,
         VOICE_BTN_TEXT_ELEMENT_ID: VOICE_BTN_TEXT_ELEMENT_ID,
         VOICE_FAB_ELEMENT_ID: VOICE_FAB_ELEMENT_ID,
         VOICE_TRANSCRIPT_ELEMENT_ID: VOICE_TRANSCRIPT_ELEMENT_ID,
+        HAZARD_CONFIRMATION_ELEMENT_ID: HAZARD_CONFIRMATION_ELEMENT_ID,
         buildVoiceRecognitionInitPreflightPlan: buildVoiceRecognitionInitPreflightPlan,
         buildVoiceSetStatusExecutePlan: buildVoiceSetStatusExecutePlan,
         buildVoiceSetListeningUiExecutePlan: buildVoiceSetListeningUiExecutePlan,
@@ -474,6 +527,8 @@
         buildVoiceActionDispatchPlan: buildVoiceActionDispatchPlan,
         buildVoiceHazardReportResponseExecutePlan: buildVoiceHazardReportResponseExecutePlan,
         buildVoiceHazardReportErrorExecutePlan: buildVoiceHazardReportErrorExecutePlan,
+        buildSimulateVoiceInputPlan: buildSimulateVoiceInputPlan,
+        buildVoiceHazardConfirmationDomExecutePlan: buildVoiceHazardConfirmationDomExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

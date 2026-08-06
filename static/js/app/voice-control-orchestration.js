@@ -311,6 +311,9 @@
                     if (execute.shouldShowStatus) {
                         rt().call.showStatus(execute.statusMessage, execute.statusType);
                     }
+                    applyHazardConfirmationFromPlan(
+                        voiceControl.buildVoiceHazardConfirmationDomExecutePlan(execute)
+                    );
                 })
                 .catch((error) => {
                     const errExecute = VC().buildVoiceHazardReportErrorExecutePlan(error);
@@ -333,6 +336,26 @@
         });
         applyVoiceActionFromPlan(plan);
         return plan;
+    }
+
+    function applyHazardConfirmationFromPlan(domPlan) {
+        if (!domPlan || !domPlan.shouldUpdate || !domPlan.elementId) return;
+        const el = document.getElementById(domPlan.elementId);
+        if (!el) return;
+        el.hidden = !!domPlan.hidden;
+        if (domPlan.text != null) {
+            el.textContent = domPlan.text;
+        }
+    }
+
+    /**
+     * Test/automation helper: inject a transcript as if the user spoke it.
+     * @param {string} transcript
+     */
+    function simulateVoiceInput(transcript) {
+        const plan = VC().buildSimulateVoiceInputPlan(transcript);
+        if (!plan.shouldProcess) return;
+        processVoiceCommand(plan.transcript);
     }
 
     function getVoiceRecognition() {
@@ -363,6 +386,7 @@
         setupVoiceCommandProcessing: setupVoiceCommandProcessing,
         processVoiceCommand: processVoiceCommand,
         handleVoiceAction: handleVoiceAction,
+        simulateVoiceInput: simulateVoiceInput,
         getVoiceRecognition: getVoiceRecognition,
         getIsListening: getIsListening,
         setIsListening: setIsListening,

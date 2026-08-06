@@ -574,9 +574,9 @@
                         <h3 id="voiceSectionTitle" class="voice-card__title">Voice control</h3>
                         <p class="voice-card__hint">Use Chrome or Edge over HTTPS. Tap Listen, speak a command, then wait for the response. The map microphone uses the same control.</p>
                     </div>
-                    <div id="voiceStatus" class="voice-status" role="status" aria-live="polite">Ready</div>
+                    <div id="voiceStatus" class="voice-status" data-testid="voice-indicator" role="status" aria-live="polite">Ready</div>
                     <div class="voice-controls">
-                        <button type="button" id="voiceBtn" class="btn-voice" onclick="toggleVoiceInput()" aria-pressed="false">
+                        <button type="button" id="voiceBtn" class="btn-voice" data-testid="voice-button" onclick="toggleVoiceInput()" aria-pressed="false">
                             <span id="voiceBtnText">Listen</span>
                         </button>
                         <button type="button" class="btn-voice-secondary" onclick="speakText('Voice control is ready. For example, say navigate to, or find nearest parking.')">
@@ -584,6 +584,7 @@
                         </button>
                     </div>
                     <div id="voiceTranscript" class="voice-transcript" aria-label="Live transcript"></div>
+                    <div id="hazardConfirmation" class="hazard-confirmation" data-testid="hazard-confirmation" hidden role="status" aria-live="polite"></div>
                     <details class="voice-examples">
                         <summary>Example phrases</summary>
                         <ul>

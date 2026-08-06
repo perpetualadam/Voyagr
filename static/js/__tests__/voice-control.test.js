@@ -224,6 +224,8 @@ describe('buildVoiceActionDispatchPlan', () => {
         expect(execute.shouldShowStatus).toBe(true);
         expect(execute.statusMessage).toContain('too far');
         expect(execute.statusType).toBe('warning');
+        expect(execute.shouldShowHazardConfirmation).toBe(false);
+        expect(execute.hazardConfirmationHidden).toBe(true);
     });
 
     test('buildVoiceHazardReportResponseExecutePlan shows success status on API success', () => {
@@ -235,5 +237,27 @@ describe('buildVoiceActionDispatchPlan', () => {
         expect(execute.statusType).toBe('success');
         expect(execute.statusMessage).toBe('Thanks — report received.');
         expect(execute.logMessage).toContain('Hazard reported');
+        expect(execute.shouldShowHazardConfirmation).toBe(true);
+        expect(execute.hazardConfirmationElementId).toBe(VC.HAZARD_CONFIRMATION_ELEMENT_ID);
+        expect(execute.hazardConfirmationMessage).toBe('Thanks — report received.');
+        expect(execute.hazardConfirmationHidden).toBe(false);
+
+        const dom = VC.buildVoiceHazardConfirmationDomExecutePlan(execute);
+        expect(dom.shouldUpdate).toBe(true);
+        expect(dom.elementId).toBe('hazardConfirmation');
+        expect(dom.hidden).toBe(false);
+        expect(dom.text).toBe('Thanks — report received.');
+    });
+
+    test('buildSimulateVoiceInputPlan trims transcript and skips empty input', () => {
+        expect(VC.buildSimulateVoiceInputPlan('  Report speed camera  ')).toEqual({
+            shouldProcess: true,
+            transcript: 'Report speed camera',
+        });
+        expect(VC.buildSimulateVoiceInputPlan('')).toEqual({
+            shouldProcess: false,
+            transcript: '',
+        });
+        expect(VC.buildSimulateVoiceInputPlan(null).shouldProcess).toBe(false);
     });
 });
