@@ -103,6 +103,7 @@ jobs:
           tests/test_voice_report_police_debris.py
           tests/test_voice_ui_hazard_examples.py
           tests/test_voice_hazard_command_parse.py
+          tests/test_voice_hazard_report_parity.py
           tests/test_persistent_route_cache.py
           tests/test_route_cache_invalidation.py
           tests/test_deployed_version.py

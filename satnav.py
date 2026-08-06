@@ -3187,9 +3187,13 @@ class SatNavApp(App):
                 log_validation_error(error_msg)
                 return None
 
-            # Validate hazard type
-            valid_types = ['accident', 'roadwork', 'police', 'hazard', 'congestion', 'weather', 'closure']
-            if hazard_type not in valid_types:
+            # Validate hazard type (aligned with PWA community + voice report types)
+            from voyagr.utils.voice_hazard_report import (
+                DESKTOP_COMMUNITY_HAZARD_TYPES,
+                normalize_voice_hazard_type,
+            )
+            hazard_type = normalize_voice_hazard_type(hazard_type)
+            if hazard_type not in DESKTOP_COMMUNITY_HAZARD_TYPES:
                 return None
 
             # Check rate limit (100 per day)
@@ -7913,7 +7917,7 @@ class SatNavApp(App):
             notification.notify(title="Report Error", message=f"{trigger} failed")
 
     def on_voice_report(self, results):
-        """Handle voice report results - try voice commands first, then fall back to reports."""
+        """Handle voice report results - try voice commands first, then community hazard report."""
         try:
             if results:
                 # SECURITY: Validate voice input
@@ -7929,31 +7933,34 @@ class SatNavApp(App):
                 if self.parse_voice_command(text):
                     return  # Command was successfully processed
 
-                # If not a command, treat as a report
-                # Validate current position before saving report
+                # Structured PWA-parity path: community_hazard_reports (not local reports table)
                 is_valid, error_msg = validate_coordinates(self.current_pos[0], self.current_pos[1], "on_voice_report")
                 if not is_valid:
                     log_validation_error(error_msg)
                     notification.notify(title="Report Error", message="Invalid GPS location for report")
                     return
 
-                report_type = (
-                    'pothole' if 'pothole' in text else
-                    'debris' if 'debris' in text else
-                    'accident' if 'accident' in text else
-                    'incident' if 'incident' in text or 'closure' in text else
-                    'camera' if 'camera' in text else
-                    'toll' if 'toll' in text else
-                    'other'
+                from voyagr.utils.voice_hazard_report import build_desktop_voice_hazard_submission
+                submission = build_desktop_voice_hazard_submission(
+                    text, self.current_pos[0], self.current_pos[1]
                 )
+                if not submission:
+                    notification.notify(title="Report Error", message="Could not classify voice report")
+                    return
 
-                # SECURITY: Use parameterized query (already in place)
-                self.cursor.execute("INSERT INTO reports (lat, lon, type, description, timestamp) VALUES (?, ?, ?, ?, ?)",
-                                   (self.current_pos[0], self.current_pos[1], report_type, text, int(time.time())))
-                self.conn.commit()
-                message = f"Report logged: {report_type.replace('_', ' ')}"
-                self.speak(message)
-                notification.notify(title="Report", message=message)
+                report_id = self.submit_hazard_report(
+                    submission['hazard_type'],
+                    submission['lat'],
+                    submission['lon'],
+                    submission['description'],
+                    severity=submission['severity'],
+                )
+                if report_id:
+                    message = f"Report logged: {submission['hazard_type'].replace('_', ' ')}"
+                    self.speak(message)
+                    notification.notify(title="Report", message=message)
+                else:
+                    notification.notify(title="Report Error", message="Failed to submit hazard report")
             else:
                 notification.notify(title="Report Error", message="No voice input detected")
         except Exception as e:

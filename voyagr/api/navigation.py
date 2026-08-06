@@ -19,6 +19,7 @@ from flask import Blueprint, jsonify, request, send_file, after_this_request
 from voyagr.models import get_db_connection, return_db_connection, db_connection
 from voyagr.utils.rate_limiting import RateLimiter
 from voyagr.utils.admin_auth import register_admin_before_request
+from voyagr.utils.voice_hazard_report import classify_voice_hazard_report
 from voyagr.utils.lane_maneuvers import (
     apply_confidence_lane_selection as _apply_confidence_lane_selection,
     estimate_candidate_lanes_uk as _estimate_candidate_lanes_uk,
@@ -970,71 +971,15 @@ def _parse_voice_command(
             return {'success': True, 'action': 'confirm_speed_display', 'message': msg}
 
         if 'report' in command:
-            if any(x in command for x in ('speed camera', 'speeding camera', 'gatso', 'mobile camera')):
+            # Shared classifier with desktop SatNav (canonical community types)
+            classified = classify_voice_hazard_report(command, require_report_keyword=True)
+            if classified:
                 return {
                     'success': True,
                     'action': 'report_hazard',
-                    'hazard_type': 'speed_camera',
-                    'description': command[:240],
-                    'message': 'Logging a speed camera report at your current location.',
-                }
-            if any(x in command for x in ('traffic light camera', 'red light camera')):
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    'hazard_type': 'camera_red_light',
-                    'description': command[:240],
-                    'message': 'Logging a traffic light camera report.',
-                }
-            if any(x in command for x in ('road closed', 'road closure', 'closure')):
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    # Canonical community type (matches road-report modal / allowlist)
-                    'hazard_type': 'closure',
-                    'description': command[:240],
-                    'message': 'Logging a road closure report.',
-                }
-            if ('traffic' in command and 'jam' in command) or 'congestion' in command:
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    # Canonical community type (matches road-report modal / allowlist)
-                    'hazard_type': 'congestion',
-                    'description': command[:240],
-                    'message': 'Logging a traffic congestion report.',
-                }
-            if 'pothole' in command:
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    'hazard_type': 'pothole',
-                    'description': command[:240],
-                    'message': 'Logging a pothole report.',
-                }
-            if 'police' in command:
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    'hazard_type': 'police',
-                    'description': command[:240],
-                    'message': 'Logging a police report.',
-                }
-            if 'debris' in command:
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    'hazard_type': 'debris',
-                    'description': command[:240],
-                    'message': 'Logging a debris report.',
-                }
-            if 'accident' in command or 'crash' in command:
-                return {
-                    'success': True,
-                    'action': 'report_hazard',
-                    'hazard_type': 'accident',
-                    'description': command[:240],
-                    'message': 'Logging an accident report.',
+                    'hazard_type': classified['hazard_type'],
+                    'description': classified['description'],
+                    'message': classified['message'],
                 }
 
         if 'avoid tolls' in command:
