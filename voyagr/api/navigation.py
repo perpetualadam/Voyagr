@@ -1010,6 +1010,22 @@ def _parse_voice_command(
                     'description': command[:240],
                     'message': 'Logging a pothole report.',
                 }
+            if 'police' in command:
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'police',
+                    'description': command[:240],
+                    'message': 'Logging a police report.',
+                }
+            if 'debris' in command:
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'debris',
+                    'description': command[:240],
+                    'message': 'Logging a debris report.',
+                }
             if 'accident' in command or 'crash' in command:
                 return {
                     'success': True,
