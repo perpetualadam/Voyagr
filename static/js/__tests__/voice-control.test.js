@@ -172,5 +172,36 @@ describe('buildVoiceActionDispatchPlan', () => {
         const execute = VC.buildVoiceHazardReportResponseExecutePlan({ success: false, error: 'too far' });
         expect(execute.shouldShowStatus).toBe(true);
         expect(execute.statusMessage).toContain('too far');
+        expect(execute.shouldShowHazardConfirmation).toBe(false);
+        expect(execute.hazardConfirmationHidden).toBe(true);
+    });
+
+    test('buildVoiceHazardReportResponseExecutePlan exposes hazard-confirmation hook on success', () => {
+        const execute = VC.buildVoiceHazardReportResponseExecutePlan({
+            success: true,
+            report_id: 7,
+        });
+        expect(execute.shouldShowHazardConfirmation).toBe(true);
+        expect(execute.hazardConfirmationElementId).toBe(VC.HAZARD_CONFIRMATION_ELEMENT_ID);
+        expect(execute.hazardConfirmationMessage).toBe('Thanks — report received.');
+        expect(execute.hazardConfirmationHidden).toBe(false);
+
+        const dom = VC.buildVoiceHazardConfirmationDomExecutePlan(execute);
+        expect(dom.shouldUpdate).toBe(true);
+        expect(dom.elementId).toBe('hazardConfirmation');
+        expect(dom.hidden).toBe(false);
+        expect(dom.text).toBe('Thanks — report received.');
+    });
+
+    test('buildSimulateVoiceInputPlan trims transcript and skips empty input', () => {
+        expect(VC.buildSimulateVoiceInputPlan('  Report speed camera  ')).toEqual({
+            shouldProcess: true,
+            transcript: 'Report speed camera',
+        });
+        expect(VC.buildSimulateVoiceInputPlan('')).toEqual({
+            shouldProcess: false,
+            transcript: '',
+        });
+        expect(VC.buildSimulateVoiceInputPlan(null).shouldProcess).toBe(false);
     });
 });

@@ -2335,6 +2335,10 @@ function getVoiceControlOrchestrationRuntime() {
 
 function initVoiceRecognition() { return VoyagrVoiceControlOrchestration.initVoiceRecognition(); }
 function toggleVoiceInput() { return VoyagrVoiceControlOrchestration.toggleVoiceInput(); }
+function simulateVoiceInput(transcript) { return VoyagrVoiceControlOrchestration.simulateVoiceInput(transcript); }
+if (typeof window !== 'undefined') {
+    window.simulateVoiceInput = simulateVoiceInput;
+}
 function speakText(text) { VoyagrVoiceControlOrchestration.speakText(text); }
 function setupVoiceCommandProcessing() { VoyagrVoiceControlOrchestration.setupVoiceCommandProcessing(); }
 function processVoiceCommand(command) { VoyagrVoiceControlOrchestration.processVoiceCommand(command); }

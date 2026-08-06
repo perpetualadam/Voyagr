@@ -117,21 +117,39 @@ test.describe('Voice Commands Workflow', () => {
   });
 
   test('should recognize hazard report command', async ({ page }) => {
-    // Activate voice
-    await page.click('[data-testid="voice-button"]');
-    await page.waitForSelector('[data-testid="voice-indicator"]', { timeout: 5000 });
+    // Stub report API so confirmation does not depend on allowlist/network
+    await page.route('**/api/hazards/report', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, report_id: 1 }),
+      });
+    });
+    await page.route('**/api/voice/command', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          action: 'report_hazard',
+          hazard_type: 'speed_camera',
+          description: 'Report speed camera ahead',
+          message: 'Logging a speed camera report at your current location.',
+        }),
+      });
+    });
 
-    // Simulate voice input
+    await expect(page.locator('[data-testid="voice-button"]')).toBeVisible();
+    await expect(page.locator('[data-testid="voice-indicator"]')).toBeVisible();
+
+    // Bypass mic/SpeechRecognition — inject transcript via test hook
     await page.evaluate(() => {
       window.simulateVoiceInput('Report speed camera ahead');
     });
 
-    // Wait for hazard report
-    await page.waitForSelector('[data-testid="hazard-confirmation"]', { timeout: 10000 });
-
-    // Verify hazard is reported
-    const confirmation = await page.locator('[data-testid="hazard-confirmation"]');
-    await expect(confirmation).toBeVisible();
+    const confirmation = page.locator('[data-testid="hazard-confirmation"]');
+    await expect(confirmation).toBeVisible({ timeout: 10000 });
+    await expect(confirmation).toHaveText(/report received/i);
   });
 
   test('should provide voice feedback', async ({ page }) => {
