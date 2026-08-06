@@ -53,7 +53,26 @@ def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
 ALLOWED_COMMUNITY_HAZARD_TYPES = frozenset({
     'accident', 'roadwork', 'police', 'hazard', 'congestion', 'weather', 'closure',
     'debris', 'flooded', 'animal', 'speed_limit_correction', 'other',
+    # Voice-report and map-aligned types (see /api/voice/command report_hazard)
+    'pothole', 'speed_camera', 'camera_red_light',
 })
+
+# Aliases emitted by older clients / voice phrasing → canonical allowlist values
+COMMUNITY_HAZARD_TYPE_ALIASES = {
+    'road_closure': 'closure',
+    'traffic': 'congestion',
+    'traffic_light_camera': 'camera_red_light',
+}
+
+
+def normalize_community_hazard_type(hazard_type):
+    """Map report type aliases to canonical community hazard types."""
+    if not isinstance(hazard_type, str):
+        return None
+    normalized = hazard_type.strip().lower()
+    if not normalized:
+        return None
+    return COMMUNITY_HAZARD_TYPE_ALIASES.get(normalized, normalized)
 
 
 @hazards_bp.route('/hazard-preferences', methods=['GET', 'POST'])
@@ -171,7 +190,9 @@ def report_hazard():
         data = request.json or {}
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
-        hazard_type = data.get('hazard_type') or data.get('type')
+        hazard_type = normalize_community_hazard_type(
+            data.get('hazard_type') or data.get('type')
+        )
         if hazard_type not in ALLOWED_COMMUNITY_HAZARD_TYPES:
             return jsonify({'success': False, 'error': 'Invalid hazard_type'}), 400
         description = sanitize_string(data.get('description', ''), max_length=500) or ''
