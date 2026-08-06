@@ -74,12 +74,21 @@ All voice features from the native app have been successfully integrated into th
 - "What's the traffic like?"
 
 ### Hazard Reporting Commands
+
+**Works end-to-end today:**
+- "Report accident"
+- "Report crash"
+
+**Recognized by voice but not yet saved:**
 - "Report speed camera"
 - "Report traffic light camera"
-- "Report police"
+- "Report road closure"
+- "Report traffic jam"
 - "Report pothole"
+
+**Not yet recognized:**
+- "Report police"
 - "Report debris"
-- "Report accident"
 
 ---
 
@@ -226,7 +235,7 @@ Result: ETA displayed
 | Voice Recognition | ✅ Picovoice | ✅ Web Speech API |
 | Text-to-Speech | ✅ Android TTS | ✅ Browser + pyttsx3 |
 | Voice Commands | ✅ 14+ commands | ✅ 14+ commands |
-| Hazard Reporting | ✅ Yes | ✅ Yes |
+| Hazard Reporting | ✅ Yes | ⚠️ Accident end-to-end; see status above |
 | Route Preferences | ✅ Yes | ✅ Yes |
 | Information Queries | ✅ Yes | ✅ Yes |
 
