@@ -354,6 +354,25 @@
             };
         }
         if (action === 'report_hazard') {
+            var lat = runtime.currentLat;
+            var lon = runtime.currentLon;
+            // Same GPS gate as the road-report modal: do not POST null/non-finite coords
+            var hasGpsFix = lat != null && lon != null
+                && Number.isFinite(lat) && Number.isFinite(lon);
+            if (!hasGpsFix) {
+                var gpsRequired = 'Turn on GPS or wait for a position fix before reporting.';
+                return {
+                    action: action,
+                    shouldApply: true,
+                    fetchHazardReport: false,
+                    shouldShowStatus: true,
+                    statusMessage: gpsRequired,
+                    statusType: 'warning',
+                    // Prefer this over the command API "Logging a …" TTS when blocked
+                    speakMessageOverride: gpsRequired,
+                    logMessage: '[Voice] Hazard report blocked: no GPS fix',
+                };
+            }
             return {
                 action: action,
                 shouldApply: true,
@@ -361,8 +380,8 @@
                 apiPath: '/api/hazards/report',
                 method: 'POST',
                 body: {
-                    lat: runtime.currentLat,
-                    lon: runtime.currentLon,
+                    lat: lat,
+                    lon: lon,
                     hazard_type: data.hazard_type,
                     description: data.description || '',
                     severity: 'medium',
