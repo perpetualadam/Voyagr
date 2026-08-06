@@ -60,14 +60,27 @@ python voyagr_web.py
 "What's the traffic like?"    → Get traffic conditions
 ```
 
-### Hazard Reporting (6 commands)
+### Hazard Reporting
+
+**Works end-to-end today** (recognized and saved):
 ```
-"Report speed camera"         → Report speed camera
-"Report traffic light camera" → Report red light camera
-"Report police"               → Report police checkpoint
-"Report pothole"              → Report road damage
-"Report debris"               → Report debris on road
 "Report accident"             → Report accident
+"Report crash"                → Report accident
+```
+
+**Recognized by voice but not yet saved** (parser type not accepted by `/api/hazards/report`):
+```
+"Report speed camera"         → Parsed as speed_camera (not saved yet)
+"Report traffic light camera" → Parsed as camera_red_light (not saved yet)
+"Report road closure"         → Parsed as road_closure (not saved yet)
+"Report traffic jam"          → Parsed as traffic (not saved yet)
+"Report pothole"              → Parsed as pothole (not saved yet)
+```
+
+**Not yet recognized:**
+```
+"Report police"
+"Report debris"
 ```
 
 ---
@@ -154,9 +167,9 @@ python voyagr_web.py
 3. ✅ Should speak the ETA
 
 ### Test 6: Hazard Report
-1. Say "Report speed camera"
-2. Check status shows confirmation
-3. ✅ Should save hazard report
+1. Say "Report accident"
+2. Check status / voice feedback for an accident report
+3. ✅ Should save hazard report (accident is allowlisted end-to-end)
 
 ---
 
@@ -284,9 +297,9 @@ Result: ETA displayed on screen
 
 ### Example 5: Hazard Report
 ```
-User: "Report speed camera"
-App: "Reporting speed camera" (speaks)
-Result: Hazard saved to database
+User: "Report accident"
+App: "Logging an accident report." (speaks)
+Result: Hazard saved to database (accident is allowlisted end-to-end)
 ```
 
 ---

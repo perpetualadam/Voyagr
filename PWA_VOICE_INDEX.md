@@ -113,13 +113,22 @@
 - How much will this cost?
 - What's the traffic like?
 
-### Hazard Reports (6)
+### Hazard Reports
+
+**Works end-to-end today:**
+- Report accident
+- Report crash
+
+**Recognized by voice but not yet saved:**
 - Report speed camera
 - Report traffic light camera
-- Report police
+- Report road closure
+- Report traffic jam
 - Report pothole
+
+**Not yet recognized:**
+- Report police
 - Report debris
-- Report accident
 
 ---
 

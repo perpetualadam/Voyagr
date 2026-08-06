@@ -67,13 +67,26 @@ The app will:
 ```
 
 ### Hazard Reporting
+
+**Works end-to-end today** (recognized and saved):
+```
+"Report accident"
+"Report crash"
+```
+
+**Recognized by voice but not yet saved** (parser type not accepted by `/api/hazards/report`):
 ```
 "Report speed camera"
 "Report traffic light camera"
-"Report police"
+"Report road closure"
+"Report traffic jam"
 "Report pothole"
+```
+
+**Not yet recognized:**
+```
+"Report police"
 "Report debris"
-"Report accident"
 ```
 
 ---
@@ -97,9 +110,9 @@ The app will:
 3. ✅ Should execute search
 
 ### Test 4: Hazard Reporting
-1. Say "Report speed camera"
-2. Check status shows: "Reporting speed camera"
-3. ✅ Should save hazard report
+1. Say "Report accident"
+2. Check the voice/command feedback for an accident report
+3. ✅ Should save hazard report (accident is allowlisted end-to-end)
 
 ---
 
@@ -237,11 +250,11 @@ If voice features don't work:
 
 ## ✨ Summary
 
-Your PWA now has **full voice control**:
+Your PWA now has **voice control**:
 - ✅ Speak commands naturally
 - ✅ Get audio feedback
 - ✅ Control navigation by voice
-- ✅ Report hazards by voice
+- ✅ Report accidents by voice (see Hazard Reporting status for other types)
 - ✅ Query trip information
 
 **Ready to use!** 🎉

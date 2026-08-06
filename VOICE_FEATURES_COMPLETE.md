@@ -12,7 +12,7 @@ All voice features from the native app have been successfully integrated into th
 - 3 new API endpoints (`/api/voice/speak`, `/api/voice/command`)
 - Voice command parser with 22+ commands
 - Text-to-speech support (pyttsx3 + browser fallback)
-- Hazard reporting by voice
+- Hazard reporting by voice (accident end-to-end; see Hazard Reports status)
 - Error handling and validation
 
 ### ✅ Frontend Implementation
@@ -66,13 +66,22 @@ All voice features from the native app have been successfully integrated into th
 - "How much will this cost?"
 - "What's the traffic like?"
 
-### Hazard Reports (6)
+### Hazard Reports
+
+**Works end-to-end today:**
+- "Report accident"
+- "Report crash"
+
+**Recognized by voice but not yet saved:**
 - "Report speed camera"
 - "Report traffic light camera"
-- "Report police"
+- "Report road closure"
+- "Report traffic jam"
 - "Report pothole"
+
+**Not yet recognized:**
+- "Report police"
 - "Report debris"
-- "Report accident"
 
 ---
 
@@ -316,9 +325,9 @@ Your Voyagr PWA now has **full voice control** with:
 ✅ Search by voice
 ✅ Route preferences by voice
 ✅ Information queries by voice
-✅ Hazard reporting by voice
-✅ 100% test coverage
-✅ Production ready
+✅ Hazard reporting by voice (accident end-to-end; other types limited — see status)
+✅ Test suite present
+✅ Core voice navigation ready
 
 ---
 
@@ -330,7 +339,7 @@ Your Voyagr PWA now has **full voice control** with:
 | TTS | Android TTS | Browser + pyttsx3 |
 | Wake Word | "Hey SatNav" | Manual button |
 | Commands | 14+ | 14+ |
-| Hazard Reports | ✅ | ✅ |
+| Hazard Reports | ✅ | ⚠️ Accident end-to-end |
 | Route Control | ✅ | ✅ |
 | Information | ✅ | ✅ |
 
