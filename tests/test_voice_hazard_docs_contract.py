@@ -74,7 +74,26 @@ class TestPrimaryVoiceDocsStatusSections(unittest.TestCase):
                         f'{phrase} appears as a working claim before unsupported section in {rel_path}',
                     )
 
-                # End-to-end example used in quick tests must not claim speed-camera save
+                # Working phrases should appear in the end-to-end section
+                for phrase, _hazard_type in DOCUMENTED_END_TO_END_VOICE_HAZARD_PHRASES:
+                    # Docs use title case; constants are lowercase commands
+                    display = ' '.join(w.capitalize() for w in phrase.split())
+                    idx = text.find(display)
+                    if idx < 0:
+                        idx = text.lower().find(phrase)
+                    self.assertGreaterEqual(idx, 0, f'{phrase} missing from {rel_path}')
+                    self.assertGreaterEqual(
+                        idx,
+                        working_idx,
+                        f'{phrase} appears before working section in {rel_path}',
+                    )
+                    self.assertLess(
+                        idx,
+                        unsupported_idx,
+                        f'{phrase} appears in/after unsupported section in {rel_path}',
+                    )
+
+                # End-to-end example used in quick tests must mention a saveable type
                 if 'Should save hazard report' in text:
                     self.assertIn('accident', text.lower())
 

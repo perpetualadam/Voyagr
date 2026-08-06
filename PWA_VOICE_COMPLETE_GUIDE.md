@@ -64,23 +64,25 @@ python voyagr_web.py
 
 **Works end-to-end today** (recognized and saved):
 ```
-"Report accident"             → Report accident
-"Report crash"                → Report accident
+"Report accident"             → accident
+"Report crash"                → accident
+"Report speed camera"         → speed_camera
+"Report traffic light camera" → camera_red_light
+"Report road closure"         → closure
+"Report traffic jam"          → congestion
+"Report pothole"              → pothole
+"Report police"               → police
+"Report debris"               → debris
 ```
 
 **Recognized by voice but not yet saved** (parser type not accepted by `/api/hazards/report`):
 ```
-"Report speed camera"         → Parsed as speed_camera (not saved yet)
-"Report traffic light camera" → Parsed as camera_red_light (not saved yet)
-"Report road closure"         → Parsed as road_closure (not saved yet)
-"Report traffic jam"          → Parsed as traffic (not saved yet)
-"Report pothole"              → Parsed as pothole (not saved yet)
+None currently.
 ```
 
 **Not yet recognized:**
 ```
-"Report police"
-"Report debris"
+None currently.
 ```
 
 ---
