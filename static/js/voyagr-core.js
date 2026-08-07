@@ -194,6 +194,27 @@ function initializeMap() {
         return voyagrMapStillInInitGracePeriod() || voyagrMapIsBootstrapStyle();
     }
 
+    /**
+     * Camera activity for tile-recovery decisions. Mid-drive follow keeps
+     * areTilesLoaded() false; recovery must not treat that as a stuck basemap.
+     */
+    function voyagrMapCameraRecoveryOpts() {
+        let isMapMoving = false;
+        try {
+            if (map && typeof map.isMoving === 'function') {
+                isMapMoving = !!map.isMoving();
+            }
+        } catch (_) {
+            isMapMoving = false;
+        }
+        const lastMoveAt = window.__voyagrLastMapMoveAt || 0;
+        const msSinceLastMapMove = lastMoveAt > 0 ? Date.now() - lastMoveAt : null;
+        const MR = window.VoyagrMapRecovery;
+        const mapIdleGraceMs = (MR && MR.MAP_IDLE_GRACE_MS) || 4000;
+        return { isMapMoving, msSinceLastMapMove, mapIdleGraceMs };
+    }
+    window.__voyagrMapCameraRecoveryOpts = voyagrMapCameraRecoveryOpts;
+
     function voyagrMapCancelRecoverTimers() {
         if (window.__voyagrMapRecoverVerifyTimer) {
             clearTimeout(window.__voyagrMapRecoverVerifyTimer);
@@ -276,6 +297,22 @@ function initializeMap() {
         maxPitch: 85, // Allow steep pitch for driving perspective
         pitchWithRotate: true // Enable pitch control with mouse/touch
     });
+    // Track camera motion so tile-stuck recovery can ignore normal mid-drive loading.
+    try {
+        const markMapMove = () => {
+            try {
+                window.__voyagrLastMapMoveAt = Date.now();
+            } catch (_) {
+                /* ignore */
+            }
+        };
+        map.on('movestart', markMapMove);
+        map.on('move', markMapMove);
+        map.on('moveend', markMapMove);
+        window.__voyagrLastMapMoveAt = Date.now();
+    } catch (_) {
+        /* ignore */
+    }
     showMapLoadingOverlay();
 
     // Log MapLibre errors with useful context. Some style/tile combinations can produce
@@ -711,14 +748,18 @@ function initializeMap() {
                     const styleOk = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
                     const tilesLoaded = typeof map.areTilesLoaded === 'function' ? map.areTilesLoaded() : null;
                     const allLoaded = typeof map.loaded === 'function' ? map.loaded() : true;
+                    const cameraOpts = voyagrMapCameraRecoveryOpts();
                     const MR = window.VoyagrMapRecovery;
                     const shouldRetry = MR && typeof MR.shouldRetryForceReloadSources === 'function'
                         ? MR.shouldRetryForceReloadSources({
                             styleLoaded: styleOk,
                             areTilesLoaded: tilesLoaded,
                             mapLoaded: allLoaded,
+                            isMapMoving: cameraOpts.isMapMoving,
+                            msSinceLastMapMove: cameraOpts.msSinceLastMapMove,
+                            mapIdleGraceMs: cameraOpts.mapIdleGraceMs,
                         })
-                        : (!styleOk || tilesLoaded === false);
+                        : (!styleOk || (tilesLoaded === false && !cameraOpts.isMapMoving));
                     if (!shouldRetry) return;
                     voyagrMapForceReloadAllSources((reason || 'verify') + ' (retry)');
                     if (window.__voyagrMapRecoverEscalateTimer) {
@@ -733,6 +774,7 @@ function initializeMap() {
                             const styleOk2 = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
                             const tilesLoaded2 = typeof map.areTilesLoaded === 'function' ? map.areTilesLoaded() : null;
                             const allLoaded2 = typeof map.loaded === 'function' ? map.loaded() : true;
+                            const cameraOpts2 = voyagrMapCameraRecoveryOpts();
                             const settleMs = (MR && MR.DEFAULT_SLOW_NETWORK_SETTLE_MS) || 12000;
                             const shouldEscalate = MR && typeof MR.shouldEscalateSoftStyleReload === 'function'
                                 ? MR.shouldEscalateSoftStyleReload({
@@ -741,8 +783,11 @@ function initializeMap() {
                                     mapLoaded: allLoaded2,
                                     msSinceForceReload: Date.now() - recoverStartedAt,
                                     slowNetworkSettleMs: settleMs,
+                                    isMapMoving: cameraOpts2.isMapMoving,
+                                    msSinceLastMapMove: cameraOpts2.msSinceLastMapMove,
+                                    mapIdleGraceMs: cameraOpts2.mapIdleGraceMs,
                                 })
-                                : (!styleOk2 || tilesLoaded2 === false);
+                                : (!styleOk2);
                             if (!shouldEscalate) return;
                             if (typeof voyagrMapSoftStyleReload === 'function') {
                                 voyagrMapSoftStyleReload((reason || 'verify') + ' (escalate)');
@@ -1011,37 +1056,46 @@ function initializeMap() {
             }
 
             // Tiles-stuck detector. `areTilesLoaded()` returning false is
-            // normal during pan/zoom, but on long drives we sometimes see
-            // sources silently stop completing tile requests (CDN session
-            // expired, mobile NAT swapped, etc.). isStyleLoaded() stays true
-            // and the GL context is fine, so neither check above fires — yet
-            // the user sees a blank/partial basemap. If tiles stay unloaded
-            // for two consecutive heartbeats (~90s) while the tab is visible,
-            // re-issue every source's tile requests. This is cheaper than a
-            // soft style reload and usually enough.
+            // normal during pan/zoom and continuous follow-nav (new tiles keep
+            // entering the loading state). Only treat it as stuck when the
+            // camera has been idle long enough — otherwise mid-drive force
+            // reload blanks the basemap around the ~1 min mark.
             try {
                 if (typeof map.areTilesLoaded === 'function') {
                     const tilesLoaded = map.areTilesLoaded();
-                    if (!tilesLoaded) {
-                        if (!window.__voyagrMapTilesStuckAt) {
-                            window.__voyagrMapTilesStuckAt = Date.now();
-                        } else if (
-                            Date.now() - window.__voyagrMapTilesStuckAt >
-                            MAP_RENDER_HEARTBEAT_MS + 5000 /* one full heartbeat + slack */
-                        ) {
-                            const reloaded = voyagrMapForceReloadAllSources(
-                                'tiles unloaded for >' +
-                                    Math.round(MAP_RENDER_HEARTBEAT_MS / 1000) +
-                                    's (heartbeat)'
-                            );
-                            if (reloaded === 0) {
-                                // Force reload was debounced or no sources matched —
-                                // try the cheap repaint nudge instead.
-                                voyagrMapResizeAndRepaint();
-                            }
-                            window.__voyagrMapTilesStuckAt = 0;
+                    const cameraOpts = voyagrMapCameraRecoveryOpts();
+                    const MR = window.VoyagrMapRecovery;
+                    const stuckAt = window.__voyagrMapTilesStuckAt || 0;
+                    const decision = MR && typeof MR.evaluateTilesStuckHeartbeat === 'function'
+                        ? MR.evaluateTilesStuckHeartbeat({
+                            areTilesLoaded: tilesLoaded,
+                            tilesStuckForMs: stuckAt > 0 ? Date.now() - stuckAt : 0,
+                            stuckThresholdMs: MAP_RENDER_HEARTBEAT_MS + 5000,
+                            isMapMoving: cameraOpts.isMapMoving,
+                            msSinceLastMapMove: cameraOpts.msSinceLastMapMove,
+                            mapIdleGraceMs: cameraOpts.mapIdleGraceMs,
+                        })
+                        : {
+                            trackStuck: tilesLoaded === false && !cameraOpts.isMapMoving,
+                            forceReload: false,
+                            clearStuck: tilesLoaded !== false || cameraOpts.isMapMoving,
+                        };
+                    if (decision.clearStuck) {
+                        window.__voyagrMapTilesStuckAt = 0;
+                    } else if (decision.trackStuck && !stuckAt) {
+                        window.__voyagrMapTilesStuckAt = Date.now();
+                    }
+                    if (decision.forceReload) {
+                        const reloaded = voyagrMapForceReloadAllSources(
+                            'tiles unloaded for >' +
+                                Math.round(MAP_RENDER_HEARTBEAT_MS / 1000) +
+                                's (heartbeat)'
+                        );
+                        if (reloaded === 0) {
+                            // Force reload was debounced or no sources matched —
+                            // try the cheap repaint nudge instead.
+                            voyagrMapResizeAndRepaint();
                         }
-                    } else {
                         window.__voyagrMapTilesStuckAt = 0;
                     }
                 }
