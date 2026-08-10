@@ -132,9 +132,13 @@ def test_index_has_seo_meta_and_jsonld(client):
     assert '<link rel="canonical"' in body
     assert 'property="og:title"' in body
     assert 'property="og:image"' in body
+    assert 'property="og:image:alt"' in body
     assert 'name="twitter:card"' in body
+    assert 'type="application/ld+json"' in body
+    assert "FAQPage" in body
     # Description must be present exactly once (no accidental duplication).
     assert body.count('<meta name="description"') == 1
+    assert 'lang="en-GB"' in body
 
 
 def test_robots_sitemap_llms_routes(client):

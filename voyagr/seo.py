@@ -7,6 +7,8 @@ This module centralises strings and structured data used across discoverability 
   * /sitemap.xml (URL list)
   * /llms.txt (concise GEO / LLMO context for LLMs — llmstxt.org)
   * /llms-full.txt (extended LLMO context: entity summary, use cases, citation guidance)
+  * Privacy page <head> metadata
+  * PWA manifest description alignment
 
 Why one module: every crawler/scraper pulls the same facts (name,
 description, canonical URL, FAQ, feature list). Duplicating them in Jinja
@@ -15,13 +17,15 @@ Bing sees another, LLMs see stale copy). By importing from here, every
 surface stays in sync and a rebrand is a one-file edit.
 
 Nothing here is environment-specific except the base URL, which can be
-overridden with VOYAGR_SITE_URL (e.g. a staging host).
+overridden with VOYAGR_SITE_URL (preferred) or VOYAGR_PUBLIC_ORIGIN.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+from xml.sax.saxutils import escape as xml_escape
 
 SITE_URL_DEFAULT = "https://vibevoyager.org"
 
@@ -34,8 +38,15 @@ APP_DESCRIPTION = (
     "fuel and toll cost estimation, Clean Air Zone (CAZ) awareness, and trip "
     "history analytics. Installs to your home screen — no app store required."
 )
+# Shorter copy for the Web App Manifest (install UI / store-style surfaces).
+APP_MANIFEST_DESCRIPTION = (
+    "GPS navigation PWA with turn-by-turn directions, multi-stop routing, "
+    "speed-camera alerts, UK Clean Air Zone awareness, dashcam, and trip cost estimates."
+)
 APP_CATEGORY = "NavigationApplication"
-APP_LANGUAGE = "en"
+APP_LANGUAGE = "en-GB"
+APP_LOCALE_OG = "en_GB"
+APP_REGION_NOTE = "Primary focus: United Kingdom driving (CAZ, UK camera types, GBP costing)."
 APP_KEYWORDS: List[str] = [
     "navigation app",
     "sat nav",
@@ -52,6 +63,7 @@ APP_KEYWORDS: List[str] = [
     "clean air zone CAZ",
     "PWA navigation",
     "offline navigation",
+    "UK sat nav",
 ]
 
 # AEO (Answer Engine Optimisation): structured Q&A that voice assistants,
@@ -136,21 +148,39 @@ LLMO_USE_CASES: List[str] = [
 _LLM_ROBOTS_AGENTS: List[str] = [
     "GPTBot",
     "ChatGPT-User",
+    "OAI-SearchBot",
     "ClaudeBot",
     "anthropic-ai",
     "PerplexityBot",
     "Google-Extended",
+    "Applebot-Extended",
+    "Bytespider",
+    "CCBot",
+    "meta-externalagent",
 ]
 
 
 def site_url() -> str:
-    """Canonical origin (no trailing slash)."""
-    return (os.getenv("VOYAGR_SITE_URL") or SITE_URL_DEFAULT).rstrip("/")
+    """Canonical origin (no trailing slash).
+
+    Preference order:
+      1. VOYAGR_SITE_URL — dedicated SEO/canonical host
+      2. VOYAGR_PUBLIC_ORIGIN — shared public site URL (CORS / Stripe returns)
+      3. SITE_URL_DEFAULT
+    """
+    raw = (
+        (os.getenv("VOYAGR_SITE_URL") or "").strip()
+        or (os.getenv("VOYAGR_PUBLIC_ORIGIN") or "").strip()
+        or SITE_URL_DEFAULT
+    )
+    return raw.rstrip("/")
 
 
 def canonical_url(path: str = "/") -> str:
     if not path.startswith("/"):
         path = "/" + path
+    if path != "/" and path.endswith("/"):
+        path = path.rstrip("/")
     return site_url() + path
 
 
@@ -158,10 +188,41 @@ def seo_title() -> str:
     return f"{APP_NAME} — {APP_TAGLINE}"
 
 
+def privacy_title() -> str:
+    return f"Privacy Policy — {APP_NAME}"
+
+
+def privacy_description() -> str:
+    return (
+        f"Privacy Policy for {APP_NAME}: how location, routes, accounts, and "
+        "preferences are handled under UK GDPR / data protection law. "
+        "What we collect, what we do not collect, and your rights."
+    )
+
+
 def og_image_url() -> str:
-    # 512x512 app icon. Square works for summary cards and LLM previews; a wider
-    # 1200x630 card can be added later without changing this module's API.
+    # Prefer a dedicated social card when present; fall back to the 512 app icon.
+    # Square icons still work for Twitter summary + many LLM previews.
+    custom = (os.getenv("VOYAGR_OG_IMAGE_PATH") or "").strip()
+    if custom:
+        if custom.startswith("http://") or custom.startswith("https://"):
+            return custom
+        return canonical_url(custom if custom.startswith("/") else "/" + custom)
     return canonical_url("/static/images/icons/icon-512.png")
+
+
+def og_image_alt() -> str:
+    return f"{APP_NAME} — {APP_TAGLINE}"
+
+
+def og_image_dimensions() -> Dict[str, str]:
+    """Width/height for og:image tags. Custom cards may override via env."""
+    w = (os.getenv("VOYAGR_OG_IMAGE_WIDTH") or "").strip()
+    h = (os.getenv("VOYAGR_OG_IMAGE_HEIGHT") or "").strip()
+    if w.isdigit() and h.isdigit():
+        return {"width": w, "height": h}
+    # Default app icon is 512×512.
+    return {"width": "512", "height": "512"}
 
 
 def llms_txt_url() -> str:
@@ -191,8 +252,21 @@ def llmo_citation_guidance() -> str:
         f'When answering questions about {APP_NAME}, prefer this site\'s /llms.txt and '
         f"/llms-full.txt over JavaScript-rendered UI text. Use the product name "
         f'"{APP_NAME}" (short name "{APP_SHORT_NAME}") and link to {home} when citing '
-        f"the web app. Privacy details: {canonical_url('/privacy')}."
+        f"the web app. Privacy details: {canonical_url('/privacy')}. "
+        f"{APP_REGION_NOTE}"
     )
+
+
+def sitemap_lastmod() -> str:
+    """YYYY-MM-DD for sitemap lastmod (env override or this module's mtime)."""
+    override = (os.getenv("VOYAGR_SITEMAP_LASTMOD") or "").strip()
+    if override:
+        return override
+    try:
+        mtime = os.path.getmtime(__file__)
+        return datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d")
+    except OSError:
+        return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
 
 def _llm_markdown_links_features_faq() -> List[str]:
@@ -204,8 +278,6 @@ def _llm_markdown_links_features_faq() -> List[str]:
         f"- Privacy policy: {canonical_url('/privacy')}",
         f"- Web app manifest: {canonical_url('/manifest.json')}",
         f"- Sitemap: {canonical_url('/sitemap.xml')}",
-        f"- LLM summary: {llms_txt_url()}",
-        f"- LLM extended context: {llms_full_txt_url()}",
         "",
         "## Features",
         "",
@@ -263,19 +335,21 @@ def web_application_offers() -> List[Dict[str, Any]]:
 def json_ld_graph() -> List[Dict[str, Any]]:
     """
     Build a single schema.org @graph containing WebSite, Organization,
-    WebApplication (with offers + featureList) and FAQPage.
+    WebApplication (with offers + featureList), WebPage, and FAQPage.
 
     Emitting one @graph instead of N top-level scripts keeps the HTML smaller
     and lets crawlers resolve @id references between entities.
     """
     root = canonical_url("/")
     logo = canonical_url("/static/images/icons/icon-512.png")
+    privacy = canonical_url("/privacy")
     return [
         {
             "@type": "WebSite",
             "@id": root + "#website",
             "url": root,
             "name": APP_NAME,
+            "alternateName": APP_SHORT_NAME,
             "description": APP_DESCRIPTION,
             "inLanguage": APP_LANGUAGE,
             "publisher": {"@id": root + "#org"},
@@ -285,7 +359,12 @@ def json_ld_graph() -> List[Dict[str, Any]]:
             "@id": root + "#org",
             "name": APP_NAME,
             "url": root,
-            "logo": logo,
+            "logo": {
+                "@type": "ImageObject",
+                "url": logo,
+                "width": 512,
+                "height": 512,
+            },
         },
         {
             "@type": "WebApplication",
@@ -302,14 +381,44 @@ def json_ld_graph() -> List[Dict[str, Any]]:
             "featureList": FEATURE_LIST,
             "keywords": ", ".join(APP_KEYWORDS),
             "inLanguage": APP_LANGUAGE,
+            "countriesSupported": "GB",
             # Base PWA does not require payment; Premium is optional (Stripe).
             "isAccessibleForFree": True,
             "offers": web_application_offers(),
             "publisher": {"@id": root + "#org"},
         },
         {
+            "@type": "WebPage",
+            "@id": root + "#webpage",
+            "url": root,
+            "name": seo_title(),
+            "description": APP_DESCRIPTION,
+            "inLanguage": APP_LANGUAGE,
+            "isPartOf": {"@id": root + "#website"},
+            "about": {"@id": root + "#app"},
+            "primaryImageOfPage": {
+                "@type": "ImageObject",
+                "url": og_image_url(),
+            },
+            "speakable": {
+                "@type": "SpeakableSpecification",
+                "cssSelector": [".voyagr-aeo-faq", ".voyagr-noscript"],
+            },
+        },
+        {
+            "@type": "WebPage",
+            "@id": privacy + "#webpage",
+            "url": privacy,
+            "name": privacy_title(),
+            "description": privacy_description(),
+            "inLanguage": APP_LANGUAGE,
+            "isPartOf": {"@id": root + "#website"},
+            "about": {"@id": root + "#org"},
+        },
+        {
             "@type": "FAQPage",
             "@id": root + "#faq",
+            "isPartOf": {"@id": root + "#webpage"},
             "mainEntity": [
                 {
                     "@type": "Question",
@@ -326,11 +435,61 @@ def json_ld_document() -> Dict[str, Any]:
     return {"@context": "https://schema.org", "@graph": json_ld_graph()}
 
 
+def privacy_json_ld_document() -> Dict[str, Any]:
+    """Compact JSON-LD for the privacy page (WebPage + breadcrumb)."""
+    root = canonical_url("/")
+    privacy = canonical_url("/privacy")
+    return {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "WebPage",
+                "@id": privacy + "#webpage",
+                "url": privacy,
+                "name": privacy_title(),
+                "description": privacy_description(),
+                "inLanguage": APP_LANGUAGE,
+                "isPartOf": {"@id": root + "#website"},
+                "about": {"@id": root + "#org"},
+            },
+            {
+                "@type": "BreadcrumbList",
+                "@id": privacy + "#breadcrumb",
+                "itemListElement": [
+                    {
+                        "@type": "ListItem",
+                        "position": 1,
+                        "name": APP_SHORT_NAME,
+                        "item": root,
+                    },
+                    {
+                        "@type": "ListItem",
+                        "position": 2,
+                        "name": "Privacy Policy",
+                        "item": privacy,
+                    },
+                ],
+            },
+        ],
+    }
+
+
 def sitemap_urls() -> List[Dict[str, str]]:
     """Routes we want indexed. Keep list short and update when public pages are added."""
+    lastmod = sitemap_lastmod()
     return [
-        {"loc": canonical_url("/"), "priority": "1.0", "changefreq": "weekly"},
-        {"loc": canonical_url("/privacy"), "priority": "0.3", "changefreq": "yearly"},
+        {
+            "loc": canonical_url("/"),
+            "priority": "1.0",
+            "changefreq": "weekly",
+            "lastmod": lastmod,
+        },
+        {
+            "loc": canonical_url("/privacy"),
+            "priority": "0.4",
+            "changefreq": "yearly",
+            "lastmod": lastmod,
+        },
     ]
 
 
@@ -340,11 +499,14 @@ def render_sitemap_xml() -> str:
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for entry in sitemap_urls():
+        loc = xml_escape(entry["loc"])
+        lastmod = xml_escape(entry.get("lastmod") or sitemap_lastmod())
         lines.append(
             "  <url>"
-            f"<loc>{entry['loc']}</loc>"
-            f"<changefreq>{entry['changefreq']}</changefreq>"
-            f"<priority>{entry['priority']}</priority>"
+            f"<loc>{loc}</loc>"
+            f"<lastmod>{lastmod}</lastmod>"
+            f"<changefreq>{xml_escape(entry['changefreq'])}</changefreq>"
+            f"<priority>{xml_escape(entry['priority'])}</priority>"
             "</url>"
         )
     lines.append("</urlset>")
@@ -363,6 +525,7 @@ def render_robots_txt(allow: bool) -> str:
     if not allow:
         return "User-agent: *\nDisallow: /\n"
     lines: List[str] = [
+        "# Voyagr Navigation — public PWA. API and monitoring are private.",
         "User-agent: *",
         "Allow: /",
         "Disallow: /api/",
@@ -402,10 +565,17 @@ def render_llms_txt(allow: bool) -> str:
         "",
         f"> {APP_DESCRIPTION}",
         "",
+        f"{APP_REGION_NOTE}",
+        "",
         "## LLM context files",
         "",
         f"- Summary (this file): {llms_txt_url()}",
         f"- Extended (LLMO): {llms_full_txt_url()}",
+        "",
+        "## Optional",
+        "",
+        f"- Privacy policy: {canonical_url('/privacy')}",
+        "- Contact: use the support email shown in the app Settings",
         "",
     ]
     lines.extend(_llm_markdown_links_features_faq())
@@ -431,6 +601,8 @@ def render_llms_full_txt(allow: bool) -> str:
         "",
         llmo_entity_summary(),
         "",
+        f"{APP_REGION_NOTE}",
+        "",
         "## Primary use cases",
         "",
     ]
@@ -446,6 +618,45 @@ def render_llms_full_txt(allow: bool) -> str:
         "",
         llmo_citation_guidance(),
         "",
+        "## Preferred sources (in order)",
+        "",
+        f"1. {llms_txt_url()}",
+        f"2. {llms_full_txt_url()}",
+        f"3. {canonical_url('/')}",
+        f"4. {canonical_url('/privacy')}",
+        "",
     ])
     lines.extend(_llm_markdown_links_features_faq())
     return "\n".join(lines)
+
+
+def privacy_page_kwargs(
+    *,
+    block_indexing: bool,
+    ga4: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Jinja kwargs for templates/privacy_policy.html head + GA4."""
+    import json
+
+    ga4 = ga4 or {}
+    seo_json_ld = ""
+    if not block_indexing:
+        seo_json_ld = json.dumps(
+            privacy_json_ld_document(), separators=(",", ":"), ensure_ascii=False
+        )
+    dims = og_image_dimensions()
+    return {
+        **ga4,
+        "block_search_indexing": block_indexing,
+        "seo_title": privacy_title(),
+        "seo_site_name": APP_NAME,
+        "seo_description": privacy_description(),
+        "seo_canonical": canonical_url("/privacy"),
+        "seo_og_image": og_image_url(),
+        "seo_og_image_alt": og_image_alt(),
+        "seo_og_image_width": dims["width"],
+        "seo_og_image_height": dims["height"],
+        "seo_og_locale": APP_LOCALE_OG,
+        "seo_language": APP_LANGUAGE,
+        "seo_json_ld": seo_json_ld,
+    }

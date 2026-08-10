@@ -1,7 +1,7 @@
 {
   "name": "Voyagr Navigation",
   "short_name": "Voyagr",
-  "description": "Full-featured navigation app with route planning, cost estimation, and trip tracking",
+  "description": "GPS navigation PWA with turn-by-turn directions, multi-stop routing, speed-camera alerts, UK Clean Air Zone awareness, dashcam, and trip cost estimates.",
   "start_url": "/",
   "scope": "/",
   "id": "/",

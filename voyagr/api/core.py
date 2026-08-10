@@ -21,6 +21,10 @@ from voyagr.discoverability import block_search_indexing
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.index_page_context import build_index_template_kwargs, tomtom_client_surface
 from voyagr.seo import (
+    APP_MANIFEST_DESCRIPTION,
+    APP_NAME,
+    APP_SHORT_NAME,
+    privacy_page_kwargs,
     render_empty_sitemap_xml,
     render_llms_full_txt,
     render_llms_txt,
@@ -188,10 +192,17 @@ def monitoring_dashboard():
 
 @core_bp.route('/manifest.json')
 def manifest():
-    """Serve the PWA manifest file."""
+    """Serve the PWA manifest file (description/name aligned with voyagr.seo)."""
     manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'manifest.json')
     with open(manifest_path, 'r', encoding='utf-8') as f:
-        return jsonify(json.load(f))
+        data = json.load(f)
+    # Keep install-surface copy in sync with the SEO single source of truth.
+    data['name'] = APP_NAME
+    data['short_name'] = APP_SHORT_NAME
+    data['description'] = APP_MANIFEST_DESCRIPTION
+    response = jsonify(data)
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    return response
 
 
 @core_bp.route('/favicon.ico')
@@ -251,5 +262,11 @@ def asset_links():
 @core_bp.route('/privacy')
 def privacy_policy():
     """Serve the privacy policy page (required by Google Play Store)."""
-    return render_template('privacy_policy.html', **ga4_template_kwargs())
+    return render_template(
+        'privacy_policy.html',
+        **privacy_page_kwargs(
+            block_indexing=block_search_indexing(),
+            ga4=ga4_template_kwargs(),
+        ),
+    )
 
