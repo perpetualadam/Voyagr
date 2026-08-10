@@ -207,6 +207,9 @@
         '.bottom-sheet-header',
         '.bottom-sheet-content',
         '.nav-control-menu',
+        // Map-controls "i" guide and road-report modals share this panel; without it,
+        // body pull-to-refresh preventDefault blocks scrolling their overflow lists.
+        '.road-report-modal-panel',
         '.fab',
         'button',
         'a',
