@@ -80,6 +80,30 @@ def test_index_json_ld_graph_types(client):
     assert "FAQPage" in types
 
 
+def test_index_json_ld_primary_image_has_dimensions(client):
+    from voyagr.seo import og_image_dimensions, og_image_url
+
+    rv = client.get("/")
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    start = body.index('type="application/ld+json"')
+    script_start = body.index(">", start) + 1
+    script_end = body.index("</script>", script_start)
+    payload = json.loads(body[script_start:script_end])
+    webpage = next(
+        n
+        for n in payload["@graph"]
+        if n.get("@type") == "WebPage" and "speakable" in n
+    )
+    image = webpage["primaryImageOfPage"]
+    dims = og_image_dimensions()
+    assert image["@type"] == "ImageObject"
+    assert image["url"] == og_image_url()
+    assert image["width"] == int(dims["width"])
+    assert image["height"] == int(dims["height"])
+    assert image.get("caption")
+
+
 def test_index_has_visible_aeo_faq(client):
     rv = client.get("/")
     assert rv.status_code == 200
