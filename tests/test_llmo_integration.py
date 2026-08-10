@@ -214,6 +214,30 @@ def _write_minimal_png(path, width: int, height: int) -> None:
         fh.write(png)
 
 
+def _write_minimal_lossy_webp(path, width: int, height: int) -> None:
+    """Write a minimal lossy (VP8) WebP with the given frame dimensions."""
+    import struct
+
+    # Keyframe tag (3 bytes) + start code 0x9d 0x01 0x2a + 14-bit width/height.
+    payload = (
+        b"\x00\x00\x00"
+        + b"\x9d\x01\x2a"
+        + struct.pack("<HH", width & 0x3FFF, height & 0x3FFF)
+        + b"\x00" * 8
+    )
+    riff_size = 4 + 8 + len(payload)
+    data = (
+        b"RIFF"
+        + struct.pack("<I", riff_size)
+        + b"WEBP"
+        + b"VP8 "
+        + struct.pack("<I", len(payload))
+        + payload
+    )
+    with open(path, "wb") as fh:
+        fh.write(data)
+
+
 def test_seo_title_fits_serp_length():
     """Home <title>/og:title should stay within common SERP display budget."""
     from voyagr.seo import seo_title
@@ -285,6 +309,24 @@ def test_og_image_dimensions_probes_local_custom_png(monkeypatch, tmp_path):
     monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
     monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
     assert seo.og_image_dimensions() == {"width": "1200", "height": "630"}
+
+
+def test_og_image_dimensions_probes_local_custom_lossy_webp(monkeypatch, tmp_path):
+    """Lossy VP8 WebP cards must be probed (not fall back to 1200×630)."""
+    from voyagr import seo
+
+    root = tmp_path / "repo"
+    card = root / "static" / "images" / "social" / "og-card.webp"
+    card.parent.mkdir(parents=True)
+    # Use dims other than the 1200×630 fallback so a probe miss cannot pass.
+    _write_minimal_lossy_webp(str(card), 1280, 720)
+
+    monkeypatch.setattr(seo, "_project_root", lambda: str(root))
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_PATH", "/static/images/social/og-card.webp")
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
+    assert seo.og_image_dimensions() == {"width": "1280", "height": "720"}
+    assert seo._webp_dimensions(card.read_bytes()) == (1280, 720)
 
 
 def test_og_image_dimensions_remote_custom_avoids_square_default(monkeypatch):
