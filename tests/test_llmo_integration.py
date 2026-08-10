@@ -118,6 +118,8 @@ def test_privacy_page_has_seo_meta(client):
     assert '<meta name="description"' in body
     assert 'rel="canonical"' in body
     assert 'property="og:title"' in body
+    assert 'property="og:image:alt"' in body
+    assert 'name="twitter:image:alt"' in body
     assert 'type="application/ld+json"' in body
     assert "BreadcrumbList" in body or "Privacy Policy" in body
 
