@@ -48,7 +48,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260727marker4" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260810toast1" />
     <script>
     (function () {
         try {
@@ -111,7 +111,7 @@
     <script defer src="/static/js/modules/navigation/geocoding-locations.js?v=20260712aaaq"></script>
     <script defer src="/static/js/modules/navigation/route-progress.js?v=20260712aaba"></script>
     <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20260712dark2"></script>
-    <script defer src="/static/js/modules/ui/device-environment.js?v=20260711zzzu"></script>
+    <script defer src="/static/js/modules/ui/device-environment.js?v=20260810toast1"></script>
     <script defer src="/static/js/modules/navigation/favorites.js?v=20260711y"></script>
     <script defer src="/static/js/modules/navigation/caz-info.js?v=20260711s"></script>
     <script defer src="/static/js/modules/map/preview-marker.js?v=20260711zzs"></script>
@@ -168,7 +168,7 @@
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20260712ab37"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20260712ab46"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20260712aaek"></script>
-    <script defer src="/static/js/app/notifications-orchestration.js?v=20260712aaek"></script>
+    <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
     <script defer src="/static/js/app/route-preferences-orchestration.js?v=20260712ab24"></script>
     <script defer src="/static/js/app/offline-navigation-orchestration.js?v=20260712ab23"></script>
     <script defer src="/static/js/app/search-favorites-orchestration.js?v=20260712aaem"></script>
@@ -1804,9 +1804,9 @@
             </div>
         </div>
 
-        <!-- Notification Container -->
+        <!-- Notification Container (styles in voyagr.css) -->
         <!-- z-index: 500 in mobile layout hierarchy - always on top of content -->
-        <div id="notificationContainer" class="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 500; max-width: 400px;"></div>
+        <div id="notificationContainer" class="notification-container" aria-live="polite" aria-relevant="additions"></div>
         <div id="mapHintToast" class="map-hint-toast" role="status" aria-live="polite" hidden></div>
 
         <!-- Gesture Indicator (Phase 3) -->
@@ -1903,53 +1903,7 @@
         </div>
     </div>
 
-    <!-- CSS for Notifications -->
-    <style>
-        .in-app-notification {
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            background: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            animation: slideIn 0.3s ease-out;
-        }
-
-        .notification-info {
-            border-left: 4px solid #2196F3;
-            background: #E3F2FD;
-        }
-
-        .notification-success {
-            border-left: 4px solid #4CAF50;
-            background: #E8F5E9;
-        }
-
-        .notification-warning {
-            border-left: 4px solid #FF9800;
-            background: #FFF3E0;
-        }
-
-        .notification-error {
-            border-left: 4px solid #F44336;
-            background: #FFEBEE;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes blink {
-            0%, 49% { opacity: 1; }
-            50%, 100% { opacity: 0.3; }
-        }
-
+    <!-- Toast / notification styles live in /static/css/voyagr.css -->
     <!-- JavaScript moved to /static/js/ -->
     <script>
         // ============================================================
