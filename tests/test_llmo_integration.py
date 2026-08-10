@@ -188,6 +188,15 @@ def _write_minimal_png(path, width: int, height: int) -> None:
         fh.write(png)
 
 
+def test_seo_title_fits_serp_length():
+    """Home <title>/og:title should stay within common SERP display budget."""
+    from voyagr.seo import seo_title
+
+    title = seo_title()
+    assert "Voyagr" in title
+    assert 30 <= len(title) <= 60
+
+
 def test_og_image_dimensions_default_icon(monkeypatch):
     from voyagr.seo import og_image_dimensions
 
