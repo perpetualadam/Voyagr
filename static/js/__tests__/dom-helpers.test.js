@@ -193,12 +193,20 @@ describe('dom-helpers', () => {
             <div class="bottom-sheet-handle" id="handle"></div>
             <button class="fab" id="fab"></button>
             <div id="map"></div>
+            <div class="road-report-modal-panel map-controls-hint-panel">
+                <ul class="map-controls-hint-list">
+                    <li class="map-hint-item" id="hintItem">Follow me</li>
+                </ul>
+            </div>
         `;
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('handle')
         ).allowNativeTouchMove).toBe(true);
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('fab')
+        ).allowNativeTouchMove).toBe(true);
+        expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
+            document.getElementById('hintItem')
         ).allowNativeTouchMove).toBe(true);
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('map')
