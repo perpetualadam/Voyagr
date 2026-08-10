@@ -32,7 +32,8 @@ SITE_URL_DEFAULT = "https://vibevoyager.org"
 
 APP_NAME = "Voyagr Navigation"
 APP_SHORT_NAME = "Voyagr"
-APP_TAGLINE = "GPS route planner with live turn-by-turn, trip tracking and dashcam"
+# Keep seo_title() within ~50–60 characters so SERPs do not truncate mid-phrase.
+APP_TAGLINE = "UK GPS nav with turn-by-turn & dashcam"
 APP_DESCRIPTION = (
     "Voyagr is a navigation web app (PWA) with turn-by-turn directions, "
     "multi-stop route optimisation, speed-camera and hazard alerts, built-in dashcam, "
