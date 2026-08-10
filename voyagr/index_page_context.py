@@ -12,11 +12,16 @@ from voyagr.discoverability import block_search_indexing
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.seo import (
     APP_DESCRIPTION,
+    APP_LANGUAGE,
+    APP_LOCALE_OG,
     APP_NAME,
+    FAQ,
     canonical_url,
     json_ld_document,
     llms_full_txt_url,
     llms_txt_url,
+    og_image_alt,
+    og_image_dimensions,
     og_image_url,
     seo_title,
 )
@@ -85,14 +90,20 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "picovoice_web_assets_ok": picovoice_web_assets_ok,
         "picovoice_keyword_public_path": picovoice_keyword_public_path,
         "wake_backend_default": wake_backend_default,
-        # SEO / GEO / AEO — see voyagr/seo.py for the single source of truth.
+        # SEO / GEO / AEO / LLMO — see voyagr/seo.py for the single source of truth.
         "seo_title": seo_title(),
         "seo_site_name": APP_NAME,
         "seo_description": APP_DESCRIPTION,
         "seo_canonical": canonical_url("/"),
         "seo_og_image": og_image_url(),
+        "seo_og_image_alt": og_image_alt(),
+        "seo_og_image_width": og_image_dimensions()["width"],
+        "seo_og_image_height": og_image_dimensions()["height"],
+        "seo_og_locale": APP_LOCALE_OG,
+        "seo_language": APP_LANGUAGE,
         "seo_json_ld": seo_json_ld,
         "seo_llms_txt_url": llms_txt_url(),
         "seo_llms_full_txt_url": llms_full_txt_url(),
+        "seo_faq": FAQ,
         **ga4_template_kwargs(),
     }
