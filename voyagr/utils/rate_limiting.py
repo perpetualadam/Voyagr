@@ -150,3 +150,36 @@ def rate_limit(limiter: RateLimiter) -> Callable[[F], F]:
         return decorated_function  # type: ignore
 
     return decorator
+
+
+def rate_limit_page(limiter: RateLimiter) -> Callable[[F], F]:
+    """Decorator for rate limiting HTML page routes (plain 429, not JSON).
+
+    Used for the PWA shell at GET / which is server-rendered and no-store —
+    a flood of shell requests is a cheap application-layer DoS against gunicorn.
+    Limits are intentionally looser than auth routes so normal reloads / tabs
+    do not break the app.
+    """
+
+    def decorator(f: F) -> F:
+        @wraps(f)
+        def decorated_function(*args: Any, **kwargs: Any) -> Any:
+            from flask import make_response
+
+            ip: Optional[str] = get_client_ip()
+            if ip and not limiter.is_allowed(ip):
+                logger.warning('Page rate limit exceeded for IP: %s', ip)
+                retry_after = max(1, int(limiter.window_seconds))
+                response = make_response(
+                    'Too Many Requests. Please wait a moment and try again.',
+                    429,
+                )
+                response.headers['Retry-After'] = str(retry_after)
+                response.headers['Cache-Control'] = 'no-store'
+                response.mimetype = 'text/plain'
+                return response
+            return f(*args, **kwargs)
+
+        return decorated_function  # type: ignore
+
+    return decorator

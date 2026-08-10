@@ -28,11 +28,31 @@ from voyagr.seo import (
     render_sitemap_xml,
 )
 from voyagr.utils.admin_auth import require_admin_if_configured
+from voyagr.utils.rate_limiting import RateLimiter, rate_limit_page
 
 core_bp = Blueprint('core', __name__)
 
+# PWA shell is no-store and rendered per request — protect GET / from refresh floods.
+# Defaults are high enough for normal multi-tab use; tighten via env if needed.
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or '').strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+page_limiter = RateLimiter(
+    max_requests=max(1, _env_int('PAGE_RATE_LIMIT_REQUESTS', 60)),
+    window_seconds=max(1, _env_int('PAGE_RATE_LIMIT_WINDOW_SECONDS', 60)),
+    key_prefix='voyagr:rl:page',
+)
+
 
 @core_bp.route('/')
+@rate_limit_page(page_limiter)
 def index():
     """Render the main application page."""
     html = render_template('index.html', **build_index_template_kwargs())

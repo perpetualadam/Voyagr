@@ -26,6 +26,7 @@ from voyagr.utils.geometry import (
 from voyagr.utils.rate_limiting import (
     RateLimiter,
     rate_limit,
+    rate_limit_page,
 )
 
 from voyagr.utils.auth import (
@@ -48,6 +49,7 @@ __all__ = [
     # Rate limiting
     'RateLimiter',
     'rate_limit',
+    'rate_limit_page',
     # Auth
     'require_auth',
     'require_private_user',
