@@ -40,6 +40,11 @@ APP_DESCRIPTION = (
     "fuel and toll cost estimation, Clean Air Zone (CAZ) awareness, and trip "
     "history analytics. Installs to your home screen — no app store required."
 )
+# SERP / Open Graph / Twitter description — keep within ~150–160 characters.
+APP_META_DESCRIPTION = (
+    "UK GPS navigation PWA with turn-by-turn directions, multi-stop routing, "
+    "speed-camera alerts, dashcam, and trip cost estimates. Installs to your home screen."
+)
 # Shorter copy for the Web App Manifest (install UI / store-style surfaces).
 APP_MANIFEST_DESCRIPTION = (
     "GPS navigation PWA with turn-by-turn directions, multi-stop routing, "

@@ -14,6 +14,7 @@ from voyagr.seo import (
     APP_DESCRIPTION,
     APP_LANGUAGE,
     APP_LOCALE_OG,
+    APP_META_DESCRIPTION,
     APP_NAME,
     FAQ,
     canonical_url,
@@ -95,7 +96,9 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         # SEO / GEO / AEO / LLMO — see voyagr/seo.py for the single source of truth.
         "seo_title": seo_title(),
         "seo_site_name": APP_NAME,
-        "seo_description": APP_DESCRIPTION,
+        # Short SERP/social meta; longer body copy for noscript / non-JS crawlers.
+        "seo_description": APP_META_DESCRIPTION,
+        "seo_body_description": APP_DESCRIPTION,
         "seo_canonical": canonical_url("/"),
         "seo_og_image": og_image_url(),
         "seo_og_image_alt": og_image_alt(),
