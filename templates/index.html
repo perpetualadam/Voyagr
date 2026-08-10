@@ -236,7 +236,7 @@
     <noscript>
         <main class="voyagr-noscript">
             <h1>{{ seo_site_name }}</h1>
-            <p>{{ seo_description }}</p>
+            <p>{{ seo_body_description|default(seo_description) }}</p>
             <p>
                 <a href="{{ seo_llms_txt_url }}">LLM context (llms.txt)</a>
                 ·

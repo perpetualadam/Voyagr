@@ -197,6 +197,23 @@ def test_seo_title_fits_serp_length():
     assert 30 <= len(title) <= 60
 
 
+def test_seo_meta_description_fits_serp_length(client):
+    """Home meta/og/twitter description should stay within ~150–160 chars."""
+    from voyagr.seo import APP_DESCRIPTION, APP_META_DESCRIPTION
+
+    assert 120 <= len(APP_META_DESCRIPTION) <= 160
+    # Longer entity copy remains available for JSON-LD / llms.txt / noscript.
+    assert len(APP_DESCRIPTION) > len(APP_META_DESCRIPTION)
+
+    rv = client.get("/")
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    assert f'content="{APP_META_DESCRIPTION}"' in body
+    assert f'<meta name="description" content="{APP_META_DESCRIPTION}">' in body
+    # Noscript product blurb keeps the fuller description.
+    assert APP_DESCRIPTION in body
+
+
 def test_og_image_dimensions_default_icon(monkeypatch):
     from voyagr.seo import og_image_dimensions
 
