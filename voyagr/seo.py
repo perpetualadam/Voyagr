@@ -497,6 +497,14 @@ def json_ld_graph() -> List[Dict[str, Any]]:
     root = canonical_url("/")
     logo = canonical_url("/static/images/icons/icon-512.png")
     privacy = canonical_url("/privacy")
+    og_dims = og_image_dimensions()
+    primary_image = {
+        "@type": "ImageObject",
+        "url": og_image_url(),
+        "width": int(og_dims["width"]),
+        "height": int(og_dims["height"]),
+        "caption": og_image_alt(),
+    }
     return [
         {
             "@type": "WebSite",
@@ -550,10 +558,7 @@ def json_ld_graph() -> List[Dict[str, Any]]:
             "inLanguage": APP_LANGUAGE,
             "isPartOf": {"@id": root + "#website"},
             "about": {"@id": root + "#app"},
-            "primaryImageOfPage": {
-                "@type": "ImageObject",
-                "url": og_image_url(),
-            },
+            "primaryImageOfPage": primary_image,
             "speakable": {
                 "@type": "SpeakableSpecification",
                 "cssSelector": [".voyagr-aeo-faq", ".voyagr-noscript"],
@@ -568,6 +573,7 @@ def json_ld_graph() -> List[Dict[str, Any]]:
             "inLanguage": APP_LANGUAGE,
             "isPartOf": {"@id": root + "#website"},
             "about": {"@id": root + "#org"},
+            "primaryImageOfPage": primary_image,
         },
         {
             "@type": "FAQPage",
