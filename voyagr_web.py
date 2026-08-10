@@ -89,6 +89,35 @@ load_dotenv(_env_path)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
+# Cap request bodies early (Werkzeug 413) — Voyagr has no large uploads; JSON API payloads are small.
+# Prevents trivial memory exhaustion from oversized POST bodies.
+try:
+    _max_body = int(os.getenv('MAX_CONTENT_LENGTH_BYTES', str(1 * 1024 * 1024)))
+except ValueError:
+    _max_body = 1 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = max(64 * 1024, _max_body)
+
+
+@app.before_request
+def _reject_oversized_bodies():
+    """Reject oversized bodies before view try/except blocks can swallow 413s."""
+    max_len = app.config.get('MAX_CONTENT_LENGTH')
+    content_length = request.content_length
+    if max_len and content_length is not None and content_length > max_len:
+        return jsonify({
+            'success': False,
+            'error': 'Request too large',
+        }), 413
+
+
+@app.errorhandler(413)
+def _request_entity_too_large(_error):
+    return jsonify({
+        'success': False,
+        'error': 'Request too large',
+    }), 413
+
+
 # Reverse proxy: fix scheme / client IP when the edge sets X-Forwarded-* (nginx on Contabo).
 if os.getenv('VOYAGR_TRUST_PROXY', '').strip().lower() in ('1', 'true', 'yes'):
     try:
