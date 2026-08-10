@@ -165,3 +165,90 @@ def test_llmo_opt_out_when_indexing_blocked(client, monkeypatch):
     body_index = rv_index.data.decode("utf-8", errors="replace")
     assert 'rel="alternate" type="text/markdown"' not in body_index
     assert "voyagr-aeo-faq" not in body_index
+
+
+def _write_minimal_png(path, width: int, height: int) -> None:
+    """Write a tiny valid RGBA PNG with the given IHDR dimensions."""
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+    raw = b"".join(b"\x00" + (b"\x00\x00\x00\xff" * width) for _ in range(height))
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
+    )
+    with open(path, "wb") as fh:
+        fh.write(png)
+
+
+def test_og_image_dimensions_default_icon(monkeypatch):
+    from voyagr.seo import og_image_dimensions
+
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_PATH", raising=False)
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
+    assert og_image_dimensions() == {"width": "512", "height": "512"}
+
+
+def test_og_image_dimensions_env_override(monkeypatch):
+    from voyagr.seo import og_image_dimensions
+
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_PATH", "/static/images/icons/icon-512.png")
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_WIDTH", "1200")
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_HEIGHT", "630")
+    assert og_image_dimensions() == {"width": "1200", "height": "630"}
+
+
+def test_og_image_dimensions_probes_local_custom_png(monkeypatch, tmp_path):
+    """Custom local card must not advertise 512×512 when the file is non-square."""
+    from voyagr import seo
+
+    root = tmp_path / "repo"
+    card = root / "static" / "images" / "social" / "og-card.png"
+    card.parent.mkdir(parents=True)
+    _write_minimal_png(str(card), 1200, 630)
+
+    monkeypatch.setattr(seo, "_project_root", lambda: str(root))
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_PATH", "/static/images/social/og-card.png")
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
+    assert seo.og_image_dimensions() == {"width": "1200", "height": "630"}
+
+
+def test_og_image_dimensions_remote_custom_avoids_square_default(monkeypatch):
+    from voyagr.seo import og_image_dimensions
+
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_PATH", "https://cdn.example/og-card.png")
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
+    # Unknown remote size: landscape OG fallback, not the 512 app icon.
+    assert og_image_dimensions() == {"width": "1200", "height": "630"}
+
+
+def test_index_and_privacy_advertise_probed_og_dimensions(client, monkeypatch, tmp_path):
+    from voyagr import seo
+
+    root = tmp_path / "repo"
+    card = root / "static" / "images" / "social" / "og-card.png"
+    card.parent.mkdir(parents=True)
+    _write_minimal_png(str(card), 1200, 630)
+
+    monkeypatch.setattr(seo, "_project_root", lambda: str(root))
+    monkeypatch.setenv("VOYAGR_OG_IMAGE_PATH", "/static/images/social/og-card.png")
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
+    monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
+
+    for path in ("/", "/privacy"):
+        rv = client.get(path)
+        assert rv.status_code == 200
+        body = rv.data.decode("utf-8", errors="replace")
+        assert 'property="og:image:width" content="1200"' in body
+        assert 'property="og:image:height" content="630"' in body
+        assert 'property="og:image:width" content="512"' not in body

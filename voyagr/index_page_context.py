@@ -81,6 +81,8 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     show_firefox_browser_hint = os.getenv(
         "VOYAGR_SHOW_FIREFOX_BROWSER_HINT", "true"
     ).strip().lower() not in ("0", "false", "no")
+    # Resolve OG dimensions once so index meta matches privacy (and custom cards).
+    og_dims = og_image_dimensions()
     return {
         "tomtom_api_key": _tt_key,
         "tomtom_traffic_proxy": _tt_proxy,
@@ -97,8 +99,8 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "seo_canonical": canonical_url("/"),
         "seo_og_image": og_image_url(),
         "seo_og_image_alt": og_image_alt(),
-        "seo_og_image_width": og_image_dimensions()["width"],
-        "seo_og_image_height": og_image_dimensions()["height"],
+        "seo_og_image_width": og_dims["width"],
+        "seo_og_image_height": og_dims["height"],
         "seo_og_locale": APP_LOCALE_OG,
         "seo_language": APP_LANGUAGE,
         "seo_json_ld": seo_json_ld,
