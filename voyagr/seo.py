@@ -314,7 +314,8 @@ def _webp_dimensions(data: bytes) -> Optional[Tuple[int, int]]:
         w = 1 + (data[24] | (data[25] << 8) | (data[26] << 16))
         h = 1 + (data[27] | (data[28] << 8) | (data[29] << 16))
         return (w, h) if w >= 1 and h >= 1 else None
-    if chunk == b"VP8 " and len(data) >= 30 and data[23] == 0x9D and data[24:27] == b"\x01\x2a":
+    # VP8 keyframe start code is 0x9d 0x01 0x2a at bytes 23..25 (not a 3-byte slice).
+    if chunk == b"VP8 " and len(data) >= 30 and data[23] == 0x9D and data[24:26] == b"\x01\x2a":
         width, height = struct.unpack("<HH", data[26:30])
         width &= 0x3FFF
         height &= 0x3FFF
