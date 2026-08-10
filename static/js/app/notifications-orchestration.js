@@ -53,8 +53,32 @@
         showInAppNotification(title, message, type);
     }
 
+    function dismissInAppNotification(notif, immediate) {
+        if (!notif || !notif.parentElement || notif.dataset.leaving === '1') return;
+        notif.dataset.leaving = '1';
+        if (notif._voyagrToastTimer) {
+            clearTimeout(notif._voyagrToastTimer);
+            notif._voyagrToastTimer = null;
+        }
+        if (immediate) {
+            notif.remove();
+            return;
+        }
+        notif.classList.add('is-leaving');
+        var remove = function () {
+            if (notif.parentElement) notif.remove();
+        };
+        notif.addEventListener('animationend', remove, { once: true });
+        // Fallback if animationend does not fire (reduced motion / old engines)
+        setTimeout(remove, 320);
+    }
+
     function showInAppNotification(title, message, type, durationMs) {
         if (type === undefined) type = 'info';
+        var mod = DE();
+        var kind = typeof mod.normalizeToastType === 'function'
+            ? mod.normalizeToastType(type)
+            : type;
         const notifContainer = document.getElementById('notificationContainer');
         if (!notifContainer) {
             console.log('Notification container not found');
@@ -62,17 +86,67 @@
         }
 
         const notif = document.createElement('div');
-        notif.className = `in-app-notification notification-${type}`;
-        notif.innerHTML = DE().buildInAppNotificationHtml(title, message);
-
-        notifContainer.appendChild(notif);
+        notif.className = 'in-app-notification voyagr-toast voyagr-toast--' + kind +
+            ' notification-' + kind;
+        notif.setAttribute('role', kind === 'error' || kind === 'warning' ? 'alert' : 'status');
+        notif.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
+        notif.innerHTML = mod.buildInAppNotificationHtml(title, message, kind);
 
         const ttl = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 5000;
-        setTimeout(() => {
-            if (notif.parentElement) {
-                notif.remove();
+        notif.style.setProperty('--toast-ttl', ttl + 'ms');
+
+        var dismissBtn = notif.querySelector('.voyagr-toast__dismiss');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dismissInAppNotification(notif, false);
+            });
+        }
+
+        // Pause auto-dismiss while the user inspects the toast (hover / focus).
+        var remaining = ttl;
+        var startedAt = Date.now();
+        var paused = false;
+
+        function armTimer() {
+            if (notif._voyagrToastTimer) clearTimeout(notif._voyagrToastTimer);
+            notif._voyagrToastTimer = setTimeout(function () {
+                dismissInAppNotification(notif, false);
+            }, Math.max(0, remaining));
+            startedAt = Date.now();
+        }
+
+        function pauseTimer() {
+            if (paused || notif.dataset.leaving === '1') return;
+            paused = true;
+            remaining = Math.max(0, remaining - (Date.now() - startedAt));
+            if (notif._voyagrToastTimer) {
+                clearTimeout(notif._voyagrToastTimer);
+                notif._voyagrToastTimer = null;
             }
-        }, ttl);
+            notif.classList.add('is-paused');
+        }
+
+        function resumeTimer() {
+            if (!paused || notif.dataset.leaving === '1') return;
+            paused = false;
+            notif.classList.remove('is-paused');
+            armTimer();
+        }
+
+        notif.addEventListener('mouseenter', pauseTimer);
+        notif.addEventListener('mouseleave', resumeTimer);
+        notif.addEventListener('focusin', pauseTimer);
+        notif.addEventListener('focusout', function (e) {
+            if (!notif.contains(e.relatedTarget)) resumeTimer();
+        });
+
+        notifContainer.appendChild(notif);
+        // Retrigger enter animation for stacked toasts
+        void notif.offsetWidth;
+        notif.classList.add('is-visible');
+        armTimer();
     }
 
     function sendEnvironmentHint(channel, title, message, type) {
@@ -168,19 +242,37 @@
         if (chip) chip.remove();
         chip = document.createElement('div');
         chip.id = execute.bannerId;
+        chip.className = execute.bannerClassName || 'voyagr-volume-hint';
         chip.setAttribute('role', 'status');
-        chip.style.cssText = execute.bannerStyleCssText;
+        chip.setAttribute('aria-live', 'polite');
+        // Prefer CSS class styles; legacy inline cssText overrides transform animations.
+        if (!execute.bannerClassName && execute.bannerStyleCssText) {
+            chip.style.cssText = execute.bannerStyleCssText;
+        }
         chip.innerHTML = execute.bannerHtml;
         document.body.appendChild(chip);
-        const dismiss = chip.querySelector('#' + execute.dismissButtonId);
-        if (dismiss) dismiss.onclick = () => chip.remove();
-        const ok = chip.querySelector('#' + execute.okButtonId);
-        if (ok) ok.onclick = () => chip.remove();
+        requestAnimationFrame(function () {
+            chip.classList.add('is-visible');
+        });
 
-        setTimeout(() => {
-            const el = document.getElementById(execute.bannerId);
-            if (el) el.remove();
-        }, execute.autoDismissMs);
+        function removeChip() {
+            if (!chip || !chip.parentElement || chip.dataset.leaving === '1') return;
+            chip.dataset.leaving = '1';
+            chip.classList.remove('is-visible');
+            chip.classList.add('is-leaving');
+            var done = function () {
+                if (chip.parentElement) chip.remove();
+            };
+            chip.addEventListener('animationend', done, { once: true });
+            setTimeout(done, 320);
+        }
+
+        const dismiss = chip.querySelector('#' + execute.dismissButtonId);
+        if (dismiss) dismiss.onclick = removeChip;
+        const ok = chip.querySelector('#' + execute.okButtonId);
+        if (ok) ok.onclick = removeChip;
+
+        setTimeout(removeChip, execute.autoDismissMs);
 
         if (execute.showNotification && 'Notification' in window && Notification.permission === 'granted') {
             try {

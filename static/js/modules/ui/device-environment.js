@@ -36,24 +36,72 @@
         autoDismissMs: 14000,
     };
 
+    var TOAST_ICONS = {
+        info: 'ℹ️',
+        success: '✓',
+        warning: '!',
+        error: '✕',
+    };
+
     /**
-     * @param {string} title
-     * @param {string} message
+     * Escape a value for safe insertion into HTML text.
+     * @param {*} value
      * @returns {string}
      */
-    function buildInAppNotificationHtml(title, message) {
+    function escapeHtml(value) {
+        if (root.VoyagrHtml && typeof root.VoyagrHtml.escapeHtml === 'function') {
+            return root.VoyagrHtml.escapeHtml(value);
+        }
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    /**
+     * @param {string} type
+     * @returns {string}
+     */
+    function normalizeToastType(type) {
+        var t = String(type || 'info').toLowerCase();
+        if (t === 'success' || t === 'warning' || t === 'error' || t === 'info') return t;
+        return 'info';
+    }
+
+    /**
+     * Build inner HTML for an in-app toast card (outer element is created by orchestration).
+     * @param {string} title
+     * @param {string} message
+     * @param {string} [type]
+     * @returns {string}
+     */
+    function buildInAppNotificationHtml(title, message, type) {
+        var kind = normalizeToastType(type);
+        var icon = TOAST_ICONS[kind] || TOAST_ICONS.info;
+        var safeTitle = escapeHtml(title);
+        var safeMessage = escapeHtml(message);
+        var messageHtml = safeMessage
+            ? '<p class="voyagr-toast__message">' + safeMessage + '</p>'
+            : '';
+
         return (
-            '<div style="display: flex; justify-content: space-between; align-items: start;">' +
-                '<div>' +
-                    '<div style="font-weight: bold; margin-bottom: 4px;">' + (title || '') + '</div>' +
-                    '<div style="font-size: 14px; opacity: 0.9;">' + (message || '') + '</div>' +
-                '</div>' +
-                '<button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; cursor: pointer; font-size: 18px;">×</button>' +
+            '<span class="voyagr-toast__icon" aria-hidden="true">' + icon + '</span>' +
+            '<div class="voyagr-toast__body">' +
+                '<p class="voyagr-toast__title">' + safeTitle + '</p>' +
+                messageHtml +
+            '</div>' +
+            '<button type="button" class="voyagr-toast__dismiss" aria-label="Dismiss notification" title="Dismiss">×</button>' +
+            '<div class="voyagr-toast__progress" aria-hidden="true">' +
+                '<span class="voyagr-toast__progress-bar"></span>' +
             '</div>'
         );
     }
 
     /**
+     * @deprecated Prefer CSS class voyagr-volume-hint; kept for tests/compat.
      * @returns {string}
      */
     function getVolumeHintBannerStyleCssText() {
@@ -64,15 +112,6 @@
             'transform:translateX(-50%)',
             'z-index:10001',
             'max-width:min(420px,92vw)',
-            'padding:14px 16px',
-            'background:#E3F2FD',
-            'border:2px solid #2196F3',
-            'border-radius:14px',
-            'box-shadow:0 8px 28px rgba(0,0,0,.22)',
-            'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
-            'font-size:15px',
-            'color:#0d47a1',
-            'text-align:center',
         ].join(';');
     }
 
@@ -83,16 +122,20 @@
      */
     function buildVolumeHintBannerHtml(line, detail) {
         return (
-            '<div style="display:flex;justify-content:flex-end;margin:-4px -4px 4px 0;">' +
-                '<button type="button" id="volumeHintDismiss" aria-label="Dismiss" title="Dismiss" ' +
-                    'style="border:none;background:transparent;color:#1565c0;font-size:22px;line-height:1;cursor:pointer;padding:4px 8px;">×</button>' +
+            '<div class="voyagr-volume-hint__toolbar">' +
+                '<button type="button" id="volumeHintDismiss" class="voyagr-volume-hint__dismiss" ' +
+                    'aria-label="Dismiss" title="Dismiss">×</button>' +
             '</div>' +
-            '<strong style="display:block;margin-bottom:6px;">🔊 Check volume</strong>' +
-            '<span>' + (line || '') + '</span><br>' +
-            '<span style="font-size:13px;opacity:.9">' + (detail || '') + '</span>' +
-            '<div style="margin-top:10px;">' +
-                '<button type="button" id="volumeHintOk" style="padding:8px 18px;border:none;border-radius:10px;' +
-                    'background:#2196F3;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">OK</button>' +
+            '<div class="voyagr-volume-hint__row">' +
+                '<span class="voyagr-volume-hint__icon" aria-hidden="true">🔊</span>' +
+                '<div class="voyagr-volume-hint__copy">' +
+                    '<strong class="voyagr-volume-hint__title">Check volume</strong>' +
+                    '<span class="voyagr-volume-hint__line">' + escapeHtml(line) + '</span>' +
+                    '<span class="voyagr-volume-hint__detail">' + escapeHtml(detail) + '</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="voyagr-volume-hint__actions">' +
+                '<button type="button" id="volumeHintOk" class="voyagr-volume-hint__ok">Got it</button>' +
             '</div>'
         );
     }
@@ -111,6 +154,7 @@
             spokenLine: VOLUME_HINT.spokenLine,
             spokenPriority: 'high',
             bannerId: VOLUME_HINT_BANNER_ID,
+            bannerClassName: 'voyagr-volume-hint',
             bannerStyleCssText: getVolumeHintBannerStyleCssText(),
             bannerHtml: buildVolumeHintBannerHtml(VOLUME_HINT.line, VOLUME_HINT.detail),
             dismissButtonId: 'volumeHintDismiss',
@@ -189,6 +233,9 @@
         ENV_HINT_MIN_MS: ENV_HINT_MIN_MS,
         ENV_HINT_MESSAGES: ENV_HINT_MESSAGES,
         VOLUME_HINT: VOLUME_HINT,
+        TOAST_ICONS: TOAST_ICONS,
+        escapeHtml: escapeHtml,
+        normalizeToastType: normalizeToastType,
         buildInAppNotificationHtml: buildInAppNotificationHtml,
         getVolumeHintBannerStyleCssText: getVolumeHintBannerStyleCssText,
         buildVolumeHintBannerHtml: buildVolumeHintBannerHtml,

@@ -11,11 +11,29 @@ describe('device-environment module', () => {
         expect(DE.ENV_HINT_MESSAGES.gps.message).toContain('location access');
     });
 
-    test('buildInAppNotificationHtml includes title, message, and dismiss button', () => {
-        const html = DE.buildInAppNotificationHtml('Offline', 'No connection');
+    test('buildInAppNotificationHtml includes title, message, icon, and dismiss control', () => {
+        const html = DE.buildInAppNotificationHtml('Offline', 'No connection', 'warning');
         expect(html).toContain('Offline');
         expect(html).toContain('No connection');
-        expect(html).toContain('parentElement.parentElement.remove');
+        expect(html).toContain('voyagr-toast__dismiss');
+        expect(html).toContain('voyagr-toast__icon');
+        expect(html).toContain('voyagr-toast__progress');
+        expect(html).toContain('aria-label="Dismiss notification"');
+        expect(html).not.toContain('parentElement.parentElement.remove');
+        expect(html).not.toContain('onclick=');
+    });
+
+    test('buildInAppNotificationHtml escapes untrusted title/message text', () => {
+        const html = DE.buildInAppNotificationHtml('<script>x</script>', 'a & b', 'info');
+        expect(html).toContain('&lt;script&gt;x&lt;/script&gt;');
+        expect(html).toContain('a &amp; b');
+        expect(html).not.toContain('<script>x</script>');
+    });
+
+    test('normalizeToastType falls back to info', () => {
+        expect(DE.normalizeToastType('success')).toBe('success');
+        expect(DE.normalizeToastType('weird')).toBe('info');
+        expect(DE.normalizeToastType(undefined)).toBe('info');
     });
 
     test('buildVolumeHintBannerHtml includes dismiss and OK controls', () => {
@@ -24,6 +42,7 @@ describe('device-environment module', () => {
         expect(html).toContain('volumeHintOk');
         expect(html).toContain('Check volume');
         expect(html).toContain(DE.VOLUME_HINT.line);
+        expect(html).toContain('voyagr-volume-hint__ok');
     });
 
     test('getVolumeHintBannerStyleCssText positions banner above bottom sheet', () => {
@@ -35,6 +54,7 @@ describe('device-environment module', () => {
         const on = DE.buildShowVolumeHintExecutePlan({ voiceAnnouncementsEnabled: true });
         expect(on.speakIfVoiceEnabled).toBe(true);
         expect(on.bannerHtml).toContain('Check volume');
+        expect(on.bannerClassName).toBe('voyagr-volume-hint');
         expect(on.autoDismissMs).toBe(DE.VOLUME_HINT.autoDismissMs);
 
         const off = DE.buildShowVolumeHintExecutePlan({ voiceAnnouncementsEnabled: false });
