@@ -19,6 +19,30 @@
 
     function DE() { return rt().deviceEnvironment(); }
 
+    /**
+     * Wait for this element's leave animation, ignoring bubbled child
+     * animationend (e.g. toast progress) and cancelled enter animations.
+     */
+    function bindLeaveAnimationEnd(el, leaveAnimationNames, onDone) {
+        if (!el || typeof onDone !== 'function') return;
+        var names = leaveAnimationNames || [];
+        var handler = function (e) {
+            if (!e || e.target !== el) return;
+            var name = String(e.animationName || '');
+            var matched = false;
+            for (var i = 0; i < names.length; i++) {
+                if (name.indexOf(names[i]) !== -1) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) return;
+            el.removeEventListener('animationend', handler);
+            onDone();
+        };
+        el.addEventListener('animationend', handler);
+    }
+
     function sendNotification(title, message, type) {
         if (type === undefined) type = 'info';
         const now = Date.now();
@@ -68,7 +92,7 @@
         var remove = function () {
             if (notif.parentElement) notif.remove();
         };
-        notif.addEventListener('animationend', remove, { once: true });
+        bindLeaveAnimationEnd(notif, ['voyagrToastOut', 'voyagrToastOutMobile'], remove);
         // Fallback if animationend does not fire (reduced motion / old engines)
         setTimeout(remove, 320);
     }
@@ -263,7 +287,7 @@
             var done = function () {
                 if (chip.parentElement) chip.remove();
             };
-            chip.addEventListener('animationend', done, { once: true });
+            bindLeaveAnimationEnd(chip, ['voyagrVolumeOut'], done);
             setTimeout(done, 320);
         }
 
