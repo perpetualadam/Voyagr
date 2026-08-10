@@ -200,10 +200,10 @@ def privacy_title() -> str:
 
 
 def privacy_description() -> str:
+    # Keep within ~150–160 characters for SERP / social description tags.
     return (
-        f"Privacy Policy for {APP_NAME}: how location, routes, accounts, and "
-        "preferences are handled under UK GDPR / data protection law. "
-        "What we collect, what we do not collect, and your rights."
+        f"Privacy Policy for {APP_NAME}: how we handle location, routes, "
+        "accounts, and preferences under UK GDPR, and your data rights."
     )
 
 

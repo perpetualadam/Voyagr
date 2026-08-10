@@ -197,6 +197,19 @@ def test_seo_title_fits_serp_length():
     assert 30 <= len(title) <= 60
 
 
+def test_privacy_description_fits_serp_length(client):
+    from voyagr.seo import privacy_description
+
+    desc = privacy_description()
+    assert 120 <= len(desc) <= 160
+    assert "GDPR" in desc
+
+    rv = client.get("/privacy")
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    assert f'content="{desc}"' in body
+
+
 def test_seo_meta_description_fits_serp_length(client):
     """Home meta/og/twitter description should stay within ~150–160 chars."""
     from voyagr.seo import APP_DESCRIPTION, APP_META_DESCRIPTION
