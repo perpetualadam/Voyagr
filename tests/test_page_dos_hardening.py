@@ -66,6 +66,12 @@ class TestPageRateLimit:
 
 
 class TestMaxContentLength:
+    def test_max_content_length_configured(self):
+        from voyagr_web import app
+
+        assert app.config.get('MAX_CONTENT_LENGTH')
+        assert app.config['MAX_CONTENT_LENGTH'] >= 64 * 1024
+
     def test_oversized_body_rejected(self, client):
         from voyagr_web import app
 
@@ -74,10 +80,13 @@ class TestMaxContentLength:
         app.config['MAX_CONTENT_LENGTH'] = 1024
         try:
             rv = client.post(
-                '/api/route',
+                '/api/config',
                 data=b'x' * 2048,
                 content_type='application/json',
+                headers={'Content-Length': '2048'},
             )
             assert rv.status_code == 413
+            body = rv.get_json(silent=True) or {}
+            assert body.get('success') is False
         finally:
             app.config['MAX_CONTENT_LENGTH'] = previous
