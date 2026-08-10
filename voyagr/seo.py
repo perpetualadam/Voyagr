@@ -23,8 +23,9 @@ overridden with VOYAGR_SITE_URL (preferred) or VOYAGR_PUBLIC_ORIGIN.
 from __future__ import annotations
 
 import os
+import struct
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from xml.sax.saxutils import escape as xml_escape
 
 SITE_URL_DEFAULT = "https://vibevoyager.org"
@@ -215,12 +216,159 @@ def og_image_alt() -> str:
     return f"{APP_NAME} — {APP_TAGLINE}"
 
 
+def _og_image_custom_path() -> str:
+    return (os.getenv("VOYAGR_OG_IMAGE_PATH") or "").strip()
+
+
+def _project_root() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+def _local_static_filesystem_path(url_path: str) -> Optional[str]:
+    """Resolve a /static/... URL path to a file under the repo, or None."""
+    path = (url_path or "").strip()
+    if not path:
+        return None
+    if not path.startswith("/"):
+        path = "/" + path
+    # Only allow reading packaged static assets (no path traversal).
+    if ".." in path.split("/") or not path.startswith("/static/"):
+        return None
+    root = _project_root()
+    fs_path = os.path.abspath(os.path.join(root, path.lstrip("/")))
+    if not (fs_path == root or fs_path.startswith(root + os.sep)):
+        return None
+    return fs_path if os.path.isfile(fs_path) else None
+
+
+def _png_dimensions(data: bytes) -> Optional[Tuple[int, int]]:
+    # PNG: 8-byte signature, then IHDR chunk with width/height at bytes 16..23.
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    if data[12:16] != b"IHDR":
+        return None
+    width, height = struct.unpack(">II", data[16:24])
+    if width < 1 or height < 1:
+        return None
+    return width, height
+
+
+def _jpeg_dimensions(data: bytes) -> Optional[Tuple[int, int]]:
+    # Walk JPEG markers until SOF0/SOF2 (baseline/progressive) for height/width.
+    if len(data) < 4 or data[:2] != b"\xff\xd8":
+        return None
+    i = 2
+    n = len(data)
+    while i + 3 < n:
+        if data[i] != 0xFF:
+            return None
+        while i < n and data[i] == 0xFF:
+            i += 1
+        if i >= n:
+            return None
+        marker = data[i]
+        i += 1
+        if marker in (0xD8, 0xD9):  # SOI / EOI
+            continue
+        if marker == 0xDA:  # SOS — dimensions should have appeared already
+            return None
+        if i + 1 >= n:
+            return None
+        seg_len = struct.unpack(">H", data[i : i + 2])[0]
+        if seg_len < 2 or i + seg_len > n:
+            return None
+        # SOF0..SOF3, SOF5..SOF7, SOF9..SOF11, SOF13..SOF15 (not DHT/DAC)
+        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+            if seg_len < 7:
+                return None
+            height, width = struct.unpack(">HH", data[i + 3 : i + 7])
+            if width < 1 or height < 1:
+                return None
+            return width, height
+        i += seg_len
+    return None
+
+
+def _gif_dimensions(data: bytes) -> Optional[Tuple[int, int]]:
+    if len(data) < 10 or data[:6] not in (b"GIF87a", b"GIF89a"):
+        return None
+    width, height = struct.unpack("<HH", data[6:10])
+    if width < 1 or height < 1:
+        return None
+    return width, height
+
+
+def _webp_dimensions(data: bytes) -> Optional[Tuple[int, int]]:
+    # RIFF....WEBP + VP8 / VP8L / VP8X
+    if len(data) < 30 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        return None
+    chunk = data[12:16]
+    if chunk == b"VP8X" and len(data) >= 30:
+        # Canvas size is 24-bit little-endian (minus one) at bytes 24..29.
+        w = 1 + (data[24] | (data[25] << 8) | (data[26] << 16))
+        h = 1 + (data[27] | (data[28] << 8) | (data[29] << 16))
+        return (w, h) if w >= 1 and h >= 1 else None
+    if chunk == b"VP8 " and len(data) >= 30 and data[23] == 0x9D and data[24:27] == b"\x01\x2a":
+        width, height = struct.unpack("<HH", data[26:30])
+        width &= 0x3FFF
+        height &= 0x3FFF
+        return (width, height) if width >= 1 and height >= 1 else None
+    if chunk == b"VP8L" and len(data) >= 25 and data[20] == 0x2F:
+        bits = struct.unpack("<I", data[21:25])[0]
+        width = (bits & 0x3FFF) + 1
+        height = ((bits >> 14) & 0x3FFF) + 1
+        return width, height
+    return None
+
+
+def _probe_image_dimensions(fs_path: str) -> Optional[Dict[str, str]]:
+    """Read width/height from a local PNG/JPEG/GIF/WebP without decoding pixels."""
+    try:
+        with open(fs_path, "rb") as fh:
+            head = fh.read(65536)
+    except OSError:
+        return None
+    dims = (
+        _png_dimensions(head)
+        or _jpeg_dimensions(head)
+        or _gif_dimensions(head)
+        or _webp_dimensions(head)
+    )
+    if not dims:
+        return None
+    width, height = dims
+    return {"width": str(width), "height": str(height)}
+
+
 def og_image_dimensions() -> Dict[str, str]:
-    """Width/height for og:image tags. Custom cards may override via env."""
+    """Width/height for og:image tags.
+
+    Resolution order:
+      1. VOYAGR_OG_IMAGE_WIDTH + VOYAGR_OG_IMAGE_HEIGHT (both required)
+      2. Probe local file when VOYAGR_OG_IMAGE_PATH points at /static/...
+      3. Default app icon size 512×512 (only when no custom path is set)
+
+    When a custom path is set but size cannot be determined (remote URL, missing
+    file, or unsupported format), env width/height must be set — we still avoid
+    advertising the square icon size for a non-square social card by falling
+    back to the common Open Graph landscape size 1200×630.
+    """
     w = (os.getenv("VOYAGR_OG_IMAGE_WIDTH") or "").strip()
     h = (os.getenv("VOYAGR_OG_IMAGE_HEIGHT") or "").strip()
-    if w.isdigit() and h.isdigit():
+    if w.isdigit() and h.isdigit() and int(w) > 0 and int(h) > 0:
         return {"width": w, "height": h}
+
+    custom = _og_image_custom_path()
+    if custom:
+        if not (custom.startswith("http://") or custom.startswith("https://")):
+            fs_path = _local_static_filesystem_path(custom)
+            if fs_path:
+                probed = _probe_image_dimensions(fs_path)
+                if probed:
+                    return probed
+        # Custom card configured but size unknown — do not claim 512×512.
+        return {"width": "1200", "height": "630"}
+
     # Default app icon is 512×512.
     return {"width": "512", "height": "512"}
 
