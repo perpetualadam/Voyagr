@@ -10,14 +10,16 @@ describe('legacy-prefs-restore module', () => {
         expect(orch.restoreBatterySavingPreference).toBe(true);
     });
 
-    test('buildRestoreGesturePreferencePlan restores enabled gesture state', () => {
+    test('buildRestoreGesturePreferencePlan never restores shake gesture', () => {
+        expect(LPR.buildLoadLegacyPreferencesOrchestrationPlan().restoreGesturePreference).toBe(false);
         expect(LPR.buildRestoreGesturePreferencePlan({ savedValue: 'false' }).shouldRestore).toBe(false);
         const restore = LPR.buildRestoreGesturePreferencePlan({
             savedValue: 'true',
             hasDeviceMotion: true,
         });
-        expect(restore.gestureEnabled).toBe(true);
-        expect(restore.addDeviceMotionListener).toBe(true);
+        expect(restore.shouldRestore).toBe(false);
+        expect(restore.gestureEnabled).toBe(false);
+        expect(restore.addDeviceMotionListener).toBe(false);
     });
 
     test('buildRestoreAutoGpsPreferencePlan starts auto GPS when saved', () => {

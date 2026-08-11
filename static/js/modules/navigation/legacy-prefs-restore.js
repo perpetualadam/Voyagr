@@ -15,7 +15,7 @@
         return {
             applyRouteAvoidanceToggles: true,
             loadHazardCameraTogglesFromApi: true,
-            restoreGesturePreference: true,
+            restoreGesturePreference: false,
             restoreAutoGpsPreference: true,
             restoreBatterySavingPreference: true,
             applySpeedWidgetToggleUi: true,
@@ -29,23 +29,12 @@
      * @returns {Object}
      */
     function buildRestoreGesturePreferencePlan(input) {
+        // Shake gesture removed — never restore device-motion listeners.
         input = input || {};
-        if (input.savedValue !== 'true') {
-            return { shouldRestore: false };
-        }
         return {
-            shouldRestore: true,
-            setGestureEnabled: true,
-            gestureEnabled: true,
-            toggle: {
-                id: 'gestureEnabled',
-                enabled: true,
-            },
-            settingsPanel: {
-                id: 'gestureSettings',
-                display: 'block',
-            },
-            addDeviceMotionListener: !!input.hasDeviceMotion,
+            shouldRestore: false,
+            gestureEnabled: false,
+            addDeviceMotionListener: false,
         };
     }
 

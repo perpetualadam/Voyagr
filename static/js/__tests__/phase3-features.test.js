@@ -8,7 +8,7 @@ describe('phase3-features module', () => {
         const plan = P3.buildInitPhase3FeaturesOrchestrationPlan();
         expect(plan.shouldInit).toBe(true);
         expect(plan.initFlagProperty).toBe(P3.INIT_FLAG_PROPERTY);
-        expect(plan.loadGestureFromApi).toBe(true);
+        expect(plan.loadGestureFromApi).toBe(false);
         expect(plan.initBatteryMonitoring).toBe(true);
         expect(plan.loadMlPredictions).toBe(true);
         expect(plan.loadArSetting).toBe(true);

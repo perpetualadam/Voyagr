@@ -286,7 +286,7 @@
             mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
             voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
             batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
-            gestureControlEnabled: localStorage.getItem('gestureEnabled') === 'true',
+            gestureControlEnabled: false,
         });
         return {
             ...collectSettingsSnapshotRuntimeState(),
