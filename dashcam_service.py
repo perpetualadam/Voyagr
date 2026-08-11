@@ -359,6 +359,48 @@ class DashcamService:
         except Exception as e:
             logger.error(f"Error getting recordings: {e}")
             return []
+
+    def get_recording_file(self, recording_id: str) -> Dict[str, Any]:
+        """Resolve a recording's video file for playback/download."""
+        if not recording_id:
+            return {'success': False, 'error': 'Invalid recording_id'}
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT file_path FROM dashcam_recordings WHERE recording_id = ?',
+                (recording_id,),
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if not row or not row[0]:
+                return {'success': False, 'error': 'Recording file not found'}
+
+            file_path = row[0]
+            path = Path(file_path)
+            storage_root = Path(self.storage_dir).resolve()
+            resolved = path.resolve()
+            if storage_root not in resolved.parents and resolved.parent != storage_root:
+                return {'success': False, 'error': 'Invalid recording file path'}
+            if not resolved.is_file():
+                return {'success': False, 'error': 'Recording file missing on disk'}
+
+            suffix = resolved.suffix.lower().lstrip('.') or 'webm'
+            mime = {
+                'webm': 'video/webm',
+                'mp4': 'video/mp4',
+                'ogg': 'video/ogg',
+            }.get(suffix, 'application/octet-stream')
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'file_path': str(resolved),
+                'mimetype': mime,
+                'download_name': resolved.name,
+            }
+        except Exception as e:
+            logger.error(f'Error resolving recording file: {e}')
+            return {'success': False, 'error': str(e)}
     
     def delete_recording(self, recording_id: str) -> Dict[str, Any]:
         """Delete a recording and its video file if present."""

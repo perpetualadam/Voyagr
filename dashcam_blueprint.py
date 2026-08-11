@@ -4,7 +4,7 @@ Dashcam API Blueprint for Voyagr PWA
 Provides REST endpoints for dashcam recording control and management
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from dashcam_service import DashcamService
 import logging
 import os
@@ -105,6 +105,28 @@ def get_recording_metadata(recording_id):
         return jsonify(result), status
     except Exception as e:
         logger.error(f"Error in get_recording_metadata: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@dashcam_bp.route('/recordings/<recording_id>/video', methods=['GET'])
+def get_recording_video(recording_id):
+    """Stream a saved dashcam video for playback/download."""
+    try:
+        result = dashcam_service.get_recording_file(recording_id)
+        if not result.get('success'):
+            return jsonify(result), 404
+        as_attachment = request.args.get('download', '').strip().lower() in (
+            '1', 'true', 'yes',
+        )
+        return send_file(
+            result['file_path'],
+            mimetype=result['mimetype'],
+            as_attachment=as_attachment,
+            download_name=result['download_name'],
+            conditional=True,
+        )
+    except Exception as e:
+        logger.error(f"Error in get_recording_video: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

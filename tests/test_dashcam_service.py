@@ -198,6 +198,20 @@ class TestDashcamService(unittest.TestCase):
         )
         self.assertFalse(result['success'])
 
+    def test_get_recording_file_returns_path_inside_storage(self):
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.stop_recording()
+        saved = self.service.save_recording_file(recording_id, b'video-bytes', 'webm')
+        result = self.service.get_recording_file(recording_id)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['file_path'], saved['file_path'])
+        self.assertEqual(result['mimetype'], 'video/webm')
+
+    def test_get_recording_file_missing_returns_error(self):
+        result = self.service.get_recording_file('dashcam_missing')
+        self.assertFalse(result['success'])
+
     def test_delete_recording_removes_video_file(self):
         start = self.service.start_recording()
         recording_id = start['recording_id']

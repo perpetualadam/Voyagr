@@ -1341,7 +1341,7 @@
                                 <span style="font-size: 20px; animation: blink 1s infinite;">🔴</span>
                                 <div>
                                     <div style="font-weight: 500; color: #C62828;">Recording in progress</div>
-                                    <div style="font-size: 12px; color: #666;">Video is being saved with GPS metadata</div>
+                                    <div style="font-size: 12px; color: #666;">Camera recording with GPS metadata</div>
                                 </div>
                             </div>
                         </div>
@@ -2238,17 +2238,29 @@
                     data.recordings.forEach(recording => {
                         const startTime = new Date(recording.start_time).toLocaleString();
                         const duration = recording.duration_seconds ? `${Math.floor(recording.duration_seconds / 60)}m ${Math.floor(recording.duration_seconds % 60)}s` : 'Recording...';
-                        const size = recording.file_size_mb ? `${recording.file_size_mb.toFixed(1)} MB` : '-';
+                        const sizeMb = Number(recording.file_size_mb || 0);
+                        const size = sizeMb > 0
+                            ? (sizeMb >= 0.1 ? `${sizeMb.toFixed(1)} MB` : `${Math.max(1, Math.round(sizeMb * 1024))} KB`)
+                            : '-';
+                        const points = recording.metadata_points != null ? recording.metadata_points : 0;
                         // Sanitize recording_id to prevent XSS via onclick
                         const recordingId = String(recording.recording_id).replace(/[^a-zA-Z0-9_-]/g, '');
+                        const hasFile = !!recording.file_path;
+                        const playControls = hasFile
+                            ? `<a href="/api/dashcam/recordings/${recordingId}/video" target="_blank" rel="noopener noreferrer" style="background: #2196F3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;">▶️ Play</a>
+                                <a href="/api/dashcam/recordings/${recordingId}/video?download=1" style="background: #607D8B; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;">⬇️</a>`
+                            : '';
 
                         html += `
-                            <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                                 <div style="flex: 1;">
                                     <div style="font-weight: 500; color: #333;">📹 ${startTime}</div>
-                                    <div style="font-size: 12px; color: #666;">Duration: ${duration} | Size: ${size}</div>
+                                    <div style="font-size: 12px; color: #666;">Duration: ${duration} | Size: ${size} | GPS: ${points}</div>
                                 </div>
-                                <button onclick="deleteDashcamRecording('${recordingId}')" style="background: #F44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    ${playControls}
+                                    <button onclick="deleteDashcamRecording('${recordingId}')" style="background: #F44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                                </div>
                             </div>
                         `;
                     });

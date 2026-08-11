@@ -204,6 +204,29 @@ class TestDashcamBlueprint(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(json.loads(response.data)['success'])
 
+    def test_get_recording_video_endpoint(self):
+        start_response = self.client.post(
+            '/api/dashcam/start',
+            data=json.dumps({}),
+            content_type='application/json',
+        )
+        recording_id = json.loads(start_response.data)['recording_id']
+        self.client.post('/api/dashcam/stop')
+        payload = b'\x1aE\xdf\xa3playable'
+        self.client.post(
+            f'/api/dashcam/recordings/{recording_id}/upload',
+            data=payload,
+            content_type='video/webm',
+        )
+
+        response = self.client.get(f'/api/dashcam/recordings/{recording_id}/video')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, payload)
+        self.assertIn('video/webm', response.content_type)
+
+        missing = self.client.get('/api/dashcam/recordings/dashcam_missing/video')
+        self.assertEqual(missing.status_code, 404)
+
     def test_delete_recording_endpoint(self):
         """Test DELETE /api/dashcam/recordings/<id>"""
         # Create a recording
