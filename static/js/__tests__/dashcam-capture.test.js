@@ -57,6 +57,44 @@ describe('dashcam-capture module', () => {
         });
     });
 
+    test('buildFinalizeStopPlan uploads captured blob even when stop fails', () => {
+        const plan = DC.buildFinalizeStopPlan({
+            recordingId: 'dashcam_123',
+            blobSize: 2048,
+            stopSuccess: false,
+            stopError: 'No active recording',
+        });
+        expect(plan.shouldUpload).toBe(true);
+        expect(plan.recordingId).toBe('dashcam_123');
+        expect(plan.stopSucceeded).toBe(false);
+        expect(plan.hasVideo).toBe(true);
+        expect(plan.stopError).toBe('No active recording');
+    });
+
+    test('buildFinalizeStopPlan uses server recording id when client id missing', () => {
+        const plan = DC.buildFinalizeStopPlan({
+            serverRecordingId: 'dashcam_456',
+            blobSize: 100,
+            stopSuccess: true,
+        });
+        expect(plan.shouldUpload).toBe(true);
+        expect(plan.recordingId).toBe('dashcam_456');
+        expect(plan.stopSucceeded).toBe(true);
+    });
+
+    test('buildFinalizeStopPlan skips upload when blob empty or id missing', () => {
+        expect(DC.buildFinalizeStopPlan({
+            recordingId: 'dashcam_123',
+            blobSize: 0,
+            stopSuccess: true,
+        }).shouldUpload).toBe(false);
+        expect(DC.buildFinalizeStopPlan({
+            blobSize: 500,
+            stopSuccess: false,
+            stopError: 'boom',
+        }).shouldUpload).toBe(false);
+    });
+
     test('stopMediaStreamTracks stops each track', () => {
         const stop = jest.fn();
         const result = DC.stopMediaStreamTracks({
