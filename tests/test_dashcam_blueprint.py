@@ -135,6 +135,16 @@ class TestDashcamBlueprint(unittest.TestCase):
 
         data = json.loads(response.data)
         self.assertTrue(data['success'])
+
+        stop = json.loads(self.client.post('/api/dashcam/stop').data)
+        self.assertEqual(stop['metadata_points'], 1)
+
+        get_meta = self.client.get(f'/api/dashcam/recordings/{recording_id}/metadata')
+        self.assertEqual(get_meta.status_code, 200)
+        body = json.loads(get_meta.data)
+        self.assertTrue(body['success'])
+        self.assertEqual(body['metadata_points'], 1)
+        self.assertEqual(body['points'][0]['lat'], 51.5074)
     
     def test_recordings_list_endpoint(self):
         """Test GET /api/dashcam/recordings"""

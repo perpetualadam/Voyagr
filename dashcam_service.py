@@ -102,8 +102,47 @@ class DashcamService:
                 self.recording_active = False
                 return {'success': False, 'error': str(e)}
     
+    def _metadata_path(self, recording_id: str) -> str:
+        return os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+
+    def _persist_metadata_buffer(self, recording_id: str, points: List[Dict[str, Any]]) -> int:
+        """Write GPS points to a sidecar JSON file. Returns point count."""
+        Path(self.storage_dir).mkdir(parents=True, exist_ok=True)
+        meta_path = self._metadata_path(recording_id)
+        with open(meta_path, 'w', encoding='utf-8') as out:
+            json.dump({'recording_id': recording_id, 'points': points}, out)
+        return len(points)
+
+    def get_recording_metadata(self, recording_id: str) -> Dict[str, Any]:
+        """Load persisted GPS metadata for a recording."""
+        if not recording_id or not self._recording_exists(recording_id):
+            return {'success': False, 'error': 'Recording not found'}
+        meta_path = self._metadata_path(recording_id)
+        if not os.path.isfile(meta_path):
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'points': [],
+                'metadata_points': 0,
+            }
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as fh:
+                payload = json.load(fh)
+            points = payload.get('points') if isinstance(payload, dict) else []
+            if not isinstance(points, list):
+                points = []
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'points': points,
+                'metadata_points': len(points),
+            }
+        except Exception as e:
+            logger.error(f'Error reading metadata for {recording_id}: {e}')
+            return {'success': False, 'error': str(e)}
+
     def stop_recording(self) -> Dict[str, Any]:
-        """Stop the current recording session."""
+        """Stop the current recording session and persist GPS metadata."""
         with self.lock:
             if not self.recording_active:
                 return {'success': False, 'error': 'No active recording'}
@@ -111,29 +150,41 @@ class DashcamService:
             try:
                 end_time = datetime.now()
                 duration = (end_time - self.current_recording_start).total_seconds()
+                recording_id = self.current_recording_id
+                points = list(self.metadata_buffer)
+                metadata_points = self._persist_metadata_buffer(recording_id, points)
                 
                 # Update database
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 cursor.execute('''
                     UPDATE dashcam_recordings 
-                    SET end_time = ?, status = ?, duration_seconds = ?
+                    SET end_time = ?, status = ?, duration_seconds = ?, metadata_points = ?
                     WHERE recording_id = ?
-                ''', (end_time.isoformat(), 'completed', duration, self.current_recording_id))
+                ''', (
+                    end_time.isoformat(),
+                    'completed',
+                    duration,
+                    metadata_points,
+                    recording_id,
+                ))
                 conn.commit()
                 conn.close()
                 
-                recording_id = self.current_recording_id
                 self.recording_active = False
                 self.current_recording_id = None
                 self.metadata_buffer = []
                 
-                logger.info(f"Recording stopped: {recording_id} ({duration:.1f}s)")
+                logger.info(
+                    f"Recording stopped: {recording_id} ({duration:.1f}s, "
+                    f"{metadata_points} metadata points)"
+                )
                 return {
                     'success': True,
                     'recording_id': recording_id,
                     'duration_seconds': duration,
-                    'end_time': end_time.isoformat()
+                    'end_time': end_time.isoformat(),
+                    'metadata_points': metadata_points,
                 }
             except Exception as e:
                 logger.error(f"Error stopping recording: {e}")
@@ -225,6 +276,11 @@ class DashcamService:
                     resolved.unlink()
         except Exception as e:
             logger.warning(f'Could not delete recording file {file_path}: {e}')
+
+    def _unlink_metadata_file(self, recording_id: Optional[str]) -> None:
+        if not recording_id:
+            return
+        self._unlink_recording_file(self._metadata_path(recording_id))
     
     def add_metadata(self, lat: float, lon: float, speed: float, heading: float) -> bool:
         """Add GPS metadata to current recording."""
@@ -295,6 +351,7 @@ class DashcamService:
             conn.commit()
             conn.close()
             self._unlink_recording_file(file_path)
+            self._unlink_metadata_file(recording_id)
             logger.info(f"Recording deleted: {recording_id}")
             return {'success': True}
         except Exception as e:
@@ -314,8 +371,9 @@ class DashcamService:
                 WHERE start_time < ? AND status = 'completed'
             ''', (cutoff_date,))
             stale = cursor.fetchall()
-            for _recording_id, file_path in stale:
+            for recording_id, file_path in stale:
                 self._unlink_recording_file(file_path)
+                self._unlink_metadata_file(recording_id)
             cursor.execute('''
                 DELETE FROM dashcam_recordings 
                 WHERE start_time < ? AND status = 'completed'

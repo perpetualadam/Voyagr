@@ -85,6 +85,43 @@ class TestDashcamService(unittest.TestCase):
         )
         self.assertTrue(result)
         self.assertEqual(len(self.service.metadata_buffer), 1)
+
+    def test_stop_recording_persists_gps_metadata(self):
+        """GPS points must survive stop via sidecar + metadata_points column."""
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.add_metadata(51.5, -0.12, 30.0, 90.0)
+        self.service.add_metadata(51.51, -0.11, 32.0, 95.0)
+
+        stop = self.service.stop_recording()
+        self.assertTrue(stop['success'])
+        self.assertEqual(stop['metadata_points'], 2)
+        self.assertEqual(len(self.service.metadata_buffer), 0)
+
+        meta_path = os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+        self.assertTrue(os.path.isfile(meta_path))
+        with open(meta_path, 'r', encoding='utf-8') as fh:
+            payload = json.load(fh)
+        self.assertEqual(len(payload['points']), 2)
+        self.assertEqual(payload['points'][0]['lat'], 51.5)
+
+        recordings = self.service.get_recordings()
+        match = next(r for r in recordings if r['recording_id'] == recording_id)
+        self.assertEqual(match['metadata_points'], 2)
+
+        loaded = self.service.get_recording_metadata(recording_id)
+        self.assertTrue(loaded['success'])
+        self.assertEqual(loaded['metadata_points'], 2)
+
+    def test_delete_recording_removes_metadata_sidecar(self):
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.add_metadata(51.5, -0.12, 10.0, 0.0)
+        self.service.stop_recording()
+        meta_path = os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+        self.assertTrue(os.path.isfile(meta_path))
+        self.service.delete_recording(recording_id)
+        self.assertFalse(os.path.isfile(meta_path))
     
     def test_get_recordings(self):
         """Test retrieving recordings list"""

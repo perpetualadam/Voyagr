@@ -96,6 +96,18 @@ def get_recordings():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@dashcam_bp.route('/recordings/<recording_id>/metadata', methods=['GET'])
+def get_recording_metadata(recording_id):
+    """Return persisted GPS metadata for a recording."""
+    try:
+        result = dashcam_service.get_recording_metadata(recording_id)
+        status = 200 if result.get('success') else 404
+        return jsonify(result), status
+    except Exception as e:
+        logger.error(f"Error in get_recording_metadata: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @dashcam_bp.route('/recordings/<recording_id>/upload', methods=['POST'])
 def upload_recording(recording_id):
     """Upload a recorded video blob for an existing session."""
