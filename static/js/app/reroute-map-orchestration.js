@@ -237,7 +237,7 @@
         // During active navigation, automatic/traffic/in-nav recalcs start from GPS.
         // Seed join so GraphHopper Optimised hard-block snaps cannot leave monitoring
         // stuck in awaiting-join after a successful map update.
-        var seedRouteJoinConfirmed = !!(rt().g('routeInProgress') && hasCurrentGps);
+        var seedRouteJoinConfirmed = !!(rt().getRouteInProgress() && hasCurrentGps);
         var plan = RD.buildRouteMapUpdateStatePlan(newRoute, rt().getLastCalculatedRoute(), {
             now: Date.now(),
             hasCurrentGps: hasCurrentGps,

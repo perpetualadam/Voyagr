@@ -171,3 +171,140 @@ describe('reroute-map-orchestration map recovery overlays', () => {
         jest.useRealTimers();
     });
 });
+
+describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
+    const RD = require('../modules/navigation/reroute-decision.js');
+
+    afterEach(() => {
+        RerouteMap.setRouteJoinConfirmedForDeviation(false);
+    });
+
+    function bindUpdateRouteRuntime(overrides) {
+        const routeInProgress = overrides.routeInProgress;
+        const buildRouteMapUpdateStatePlan = jest.fn((...args) =>
+            RD.buildRouteMapUpdateStatePlan(...args)
+        );
+        const buildUpdateRouteOnMapExecutePlan = jest.fn((plan) =>
+            RD.buildUpdateRouteOnMapExecutePlan(plan)
+        );
+        const buildInvalidPolylineDecodeApplyPlan = jest.fn(() =>
+            RD.buildInvalidPolylineDecodeApplyPlan()
+        );
+        const buildRouteMapUpdateStateExecutePlan = jest.fn((plan, ctx) =>
+            RD.buildRouteMapUpdateStateExecutePlan(plan, ctx)
+        );
+
+        // Mirrors voyagr-app getRerouteMapOrchestrationRuntime: getRouteInProgress only — no g().
+        const runtime = {
+            getRouteInProgress: () => routeInProgress,
+            getCurrentLat: () => (overrides.hasGps === false ? null : 51.5),
+            getCurrentLon: () => (overrides.hasGps === false ? null : -0.1),
+            getLastCalculatedRoute: () => ({ destination: '51.6,-0.2', source: 'GraphHopper' }),
+            setLastCalculatedRoute: jest.fn(),
+            getRoutePolyline: () => null,
+            setRoutePolyline: jest.fn(),
+            getRouteLayer: () => null,
+            setRouteLayer: jest.fn(),
+            getMap: () => ({}),
+            getMapLibreHelpers: () => ({
+                addPolyline: jest.fn(() => ({ remove: jest.fn() })),
+            }),
+            getCurrentRouteSteps: () => [],
+            setCurrentRouteSteps: jest.fn(),
+            setCurrentStepIndex: jest.fn(),
+            setLastSnappedRouteIndex: jest.fn(),
+            setLastTurnDetectRouteVertexIndex: jest.fn(),
+            getAnnouncedTurnThresholds: () => ({ clear: jest.fn() }),
+            getAnnouncedExitThresholds: () => ({ clear: jest.fn() }),
+            getAnnouncedKeepThresholds: () => ({ clear: jest.fn() }),
+            setLastETAAnnouncementTime: jest.fn(),
+            setLastAnnouncedETA: jest.fn(),
+            setLastDestinationAnnouncementDistance: jest.fn(),
+            setInitialETAMovementRetries: jest.fn(),
+            setVoiceAnnouncedForManeuverIndex: jest.fn(),
+            setVoiceAnnouncedCategory: jest.fn(),
+            rerouteDecision: () => ({
+                buildRouteMapUpdateStatePlan,
+                buildUpdateRouteOnMapExecutePlan,
+                buildInvalidPolylineDecodeApplyPlan,
+                buildRouteMapUpdateStateExecutePlan,
+                buildRouteMapUpdatePostApplyPlan: RD.buildRouteMapUpdatePostApplyPlan,
+            }),
+            routeSelection: () => ({
+                resolvePerRouteGeometryPrecision: () => 5,
+                buildNavActiveRouteLayerMountPlan: () => ({
+                    valid: true,
+                    polyline: [[-0.1, 51.5], [-0.2, 51.6]],
+                    style: { color: '#2563EB', weight: 8 },
+                }),
+            }),
+            voiceAnnouncements: () => ({
+                buildVoiceAnnouncementStateResetExecutePlan: () => ({ shouldReset: false }),
+            }),
+            speedLimitWidget: () => null,
+            call: {
+                convertDistance: (km) => String(km),
+                getDistanceUnit: () => 'km',
+                decodePolyline: () => [[51.5, -0.1], [51.6, -0.2]],
+                navActiveRouteColor: () => '#2563EB',
+                bringNavRouteAboveTrafficEdges: jest.fn(),
+                clearRouteTrafficLayers: jest.fn(),
+                fetchAndDisplayRouteTraffic: jest.fn(),
+                clearAllRouteLayersFromMap: jest.fn(),
+                clearAllRouteLayerHandles: jest.fn(),
+                resetVehicleMarkerDisplayState: jest.fn(),
+                applySpeedLimitFetchResetFromPlan: jest.fn(),
+                primeVehicleMarkerOnRoute: jest.fn(),
+                resetNavigationArrivalState: jest.fn(),
+                resetRoadNameState: jest.fn(),
+                clearRerouteFailureRetries: jest.fn(),
+                updateTurnWidgetFromPosition: jest.fn(),
+                fetchRoadNameThrottled: jest.fn(),
+                updateTripInfo: jest.fn(),
+                clearInitialETAAnnouncement: jest.fn(),
+                setLastLaneVoiceKey: jest.fn(),
+                showStatus: jest.fn(),
+            },
+        };
+
+        expect(runtime.g).toBeUndefined();
+        RerouteMap.bind(runtime);
+        return { buildRouteMapUpdateStatePlan };
+    }
+
+    test('updateRouteOnMap uses getRouteInProgress (no g helper) and seeds join during nav', () => {
+        const { buildRouteMapUpdateStatePlan } = bindUpdateRouteRuntime({ routeInProgress: true });
+
+        const result = RerouteMap.updateRouteOnMap({
+            geometry: 'encoded',
+            distance_km: 10,
+            duration_minutes: 20,
+            source: 'GraphHopper',
+            name: '⚡ Optimised',
+            steps: [],
+        });
+
+        expect(result).toEqual({ ok: true });
+        expect(buildRouteMapUpdateStatePlan).toHaveBeenCalled();
+        const opts = buildRouteMapUpdateStatePlan.mock.calls[0][2];
+        expect(opts.seedRouteJoinConfirmed).toBe(true);
+        expect(opts.hasCurrentGps).toBe(true);
+        expect(RerouteMap.getRouteJoinConfirmedForDeviation()).toBe(true);
+    });
+
+    test('updateRouteOnMap does not seed join when navigation is inactive', () => {
+        const { buildRouteMapUpdateStatePlan } = bindUpdateRouteRuntime({ routeInProgress: false });
+
+        const result = RerouteMap.updateRouteOnMap({
+            geometry: 'encoded',
+            distance_km: 10,
+            duration_minutes: 20,
+            steps: [],
+        });
+
+        expect(result).toEqual({ ok: true });
+        const opts = buildRouteMapUpdateStatePlan.mock.calls[0][2];
+        expect(opts.seedRouteJoinConfirmed).toBe(false);
+        expect(RerouteMap.getRouteJoinConfirmedForDeviation()).toBe(false);
+    });
+});
