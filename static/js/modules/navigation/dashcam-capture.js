@@ -106,6 +106,40 @@
     }
 
     /**
+     * After local MediaRecorder teardown, decide whether the captured blob
+     * should still be uploaded when POST /api/dashcam/stop fails or throws.
+     * The client already finalized the blob, so a failed stop must not discard it.
+     *
+     * @param {Object} [input]
+     * @param {string} [input.recordingId] - client id from /start
+     * @param {string} [input.serverRecordingId] - id from /stop response
+     * @param {number} [input.blobSize]
+     * @param {boolean} [input.stopSuccess]
+     * @param {string} [input.stopError]
+     * @returns {{
+     *   shouldUpload: boolean,
+     *   recordingId: string,
+     *   stopSucceeded: boolean,
+     *   hasVideo: boolean,
+     *   stopError: string
+     * }}
+     */
+    function buildFinalizeStopPlan(input) {
+        input = input || {};
+        var recordingId = String(input.recordingId || input.serverRecordingId || '')
+            .replace(/[^a-zA-Z0-9_-]/g, '');
+        var blobSize = Number(input.blobSize);
+        if (!Number.isFinite(blobSize) || blobSize < 0) blobSize = 0;
+        return {
+            shouldUpload: blobSize > 0 && !!recordingId,
+            recordingId: recordingId,
+            stopSucceeded: !!input.stopSuccess,
+            hasVideo: blobSize > 0,
+            stopError: input.stopError ? String(input.stopError) : '',
+        };
+    }
+
+    /**
      * @param {MediaStream|null|undefined} stream
      * @returns {{ stoppedTracks: number }}
      */
@@ -149,6 +183,7 @@
         pickSupportedMimeType: pickSupportedMimeType,
         buildUploadRequestPlan: buildUploadRequestPlan,
         buildAbortServerSessionPlan: buildAbortServerSessionPlan,
+        buildFinalizeStopPlan: buildFinalizeStopPlan,
         stopMediaStreamTracks: stopMediaStreamTracks,
         isCaptureSupported: isCaptureSupported,
     };

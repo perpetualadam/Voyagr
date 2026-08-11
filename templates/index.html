@@ -151,7 +151,7 @@
     <script defer src="/static/js/modules/navigation/battery-saving.js?v=20260712aaah"></script>
     <script defer src="/static/js/modules/navigation/app-state.js?v=20260712aaac"></script>
     <script defer src="/static/js/modules/navigation/gesture-control.js?v=20260811noshake"></script>
-    <script defer src="/static/js/modules/navigation/dashcam-capture.js?v=20260811dash2"></script>
+    <script defer src="/static/js/modules/navigation/dashcam-capture.js?v=20260811dash3"></script>
     <script defer src="/static/js/modules/navigation/legacy-prefs-restore.js?v=20260811noshake"></script>
     <script defer src="/static/js/modules/navigation/smart-zoom.js?v=20260711zzzj"></script>
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260811noshake"></script>
@@ -2127,47 +2127,95 @@
             const recorder = dashcamState.mediaRecorder;
             const chunks = dashcamState.recordingChunks;
             const mimeType = dashcamState.recorderMimeType || 'video/webm';
+            const DC = getDashcamCapture();
 
+            dashcamState.isRecording = false;
+            clearInterval(dashcamState.recordingDurationInterval);
+
+            let blob = null;
             try {
-                dashcamState.isRecording = false;
-                clearInterval(dashcamState.recordingDurationInterval);
+                blob = await stopMediaRecorderToBlob(recorder, chunks, mimeType);
+            } catch (error) {
+                console.error('Error finalizing dashcam blob:', error);
+                blob = new Blob(chunks || [], { type: mimeType });
+            }
 
-                const blob = await stopMediaRecorderToBlob(recorder, chunks, mimeType);
-                releaseDashcamMedia();
+            releaseDashcamMedia();
+            updateDashcamUI();
+            document.getElementById('dashcamIndicator').style.display = 'none';
 
+            let stopSuccess = false;
+            let stopError = '';
+            let serverRecordingId = null;
+            try {
                 const response = await fetch('/api/dashcam/stop', { method: 'POST' });
                 const data = await response.json();
-
-                updateDashcamUI();
-                document.getElementById('dashcamIndicator').style.display = 'none';
-
-                if (!data.success) {
-                    sendNotification('📹 Dashcam', 'Failed to stop recording: ' + (data.error || 'unknown'), 'error');
-                    loadDashcamRecordings();
-                    return;
-                }
-
-                const id = recordingId || data.recording_id;
-                if (blob && blob.size > 0 && id) {
-                    const upload = await uploadDashcamBlob(id, blob, mimeType);
-                    if (upload.success) {
-                        sendNotification('📹 Dashcam', 'Dashcam recording saved', 'success');
-                    } else {
-                        sendNotification('📹 Dashcam', 'Recording stopped but upload failed: ' + (upload.error || 'unknown'), 'error');
-                    }
-                } else {
-                    sendNotification('📹 Dashcam', 'Dashcam recording stopped (no video data)', 'info');
-                }
-
-                loadDashcamRecordings();
+                stopSuccess = !!data.success;
+                stopError = data.error || '';
+                serverRecordingId = data.recording_id || null;
             } catch (error) {
-                console.error('Error stopping dashcam:', error);
-                releaseDashcamMedia();
-                dashcamState.isRecording = false;
-                updateDashcamUI();
-                document.getElementById('dashcamIndicator').style.display = 'none';
-                sendNotification('📹 Dashcam', 'Error stopping dashcam recording', 'error');
+                console.error('Error stopping dashcam session:', error);
+                stopSuccess = false;
+                stopError = 'Error stopping dashcam recording';
             }
+
+            const plan = DC && DC.buildFinalizeStopPlan
+                ? DC.buildFinalizeStopPlan({
+                    recordingId: recordingId,
+                    serverRecordingId: serverRecordingId,
+                    blobSize: blob ? blob.size : 0,
+                    stopSuccess: stopSuccess,
+                    stopError: stopError,
+                })
+                : {
+                    shouldUpload: !!(blob && blob.size > 0 && (recordingId || serverRecordingId)),
+                    recordingId: recordingId || serverRecordingId || '',
+                    stopSucceeded: stopSuccess,
+                    hasVideo: !!(blob && blob.size > 0),
+                    stopError: stopError,
+                };
+
+            if (plan.shouldUpload) {
+                try {
+                    const upload = await uploadDashcamBlob(plan.recordingId, blob, mimeType);
+                    if (upload.success) {
+                        if (plan.stopSucceeded) {
+                            sendNotification('📹 Dashcam', 'Dashcam recording saved', 'success');
+                        } else {
+                            sendNotification(
+                                '📹 Dashcam',
+                                'Recording saved (stop reported failure: ' + (plan.stopError || 'unknown') + ')',
+                                'warning'
+                            );
+                        }
+                    } else if (plan.stopSucceeded) {
+                        sendNotification('📹 Dashcam', 'Recording stopped but upload failed: ' + (upload.error || 'unknown'), 'error');
+                    } else {
+                        sendNotification(
+                            '📹 Dashcam',
+                            'Failed to stop recording and upload failed: ' + (upload.error || plan.stopError || 'unknown'),
+                            'error'
+                        );
+                    }
+                } catch (uploadError) {
+                    console.error('Error uploading dashcam blob:', uploadError);
+                    sendNotification(
+                        '📹 Dashcam',
+                        plan.stopSucceeded
+                            ? 'Recording stopped but upload failed'
+                            : 'Failed to stop recording and upload failed',
+                        'error'
+                    );
+                }
+            } else if (!plan.stopSucceeded) {
+                sendNotification('📹 Dashcam', 'Failed to stop recording: ' + (plan.stopError || 'unknown'), 'error');
+            } else if (!plan.hasVideo) {
+                sendNotification('📹 Dashcam', 'Dashcam recording stopped (no video data)', 'info');
+            } else {
+                sendNotification('📹 Dashcam', 'Dashcam recording stopped (missing recording id)', 'error');
+            }
+
+            loadDashcamRecordings();
         }
 
         function startRecordingTimer() {
