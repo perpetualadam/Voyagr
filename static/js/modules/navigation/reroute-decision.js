@@ -943,7 +943,10 @@
                 deviationStartTimeCheck: null,
                 rerouteAttemptCount: 0,
                 postRerouteGraceUntil: now + graceMs,
-                routeJoinConfirmedForDeviation: false,
+                // Mid-nav automatic/traffic reroutes start from current GPS. Keep join
+                // confirmed so GraphHopper hard-block snap offsets (> join gate) cannot
+                // permanently disable deviation monitoring after an Optimised update.
+                routeJoinConfirmedForDeviation: !!opts.seedRouteJoinConfirmed,
                 deviationOffRouteStreak: 0,
                 lastRerouteTime: now,
                 lastRerouteAttemptTime: now,
@@ -992,6 +995,23 @@
             refreshRouteTraffic: true,
             applyRouteMapUpdateState: true,
             polylineLogPrefix: '[Reroute] Route polyline decoded:',
+        };
+    }
+
+    /**
+     * Apply plan when updateRouteOnMap aborts after an invalid polyline decode.
+     * Must clear rerouteInProgress — otherwise automatic Optimised (GraphHopper)
+     * reroutes stay permanently skipped with reason "in-progress".
+     * @returns {Object}
+     */
+    function buildInvalidPolylineDecodeApplyPlan() {
+        return {
+            action: 'abort',
+            reason: 'invalid-decode',
+            ok: false,
+            resetRerouteInProgress: true,
+            scheduleRetry: true,
+            logMessage: '[Reroute] Map update aborted — clearing in-progress flag so Optimised reroute can retry',
         };
     }
 
@@ -1251,6 +1271,7 @@
         resolveRouteManeuversFromPayload: resolveRouteManeuversFromPayload,
         buildRouteMapUpdateStatePlan: buildRouteMapUpdateStatePlan,
         buildUpdateRouteOnMapExecutePlan: buildUpdateRouteOnMapExecutePlan,
+        buildInvalidPolylineDecodeApplyPlan: buildInvalidPolylineDecodeApplyPlan,
         buildRouteMapUpdatePostApplyPlan: buildRouteMapUpdatePostApplyPlan,
         buildRouteMapUpdateStateApplySectionsPlan: buildRouteMapUpdateStateApplySectionsPlan,
         buildRouteMapUpdateSpeedLimitResetPlan: buildRouteMapUpdateSpeedLimitResetPlan,

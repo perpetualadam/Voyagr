@@ -1458,7 +1458,15 @@
         if (execute.preferPrimaryRouteOnNextNavUpdate) {
             rt().s('_preferPrimaryRouteOnNextNavUpdate',  true);
         }
-        if (execute.updateRouteOnMap) rt().call.updateRouteOnMap(execute.newRoute);
+        if (execute.updateRouteOnMap) {
+            const mapResult = rt().call.updateRouteOnMap(execute.newRoute);
+            // Invalid Optimised/GraphHopper geometry aborts the map apply and clears
+            // rerouteInProgress inside updateRouteOnMap; retry instead of celebrating.
+            if (mapResult && mapResult.ok === false) {
+                if (mapResult.scheduleRetry) scheduleAutomaticRerouteRetry();
+                return;
+            }
+        }
         if (execute.logRerouteEvent) {
             logReroutingEvent(startLat, startLon, destination, execute.newRoute, execute.hazardCount);
         }
