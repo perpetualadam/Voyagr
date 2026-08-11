@@ -180,6 +180,13 @@
         }
 
         document.body.addEventListener('touchmove', (e) => {
+            // First-run safety notice owns its own scroll while open. Never cancel
+            // touchmove here — otherwise short mobile viewports cannot reach consent
+            // controls (or scroll the notice body) without enabling Desktop site.
+            const safetyOverlay = document.getElementById('safetyNoticeOverlay');
+            if (safetyOverlay && safetyOverlay.style.display === 'flex') {
+                return;
+            }
             // Do not cancel touchmoves on sheet chrome / FABs / controls. Firefox maps
             // preventDefault(touchmove) to pointercancel, which killed bottom-sheet and
             // hamburger gestures while pull-to-refresh blocking was still desired on the map.
