@@ -2107,6 +2107,10 @@
                 }
                 dashcamState.isRecording = false;
                 dashcamState.currentRecordingId = null;
+                // Reset UI if failure happened after recording chrome was shown.
+                clearInterval(dashcamState.recordingDurationInterval);
+                updateDashcamUI();
+                document.getElementById('dashcamIndicator').style.display = 'none';
                 const message = (error && error.name === 'NotAllowedError')
                     ? 'Camera permission denied'
                     : 'Error starting dashcam recording';
