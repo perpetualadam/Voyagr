@@ -57,7 +57,7 @@
 <body>
 <div class="container">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: May 2026</p>
+  <p class="updated">Last updated: August 2026</p>
 
   <p>Voyagr Navigation ("Voyagr", "we", "our") is committed to protecting your
   privacy. This policy explains what data we collect, why, and how we handle it.</p>
@@ -73,16 +73,27 @@
     <li><strong>Location data</strong> &mdash; When you use GPS tracking or navigation,
     your device's location is used to provide turn-by-turn directions, speed monitoring,
     and route progress. Location data is processed in real time and is not stored on our
-    servers unless you explicitly save a trip.</li>
+    servers unless you explicitly save a trip or start a dashcam recording (see Dashcam
+    below).</li>
     <li><strong>Route calculations</strong> &mdash; Start and end coordinates are sent
     to routing engines (Valhalla, GraphHopper) to calculate routes. These are processed
     transiently and cached locally on the server for performance.</li>
     <li><strong>Saved trips</strong> &mdash; If you save a trip, the route summary
     (distance, duration, cost estimate) is stored in a local database on the server.</li>
+    <li><strong>Dashcam recordings (only if you start recording)</strong> &mdash; If you
+    use the optional Dashcam feature, we process and may save: (a) video captured from
+    your device camera; (b) audio from your microphone if you leave audio recording
+    enabled; (c) GPS metadata linked to the recording (timestamp, latitude, longitude,
+    speed, and heading); and (d) recording details such as start/end time, duration,
+    and file size. Recordings are created only when you press Start Recording, and the
+    video file is uploaded and stored when you stop (or when the session ends). Dashcam
+    is optional and is not required for navigation.</li>
     <li><strong>Account data</strong> &mdash; If you sign in, your email address and
     display name are managed by Supabase (our authentication provider).</li>
     <li><strong>Preferences</strong> &mdash; Settings such as vehicle type, units, and
-    theme are stored in your browser's local storage.</li>
+    theme are stored in your browser's local storage. Dashcam preferences (resolution,
+    frame rate, audio on/off, and retention period) are stored so your chosen settings
+    apply to later recordings.</li>
     <li><strong>Account sync (only if you sign in)</strong> &mdash; When you are signed
     in, your settings and saved routes can be synced to your account so they are
     available on your other signed-in devices. Recent destinations used for search
@@ -93,7 +104,12 @@
   <ul>
     <li>We do not sell or share your personal data with advertisers for their own marketing.</li>
     <li>We do not use cross-site tracking or device fingerprinting.</li>
-    <li>We do not collect contacts, messages, photos, or files from your device.</li>
+    <li>We do not access your contacts, messages, photo library, or other existing files
+    on your device. Dashcam creates new recordings only when you choose to record; it
+    does not browse or upload unrelated media from your device.</li>
+    <li>We do not continuously record camera or microphone input in the background.
+    Capture starts only after you explicitly start a dashcam recording and grant the
+    relevant browser/device permissions.</li>
   </ul>
 
   <h2>3. Third-Party Services</h2>
@@ -122,9 +138,12 @@
     <li><strong>Performance of a contract / providing the service you request</strong>
     &mdash; e.g. calculating a route, showing your position, or saving a trip you ask us
     to save.</li>
-    <li><strong>Consent</strong> &mdash; e.g. accessing your device location, or creating
-    and syncing an account. You can withdraw consent at any time (see Location
-    Permission and Your Rights).</li>
+    <li><strong>Consent</strong> &mdash; e.g. accessing your device location; accessing
+    the camera and/or microphone for dashcam; saving dashcam recordings and related GPS
+    metadata you choose to create; or creating and syncing an account. You can withdraw
+    consent at any time (see Location Permission, Dashcam Permissions, and Your Rights).
+    Withdrawing consent does not affect processing already carried out while consent was
+    in place.</li>
     <li><strong>Legitimate interests</strong> &mdash; e.g. keeping the service secure,
     preventing abuse, and maintaining reliability, balanced against your rights.</li>
   </ul>
@@ -133,51 +152,90 @@
   <p>Voyagr requests location access only when you actively use GPS tracking or
   navigation. You can revoke this permission at any time in your device or browser
   settings. The app functions without location access (route planning, cost estimation)
-  but real-time navigation features require it.</p>
+  but real-time navigation features require it. If you record with dashcam while
+  location is available, GPS points may be stored with that recording as described
+  below.</p>
 
-  <h2>6. Data Storage, Retention and Security</h2>
+  <h2>6. Dashcam Permissions and Saving Recordings</h2>
+  <p>Dashcam is an optional feature. Before any dashcam capture begins, your browser or
+  device will ask for permission to use the camera and, if audio is enabled, the
+  microphone. We rely on your consent for this processing under UK GDPR.</p>
+  <ul>
+    <li><strong>When permissions are requested</strong> &mdash; Camera (and microphone,
+    if audio recording is on) access is requested when you start a dashcam recording,
+    not merely because the Dashcam tab is open.</li>
+    <li><strong>What is saved</strong> &mdash; If you complete a recording, the video
+    file (and audio if enabled) is uploaded to our servers and stored with recording
+    metadata. GPS points collected during that session may also be saved alongside the
+    recording. If you deny camera permission, recording cannot start and no dashcam
+    video is saved.</li>
+    <li><strong>Purpose</strong> &mdash; To provide the dashcam service you request
+    (reviewing a journey, incident evidence for your own use, and related playback or
+    cleanup in the app). We do not use dashcam footage for advertising or sell it to
+    third parties.</li>
+    <li><strong>Your control</strong> &mdash; You can turn audio recording off in
+    Dashcam settings, choose a retention period (for example 7, 14, 30, or 90 days),
+    delete individual recordings, or run cleanup of older recordings in the app. You
+    can also revoke camera and microphone access at any time in your browser or device
+    settings; after revocation, new recordings cannot be created until you grant
+    permission again.</li>
+    <li><strong>Special category / sensitive content</strong> &mdash; Dashcam footage
+    may incidentally capture other people, vehicle registration marks, or conversations.
+    You are responsible for using dashcam lawfully (including any local rules on
+    recording in public or in vehicles) and for deciding what you record and keep.</li>
+  </ul>
+
+  <h2>7. Data Storage, Retention and Security</h2>
   <ul>
     <li>Preferences and recent destinations are stored locally in your browser and remain
     on your device until you clear site data (for signed-in users, settings and saved
     routes may also sync to your account &mdash; see below).</li>
     <li>Trip history you save while signed in is stored in a server-side database linked
     to your account.</li>
+    <li><strong>Dashcam storage:</strong> Saved dashcam video files and associated GPS
+    metadata are stored on our servers so you can play back, manage, and delete them in
+    the app. Transfer uses HTTPS.</li>
     <li>All communication uses HTTPS encryption.</li>
     <li><strong>Retention:</strong> Saved trips and account data are kept until you delete
     them or close your account, after which they are removed within a reasonable period.
     Route requests are processed transiently and only short-term server caching is used
     for performance; this cache is not used to profile you. Data held only in your browser
-    stays until you clear it.</li>
+    stays until you clear it. Dashcam recordings are kept according to the retention
+    period you select in Dashcam settings (or until you delete them earlier). Cleanup
+    removes recordings older than that period; you can also delete recordings manually
+    at any time.</li>
     <li>You can delete your data at any time from within the app, or by contacting us.</li>
   </ul>
 
-  <h2>7. International Data Transfers</h2>
+  <h2>8. International Data Transfers</h2>
   <p>Some of our providers (for example our authentication and hosting providers) may
   store or process data on servers located outside the UK or European Economic Area.
   Where that happens, we rely on appropriate safeguards &mdash; such as UK/EU Standard
   Contractual Clauses or an adequacy decision &mdash; so that your data receives an
   equivalent level of protection.</p>
 
-  <h2>8. Children's Privacy</h2>
+  <h2>9. Children's Privacy</h2>
   <p>Voyagr is not directed at children under 13. We do not knowingly collect data from
   children.</p>
 
-  <h2>9. Your Rights</h2>
+  <h2>10. Your Rights</h2>
   <p>Under UK GDPR and applicable data protection laws, you have the right to:</p>
   <ul>
-    <li>Access, correct, or delete your personal data</li>
+    <li>Access, correct, or delete your personal data (including dashcam recordings and
+    related GPS metadata saved through the app)</li>
     <li>Restrict or object to certain processing</li>
-    <li>Withdraw consent for location tracking or account sync at any time</li>
+    <li>Withdraw consent for location tracking, camera/microphone access, saving new
+    dashcam recordings, or account sync at any time</li>
     <li>Request a copy of your data in a portable format</li>
     <li>Lodge a complaint with the Information Commissioner's Office (ICO) at
     <a href="https://ico.org.uk/" target="_blank" rel="noopener">ico.org.uk</a></li>
   </ul>
 
-  <h2>10. Changes to This Policy</h2>
+  <h2>11. Changes to This Policy</h2>
   <p>We may update this privacy policy from time to time. Changes will be posted on this
   page with an updated date.</p>
 
-  <h2>11. Contact</h2>
+  <h2>12. Contact</h2>
   <p>If you have questions about this privacy policy or your data, please contact us at
   the email address provided in the app's settings.</p>
 
