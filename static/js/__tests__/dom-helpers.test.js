@@ -198,6 +198,9 @@ describe('dom-helpers', () => {
                     <li class="map-hint-item" id="hintItem">Follow me</li>
                 </ul>
             </div>
+            <div id="safetyNoticeOverlay">
+                <p id="safetyNoticeText">You use Voyagr at your own risk.</p>
+            </div>
         `;
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('handle')
@@ -207,6 +210,9 @@ describe('dom-helpers', () => {
         ).allowNativeTouchMove).toBe(true);
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('hintItem')
+        ).allowNativeTouchMove).toBe(true);
+        expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
+            document.getElementById('safetyNoticeText')
         ).allowNativeTouchMove).toBe(true);
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('map')

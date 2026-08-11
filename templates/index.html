@@ -256,7 +256,7 @@
         </main>
     </noscript>
     <!-- First-run driver safety + privacy notice (shown once; gate before app use) -->
-    <div id="safetyNoticeOverlay" style="display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(17, 24, 39, 0.72); padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch;" role="dialog" aria-modal="true" aria-labelledby="safetyNoticeTitle">
+    <div id="safetyNoticeOverlay" style="display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(17, 24, 39, 0.72); padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;" role="dialog" aria-modal="true" aria-labelledby="safetyNoticeTitle">
         <div style="max-width: 520px; margin: 24px auto; background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; padding: 20px 22px;">
                 <h2 id="safetyNoticeTitle" style="margin: 0; font-size: 20px; font-weight: 700;">Before you drive</h2>
@@ -285,12 +285,12 @@
                 </div>
 
                 <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #333; cursor: pointer; margin-bottom: 16px;">
-                    <input type="checkbox" id="safetyNoticeAgree" style="margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0;" onchange="document.getElementById('safetyNoticeContinue').disabled = !this.checked;" />
+                    <input type="checkbox" id="safetyNoticeAgree" style="margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0;" onchange="var b=document.getElementById('safetyNoticeContinue'); if(b){b.disabled=!this.checked;b.style.opacity=this.checked?'1':'0.45';b.style.cursor=this.checked?'pointer':'not-allowed';}" />
                     <span>I understand and agree to drive responsibly and follow the rules of the road.</span>
                 </label>
 
                 <button type="button" id="safetyNoticeContinue" disabled onclick="voyagrAcceptSafetyNotice()"
-                        style="width: 100%; padding: 13px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; opacity: 1;">
+                        style="width: 100%; padding: 13px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: not-allowed; opacity: 0.45;">
                     I understand — continue
                 </button>
                 <p style="margin: 12px 0 0; text-align: center; font-size: 11px; color: #999;">
@@ -2275,7 +2275,11 @@
                 var agree = document.getElementById('safetyNoticeAgree');
                 var btn = document.getElementById('safetyNoticeContinue');
                 if (agree) agree.checked = true;
-                if (btn) btn.disabled = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
                 showSafetyNotice();
             };
             function init() {
