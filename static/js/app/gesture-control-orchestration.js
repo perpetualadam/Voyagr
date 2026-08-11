@@ -63,8 +63,10 @@
 
     function updateGestureSensitivity() {
         const gestureControl = GC();
+        const sensitivityEl = document.getElementById(gestureControl.GESTURE_SENSITIVITY_ID);
+        if (!sensitivityEl) return;
         const execute = gestureControl.buildUpdateGestureSensitivityExecutePlan({
-            value: document.getElementById(gestureControl.GESTURE_SENSITIVITY_ID).value,
+            value: sensitivityEl.value,
         });
         if (!execute.shouldApply) return;
         gestureSensitivity = execute.sensitivity;
@@ -77,8 +79,10 @@
 
     function updateGestureAction() {
         const gestureControl = GC();
+        const actionEl = document.getElementById(gestureControl.GESTURE_ACTION_ID);
+        if (!actionEl) return;
         const execute = gestureControl.buildUpdateGestureActionExecutePlan({
-            value: document.getElementById(gestureControl.GESTURE_ACTION_ID).value,
+            value: actionEl.value,
         });
         if (!execute.shouldApply) return;
         gestureAction = execute.action;
