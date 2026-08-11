@@ -521,6 +521,28 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.deviation.postRerouteGraceUntil).toBe(1000 + RD.POST_REROUTE_GRACE_MS);
         expect(plan.lastCalculatedRoutePatch.destination).toBe('51,0');
         expect(plan.lastCalculatedRoutePatch.distance).toBe('10.0 km');
+        // Preview / first draw keeps the join gate closed until GPS is on the line.
+        expect(plan.deviation.routeJoinConfirmedForDeviation).toBe(false);
+    });
+
+    test('buildRouteMapUpdateStatePlan seeds join after mid-nav Optimised reroute', () => {
+        // GraphHopper hard-block snaps can leave GPS > join-gate from the new line;
+        // seeding join keeps deviation monitoring alive for the next Optimised reroute.
+        const seeded = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', distance_km: 10, duration_minutes: 20, source: 'GraphHopper', name: '⚡ Optimised' },
+            { destination: '51,0', source: 'GraphHopper' },
+            { hasCurrentGps: true, seedRouteJoinConfirmed: true, now: 1000 }
+        );
+        expect(seeded.deviation.routeJoinConfirmedForDeviation).toBe(true);
+        expect(seeded.deviation.rerouteInProgress).toBe(false);
+    });
+
+    test('buildInvalidPolylineDecodeApplyPlan clears in-progress so Optimised can retry', () => {
+        const abort = RD.buildInvalidPolylineDecodeApplyPlan();
+        expect(abort.ok).toBe(false);
+        expect(abort.resetRerouteInProgress).toBe(true);
+        expect(abort.scheduleRetry).toBe(true);
+        expect(abort.reason).toBe('invalid-decode');
     });
 
     test('buildUpdateRouteOnMapExecutePlan and post-apply plan', () => {

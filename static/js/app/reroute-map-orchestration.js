@@ -233,9 +233,15 @@
 
     function updateRouteOnMap(newRoute) {
         var RD = rt().rerouteDecision();
+        var hasCurrentGps = rt().getCurrentLat() != null && rt().getCurrentLon() != null;
+        // During active navigation, automatic/traffic/in-nav recalcs start from GPS.
+        // Seed join so GraphHopper Optimised hard-block snaps cannot leave monitoring
+        // stuck in awaiting-join after a successful map update.
+        var seedRouteJoinConfirmed = !!(rt().g('routeInProgress') && hasCurrentGps);
         var plan = RD.buildRouteMapUpdateStatePlan(newRoute, rt().getLastCalculatedRoute(), {
             now: Date.now(),
-            hasCurrentGps: rt().getCurrentLat() != null && rt().getCurrentLon() != null,
+            hasCurrentGps: hasCurrentGps,
+            seedRouteJoinConfirmed: seedRouteJoinConfirmed,
             convertDistance: rt().call.convertDistance,
             distUnit: rt().call.getDistanceUnit(),
             polylineDecodePrecision: rt().routeSelection().resolvePerRouteGeometryPrecision(newRoute),
@@ -259,7 +265,14 @@
             if (execute.invalidDecodeStatusMessage && typeof rt().call.showStatus === 'function') {
                 rt().call.showStatus(execute.invalidDecodeStatusMessage, 'warning');
             }
-            return;
+            var abortApply = RD.buildInvalidPolylineDecodeApplyPlan();
+            if (abortApply.resetRerouteInProgress) {
+                setRerouteInProgress(false);
+            }
+            if (abortApply.logMessage) {
+                console.log(abortApply.logMessage);
+            }
+            return { ok: false, reason: abortApply.reason || 'invalid-decode', scheduleRetry: !!abortApply.scheduleRetry };
         }
 
         rt().setRoutePolyline(routePolyline);
@@ -311,6 +324,7 @@
         if (execute.applyRouteMapUpdateState) {
             applyRouteMapUpdateStateFromPlan(plan, newRoute);
         }
+        return { ok: true };
     }
 
     function getNavActiveRoutePolylineOptions() {
