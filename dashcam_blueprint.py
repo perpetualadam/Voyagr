@@ -7,6 +7,7 @@ Provides REST endpoints for dashcam recording control and management
 from flask import Blueprint, request, jsonify
 from dashcam_service import DashcamService
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,17 @@ dashcam_bp = Blueprint('dashcam', __name__, url_prefix='/api/dashcam')
 dashcam_service = None
 
 
-def init_dashcam_blueprint(app, db_path: str = 'voyagr_web.db'):
+def init_dashcam_blueprint(
+    app,
+    db_path: str = 'voyagr_web.db',
+    storage_dir: str = 'dashcam_recordings',
+):
     """Initialize dashcam blueprint with Flask app."""
     global dashcam_service
-    dashcam_service = DashcamService(db_path=db_path)
-    app.register_blueprint(dashcam_bp)
+    dashcam_service = DashcamService(db_path=db_path, storage_dir=storage_dir)
+    # Avoid double-register when tests re-init on a fresh app with same blueprint object.
+    if 'dashcam' not in app.blueprints:
+        app.register_blueprint(dashcam_bp)
     logger.info("Dashcam blueprint initialized")
 
 
@@ -89,12 +96,43 @@ def get_recordings():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@dashcam_bp.route('/recordings/<recording_id>/upload', methods=['POST'])
+def upload_recording(recording_id):
+    """Upload a recorded video blob for an existing session."""
+    try:
+        if 'file' not in request.files and not request.get_data():
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        upload = request.files.get('file')
+        if upload is not None and upload.filename:
+            file_bytes = upload.read()
+            content_type = upload.mimetype or upload.content_type or 'video/webm'
+        else:
+            file_bytes = request.get_data()
+            content_type = request.content_type or 'video/webm'
+
+        if not file_bytes:
+            return jsonify({'success': False, 'error': 'Empty file'}), 400
+
+        result = dashcam_service.save_recording_file(
+            recording_id=recording_id,
+            file_bytes=file_bytes,
+            extension=content_type,
+        )
+        status = 200 if result.get('success') else 400
+        return jsonify(result), status
+    except Exception as e:
+        logger.error(f"Error in upload_recording: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @dashcam_bp.route('/recordings/<recording_id>', methods=['DELETE'])
 def delete_recording(recording_id):
     """Delete a recording."""
     try:
         result = dashcam_service.delete_recording(recording_id)
-        return jsonify(result)
+        status = 200 if result.get('success') else 404
+        return jsonify(result), status
     except Exception as e:
         logger.error(f"Error in delete_recording: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
