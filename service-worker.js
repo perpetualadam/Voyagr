@@ -545,8 +545,8 @@ self.addEventListener('message', event => {
   }
 
   // Targeted static-cache warm-up. Used to opportunistically precache large
-  // vendor bundles (e.g. Sherpa WASM) *after* first successful page load so
-  // subsequent launches — including offline — have everything ready.
+  // vendor bundles *after* first successful page load so subsequent launches
+  // — including offline — have everything ready.
   // Routed to STATIC_CACHE so it's not evicted by the dynamic cache trimmer.
   // Silently skips URLs that are already cached to keep the warm-up idempotent.
   if (event.data.type === 'WARM_STATIC_URLS') {

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Pytest: PWA index page and Sherpa KWS static assets (no browser).
+Pytest: PWA index page and Picovoice wake static assets (no browser).
 
-Fixes regression: core.index must pass full template kwargs (Picovoice + Sherpa).
+Fixes regression: core.index must pass full template kwargs (Picovoice).
+Sherpa wake-word lab was removed; assert those assets stay gone.
 """
 
 import pytest
@@ -57,6 +58,8 @@ def test_index_injects_picovoice_wake_globals(client):
     assert "window.PICOVOICE_ACCESS_KEY" in body
     assert "window.VoyagrPicovoiceWebAssetsOk" in body
     assert "VoyagrSherpaKwsLab" not in body
+    assert "sherpa-kws" not in body
+    assert "VoyagrSherpaKwsMap" not in body
 
 
 def test_picovoice_vendor_assets_served(client):
@@ -101,24 +104,18 @@ def test_firefox_browser_hint_off_by_default(monkeypatch):
     assert build_index_template_kwargs()["show_firefox_browser_hint"] is False
 
 
-def test_sherpa_lab_page_static(client):
-    rv = client.get("/static/sherpa-kws-spike.html")
-    assert rv.status_code == 200
-    assert b"sherpa-onnx-wasm-kws-main.js" in rv.data
-
-
-def test_sherpa_keywords_config_static(client):
-    rv = client.get("/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt")
-    assert rv.status_code == 200
-    assert len(rv.data) > 0
-
-
-def test_sherpa_onnx_kws_spike_glue_served(client):
-    """KWS PWA load path uses this file (global createKws) — must 200 in prod."""
-    rv = client.get("/static/js/sherpa-onnx-kws-spike.js")
-    assert rv.status_code == 200
-    assert b"createKws" in rv.data
-    assert b"globalThis.createKws" in rv.data
+def test_sherpa_lab_assets_removed(client):
+    """Sherpa wake-word lab must not ship; Porcupine remains the wake path."""
+    removed_paths = (
+        "/static/sherpa-kws-spike.html",
+        "/static/js/sherpa-onnx-kws-spike.js",
+        "/static/js/sherpa-kws-spike-app.js",
+        "/static/js/sherpa-kws-map-runtime.js",
+        "/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt",
+    )
+    for path in removed_paths:
+        rv = client.get(path)
+        assert rv.status_code == 404, path
 
 
 def test_manifest_and_service_worker(client):
