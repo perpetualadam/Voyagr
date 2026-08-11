@@ -1,14 +1,12 @@
 /**
- * @file Gesture control orchestration (shake detection, toggle, sensitivity/action).
+ * @file Gesture control orchestration (shake removed; stubs keep call sites stable).
  * Extracted from voyagr-app.js to shrink the monolith; receives live deps via bind().
  */
 (function (root) {
     'use strict';
 
     var runtime = null;
-    var shakeCount = 0;
-    var lastShakeTime = 0;
-    var gestureEnabled = true;
+    var gestureEnabled = false;
     var gestureSensitivity = 'medium';
     var gestureAction = 'recalculate';
 
@@ -22,57 +20,14 @@
     function GC() { return rt().gestureControl(); }
 
     function handleDeviceMotion(event) {
-        if (!gestureEnabled) return;
-
-        const gestureControl = GC();
-        const accel = event.acceleration;
-        if (!accel) return;
-
-        const magnitude = Math.sqrt(accel.x ** 2 + accel.y ** 2 + accel.z ** 2);
-        const detection = gestureControl.buildGestureShakeDetectionPlan({
-            magnitude,
-            sensitivity: gestureSensitivity,
-            lastShakeTime,
-            shakeCount,
-            now: Date.now(),
-        });
-        shakeCount = detection.shakeCount;
-        lastShakeTime = detection.lastShakeTime;
-        if (detection.shouldTrigger) {
-            triggerGestureAction();
-        }
+        // Shake gesture removed — ignore device motion.
+        return;
     }
 
     function triggerGestureAction() {
         const gestureControl = GC();
         const execute = gestureControl.buildGestureActionExecutePlan({ action: gestureAction });
         if (!execute.shouldApply) return;
-
-        const indicator = document.getElementById(execute.indicator.id);
-        if (indicator) {
-            indicator.classList.add(execute.indicator.showClass);
-            setTimeout(() => indicator.classList.remove(execute.indicator.showClass), execute.indicator.hideAfterMs);
-        }
-
-        if ('vibrate' in navigator) {
-            navigator.vibrate(execute.vibrateMs);
-        }
-
-        fetch('/api/gesture-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(execute.logApiBody),
-        }).catch((error) => console.error('Error logging gesture:', error));
-
-        if (execute.triggerRecalculate) {
-            rt().call.showStatus(execute.statusMessage, execute.statusType);
-            rt().call.calculateRoute();
-        } else if (execute.triggerClear) {
-            rt().call.showStatus(execute.statusMessage, execute.statusType);
-            rt().call.clearForm();
-        } else {
-            rt().call.showStatus(execute.statusMessage, execute.statusType);
-        }
     }
 
     function toggleGestureControl() {
@@ -85,13 +40,14 @@
         });
         if (!execute.shouldApply) return;
 
-        gestureEnabled = execute.enabled;
-        toggleUi.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
+        gestureEnabled = false;
+        const toggleEl = document.getElementById(execute.toggle.id);
+        if (toggleEl) toggleUi.applyToggleButton(toggleEl, false);
 
         const settingsPanel = document.getElementById(execute.settingsPanel.id);
-        if (settingsPanel) settingsPanel.style.display = execute.settingsPanel.display;
+        if (settingsPanel) settingsPanel.style.display = 'none';
 
-        localStorage.setItem(execute.storageKey, execute.storageValue);
+        localStorage.setItem(execute.storageKey, false);
 
         fetch('/api/app-settings', {
             method: 'POST',
@@ -99,13 +55,10 @@
             body: JSON.stringify(execute.persistApiBody),
         }).catch((error) => console.error('Error updating gesture setting:', error));
 
-        if (execute.addDeviceMotionListener) {
-            window.addEventListener('devicemotion', handleDeviceMotion);
+        window.removeEventListener('devicemotion', handleDeviceMotion);
+        if (execute.statusMessage) {
+            rt().call.showStatus(execute.statusMessage, execute.statusType);
         }
-        if (execute.removeDeviceMotionListener) {
-            window.removeEventListener('devicemotion', handleDeviceMotion);
-        }
-        rt().call.showStatus(execute.statusMessage, execute.statusType);
     }
 
     function updateGestureSensitivity() {
@@ -137,7 +90,8 @@
     }
 
     function setGestureEnabled(val) {
-        gestureEnabled = val;
+        // Shake gesture removed — remain disabled regardless of callers.
+        gestureEnabled = false;
     }
 
     function setGestureSensitivity(val) {

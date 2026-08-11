@@ -39,20 +39,10 @@
 
         if (orch.loadHazardCameraTogglesFromApi) rt().call.loadHazardCameraTogglesFromApi();
 
-        const gestureRestore = LPR().buildRestoreGesturePreferencePlan({
-            savedValue: localStorage.getItem(GC().GESTURE_ENABLED_STORAGE_KEY),
-            hasDeviceMotion: 'DeviceMotionEvent' in window,
-        });
-        if (gestureRestore.shouldRestore) {
-            rt().setGestureEnabled(gestureRestore.gestureEnabled);
-            const gestureButton = document.getElementById(gestureRestore.toggle.id);
-            if (gestureButton) TU().applyToggleButton(gestureButton, gestureRestore.toggle.enabled);
-            const gestureSettings = document.getElementById(gestureRestore.settingsPanel.id);
-            if (gestureSettings) gestureSettings.style.display = gestureRestore.settingsPanel.display;
-            if (gestureRestore.addDeviceMotionListener) {
-                window.addEventListener('devicemotion', rt().call.handleDeviceMotion);
-            }
-        }
+        // Shake gesture removed — clear any prior enablement and detach listeners.
+        rt().setGestureEnabled(false);
+        localStorage.setItem(GC().GESTURE_ENABLED_STORAGE_KEY, 'false');
+        window.removeEventListener('devicemotion', rt().call.handleDeviceMotion);
 
         const autoGpsRestore = LPR().buildRestoreAutoGpsPreferencePlan({
             savedValue: localStorage.getItem(LPR().AUTO_GPS_STORAGE_KEY),

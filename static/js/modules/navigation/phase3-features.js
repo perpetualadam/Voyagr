@@ -14,7 +14,7 @@
         return {
             shouldInit: true,
             initFlagProperty: INIT_FLAG_PROPERTY,
-            loadGestureFromApi: true,
+            loadGestureFromApi: false,
             initBatteryMonitoring: true,
             loadMlPredictions: true,
             loadArSetting: true,
