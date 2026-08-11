@@ -46,6 +46,17 @@ describe('dashcam-capture module', () => {
         expect(DC.buildUploadRequestPlan({ recordingId: '' }).shouldUpload).toBe(false);
     });
 
+    test('buildAbortServerSessionPlan aborts only after server start succeeds', () => {
+        expect(DC.buildAbortServerSessionPlan({ serverSessionStarted: false })).toEqual({
+            shouldAbort: false,
+        });
+        expect(DC.buildAbortServerSessionPlan({ serverSessionStarted: true })).toEqual({
+            shouldAbort: true,
+            url: '/api/dashcam/stop',
+            method: 'POST',
+        });
+    });
+
     test('stopMediaStreamTracks stops each track', () => {
         const stop = jest.fn();
         const result = DC.stopMediaStreamTracks({
