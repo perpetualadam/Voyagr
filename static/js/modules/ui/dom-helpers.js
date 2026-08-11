@@ -210,6 +210,10 @@
         // Map-controls "i" guide and road-report modals share this panel; without it,
         // body pull-to-refresh preventDefault blocks scrolling their overflow lists.
         '.road-report-modal-panel',
+        // First-run "Before you drive" notice: plain text nodes are not button/input/label,
+        // so without this selector mobile touchmove preventDefault blocks overlay scroll
+        // and makes the consent checkbox/continue control unreachable or unusable.
+        '#safetyNoticeOverlay',
         '.fab',
         'button',
         'a',
