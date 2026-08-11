@@ -26,6 +26,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Default ceiling for dashcam video uploads (overridable via DASHCAM_MAX_UPLOAD_BYTES).
+DEFAULT_DASHCAM_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+DEFAULT_API_MAX_CONTENT_BYTES = 1 * 1024 * 1024
+
+
+def resolve_max_content_length_bytes(
+    max_content_length_bytes: Optional[str] = None,
+    dashcam_max_upload_bytes: Optional[str] = None,
+) -> int:
+    """
+    Resolve Flask MAX_CONTENT_LENGTH.
+
+    JSON APIs stay small by default, but dashcam video uploads need a larger
+    ceiling. Explicit env values win; invalid values fall back to defaults.
+    """
+    def _parse(raw: Optional[str], default: int) -> int:
+        if raw is None or str(raw).strip() == '':
+            return default
+        try:
+            return int(str(raw).strip())
+        except (TypeError, ValueError):
+            return default
+
+    api_max = _parse(max_content_length_bytes, DEFAULT_API_MAX_CONTENT_BYTES)
+    dashcam_max = _parse(dashcam_max_upload_bytes, DEFAULT_DASHCAM_MAX_UPLOAD_BYTES)
+    return max(64 * 1024, api_max, dashcam_max)
+
 
 class DashcamService:
     """
@@ -102,8 +129,47 @@ class DashcamService:
                 self.recording_active = False
                 return {'success': False, 'error': str(e)}
     
+    def _metadata_path(self, recording_id: str) -> str:
+        return os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+
+    def _persist_metadata_buffer(self, recording_id: str, points: List[Dict[str, Any]]) -> int:
+        """Write GPS points to a sidecar JSON file. Returns point count."""
+        Path(self.storage_dir).mkdir(parents=True, exist_ok=True)
+        meta_path = self._metadata_path(recording_id)
+        with open(meta_path, 'w', encoding='utf-8') as out:
+            json.dump({'recording_id': recording_id, 'points': points}, out)
+        return len(points)
+
+    def get_recording_metadata(self, recording_id: str) -> Dict[str, Any]:
+        """Load persisted GPS metadata for a recording."""
+        if not recording_id or not self._recording_exists(recording_id):
+            return {'success': False, 'error': 'Recording not found'}
+        meta_path = self._metadata_path(recording_id)
+        if not os.path.isfile(meta_path):
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'points': [],
+                'metadata_points': 0,
+            }
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as fh:
+                payload = json.load(fh)
+            points = payload.get('points') if isinstance(payload, dict) else []
+            if not isinstance(points, list):
+                points = []
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'points': points,
+                'metadata_points': len(points),
+            }
+        except Exception as e:
+            logger.error(f'Error reading metadata for {recording_id}: {e}')
+            return {'success': False, 'error': str(e)}
+
     def stop_recording(self) -> Dict[str, Any]:
-        """Stop the current recording session."""
+        """Stop the current recording session and persist GPS metadata."""
         with self.lock:
             if not self.recording_active:
                 return {'success': False, 'error': 'No active recording'}
@@ -111,33 +177,137 @@ class DashcamService:
             try:
                 end_time = datetime.now()
                 duration = (end_time - self.current_recording_start).total_seconds()
+                recording_id = self.current_recording_id
+                points = list(self.metadata_buffer)
+                metadata_points = self._persist_metadata_buffer(recording_id, points)
                 
                 # Update database
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 cursor.execute('''
                     UPDATE dashcam_recordings 
-                    SET end_time = ?, status = ?, duration_seconds = ?
+                    SET end_time = ?, status = ?, duration_seconds = ?, metadata_points = ?
                     WHERE recording_id = ?
-                ''', (end_time.isoformat(), 'completed', duration, self.current_recording_id))
+                ''', (
+                    end_time.isoformat(),
+                    'completed',
+                    duration,
+                    metadata_points,
+                    recording_id,
+                ))
                 conn.commit()
                 conn.close()
                 
-                recording_id = self.current_recording_id
                 self.recording_active = False
                 self.current_recording_id = None
                 self.metadata_buffer = []
                 
-                logger.info(f"Recording stopped: {recording_id} ({duration:.1f}s)")
+                logger.info(
+                    f"Recording stopped: {recording_id} ({duration:.1f}s, "
+                    f"{metadata_points} metadata points)"
+                )
                 return {
                     'success': True,
                     'recording_id': recording_id,
                     'duration_seconds': duration,
-                    'end_time': end_time.isoformat()
+                    'end_time': end_time.isoformat(),
+                    'metadata_points': metadata_points,
                 }
             except Exception as e:
                 logger.error(f"Error stopping recording: {e}")
                 return {'success': False, 'error': str(e)}
+
+    @staticmethod
+    def _normalize_extension(extension: Optional[str]) -> str:
+        """Map a content type or extension to a safe file suffix."""
+        ext = (extension or 'webm').strip().lower()
+        if '/' in ext:
+            # content-type like video/webm;codecs=vp8
+            ext = ext.split(';', 1)[0].split('/', 1)[-1]
+        ext = ext.lstrip('.')
+        if ext in ('webm', 'mp4', 'ogg'):
+            return ext
+        return 'webm'
+
+    def _recording_exists(self, recording_id: str) -> bool:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT 1 FROM dashcam_recordings WHERE recording_id = ? LIMIT 1',
+            (recording_id,),
+        )
+        found = cursor.fetchone() is not None
+        conn.close()
+        return found
+
+    def save_recording_file(
+        self,
+        recording_id: str,
+        file_bytes: bytes,
+        extension: Optional[str] = 'webm',
+    ) -> Dict[str, Any]:
+        """Persist a video blob for a recording and update DB path/size."""
+        if not recording_id or not isinstance(recording_id, str):
+            return {'success': False, 'error': 'Invalid recording_id'}
+        if not isinstance(file_bytes, (bytes, bytearray)) or len(file_bytes) == 0:
+            return {'success': False, 'error': 'Empty recording file'}
+        if not self._recording_exists(recording_id):
+            return {'success': False, 'error': 'Recording not found'}
+
+        try:
+            ext = self._normalize_extension(extension)
+            Path(self.storage_dir).mkdir(parents=True, exist_ok=True)
+            filename = f'{recording_id}.{ext}'
+            abs_path = os.path.join(self.storage_dir, filename)
+            with open(abs_path, 'wb') as out:
+                out.write(file_bytes)
+
+            # Keep sub-MB clips visible (short test / short drive clips).
+            size_mb = round(len(file_bytes) / (1024 * 1024), 6)
+            if size_mb <= 0 and len(file_bytes) > 0:
+                size_mb = 0.000001
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                UPDATE dashcam_recordings
+                SET file_path = ?, file_size_mb = ?
+                WHERE recording_id = ?
+                ''',
+                (abs_path, size_mb, recording_id),
+            )
+            conn.commit()
+            conn.close()
+
+            logger.info(f'Recording file saved: {recording_id} ({size_mb} MB)')
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'file_path': abs_path,
+                'file_size_mb': size_mb,
+            }
+        except Exception as e:
+            logger.error(f'Error saving recording file: {e}')
+            return {'success': False, 'error': str(e)}
+
+    def _unlink_recording_file(self, file_path: Optional[str]) -> None:
+        if not file_path:
+            return
+        try:
+            path = Path(file_path)
+            # Only delete files inside our storage directory.
+            storage_root = Path(self.storage_dir).resolve()
+            resolved = path.resolve()
+            if storage_root in resolved.parents or resolved.parent == storage_root:
+                if resolved.is_file():
+                    resolved.unlink()
+        except Exception as e:
+            logger.warning(f'Could not delete recording file {file_path}: {e}')
+
+    def _unlink_metadata_file(self, recording_id: Optional[str]) -> None:
+        if not recording_id:
+            return
+        self._unlink_recording_file(self._metadata_path(recording_id))
     
     def add_metadata(self, lat: float, lon: float, speed: float, heading: float) -> bool:
         """Add GPS metadata to current recording."""
@@ -189,15 +359,68 @@ class DashcamService:
         except Exception as e:
             logger.error(f"Error getting recordings: {e}")
             return []
-    
-    def delete_recording(self, recording_id: str) -> Dict[str, Any]:
-        """Delete a recording."""
+
+    def get_recording_file(self, recording_id: str) -> Dict[str, Any]:
+        """Resolve a recording's video file for playback/download."""
+        if not recording_id:
+            return {'success': False, 'error': 'Invalid recording_id'}
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            cursor.execute(
+                'SELECT file_path FROM dashcam_recordings WHERE recording_id = ?',
+                (recording_id,),
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if not row or not row[0]:
+                return {'success': False, 'error': 'Recording file not found'}
+
+            file_path = row[0]
+            path = Path(file_path)
+            storage_root = Path(self.storage_dir).resolve()
+            resolved = path.resolve()
+            if storage_root not in resolved.parents and resolved.parent != storage_root:
+                return {'success': False, 'error': 'Invalid recording file path'}
+            if not resolved.is_file():
+                return {'success': False, 'error': 'Recording file missing on disk'}
+
+            suffix = resolved.suffix.lower().lstrip('.') or 'webm'
+            mime = {
+                'webm': 'video/webm',
+                'mp4': 'video/mp4',
+                'ogg': 'video/ogg',
+            }.get(suffix, 'application/octet-stream')
+            return {
+                'success': True,
+                'recording_id': recording_id,
+                'file_path': str(resolved),
+                'mimetype': mime,
+                'download_name': resolved.name,
+            }
+        except Exception as e:
+            logger.error(f'Error resolving recording file: {e}')
+            return {'success': False, 'error': str(e)}
+    
+    def delete_recording(self, recording_id: str) -> Dict[str, Any]:
+        """Delete a recording and its video file if present."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT file_path FROM dashcam_recordings WHERE recording_id = ?',
+                (recording_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return {'success': False, 'error': 'Recording not found'}
+            file_path = row[0]
             cursor.execute('DELETE FROM dashcam_recordings WHERE recording_id = ?', (recording_id,))
             conn.commit()
             conn.close()
+            self._unlink_recording_file(file_path)
+            self._unlink_metadata_file(recording_id)
             logger.info(f"Recording deleted: {recording_id}")
             return {'success': True}
         except Exception as e:
@@ -205,13 +428,21 @@ class DashcamService:
             return {'success': False, 'error': str(e)}
     
     def cleanup_old_recordings(self) -> Dict[str, Any]:
-        """Delete recordings older than retention period."""
+        """Delete recordings older than retention period (DB + files)."""
         try:
             retention_days = self.settings['retention_days']
             cutoff_date = (datetime.now() - timedelta(days=retention_days)).isoformat()
             
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            cursor.execute('''
+                SELECT recording_id, file_path FROM dashcam_recordings
+                WHERE start_time < ? AND status = 'completed'
+            ''', (cutoff_date,))
+            stale = cursor.fetchall()
+            for recording_id, file_path in stale:
+                self._unlink_recording_file(file_path)
+                self._unlink_metadata_file(recording_id)
             cursor.execute('''
                 DELETE FROM dashcam_recordings 
                 WHERE start_time < ? AND status = 'completed'

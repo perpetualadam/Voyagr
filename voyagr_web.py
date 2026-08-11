@@ -89,13 +89,21 @@ load_dotenv(_env_path)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# Cap request bodies early (Werkzeug 413) — Voyagr has no large uploads; JSON API payloads are small.
-# Prevents trivial memory exhaustion from oversized POST bodies.
+# Cap request bodies early (Werkzeug 413). JSON APIs are small; dashcam video
+# uploads need a larger ceiling (see DASHCAM_MAX_UPLOAD_BYTES).
 try:
-    _max_body = int(os.getenv('MAX_CONTENT_LENGTH_BYTES', str(1 * 1024 * 1024)))
-except ValueError:
-    _max_body = 1 * 1024 * 1024
-app.config['MAX_CONTENT_LENGTH'] = max(64 * 1024, _max_body)
+    from dashcam_service import resolve_max_content_length_bytes
+
+    app.config['MAX_CONTENT_LENGTH'] = resolve_max_content_length_bytes(
+        os.getenv('MAX_CONTENT_LENGTH_BYTES'),
+        os.getenv('DASHCAM_MAX_UPLOAD_BYTES'),
+    )
+except ImportError:
+    try:
+        _max_body = int(os.getenv('MAX_CONTENT_LENGTH_BYTES', str(1 * 1024 * 1024)))
+    except ValueError:
+        _max_body = 1 * 1024 * 1024
+    app.config['MAX_CONTENT_LENGTH'] = max(64 * 1024, _max_body)
 
 
 @app.before_request

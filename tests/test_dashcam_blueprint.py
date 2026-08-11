@@ -46,8 +46,13 @@ class TestDashcamBlueprint(unittest.TestCase):
         conn.commit()
         conn.close()
         
-        # Initialize dashcam blueprint
-        init_dashcam_blueprint(self.app, db_path=self.db_path)
+        # Initialize dashcam blueprint with isolated storage
+        self.storage_dir = os.path.join(self.temp_dir, 'recordings')
+        init_dashcam_blueprint(
+            self.app,
+            db_path=self.db_path,
+            storage_dir=self.storage_dir,
+        )
         self.client = self.app.test_client()
     
     def tearDown(self):
@@ -130,6 +135,16 @@ class TestDashcamBlueprint(unittest.TestCase):
 
         data = json.loads(response.data)
         self.assertTrue(data['success'])
+
+        stop = json.loads(self.client.post('/api/dashcam/stop').data)
+        self.assertEqual(stop['metadata_points'], 1)
+
+        get_meta = self.client.get(f'/api/dashcam/recordings/{recording_id}/metadata')
+        self.assertEqual(get_meta.status_code, 200)
+        body = json.loads(get_meta.data)
+        self.assertTrue(body['success'])
+        self.assertEqual(body['metadata_points'], 1)
+        self.assertEqual(body['points'][0]['lat'], 51.5074)
     
     def test_recordings_list_endpoint(self):
         """Test GET /api/dashcam/recordings"""
@@ -145,6 +160,73 @@ class TestDashcamBlueprint(unittest.TestCase):
         self.assertIn('recordings', data)
         self.assertIsInstance(data['recordings'], list)
     
+    def test_upload_recording_endpoint(self):
+        """Test POST /api/dashcam/recordings/<id>/upload stores video bytes."""
+        start_response = self.client.post(
+            '/api/dashcam/start',
+            data=json.dumps({}),
+            content_type='application/json',
+        )
+        recording_id = json.loads(start_response.data)['recording_id']
+        self.client.post('/api/dashcam/stop', data=json.dumps({}), content_type='application/json')
+
+        payload = b'\x1aE\xdf\xa3uploaded-webm'
+        response = self.client.post(
+            f'/api/dashcam/recordings/{recording_id}/upload',
+            data=payload,
+            content_type='video/webm',
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data['success'])
+        self.assertTrue(os.path.isfile(data['file_path']))
+        with open(data['file_path'], 'rb') as f:
+            self.assertEqual(f.read(), payload)
+
+        listing = json.loads(self.client.get('/api/dashcam/recordings').data)
+        match = next(r for r in listing['recordings'] if r['recording_id'] == recording_id)
+        self.assertEqual(match['file_path'], data['file_path'])
+        self.assertGreater(match['file_size_mb'], 0)
+
+    def test_upload_recording_endpoint_missing_file(self):
+        start_response = self.client.post(
+            '/api/dashcam/start',
+            data=json.dumps({}),
+            content_type='application/json',
+        )
+        recording_id = json.loads(start_response.data)['recording_id']
+        self.client.post('/api/dashcam/stop')
+        response = self.client.post(
+            f'/api/dashcam/recordings/{recording_id}/upload',
+            data=b'',
+            content_type='video/webm',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(json.loads(response.data)['success'])
+
+    def test_get_recording_video_endpoint(self):
+        start_response = self.client.post(
+            '/api/dashcam/start',
+            data=json.dumps({}),
+            content_type='application/json',
+        )
+        recording_id = json.loads(start_response.data)['recording_id']
+        self.client.post('/api/dashcam/stop')
+        payload = b'\x1aE\xdf\xa3playable'
+        self.client.post(
+            f'/api/dashcam/recordings/{recording_id}/upload',
+            data=payload,
+            content_type='video/webm',
+        )
+
+        response = self.client.get(f'/api/dashcam/recordings/{recording_id}/video')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, payload)
+        self.assertIn('video/webm', response.content_type)
+
+        missing = self.client.get('/api/dashcam/recordings/dashcam_missing/video')
+        self.assertEqual(missing.status_code, 404)
+
     def test_delete_recording_endpoint(self):
         """Test DELETE /api/dashcam/recordings/<id>"""
         # Create a recording

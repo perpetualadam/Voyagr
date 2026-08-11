@@ -10,7 +10,25 @@ import os
 import sqlite3
 import json
 from datetime import datetime, timedelta
-from dashcam_service import DashcamService
+from dashcam_service import (
+    DashcamService,
+    DEFAULT_DASHCAM_MAX_UPLOAD_BYTES,
+    resolve_max_content_length_bytes,
+)
+
+
+class TestDashcamUploadLimits(unittest.TestCase):
+    def test_resolve_max_content_length_includes_dashcam_ceiling(self):
+        value = resolve_max_content_length_bytes(None, None)
+        self.assertEqual(value, DEFAULT_DASHCAM_MAX_UPLOAD_BYTES)
+
+    def test_resolve_max_content_length_respects_explicit_api_ceiling(self):
+        value = resolve_max_content_length_bytes(str(5 * 1024 * 1024), str(2 * 1024 * 1024))
+        self.assertEqual(value, 5 * 1024 * 1024)
+
+    def test_resolve_max_content_length_invalid_values_use_defaults(self):
+        value = resolve_max_content_length_bytes('nope', 'also-nope')
+        self.assertEqual(value, DEFAULT_DASHCAM_MAX_UPLOAD_BYTES)
 
 
 class TestDashcamService(unittest.TestCase):
@@ -85,6 +103,43 @@ class TestDashcamService(unittest.TestCase):
         )
         self.assertTrue(result)
         self.assertEqual(len(self.service.metadata_buffer), 1)
+
+    def test_stop_recording_persists_gps_metadata(self):
+        """GPS points must survive stop via sidecar + metadata_points column."""
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.add_metadata(51.5, -0.12, 30.0, 90.0)
+        self.service.add_metadata(51.51, -0.11, 32.0, 95.0)
+
+        stop = self.service.stop_recording()
+        self.assertTrue(stop['success'])
+        self.assertEqual(stop['metadata_points'], 2)
+        self.assertEqual(len(self.service.metadata_buffer), 0)
+
+        meta_path = os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+        self.assertTrue(os.path.isfile(meta_path))
+        with open(meta_path, 'r', encoding='utf-8') as fh:
+            payload = json.load(fh)
+        self.assertEqual(len(payload['points']), 2)
+        self.assertEqual(payload['points'][0]['lat'], 51.5)
+
+        recordings = self.service.get_recordings()
+        match = next(r for r in recordings if r['recording_id'] == recording_id)
+        self.assertEqual(match['metadata_points'], 2)
+
+        loaded = self.service.get_recording_metadata(recording_id)
+        self.assertTrue(loaded['success'])
+        self.assertEqual(loaded['metadata_points'], 2)
+
+    def test_delete_recording_removes_metadata_sidecar(self):
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.add_metadata(51.5, -0.12, 10.0, 0.0)
+        self.service.stop_recording()
+        meta_path = os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+        self.assertTrue(os.path.isfile(meta_path))
+        self.service.delete_recording(recording_id)
+        self.assertFalse(os.path.isfile(meta_path))
     
     def test_get_recordings(self):
         """Test retrieving recordings list"""
@@ -112,6 +167,61 @@ class TestDashcamService(unittest.TestCase):
         
         result = self.service.delete_recording(recording_id)
         self.assertTrue(result['success'])
+
+    def test_save_recording_file_persists_bytes_and_db_fields(self):
+        """Video bytes must land on disk and update file_path / file_size_mb."""
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.stop_recording()
+
+        payload = b'\x1aE\xdf\xa3fake-webm-bytes'
+        result = self.service.save_recording_file(
+            recording_id=recording_id,
+            file_bytes=payload,
+            extension='video/webm',
+        )
+        self.assertTrue(result['success'])
+        self.assertTrue(os.path.isfile(result['file_path']))
+        with open(result['file_path'], 'rb') as f:
+            self.assertEqual(f.read(), payload)
+
+        recordings = self.service.get_recordings()
+        match = next(r for r in recordings if r['recording_id'] == recording_id)
+        self.assertEqual(match['file_path'], result['file_path'])
+        self.assertGreater(match['file_size_mb'], 0)
+
+    def test_save_recording_file_rejects_unknown_id(self):
+        result = self.service.save_recording_file(
+            recording_id='dashcam_missing',
+            file_bytes=b'abc',
+            extension='webm',
+        )
+        self.assertFalse(result['success'])
+
+    def test_get_recording_file_returns_path_inside_storage(self):
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.stop_recording()
+        saved = self.service.save_recording_file(recording_id, b'video-bytes', 'webm')
+        result = self.service.get_recording_file(recording_id)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['file_path'], saved['file_path'])
+        self.assertEqual(result['mimetype'], 'video/webm')
+
+    def test_get_recording_file_missing_returns_error(self):
+        result = self.service.get_recording_file('dashcam_missing')
+        self.assertFalse(result['success'])
+
+    def test_delete_recording_removes_video_file(self):
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.stop_recording()
+        saved = self.service.save_recording_file(recording_id, b'video-data', 'webm')
+        self.assertTrue(os.path.isfile(saved['file_path']))
+
+        result = self.service.delete_recording(recording_id)
+        self.assertTrue(result['success'])
+        self.assertFalse(os.path.isfile(saved['file_path']))
     
     def test_cleanup_old_recordings(self):
         """Test cleanup of old recordings"""
@@ -123,6 +233,17 @@ class TestDashcamService(unittest.TestCase):
         self.service.update_settings({'retention_days': 0})
         result = self.service.cleanup_old_recordings()
         self.assertTrue(result['success'])
+
+    def test_cleanup_old_recordings_removes_files(self):
+        start = self.service.start_recording()
+        recording_id = start['recording_id']
+        self.service.stop_recording()
+        saved = self.service.save_recording_file(recording_id, b'old-video', 'webm')
+        self.service.update_settings({'retention_days': 0})
+        result = self.service.cleanup_old_recordings()
+        self.assertTrue(result['success'])
+        self.assertGreaterEqual(result['deleted_count'], 1)
+        self.assertFalse(os.path.isfile(saved['file_path']))
     
     def test_get_settings(self):
         """Test getting settings"""

@@ -121,6 +121,12 @@
         } else if (tab === 'dashcam') {
             if (dashcamTab) dashcamTab.style.display = 'block';
             sheetTitle.textContent = '📹 Dashcam';
+            if (typeof window.loadDashcamRecordings === 'function') {
+                window.loadDashcamRecordings();
+            }
+            if (typeof window.loadDashcamSettings === 'function') {
+                window.loadDashcamSettings();
+            }
         } else if (tab === 'navigation') {
             if (navigationTab) navigationTab.style.display = 'block';
             sheetTitle.textContent = '🗺️ Navigation';
