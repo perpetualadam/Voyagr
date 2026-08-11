@@ -151,6 +151,7 @@
     <script defer src="/static/js/modules/navigation/battery-saving.js?v=20260712aaah"></script>
     <script defer src="/static/js/modules/navigation/app-state.js?v=20260712aaac"></script>
     <script defer src="/static/js/modules/navigation/gesture-control.js?v=20260811noshake"></script>
+    <script defer src="/static/js/modules/navigation/dashcam-capture.js?v=20260811dash1"></script>
     <script defer src="/static/js/modules/navigation/legacy-prefs-restore.js?v=20260811noshake"></script>
     <script defer src="/static/js/modules/navigation/smart-zoom.js?v=20260711zzzj"></script>
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260811noshake"></script>
@@ -1325,6 +1326,9 @@
                             <div id="dashcamRecordingTime" style="font-size: 12px; color: #666; margin-top: 8px; display: none;">Recording time: <span id="recordingDuration">00:00:00</span></div>
                         </div>
 
+                        <!-- Live camera preview (shown while recording) -->
+                        <video id="dashcamPreview" muted autoplay playsinline style="display: none; width: 100%; max-height: 220px; border-radius: 8px; margin-bottom: 15px; background: #111; object-fit: cover;"></video>
+
                         <!-- Recording Controls -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                             <button type="button" id="dashcamStartBtn" class="routing-mode-btn" onclick="startDashcamRecording()" style="background: #4CAF50; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px; touch-action: manipulation;">🔴 Start Recording</button>
@@ -1940,7 +1944,11 @@
             recordingStartTime: null,
             recordingDurationInterval: null,
             currentRecordingId: null,
-            recordingMetadata: []
+            recordingMetadata: [],
+            mediaStream: null,
+            mediaRecorder: null,
+            recordingChunks: [],
+            recorderMimeType: 'video/webm',
         };
 
         // Initialize dashcam on page load
@@ -1955,58 +1963,185 @@
             updateDashcamSettings();
         }
 
+        function getDashcamCapture() {
+            return window.VoyagrDashcamCapture || null;
+        }
+
+        function readDashcamCaptureSettings() {
+            const audioBtn = document.getElementById('dashcamAudio');
+            return {
+                resolution: (document.getElementById('dashcamResolution') || {}).value || '720p',
+                fps: (document.getElementById('dashcamFps') || {}).value || '30',
+                audioEnabled: !!(audioBtn && audioBtn.classList.contains('active')),
+            };
+        }
+
+        function setDashcamPreviewStream(stream) {
+            const preview = document.getElementById('dashcamPreview');
+            if (!preview) return;
+            preview.srcObject = stream || null;
+            preview.style.display = stream ? 'block' : 'none';
+        }
+
+        function releaseDashcamMedia() {
+            const DC = getDashcamCapture();
+            if (DC) DC.stopMediaStreamTracks(dashcamState.mediaStream);
+            else if (dashcamState.mediaStream && dashcamState.mediaStream.getTracks) {
+                dashcamState.mediaStream.getTracks().forEach((t) => { try { t.stop(); } catch (e) { /* ignore */ } });
+            }
+            dashcamState.mediaStream = null;
+            dashcamState.mediaRecorder = null;
+            dashcamState.recordingChunks = [];
+            setDashcamPreviewStream(null);
+        }
+
+        function stopMediaRecorderToBlob(recorder, chunks, mimeType) {
+            return new Promise((resolve) => {
+                if (!recorder || recorder.state === 'inactive') {
+                    resolve(new Blob(chunks || [], { type: mimeType || 'video/webm' }));
+                    return;
+                }
+                recorder.onstop = () => {
+                    resolve(new Blob(chunks || [], { type: mimeType || 'video/webm' }));
+                };
+                try {
+                    recorder.stop();
+                } catch (e) {
+                    resolve(new Blob(chunks || [], { type: mimeType || 'video/webm' }));
+                }
+            });
+        }
+
+        async function uploadDashcamBlob(recordingId, blob, mimeType) {
+            const DC = getDashcamCapture();
+            const plan = DC
+                ? DC.buildUploadRequestPlan({ recordingId, mimeType })
+                : {
+                    shouldUpload: !!recordingId,
+                    url: '/api/dashcam/recordings/' + encodeURIComponent(recordingId) + '/upload',
+                    method: 'POST',
+                    headers: { 'Content-Type': (mimeType || 'video/webm').split(';')[0] },
+                };
+            if (!plan.shouldUpload || !blob || !blob.size) {
+                return { success: false, error: plan.error || 'Empty recording' };
+            }
+            const response = await fetch(plan.url, {
+                method: plan.method,
+                headers: plan.headers,
+                body: blob,
+            });
+            return response.json();
+        }
+
         async function startDashcamRecording() {
+            const DC = getDashcamCapture();
+            if (!DC || !DC.isCaptureSupported({ navigator: navigator, window: window })) {
+                sendNotification('📹 Dashcam', 'Camera recording is not supported in this browser', 'error');
+                return;
+            }
+
+            let stream = null;
             try {
+                const settings = readDashcamCaptureSettings();
+                const constraints = DC.buildMediaConstraints(settings);
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+
                 const response = await fetch('/api/dashcam/start', { method: 'POST' });
                 const data = await response.json();
-
-                if (data.success) {
-                    dashcamState.isRecording = true;
-                    dashcamState.recordingStartTime = Date.now();
-                    dashcamState.currentRecordingId = data.recording_id;
-                    dashcamState.recordingMetadata = [];
-
-                    // Update UI
-                    updateDashcamUI();
-                    startRecordingTimer();
-                    sendNotification('📹 Dashcam', 'Dashcam recording started', 'success');
-
-                    // Show recording indicator
-                    document.getElementById('dashcamIndicator').style.display = 'block';
-
-                    // Start collecting GPS metadata
-                    startDashcamMetadataCollection();
-                } else {
-                    sendNotification('📹 Dashcam', 'Failed to start recording: ' + data.error, 'error');
+                if (!data.success) {
+                    DC.stopMediaStreamTracks(stream);
+                    sendNotification('📹 Dashcam', 'Failed to start recording: ' + (data.error || 'unknown'), 'error');
+                    return;
                 }
+
+                const mimeType = DC.pickSupportedMimeType(
+                    window.MediaRecorder.isTypeSupported.bind(window.MediaRecorder)
+                );
+                const chunks = [];
+                const recorderOptions = mimeType ? { mimeType: mimeType } : undefined;
+                const recorder = new MediaRecorder(stream, recorderOptions);
+                recorder.ondataavailable = function (event) {
+                    if (event.data && event.data.size > 0) chunks.push(event.data);
+                };
+                recorder.start(1000);
+
+                dashcamState.isRecording = true;
+                dashcamState.recordingStartTime = Date.now();
+                dashcamState.currentRecordingId = data.recording_id;
+                dashcamState.recordingMetadata = [];
+                dashcamState.mediaStream = stream;
+                dashcamState.mediaRecorder = recorder;
+                dashcamState.recordingChunks = chunks;
+                dashcamState.recorderMimeType = mimeType || recorder.mimeType || 'video/webm';
+
+                setDashcamPreviewStream(stream);
+                updateDashcamUI();
+                startRecordingTimer();
+                document.getElementById('dashcamIndicator').style.display = 'block';
+                startDashcamMetadataCollection();
+                sendNotification('📹 Dashcam', 'Dashcam recording started', 'success');
             } catch (error) {
                 console.error('Error starting dashcam:', error);
-                sendNotification('📹 Dashcam', 'Error starting dashcam recording', 'error');
+                if (stream) {
+                    const capture = getDashcamCapture();
+                    if (capture) capture.stopMediaStreamTracks(stream);
+                }
+                releaseDashcamMedia();
+                const message = (error && error.name === 'NotAllowedError')
+                    ? 'Camera permission denied'
+                    : 'Error starting dashcam recording';
+                sendNotification('📹 Dashcam', message, 'error');
             }
         }
 
         async function stopDashcamRecording() {
+            if (!dashcamState.isRecording && !dashcamState.mediaRecorder) {
+                return;
+            }
+
+            const recordingId = dashcamState.currentRecordingId;
+            const recorder = dashcamState.mediaRecorder;
+            const chunks = dashcamState.recordingChunks;
+            const mimeType = dashcamState.recorderMimeType || 'video/webm';
+
             try {
+                dashcamState.isRecording = false;
+                clearInterval(dashcamState.recordingDurationInterval);
+
+                const blob = await stopMediaRecorderToBlob(recorder, chunks, mimeType);
+                releaseDashcamMedia();
+
                 const response = await fetch('/api/dashcam/stop', { method: 'POST' });
                 const data = await response.json();
 
-                if (data.success) {
-                    dashcamState.isRecording = false;
-                    clearInterval(dashcamState.recordingDurationInterval);
+                updateDashcamUI();
+                document.getElementById('dashcamIndicator').style.display = 'none';
 
-                    // Update UI
-                    updateDashcamUI();
-                    document.getElementById('dashcamIndicator').style.display = 'none';
-
-                    sendNotification('📹 Dashcam', 'Dashcam recording stopped', 'success');
-
-                    // Reload recordings list
+                if (!data.success) {
+                    sendNotification('📹 Dashcam', 'Failed to stop recording: ' + (data.error || 'unknown'), 'error');
                     loadDashcamRecordings();
-                } else {
-                    sendNotification('📹 Dashcam', 'Failed to stop recording: ' + data.error, 'error');
+                    return;
                 }
+
+                const id = recordingId || data.recording_id;
+                if (blob && blob.size > 0 && id) {
+                    const upload = await uploadDashcamBlob(id, blob, mimeType);
+                    if (upload.success) {
+                        sendNotification('📹 Dashcam', 'Dashcam recording saved', 'success');
+                    } else {
+                        sendNotification('📹 Dashcam', 'Recording stopped but upload failed: ' + (upload.error || 'unknown'), 'error');
+                    }
+                } else {
+                    sendNotification('📹 Dashcam', 'Dashcam recording stopped (no video data)', 'info');
+                }
+
+                loadDashcamRecordings();
             } catch (error) {
                 console.error('Error stopping dashcam:', error);
+                releaseDashcamMedia();
+                dashcamState.isRecording = false;
+                updateDashcamUI();
+                document.getElementById('dashcamIndicator').style.display = 'none';
                 sendNotification('📹 Dashcam', 'Error stopping dashcam recording', 'error');
             }
         }
