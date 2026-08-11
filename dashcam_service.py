@@ -26,6 +26,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Default ceiling for dashcam video uploads (overridable via DASHCAM_MAX_UPLOAD_BYTES).
+DEFAULT_DASHCAM_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+DEFAULT_API_MAX_CONTENT_BYTES = 1 * 1024 * 1024
+
+
+def resolve_max_content_length_bytes(
+    max_content_length_bytes: Optional[str] = None,
+    dashcam_max_upload_bytes: Optional[str] = None,
+) -> int:
+    """
+    Resolve Flask MAX_CONTENT_LENGTH.
+
+    JSON APIs stay small by default, but dashcam video uploads need a larger
+    ceiling. Explicit env values win; invalid values fall back to defaults.
+    """
+    def _parse(raw: Optional[str], default: int) -> int:
+        if raw is None or str(raw).strip() == '':
+            return default
+        try:
+            return int(str(raw).strip())
+        except (TypeError, ValueError):
+            return default
+
+    api_max = _parse(max_content_length_bytes, DEFAULT_API_MAX_CONTENT_BYTES)
+    dashcam_max = _parse(dashcam_max_upload_bytes, DEFAULT_DASHCAM_MAX_UPLOAD_BYTES)
+    return max(64 * 1024, api_max, dashcam_max)
+
 
 class DashcamService:
     """

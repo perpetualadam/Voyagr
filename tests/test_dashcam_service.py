@@ -10,7 +10,25 @@ import os
 import sqlite3
 import json
 from datetime import datetime, timedelta
-from dashcam_service import DashcamService
+from dashcam_service import (
+    DashcamService,
+    DEFAULT_DASHCAM_MAX_UPLOAD_BYTES,
+    resolve_max_content_length_bytes,
+)
+
+
+class TestDashcamUploadLimits(unittest.TestCase):
+    def test_resolve_max_content_length_includes_dashcam_ceiling(self):
+        value = resolve_max_content_length_bytes(None, None)
+        self.assertEqual(value, DEFAULT_DASHCAM_MAX_UPLOAD_BYTES)
+
+    def test_resolve_max_content_length_respects_explicit_api_ceiling(self):
+        value = resolve_max_content_length_bytes(str(5 * 1024 * 1024), str(2 * 1024 * 1024))
+        self.assertEqual(value, 5 * 1024 * 1024)
+
+    def test_resolve_max_content_length_invalid_values_use_defaults(self):
+        value = resolve_max_content_length_bytes('nope', 'also-nope')
+        self.assertEqual(value, DEFAULT_DASHCAM_MAX_UPLOAD_BYTES)
 
 
 class TestDashcamService(unittest.TestCase):
