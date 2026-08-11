@@ -86,6 +86,26 @@
     }
 
     /**
+     * When local MediaRecorder setup fails after POST /api/dashcam/start,
+     * the server session must be aborted or it stays recording_active.
+     *
+     * @param {Object} [input]
+     * @param {boolean} [input.serverSessionStarted]
+     * @returns {{ shouldAbort: boolean, url?: string, method?: string }}
+     */
+    function buildAbortServerSessionPlan(input) {
+        input = input || {};
+        if (!input.serverSessionStarted) {
+            return { shouldAbort: false };
+        }
+        return {
+            shouldAbort: true,
+            url: '/api/dashcam/stop',
+            method: 'POST',
+        };
+    }
+
+    /**
      * @param {MediaStream|null|undefined} stream
      * @returns {{ stoppedTracks: number }}
      */
@@ -128,6 +148,7 @@
         buildMediaConstraints: buildMediaConstraints,
         pickSupportedMimeType: pickSupportedMimeType,
         buildUploadRequestPlan: buildUploadRequestPlan,
+        buildAbortServerSessionPlan: buildAbortServerSessionPlan,
         stopMediaStreamTracks: stopMediaStreamTracks,
         isCaptureSupported: isCaptureSupported,
     };
