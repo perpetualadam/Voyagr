@@ -97,8 +97,10 @@ FAQ: List[Dict[str, str]] = [
         "q": "How does Voyagr handle my location data?",
         "a": (
             "Location is processed in real time to provide navigation and is not "
-            "stored on our servers unless you explicitly save a trip. Preferences "
-            "stay in your browser's local storage. See /privacy for full details."
+            "stored on our servers unless you explicitly save a trip or start an "
+            "optional dashcam recording (GPS metadata may then be saved with that "
+            "recording). Preferences stay in your browser's local storage. See "
+            "/privacy for full details."
         ),
     },
     {
@@ -202,8 +204,8 @@ def privacy_title() -> str:
 def privacy_description() -> str:
     # Keep within ~150–160 characters for SERP / social description tags.
     return (
-        f"Privacy Policy for {APP_NAME}: how we handle location, routes, "
-        "accounts, and preferences under UK GDPR, and your data rights."
+        f"Privacy Policy for {APP_NAME}: location, routes, optional dashcam "
+        "recordings, accounts, and your data rights under UK GDPR."
     )
 
 
