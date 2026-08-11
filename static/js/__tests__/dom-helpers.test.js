@@ -199,7 +199,12 @@ describe('dom-helpers', () => {
                 </ul>
             </div>
             <div id="safetyNoticeOverlay">
-                <p id="safetyNoticeText">You use Voyagr at your own risk.</p>
+                <div class="safety-notice-body">
+                    <p id="safetyNoticeText">You use Voyagr at your own risk.</p>
+                </div>
+                <div class="safety-notice-footer">
+                    <label id="safetyNoticeFooterLabel">I understand</label>
+                </div>
             </div>
         `;
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
@@ -213,6 +218,9 @@ describe('dom-helpers', () => {
         ).allowNativeTouchMove).toBe(true);
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('safetyNoticeText')
+        ).allowNativeTouchMove).toBe(true);
+        expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
+            document.getElementById('safetyNoticeFooterLabel')
         ).allowNativeTouchMove).toBe(true);
         expect(Dom.buildPullToRefreshTouchMoveAllowPlan(
             document.getElementById('map')

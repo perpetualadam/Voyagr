@@ -211,9 +211,11 @@
         // body pull-to-refresh preventDefault blocks scrolling their overflow lists.
         '.road-report-modal-panel',
         // First-run "Before you drive" notice: plain text nodes are not button/input/label,
-        // so without this selector mobile touchmove preventDefault blocks overlay scroll
+        // so without these selectors mobile touchmove preventDefault blocks overlay scroll
         // and makes the consent checkbox/continue control unreachable or unusable.
         '#safetyNoticeOverlay',
+        '.safety-notice-body',
+        '.safety-notice-footer',
         '.fab',
         'button',
         'a',
