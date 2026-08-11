@@ -87,6 +87,20 @@ def test_picovoice_web_assets_ok_requires_access_key(monkeypatch):
     assert kwargs_with_key["picovoice_access_key"] == "test-access-key"
 
 
+def test_firefox_browser_hint_off_by_default(monkeypatch):
+    """Do not push Firefox by default; Chrome/other browsers are the common path."""
+    from voyagr.index_page_context import build_index_template_kwargs
+
+    monkeypatch.delenv("VOYAGR_SHOW_FIREFOX_BROWSER_HINT", raising=False)
+    assert build_index_template_kwargs()["show_firefox_browser_hint"] is False
+
+    monkeypatch.setenv("VOYAGR_SHOW_FIREFOX_BROWSER_HINT", "1")
+    assert build_index_template_kwargs()["show_firefox_browser_hint"] is True
+
+    monkeypatch.setenv("VOYAGR_SHOW_FIREFOX_BROWSER_HINT", "false")
+    assert build_index_template_kwargs()["show_firefox_browser_hint"] is False
+
+
 def test_sherpa_lab_page_static(client):
     rv = client.get("/static/sherpa-kws-spike.html")
     assert rv.status_code == 200

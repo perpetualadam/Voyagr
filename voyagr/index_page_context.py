@@ -78,10 +78,11 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         json_ld_document(), separators=(",", ":"), ensure_ascii=False
     )
     _tt_key, _tt_proxy = tomtom_client_surface()
-    # Set VOYAGR_SHOW_FIREFOX_BROWSER_HINT=0 to disable the Firefox recommendation banner.
+    # Firefox recommendation banner is off by default (Chrome/other browsers are
+    # the common working path). Opt in with VOYAGR_SHOW_FIREFOX_BROWSER_HINT=1.
     show_firefox_browser_hint = os.getenv(
-        "VOYAGR_SHOW_FIREFOX_BROWSER_HINT", "true"
-    ).strip().lower() not in ("0", "false", "no")
+        "VOYAGR_SHOW_FIREFOX_BROWSER_HINT", "false"
+    ).strip().lower() in ("1", "true", "yes", "on")
     # Resolve OG dimensions once so index meta matches privacy (and custom cards).
     og_dims = og_image_dimensions()
     return {
