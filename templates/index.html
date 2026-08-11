@@ -2041,6 +2041,7 @@
             }
 
             let stream = null;
+            let serverSessionStarted = false;
             try {
                 const settings = readDashcamCaptureSettings();
                 const constraints = DC.buildMediaConstraints(settings);
@@ -2053,6 +2054,7 @@
                     sendNotification('📹 Dashcam', 'Failed to start recording: ' + (data.error || 'unknown'), 'error');
                     return;
                 }
+                serverSessionStarted = true;
 
                 const mimeType = DC.pickSupportedMimeType(
                     window.MediaRecorder.isTypeSupported.bind(window.MediaRecorder)
@@ -2087,6 +2089,13 @@
                     if (capture) capture.stopMediaStreamTracks(stream);
                 }
                 releaseDashcamMedia();
+                if (serverSessionStarted) {
+                    try {
+                        await fetch('/api/dashcam/stop', { method: 'POST' });
+                    } catch (stopError) {
+                        console.error('Error rolling back dashcam session:', stopError);
+                    }
+                }
                 const message = (error && error.name === 'NotAllowedError')
                     ? 'Camera permission denied'
                     : 'Error starting dashcam recording';
@@ -2117,20 +2126,23 @@
                 updateDashcamUI();
                 document.getElementById('dashcamIndicator').style.display = 'none';
 
-                if (!data.success) {
-                    sendNotification('📹 Dashcam', 'Failed to stop recording: ' + (data.error || 'unknown'), 'error');
-                    loadDashcamRecordings();
-                    return;
-                }
-
                 const id = recordingId || data.recording_id;
                 if (blob && blob.size > 0 && id) {
                     const upload = await uploadDashcamBlob(id, blob, mimeType);
-                    if (upload.success) {
+                    if (!data.success) {
+                        sendNotification(
+                            '📹 Dashcam',
+                            'Failed to stop recording: ' + (data.error || 'unknown')
+                                + (upload.success ? ' (video saved)' : ''),
+                            'error'
+                        );
+                    } else if (upload.success) {
                         sendNotification('📹 Dashcam', 'Dashcam recording saved', 'success');
                     } else {
                         sendNotification('📹 Dashcam', 'Recording stopped but upload failed: ' + (upload.error || 'unknown'), 'error');
                     }
+                } else if (!data.success) {
+                    sendNotification('📹 Dashcam', 'Failed to stop recording: ' + (data.error || 'unknown'), 'error');
                 } else {
                     sendNotification('📹 Dashcam', 'Dashcam recording stopped (no video data)', 'info');
                 }
