@@ -39,7 +39,7 @@ def post_valhalla_route(url: str, payload: Dict[str, Any], headers: Dict[str, st
 
     Mirrors the previous inline try/except in ``calculate_route``:
       - success/HTTP response  -> (response, None, False)
-      - request timeout        -> (None, None, True)   [caller returns HTTP 408]
+      - request timeout        -> (None, None, True)   [caller sets valhalla_error and falls back]
       - other request failure  -> (None, "Routing service unreachable: <e>", False)
 
     HTTP status handling and JSON parsing stay in the caller.
