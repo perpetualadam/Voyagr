@@ -1602,9 +1602,11 @@ def calculate_route():
             # HTTP POST + transport-error classification extracted to
             # orchestrator.post_valhalla_route (status handling/parsing stay here).
             _post_outcome = post_valhalla_route(url, payload, headers, route_timeout)
+            # Timeout is a Valhalla failure, not a hard API failure: fall through to
+            # GraphHopper recovery / OSRM like other engine errors (do not return 408 here).
             if _post_outcome.timed_out:
                 print(f"[Valhalla] Request timed out after {route_timeout}s")
-                return jsonify({'error': 'Route calculation timed out. Try a shorter route or moving start/end points closer.'}), 408
+                valhalla_error = f"Timeout (>{route_timeout}s)"
             response = _post_outcome.response
             if _post_outcome.error:
                 print(f"[Valhalla] Request failed: {_post_outcome.error}")
@@ -1760,8 +1762,9 @@ def calculate_route():
                     return jsonify(response_data)
                 else:
                     valhalla_error = f"Unexpected response format: {route_data.keys()}"
-            else:
+            elif response is not None:
                 valhalla_error = f"HTTP {response.status_code}"
+            # else: transport failure already set valhalla_error (timeout / unreachable)
         except requests.exceptions.Timeout:
             valhalla_error = "Timeout (>10s)"
             print(f"[Valhalla] Timeout error: {valhalla_error}")

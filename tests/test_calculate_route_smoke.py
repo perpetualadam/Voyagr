@@ -335,6 +335,63 @@ class CalculateRouteSmokeTest(unittest.TestCase):
         self.assertTrue(d.get('success'), f"error: {d.get('error')}")
         self.assertGreaterEqual(len(d.get('routes') or []), 1)
 
+    def test_valhalla_timeout_falls_through_to_osrm(self):
+        """
+        Valhalla request timeout must not hard-fail with HTTP 408; OSRM fallback
+        should still return a usable route.
+        """
+        import polyline
+        from voyagr.services.routing.orchestrator import ValhallaPostOutcome
+
+        coords = [(53.536, -1.380), (53.525, -1.260), (53.517, -1.150)]
+        geom = polyline.encode(coords, 5)
+
+        class _OsrmResp:
+            status_code = 200
+            text = ''
+
+            def json(self):
+                return {
+                    'code': 'Ok',
+                    'routes': [{
+                        'distance': 18000,
+                        'duration': 1200,
+                        'geometry': geom,
+                        'legs': [{
+                            'annotation': {'maxspeed': [{'speed': 48, 'unit': 'km/h'}] * 3},
+                            'steps': [
+                                {
+                                    'distance': 18000, 'duration': 1200, 'name': 'A635', 'ref': 'A635',
+                                    'maneuver': {'type': 'depart', 'location': [-1.380, 53.536]},
+                                },
+                                {
+                                    'distance': 0, 'duration': 0, 'name': '', 'ref': '',
+                                    'maneuver': {'type': 'arrive', 'location': [-1.150, 53.517]},
+                                },
+                            ],
+                        }],
+                    }],
+                }
+
+        timed_out = ValhallaPostOutcome(response=None, error=None, timed_out=True)
+        with patch.object(vw, 'route_with_graphhopper', return_value=None), \
+             patch.object(vw, 'attempt_graphhopper_camera_route', return_value=(None, 'skipped')), \
+             patch.object(vw, 'fetch_hazards_for_route', return_value={}), \
+             patch.object(vw, 'fetch_tomtom_incidents', return_value={}), \
+             patch.object(vw, 'post_valhalla_route', return_value=timed_out), \
+             patch.object(vw.requests, 'get', return_value=_OsrmResp()):
+            r = self._post({
+                'start': '53.536,-1.380', 'end': '53.517,-1.150',
+                'routing_mode': 'auto', 'enable_hazard_avoidance': False,
+                'force_refresh': True,
+            })
+        self.assertNotEqual(r.status_code, 408, r.get_data(as_text=True)[:500])
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertTrue(d.get('success'), f"error: {d.get('error')}")
+        self.assertIn('OSRM', d.get('source') or '')
+        self.assertGreaterEqual(len(d.get('routes') or []), 1)
+
 
 if __name__ == '__main__':
     unittest.main()
