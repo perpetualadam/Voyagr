@@ -43,6 +43,8 @@ RETIRED_SETTINGS_PHRASES = [
     'Avoid Traffic Lights',
     'OpenStreetMap',
     'SCDB',
+    'mapped enforcement points',
+    'steer clear of mapped',
 ]
 
 
