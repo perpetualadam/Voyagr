@@ -64,6 +64,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrMapOverlayToggles = require('../modules/map/map-overlay-toggles');
         global.VoyagrMapView3D = require('../modules/map/map-view-3d');
         global.VoyagrMapTheme = require('../modules/map/map-theme');
+        global.VoyagrCenterOnLocation = require('../modules/map/center-on-location');
         global.VoyagrMapRecovery = require('../modules/map/map-recovery');
         global.VoyagrCameraMapMarkers = require('../modules/map/camera-map-markers');
         global.VoyagrHazardMapMarkers = require('../modules/map/hazard-map-markers');
