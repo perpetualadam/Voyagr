@@ -65,6 +65,7 @@
         mapOverlayToggles: 'VoyagrMapOverlayToggles',
         mapView3D: 'VoyagrMapView3D',
         mapTheme: 'VoyagrMapTheme',
+        centerOnLocation: 'VoyagrCenterOnLocation',
         mapRecovery: 'VoyagrMapRecovery',
         cameraMapMarkers: 'VoyagrCameraMapMarkers',
         hazardMapMarkers: 'VoyagrHazardMapMarkers',

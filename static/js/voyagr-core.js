@@ -227,10 +227,30 @@ function initializeMap() {
     }
     window.__voyagrMapCancelRecoverTimers = voyagrMapCancelRecoverTimers;
 
+    function voyagrCenterMapOnLocationEnabled() {
+        try {
+            const raw = (typeof localStorage !== 'undefined')
+                ? localStorage.getItem('centerMapOnLocation')
+                : null;
+            if (typeof VoyagrCenterOnLocation !== 'undefined'
+                && typeof VoyagrCenterOnLocation.resolveCenterOnLocationEnabledFromStorage === 'function') {
+                return VoyagrCenterOnLocation.resolveCenterOnLocationEnabledFromStorage(raw);
+            }
+            if (raw === null || raw === undefined || raw === '') return true;
+            return raw === '1' || raw === 'true';
+        } catch (_) {
+            return true;
+        }
+    }
+
     function voyagrMapFlyToUserWhenReady(lat, lon) {
         const doFly = () => {
             try {
                 if (!map || typeof map.flyTo !== 'function') return;
+                if (!voyagrCenterMapOnLocationEnabled()) {
+                    console.log('[Init] Center on my location disabled — keeping default view');
+                    return;
+                }
                 console.log(`[Init] Centering on user: [${lat}, ${lon}]`);
                 map.flyTo({
                     center: [lon, lat],
@@ -1118,7 +1138,8 @@ function initializeMap() {
     );
 
     // Attempt to center on current location after the basemap has painted (London default first).
-    if (navigator.geolocation) {
+    // Skipped when the user disables "Center on my location" in Map & display settings.
+    if (navigator.geolocation && voyagrCenterMapOnLocationEnabled()) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 voyagrMapFlyToUserWhenReady(
@@ -1131,6 +1152,8 @@ function initializeMap() {
             },
             { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
         );
+    } else if (!voyagrCenterMapOnLocationEnabled()) {
+        console.log('[Init] Center on my location disabled — skipping GPS recenter');
     }
     // Add navigation controls (zoom and rotation) - positioned bottom-left to avoid
     // collision with speed widget and notifications in top-right

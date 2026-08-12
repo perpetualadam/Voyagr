@@ -53,6 +53,7 @@
             vehicleType: rt().getCurrentVehicleType(),
             routingMode: rt().getCurrentRoutingMode(),
             smartZoomEnabled: rt().getSmartZoomEnabled(),
+            centerMapOnLocation: rt().getCenterMapOnLocationEnabled(),
             showCamerasEnabled: rt().getShowCamerasEnabled(),
             showOsmTrafficLightsEnabled: rt().getShowOsmTrafficLightsEnabled(),
             showOsmRailwayCrossingsEnabled: rt().getShowOsmRailwayCrossingsEnabled(),
@@ -97,6 +98,7 @@
                 case 'currentVehicleType': rt().setCurrentVehicleType(value); break;
                 case 'currentRoutingMode': rt().setCurrentRoutingMode(value); break;
                 case 'smartZoomEnabled': rt().setSmartZoomEnabled(value); break;
+                case 'centerMapOnLocation': rt().setCenterMapOnLocationEnabled(value); break;
                 case 'autoTrafficUpdateEnabled':
                     root.VoyagrTrafficOrchestration.applyTrafficSettingsPatch('autoTrafficUpdateEnabled', value);
                     break;
