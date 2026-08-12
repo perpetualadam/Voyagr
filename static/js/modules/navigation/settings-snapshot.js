@@ -20,6 +20,7 @@
         'mapTheme',
         'uiTheme',
         'smartZoomEnabled',
+        'centerMapOnLocation',
         'showCamerasEnabled',
         'showOsmTrafficLightsEnabled',
         'showOsmRailwayCrossingsEnabled',
@@ -67,6 +68,7 @@
             mapTheme: input.mapTheme,
             uiTheme: input.uiTheme,
             smartZoomEnabled: input.smartZoomEnabled,
+            centerMapOnLocation: input.centerMapOnLocation,
             showCamerasEnabled: input.showCamerasEnabled,
             showOsmTrafficLightsEnabled: input.showOsmTrafficLightsEnabled,
             showOsmRailwayCrossingsEnabled: input.showOsmRailwayCrossingsEnabled,
@@ -102,6 +104,7 @@
             mapTheme: formState.mapTheme != null ? formState.mapTheme : 'standard',
             uiTheme: formState.uiTheme != null ? formState.uiTheme : 'light',
             smartZoomEnabled: runtime.smartZoomEnabled,
+            centerMapOnLocation: runtime.centerMapOnLocation,
             showCamerasEnabled: runtime.showCamerasEnabled,
             showOsmTrafficLightsEnabled: runtime.showOsmTrafficLightsEnabled,
             showOsmRailwayCrossingsEnabled: runtime.showOsmRailwayCrossingsEnabled,
@@ -314,6 +317,10 @@
         if (settings.smartZoomEnabled !== undefined) {
             runtime.smartZoomEnabled = settings.smartZoomEnabled;
             localStoragePatches.smartZoomEnabled = settings.smartZoomEnabled ? '1' : '0';
+        }
+        if (settings.centerMapOnLocation !== undefined) {
+            runtime.centerMapOnLocation = !!settings.centerMapOnLocation;
+            localStoragePatches.centerMapOnLocation = runtime.centerMapOnLocation ? '1' : '0';
         }
         if (settings.showCamerasEnabled !== undefined) {
             runtime.showCamerasEnabled = settings.showCamerasEnabled;
@@ -751,7 +758,7 @@
         'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
         'pref_tolls', 'pref_caz', 'pref_cameras',
         'pref_trafficLightsAvoid', 'pref_railwayCrossingsAvoid',
-        'mapTheme', 'smartZoomEnabled',
+        'mapTheme', 'smartZoomEnabled', 'centerMapOnLocation',
         'parkingPreferences',
         'autoTrafficUpdate', 'autoRerouteOnDeviation', 'routeTrafficEnabled',
         'showCamerasEnabled', 'showOsmTrafficLightsOnMap',
@@ -774,6 +781,7 @@
                 currentVehicleType: 'petrol_diesel',
                 currentRoutingMode: 'auto',
                 smartZoomEnabled: true,
+                centerMapOnLocation: true,
                 autoTrafficUpdateEnabled: true,
                 autoRerouteOnDeviationEnabled: true,
                 routeTrafficEnabled: true,
@@ -868,6 +876,9 @@
         if (runtime.currentRoutingMode) patches.push({ key: 'currentRoutingMode', value: runtime.currentRoutingMode });
         if (runtime.smartZoomEnabled !== undefined) {
             patches.push({ key: 'smartZoomEnabled', value: !!runtime.smartZoomEnabled });
+        }
+        if (runtime.centerMapOnLocation !== undefined) {
+            patches.push({ key: 'centerMapOnLocation', value: !!runtime.centerMapOnLocation });
         }
         if (runtime.autoTrafficUpdateEnabled !== undefined) {
             patches.push({ key: 'autoTrafficUpdateEnabled', value: !!runtime.autoTrafficUpdateEnabled });
@@ -1118,6 +1129,9 @@
             uiTheme: input.uiTheme || 'light',
             toggleButtons: {
                 smartZoom: !!input.smartZoomEnabled,
+                centerOnLocation: input.centerMapOnLocation !== undefined
+                    ? !!input.centerMapOnLocation
+                    : true,
                 autoTrafficUpdate: !!input.autoTrafficUpdateEnabled,
                 autoRerouteOnDeviation: !!input.autoRerouteOnDeviationEnabled,
                 routeTraffic: !!input.routeTrafficEnabled,
@@ -1163,6 +1177,7 @@
             mapTheme: stored.mapTheme != null ? stored.mapTheme : 'standard',
             uiTheme: stored.uiTheme != null ? stored.uiTheme : 'light',
             smartZoomEnabled: runtime.smartZoomEnabled,
+            centerMapOnLocation: runtime.centerMapOnLocation,
             autoTrafficUpdateEnabled: runtime.autoTrafficUpdateEnabled,
             autoRerouteOnDeviationEnabled: runtime.autoRerouteOnDeviationEnabled,
             routeTrafficEnabled: runtime.routeTrafficEnabled,
@@ -1210,6 +1225,10 @@
             ],
             standardToggles: [
                 { id: 'smartZoomToggle', enabled: toggles.smartZoom },
+                {
+                    id: 'centerOnLocationToggle',
+                    enabled: toggles.centerOnLocation !== undefined ? toggles.centerOnLocation : true,
+                },
                 { id: 'autoTrafficUpdateToggle', enabled: toggles.autoTrafficUpdate },
                 { id: 'autoRerouteDeviationToggle', enabled: toggles.autoRerouteOnDeviation },
                 { id: 'routeTrafficToggle', enabled: toggles.routeTraffic },

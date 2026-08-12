@@ -147,6 +147,28 @@ describe('settings-snapshot module', () => {
         expect(dom.standardToggles.find((item) => item.id === 'routeTrafficToggle').enabled).toBe(false);
     });
 
+    test('buildSettingsUiDomApplyPlan includes centerOnLocationToggle defaulting on', () => {
+        const defaultDom = SS.buildSettingsUiDomApplyPlan(
+            SS.buildSettingsUiApplyPlan({ smartZoomEnabled: true })
+        );
+        expect(
+            defaultDom.standardToggles.find((item) => item.id === 'centerOnLocationToggle').enabled
+        ).toBe(true);
+
+        const offDom = SS.buildSettingsUiDomApplyPlan(
+            SS.buildSettingsUiApplyPlan({ smartZoomEnabled: true, centerMapOnLocation: false })
+        );
+        expect(
+            offDom.standardToggles.find((item) => item.id === 'centerOnLocationToggle').enabled
+        ).toBe(false);
+    });
+
+    test('buildSettingsRestorePlan restores centerMapOnLocation pref', () => {
+        const plan = SS.buildSettingsRestorePlan({ centerMapOnLocation: false });
+        expect(plan.runtime.centerMapOnLocation).toBe(false);
+        expect(plan.localStorage.centerMapOnLocation).toBe('0');
+    });
+
     test('buildSettingsUiInputPlan merges runtime and stored state', () => {
         const input = SS.buildSettingsUiInputPlan(
             {

@@ -332,6 +332,8 @@ function getSettingsOrchestrationRuntime() {
         setCurrentRoutingMode: (val) => VoyagrVehicleRoutingOrchestration.setCurrentRoutingMode(val),
         getSmartZoomEnabled: () => VoyagrSmartZoomOrchestration.getSmartZoomEnabled(),
         setSmartZoomEnabled: (val) => VoyagrSmartZoomOrchestration.setSmartZoomEnabled(val),
+        getCenterMapOnLocationEnabled: () => VoyagrCenterOnLocationOrchestration.getCenterMapOnLocationEnabled(),
+        setCenterMapOnLocationEnabled: (val) => VoyagrCenterOnLocationOrchestration.setCenterMapOnLocationEnabled(val),
         getShowCamerasEnabled: () => VoyagrMapOverlayOrchestration.getShowCamerasEnabled(),
         setShowCamerasEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowCamerasEnabled(val); },
         getShowOsmTrafficLightsEnabled: () => VoyagrMapOverlayOrchestration.getShowOsmTrafficLightsEnabled(),
@@ -1704,6 +1706,7 @@ const _gestureControl = () => VoyagrModules.gestureControl();
 const _legacyPrefsRestore = () => VoyagrModules.legacyPrefsRestore();
 const _voiceControl = () => VoyagrModules.voiceControl();
 const _smartZoom = () => VoyagrModules.smartZoom();
+const _centerOnLocation = () => VoyagrModules.centerOnLocation();
 const _phase3Features = () => VoyagrModules.phase3Features();
 const _previewMarker = () => VoyagrModules.previewMarker();
 const _favorites = () => VoyagrModules.favorites();
@@ -1916,6 +1919,25 @@ function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadTy
 function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
     return VoyagrSmartZoomOrchestration.applySmartZoom(speedMph, distanceToNextTurn, roadType);
 }
+
+// ===== CENTER ON LOCATION ORCHESTRATION =====
+// Orchestration lives in static/js/app/center-on-location-orchestration.js (bound at file end).
+
+function getCenterOnLocationOrchestrationRuntime() {
+    return {
+        centerOnLocation: () => _centerOnLocation(),
+        toggleUI: () => _toggleUI(),
+        getMap: () => map,
+        getCenterMapOnLocationEnabled: () => VoyagrCenterOnLocationOrchestration.getCenterMapOnLocationEnabled(),
+        setCenterMapOnLocationEnabled: (val) => VoyagrCenterOnLocationOrchestration.setCenterMapOnLocationEnabled(val),
+        call: {
+            saveAllSettings,
+            showStatus,
+        },
+    };
+}
+
+function toggleCenterOnLocation() { VoyagrCenterOnLocationOrchestration.toggleCenterOnLocation(); }
 
 // ===== PHASE 3 FEATURES ORCHESTRATION =====
 // Orchestration lives in static/js/app/phase3-features-orchestration.js (bound at file end).
@@ -3050,6 +3072,7 @@ VoyagrGestureControlOrchestration.bind(getGestureControlOrchestrationRuntime());
 VoyagrBatterySavingOrchestration.bind(getBatterySavingOrchestrationRuntime());
 VoyagrUnitsPreferencesOrchestration.bind(getUnitsPreferencesOrchestrationRuntime());
 VoyagrSmartZoomOrchestration.bind(getSmartZoomOrchestrationRuntime());
+VoyagrCenterOnLocationOrchestration.bind(getCenterOnLocationOrchestrationRuntime());
 VoyagrMapThemeOrchestration.bind(getMapThemeOrchestrationRuntime());
 VoyagrFormClearOrchestration.bind(getFormClearOrchestrationRuntime());
 VoyagrMapHintsOrchestration.bind(getMapHintsOrchestrationRuntime());
