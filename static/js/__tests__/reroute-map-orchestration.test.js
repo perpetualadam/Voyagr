@@ -308,3 +308,57 @@ describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
         expect(RerouteMap.getRouteJoinConfirmedForDeviation()).toBe(false);
     });
 });
+
+describe('buildRouteRequest avoid-tolls dependency (PWA-01)', () => {
+    const RR = require('../modules/navigation/routing-request.js');
+
+    function bindBuildRouteRequest(isAvoidTollsEnabled) {
+        const avoidFn = jest.fn(isAvoidTollsEnabled);
+        RerouteMap.bind({
+            routingRequest: () => RR,
+            getCurrentRoutingMode: () => 'auto',
+            getCurrentVehicleType: () => 'petrol_diesel',
+            call: {
+                getRouteCostParams: () => ({ fuel_price: 1.5 }),
+                isAvoidTollsEnabled: avoidFn,
+                getRoutePreferences: () => ({}),
+            },
+        });
+        return avoidFn;
+    }
+
+    test('traffic reroute with toll avoidance enabled does not throw avoidTollsFn', () => {
+        const avoidFn = bindBuildRouteRequest(() => true);
+
+        let body;
+        expect(() => {
+            body = RerouteMap.buildRouteRequest(51.5, -0.1, '52.0,0.0');
+        }).not.toThrow();
+
+        expect(body.avoid_tolls).toBe(true);
+        expect(body.is_reroute).toBe(true);
+        expect(avoidFn).toHaveBeenCalled();
+        expect(typeof avoidFn.mock.results[0].value).toBe('boolean');
+    });
+
+    test('traffic reroute with toll avoidance disabled keeps avoid_tolls false', () => {
+        bindBuildRouteRequest(() => false);
+
+        const body = RerouteMap.buildRouteRequest(51.5, -0.1, '52.0,0.0');
+
+        expect(body.avoid_tolls).toBe(false);
+        expect(body.is_reroute).toBe(true);
+    });
+
+    test('passes the isAvoidTollsEnabled function, not its boolean result', () => {
+        const avoidFn = bindBuildRouteRequest(() => true);
+        const collectSpy = jest.spyOn(RR, 'buildRouteRequestCollectPlan');
+
+        RerouteMap.buildRouteRequest(51.5, -0.1, '52.0,0.0', [{ lat: 51.6, lon: 0 }]);
+
+        expect(collectSpy).toHaveBeenCalledTimes(1);
+        expect(collectSpy.mock.calls[0][0].isAvoidTollsEnabled).toBe(avoidFn);
+        expect(typeof collectSpy.mock.calls[0][0].isAvoidTollsEnabled).toBe('function');
+        collectSpy.mockRestore();
+    });
+});

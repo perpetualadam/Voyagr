@@ -107,7 +107,7 @@
             routingMode: rt().getCurrentRoutingMode() || 'auto',
             vehicleType: rt().getCurrentVehicleType() || 'petrol_diesel',
             costParams: rt().call.getRouteCostParams(rt().getCurrentVehicleType()),
-            isAvoidTollsEnabled: rt().call.isAvoidTollsEnabled(),
+            isAvoidTollsEnabled: rt().call.isAvoidTollsEnabled,
             routePrefs: (typeof rt().call.getRoutePreferences === 'function') ? rt().call.getRoutePreferences() : {},
         });
         return RR.buildAutomaticRerouteRequestPlan(collect.storage, collect.opts);

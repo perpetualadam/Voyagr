@@ -325,7 +325,34 @@ describe('multi-drop and initial route helpers', () => {
             routePrefs: {},
         });
         expect(reroute.avoidFerries).toBe(true);
+        expect(reroute.avoidTolls).toBe(false);
         expect(RR.readRerouteIncludeFlags(storage).includeCaz).toBe(false);
+    });
+
+    test('buildRerouteSharedOptions uses the avoid-tolls function, not a pre-invoked boolean', () => {
+        const storage = mockStorage({
+            pref_cameras: 'false',
+            pref_trafficLightsAvoid: 'false',
+            pref_railwayCrossingsAvoid: 'false',
+            pref_caz: 'false',
+        });
+        const enabled = RR.buildRerouteSharedOptions(storage, {
+            isAvoidTollsEnabled: function () { return true; },
+        });
+        const disabled = RR.buildRerouteSharedOptions(storage, {
+            isAvoidTollsEnabled: function () { return false; },
+        });
+        expect(enabled.avoidTolls).toBe(true);
+        expect(enabled.enableHazardAvoidance).toBe(true);
+        expect(disabled.avoidTolls).toBe(false);
+        expect(disabled.enableHazardAvoidance).toBe(false);
+    });
+
+    test('pre-invoked boolean true for isAvoidTollsEnabled reproduces avoidTollsFn TypeError', () => {
+        const storage = mockStorage({});
+        expect(function () {
+            RR.buildRerouteSharedOptions(storage, { isAvoidTollsEnabled: true });
+        }).toThrow(/avoidTollsFn is not a function/);
     });
 });
 
