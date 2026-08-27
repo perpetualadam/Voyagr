@@ -184,6 +184,20 @@
 
         if (!speakPlan.shouldSpeak) return;
 
+        try {
+            if (
+                window.AndroidTTS &&
+                typeof window.AndroidTTS.speak === 'function'
+            ) {
+                console.log('[NativeTTS] Sending to Android:', speakPlan.utterance.text);
+                window.AndroidTTS.speak(speakPlan.utterance.text);
+                lastVoiceAnnouncementTime = now;
+                return;
+            }
+        } catch (error) {
+            console.error('[NativeTTS] Android bridge failed:', error);
+        }
+
         if (applySpeechSynthesisSpeakPlan(speakPlan, priority)) {
             lastVoiceAnnouncementTime = now;
         }
