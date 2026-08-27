@@ -87,6 +87,9 @@
             rt().setLastAnnouncedETA(null);
             rt().setLastNavTrafficFetchAt(0);
             rt().setInitialETAMovementRetries(0);
+            if (typeof rt().clearLastDistanceToNextTurn === 'function') {
+                rt().clearLastDistanceToNextTurn();
+            }
         }
 
         if (apply.createEmptyEtaSnapshot) {
@@ -434,6 +437,9 @@
         rt().setJourneyOverviewActive(apply.journeyOverviewActive);
         rt().setSavedMapState(apply.savedMapState);
         rt().setInitialETAMovementRetries(apply.initialETAMovementRetries);
+        if (typeof rt().clearLastDistanceToNextTurn === 'function') {
+            rt().clearLastDistanceToNextTurn();
+        }
     }
 
     function applyNavStopWakeLockReleaseFromPlan(lifecycle) {

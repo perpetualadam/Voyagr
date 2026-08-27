@@ -10,6 +10,8 @@
     var lastZoomLevel = 13;
     var lastTurnZoomApplied = false;
     var lastDistanceToNextTurn = null;
+    /** Distance passed into the last calculateSmartZoom call (for turn-exit hysteresis). */
+    var lastSmartZoomTurnDistance = null;
     var smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
         ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
         : (localStorage.getItem('smartZoomEnabled') === null
@@ -42,15 +44,32 @@
         lastDistanceToNextTurn = (val != null && Number.isFinite(val)) ? val : null;
     }
 
+    /**
+     * Drop turn-proximity caches at route boundaries so follow (which reads the
+     * detect-tick cache before detect runs) cannot inherit the previous trip.
+     */
+    function clearLastDistanceToNextTurn() {
+        lastDistanceToNextTurn = null;
+        lastSmartZoomTurnDistance = null;
+        lastTurnZoomApplied = false;
+    }
+
     function buildSmartZoomHysteresis() {
         return {
             lastZoomLevel: getLastZoomLevel(),
             lastTurnZoomApplied: getLastTurnZoomApplied(),
+            lastDistanceToNextTurn: lastSmartZoomTurnDistance,
         };
     }
 
+    function rememberSmartZoomTurnDistance(distanceToNextTurn) {
+        lastSmartZoomTurnDistance = (distanceToNextTurn != null && Number.isFinite(distanceToNextTurn))
+            ? distanceToNextTurn
+            : null;
+    }
+
     function computeSmartZoomLevel(speedMph, distanceToNextTurn, roadType) {
-        return rt().routeGeometry().calculateSmartZoom(
+        var zoom = rt().routeGeometry().calculateSmartZoom(
             speedMph,
             distanceToNextTurn,
             roadType,
@@ -58,6 +77,8 @@
             getTurnZoomThreshold(),
             buildSmartZoomHysteresis()
         );
+        rememberSmartZoomTurnDistance(distanceToNextTurn);
+        return zoom;
     }
 
     function rt() {
@@ -160,6 +181,7 @@
         setLastTurnZoomApplied: setLastTurnZoomApplied,
         getLastDistanceToNextTurn: getLastDistanceToNextTurn,
         setLastDistanceToNextTurn: setLastDistanceToNextTurn,
+        clearLastDistanceToNextTurn: clearLastDistanceToNextTurn,
         getZoomLevels: getZoomLevels,
         getTurnZoomThreshold: getTurnZoomThreshold,
         getZoomAnimationDuration: getZoomAnimationDuration,

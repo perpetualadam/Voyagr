@@ -1807,6 +1807,8 @@ function getMapRecenterOrchestrationRuntime() {
         getLastZoomLevel: () => VoyagrSmartZoomOrchestration.getLastZoomLevel(),
         getLastTurnZoomApplied: () => VoyagrSmartZoomOrchestration.getLastTurnZoomApplied(),
         getLastDistanceToNextTurn: () => VoyagrSmartZoomOrchestration.getLastDistanceToNextTurn(),
+        computeSmartZoomLevel: (spd, dist, roadType) =>
+            VoyagrSmartZoomOrchestration.computeSmartZoomLevel(spd, dist, roadType),
         call: {
             showStatus,
             getVehicleDisplayCoordinates,
@@ -2673,6 +2675,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
         setLastAnnouncedETA: (val) => VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val),
         setLastNavTrafficFetchAt: (val) => VoyagrLiveDataRefreshOrchestration.setLastNavTrafficFetchAt(val),
         setInitialETAMovementRetries: (val) => VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val),
+        clearLastDistanceToNextTurn: () => VoyagrSmartZoomOrchestration.clearLastDistanceToNextTurn(),
         call: {
             resetVoiceAnnouncementStateForNewRoute,
             resetVehicleMarkerDisplayState,
