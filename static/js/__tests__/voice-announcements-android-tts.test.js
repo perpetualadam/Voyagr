@@ -9,7 +9,9 @@ const VoiceAnnouncements = require('../modules/navigation/voice-announcements.js
 function mockSpeechSynthesis() {
     const speak = jest.fn();
     const resume = jest.fn();
-    const getVoices = jest.fn(() => []);
+    const getVoices = jest.fn(() => [
+        { name: 'Local EN', lang: 'en-US', localService: true, default: true },
+    ]);
     window.speechSynthesis = { speak, resume, getVoices, addEventListener: jest.fn() };
     global.SpeechSynthesisUtterance = function SpeechSynthesisUtterance(text) {
         this.text = text;
