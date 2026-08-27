@@ -397,9 +397,29 @@ describe('calculateSmartZoom', () => {
     });
 
     test('turn exit hysteresis holds turn zoom until past exit band', () => {
-        const hyst = { lastZoomLevel: ZL.turn_ahead, lastTurnZoomApplied: true };
+        const hyst = {
+            lastZoomLevel: ZL.turn_ahead,
+            lastTurnZoomApplied: true,
+            lastDistanceToNextTurn: 480,
+        };
         expect(RG.calculateSmartZoom(60, 550, 'primary', ZL, T, hyst)).toBe(ZL.turn_ahead);
-        expect(RG.calculateSmartZoom(60, 750, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
+        expect(RG.calculateSmartZoom(60, 750, 'primary', ZL, T, {
+            ...hyst,
+            lastDistanceToNextTurn: 550,
+        })).toBe(ZL.main_road_medium_speed);
+    });
+
+    test('after a maneuver, next turn in exit band does not inherit turn zoom', () => {
+        // Completed turn (~40 m) then next maneuver at 600 m with lastTurn still set.
+        const hyst = {
+            lastZoomLevel: ZL.turn_ahead,
+            lastTurnZoomApplied: true,
+            lastDistanceToNextTurn: 40,
+        };
+        expect(RG.calculateSmartZoom(60, 600, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
+        expect(RG.calculateSmartZoom(60, 520, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
+        // Still enters normally once under the enter threshold.
+        expect(RG.calculateSmartZoom(60, 400, 'primary', ZL, T, hyst)).toBe(ZL.turn_ahead);
     });
 });
 

@@ -442,6 +442,13 @@
     var DEFAULT_TURN_EXIT_EXTRA_METERS = 200;
 
     /**
+     * Upward jump in distance-to-turn that means the active maneuver advanced.
+     * GPS noise near a threshold is far smaller; completing a turn then seeing
+     * the next maneuver at 500–700 m is much larger.
+     */
+    var DEFAULT_TURN_MANEUVER_ADVANCE_METERS = 200;
+
+    /**
      * Map a zoom level back to its speed band name (for hysteresis).
      * @param {number} zoom
      * @param {object} ZL
@@ -508,8 +515,10 @@
      * @param {object} [hysteresis]
      * @param {number} [hysteresis.lastZoomLevel]
      * @param {boolean} [hysteresis.lastTurnZoomApplied]
+     * @param {number} [hysteresis.lastDistanceToNextTurn] - Distance used on the previous smart-zoom decision
      * @param {number} [hysteresis.speedHysteresisMph]
      * @param {number} [hysteresis.turnExitExtraMeters]
+     * @param {number} [hysteresis.turnManeuverAdvanceMeters]
      * @returns {number} Zoom level
      */
     function calculateSmartZoom(speedMph, distanceToNextTurn, roadType, zoomLevels, turnZoomThreshold, hysteresis) {
@@ -518,17 +527,33 @@
         var hyst = hysteresis || null;
         var lastZoom = (hyst && Number.isFinite(hyst.lastZoomLevel)) ? hyst.lastZoomLevel : null;
         var lastTurn = !!(hyst && hyst.lastTurnZoomApplied);
+        var lastDist = (hyst && Number.isFinite(hyst.lastDistanceToNextTurn))
+            ? hyst.lastDistanceToNextTurn
+            : null;
         var speedHyst = (hyst && hyst.speedHysteresisMph != null)
             ? hyst.speedHysteresisMph
             : DEFAULT_SPEED_HYSTERESIS_MPH;
         var turnExitExtra = (hyst && hyst.turnExitExtraMeters != null)
             ? hyst.turnExitExtraMeters
             : DEFAULT_TURN_EXIT_EXTRA_METERS;
+        var maneuverAdvance = (hyst && hyst.turnManeuverAdvanceMeters != null)
+            ? hyst.turnManeuverAdvanceMeters
+            : DEFAULT_TURN_MANEUVER_ADVANCE_METERS;
 
+        var exitLimit = threshold + turnExitExtra;
         var enterTurn = distanceToNextTurn != null && distanceToNextTurn < threshold;
+        // Hold turn zoom in the exit fringe only for the same approach. After a
+        // maneuver completes, distance jumps up to the next turn (often 500–700 m);
+        // that must not inherit lastTurnZoomApplied.
+        var maneuverAdvanced = lastDist != null &&
+            distanceToNextTurn != null &&
+            (distanceToNextTurn - lastDist) >= maneuverAdvance;
         var stayInTurn = lastTurn &&
             distanceToNextTurn != null &&
-            distanceToNextTurn < (threshold + turnExitExtra);
+            distanceToNextTurn < exitLimit &&
+            lastDist != null &&
+            lastDist < exitLimit &&
+            !maneuverAdvanced;
         if (enterTurn || stayInTurn) {
             return ZL.turn_ahead;
         }

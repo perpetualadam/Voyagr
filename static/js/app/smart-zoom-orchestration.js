@@ -10,6 +10,8 @@
     var lastZoomLevel = 13;
     var lastTurnZoomApplied = false;
     var lastDistanceToNextTurn = null;
+    /** Distance passed into the last calculateSmartZoom call (for turn-exit hysteresis). */
+    var lastSmartZoomTurnDistance = null;
     var smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
         ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
         : (localStorage.getItem('smartZoomEnabled') === null
@@ -46,11 +48,18 @@
         return {
             lastZoomLevel: getLastZoomLevel(),
             lastTurnZoomApplied: getLastTurnZoomApplied(),
+            lastDistanceToNextTurn: lastSmartZoomTurnDistance,
         };
     }
 
+    function rememberSmartZoomTurnDistance(distanceToNextTurn) {
+        lastSmartZoomTurnDistance = (distanceToNextTurn != null && Number.isFinite(distanceToNextTurn))
+            ? distanceToNextTurn
+            : null;
+    }
+
     function computeSmartZoomLevel(speedMph, distanceToNextTurn, roadType) {
-        return rt().routeGeometry().calculateSmartZoom(
+        var zoom = rt().routeGeometry().calculateSmartZoom(
             speedMph,
             distanceToNextTurn,
             roadType,
@@ -58,6 +67,8 @@
             getTurnZoomThreshold(),
             buildSmartZoomHysteresis()
         );
+        rememberSmartZoomTurnDistance(distanceToNextTurn);
+        return zoom;
     }
 
     function rt() {

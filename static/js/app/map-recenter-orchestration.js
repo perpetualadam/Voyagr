@@ -166,6 +166,9 @@
             var followCamera = rt().cameraPitch().buildNavigationFollowCameraPlan(
                 Object.assign({}, followInput, {
                     computeSmartZoom: function (spd, dist, roadType) {
+                        if (typeof rt().computeSmartZoomLevel === 'function') {
+                            return rt().computeSmartZoomLevel(spd, dist, roadType);
+                        }
                         return rt().routeGeometry().calculateSmartZoom(
                             spd,
                             dist,
