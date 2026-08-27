@@ -47,7 +47,9 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             getIsTrackingActive: () => true,
             getZoomAndFollowEnabled: () => true,
             getMapFollowingActive: () => false,
-            getMap: () => ({}),
+            getMap: () => ({
+                easeTo: jest.fn(),
+            }),
             getMapLibreHelpers: () => ({
                 addPolyline,
                 isPolylineLayerMountOk: window.MapLibreHelpers.isPolylineLayerMountOk,
@@ -128,6 +130,9 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
         global.VoyagrRerouteMapOrchestration = require('../app/reroute-map-orchestration.js');
         global.VoyagrDeviceEnvironment = require('../modules/ui/device-environment.js');
         global.VoyagrTurnInstructions = require('../modules/navigation/turn-instructions.js');
+        global.VoyagrServiceWorkerOrchestration = {
+            getUpdatePending: () => false,
+        };
         NavigationLifecycle = require('../app/navigation-lifecycle-orchestration.js');
         NavigationLifecycle.setRouteInProgress(false);
         window.lastCalculatedRoute = null;
