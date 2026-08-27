@@ -383,6 +383,24 @@ describe('calculateSmartZoom', () => {
     test('turn beyond threshold ignored', () => {
         expect(RG.calculateSmartZoom(60, 600, 'primary', ZL, T)).toBe(ZL.main_road_medium_speed);
     });
+
+    test('speed hysteresis holds urban band near 20 mph boundary', () => {
+        const hyst = { lastZoomLevel: ZL.urban_low_speed, lastTurnZoomApplied: false };
+        expect(RG.calculateSmartZoom(18, null, 'residential', ZL, T, hyst)).toBe(ZL.urban_low_speed);
+        expect(RG.calculateSmartZoom(11, null, 'residential', ZL, T, hyst)).toBe(ZL.parking_very_low_speed);
+    });
+
+    test('speed hysteresis holds main band near 50 mph boundary', () => {
+        const hyst = { lastZoomLevel: ZL.main_road_medium_speed, lastTurnZoomApplied: false };
+        expect(RG.calculateSmartZoom(48, null, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
+        expect(RG.calculateSmartZoom(41, null, 'primary', ZL, T, hyst)).toBe(ZL.urban_low_speed);
+    });
+
+    test('turn exit hysteresis holds turn zoom until past exit band', () => {
+        const hyst = { lastZoomLevel: ZL.turn_ahead, lastTurnZoomApplied: true };
+        expect(RG.calculateSmartZoom(60, 550, 'primary', ZL, T, hyst)).toBe(ZL.turn_ahead);
+        expect(RG.calculateSmartZoom(60, 750, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
+    });
 });
 
 describe('calculateDriverViewCenter', () => {

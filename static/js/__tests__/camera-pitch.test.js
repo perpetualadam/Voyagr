@@ -119,7 +119,27 @@ describe('buildNavigationFollowEasePlan', () => {
         });
         expect(plan.mode).toBe('navigation');
         expect(plan.shouldEase).toBe(true);
-        expect(plan.durationMs).toBe(640);
+        expect(plan.durationMs).toBe(650);
+    });
+
+    test('default follow interval is long enough to avoid stacked zoom eases', () => {
+        const due = buildNavigationFollowEasePlan({
+            nowMs: 700,
+            lastFollowEaseAt: 0,
+            followJumpM: 5,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        const notDue = buildNavigationFollowEasePlan({
+            nowMs: 699,
+            lastFollowEaseAt: 0,
+            followJumpM: 5,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        expect(due.shouldEase).toBe(true);
+        expect(notDue.shouldEase).toBe(false);
+        expect(due.durationMs).toBeLessThanOrEqual(700);
     });
 
     test('browsing mode uses fixed zoom and optional padding flag', () => {
@@ -178,6 +198,32 @@ describe('buildNavigationFollowCameraPlan', () => {
         });
         expect(plan.easeTo.padding.top).toBeGreaterThan(plan.easeTo.padding.bottom);
         expect(plan.padding).toEqual(plan.easeTo.padding);
+        expect(plan.easeTo.zoom).toBe(15);
+    });
+
+    test('passes turn distance into smart zoom and omits ease zoom when unchanged', () => {
+        const calls = [];
+        const plan = buildNavigationFollowCameraPlan({
+            speedMph: 40,
+            distanceToNextTurn: 300,
+            lastZoomLevel: 18,
+            roadType: 'primary',
+            heading: 10,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: (spd, dist) => {
+                calls.push({ spd, dist });
+                return 18;
+            },
+        });
+        expect(calls[0]).toEqual({ spd: 40, dist: 300 });
+        expect(plan.zoom).toBe(18);
+        expect(plan.easeTo.zoom).toBeUndefined();
     });
 
     test('keeps the same follow padding across GPS-style camera rebuilds', () => {
@@ -271,10 +317,12 @@ describe('buildSmartZoomEasePlan', () => {
             userLon: -0.1,
             hasMap: true,
             turnZoomThreshold: 500,
-            computeSmartZoom: () => 17,
+            turnAheadZoomLevel: 18,
+            computeSmartZoom: () => 18,
         });
         expect(plan.logTurn).toBe(true);
         expect(plan.lastTurnZoomApplied).toBe(true);
+        expect(plan.newZoomLevel).toBe(18);
     });
 });
 
@@ -300,6 +348,17 @@ describe('buildNavigationZoomTickPlan', () => {
         });
         expect(plan.applySmartZoom).toBe(true);
         expect(plan.syncLastZoomLevel).toBeNull();
+    });
+
+    test('skips smart zoom entirely while zoom-and-follow owns the camera', () => {
+        const plan = buildNavigationZoomTickPlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            navigationFollowEaseApplied: false,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        expect(plan.applySmartZoom).toBe(false);
     });
 });
 
@@ -430,12 +489,13 @@ describe('buildSmartZoomApplyPlan', () => {
             userLon: -0.1,
             hasMap: true,
             turnZoomThreshold: 500,
-            computeSmartZoom: () => 17,
+            turnAheadZoomLevel: 18,
+            computeSmartZoom: () => 18,
         });
         const apply = buildSmartZoomApplyPlan(easePlan);
         expect(apply.action).toBe('apply');
-        expect(apply.newZoomLevel).toBe(17);
-        expect(apply.easeTo.zoom).toBe(17);
+        expect(apply.newZoomLevel).toBe(18);
+        expect(apply.easeTo.zoom).toBe(18);
         expect(apply.logLine).toContain('Turn-based zoom');
         expect(apply.lastTurnZoomApplied).toBe(true);
     });
@@ -457,7 +517,8 @@ describe('buildSmartZoomApplyPlan', () => {
             viewportHeight: 800,
             viewportWidth: 400,
             turnZoomThreshold: 500,
-            computeSmartZoom: () => 17,
+            turnAheadZoomLevel: 18,
+            computeSmartZoom: () => 18,
         });
         const apply = buildSmartZoomApplyPlan(easePlan);
         expect(apply.easeTo.padding).toEqual(computeFollowPadding(800, 400));

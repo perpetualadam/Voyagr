@@ -124,7 +124,7 @@
      * @param {string} roadType
      * @returns {{ navigationFollowEaseApplied: boolean, navigationFollowZoom: (number|null) }}
      */
-    function applyGpsFollowCameraTick(markerLat, markerLon, followJumpM, speedMph, heading, roadType) {
+    function applyGpsFollowCameraTick(markerLat, markerLon, followJumpM, speedMph, heading, roadType, distanceToNextTurn) {
         const CP = cpModule();
         const followPlan = CP.buildNavigationFollowEasePlan({
             nowMs: Date.now(),
@@ -141,6 +141,10 @@
             ? CP.buildNavigationFollowCameraPlan({
                 speedMph,
                 roadType: roadType || 'unknown',
+                distanceToNextTurn: distanceToNextTurn != null
+                    ? distanceToNextTurn
+                    : VoyagrSmartZoomOrchestration.getLastDistanceToNextTurn(),
+                lastZoomLevel: VoyagrSmartZoomOrchestration.getLastZoomLevel(),
                 heading: heading || rt().g('map').getBearing(),
                 mapBearing: rt().g('map').getBearing(),
                 markerLat,
@@ -151,9 +155,8 @@
                 usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
                 viewportHeight: viewport.height,
                 viewportWidth: viewport.width,
-                computeSmartZoom: (spd, dist, roadType) => rgModule().calculateSmartZoom(
-                    spd, dist, roadType, rt().consts.ZOOM_LEVELS, rt().consts.TURN_ZOOM_THRESHOLD
-                ),
+                computeSmartZoom: (spd, dist, roadTypeName) =>
+                    VoyagrSmartZoomOrchestration.computeSmartZoomLevel(spd, dist, roadTypeName),
             })
             : null;
 
@@ -358,8 +361,11 @@
             turnInfoThisTick = rt().call.detectUpcomingTurn(lat, lon);
         }
 
-        if (turnPlan.announce && turnInfoThisTick) {
+        if (turnInfoThisTick && Number.isFinite(turnInfoThisTick.distance)) {
             distanceToNextTurn = turnInfoThisTick.distance;
+        }
+
+        if (turnPlan.announce && turnInfoThisTick) {
             announceUpcomingTurn(turnInfoThisTick);
         }
 
@@ -436,6 +442,8 @@
             routeInProgress: rt().g('routeInProgress'),
             navigationFollowEaseApplied,
             followZoom: navigationFollowZoom,
+            zoomAndFollowEnabled: rt().g('zoomAndFollowEnabled'),
+            mapFollowingActive: rt().g('mapFollowingActive'),
         });
         const zoomApply = CP.buildNavigationZoomApplyPlan(zoomTick, {
             speedMph,
@@ -448,6 +456,10 @@
 
         if (zoomApply.syncLastZoomLevel != null) {
             VoyagrSmartZoomOrchestration.setLastZoomLevel(zoomApply.syncLastZoomLevel);
+            const turnZoom = VoyagrSmartZoomOrchestration.getZoomLevels().turn_ahead;
+            VoyagrSmartZoomOrchestration.setLastTurnZoomApplied(
+                zoomApply.syncLastZoomLevel === turnZoom
+            );
         }
         if (zoomApply.applySmartZoom) {
             rt().call.applySmartZoomWithAnimation(
@@ -538,6 +550,9 @@
         if (tickPlan.turn.detect || tickPlan.turn.announce || tickPlan.turn.updateWidget) {
             const turnResult = applyGpsTurnSideEffectsTick(lat, lon, tickPlan.turn);
             distanceToNextTurn = turnResult.distanceToNextTurn;
+            if (tickPlan.turn.detect) {
+                VoyagrSmartZoomOrchestration.setLastDistanceToNextTurn(distanceToNextTurn);
+            }
         }
 
         if (tickPlan.announceDestination || tickPlan.checkArrival) {

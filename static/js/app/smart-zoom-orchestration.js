@@ -9,6 +9,7 @@
 
     var lastZoomLevel = 13;
     var lastTurnZoomApplied = false;
+    var lastDistanceToNextTurn = null;
     var smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
         ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
         : (localStorage.getItem('smartZoomEnabled') === null
@@ -36,6 +37,28 @@
     function setLastZoomLevel(val) { lastZoomLevel = val; }
     function getLastTurnZoomApplied() { return lastTurnZoomApplied; }
     function setLastTurnZoomApplied(val) { lastTurnZoomApplied = !!val; }
+    function getLastDistanceToNextTurn() { return lastDistanceToNextTurn; }
+    function setLastDistanceToNextTurn(val) {
+        lastDistanceToNextTurn = (val != null && Number.isFinite(val)) ? val : null;
+    }
+
+    function buildSmartZoomHysteresis() {
+        return {
+            lastZoomLevel: getLastZoomLevel(),
+            lastTurnZoomApplied: getLastTurnZoomApplied(),
+        };
+    }
+
+    function computeSmartZoomLevel(speedMph, distanceToNextTurn, roadType) {
+        return rt().routeGeometry().calculateSmartZoom(
+            speedMph,
+            distanceToNextTurn,
+            roadType,
+            getZoomLevels(),
+            getTurnZoomThreshold(),
+            buildSmartZoomHysteresis()
+        );
+    }
 
     function rt() {
         if (!runtime) {
@@ -95,9 +118,9 @@
             shouldTilt: rt().call.shouldTiltDrivingCamera(),
             zoomAnimationDurationMs: getZoomAnimationDurationMs(),
             turnZoomThreshold: getTurnZoomThreshold(),
-            computeSmartZoom: (spd, dist, rtName) => rt().routeGeometry().calculateSmartZoom(
-                spd, dist, rtName, getZoomLevels(), getTurnZoomThreshold()
-            ),
+            turnAheadZoomLevel: ZOOM_LEVELS.turn_ahead,
+            lastTurnZoomApplied: getLastTurnZoomApplied(),
+            computeSmartZoom: (spd, dist, rtName) => computeSmartZoomLevel(spd, dist, rtName),
         });
 
         const apply = CP.buildSmartZoomApplyPlan(easePlan);
@@ -135,10 +158,13 @@
         setLastZoomLevel: setLastZoomLevel,
         getLastTurnZoomApplied: getLastTurnZoomApplied,
         setLastTurnZoomApplied: setLastTurnZoomApplied,
+        getLastDistanceToNextTurn: getLastDistanceToNextTurn,
+        setLastDistanceToNextTurn: setLastDistanceToNextTurn,
         getZoomLevels: getZoomLevels,
         getTurnZoomThreshold: getTurnZoomThreshold,
         getZoomAnimationDuration: getZoomAnimationDuration,
         getZoomAnimationDurationMs: getZoomAnimationDurationMs,
+        computeSmartZoomLevel: computeSmartZoomLevel,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
