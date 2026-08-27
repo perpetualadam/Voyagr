@@ -207,16 +207,24 @@
     function buildToggleZoomAndFollowEnabledExecutePlan(input) {
         input = input || {};
         var hasPosition = !!(input.hasMap && input.currentLat && input.currentLon);
+        var flyTo = null;
+        if (hasPosition) {
+            flyTo = {
+                center: [input.currentLon, input.currentLat],
+                zoom: 17,
+                duration: 500,
+                essential: true,
+            };
+            if (input.followPadding) {
+                flyTo.padding = input.followPadding;
+            }
+        }
         return {
             mapFollowingActive: true,
             statusMessage: '📍 Zoom & Follow enabled - map will follow your vehicle',
             statusType: 'success',
             logMessage: '[Zoom & Follow] Enabled',
-            flyTo: hasPosition ? {
-                center: [input.currentLon, input.currentLat],
-                zoom: 17,
-                duration: 500,
-            } : null,
+            flyTo: flyTo,
         };
     }
 
@@ -1461,6 +1469,7 @@
      */
     function buildToggleJourneyOverviewDeactivatePlan(input) {
         input = input || {};
+        var restoreFollow = !!input.zoomAndFollowEnabled;
         var flyTo = null;
         if (input.savedMapState && input.savedMapState.center) {
             flyTo = {
@@ -1469,15 +1478,19 @@
                     input.savedMapState.center.lat,
                 ],
                 zoom: input.savedMapState.zoom,
-                pitch: 55,
+                pitch: input.pitch != null ? input.pitch : 55,
                 duration: 1000,
                 essential: true,
             };
+            if (input.followPadding) {
+                flyTo.padding = input.followPadding;
+            }
         }
         return {
             action: 'deactivate',
             journeyOverviewActive: false,
-            restoreMapFollowing: !!input.zoomAndFollowEnabled,
+            restoreMapFollowing: restoreFollow,
+            restoreLiveNavigationCamera: restoreFollow,
             flyTo: flyTo,
             clearSavedMapState: !!input.savedMapState,
             overviewButtonActive: false,

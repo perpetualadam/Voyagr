@@ -104,7 +104,10 @@
         if (deactivate.restoreMapFollowing) {
             rt().setMapFollowingActive(true);
         }
-        if (deactivate.flyTo) {
+        if (deactivate.restoreLiveNavigationCamera &&
+            typeof rt().call.applyLiveNavigationCamera === 'function') {
+            rt().call.applyLiveNavigationCamera();
+        } else if (deactivate.flyTo) {
             map.flyTo(deactivate.flyTo);
         }
         if (deactivate.clearSavedMapState) {

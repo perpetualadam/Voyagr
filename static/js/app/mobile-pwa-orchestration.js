@@ -326,6 +326,20 @@
                 (rt().getRouteInProgress() || rt().getIsTrackingActive())) {
                 rt().call.redrawNavigationVehicleMarker(reason || 'foreground resume');
             }
+            var restoreCamera = null;
+            if (typeof rt().cameraPitch === 'function') {
+                restoreCamera = rt().cameraPitch().buildForegroundFollowCameraRestorePlan({
+                    routeInProgress: !!rt().getRouteInProgress(),
+                    zoomAndFollowEnabled: !!(typeof rt().getZoomAndFollowEnabled === 'function' &&
+                        rt().getZoomAndFollowEnabled()),
+                    mapFollowingActive: !!(typeof rt().getMapFollowingActive === 'function' &&
+                        rt().getMapFollowingActive()),
+                });
+            }
+            if (restoreCamera && restoreCamera.shouldRestore &&
+                typeof rt().call.applyLiveNavigationCamera === 'function') {
+                rt().call.applyLiveNavigationCamera();
+            }
         } catch (e) {
             console.warn('[Mobile] Foreground nav resume failed:', e);
         }

@@ -1840,6 +1840,7 @@ function getJourneyOverviewOrchestrationRuntime() {
         call: {
             showStatus,
             updateRecenterButtonVisibility,
+            applyLiveNavigationCamera,
         },
     };
 }
@@ -2984,12 +2985,16 @@ function getMobilePwaOrchestrationRuntime() {
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getGpsWatchId: () => VoyagrGpsOrchestration.getGpsWatchId(),
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getZoomAndFollowEnabled: () => VoyagrMapRecenterOrchestration.getZoomAndFollowEnabled(),
+        getMapFollowingActive: () => VoyagrMapRecenterOrchestration.getMapFollowingActive(),
+        cameraPitch: () => _cameraPitch(),
         call: {
             collapseBottomSheet,
             startGPSTracking,
             ensureGPSTracking,
             ensureNavWakeLock: (opts) => VoyagrNavigationLifecycleOrchestration.ensureNavWakeLock(opts),
             redrawNavigationVehicleMarker,
+            applyLiveNavigationCamera,
         },
     };
 }

@@ -91,6 +91,7 @@
                 hasMap: !!map,
                 currentLat: rt().getCurrentLat(),
                 currentLon: rt().getCurrentLon(),
+                followPadding: rt().cameraPitch().resolveFollowPadding({ map: map }),
             });
             setMapFollowingActive(execute.mapFollowingActive);
             rt().call.showStatus(execute.statusMessage, execute.statusType);
@@ -141,6 +142,7 @@
                 ? currentUserMarker.speed
                 : 0;
             var speedMph = speedMps * 2.23694;
+            var viewport = rt().cameraPitch().resolveFollowViewportSize({ map: map });
             var followInput = MC.buildRecenterNavigationFollowInputPlan({
                 lat: lat,
                 lon: lon,
@@ -152,8 +154,8 @@
                 mapBearing: map.getBearing(),
                 shouldTilt: rt().call.shouldTiltDrivingCamera(),
                 usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
-                viewportHeight: window.innerHeight,
-                viewportWidth: window.innerWidth,
+                viewportHeight: viewport.height,
+                viewportWidth: viewport.width,
             });
             var followCamera = rt().cameraPitch().buildNavigationFollowCameraPlan(
                 Object.assign({}, followInput, {

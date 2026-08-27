@@ -67,7 +67,7 @@
             pitch: shouldTiltDrivingCamera() ? 60 : 0,
             bearing: heading,
             center: [currentLon, currentLat],
-            padding: rt().cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
+            padding: rt().cameraPitch().resolveFollowPadding({ map: map }),
         });
         console.log('[Driver View] ' + (shouldTiltDrivingCamera() ? '60°' : 'flat 2D') + ' navigation camera (follow padding)');
     }
@@ -86,7 +86,7 @@
         if (shouldUsePitchedDrivingCamera()) {
             easeOptions.pitch = shouldTiltDrivingCamera() ? 60 : 0;
             easeOptions.bearing = heading;
-            easeOptions.padding = rt().cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
+            easeOptions.padding = rt().cameraPitch().resolveFollowPadding({ map: map });
             const currentLat = rt().getCurrentLat();
             const currentLon = rt().getCurrentLon();
             if (currentLat != null && currentLon != null) {

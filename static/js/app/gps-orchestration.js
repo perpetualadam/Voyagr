@@ -136,6 +136,7 @@
             routeInProgress: rt().g('routeInProgress'),
         });
 
+        const viewport = CP.resolveFollowViewportSize({ map: rt().g('map') });
         const followCamera = (followPlan.mode === 'navigation' && rt().g('map'))
             ? CP.buildNavigationFollowCameraPlan({
                 speedMph,
@@ -148,8 +149,8 @@
                 durationMs: followPlan.durationMs,
                 shouldTilt: rt().call.shouldTiltDrivingCamera(),
                 usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
-                viewportHeight: window.innerHeight,
-                viewportWidth: window.innerWidth,
+                viewportHeight: viewport.height,
+                viewportWidth: viewport.width,
                 computeSmartZoom: (spd, dist, roadType) => rgModule().calculateSmartZoom(
                     spd, dist, roadType, rt().consts.ZOOM_LEVELS, rt().consts.TURN_ZOOM_THRESHOLD
                 ),
@@ -162,8 +163,8 @@
             followCameraPlan: followCamera,
             markerLat,
             markerLon,
-            viewportHeight: window.innerHeight,
-            viewportWidth: window.innerWidth,
+            viewportHeight: viewport.height,
+            viewportWidth: viewport.width,
             isActiveNavigationFollow: rt().call.isActiveNavigationFollow(),
             driverPerspectiveEnabled: rt().g('driverPerspectiveEnabled'),
         });

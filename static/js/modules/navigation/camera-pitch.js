@@ -55,6 +55,71 @@
     }
 
     /**
+     * Prefer the MapLibre canvas size so follow padding matches the transform
+     * that actually receives easeTo/flyTo. Window size is only a fallback.
+     * @param {Object} [opts]
+     * @param {{ getContainer?: function }} [opts.map]
+     * @param {number} [opts.fallbackHeight]
+     * @param {number} [opts.fallbackWidth]
+     * @returns {{ height: number, width: number }}
+     */
+    function resolveFollowViewportSize(opts) {
+        opts = opts || {};
+        var map = opts.map;
+        if (map && typeof map.getContainer === 'function') {
+            try {
+                var el = map.getContainer();
+                if (el && el.clientHeight > 0 && el.clientWidth > 0) {
+                    return { height: el.clientHeight, width: el.clientWidth };
+                }
+            } catch (_err) { /* fall through to window/fallback */ }
+        }
+        var fallbackH = opts.fallbackHeight;
+        var fallbackW = opts.fallbackWidth;
+        if (fallbackH == null && typeof window !== 'undefined') {
+            fallbackH = window.innerHeight;
+        }
+        if (fallbackW == null && typeof window !== 'undefined') {
+            fallbackW = window.innerWidth;
+        }
+        var h = Number(fallbackH);
+        var w = Number(fallbackW);
+        return {
+            height: (Number.isFinite(h) && h > 0) ? h : 0,
+            width: (Number.isFinite(w) && w > 0) ? w : 0,
+        };
+    }
+
+    /**
+     * Follow padding for the given map canvas (or window fallback).
+     * @param {Object} [opts] - same as resolveFollowViewportSize
+     * @returns {{top:number, bottom:number, left:number, right:number}}
+     */
+    function resolveFollowPadding(opts) {
+        var size = resolveFollowViewportSize(opts);
+        return computeFollowPadding(size.height, size.width);
+    }
+
+    /**
+     * Whether returning to the foreground should re-apply the navigation camera.
+     * Must not restore when the driver has left follow / zoom-and-follow.
+     * @param {Object} [opts]
+     * @returns {{ shouldRestore: boolean, action: string }}
+     */
+    function buildForegroundFollowCameraRestorePlan(opts) {
+        opts = opts || {};
+        var shouldRestore = !!(
+            opts.routeInProgress &&
+            opts.zoomAndFollowEnabled &&
+            opts.mapFollowingActive
+        );
+        return {
+            shouldRestore: shouldRestore,
+            action: shouldRestore ? 'applyLiveNavigationCamera' : 'skip',
+        };
+    }
+
+    /**
      * Whether and how the follow camera should ease on this GPS tick.
      * @param {Object} opts
      * @param {number} [opts.nowMs]
@@ -353,6 +418,9 @@
     const api = {
         decideDrivingCamera: decideDrivingCamera,
         computeFollowPadding: computeFollowPadding,
+        resolveFollowViewportSize: resolveFollowViewportSize,
+        resolveFollowPadding: resolveFollowPadding,
+        buildForegroundFollowCameraRestorePlan: buildForegroundFollowCameraRestorePlan,
         buildNavigationFollowEasePlan: buildNavigationFollowEasePlan,
         buildNavigationFollowCameraPlan: buildNavigationFollowCameraPlan,
         buildNavigationFollowApplyPlan: buildNavigationFollowApplyPlan,
