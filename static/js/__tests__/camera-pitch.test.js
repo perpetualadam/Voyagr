@@ -96,6 +96,14 @@ describe('computeFollowPadding', () => {
         expect(computeFollowPadding(400, 300).bottom).toBe(96);
         expect(computeFollowPadding(2000, 300).bottom).toBe(200);
     });
+
+    test('places the vanishing point below the visual centre so more map is ahead', () => {
+        const height = 800;
+        const padding = computeFollowPadding(height, 400);
+        const vanishingY = (padding.top + height - padding.bottom) / 2;
+        expect(vanishingY).toBeGreaterThan(height / 2);
+        expect(padding.top).toBeGreaterThan(padding.bottom);
+    });
 });
 
 describe('buildNavigationFollowEasePlan', () => {
@@ -162,6 +170,34 @@ describe('buildNavigationFollowCameraPlan', () => {
         expect(plan.zoom).toBe(15);
         expect(plan.pitch).toBe(60);
         expect(plan.easeTo.center).toEqual([-0.1, 51.5]);
+        expect(plan.easeTo.padding).toEqual({
+            top: 440,
+            bottom: 120,
+            left: 12,
+            right: 12,
+        });
+        expect(plan.easeTo.padding.top).toBeGreaterThan(plan.easeTo.padding.bottom);
+        expect(plan.padding).toEqual(plan.easeTo.padding);
+    });
+
+    test('keeps the same follow padding across GPS-style camera rebuilds', () => {
+        const opts = {
+            speedMph: 40,
+            roadType: 'urban',
+            heading: 10,
+            markerLat: 53.5,
+            markerLon: -1.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 16,
+        };
+        const first = buildNavigationFollowCameraPlan(opts);
+        const second = buildNavigationFollowCameraPlan(Object.assign({}, opts, { heading: 18 }));
+        expect(second.easeTo.padding).toEqual(first.easeTo.padding);
+        expect(second.easeTo.center).toEqual([-1.1, 53.5]);
     });
 });
 
@@ -194,7 +230,33 @@ describe('buildSmartZoomEasePlan', () => {
         expect(plan.shouldApply).toBe(true);
         expect(plan.newZoomLevel).toBe(15);
         expect(plan.easeTo.zoom).toBe(15);
+        expect(plan.easeTo.padding).toEqual({
+            top: 440,
+            bottom: 120,
+            left: 12,
+            right: 12,
+        });
         expect(plan.logTurn).toBe(false);
+    });
+
+    test('omits follow padding when zoom-and-follow is not active', () => {
+        const plan = buildSmartZoomEasePlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            speedMph: 60,
+            distanceToNextTurn: null,
+            roadType: 'primary',
+            lastZoomLevel: 13,
+            userLat: 51.5,
+            userLon: -0.1,
+            hasMap: true,
+            zoomAndFollowEnabled: false,
+            mapFollowingActive: false,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 15,
+        });
+        expect(plan.easeTo.padding).toBeUndefined();
     });
 
     test('flags turn-based zoom in log metadata', () => {
@@ -316,6 +378,7 @@ describe('buildNavigationFollowApplyPlan', () => {
         expect(apply.action).toBe('navigation');
         expect(apply.navigationFollowEaseApplied).toBe(true);
         expect(apply.easeTo.center).toEqual([-0.1, 51.5]);
+        expect(apply.easeTo.padding.top).toBeGreaterThan(apply.easeTo.padding.bottom);
         expect(apply.logLine).toContain('[Navigation] View');
         expect(apply.updateRecenterVisibility).toBe(true);
     });
@@ -377,6 +440,29 @@ describe('buildSmartZoomApplyPlan', () => {
         expect(apply.lastTurnZoomApplied).toBe(true);
     });
 
+    test('preserves follow padding on the smart-zoom apply easeTo', () => {
+        const { computeFollowPadding } = require('../modules/navigation/camera-pitch.js');
+        const easePlan = buildSmartZoomEasePlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            speedMph: 20,
+            distanceToNextTurn: 200,
+            roadType: 'residential',
+            lastZoomLevel: 13,
+            userLat: 51.5,
+            userLon: -0.1,
+            hasMap: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            turnZoomThreshold: 500,
+            computeSmartZoom: () => 17,
+        });
+        const apply = buildSmartZoomApplyPlan(easePlan);
+        expect(apply.easeTo.padding).toEqual(computeFollowPadding(800, 400));
+    });
+
     test('returns speed-based log when not a turn zoom', () => {
         const easePlan = buildSmartZoomEasePlan({
             smartZoomEnabled: true,
@@ -393,5 +479,61 @@ describe('buildSmartZoomApplyPlan', () => {
         const apply = buildSmartZoomApplyPlan(easePlan);
         expect(apply.logLine).toContain('Speed-based zoom');
         expect(apply.lastTurnZoomApplied).toBe(false);
+    });
+});
+
+describe('resolveFollowViewportSize', () => {
+    const {
+        resolveFollowViewportSize,
+        resolveFollowPadding,
+        computeFollowPadding,
+    } = require('../modules/navigation/camera-pitch.js');
+
+    test('prefers the map container over the window fallback', () => {
+        const size = resolveFollowViewportSize({
+            map: { getContainer: () => ({ clientHeight: 640, clientWidth: 360 }) },
+            fallbackHeight: 800,
+            fallbackWidth: 400,
+        });
+        expect(size).toEqual({ height: 640, width: 360 });
+        expect(resolveFollowPadding({
+            map: { getContainer: () => ({ clientHeight: 640, clientWidth: 360 }) },
+        })).toEqual(computeFollowPadding(640, 360));
+    });
+
+    test('falls back when the map container has no size', () => {
+        expect(resolveFollowViewportSize({
+            map: { getContainer: () => ({ clientHeight: 0, clientWidth: 0 }) },
+            fallbackHeight: 800,
+            fallbackWidth: 400,
+        })).toEqual({ height: 800, width: 400 });
+    });
+});
+
+describe('buildForegroundFollowCameraRestorePlan', () => {
+    const { buildForegroundFollowCameraRestorePlan } = require('../modules/navigation/camera-pitch.js');
+
+    test('re-applies the live navigation camera after background when follow is active', () => {
+        expect(buildForegroundFollowCameraRestorePlan({
+            routeInProgress: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        })).toEqual({
+            shouldRestore: true,
+            action: 'applyLiveNavigationCamera',
+        });
+    });
+
+    test('does not force the camera back when the driver left follow', () => {
+        expect(buildForegroundFollowCameraRestorePlan({
+            routeInProgress: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: false,
+        }).shouldRestore).toBe(false);
+        expect(buildForegroundFollowCameraRestorePlan({
+            routeInProgress: true,
+            zoomAndFollowEnabled: false,
+            mapFollowingActive: true,
+        }).action).toBe('skip');
     });
 });

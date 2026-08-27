@@ -448,6 +448,8 @@ describe('map-controls module', () => {
             mapFollowingActive: true,
         });
         expect(gesture.pauseMapFollowing).toBe(true);
+        expect(gesture.flyTo).toBeUndefined();
+        expect(gesture.easeTo).toBeUndefined();
         expect(MC.buildMapExploreMoveEndExecutePlan().updateRecenterVisibility).toBe(true);
     });
 
@@ -463,6 +465,25 @@ describe('map-controls module', () => {
         expect(MC.buildRecenterButtonVisibilityExecutePlan(true).display).toBe('flex');
         expect(MC.buildRecenterOnVehiclePreflightPlan({ hasMap: false }).shouldRecenter).toBe(false);
         expect(MC.buildRecenterTrackingEasePlan({ lat: 1, lon: 2, currentZoom: 15 }).easeTo.zoom).toBe(16);
+
+        const { buildNavigationFollowCameraPlan, computeFollowPadding } =
+            require('../modules/navigation/camera-pitch.js');
+        const followInput = MC.buildRecenterNavigationFollowInputPlan({
+            lat: 51.5,
+            lon: -0.1,
+            speedMph: 30,
+            roadType: 'urban',
+            heading: 90,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+        });
+        const followCamera = buildNavigationFollowCameraPlan(Object.assign({}, followInput, {
+            computeSmartZoom: () => 16,
+        }));
+        expect(followCamera.easeTo.padding).toEqual(computeFollowPadding(800, 400));
+        expect(followCamera.easeTo.center).toEqual([-0.1, 51.5]);
     });
 
     test('journey overview toggle and button UI plans', () => {
@@ -482,12 +503,16 @@ describe('map-controls module', () => {
         });
         expect(activate.journeyOverviewActive).toBe(true);
         expect(activate.fitBounds.padding).toBe(50);
+        const followPadding = { top: 440, bottom: 120, left: 12, right: 12 };
         const deactivate = MC.buildToggleJourneyOverviewDeactivatePlan({
             zoomAndFollowEnabled: true,
             savedMapState: { center: { lat: 1, lng: 2 }, zoom: 15 },
+            followPadding,
         });
         expect(deactivate.restoreMapFollowing).toBe(true);
+        expect(deactivate.restoreLiveNavigationCamera).toBe(true);
         expect(deactivate.flyTo.pitch).toBe(55);
+        expect(deactivate.flyTo.padding).toEqual(followPadding);
         expect(MC.buildJourneyOverviewButtonUiExecutePlan(true).innerHtml).toBe(MC.JOURNEY_RETURN_ICON);
     });
 
@@ -500,12 +525,22 @@ describe('map-controls module', () => {
         expect(orch.action).toBe('disable');
         expect(orch.nextEnabled).toBe(false);
 
+        const followPadding = { top: 440, bottom: 120, left: 12, right: 12 };
         const enable = MC.buildToggleZoomAndFollowEnabledExecutePlan({
             hasMap: true,
             currentLat: 51.5,
             currentLon: -0.1,
+            followPadding,
         });
         expect(enable.flyTo.zoom).toBe(17);
+        expect(enable.flyTo.center).toEqual([-0.1, 51.5]);
+        expect(enable.flyTo.padding).toEqual(followPadding);
+        expect(enable.flyTo.padding.top).toBeGreaterThan(enable.flyTo.padding.bottom);
         expect(MC.buildZoomFollowButtonUiExecutePlan(true).active).toBe(true);
+
+        const disabled = MC.buildToggleZoomAndFollowDisabledExecutePlan();
+        expect(disabled.mapFollowingActive).toBe(false);
+        expect(disabled.flyTo).toBeUndefined();
+        expect(disabled.easeTo).toBeUndefined();
     });
 });

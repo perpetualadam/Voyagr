@@ -71,6 +71,7 @@
         const CP = rt().cameraPitch();
         const map = rt().getMap();
         const currentUserMarker = rt().getCurrentUserMarker();
+        const viewport = CP.resolveFollowViewportSize({ map: map });
         const easePlan = CP.buildSmartZoomEasePlan({
             smartZoomEnabled: getSmartZoomEnabled(),
             routeInProgress: rt().getRouteInProgress(),
@@ -83,8 +84,8 @@
             hasMap: !!map,
             zoomAndFollowEnabled: rt().getZoomAndFollowEnabled(),
             mapFollowingActive: rt().getMapFollowingActive(),
-            viewportHeight: window.innerHeight,
-            viewportWidth: window.innerWidth,
+            viewportHeight: viewport.height,
+            viewportWidth: viewport.width,
             currentPitch: map && typeof map.getPitch === 'function' ? map.getPitch() : 0,
             currentBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
             vehicleHeading: currentUserMarker && typeof currentUserMarker.heading === 'number'
