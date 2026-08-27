@@ -195,9 +195,12 @@
                 duration: opts.durationMs != null ? opts.durationMs : 650,
                 essential: true,
             };
-            // Only animate zoom when the target level actually changed (avoids needless zoom easing).
+            // Only skip zoom when this exact integer band was already applied.
+            // Do not use a "within 1" check: lastZoomLevel is often a fractional
+            // map.getZoom() from route fit, and syncing the target band after an
+            // omitted zoom leaves the camera stuck (e.g. at overview).
             var lastZoom = opts.lastZoomLevel;
-            var zoomChanged = !Number.isFinite(lastZoom) || Math.abs(smartZoom - lastZoom) >= 1;
+            var zoomChanged = !Number.isFinite(lastZoom) || lastZoom !== smartZoom;
             if (zoomChanged) {
                 easeTo.zoom = smartZoom;
             }
@@ -354,10 +357,16 @@
         if (followPlan.mode === 'navigation') {
             var followCamera = opts.followCameraPlan || {};
             var applied = !!followCamera.easeTo;
+            // Only expose followZoom for lastZoomLevel sync when easeTo actually
+            // included zoom; otherwise gps-orchestration would record the band
+            // as applied while the camera never moved to it.
+            var easeZoom = applied && followCamera.easeTo && Number.isFinite(followCamera.easeTo.zoom)
+                ? followCamera.easeTo.zoom
+                : null;
             var result = {
                 action: 'navigation',
                 navigationFollowEaseApplied: applied,
-                navigationFollowZoom: applied ? followCamera.zoom : null,
+                navigationFollowZoom: easeZoom,
                 updateRecenterVisibility: true,
                 logLine: '[Navigation] View: pitch ' + (followCamera.pitch || 0) + '°, bearing ' +
                     Math.round(followCamera.bearing || 0) + '°, zoom ' +

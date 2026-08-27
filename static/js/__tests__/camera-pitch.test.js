@@ -226,6 +226,27 @@ describe('buildNavigationFollowCameraPlan', () => {
         expect(plan.easeTo.zoom).toBeUndefined();
     });
 
+    test('includes ease zoom when fractional lastZoomLevel is within 1 of target', () => {
+        // Route fit stores map.getZoom() (fractional). A "within 1" gate would omit
+        // zoom then sync the integer band, leaving the camera at overview.
+        const plan = buildNavigationFollowCameraPlan({
+            speedMph: 40,
+            lastZoomLevel: 15.4,
+            roadType: 'urban',
+            heading: 10,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 16,
+        });
+        expect(plan.zoom).toBe(16);
+        expect(plan.easeTo.zoom).toBe(16);
+    });
+
     test('keeps the same follow padding across GPS-style camera rebuilds', () => {
         const opts = {
             speedMph: 40,
@@ -436,10 +457,48 @@ describe('buildNavigationFollowApplyPlan', () => {
         });
         expect(apply.action).toBe('navigation');
         expect(apply.navigationFollowEaseApplied).toBe(true);
+        expect(apply.navigationFollowZoom).toBe(15);
         expect(apply.easeTo.center).toEqual([-0.1, 51.5]);
         expect(apply.easeTo.padding.top).toBeGreaterThan(apply.easeTo.padding.bottom);
         expect(apply.logLine).toContain('[Navigation] View');
         expect(apply.updateRecenterVisibility).toBe(true);
+    });
+
+    test('does not sync followZoom when easeTo omitted zoom for unchanged band', () => {
+        const easePlan = buildNavigationFollowEasePlan({
+            nowMs: 5000,
+            lastFollowEaseAt: 0,
+            followJumpM: 50,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        const cameraPlan = buildNavigationFollowCameraPlan({
+            speedMph: 40,
+            lastZoomLevel: 16,
+            roadType: 'urban',
+            heading: 90,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 16,
+        });
+        expect(cameraPlan.easeTo.zoom).toBeUndefined();
+        const apply = buildNavigationFollowApplyPlan({
+            hasMap: true,
+            followEasePlan: easePlan,
+            followCameraPlan: cameraPlan,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            isActiveNavigationFollow: true,
+            driverPerspectiveEnabled: false,
+        });
+        expect(apply.navigationFollowEaseApplied).toBe(true);
+        expect(apply.navigationFollowZoom).toBeNull();
+        expect(apply.easeTo.zoom).toBeUndefined();
     });
 
     test('browsing mode eases with padding when route in progress', () => {
