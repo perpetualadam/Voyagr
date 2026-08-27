@@ -17,11 +17,13 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
     let NavigationLifecycle;
     let showStatus;
     let addPolyline;
+    let clearLastDistanceToNextTurn;
 
     function bindRuntime(overrides) {
         overrides = overrides || {};
         showStatus = jest.fn();
         addPolyline = overrides.addPolyline || jest.fn(() => ({ _added: true }));
+        clearLastDistanceToNextTurn = overrides.clearLastDistanceToNextTurn || jest.fn();
         const redrawNavigationRouteLayer = overrides.redrawNavigationRouteLayer || jest.fn();
 
         const noop = jest.fn();
@@ -53,10 +55,16 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             getRouteLayer: () => null,
             setRouteLayer: noop,
             setMapFollowingActive: noop,
+            setJourneyOverviewActive: noop,
+            setSavedMapState: noop,
             setLastETAAnnouncementTime: noop,
             setLastAnnouncedETA: noop,
             setLastNavTrafficFetchAt: noop,
             setInitialETAMovementRetries: noop,
+            clearLastDistanceToNextTurn,
+            getDriverPerspectiveEnabled: () => false,
+            getArModeActive: () => false,
+            getUpdatePending: () => false,
             call: {
                 resetVoiceAnnouncementStateForNewRoute: noop,
                 resetVehicleMarkerDisplayState: noop,
@@ -66,6 +74,8 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
                 precacheRouteTiles: noop,
                 clearAllRouteLayersFromMap: noop,
                 clearAllRouteLayerHandles: noop,
+                clearPersistedRoute: noop,
+                clearRerouteFailureRetries: noop,
                 navActiveRouteColor: () => '#3388ff',
                 bringNavRouteAboveTrafficEdges: noop,
                 redrawNavigationRouteLayer,
@@ -73,14 +83,22 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
                 sendNotification: noop,
                 speakMessage: noop,
                 startGPSTracking: noop,
+                stopGPSTracking: noop,
                 startLiveDataRefresh: noop,
+                stopLiveDataRefresh: noop,
                 updateETACalculation: noop,
                 scheduleInitialETAAnnouncement: noop,
+                clearInitialETAAnnouncement: noop,
                 startAutoTrafficUpdates: noop,
+                stopAutoTrafficUpdates: noop,
                 startRouteTrafficUpdates: noop,
+                stopRouteTrafficUpdates: noop,
                 showTurnInstructionWidget: noop,
+                hideTurnInstructionWidget: noop,
                 updateTurnInstructionDisplay: noop,
                 showJourneySummaryBar: noop,
+                hideJourneySummaryBar: noop,
+                hideRoadNameBar: noop,
                 updateNavigationFabVisibility: noop,
                 voyagrShowMapIconHint: noop,
                 showVolumeHintForNavigation: noop,
@@ -89,6 +107,12 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
                 updateRecenterButtonVisibility: noop,
                 updateSpeedWidgetVisibility: noop,
                 shouldUsePitchedDrivingCamera: () => false,
+                applyDriverPerspective: noop,
+                buildTraveledJourneyRoute: noop,
+                persistCompletedTrip: noop,
+                showJourneySummary: noop,
+                stopARMode: noop,
+                saveAppState: noop,
                 getTrafficSettingsSnapshot: () => ({
                     autoTrafficUpdateEnabled: false,
                     routeTrafficEnabled: false,
@@ -177,5 +201,26 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             expect.stringContaining('retry'),
             'warning'
         );
+    });
+
+    test('nav start clears cached lastDistanceToNextTurn from the previous trip', () => {
+        bindRuntime();
+
+        NavigationLifecycle.startTurnByTurnNavigation({
+            geometry: 'encoded',
+            maneuvers: [{ type: 1, instruction: 'Turn left' }],
+        });
+
+        expect(clearLastDistanceToNextTurn).toHaveBeenCalled();
+    });
+
+    test('nav stop clears cached lastDistanceToNextTurn', () => {
+        bindRuntime();
+        NavigationLifecycle.setRouteInProgress(true);
+
+        NavigationLifecycle.stopTurnByTurnNavigation();
+
+        expect(clearLastDistanceToNextTurn).toHaveBeenCalled();
+        expect(NavigationLifecycle.getRouteInProgress()).toBe(false);
     });
 });

@@ -2673,6 +2673,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
         setLastAnnouncedETA: (val) => VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val),
         setLastNavTrafficFetchAt: (val) => VoyagrLiveDataRefreshOrchestration.setLastNavTrafficFetchAt(val),
         setInitialETAMovementRetries: (val) => VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val),
+        clearLastDistanceToNextTurn: () => VoyagrSmartZoomOrchestration.clearLastDistanceToNextTurn(),
         call: {
             resetVoiceAnnouncementStateForNewRoute,
             resetVehicleMarkerDisplayState,

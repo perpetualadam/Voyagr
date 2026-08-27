@@ -44,6 +44,16 @@
         lastDistanceToNextTurn = (val != null && Number.isFinite(val)) ? val : null;
     }
 
+    /**
+     * Drop turn-proximity caches at route boundaries so follow (which reads the
+     * detect-tick cache before detect runs) cannot inherit the previous trip.
+     */
+    function clearLastDistanceToNextTurn() {
+        lastDistanceToNextTurn = null;
+        lastSmartZoomTurnDistance = null;
+        lastTurnZoomApplied = false;
+    }
+
     function buildSmartZoomHysteresis() {
         return {
             lastZoomLevel: getLastZoomLevel(),
@@ -171,6 +181,7 @@
         setLastTurnZoomApplied: setLastTurnZoomApplied,
         getLastDistanceToNextTurn: getLastDistanceToNextTurn,
         setLastDistanceToNextTurn: setLastDistanceToNextTurn,
+        clearLastDistanceToNextTurn: clearLastDistanceToNextTurn,
         getZoomLevels: getZoomLevels,
         getTurnZoomThreshold: getTurnZoomThreshold,
         getZoomAnimationDuration: getZoomAnimationDuration,
