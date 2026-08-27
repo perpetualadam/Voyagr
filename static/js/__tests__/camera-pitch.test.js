@@ -226,6 +226,40 @@ describe('buildNavigationFollowCameraPlan', () => {
         expect(plan.easeTo.zoom).toBeUndefined();
     });
 
+    test('eases zoom when lastZoomLevel is a fractional overview near the target band', () => {
+        const plan = buildNavigationFollowCameraPlan({
+            speedMph: 40,
+            lastZoomLevel: 14.7,
+            heading: 10,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 15,
+        });
+        expect(plan.easeTo.zoom).toBe(15);
+    });
+
+    test('eases to turn zoom when lastZoomLevel is a nearby fractional level', () => {
+        const plan = buildNavigationFollowCameraPlan({
+            speedMph: 20,
+            lastZoomLevel: 17.4,
+            heading: 10,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 18,
+        });
+        expect(plan.easeTo.zoom).toBe(18);
+    });
+
     test('keeps the same follow padding across GPS-style camera rebuilds', () => {
         const opts = {
             speedMph: 40,

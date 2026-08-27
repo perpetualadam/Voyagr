@@ -10,6 +10,7 @@
     var lastZoomLevel = 13;
     var lastTurnZoomApplied = false;
     var lastDistanceToNextTurn = null;
+    var lastTurnZoomDistance = null;
     var smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
         ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
         : (localStorage.getItem('smartZoomEnabled') === null
@@ -36,21 +37,31 @@
     function getLastZoomLevel() { return lastZoomLevel; }
     function setLastZoomLevel(val) { lastZoomLevel = val; }
     function getLastTurnZoomApplied() { return lastTurnZoomApplied; }
-    function setLastTurnZoomApplied(val) { lastTurnZoomApplied = !!val; }
+    function setLastTurnZoomApplied(val) {
+        lastTurnZoomApplied = !!val;
+        if (!lastTurnZoomApplied) lastTurnZoomDistance = null;
+    }
     function getLastDistanceToNextTurn() { return lastDistanceToNextTurn; }
     function setLastDistanceToNextTurn(val) {
         lastDistanceToNextTurn = (val != null && Number.isFinite(val)) ? val : null;
+    }
+
+    function resetSessionZoomState() {
+        lastDistanceToNextTurn = null;
+        lastTurnZoomApplied = false;
+        lastTurnZoomDistance = null;
     }
 
     function buildSmartZoomHysteresis() {
         return {
             lastZoomLevel: getLastZoomLevel(),
             lastTurnZoomApplied: getLastTurnZoomApplied(),
+            lastTurnDistance: lastTurnZoomDistance,
         };
     }
 
     function computeSmartZoomLevel(speedMph, distanceToNextTurn, roadType) {
-        return rt().routeGeometry().calculateSmartZoom(
+        var zoom = rt().routeGeometry().calculateSmartZoom(
             speedMph,
             distanceToNextTurn,
             roadType,
@@ -58,6 +69,10 @@
             getTurnZoomThreshold(),
             buildSmartZoomHysteresis()
         );
+        if (zoom === getZoomLevels().turn_ahead && Number.isFinite(distanceToNextTurn)) {
+            lastTurnZoomDistance = distanceToNextTurn;
+        }
+        return zoom;
     }
 
     function rt() {
@@ -160,6 +175,7 @@
         setLastTurnZoomApplied: setLastTurnZoomApplied,
         getLastDistanceToNextTurn: getLastDistanceToNextTurn,
         setLastDistanceToNextTurn: setLastDistanceToNextTurn,
+        resetSessionZoomState: resetSessionZoomState,
         getZoomLevels: getZoomLevels,
         getTurnZoomThreshold: getTurnZoomThreshold,
         getZoomAnimationDuration: getZoomAnimationDuration,

@@ -508,6 +508,7 @@
      * @param {object} [hysteresis]
      * @param {number} [hysteresis.lastZoomLevel]
      * @param {boolean} [hysteresis.lastTurnZoomApplied]
+     * @param {number} [hysteresis.lastTurnDistance] - Distance used when turn zoom was last applied
      * @param {number} [hysteresis.speedHysteresisMph]
      * @param {number} [hysteresis.turnExitExtraMeters]
      * @returns {number} Zoom level
@@ -518,6 +519,9 @@
         var hyst = hysteresis || null;
         var lastZoom = (hyst && Number.isFinite(hyst.lastZoomLevel)) ? hyst.lastZoomLevel : null;
         var lastTurn = !!(hyst && hyst.lastTurnZoomApplied);
+        var lastTurnDistance = (hyst && Number.isFinite(hyst.lastTurnDistance))
+            ? hyst.lastTurnDistance
+            : null;
         var speedHyst = (hyst && hyst.speedHysteresisMph != null)
             ? hyst.speedHysteresisMph
             : DEFAULT_SPEED_HYSTERESIS_MPH;
@@ -526,9 +530,15 @@
             : DEFAULT_TURN_EXIT_EXTRA_METERS;
 
         var enterTurn = distanceToNextTurn != null && distanceToNextTurn < threshold;
+        // Exit hysteresis is only for the same maneuver (GPS jitter around 500 m).
+        // A jump to a farther turn is a new maneuver, not a stay.
+        var jumpedToNewTurn = lastTurnDistance != null &&
+            distanceToNextTurn != null &&
+            distanceToNextTurn > lastTurnDistance + turnExitExtra;
         var stayInTurn = lastTurn &&
             distanceToNextTurn != null &&
-            distanceToNextTurn < (threshold + turnExitExtra);
+            distanceToNextTurn < (threshold + turnExitExtra) &&
+            !jumpedToNewTurn;
         if (enterTurn || stayInTurn) {
             return ZL.turn_ahead;
         }

@@ -195,10 +195,10 @@
                 duration: opts.durationMs != null ? opts.durationMs : 650,
                 essential: true,
             };
-            // Only animate zoom when the target level actually changed (avoids needless zoom easing).
+            // Omit zoom only when lastZoomLevel is already this exact band. A fractional
+            // lastZoom from fitBounds/getZoom (e.g. 14.7) must still ease to 15 or 16.
             var lastZoom = opts.lastZoomLevel;
-            var zoomChanged = !Number.isFinite(lastZoom) || Math.abs(smartZoom - lastZoom) >= 1;
-            if (zoomChanged) {
+            if (!Number.isFinite(lastZoom) || lastZoom !== smartZoom) {
                 easeTo.zoom = smartZoom;
             }
         }

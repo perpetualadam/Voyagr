@@ -55,6 +55,13 @@
         setNavigationArrivalZoneSince(0);
     }
 
+    function resetSmartZoomSessionState() {
+        var SZ = root.VoyagrSmartZoomOrchestration;
+        if (SZ && typeof SZ.resetSessionZoomState === 'function') {
+            SZ.resetSessionZoomState();
+        }
+    }
+
     function rt() {
         if (!runtime) {
             throw new Error('[NavigationLifecycle] Orchestration runtime not bound');
@@ -87,6 +94,7 @@
             rt().setLastAnnouncedETA(null);
             rt().setLastNavTrafficFetchAt(0);
             rt().setInitialETAMovementRetries(0);
+            resetSmartZoomSessionState();
         }
 
         if (apply.createEmptyEtaSnapshot) {
@@ -434,6 +442,7 @@
         rt().setJourneyOverviewActive(apply.journeyOverviewActive);
         rt().setSavedMapState(apply.savedMapState);
         rt().setInitialETAMovementRetries(apply.initialETAMovementRetries);
+        resetSmartZoomSessionState();
     }
 
     function applyNavStopWakeLockReleaseFromPlan(lifecycle) {

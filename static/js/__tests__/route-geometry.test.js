@@ -401,6 +401,24 @@ describe('calculateSmartZoom', () => {
         expect(RG.calculateSmartZoom(60, 550, 'primary', ZL, T, hyst)).toBe(ZL.turn_ahead);
         expect(RG.calculateSmartZoom(60, 750, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
     });
+
+    test('turn exit hysteresis holds for GPS jitter around the same 500 m boundary', () => {
+        const hyst = {
+            lastZoomLevel: ZL.turn_ahead,
+            lastTurnZoomApplied: true,
+            lastTurnDistance: 490,
+        };
+        expect(RG.calculateSmartZoom(60, 550, 'primary', ZL, T, hyst)).toBe(ZL.turn_ahead);
+    });
+
+    test('turn exit hysteresis does not keep turn zoom for a different farther turn', () => {
+        const hyst = {
+            lastZoomLevel: ZL.turn_ahead,
+            lastTurnZoomApplied: true,
+            lastTurnDistance: 80,
+        };
+        expect(RG.calculateSmartZoom(60, 600, 'primary', ZL, T, hyst)).toBe(ZL.main_road_medium_speed);
+    });
 });
 
 describe('calculateDriverViewCenter', () => {
