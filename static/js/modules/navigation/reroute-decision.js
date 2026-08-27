@@ -498,6 +498,11 @@
 
     /**
      * Pre-trigger guards before starting an automatic reroute.
+     *
+     * GPS-tick spacing is already enforced by decideRouteDeviation (lastRerouteAttemptTime
+     * + REROUTE_DEBOUNCE_MS). This guard must NOT repeat that debounce: failure retries
+     * (4–14s) fire inside the 30s window, and a just-confirmed deviation must still fetch.
+     *
      * @param {number} now
      * @param {Object} state
      * @returns {{ skip: boolean, reason?: string }}
@@ -506,10 +511,6 @@
         state = state || {};
         if (state.rerouteInProgress) {
             return { skip: true, reason: 'in-progress' };
-        }
-        var debounceMs = state.debounceMs != null ? state.debounceMs : DEFAULTS.REROUTE_DEBOUNCE_MS;
-        if (now - (state.lastRerouteAttemptTime || 0) < debounceMs) {
-            return { skip: true, reason: 'debounced' };
         }
         if (now < (state.postRerouteGraceUntil || 0)) {
             return { skip: true, reason: 'grace' };

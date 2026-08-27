@@ -350,6 +350,15 @@ describe('buildRouteRequest avoid-tolls dependency (PWA-01)', () => {
         expect(body.is_reroute).toBe(true);
     });
 
+    test('PWA-04: deviation reroute origin is the current GPS pair, not a stale start', () => {
+        bindBuildRouteRequest(() => false);
+        const body = RerouteMap.buildRouteRequest(53.43012, -1.35045, '53.52200,-1.12800');
+        expect(body.start).toBe('53.43012,-1.35045');
+        expect(body.end).toBe('53.52200,-1.12800');
+        expect(body.is_reroute).toBe(true);
+        expect(body.start).not.toContain('51.5074');
+    });
+
     test('passes the isAvoidTollsEnabled function, not its boolean result', () => {
         const avoidFn = bindBuildRouteRequest(() => true);
         const collectSpy = jest.spyOn(RR, 'buildRouteRequestCollectPlan');
