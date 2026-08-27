@@ -104,10 +104,17 @@
         if (deactivate.restoreMapFollowing) {
             rt().setMapFollowingActive(true);
         }
+        var liveCameraApplied = false;
         if (deactivate.restoreLiveNavigationCamera &&
             typeof rt().call.applyLiveNavigationCamera === 'function') {
-            rt().call.applyLiveNavigationCamera();
-        } else if (deactivate.flyTo) {
+            var cameraOpts = {
+                zoom: (deactivate.flyTo && deactivate.flyTo.zoom != null)
+                    ? deactivate.flyTo.zoom
+                    : 17,
+            };
+            liveCameraApplied = !!rt().call.applyLiveNavigationCamera(cameraOpts);
+        }
+        if (!liveCameraApplied && deactivate.flyTo) {
             map.flyTo(deactivate.flyTo);
         }
         if (deactivate.clearSavedMapState) {

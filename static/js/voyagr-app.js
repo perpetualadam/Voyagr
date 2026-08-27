@@ -2208,7 +2208,9 @@ function userPrefersFlat2D() { return VoyagrDriverCameraOrchestration.userPrefer
 function decideDrivingCameraState() { return VoyagrDriverCameraOrchestration.decideDrivingCameraState(); }
 function shouldUsePitchedDrivingCamera() { return VoyagrDriverCameraOrchestration.shouldUsePitchedDrivingCamera(); }
 function shouldTiltDrivingCamera() { return VoyagrDriverCameraOrchestration.shouldTiltDrivingCamera(); }
-function applyLiveNavigationCamera() { VoyagrDriverCameraOrchestration.applyLiveNavigationCamera(); }
+function applyLiveNavigationCamera(opts) {
+    return VoyagrDriverCameraOrchestration.applyLiveNavigationCamera(opts);
+}
 function toggleDriverPerspective() { VoyagrDriverCameraOrchestration.toggleDriverPerspective(); }
 function applyDriverPerspective() { VoyagrDriverCameraOrchestration.applyDriverPerspective(); }
 

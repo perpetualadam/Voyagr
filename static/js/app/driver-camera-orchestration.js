@@ -52,24 +52,36 @@
         return decideDrivingCameraState().tilt;
     }
 
-    function applyLiveNavigationCamera() {
+    /**
+     * Ease the map to the live vehicle with heading-up follow framing.
+     * @param {Object} [opts]
+     * @param {number} [opts.zoom] - When set, restore this zoom (e.g. leaving journey overview).
+     * @returns {boolean} false when map/position is missing so callers can fall back.
+     */
+    function applyLiveNavigationCamera(opts) {
+        opts = opts || {};
         const map = rt().getMap();
         const currentLat = rt().getCurrentLat();
         const currentLon = rt().getCurrentLon();
-        if (!map || currentLat == null || currentLon == null) return;
+        if (!map || currentLat == null || currentLon == null) return false;
 
         const currentUserMarker = rt().getCurrentUserMarker();
         const heading = (typeof currentUserMarker?.heading === 'number')
             ? currentUserMarker.heading
             : map.getBearing();
-        map.easeTo({
+        const easeTo = {
             duration: 1000,
             pitch: shouldTiltDrivingCamera() ? 60 : 0,
             bearing: heading,
             center: [currentLon, currentLat],
             padding: rt().cameraPitch().resolveFollowPadding({ map: map }),
-        });
+        };
+        if (opts.zoom != null && Number.isFinite(Number(opts.zoom))) {
+            easeTo.zoom = Number(opts.zoom);
+        }
+        map.easeTo(easeTo);
         console.log('[Driver View] ' + (shouldTiltDrivingCamera() ? '60°' : 'flat 2D') + ' navigation camera (follow padding)');
+        return true;
     }
 
     function applyDriverPerspective() {
