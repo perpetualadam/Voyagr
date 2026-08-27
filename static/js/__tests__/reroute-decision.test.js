@@ -335,13 +335,18 @@ describe('reroute retry and notification helpers', () => {
         expect(RD.formatDeviationDistanceDisplay(30, 'km')).toBe('30 m');
     });
 
-    test('shouldSkipRerouteTrigger respects debounce and grace', () => {
+    test('shouldSkipRerouteTrigger blocks in-progress and grace, not attempt debounce', () => {
+        expect(RD.shouldSkipRerouteTrigger(10000, {
+            rerouteInProgress: true,
+            lastRerouteAttemptTime: 9000,
+            postRerouteGraceUntil: 0,
+        }).reason).toBe('in-progress');
         expect(RD.shouldSkipRerouteTrigger(10000, {
             rerouteInProgress: false,
             lastRerouteAttemptTime: 9000,
             postRerouteGraceUntil: 0,
             debounceMs: 30000,
-        }).skip).toBe(true);
+        }).skip).toBe(false);
         expect(RD.shouldSkipRerouteTrigger(100000, {
             rerouteInProgress: false,
             lastRerouteAttemptTime: 0,
@@ -752,6 +757,72 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.action).toBe('fetch');
         expect(plan.rerouteInProgress).toBe(true);
         expect(plan.guard.proceed).toBe(true);
+    });
+
+    test('PWA-04: confirmed deviation timestamp must not skip the GraphHopper fetch', () => {
+        const now = 1_700_000_000_000;
+        const tick = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            remainingToDest: 8000,
+            accuracy: 10,
+            minDistance: 140,
+            routeJoinConfirmed: true,
+            deviationStartTime: now - 12_000,
+            lastRerouteTime: 0,
+            lastRerouteAttemptTime: 0,
+            offRouteStreak: 5,
+            now,
+            distanceUnit: 'km',
+        });
+        expect(tick.triggerReroute).toBe(true);
+        expect(tick.statePatch.lastRerouteAttemptTime).toBe(now);
+
+        const trigger = RD.buildAutomaticRerouteTriggerPlan(now, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: tick.statePatch.lastRerouteAttemptTime,
+            destination: '53.5220,-1.1280',
+            hasRouteContext: true,
+            offline: false,
+            startLat: 53.4300,
+            startLon: -1.3500,
+        });
+        expect(trigger.action).toBe('fetch');
+        expect(trigger.guard.logMessage).toContain('53.4300');
+        expect(trigger.guard.logMessage).toContain('-1.3500');
+        expect(trigger.guard.logMessage).toContain('53.5220,-1.1280');
+    });
+
+    test('PWA-04: Valhalla trigger path still fetches after a recent attempt timestamp', () => {
+        const now = 1_700_000_000_000;
+        const trigger = RD.buildAutomaticRerouteTriggerPlan(now, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: now,
+            destination: '51.5074,-0.1278',
+            hasRouteContext: true,
+            offline: false,
+            startLat: 51.5000,
+            startLon: -0.1200,
+        });
+        expect(trigger.action).toBe('fetch');
+        expect(RD.routeSourcesMatch('Valhalla', 'valhalla')).toBe(true);
+        expect(RD.routeSourcesMatch('Valhalla', 'osrm')).toBe(false);
+    });
+
+    test('PWA-04: a failed GraphHopper attempt can retry before the 30s GPS debounce', () => {
+        const firstAttempt = 1_700_000_000_000;
+        const retryAt = firstAttempt + 4000;
+        const trigger = RD.buildAutomaticRerouteTriggerPlan(retryAt, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: firstAttempt,
+            destination: '53.5220,-1.1280',
+            hasRouteContext: true,
+            offline: false,
+            startLat: 53.4300,
+            startLon: -1.3500,
+        });
+        expect(trigger.action).toBe('fetch');
+        expect(trigger.rerouteInProgress).toBe(true);
     });
 });
 

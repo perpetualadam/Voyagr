@@ -1363,9 +1363,9 @@
         rt().s('routeJoinConfirmedForDeviation',  stateApply.statePatch.routeJoinConfirmedForDeviation);
         rt().s('deviationStartTimeCheck',  stateApply.statePatch.deviationStartTimeCheck);
         rt().s('deviationOffRouteStreak',  stateApply.statePatch.deviationOffRouteStreak);
-        if (stateApply.statePatch.lastRerouteAttemptTime != null) {
-            rt().s('lastRerouteAttemptTime',  stateApply.statePatch.lastRerouteAttemptTime);
-        }
+        // lastRerouteAttemptTime is owned by triggerAutomaticRerouteWithHazardHandling.
+        // Writing it here made the trigger treat a just-confirmed deviation as
+        // "already attempted" and skip the GraphHopper/Valhalla fetch.
 
         if (stateApply.logJoinLine) console.log(stateApply.logJoinLine);
 
@@ -1494,6 +1494,9 @@
         const now = Date.now();
         const RD = rdModule();
         const destination = rt().call.resolveNavigationDestination();
+        const originLat = Number.isFinite(currentLat) ? currentLat : rt().g('currentLat');
+        const originLon = Number.isFinite(currentLon) ? currentLon : rt().g('currentLon');
+        const previousSource = window.lastCalculatedRoute ? window.lastCalculatedRoute.source : '';
         const trigger = RD.buildAutomaticRerouteTriggerPlan(now, {
             rerouteInProgress: rt().g('rerouteInProgress'),
             lastRerouteAttemptTime: rt().g('lastRerouteAttemptTime'),
@@ -1502,8 +1505,8 @@
             offline: !navigator.onLine,
             destination,
             hasRouteContext: !!window.lastCalculatedRoute,
-            startLat: rt().g('currentLat'),
-            startLon: rt().g('currentLon'),
+            startLat: originLat,
+            startLon: originLon,
         });
         const triggerExecute = RD.buildAutomaticRerouteTriggerExecutePlan(trigger);
 
@@ -1524,9 +1527,15 @@
         rt().s('rerouteInProgress',  triggerExecute.rerouteInProgress);
         try {
             if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
+            console.log(
+                '[Reroute] Provider=' + (previousSource || 'unknown') +
+                ' origin=' + Number(originLat).toFixed(5) + ',' + Number(originLon).toFixed(5) +
+                ' destination=' + destination
+            );
 
-            const routeRequest = rt().call.buildRouteRequest(rt().g('currentLat'), rt().g('currentLon'), destination);
+            const routeRequest = rt().call.buildRouteRequest(originLat, originLon, destination);
             const fetchOrch = RD.buildAutomaticRerouteFetchOrchestrationPlan();
+            console.log('[Reroute] Sending request start=' + routeRequest.start + ' end=' + routeRequest.end);
 
             const response = await fetch(fetchOrch.apiPath, {
                 method: fetchOrch.method,
@@ -1535,6 +1544,11 @@
             });
 
             const data = await response.json();
+            const routeCount = data && data.routes ? data.routes.length : 0;
+            console.log(
+                '[Reroute] Response received success=' + !!(data && data.success) +
+                ' routeCount=' + routeCount
+            );
             const responsePlans = RD.buildAutomaticRerouteResponsePlans(data, {
                 convertDistance: rt().call.convertDistance,
                 distUnit: rt().call.getDistanceUnit(),
@@ -1543,21 +1557,22 @@
                 rerouteFailureRetryCount: rt().g('rerouteFailureRetryCount'),
                 now: Date.now(),
                 previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
-                previousRouteSource: window.lastCalculatedRoute ? window.lastCalculatedRoute.source : '',
+                previousRouteSource: previousSource,
             });
             applyAutomaticRerouteResult({
                 apply: responsePlans.apply,
-                startLat: rt().g('currentLat'),
-                startLon: rt().g('currentLon'),
+                startLat: originLat,
+                startLon: originLon,
                 destination,
             });
         } catch (error) {
             console.error('[Rerouting] Error during automatic reroute:', error);
+            console.log('[Reroute] Reroute failed: ' + (error && error.message ? error.message : error));
             const errorPlans = RD.buildAutomaticRerouteErrorResponsePlans({ rerouteFailureRetryCount: rt().g('rerouteFailureRetryCount') });
             applyAutomaticRerouteResult({
                 apply: errorPlans.apply,
-                startLat: rt().g('currentLat'),
-                startLon: rt().g('currentLon'),
+                startLat: originLat,
+                startLon: originLon,
                 destination,
             });
         }
