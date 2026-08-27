@@ -38,6 +38,11 @@
             return;
         }
 
+        if (autoGpsLocationMonitor != null) {
+            console.log('[Auto GPS] Location monitor already running');
+            return;
+        }
+
         rt().call.showStatus('📍 Auto GPS location enabled. Fetching your location...', 'success');
         console.log('[Auto GPS] Starting auto location monitoring');
 
