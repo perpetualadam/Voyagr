@@ -156,6 +156,12 @@
                 usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
                 viewportHeight: viewport.height,
                 viewportWidth: viewport.width,
+                distanceToNextTurn: rt().getLastDistanceToNextTurn
+                    ? rt().getLastDistanceToNextTurn()
+                    : null,
+                lastZoomLevel: rt().getLastZoomLevel
+                    ? rt().getLastZoomLevel()
+                    : undefined,
             });
             var followCamera = rt().cameraPitch().buildNavigationFollowCameraPlan(
                 Object.assign({}, followInput, {
@@ -165,7 +171,15 @@
                             dist,
                             roadType,
                             rt().getZoomLevels(),
-                            rt().getTurnZoomThreshold()
+                            rt().getTurnZoomThreshold(),
+                            {
+                                lastZoomLevel: rt().getLastZoomLevel
+                                    ? rt().getLastZoomLevel()
+                                    : undefined,
+                                lastTurnZoomApplied: rt().getLastTurnZoomApplied
+                                    ? rt().getLastTurnZoomApplied()
+                                    : false,
+                            }
                         );
                     },
                 })

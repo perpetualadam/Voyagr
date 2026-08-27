@@ -134,7 +134,8 @@
      */
     function buildNavigationFollowEasePlan(opts) {
         opts = opts || {};
-        var followEaseMinMs = opts.followEaseMinMs != null ? opts.followEaseMinMs : 400;
+        // Keep interval >= typical ease duration so overlapping easeTo zooms do not stack.
+        var followEaseMinMs = opts.followEaseMinMs != null ? opts.followEaseMinMs : 700;
         var nowMs = opts.nowMs != null ? opts.nowMs : Date.now();
         var lastFollowEaseAt = opts.lastFollowEaseAt || 0;
         var followJumpM = Number.isFinite(opts.followJumpM) ? opts.followJumpM : Infinity;
@@ -148,7 +149,9 @@
             followDue: followDue,
             followUrgent: followUrgent,
             shouldEase: shouldEase,
-            durationMs: followJumpM > 95 ? 780 : Math.min(680, followEaseMinMs + 240),
+            durationMs: followJumpM > 95
+                ? Math.min(720, followEaseMinMs + 40)
+                : Math.min(650, Math.max(400, followEaseMinMs - 50)),
             browsingDurationMs: followJumpM > 95 ? 650 : 420,
             mode: 'none',
         };
@@ -175,7 +178,8 @@
             ? opts.computeSmartZoom
             : function () { return 16; };
         var roadType = opts.roadType || 'unknown';
-        var smartZoom = computeZoom(opts.speedMph, null, roadType);
+        var distanceToNextTurn = opts.distanceToNextTurn != null ? opts.distanceToNextTurn : null;
+        var smartZoom = computeZoom(opts.speedMph, distanceToNextTurn, roadType);
         var pitch = opts.shouldTilt ? 60 : 0;
         var padding = computeFollowPadding(opts.viewportHeight || 0, opts.viewportWidth || 0);
         var bearing = opts.usePitchedDrivingCamera
@@ -185,13 +189,18 @@
         if (opts.shouldEase) {
             easeTo = {
                 center: [opts.markerLon, opts.markerLat],
-                zoom: smartZoom,
                 bearing: bearing,
                 pitch: pitch,
                 padding: padding,
-                duration: opts.durationMs != null ? opts.durationMs : 640,
+                duration: opts.durationMs != null ? opts.durationMs : 650,
                 essential: true,
             };
+            // Only animate zoom when the target level actually changed (avoids needless zoom easing).
+            var lastZoom = opts.lastZoomLevel;
+            var zoomChanged = !Number.isFinite(lastZoom) || Math.abs(smartZoom - lastZoom) >= 1;
+            if (zoomChanged) {
+                easeTo.zoom = smartZoom;
+            }
         }
         return {
             zoom: smartZoom,
@@ -221,7 +230,6 @@
             return { shouldApply: false };
         }
 
-        var turnThreshold = opts.turnZoomThreshold != null ? opts.turnZoomThreshold : 500;
         var navFollow = !!(opts.zoomAndFollowEnabled && opts.mapFollowingActive);
         var hasUserCoords = opts.userLat != null && opts.userLon != null && opts.hasMap;
         var easeTo = null;
@@ -258,7 +266,8 @@
             return { shouldApply: false };
         }
 
-        var isTurnZoom = opts.distanceToNextTurn != null && opts.distanceToNextTurn < turnThreshold;
+        var turnAheadZoom = opts.turnAheadZoomLevel != null ? opts.turnAheadZoomLevel : 18;
+        var isTurnZoom = newZoomLevel === turnAheadZoom;
         return {
             shouldApply: true,
             newZoomLevel: newZoomLevel,
@@ -273,15 +282,23 @@
 
     /**
      * Decide whether turn/smart zoom should run after navigation follow eased this tick.
+     * When zoom-and-follow is active, follow owns zoom (including turn zoom) so smart zoom
+     * must not fight it on ticks where follow skipped an ease.
      * @param {Object} opts
      * @returns {{ applySmartZoom: boolean, syncLastZoomLevel: (number|null) }}
      */
     function buildNavigationZoomTickPlan(opts) {
         opts = opts || {};
         var followEaseApplied = !!(opts.navigationFollowEaseApplied);
+        var navFollowActive = !!(opts.zoomAndFollowEnabled && opts.mapFollowingActive);
         var syncZoom = followEaseApplied && Number.isFinite(opts.followZoom) ? opts.followZoom : null;
         return {
-            applySmartZoom: !!(opts.smartZoomEnabled && opts.routeInProgress && !followEaseApplied),
+            applySmartZoom: !!(
+                opts.smartZoomEnabled &&
+                opts.routeInProgress &&
+                !followEaseApplied &&
+                !navFollowActive
+            ),
             syncLastZoomLevel: syncZoom,
         };
     }

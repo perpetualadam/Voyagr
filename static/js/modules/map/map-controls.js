@@ -1356,6 +1356,8 @@
             usePitchedDrivingCamera: !!input.usePitchedDrivingCamera,
             viewportHeight: input.viewportHeight,
             viewportWidth: input.viewportWidth,
+            distanceToNextTurn: input.distanceToNextTurn != null ? input.distanceToNextTurn : null,
+            lastZoomLevel: input.lastZoomLevel,
         };
     }
 

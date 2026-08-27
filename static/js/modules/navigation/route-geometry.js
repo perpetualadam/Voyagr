@@ -435,27 +435,108 @@
     /** Default turn-detection threshold in metres. */
     var DEFAULT_TURN_ZOOM_THRESHOLD = 500;
 
+    /** mph buffer before leaving / entering an adjacent speed band. */
+    var DEFAULT_SPEED_HYSTERESIS_MPH = 8;
+
+    /** Metres beyond turn enter threshold before leaving turn zoom. */
+    var DEFAULT_TURN_EXIT_EXTRA_METERS = 200;
+
+    /**
+     * Map a zoom level back to its speed band name (for hysteresis).
+     * @param {number} zoom
+     * @param {object} ZL
+     * @returns {string|null}
+     */
+    function speedBandFromZoom(zoom, ZL) {
+        if (zoom === ZL.motorway_high_speed) return 'motorway';
+        if (zoom === ZL.main_road_medium_speed) return 'main';
+        if (zoom === ZL.urban_low_speed) return 'urban';
+        if (zoom === ZL.parking_very_low_speed) return 'parking';
+        return null;
+    }
+
+    /**
+     * Speed → zoom with schmitt-trigger bands so GPS jitter at thresholds does not hunt.
+     * @param {number} speedMph
+     * @param {object} ZL
+     * @param {string|null} lastBand
+     * @param {number} hystMph
+     * @returns {number}
+     */
+    function zoomFromSpeedWithHysteresis(speedMph, ZL, lastBand, hystMph) {
+        var speed = Number(speedMph);
+        if (!Number.isFinite(speed)) speed = 0;
+        var h = Number.isFinite(hystMph) ? hystMph : DEFAULT_SPEED_HYSTERESIS_MPH;
+
+        var enterMotorway = 100;
+        var enterMain = 50;
+        var enterUrban = 20;
+        var exitMotorway = enterMotorway - h;
+        var exitMain = enterMain - h;
+        var exitUrban = enterUrban - h;
+
+        if (lastBand === 'motorway') {
+            if (speed > exitMotorway) return ZL.motorway_high_speed;
+        } else if (lastBand === 'main') {
+            if (speed > enterMotorway) return ZL.motorway_high_speed;
+            if (speed > exitMain) return ZL.main_road_medium_speed;
+        } else if (lastBand === 'urban') {
+            if (speed > enterMain) return ZL.main_road_medium_speed;
+            if (speed > exitUrban) return ZL.urban_low_speed;
+        } else if (lastBand === 'parking') {
+            if (speed > enterUrban) return ZL.urban_low_speed;
+            return ZL.parking_very_low_speed;
+        }
+
+        if (speed > enterMotorway) return ZL.motorway_high_speed;
+        if (speed > enterMain) return ZL.main_road_medium_speed;
+        if (speed > enterUrban) return ZL.urban_low_speed;
+        return ZL.parking_very_low_speed;
+    }
+
     /**
      * Choose the appropriate map zoom level given speed and proximity to the next turn.
+     *
+     * Optional hysteresis (6th arg) holds the previous zoom/turn state so speed and turn
+     * thresholds do not flicker when GPS noise straddles a boundary.
      *
      * @param {number} speedMph
      * @param {number|null} [distanceToNextTurn] - Metres to next maneuver, or null
      * @param {string} [roadType] - Informational; current logic uses speed only
      * @param {object} [zoomLevels] - Override DEFAULT_ZOOM_LEVELS (for tests)
      * @param {number} [turnZoomThreshold] - Override DEFAULT_TURN_ZOOM_THRESHOLD (for tests)
+     * @param {object} [hysteresis]
+     * @param {number} [hysteresis.lastZoomLevel]
+     * @param {boolean} [hysteresis.lastTurnZoomApplied]
+     * @param {number} [hysteresis.speedHysteresisMph]
+     * @param {number} [hysteresis.turnExitExtraMeters]
      * @returns {number} Zoom level
      */
-    function calculateSmartZoom(speedMph, distanceToNextTurn, roadType, zoomLevels, turnZoomThreshold) {
+    function calculateSmartZoom(speedMph, distanceToNextTurn, roadType, zoomLevels, turnZoomThreshold, hysteresis) {
         var ZL = zoomLevels || DEFAULT_ZOOM_LEVELS;
         var threshold = (turnZoomThreshold != null) ? turnZoomThreshold : DEFAULT_TURN_ZOOM_THRESHOLD;
+        var hyst = hysteresis || null;
+        var lastZoom = (hyst && Number.isFinite(hyst.lastZoomLevel)) ? hyst.lastZoomLevel : null;
+        var lastTurn = !!(hyst && hyst.lastTurnZoomApplied);
+        var speedHyst = (hyst && hyst.speedHysteresisMph != null)
+            ? hyst.speedHysteresisMph
+            : DEFAULT_SPEED_HYSTERESIS_MPH;
+        var turnExitExtra = (hyst && hyst.turnExitExtraMeters != null)
+            ? hyst.turnExitExtraMeters
+            : DEFAULT_TURN_EXIT_EXTRA_METERS;
 
-        if (distanceToNextTurn != null && distanceToNextTurn < threshold) {
+        var enterTurn = distanceToNextTurn != null && distanceToNextTurn < threshold;
+        var stayInTurn = lastTurn &&
+            distanceToNextTurn != null &&
+            distanceToNextTurn < (threshold + turnExitExtra);
+        if (enterTurn || stayInTurn) {
             return ZL.turn_ahead;
         }
-        if (speedMph > 100) return ZL.motorway_high_speed;
-        if (speedMph > 50)  return ZL.main_road_medium_speed;
-        if (speedMph > 20)  return ZL.urban_low_speed;
-        return ZL.parking_very_low_speed;
+
+        var lastBand = lastZoom != null ? speedBandFromZoom(lastZoom, ZL) : null;
+        // Leaving turn zoom: do not inherit turn_ahead as a speed band.
+        if (lastZoom === ZL.turn_ahead) lastBand = null;
+        return zoomFromSpeedWithHysteresis(speedMph, ZL, lastBand, speedHyst);
     }
 
     /**

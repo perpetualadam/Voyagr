@@ -1804,6 +1804,9 @@ function getMapRecenterOrchestrationRuntime() {
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
         getZoomLevels: () => VoyagrSmartZoomOrchestration.getZoomLevels(),
         getTurnZoomThreshold: () => VoyagrSmartZoomOrchestration.getTurnZoomThreshold(),
+        getLastZoomLevel: () => VoyagrSmartZoomOrchestration.getLastZoomLevel(),
+        getLastTurnZoomApplied: () => VoyagrSmartZoomOrchestration.getLastTurnZoomApplied(),
+        getLastDistanceToNextTurn: () => VoyagrSmartZoomOrchestration.getLastDistanceToNextTurn(),
         call: {
             showStatus,
             getVehicleDisplayCoordinates,
