@@ -159,6 +159,8 @@
                 distanceToNextTurn: rt().getLastDistanceToNextTurn
                     ? rt().getLastDistanceToNextTurn()
                     : null,
+                // Live camera zoom for omit check (user zoom does not update managed cache).
+                currentMapZoom: typeof map.getZoom === 'function' ? map.getZoom() : undefined,
                 lastZoomLevel: rt().getLastZoomLevel
                     ? rt().getLastZoomLevel()
                     : undefined,
@@ -197,6 +199,11 @@
             }
             if (followCamera.easeTo) {
                 map.easeTo(followCamera.easeTo);
+                // Keep managed cache in sync when recenter actually animates zoom,
+                // so later GPS follow ticks do not omit against a stale band.
+                if (Number.isFinite(followCamera.easeTo.zoom) && typeof rt().setLastZoomLevel === 'function') {
+                    rt().setLastZoomLevel(followCamera.easeTo.zoom);
+                }
             }
             rt().call.showStatus(complete.statusMessage, complete.statusType);
         } else {

@@ -247,6 +247,27 @@ describe('buildNavigationFollowCameraPlan', () => {
         expect(plan.easeTo.zoom).toBe(16);
     });
 
+    test('includes ease zoom when lastZoomLevel is a manual scale away from the target band', () => {
+        // Recenter passes map.getZoom() after user zoomstart; managed cache alone
+        // can still equal the speed band and would incorrectly omit zoom.
+        const plan = buildNavigationFollowCameraPlan({
+            speedMph: 40,
+            lastZoomLevel: 12,
+            roadType: 'urban',
+            heading: 10,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 16,
+        });
+        expect(plan.zoom).toBe(16);
+        expect(plan.easeTo.zoom).toBe(16);
+    });
+
     test('keeps the same follow padding across GPS-style camera rebuilds', () => {
         const opts = {
             speedMph: 40,
