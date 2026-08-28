@@ -1460,8 +1460,10 @@
             if (execute.notification) {
                 rt().call.sendNotification(execute.notification.title, execute.notification.body, execute.notification.type);
             }
-            if (execute.scheduleRetry) scheduleAutomaticRerouteRetry();
+            // Clear in-progress before scheduling — buildRerouteFailureRetryPlan
+            // skips with reason "in-progress" while the flag is still set.
             if (execute.resetRerouteInProgress) rt().s('rerouteInProgress',  false);
+            if (execute.scheduleRetry) scheduleAutomaticRerouteRetry();
             return;
         }
 
@@ -1534,8 +1536,9 @@
 
         if (triggerExecute.action === 'defer') {
             if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
-            if (triggerExecute.scheduleRetry) scheduleAutomaticRerouteRetry();
+            // Clear in-progress before scheduling — same contract as failure path.
             if (triggerExecute.resetRerouteInProgress) rt().s('rerouteInProgress',  false);
+            if (triggerExecute.scheduleRetry) scheduleAutomaticRerouteRetry();
             return;
         }
 

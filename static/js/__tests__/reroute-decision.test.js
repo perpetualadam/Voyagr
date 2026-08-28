@@ -317,6 +317,22 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.attemptLabel).toBe(1);
     });
 
+    test('buildRerouteFailureRetryPlan skips while a reroute is still in progress', () => {
+        // Orchestration must clear rerouteInProgress before scheduleAutomaticRerouteRetry,
+        // otherwise failed fetches never enter the 4–14s retry sequence.
+        const plan = RD.buildRerouteFailureRetryPlan({
+            routeInProgress: true,
+            autoRerouteOnDeviationEnabled: true,
+            postRerouteGraceUntil: 0,
+            rerouteInProgress: true,
+            rerouteFailureRetryCount: 0,
+            now: 1000,
+        });
+        expect(plan.action).toBe('skip');
+        expect(plan.schedule).toBe(false);
+        expect(plan.reason).toBe('in-progress');
+    });
+
     test('buildRerouteFailureRetryPlan exhausts after max attempts', () => {
         const plan = RD.buildRerouteFailureRetryPlan({
             routeInProgress: true,
