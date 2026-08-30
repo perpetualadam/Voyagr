@@ -38,6 +38,13 @@ class TestParseAddressQuery:
         p = parse_address_query('Acme Warehouse, Doncaster')
         assert p.is_business is True
 
+    def test_named_business_hints(self):
+        assert is_business_or_industrial_query('Costa Coffee, Leeds')
+        assert is_business_or_industrial_query('Boots Pharmacy Sheffield')
+        assert is_business_or_industrial_query('Premier Inn Manchester')
+        p = parse_address_query('Costa Coffee, Leeds')
+        assert p.is_business is True
+
     def test_full_postcode_only(self):
         p = parse_address_query('SW1A 1AA')
         assert p.postcode == 'SW1A1AA'
@@ -144,6 +151,12 @@ class TestUkPostcodeHelpers:
     def test_nominatim_extra_keeps_layer_for_house_number(self):
         extra = nominatim_extra_params_for_query('12 High Street')
         assert extra.get('layer') == 'address'
+        assert extra.get('namedetails') == '1'
+
+    def test_nominatim_extra_skips_layer_for_business_unit(self):
+        extra = nominatim_extra_params_for_query('Unit 5 Business Park Leeds')
+        assert 'layer' not in extra
+        assert extra.get('namedetails') == '1'
 
 
 class TestStructuredParams:
@@ -153,12 +166,24 @@ class TestStructuredParams:
         assert params is not None
         assert params['street'] == '45 Doncaster Road'
         assert params['postalcode'] == 'S70 1AA'
+        assert params.get('namedetails') == '1'
 
     def test_postcode_only_structured(self):
         p = parse_address_query('EC1A 1BB')
         params = build_nominatim_structured_params(p)
         assert params is not None
         assert params['postalcode'] == 'EC1A 1BB'
+        assert 'street' not in params
+
+    def test_skips_structured_street_for_business_name(self):
+        p = parse_address_query('Tesco Express, Leeds')
+        assert build_nominatim_structured_params(p) is None
+
+    def test_keeps_postcode_structured_without_business_street(self):
+        p = parse_address_query('Costa Coffee, LS1 5AA')
+        params = build_nominatim_structured_params(p)
+        assert params is not None
+        assert params['postalcode'] == 'LS1 5AA'
         assert 'street' not in params
 
 
@@ -217,6 +242,32 @@ class TestRanking:
         }
         ranked = rank_geocode_results(query, [without_pc, with_pc])
         assert ranked[0]['address']['postcode'] == 'S70 6TA'
+
+    def test_prefers_named_business_poi_over_street(self):
+        query = 'Tesco Express, Leeds'
+        street = {
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }
+        poi = {
+            'lat': '53.801',
+            'lon': '-1.549',
+            'type': 'supermarket',
+            'class': 'shop',
+            'importance': 0.4,
+            'display_name': 'Tesco Express, Briggate, Leeds',
+            'name': 'Tesco Express',
+            'address': {'road': 'Briggate', 'city': 'Leeds', 'house_number': '12'},
+        }
+        ranked = rank_geocode_results(query, [street, poi])
+        assert ranked[0]['name'] == 'Tesco Express'
+        assert ranked[0]['class'] == 'shop'
 
     def test_prefers_gb_postcode_over_foreign_homonym(self):
         query = 'LS1'
@@ -322,6 +373,16 @@ class TestShouldFetchTomtom:
             '_source': 'postcodes_io',
         }]
         assert not should_fetch_tomtom('SW1A 1AA', results)
+
+    def test_business_without_poi_fetches_tomtom(self):
+        results = [{
+            'type': 'residential',
+            'class': 'highway',
+            'name': 'Coffee Street',
+            'address': {'road': 'Coffee Street'},
+            'importance': 0.5,
+        }]
+        assert should_fetch_tomtom('Costa Coffee, Leeds', results)
 
 
 @pytest.fixture
@@ -451,6 +512,76 @@ class TestGeocodeEndpoint:
         assert data[0]['name'] == 'LS1'
         assert data[0]['address']['country_code'] == 'gb'
 
+
+    @patch('voyagr.api.search._tomtom_geocode')
+    @patch('voyagr.api.search._nominatim_search')
+    @patch('voyagr.api.search._postcodes_io_geocode')
+    def test_ranks_business_poi_first(self, mock_pc, mock_nom, mock_tt, client):
+        mock_pc.return_value = []
+        mock_nom.side_effect = [([
+            {
+                'lat': '53.8',
+                'lon': '-1.55',
+                'type': 'residential',
+                'class': 'highway',
+                'importance': 0.7,
+                'display_name': 'Express Way, Leeds',
+                'name': 'Express Way',
+                'address': {'road': 'Express Way', 'city': 'Leeds'},
+            },
+            {
+                'lat': '53.801',
+                'lon': '-1.549',
+                'type': 'supermarket',
+                'class': 'shop',
+                'importance': 0.4,
+                'display_name': 'Tesco Express, Briggate, Leeds',
+                'name': 'Tesco Express',
+                'address': {'road': 'Briggate', 'city': 'Leeds'},
+            },
+        ], True), ([], True)]
+        mock_tt.return_value = []
+
+        rv = client.get('/api/geocode?q=Tesco+Express,+Leeds&limit=3')
+        assert rv.status_code == 200
+        data = json.loads(rv.data)
+        assert data[0]['name'] == 'Tesco Express'
+        assert data[0]['class'] == 'shop'
+
+
+class TestTomtomPoiHelper:
+    @patch('voyagr.api.search.requests.get')
+    def test_prefers_poi_name_over_street_number(self, mock_get):
+        from voyagr.api.search import _tomtom_geocode
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'results': [{
+                'type': 'POI',
+                'position': {'lat': 53.8, 'lon': -1.55},
+                'poi': {
+                    'name': 'Tesco Express',
+                    'categories': ['shop.supermarket'],
+                },
+                'address': {
+                    'streetNumber': '12',
+                    'streetName': 'Briggate',
+                    'municipality': 'Leeds',
+                    'country': 'United Kingdom',
+                    'postalCode': 'LS1 6HD',
+                    'freeformAddress': '12 Briggate, Leeds, LS1 6HD',
+                    'countryCode': 'GB',
+                },
+            }],
+        }
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'test-key'}):
+            results = _tomtom_geocode('Tesco Express Leeds', 5)
+        assert len(results) == 1
+        assert results[0]['name'] == 'Tesco Express'
+        assert results[0]['class'] == 'shop'
+        assert 'Tesco Express' in results[0]['display_name']
+        assert results[0]['address']['house_number'] == '12'
+        assert results[0]['address']['postcode'] == 'LS1 6HD'
 
 class TestPostcodesIoHelper:
     @patch('voyagr.api.search.requests.get')

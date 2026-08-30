@@ -15,27 +15,42 @@
     function getLocationIcon(result) {
         result = result || {};
         var type = result.type || '';
-        var category = result.category || '';
+        // Nominatim uses `class`; some providers use `category`.
+        var category = result.category || result.class || '';
 
         if (type === 'house' || category === 'building') return '🏠';
         if (type === 'postcode' || category === 'postcode') return '📫';
         if (type === 'street' || category === 'highway') return '🛣️';
-        if (type === 'city' || type === 'town' || category === 'place') return '🏙️';
-        if (type === 'restaurant' || category === 'amenity') return '🍽️';
-        if (type === 'parking' || category === 'parking') return '🅿️';
-        if (type === 'fuel' || category === 'fuel') return '⛽';
-        if (type === 'hospital' || category === 'hospital') return '🏥';
-        if (type === 'school' || category === 'school') return '🏫';
+        if (type === 'city' || type === 'town' || (category === 'place' && type !== 'postcode')) return '🏙️';
+        if (type === 'parking') return '🅿️';
+        if (type === 'fuel') return '⛽';
+        if (type === 'hospital' || category === 'healthcare') return '🏥';
+        if (type === 'school') return '🏫';
         if (type === 'shop' || category === 'shop') return '🛍️';
-        if (type === 'airport' || category === 'airport') return '✈️';
-        if (type === 'railway' || category === 'railway') return '🚂';
-        if (type === 'bus_stop' || category === 'bus') return '🚌';
-        if (type === 'hotel' || category === 'hotel') return '🏨';
-        if (type === 'museum' || category === 'museum') return '🏛️';
-        if (type === 'park' || category === 'park') return '🌳';
-        if (type === 'beach' || category === 'beach') return '🏖️';
-        if (type === 'mountain' || category === 'mountain') return '⛰️';
+        if (type === 'airport') return '✈️';
+        if (type === 'railway') return '🚂';
+        if (type === 'bus_stop') return '🚌';
+        if (type === 'hotel' || category === 'tourism') return '🏨';
+        if (type === 'museum') return '🏛️';
+        if (type === 'park') return '🌳';
+        if (type === 'beach') return '🏖️';
+        if (type === 'mountain') return '⛰️';
         if (type === 'lake' || category === 'water') return '🌊';
+        if (type === 'restaurant' || type === 'cafe' || type === 'fast_food' || type === 'pub' || type === 'bar') return '🍽️';
+        if (type === 'poi' || category === 'office' || category === 'industrial') return '🏢';
+        if (category === 'amenity') return '🍽️';
+        if (category === 'parking') return '🅿️';
+        if (category === 'fuel') return '⛽';
+        if (category === 'hospital') return '🏥';
+        if (category === 'school') return '🏫';
+        if (category === 'airport') return '✈️';
+        if (category === 'railway') return '🚂';
+        if (category === 'bus') return '🚌';
+        if (category === 'hotel') return '🏨';
+        if (category === 'museum') return '🏛️';
+        if (category === 'park') return '🌳';
+        if (category === 'beach') return '🏖️';
+        if (category === 'mountain') return '⛰️';
         return '📍';
     }
 
@@ -136,14 +151,27 @@
      */
     function resolveGeocodeResultDisplayName(result) {
         result = result || {};
+        var namedetails = result.namedetails || {};
         var name = result.name ||
+            (namedetails && namedetails.name) ||
             (result.address && result.address.postcode) ||
             (result.address && result.address.road) ||
             (result.address && result.address.city) ||
             result.display_name ||
             'Location';
         var houseNum = result.address && result.address.house_number;
-        if (houseNum && !String(name).startsWith(String(houseNum))) {
+        var category = result.class || result.category || '';
+        var type = result.type || '';
+        var isPoi = type === 'poi' ||
+            category === 'amenity' ||
+            category === 'shop' ||
+            category === 'office' ||
+            category === 'tourism' ||
+            category === 'craft' ||
+            category === 'leisure' ||
+            category === 'healthcare';
+        // Keep house numbers on street addresses; named businesses already include branding.
+        if (houseNum && !isPoi && !String(name).startsWith(String(houseNum))) {
             name = houseNum + ' ' + name;
         }
         return name;

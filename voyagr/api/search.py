@@ -190,8 +190,28 @@ def _nominatim_search(params: dict, headers: dict) -> tuple:
     return data, True
 
 
+def _tomtom_category_class(categories: list) -> tuple:
+    """Map TomTom POI category ids to Nominatim-like (class, type)."""
+    joined = ' '.join(str(c).lower() for c in (categories or []))
+    if any(k in joined for k in ('shop', 'commercial', 'supermarket', 'market')):
+        return 'shop', 'shop'
+    if any(k in joined for k in ('eat', 'restaurant', 'cafe', 'coffee', 'fast')):
+        return 'amenity', 'restaurant'
+    if any(k in joined for k in ('hotel', 'motel', 'lodging')):
+        return 'tourism', 'hotel'
+    if any(k in joined for k in ('petrol', 'gas_station', 'fuel')):
+        return 'amenity', 'fuel'
+    if any(k in joined for k in ('parking',)):
+        return 'amenity', 'parking'
+    if any(k in joined for k in ('hospital', 'clinic', 'health')):
+        return 'amenity', 'hospital'
+    if any(k in joined for k in ('office', 'company', 'industrial')):
+        return 'office', 'company'
+    return 'amenity', 'poi'
+
+
 def _tomtom_geocode(query: str, limit: int) -> list:
-    """Use TomTom Fuzzy Search API for geocoding (better house-number matching)."""
+    """Use TomTom Fuzzy Search API for geocoding (house numbers + business POIs)."""
     api_key = os.getenv('TOMTOM_API_KEY', '')
     if not api_key:
         return []
@@ -203,6 +223,10 @@ def _tomtom_geocode(query: str, limit: int) -> list:
             country_set = 'GB'
         if country_set:
             params['countrySet'] = country_set
+        # Prefer POIs when the query looks like a named business.
+        parsed = parse_address_query(query)
+        if parsed.is_business and not parsed.house_number:
+            params['idxSet'] = 'POI,PAD,Addr,Str'
         resp = requests.get(url, params=params, timeout=8)
         if resp.status_code != 200:
             return []
@@ -218,12 +242,42 @@ def _tomtom_geocode(query: str, limit: int) -> list:
             country = addr.get('country', '')
             postcode = addr.get('postalCode') or addr.get('extendedPostalCode') or ''
             freeform = addr.get('freeformAddress', '')
+            poi = r.get('poi') or {}
+            poi_name = (poi.get('name') or '').strip()
+            result_type = (r.get('type') or 'address').lower()
+            categories = poi.get('categories') or []
+
             name_parts = []
             if house_num:
                 name_parts.append(house_num)
             if street:
                 name_parts.append(street)
-            name = ' '.join(name_parts) if name_parts else freeform or r.get('poi', {}).get('name', 'Location')
+            street_label = ' '.join(name_parts)
+
+            # Prefer business/POI name so autocomplete can select shops as destinations.
+            if poi_name and result_type == 'poi':
+                name = poi_name
+                if freeform and poi_name.lower() not in freeform.lower():
+                    display_name = f"{poi_name}, {freeform}"
+                else:
+                    display_name = freeform or (
+                        f"{poi_name}, {city}, {country}".strip(', ')
+                    )
+                rclass, rtype = _tomtom_category_class(categories)
+            elif street_label:
+                name = street_label
+                display_name = freeform or f"{name}, {city}, {country}".strip(', ')
+                rclass = ''
+                rtype = result_type if result_type != 'poi' else 'address'
+            else:
+                name = freeform or poi_name or 'Location'
+                display_name = freeform or f"{name}, {city}, {country}".strip(', ')
+                if poi_name:
+                    rclass, rtype = _tomtom_category_class(categories)
+                else:
+                    rclass = ''
+                    rtype = result_type
+
             address_obj = {}
             if house_num:
                 address_obj['house_number'] = house_num
@@ -238,15 +292,18 @@ def _tomtom_geocode(query: str, limit: int) -> list:
             country_code = (addr.get('countryCode') or '').lower()
             if country_code:
                 address_obj['country_code'] = country_code
-            results.append({
+            entry = {
                 'lat': str(pos['lat']),
                 'lon': str(pos['lon']),
-                'display_name': freeform or f"{name}, {city}, {country}",
+                'display_name': display_name,
                 'name': name,
-                'type': r.get('type', 'address').lower(),
+                'type': rtype,
                 'address': address_obj,
                 '_source': 'tomtom',
-            })
+            }
+            if rclass:
+                entry['class'] = rclass
+            results.append(entry)
         return results
     except Exception as e:
         logger.debug(f"[Geocode] TomTom fallback error: {e}")
@@ -257,9 +314,9 @@ def _tomtom_geocode(query: str, limit: int) -> list:
 def geocode():
     """
     Server-side geocoding proxy: queries postcodes.io for UK postcodes,
-    Nominatim for general addresses, then TomTom when Nominatim is empty,
-    fails HTTP, or throws; also merges TomTom for house-number queries
-    with no Nominatim house match.
+    Nominatim for general addresses and business/POI names, then TomTom when
+    Nominatim is empty, fails HTTP, or throws; also merges TomTom for
+    house-number queries with no Nominatim house match and for named businesses.
 
     Query params:
       - q: query string (required)
@@ -269,10 +326,10 @@ def geocode():
     UK unit and outward postcodes (e.g. SW1A 1AA, LS1) resolve via
     postcodes.io when present, with Nominatim biased to countrycodes=gb.
 
-    Nominatim search features not used here (could improve business/POI lookup):
-      viewbox + bounded=1 for map-biased search; extratags=1; namedetails=1;
-      polygon_geojson / polygon_kml; layer= / featuretype= filters; /lookup by osm ids;
-      /details endpoint; email= for usage policy. Reverse uses addressdetails only.
+    Supports start/destination search for:
+      - Business / POI names (shops, amenities, offices)
+      - Street addresses with house numbers
+      - UK postcodes (unit and outward)
     """
     try:
         q = (request.args.get('q') or '').strip()
@@ -305,6 +362,7 @@ def geocode():
             'format': 'json',
             'limit': str(fetch_limit),
             'addressdetails': '1',
+            'namedetails': '1',
         }
         params.update(nominatim_extra_params_for_query(q))
         if NOMINATIM_COUNTRYCODES:

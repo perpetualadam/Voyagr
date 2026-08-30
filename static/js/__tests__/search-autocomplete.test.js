@@ -10,6 +10,9 @@ describe('search-autocomplete module', () => {
         expect(SA.getLocationIcon({ type: 'postcode' })).toBe('📫');
         expect(SA.getLocationIcon({ type: 'fuel' })).toBe('⛽');
         expect(SA.getLocationIcon({ category: 'hospital' })).toBe('🏥');
+        expect(SA.getLocationIcon({ class: 'shop', type: 'supermarket' })).toBe('🛍️');
+        expect(SA.getLocationIcon({ type: 'poi', class: 'office' })).toBe('🏢');
+        expect(SA.getLocationIcon({ class: 'amenity', type: 'fuel' })).toBe('⛽');
         expect(SA.getLocationIcon({})).toBe('📍');
     });
 
@@ -72,6 +75,13 @@ describe('search-autocomplete module', () => {
             address: { postcode: 'SW1A 1AA' },
             display_name: 'SW1A 1AA, Westminster, United Kingdom',
         })).toBe('SW1A 1AA');
+        expect(SA.resolveGeocodeResultDisplayName({
+            name: 'Tesco Express',
+            class: 'shop',
+            type: 'supermarket',
+            address: { house_number: '12', road: 'Briggate' },
+            display_name: 'Tesco Express, 12 Briggate, Leeds',
+        })).toBe('Tesco Express');
         const longName = 'x'.repeat(80);
         expect(SA.resolveGeocodeResultShortAddress({ display_name: longName }, 60)).toBe('x'.repeat(60) + '...');
     });
