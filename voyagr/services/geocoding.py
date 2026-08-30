@@ -68,6 +68,8 @@ _BUSINESS_NAME_HINTS = (
     'theatre', 'theater', 'museum', 'gallery', 'pub', 'bistro', 'coffee',
     'store', 'stores', 'shop', 'market', 'centre', 'center', 'station',
     # Brands / formats that often omit a category word (e.g. "Tesco Express").
+    # Ambiguous tokens like "express" are ignored when the subject looks like
+    # a road name (see is_business_or_industrial_query).
     'express', 'tesco', 'sainsbury', 'asda', 'morrisons', 'aldi', 'lidl',
     'waitrose', 'ikea', 'argos', 'boots',
 )
@@ -232,6 +234,12 @@ def is_business_or_industrial_query(query: str) -> bool:
     lower = (query or '').lower()
     if any(kw in lower for kw in _BUSINESS_KEYWORDS):
         return True
+    # First comma segment is the subject (POI name or street). Road-suffix
+    # subjects are streets, not businesses — even when they contain format
+    # words from _BUSINESS_NAME_HINTS (e.g. "Express Way", "Station Road").
+    subject = lower.split(',')[0].strip()
+    if looks_like_road_name(subject):
+        return False
     for hint in _BUSINESS_NAME_HINTS:
         if re.search(rf'\b{re.escape(hint)}\b', lower, re.IGNORECASE):
             return True
@@ -406,6 +414,10 @@ def _road_matches(parsed: ParsedQuery, addr: Dict[str, Any], display_name: str) 
     road_tokens = _token_set(road)
     if street_tokens & road_tokens:
         return True
+    # Road-suffix queries must match the structured road field. Display-name
+    # fallback is too loose ("Express Way" must not match "Tesco Express, …").
+    if looks_like_road_name(parsed.street):
+        return False
     display_tokens = _token_set(display_name)
     return len(street_tokens & display_tokens) >= max(1, len(street_tokens) // 2)
 
@@ -570,7 +582,9 @@ def should_fetch_tomtom(query: str, nominatim_results: Sequence[Dict[str, Any]])
 
     if parsed.house_number:
         return top_score < 80.0
-    if parsed.is_business:
+    # Road-suffix streets must not take the business TomTom/POI path just
+    # because a hint token appears in the road name (e.g. "Express Way").
+    if parsed.is_business and not looks_like_road_name(parsed.street or ''):
         # TomTom Fuzzy Search is strong for named businesses; merge unless we
         # already have a well-scoring POI hit.
         if not result_looks_like_poi(top):
