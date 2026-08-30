@@ -1337,11 +1337,17 @@
 
     /**
      * Input plan for navigation follow camera during recenter.
+     * Prefer the live camera zoom over the managed lastZoomLevel cache: a user
+     * zoomstart pauses follow without updating that cache, so comparing only the
+     * cache can omit easeTo.zoom and leave zoom-and-follow stuck at the manual scale.
      * @param {Object} [input]
      * @returns {Object}
      */
     function buildRecenterNavigationFollowInputPlan(input) {
         input = input || {};
+        var zoomForOmit = Number.isFinite(input.currentMapZoom)
+            ? input.currentMapZoom
+            : input.lastZoomLevel;
         return {
             mapFollowingActive: true,
             speedMph: input.speedMph,
@@ -1357,7 +1363,7 @@
             viewportHeight: input.viewportHeight,
             viewportWidth: input.viewportWidth,
             distanceToNextTurn: input.distanceToNextTurn != null ? input.distanceToNextTurn : null,
-            lastZoomLevel: input.lastZoomLevel,
+            lastZoomLevel: zoomForOmit,
         };
     }
 

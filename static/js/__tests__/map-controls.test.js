@@ -484,6 +484,46 @@ describe('map-controls module', () => {
         }));
         expect(followCamera.easeTo.padding).toEqual(computeFollowPadding(800, 400));
         expect(followCamera.easeTo.center).toEqual([-0.1, 51.5]);
+
+        // After a user zoomstart, managed lastZoomLevel can still equal the speed
+        // band while the camera sits at the manual scale. Prefer live map zoom so
+        // recenter re-applies system zoom instead of omitting easeTo.zoom.
+        const afterManualZoom = MC.buildRecenterNavigationFollowInputPlan({
+            lat: 51.5,
+            lon: -0.1,
+            speedMph: 30,
+            roadType: 'urban',
+            heading: 90,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            lastZoomLevel: 16,
+            currentMapZoom: 12,
+        });
+        expect(afterManualZoom.lastZoomLevel).toBe(12);
+        const restoreCamera = buildNavigationFollowCameraPlan(Object.assign({}, afterManualZoom, {
+            computeSmartZoom: () => 16,
+        }));
+        expect(restoreCamera.easeTo.zoom).toBe(16);
+
+        const alreadyAtBand = MC.buildRecenterNavigationFollowInputPlan({
+            lat: 51.5,
+            lon: -0.1,
+            speedMph: 30,
+            roadType: 'urban',
+            heading: 90,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            lastZoomLevel: 16,
+            currentMapZoom: 16,
+        });
+        const skipZoomCamera = buildNavigationFollowCameraPlan(Object.assign({}, alreadyAtBand, {
+            computeSmartZoom: () => 16,
+        }));
+        expect(skipZoomCamera.easeTo.zoom).toBeUndefined();
     });
 
     test('journey overview toggle and button UI plans', () => {
