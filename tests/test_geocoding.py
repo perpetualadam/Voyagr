@@ -63,6 +63,16 @@ class TestParseAddressQuery:
         assert not is_business_or_industrial_query('Station Road, Leeds')
         assert not is_business_or_industrial_query('Market Street')
 
+    def test_express_road_not_business_when_city_comes_first(self):
+        # Hint must not fire when "express" only appears as a road component
+        # outside the first comma segment ("Leeds, Express Way").
+        assert not is_business_or_industrial_query('Leeds, Express Way')
+        assert not is_business_or_industrial_query('Leeds, Station Road')
+        assert not is_business_or_industrial_query('York, Market Street')
+        # Real store format still matches when not a road suffix.
+        assert is_business_or_industrial_query('Tesco Express, Leeds')
+        assert is_business_or_industrial_query('Premier Inn Manchester')
+
     def test_full_postcode_only(self):
         p = parse_address_query('SW1A 1AA')
         assert p.postcode == 'SW1A1AA'
@@ -326,6 +336,33 @@ class TestRanking:
         assert ranked[0]['name'] == 'Express Way'
         assert ranked[0]['class'] == 'highway'
 
+    def test_prefers_express_road_when_city_comes_first(self):
+        # City-first queries must not treat "express" as a store format hint.
+        query = 'Leeds, Express Way'
+        street = {
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }
+        poi = {
+            'lat': '53.801',
+            'lon': '-1.549',
+            'type': 'supermarket',
+            'class': 'shop',
+            'importance': 0.4,
+            'display_name': 'Tesco Express, Briggate, Leeds',
+            'name': 'Tesco Express',
+            'address': {'road': 'Briggate', 'city': 'Leeds', 'house_number': '12'},
+        }
+        ranked = rank_geocode_results(query, [poi, street])
+        assert ranked[0]['name'] == 'Express Way'
+        assert ranked[0]['class'] == 'highway'
+
     def test_prefers_gb_postcode_over_foreign_homonym(self):
         query = 'LS1'
         foreign = {
@@ -470,6 +507,19 @@ class TestShouldFetchTomtom:
             'address': {'road': 'Express Way', 'city': 'Leeds'},
         }]
         assert not should_fetch_tomtom('Express Way, Leeds', results)
+
+    def test_city_first_express_road_does_not_take_business_tomtom_path(self):
+        results = [{
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }]
+        assert not should_fetch_tomtom('Leeds, Express Way', results)
 
     def test_freetext_non_road_without_poi_fetches_tomtom(self):
         # Unknown brand with no hint keywords: free-text path must still
