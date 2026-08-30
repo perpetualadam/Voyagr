@@ -45,6 +45,14 @@ class TestParseAddressQuery:
         p = parse_address_query('Costa Coffee, Leeds')
         assert p.is_business is True
 
+    def test_brand_without_category_word_is_business(self):
+        # "Tesco Express" has no cafe/shop/supermarket keyword; brand/format
+        # hints must still mark it so TomTom POI search is considered.
+        assert is_business_or_industrial_query('Tesco Express, Leeds')
+        p = parse_address_query('Tesco Express, Leeds')
+        assert p.is_business is True
+        assert is_business_or_industrial_query('Asda, Sheffield')
+
     def test_full_postcode_only(self):
         p = parse_address_query('SW1A 1AA')
         assert p.postcode == 'SW1A1AA'
@@ -383,6 +391,34 @@ class TestShouldFetchTomtom:
             'importance': 0.5,
         }]
         assert should_fetch_tomtom('Costa Coffee, Leeds', results)
+
+    def test_freetext_brand_not_blocked_by_road_token_score(self):
+        # Shared token "Express" + city Leeds scores well above the old <40
+        # gate even though the hit is a street, not a POI.
+        results = [{
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }]
+        assert should_fetch_tomtom('Tesco Express, Leeds', results)
+
+    def test_freetext_non_road_without_poi_fetches_tomtom(self):
+        # Unknown brand with no hint keywords: free-text path must still
+        # call TomTom when Nominatim only returned a non-POI street.
+        results = [{
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Acme Way, Leeds',
+            'name': 'Acme Way',
+            'address': {'road': 'Acme Way', 'city': 'Leeds'},
+        }]
+        assert should_fetch_tomtom('Acme Widgets, Leeds', results)
 
 
 @pytest.fixture

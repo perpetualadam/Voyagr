@@ -67,6 +67,9 @@ _BUSINESS_NAME_HINTS = (
     'salon', 'clinic', 'dentist', 'veterinary', 'vets', 'gym', 'cinema',
     'theatre', 'theater', 'museum', 'gallery', 'pub', 'bistro', 'coffee',
     'store', 'stores', 'shop', 'market', 'centre', 'center', 'station',
+    # Brands / formats that often omit a category word (e.g. "Tesco Express").
+    'express', 'tesco', 'sainsbury', 'asda', 'morrisons', 'aldi', 'lidl',
+    'waitrose', 'ikea', 'argos', 'boots',
 )
 
 _ROAD_SUFFIX_RE = re.compile(
@@ -576,8 +579,11 @@ def should_fetch_tomtom(query: str, nominatim_results: Sequence[Dict[str, Any]])
     if parsed.postcode:
         return top_score < 60.0
     # Free-text that is not a clear place/road often benefits from POI search.
+    # Do not gate on top_score: a single shared road token already scores +40,
+    # and a city match adds +45–+70, which blocked TomTom for names like
+    # "Tesco Express" when Nominatim only returned a street (e.g. Express Way).
     if not parsed.house_number and not looks_like_road_name(parsed.street or query):
-        if not result_looks_like_poi(top) and top_score < 40.0:
+        if not result_looks_like_poi(top):
             return True
     return top_score < 25.0
 
