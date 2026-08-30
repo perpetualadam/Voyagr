@@ -73,6 +73,19 @@ class TestParseAddressQuery:
         assert is_business_or_industrial_query('Tesco Express, Leeds')
         assert is_business_or_industrial_query('Premier Inn Manchester')
 
+    def test_road_name_hints_are_not_business(self):
+        # station/market/centre/inn/shop are common UK street tokens — not POIs.
+        assert not is_business_or_industrial_query('12 Station Road')
+        assert not is_business_or_industrial_query('12 Market Street')
+        assert not is_business_or_industrial_query('12 Centre Avenue')
+        assert not is_business_or_industrial_query('12 Inn Close')
+        assert not is_business_or_industrial_query('12 Shop Lane')
+        assert not is_business_or_industrial_query('Market Street, Leeds')
+        # Real businesses / stations still match.
+        assert is_business_or_industrial_query('Premier Inn Manchester')
+        assert is_business_or_industrial_query('The Shopping Centre Leeds')
+        assert is_business_or_industrial_query("King's Cross Station")
+
     def test_full_postcode_only(self):
         p = parse_address_query('SW1A 1AA')
         assert p.postcode == 'SW1A1AA'
@@ -182,13 +195,17 @@ class TestUkPostcodeHelpers:
         assert extra.get('namedetails') == '1'
 
     def test_nominatim_extra_keeps_layer_for_industrial_road_houses(self):
-        # Industrial keywords must not drop layer=address for ordinary roads.
+        # Industrial / street-token keywords must not drop layer=address for
+        # ordinary house-number roads (Station Road, Industrial Way, etc.).
         for q in (
             '12 Industrial Way',
             '12 Mill Lane',
             '12 Parkway Drive',
             '12 Station Road',
             '12 Market Street',
+            '12 Centre Avenue',
+            '12 Inn Close',
+            '12 Shop Lane',
         ):
             extra = nominatim_extra_params_for_query(q)
             assert extra.get('layer') == 'address', q
