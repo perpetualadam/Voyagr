@@ -30,7 +30,8 @@
         if (type === 'airport') return '✈️';
         if (type === 'railway') return '🚂';
         if (type === 'bus_stop') return '🚌';
-        if (type === 'hotel' || category === 'tourism') return '🏨';
+        // Hotels only: Nominatim museums/attractions/etc. also use class=tourism.
+        if (type === 'hotel') return '🏨';
         if (type === 'museum') return '🏛️';
         if (type === 'park') return '🌳';
         if (type === 'beach') return '🏖️';
