@@ -421,6 +421,27 @@ describe('calculateSmartZoom', () => {
         // Still enters normally once under the enter threshold.
         expect(RG.calculateSmartZoom(60, 400, 'primary', ZL, T, hyst)).toBe(ZL.turn_ahead);
     });
+
+    test('stale lastTurnZoomApplied with restored speed band re-applies turn zoom in exit fringe', () => {
+        // Recenter syncing only lastZoomLevel (leaving lastTurn true) after computing
+        // a speed band while next-turn distance sits in the exit fringe.
+        const mismatched = {
+            lastZoomLevel: ZL.main_road_medium_speed,
+            lastTurnZoomApplied: true,
+            lastDistanceToNextTurn: 600,
+        };
+        expect(RG.calculateSmartZoom(60, 600, 'primary', ZL, T, mismatched))
+            .toBe(ZL.turn_ahead);
+
+        // Pairing the latch with the restored speed band avoids the false stay-in-turn.
+        const paired = {
+            lastZoomLevel: ZL.main_road_medium_speed,
+            lastTurnZoomApplied: false,
+            lastDistanceToNextTurn: 600,
+        };
+        expect(RG.calculateSmartZoom(60, 600, 'primary', ZL, T, paired))
+            .toBe(ZL.main_road_medium_speed);
+    });
 });
 
 describe('calculateDriverViewCenter', () => {

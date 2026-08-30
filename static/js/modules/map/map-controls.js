@@ -1382,6 +1382,28 @@
     }
 
     /**
+     * Pair lastZoomLevel with lastTurnZoomApplied when recenter animates zoom.
+     * GPS follow treats these as one hysteresis pair; syncing only the zoom leaves
+     * a stale turn latch that can re-apply turn zoom in the exit fringe.
+     * @param {Object} [input]
+     * @param {number} [input.zoom] - easeTo.zoom from the recenter follow camera
+     * @param {number} [input.turnAheadZoom] - ZOOM_LEVELS.turn_ahead (default 18)
+     * @returns {{ shouldSync: boolean, lastZoomLevel?: number, lastTurnZoomApplied?: boolean }}
+     */
+    function buildRecenterZoomCacheSyncPlan(input) {
+        input = input || {};
+        if (!Number.isFinite(input.zoom)) {
+            return { shouldSync: false };
+        }
+        var turnAhead = Number.isFinite(input.turnAheadZoom) ? input.turnAheadZoom : 18;
+        return {
+            shouldSync: true,
+            lastZoomLevel: input.zoom,
+            lastTurnZoomApplied: input.zoom === turnAhead,
+        };
+    }
+
+    /**
      * Execute plan for recenter while tracking (non-navigation).
      * @param {Object} [input]
      * @returns {Object}
@@ -1565,6 +1587,7 @@
         buildRecenterJourneyOverviewExitPlan: buildRecenterJourneyOverviewExitPlan,
         buildRecenterNavigationFollowInputPlan: buildRecenterNavigationFollowInputPlan,
         buildRecenterNavigationCompletePlan: buildRecenterNavigationCompletePlan,
+        buildRecenterZoomCacheSyncPlan: buildRecenterZoomCacheSyncPlan,
         buildRecenterTrackingEasePlan: buildRecenterTrackingEasePlan,
         buildToggleJourneyOverviewPreflightPlan: buildToggleJourneyOverviewPreflightPlan,
         buildToggleJourneyOverviewFitBoundsPlan: buildToggleJourneyOverviewFitBoundsPlan,

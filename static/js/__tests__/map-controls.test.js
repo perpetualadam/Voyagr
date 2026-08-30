@@ -524,6 +524,22 @@ describe('map-controls module', () => {
             computeSmartZoom: () => 16,
         }));
         expect(skipZoomCamera.easeTo.zoom).toBeUndefined();
+
+        // When recenter animates a speed-band zoom, clear the turn latch with it.
+        // Syncing only lastZoomLevel leaves lastTurnZoomApplied true and a later
+        // GPS tick can re-apply turn zoom while the next turn sits in the exit fringe.
+        expect(MC.buildRecenterZoomCacheSyncPlan({ zoom: 16, turnAheadZoom: 18 })).toEqual({
+            shouldSync: true,
+            lastZoomLevel: 16,
+            lastTurnZoomApplied: false,
+        });
+        expect(MC.buildRecenterZoomCacheSyncPlan({ zoom: 18, turnAheadZoom: 18 })).toEqual({
+            shouldSync: true,
+            lastZoomLevel: 18,
+            lastTurnZoomApplied: true,
+        });
+        expect(MC.buildRecenterZoomCacheSyncPlan({}).shouldSync).toBe(false);
+        expect(MC.buildRecenterZoomCacheSyncPlan({ zoom: undefined }).shouldSync).toBe(false);
     });
 
     test('journey overview toggle and button UI plans', () => {
