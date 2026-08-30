@@ -13,6 +13,13 @@ describe('search-autocomplete module', () => {
         expect(SA.getLocationIcon({ class: 'shop', type: 'supermarket' })).toBe('🛍️');
         expect(SA.getLocationIcon({ type: 'poi', class: 'office' })).toBe('🏢');
         expect(SA.getLocationIcon({ class: 'amenity', type: 'fuel' })).toBe('⛽');
+        expect(SA.getLocationIcon({ type: 'hotel' })).toBe('🏨');
+        expect(SA.getLocationIcon({ class: 'tourism', type: 'hotel' })).toBe('🏨');
+        expect(SA.getLocationIcon({ class: 'tourism', type: 'museum' })).toBe('🏛️');
+        expect(SA.getLocationIcon({ class: 'tourism', type: 'attraction' })).toBe('📍');
+        expect(SA.getLocationIcon({ class: 'tourism', type: 'viewpoint' })).toBe('📍');
+        expect(SA.getLocationIcon({ class: 'tourism', type: 'zoo' })).toBe('📍');
+        expect(SA.getLocationIcon({ class: 'tourism', type: 'camp_site' })).toBe('📍');
         expect(SA.getLocationIcon({})).toBe('📍');
     });
 
