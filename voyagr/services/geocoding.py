@@ -229,6 +229,32 @@ def looks_like_road_name(street: str) -> bool:
     return bool(_ROAD_SUFFIX_RE.search(s))
 
 
+def _hint_is_only_road_name_component(hint: str, lower_query: str) -> bool:
+    """True when every hit of hint is part of a road name (e.g. Express Way).
+
+    Format/category hints like express/station/market are common UK street
+    tokens; treating them as businesses forces the TomTom POI path and can
+    rank a store above the road (including city-first queries such as
+    "Leeds, Express Way" where the road is not the first comma segment).
+    """
+    matches = list(re.finditer(rf'\b{re.escape(hint)}\b', lower_query, re.IGNORECASE))
+    if not matches:
+        return False
+    for m in matches:
+        after = lower_query[m.end() :]
+        # "Express Way", "New Market Street" (optional single intervening word)
+        if not re.match(
+            rf'(?:\s+\w+){{0,1}}\s+(?:street|st|road|rd|lane|ln|avenue|ave|'
+            rf'drive|dr|close|crescent|way|court|ct|place|pl|terrace|'
+            rf'gardens|grove|hill|row|parade|boulevard|blvd|mews|walk|'
+            rf'gate|square|sq)\b',
+            after,
+            re.IGNORECASE,
+        ):
+            return False
+    return True
+
+
 def is_business_or_industrial_query(query: str) -> bool:
     """True for industrial estates and common named-business / POI phrasing."""
     lower = (query or '').lower()
@@ -241,8 +267,13 @@ def is_business_or_industrial_query(query: str) -> bool:
     if looks_like_road_name(subject):
         return False
     for hint in _BUSINESS_NAME_HINTS:
-        if re.search(rf'\b{re.escape(hint)}\b', lower, re.IGNORECASE):
-            return True
+        if not re.search(rf'\b{re.escape(hint)}\b', lower, re.IGNORECASE):
+            continue
+        # Skip hints that only appear as road-name components elsewhere in the
+        # query (city-first: "Leeds, Express Way").
+        if _hint_is_only_road_name_component(hint, lower):
+            continue
+        return True
     return False
 
 
@@ -596,7 +627,13 @@ def should_fetch_tomtom(query: str, nominatim_results: Sequence[Dict[str, Any]])
     # Do not gate on top_score: a single shared road token already scores +40,
     # and a city match adds +45–+70, which blocked TomTom for names like
     # "Tesco Express" when Nominatim only returned a street (e.g. Express Way).
-    if not parsed.house_number and not looks_like_road_name(parsed.street or query):
+    # Also treat city-first road queries ("Leeds, Express Way") as roads even
+    # when parse_address_query puts the city in the street field.
+    if (
+        not parsed.house_number
+        and not looks_like_road_name(parsed.street or query)
+        and not looks_like_road_name(query)
+    ):
         if not result_looks_like_poi(top):
             return True
     return top_score < 25.0
