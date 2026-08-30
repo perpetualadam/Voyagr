@@ -45,6 +45,24 @@ class TestParseAddressQuery:
         p = parse_address_query('Costa Coffee, Leeds')
         assert p.is_business is True
 
+    def test_brand_without_category_word_is_business(self):
+        # "Tesco Express" has no cafe/shop/supermarket keyword; brand/format
+        # hints must still mark it so TomTom POI search is considered.
+        assert is_business_or_industrial_query('Tesco Express, Leeds')
+        p = parse_address_query('Tesco Express, Leeds')
+        assert p.is_business is True
+        assert is_business_or_industrial_query('Asda, Sheffield')
+
+    def test_express_road_suffix_is_not_business(self):
+        # "express" is a store format hint, but "Express Way" is a road.
+        assert not is_business_or_industrial_query('Express Way, Leeds')
+        assert not is_business_or_industrial_query('Express Way')
+        p = parse_address_query('Express Way, Leeds')
+        assert p.is_business is False
+        # Same class of false positive: Station/Market + road suffix.
+        assert not is_business_or_industrial_query('Station Road, Leeds')
+        assert not is_business_or_industrial_query('Market Street')
+
     def test_full_postcode_only(self):
         p = parse_address_query('SW1A 1AA')
         assert p.postcode == 'SW1A1AA'
@@ -269,6 +287,33 @@ class TestRanking:
         assert ranked[0]['name'] == 'Tesco Express'
         assert ranked[0]['class'] == 'shop'
 
+    def test_prefers_express_road_over_store_poi(self):
+        # Searching for the road must not surface a store that shares "Express".
+        query = 'Express Way, Leeds'
+        street = {
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }
+        poi = {
+            'lat': '53.801',
+            'lon': '-1.549',
+            'type': 'supermarket',
+            'class': 'shop',
+            'importance': 0.4,
+            'display_name': 'Tesco Express, Briggate, Leeds',
+            'name': 'Tesco Express',
+            'address': {'road': 'Briggate', 'city': 'Leeds', 'house_number': '12'},
+        }
+        ranked = rank_geocode_results(query, [poi, street])
+        assert ranked[0]['name'] == 'Express Way'
+        assert ranked[0]['class'] == 'highway'
+
     def test_prefers_gb_postcode_over_foreign_homonym(self):
         query = 'LS1'
         foreign = {
@@ -383,6 +428,49 @@ class TestShouldFetchTomtom:
             'importance': 0.5,
         }]
         assert should_fetch_tomtom('Costa Coffee, Leeds', results)
+
+    def test_freetext_brand_not_blocked_by_road_token_score(self):
+        # Shared token "Express" + city Leeds scores well above the old <40
+        # gate even though the hit is a street, not a POI.
+        results = [{
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }]
+        assert should_fetch_tomtom('Tesco Express, Leeds', results)
+
+    def test_express_road_does_not_take_business_tomtom_path(self):
+        # Nominatim already has the road; do not pull POI search just because
+        # "express" is a business-format hint.
+        results = [{
+            'lat': '53.8',
+            'lon': '-1.55',
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Express Way, Leeds',
+            'name': 'Express Way',
+            'address': {'road': 'Express Way', 'city': 'Leeds'},
+        }]
+        assert not should_fetch_tomtom('Express Way, Leeds', results)
+
+    def test_freetext_non_road_without_poi_fetches_tomtom(self):
+        # Unknown brand with no hint keywords: free-text path must still
+        # call TomTom when Nominatim only returned a non-POI street.
+        results = [{
+            'type': 'residential',
+            'class': 'highway',
+            'importance': 0.7,
+            'display_name': 'Acme Way, Leeds',
+            'name': 'Acme Way',
+            'address': {'road': 'Acme Way', 'city': 'Leeds'},
+        }]
+        assert should_fetch_tomtom('Acme Widgets, Leeds', results)
 
 
 @pytest.fixture
