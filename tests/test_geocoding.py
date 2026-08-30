@@ -171,6 +171,18 @@ class TestUkPostcodeHelpers:
         assert extra.get('layer') == 'address'
         assert extra.get('namedetails') == '1'
 
+    def test_nominatim_extra_keeps_layer_for_industrial_road_houses(self):
+        # Industrial keywords must not drop layer=address for ordinary roads.
+        for q in (
+            '12 Industrial Way',
+            '12 Mill Lane',
+            '12 Parkway Drive',
+            '12 Station Road',
+            '12 Market Street',
+        ):
+            extra = nominatim_extra_params_for_query(q)
+            assert extra.get('layer') == 'address', q
+
     def test_nominatim_extra_skips_layer_for_business_unit(self):
         extra = nominatim_extra_params_for_query('Unit 5 Business Park Leeds')
         assert 'layer' not in extra

@@ -611,10 +611,15 @@ def nominatim_extra_params_for_query(query: str) -> Dict[str, str]:
     }
     # House-number layer filter must not apply to postcode / partial postcode
     # queries, and must not hide amenity/shop POIs for business name searches.
+    # Keep address layer when the street looks like a road even if industrial
+    # keywords match (e.g. "12 Industrial Way", "12 Mill Lane").
+    suppress_address_layer = parsed.is_business and not looks_like_road_name(
+        parsed.street
+    )
     if (
         parsed.house_number
         and not parsed.postcode
-        and not parsed.is_business
+        and not suppress_address_layer
         and not looks_like_partial_uk_postcode(query)
     ):
         extra['layer'] = 'address'
