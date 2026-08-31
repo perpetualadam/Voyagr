@@ -199,10 +199,22 @@
             }
             if (followCamera.easeTo) {
                 map.easeTo(followCamera.easeTo);
-                // Keep managed cache in sync when recenter actually animates zoom,
-                // so later GPS follow ticks do not omit against a stale band.
-                if (Number.isFinite(followCamera.easeTo.zoom) && typeof rt().setLastZoomLevel === 'function') {
-                    rt().setLastZoomLevel(followCamera.easeTo.zoom);
+                // Keep managed zoom + turn-latch caches in sync when recenter
+                // animates zoom (GPS follow treats them as a pair).
+                var zoomLevels = typeof rt().getZoomLevels === 'function'
+                    ? rt().getZoomLevels()
+                    : null;
+                var zoomSync = MC.buildRecenterZoomCacheSyncPlan({
+                    zoom: followCamera.easeTo.zoom,
+                    turnAheadZoom: zoomLevels && Number.isFinite(zoomLevels.turn_ahead)
+                        ? zoomLevels.turn_ahead
+                        : undefined,
+                });
+                if (zoomSync.shouldSync && typeof rt().setLastZoomLevel === 'function') {
+                    rt().setLastZoomLevel(zoomSync.lastZoomLevel);
+                    if (typeof rt().setLastTurnZoomApplied === 'function') {
+                        rt().setLastTurnZoomApplied(zoomSync.lastTurnZoomApplied);
+                    }
                 }
             }
             rt().call.showStatus(complete.statusMessage, complete.statusType);

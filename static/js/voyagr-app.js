@@ -1807,6 +1807,7 @@ function getMapRecenterOrchestrationRuntime() {
         getLastZoomLevel: () => VoyagrSmartZoomOrchestration.getLastZoomLevel(),
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getLastTurnZoomApplied: () => VoyagrSmartZoomOrchestration.getLastTurnZoomApplied(),
+        setLastTurnZoomApplied: (val) => VoyagrSmartZoomOrchestration.setLastTurnZoomApplied(val),
         getLastDistanceToNextTurn: () => VoyagrSmartZoomOrchestration.getLastDistanceToNextTurn(),
         computeSmartZoomLevel: (spd, dist, roadType) =>
             VoyagrSmartZoomOrchestration.computeSmartZoomLevel(spd, dist, roadType),
