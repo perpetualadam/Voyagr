@@ -69,9 +69,20 @@ class TestParseAddressQuery:
         assert not is_business_or_industrial_query('Leeds, Express Way')
         assert not is_business_or_industrial_query('Leeds, Station Road')
         assert not is_business_or_industrial_query('York, Market Street')
+        assert not is_business_or_industrial_query('Leeds, Market St')
+        assert not is_business_or_industrial_query('York, Station St East')
         # Real store format still matches when not a road suffix.
         assert is_business_or_industrial_query('Tesco Express, Leeds')
         assert is_business_or_industrial_query('Premier Inn Manchester')
+
+    def test_city_first_business_with_saint_st_is_business(self):
+        # Abbreviated "st" must not swallow Saint place names after a hint
+        # ("St James", "St Pancras") — those stay TomTom/POI businesses.
+        assert is_business_or_industrial_query('Leeds, Tesco Express St James')
+        assert is_business_or_industrial_query('London, Costa Coffee St Pancras')
+        assert is_business_or_industrial_query('Sheffield, Premier Inn St Paul')
+        p = parse_address_query('Leeds, Tesco Express St James')
+        assert p.is_business is True
 
     def test_road_name_hints_are_not_business(self):
         # station/market/centre/inn/shop are common UK street tokens — not POIs.
