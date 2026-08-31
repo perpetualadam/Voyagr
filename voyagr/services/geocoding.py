@@ -242,18 +242,22 @@ def _hint_is_only_road_name_component(hint: str, lower_query: str) -> bool:
         return False
     for m in matches:
         after = lower_query[m.end() :]
-        # "Express Way", "New Market Street" (optional single intervening word).
-        # Abbreviated "st" / "st." is street only when phrase-final, before a
-        # comma/cardinal, or before a UK postcode — not Saint names
-        # ("Tesco Express St James").
+        # Full suffixes allow one intervening word ("New Market Street").
+        # Abbreviated "st" / "st." must be adjacent to the hint (phrase-final,
+        # comma/cardinal, or UK postcode) so "Market St LS1" stays a road, but
+        # an intervening word + st + postcode does not strip POIs such as
+        # "Costa Coffee High St EC1A 1BB". Not Saint names ("St James").
         if not re.match(
+            rf'(?:'
             rf'(?:\s+\w+){{0,1}}\s+(?:street|road|rd|lane|ln|avenue|ave|'
             rf'drive|dr|close|crescent|way|court|ct|place|pl|terrace|'
             rf'gardens|grove|hill|row|parade|boulevard|blvd|mews|walk|'
-            rf'gate|square|sq|'
-            rf'st(?=\.?\s*(?:$|,|(?:east|west|north|south)\b|'
+            rf'gate|square|sq)\b'
+            rf'|'
+            rf'\s+st(?=\.?\s*(?:$|,|(?:east|west|north|south)\b|'
             rf'(?:gir(?:\s*0aa)?|[a-z]{{1,2}}\d[a-z\d]?'
-            rf'(?:\s*\d[a-z]{{2}})?)\b)))\b',
+            rf'(?:\s*\d[a-z]{{2}})?)\b))\b'
+            rf')',
             after,
             re.IGNORECASE,
         ):

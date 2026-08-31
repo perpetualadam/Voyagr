@@ -89,6 +89,30 @@ class TestParseAddressQuery:
         p = parse_address_query('Leeds, Tesco Express St James')
         assert p.is_business is True
 
+    def test_city_first_poi_with_st_and_postcode_is_business(self):
+        # Intervening street token + St/St. + postcode must not clear is_business
+        # for POIs ("Coffee High St EC1A…"); adjacent "Market St LS1" stays road.
+        assert is_business_or_industrial_query(
+            'London, Costa Coffee High St EC1A 1BB'
+        )
+        assert is_business_or_industrial_query(
+            'London, Costa Coffee High St. EC1A 1BB'
+        )
+        assert is_business_or_industrial_query(
+            'Manchester, Costa Coffee Market St M1 1AE'
+        )
+        assert is_business_or_industrial_query('Sheffield, Asda High St S1 2HH')
+        assert is_business_or_industrial_query(
+            'York, Premier Inn Station St YO1 8ST'
+        )
+        assert is_business_or_industrial_query(
+            'Leeds, Tesco Express St James LS1 1AA'
+        )
+        p = parse_address_query('London, Costa Coffee High St EC1A 1BB')
+        assert p.is_business is True
+        assert not is_business_or_industrial_query('Leeds, Market St LS1 1AA')
+        assert not is_business_or_industrial_query('Leeds, Market St. LS1 1AA')
+
     def test_road_name_hints_are_not_business(self):
         # station/market/centre/inn/shop are common UK street tokens — not POIs.
         assert not is_business_or_industrial_query('12 Station Road')
