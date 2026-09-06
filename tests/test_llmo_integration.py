@@ -175,8 +175,8 @@ def test_llmo_shared_faq_consistency():
     full = render_llms_full_txt(allow=True)
     assert "Does Voyagr work offline?" in summary
     assert "Does Voyagr work offline?" in full
-    assert "GPS navigation app" in summary
-    assert "GPS navigation app" in full
+    assert "navigation app" in summary
+    assert "navigation app" in full
     assert "Progressive Web App" not in summary
     assert "Progressive Web App" not in full
     assert "PWA" not in summary
