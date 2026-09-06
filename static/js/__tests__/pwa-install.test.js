@@ -111,6 +111,10 @@ describe('pwa-install module', () => {
         expect(waiting.skipWaitingMessageType).toBe('SKIP_WAITING');
 
         const version = PWA.buildDisplayPwaVersionExecutePlan({ buildDate: '2026-07-11' });
-        expect(version.versionText).toContain('2026-07-11');
+        expect(version.versionText).toBe('App version: 2026-07-11');
+        expect(version.versionText).not.toMatch(/PWA/i);
+
+        expect(PWA.buildCheckForUpdatesPreflightPlan({ hasServiceWorker: false }).statusMessage)
+            .not.toMatch(/PWA/i);
     });
 });

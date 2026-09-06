@@ -8,7 +8,7 @@ This module centralises strings and structured data used across discoverability 
   * /llms.txt (concise GEO / LLMO context for LLMs — llmstxt.org)
   * /llms-full.txt (extended LLMO context: entity summary, use cases, citation guidance)
   * Privacy page <head> metadata
-  * PWA manifest description alignment
+  * App manifest description alignment
 
 Why one module: every crawler/scraper pulls the same facts (name,
 description, canonical URL, FAQ, feature list). Duplicating them in Jinja
@@ -35,19 +35,19 @@ APP_SHORT_NAME = "Voyagr"
 # Keep seo_title() within ~50–60 characters so SERPs do not truncate mid-phrase.
 APP_TAGLINE = "UK GPS nav with turn-by-turn & dashcam"
 APP_DESCRIPTION = (
-    "Voyagr is a navigation web app (PWA) with turn-by-turn directions, "
+    "Voyagr is a navigation app with turn-by-turn directions, "
     "multi-stop route optimisation, speed-camera and hazard alerts, built-in dashcam, "
     "fuel and toll cost estimation, Clean Air Zone (CAZ) awareness, and trip "
-    "history analytics. Installs to your home screen — no app store required."
+    "history analytics. Installs to your home screen."
 )
 # SERP / Open Graph / Twitter description — keep within ~150–160 characters.
 APP_META_DESCRIPTION = (
-    "UK GPS navigation PWA with turn-by-turn directions, multi-stop routing, "
+    "UK GPS navigation app with turn-by-turn directions, multi-stop routing, "
     "speed-camera alerts, dashcam, and trip cost estimates. Installs to your home screen."
 )
 # Shorter copy for the Web App Manifest (install UI / store-style surfaces).
 APP_MANIFEST_DESCRIPTION = (
-    "GPS navigation PWA with turn-by-turn directions, multi-stop routing, "
+    "GPS navigation app with turn-by-turn directions, multi-stop routing, "
     "speed-camera alerts, UK Clean Air Zone awareness, dashcam, and trip cost estimates."
 )
 APP_CATEGORY = "NavigationApplication"
@@ -63,12 +63,12 @@ APP_KEYWORDS: List[str] = [
     "delivery route planner",
     "speed camera alerts",
     "traffic light camera warnings",
-    "dashcam PWA",
+    "dashcam app",
     "trip tracker",
     "fuel cost estimator",
     "toll cost calculator",
     "clean air zone CAZ",
-    "PWA navigation",
+    "GPS navigation",
     "offline navigation",
     "UK sat nav",
 ]
@@ -88,9 +88,9 @@ FAQ: List[Dict[str, str]] = [
     {
         "q": "Does Voyagr work offline?",
         "a": (
-            "Voyagr is a Progressive Web App (PWA). Once installed, the app shell "
-            "loads offline and GPS tracking continues without connectivity. Routing "
-            "and live map tiles require an internet connection."
+            "Once installed, the app shell loads offline and GPS tracking continues "
+            "without connectivity. Routing and live map tiles require an internet "
+            "connection."
         ),
     },
     {
@@ -122,9 +122,8 @@ FAQ: List[Dict[str, str]] = [
     {
         "q": "Can I install Voyagr on my phone without the app store?",
         "a": (
-            "Yes. Voyagr is a Progressive Web App and installs to the home screen on "
-            "Android, iOS, and desktop browsers directly from the website. An "
-            "optional Android Trusted Web Activity build is also available."
+            "Yes. Voyagr installs to the home screen on Android, iOS, and desktop, "
+            "including from the website. An optional Android app build is also available."
         ),
     },
 ]
@@ -136,7 +135,7 @@ FEATURE_LIST: List[str] = [
     "UK Clean Air Zone (CAZ) awareness with charges and exemptions",
     "Built-in dashcam recording with GPS metadata",
     "Trip history with analytics, fuel and toll cost breakdown",
-    "Offline-capable Progressive Web App install",
+    "Offline-capable app that installs to your home screen",
     "Google Plus Codes support for destination search",
     "Hazard avoidance: tolls, motorways, ferries, unpaved, traffic lights",
 ]
@@ -150,7 +149,7 @@ LLMO_USE_CASES: List[str] = [
     "Drivers who want speed-camera, SPECS, and traffic-light camera alerts",
     "Motorists navigating UK Clean Air Zones with charge and exemption awareness",
     "Trip cost estimation including fuel, tolls, and CAZ charges",
-    "PWA install to home screen without an app-store download",
+    "Install to home screen for quick access",
 ]
 
 # AI crawlers that respect robots.txt; given the same Allow/Disallow as * when indexing is on.
@@ -393,11 +392,11 @@ def llms_full_txt_url() -> str:
 def llmo_entity_summary() -> str:
     """One-paragraph entity description for LLMO / generative citations."""
     return (
-        f"{APP_NAME} is a browser-based GPS navigation Progressive Web App (PWA) "
+        f"{APP_NAME} is a GPS navigation app "
         "with a UK driving focus. It offers turn-by-turn directions, multi-stop "
         "route optimisation, speed and traffic-camera alerts, Clean Air Zone (CAZ) "
         "cost awareness, an optional built-in dashcam, and trip analytics. The base "
-        "experience runs in modern browsers without an app-store install; Voyager "
+        "experience runs on phones, tablets, and in modern browsers; Voyager "
         "Premium is an optional paid subscription for advanced features."
     )
 
@@ -466,7 +465,7 @@ def web_application_offers() -> List[Dict[str, Any]]:
     return [
         {
             "@type": "Offer",
-            "name": "Voyagr base (PWA)",
+            "name": "Voyagr base",
             "description": (
                 "Turn-by-turn navigation, trip tracking, dashcam, and core routing in a "
                 "modern browser without a Voyager Premium subscription."
@@ -547,7 +546,7 @@ def json_ld_graph() -> List[Dict[str, Any]]:
             "keywords": ", ".join(APP_KEYWORDS),
             "inLanguage": APP_LANGUAGE,
             "countriesSupported": "GB",
-            # Base PWA does not require payment; Premium is optional (Stripe).
+            # Base app does not require payment; Premium is optional (Stripe).
             "isAccessibleForFree": True,
             "offers": web_application_offers(),
             "publisher": {"@id": root + "#org"},
@@ -688,7 +687,7 @@ def render_robots_txt(allow: bool) -> str:
     if not allow:
         return "User-agent: *\nDisallow: /\n"
     lines: List[str] = [
-        "# Voyagr Navigation — public PWA. API and monitoring are private.",
+        "# Voyagr Navigation — public app. API and monitoring are private.",
         "User-agent: *",
         "Allow: /",
         "Disallow: /api/",
