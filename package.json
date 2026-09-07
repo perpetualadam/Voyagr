@@ -1,7 +1,7 @@
 {
-  "name": "voyagr-pwa",
+  "name": "voyagr-app",
   "version": "1.0.0",
-  "description": "Voyagr - Advanced Navigation PWA with Route Optimization",
+  "description": "Voyagr - Advanced Navigation App with Route Optimization",
   "main": "voyagr_web.py",
   "scripts": {
     "picovoice:sync": "node scripts/sync-picovoice-web.cjs",
@@ -20,7 +20,7 @@
   "keywords": [
     "navigation",
     "routing",
-    "pwa",
+    "app",
     "maps",
     "gps"
   ],

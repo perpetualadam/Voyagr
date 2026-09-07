@@ -192,7 +192,7 @@ def monitoring_dashboard():
 
 @core_bp.route('/manifest.json')
 def manifest():
-    """Serve the PWA manifest file (description/name aligned with voyagr.seo)."""
+    """Serve the web app manifest file (description/name aligned with voyagr.seo)."""
     manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'manifest.json')
     with open(manifest_path, 'r', encoding='utf-8') as f:
         data = json.load(f)

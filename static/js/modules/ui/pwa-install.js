@@ -264,7 +264,7 @@
         if (!input.hasServiceWorker) {
             return {
                 action: 'unsupported',
-                statusMessage: '⚠️ PWA not supported on this browser',
+                statusMessage: '⚠️ App updates are not supported on this browser',
                 statusType: 'warning',
             };
         }
@@ -324,7 +324,7 @@
         return {
             shouldUpdate: true,
             elementId: 'pwaVersionText',
-            versionText: 'App version: PWA ' + buildDate,
+            versionText: 'App version: ' + buildDate,
         };
     }
 

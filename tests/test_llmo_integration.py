@@ -175,8 +175,12 @@ def test_llmo_shared_faq_consistency():
     full = render_llms_full_txt(allow=True)
     assert "Does Voyagr work offline?" in summary
     assert "Does Voyagr work offline?" in full
-    assert summary.count("Progressive Web App") >= 1
-    assert full.count("Progressive Web App") >= 1
+    assert "navigation app" in summary
+    assert "navigation app" in full
+    assert "Progressive Web App" not in summary
+    assert "Progressive Web App" not in full
+    assert "PWA" not in summary
+    assert "PWA" not in full
 
 
 def test_llmo_opt_out_when_indexing_blocked(client, monkeypatch):
@@ -267,6 +271,8 @@ def test_seo_meta_description_fits_serp_length(client):
     assert 120 <= len(APP_META_DESCRIPTION) <= 160
     # Longer entity copy remains available for JSON-LD / llms.txt / noscript.
     assert len(APP_DESCRIPTION) > len(APP_META_DESCRIPTION)
+    assert "PWA" not in APP_DESCRIPTION
+    assert "PWA" not in APP_META_DESCRIPTION
 
     rv = client.get("/")
     assert rv.status_code == 200
@@ -275,6 +281,9 @@ def test_seo_meta_description_fits_serp_length(client):
     assert f'<meta name="description" content="{APP_META_DESCRIPTION}">' in body
     # Noscript product blurb keeps the fuller description.
     assert APP_DESCRIPTION in body
+    assert "navigation web app (PWA)" not in body
+    assert "UK GPS navigation PWA" not in body
+    assert "Voyagr base (PWA)" not in body
 
 
 def test_og_image_dimensions_default_icon(monkeypatch):
