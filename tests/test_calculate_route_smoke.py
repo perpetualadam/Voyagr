@@ -393,5 +393,55 @@ class CalculateRouteSmokeTest(unittest.TestCase):
         self.assertGreaterEqual(len(d.get('routes') or []), 1)
 
 
+class _Http400Resp:
+    status_code = 400
+    text = '{"error":"Exceeded max alternates","error_code":158}'
+
+    def json(self):
+        return {'error': 'Exceeded max alternates', 'error_code': 158}
+
+
+class ValhallaHttp400RecoverySmokeTest(unittest.TestCase):
+    """
+    A Valhalla HTTP 400 must not strand the user when GraphHopper is also down.
+
+    The primary payload used to request 3 alternates (stock Valhalla max is 2) or
+    forward an illegal date_time, then skip baseline retry unless GraphHopper had
+    already succeeded — which produced: All routing engines failed. Valhalla: HTTP 400.
+    """
+
+    def setUp(self):
+        self.client = vw.app.test_client()
+
+    def test_http_400_recovers_with_baseline_valhalla_without_graphhopper(self):
+        from voyagr.services.routing.orchestrator import ValhallaPostOutcome
+
+        rejected = ValhallaPostOutcome(response=_Http400Resp(), error=None, timed_out=False)
+
+        def fake_post(url, json=None, **kwargs):
+            # Recovery / enrichment posts after the primary 400.
+            return _FakeResp()
+
+        with patch.object(vw, 'route_with_graphhopper', return_value=None), \
+             patch.object(vw, 'attempt_graphhopper_camera_route', return_value=(None, 'unavailable')), \
+             patch.object(vw, 'fetch_hazards_for_route', return_value={}), \
+             patch.object(vw, 'fetch_tomtom_incidents', return_value={}), \
+             patch.object(vw, 'post_valhalla_route', return_value=rejected), \
+             patch.object(vw.requests, 'post', side_effect=fake_post), \
+             patch.object(vw.requests, 'get', return_value=_FakeResp()):
+            r = self.client.post('/api/route', json={
+                'start': '53.536,-1.380', 'end': '53.517,-1.150',
+                'routing_mode': 'auto', 'enable_hazard_avoidance': False,
+                'departure_time': '08:00',
+                'force_refresh': True,
+            })
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True)[:500])
+        d = r.get_json()
+        self.assertTrue(d.get('success'), f"error: {d.get('error')}")
+        self.assertNotIn('All routing engines failed', d.get('error') or '')
+        self.assertIn('Valhalla', d.get('source') or '')
+        self.assertGreaterEqual(len(d.get('routes') or []), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

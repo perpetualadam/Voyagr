@@ -1109,10 +1109,12 @@ from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazar
 from voyagr.services.routing.orchestrator import (
     build_valhalla_baseline_request_payload,
     build_valhalla_discovery_payload,
+    build_valhalla_minimal_request_payload,
     build_valhalla_retry_payload,
     build_valhalla_route_payload,
     build_route_success_response,
     classify_valhalla_route_data,
+    describe_valhalla_http_error,
     find_baseline_cameras_on_route,
     post_valhalla_route,
 )
@@ -1763,7 +1765,7 @@ def calculate_route():
                 else:
                     valhalla_error = f"Unexpected response format: {route_data.keys()}"
             elif response is not None:
-                valhalla_error = f"HTTP {response.status_code}"
+                valhalla_error = describe_valhalla_http_error(response)
             # else: transport failure already set valhalla_error (timeout / unreachable)
         except requests.exceptions.Timeout:
             valhalla_error = "Timeout (>10s)"
@@ -1951,15 +1953,21 @@ def calculate_route():
             logger.info("[ROUTING] Valhalla succeeded, skipping OSRM fallback")
         else:
             # ----------------------------------------------------------------
-            # GraphHopper often succeeds while Valhalla rejects hazard-heavy payloads (HTTP 400).
-            # Return GH ⚡ Optimised + baseline Valhalla (no exclude_locations) before OSRM.
+            # Valhalla often rejects hazard-heavy / over-specified payloads (HTTP 400).
+            # Retry a baseline request (no exclude_locations) even when GraphHopper failed,
+            # then a stripped locations+costing payload, before giving up to OSRM.
             # ----------------------------------------------------------------
             recovery_data: Optional[Dict[str, Any]] = None
-            if graphhopper_route and graphhopper_route.get('success'):
-                try:
+            _ve = str(valhalla_error or '')
+            skip_valhalla_retry = (
+                'Timeout' in _ve
+                or 'unreachable' in _ve.lower()
+                or 'Connection error' in _ve
+            )
+            try:
                     tr_mult, tr_level = traffic_factors()
                     gh_entry = None
-                    if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
+                    if graphhopper_route and graphhopper_route.get('success') and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                         gh_entry = build_graphhopper_optimised_route_entry(
                             graphhopper_route,
                             hazards,
@@ -1997,38 +2005,55 @@ def calculate_route():
                         avoid_unpaved=avoid_unpaved,
                         route_optimization=route_optimization,
                     )
-                    logger.info("[ROUTING] Recovery: requesting baseline Valhalla (no exclude_locations)")
-                    vrec = requests.post(url, json=baseline_payload, timeout=15, headers=headers)
+                    minimal_payload = build_valhalla_minimal_request_payload(
+                        start_lat=start_lat,
+                        start_lon=start_lon,
+                        end_lat=end_lat,
+                        end_lon=end_lon,
+                        route_locations=route_locations,
+                        has_waypoints=has_waypoints,
+                        valhalla_costing=valhalla_costing,
+                    )
                     valhalla_baseline_ok = False
-                    if vrec.status_code == 200:
-                        rd = vrec.json()
-                        if rd.get('error'):
-                            logger.warning(f"[ROUTING] Recovery Valhalla error in JSON: {rd.get('error')}")
-                        elif 'trip' in rd:
-                            v_routes = valhalla_route_json_to_standard_routes(
-                                rd,
-                                valhalla_costing=valhalla_costing,
-                                start_lat=start_lat,
-                                start_lon=start_lon,
-                                hazards=hazards,
-                                cost_calculator=cost_calculator,
-                                vehicle_type=vehicle_type,
-                                fuel_efficiency=fuel_efficiency,
-                                fuel_price=fuel_price,
-                                energy_efficiency=energy_efficiency,
-                                electricity_price=electricity_price,
-                                include_tolls=include_tolls,
-                                include_caz=include_caz,
-                                caz_exempt=caz_exempt,
-                                traffic_factors=(tr_mult, tr_level),
-                            )
-                            if v_routes:
-                                routes_out.extend(v_routes)
-                                valhalla_baseline_ok = True
-                                logger.info(f"[ROUTING] Recovery: baseline Valhalla returned {len(v_routes)} route(s)")
-                    else:
-                        _rbody = vrec.text[:800] if vrec.text else ''
-                        logger.warning(f"[ROUTING] Recovery Valhalla HTTP {vrec.status_code}: {_rbody}")
+                    if not skip_valhalla_retry:
+                        for rec_label, rec_payload in (
+                            ('baseline Valhalla (no exclude_locations)', baseline_payload),
+                            ('minimal Valhalla (locations+costing)', minimal_payload),
+                        ):
+                            logger.info(f"[ROUTING] Recovery: requesting {rec_label}")
+                            vrec = requests.post(url, json=rec_payload, timeout=15, headers=headers)
+                            if vrec.status_code == 200:
+                                rd = vrec.json()
+                                if rd.get('error'):
+                                    logger.warning(f"[ROUTING] Recovery Valhalla error in JSON: {rd.get('error')}")
+                                    continue
+                                if 'trip' not in rd:
+                                    continue
+                                v_routes = valhalla_route_json_to_standard_routes(
+                                    rd,
+                                    valhalla_costing=valhalla_costing,
+                                    start_lat=start_lat,
+                                    start_lon=start_lon,
+                                    hazards=hazards,
+                                    cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type,
+                                    fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price,
+                                    energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price,
+                                    include_tolls=include_tolls,
+                                    include_caz=include_caz,
+                                    caz_exempt=caz_exempt,
+                                    traffic_factors=(tr_mult, tr_level),
+                                )
+                                if v_routes:
+                                    routes_out.extend(v_routes)
+                                    valhalla_baseline_ok = True
+                                    logger.info(f"[ROUTING] Recovery: {rec_label} returned {len(v_routes)} route(s)")
+                                    break
+                            else:
+                                _rbody = vrec.text[:800] if vrec.text else ''
+                                logger.warning(f"[ROUTING] Recovery {rec_label} HTTP {vrec.status_code}: {_rbody}")
 
                     if routes_out:
                         recovery_enrich = RouteEnrichmentContext(
@@ -2066,11 +2091,12 @@ def calculate_route():
                         for idx, route in enumerate(routes_out):
                             route['id'] = idx + 1
 
-                        routing_source = (
-                            'GraphHopper+Valhalla ✅'
-                            if valhalla_baseline_ok
-                            else 'GraphHopper (Valhalla hazard request failed)'
-                        )
+                        if valhalla_baseline_ok and gh_entry:
+                            routing_source = 'GraphHopper+Valhalla ✅'
+                        elif valhalla_baseline_ok:
+                            routing_source = 'Valhalla ✅'
+                        else:
+                            routing_source = 'GraphHopper (Valhalla hazard request failed)'
                         recovery_data = build_route_success_response(
                             routes_out,
                             source=routing_source,
@@ -2093,8 +2119,8 @@ def calculate_route():
                             recovery_data, routing_source, cache_key=db_cache_key,
                         )
                         logger.info(f"[ROUTING] Recovery response: {routing_source}, {len(routes_out)} route(s)")
-                except Exception as rec_e:
-                    logger.warning(f"[ROUTING] GraphHopper/Valhalla recovery failed: {rec_e}")
+            except Exception as rec_e:
+                logger.warning(f"[ROUTING] GraphHopper/Valhalla recovery failed: {rec_e}")
 
             if recovery_data is not None:
                 return jsonify(recovery_data)

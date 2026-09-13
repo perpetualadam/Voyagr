@@ -10,6 +10,7 @@ return/jsonify-heavy and require live-engine verification to move safely).
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,16 @@ except ImportError:  # pragma: no cover - requests always present server-side
 from voyagr.services.routing.costing import build_auto_costing_options
 
 logger = logging.getLogger('voyagr_web')
+
+# Stock Valhalla (and gis-ops docker images) default service_limits.max_alternates
+# to 2. Requesting 3 is a 400 ("Exceeded max alternates") and used to take down
+# every auto /api/route when GraphHopper/OSRM were also unavailable.
+VALHALLA_MAX_ALTERNATES = 2
+VALHALLA_MAX_EXCLUDE_LOCATIONS = 50
+VALHALLA_DATETIME_FMT = '%Y-%m-%dT%H:%M'
+
+_VALHALLA_ISO_LOCAL_RE = re.compile(r'^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})')
+_VALHALLA_HM_RE = re.compile(r'^(\d{1,2}):(\d{2})$')
 
 
 @dataclass
@@ -51,6 +62,132 @@ def post_valhalla_route(url: str, payload: Dict[str, Any], headers: Dict[str, st
         return ValhallaPostOutcome(None, None, True)
     except requests.exceptions.RequestException as e:
         return ValhallaPostOutcome(None, f"Routing service unreachable: {str(e)}", False)
+
+
+def valhalla_alternates_count(costing: str, has_waypoints: bool = False) -> int:
+    """How many Valhalla alternates to request without exceeding service_limits."""
+    return VALHALLA_MAX_ALTERNATES if (costing == 'auto' and not has_waypoints) else 0
+
+
+def normalize_valhalla_datetime(value: Optional[Any], *, now: Optional[datetime] = None) -> Optional[str]:
+    """
+    Coerce a client departure time into Valhalla's ``YYYY-MM-DDTHH:MM``.
+
+    ``datetime-local`` can include seconds; leftover ``HH:MM`` prefs and ISO
+    strings with a timezone are also common. Sending any of those unparsed is
+    HTTP 400 (invalid date_time). Unusable values return None so callers can fall
+    back to "now" instead of forwarding the bad string.
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    iso = _VALHALLA_ISO_LOCAL_RE.match(s)
+    if iso:
+        return f'{iso.group(1)}T{iso.group(2)}'
+    hm = _VALHALLA_HM_RE.match(s)
+    if hm:
+        hour, minute = int(hm.group(1)), int(hm.group(2))
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            base = now or datetime.now()
+            return base.replace(hour=hour, minute=minute, second=0, microsecond=0).strftime(
+                VALHALLA_DATETIME_FMT
+            )
+    try:
+        parsed = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        return parsed.strftime(VALHALLA_DATETIME_FMT)
+    except ValueError:
+        return None
+
+
+def sanitize_valhalla_exclude_locations(
+    exclude_locations: Optional[List[Dict[str, Any]]],
+    max_locations: int = VALHALLA_MAX_EXCLUDE_LOCATIONS,
+) -> List[Dict[str, float]]:
+    """Keep only numeric lat/lon pairs, capped at Valhalla's exclude_locations limit (error 157)."""
+    out: List[Dict[str, float]] = []
+    for loc in exclude_locations or []:
+        try:
+            lat = float(loc['lat'])
+            lon = float(loc['lon'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0:
+            out.append({'lat': lat, 'lon': lon})
+        if len(out) >= max_locations:
+            break
+    return out
+
+
+def describe_valhalla_http_error(response: Any) -> str:
+    """Turn a non-200 Valhalla response into the valhalla_error string shown to the client."""
+    status = getattr(response, 'status_code', None) or 'unknown'
+    try:
+        body = response.json()
+        err = body.get('error')
+        if err:
+            return f'HTTP {status}: {err}'
+    except Exception:
+        pass
+    text = (getattr(response, 'text', None) or '').strip()
+    if text:
+        return f'HTTP {status}: {text[:180]}'
+    return f'HTTP {status}'
+
+
+def attach_valhalla_datetime(
+    payload: Dict[str, Any],
+    departure_time: Optional[Any],
+    now_str: Optional[str] = None,
+) -> None:
+    """Attach a Valhalla-legal date_time, falling back to now when the client value is unusable."""
+    dt_value = normalize_valhalla_datetime(departure_time)
+    if not dt_value:
+        dt_value = now_str or datetime.now().strftime(VALHALLA_DATETIME_FMT)
+    payload['date_time'] = {'type': 1, 'value': dt_value}
+
+
+def apply_valhalla_mode_costing_options(
+    payload: Dict[str, Any],
+    valhalla_costing: str,
+    *,
+    avoid_tolls: bool = False,
+    avoid_motorways: bool = False,
+    avoid_ferries: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    avoid_unpaved: bool = False,
+    route_optimization: str = 'fastest',
+    log_auto: bool = False,
+) -> None:
+    """Attach mode-specific costing_options. Bicycle omits unknown keys (they 400 some builds)."""
+    if valhalla_costing == 'pedestrian':
+        payload['costing_options'] = {
+            'pedestrian': {'walking_speed': 5.1, 'use_ferry': not avoid_ferries}
+        }
+    elif valhalla_costing == 'bicycle':
+        payload['costing_options'] = {
+            'bicycle': {'cycling_speed': 18, 'use_ferry': not avoid_ferries}
+        }
+    elif valhalla_costing in ('auto', 'auto_shorter'):
+        auto_opts = build_auto_costing_options(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            avoid_unpaved=avoid_unpaved,
+            route_optimization=route_optimization,
+        )
+        if auto_opts:
+            payload['costing_options'] = {valhalla_costing: auto_opts}
+            if log_auto:
+                logger.info(
+                    f"[VALHALLA] auto costing opts: tolls={avoid_tolls} motorways={avoid_motorways} "
+                    f"ferries={avoid_ferries} scenic={prefer_scenic} quiet={prefer_quiet} "
+                    f"unpaved={avoid_unpaved} opt={route_optimization} → {auto_opts}"
+                )
 
 
 def build_valhalla_route_payload(
@@ -86,52 +223,35 @@ def build_valhalla_route_payload(
             {"lat": end_lat, "lon": end_lon},
         ],
         "costing": valhalla_costing,
-        "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+        "alternates": valhalla_alternates_count(valhalla_costing, has_waypoints),
         # Valhalla API: units/language at top level affect narration (turn-by-turn API reference)
         "units": "kilometers",
         "language": "en-GB",
-        "directions_options": {"generalize": 0},
+        "generalize": 0,
     }
 
-    if valhalla_costing == 'pedestrian':
-        payload["costing_options"] = {
-            "pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}
-        }
-    elif valhalla_costing == 'bicycle':
-        payload["costing_options"] = {
-            "bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}
-        }
-    elif valhalla_costing in ('auto', 'auto_shorter'):
-        auto_opts = build_auto_costing_options(
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            avoid_unpaved=avoid_unpaved,
-            route_optimization=route_optimization,
-        )
-        if auto_opts:
-            payload["costing_options"] = {valhalla_costing: auto_opts}
-            logger.info(
-                f"[VALHALLA] auto costing opts: tolls={avoid_tolls} motorways={avoid_motorways} "
-                f"ferries={avoid_ferries} scenic={prefer_scenic} quiet={prefer_quiet} "
-                f"unpaved={avoid_unpaved} opt={route_optimization} → {auto_opts}"
-            )
+    apply_valhalla_mode_costing_options(
+        payload,
+        valhalla_costing,
+        avoid_tolls=avoid_tolls,
+        avoid_motorways=avoid_motorways,
+        avoid_ferries=avoid_ferries,
+        prefer_scenic=prefer_scenic,
+        prefer_quiet=prefer_quiet,
+        avoid_unpaved=avoid_unpaved,
+        route_optimization=route_optimization,
+        log_auto=True,
+    )
 
     # Traffic-aware routing: use departure time for time-dependent routing (auto only)
     if valhalla_costing == 'auto':
-        if departure_time:
-            payload["date_time"] = {"type": 1, "value": departure_time}
-            logger.info(f"[VALHALLA] Time-dependent routing with departure: {departure_time}")
-        else:
-            value = now_str or datetime.now().strftime('%Y-%m-%dT%H:%M')
-            payload["date_time"] = {"type": 1, "value": value}
-            logger.info(f"[VALHALLA] Time-dependent routing with current time: {value}")
+        attach_valhalla_datetime(payload, departure_time, now_str=now_str)
+        logger.info(f"[VALHALLA] Time-dependent routing with {payload['date_time']['value']}")
 
-    if exclude_locations:
-        payload["exclude_locations"] = exclude_locations
-        logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
+    cleaned = sanitize_valhalla_exclude_locations(exclude_locations)
+    if cleaned:
+        payload["exclude_locations"] = cleaned
+        logger.debug(f"[VALHALLA] Added {len(cleaned)} exclude_locations to request")
 
     return payload
 
@@ -165,32 +285,25 @@ def build_valhalla_retry_payload(
             {"lat": end_lat, "lon": end_lon},
         ],
         "costing": valhalla_costing,
-        "alternates": 3 if valhalla_costing == 'auto' else 0,
-        "exclude_locations": exclude_locations,
+        "alternates": valhalla_alternates_count(valhalla_costing),
         "units": "kilometers",
         "language": "en-GB",
-        "directions_options": {"generalize": 0},
+        "generalize": 0,
     }
-    if valhalla_costing == 'pedestrian':
-        payload["costing_options"] = {
-            "pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}
-        }
-    elif valhalla_costing == 'bicycle':
-        payload["costing_options"] = {
-            "bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}
-        }
-    elif valhalla_costing in ('auto', 'auto_shorter'):
-        auto_opts = build_auto_costing_options(
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            avoid_unpaved=avoid_unpaved,
-            route_optimization=route_optimization,
-        )
-        if auto_opts:
-            payload["costing_options"] = {valhalla_costing: auto_opts}
+    cleaned = sanitize_valhalla_exclude_locations(exclude_locations)
+    if cleaned:
+        payload["exclude_locations"] = cleaned
+    apply_valhalla_mode_costing_options(
+        payload,
+        valhalla_costing,
+        avoid_tolls=avoid_tolls,
+        avoid_motorways=avoid_motorways,
+        avoid_ferries=avoid_ferries,
+        prefer_scenic=prefer_scenic,
+        prefer_quiet=prefer_quiet,
+        avoid_unpaved=avoid_unpaved,
+        route_optimization=route_optimization,
+    )
     return payload
 
 
@@ -222,34 +335,53 @@ def build_valhalla_baseline_request_payload(
             {"lat": end_lat, "lon": end_lon},
         ],
         "costing": valhalla_costing,
-        "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+        "alternates": valhalla_alternates_count(valhalla_costing, has_waypoints),
         "units": "kilometers",
         "language": "en-GB",
-        "directions_options": {"generalize": 0},
+        "generalize": 0,
     }
-    if valhalla_costing == 'pedestrian':
-        payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
-    elif valhalla_costing == 'bicycle':
-        payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
-    elif valhalla_costing in ('auto', 'auto_shorter'):
-        auto_opts = build_auto_costing_options(
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            avoid_unpaved=avoid_unpaved,
-            route_optimization=route_optimization,
-        )
-        if auto_opts:
-            payload["costing_options"] = {valhalla_costing: auto_opts}
+    apply_valhalla_mode_costing_options(
+        payload,
+        valhalla_costing,
+        avoid_tolls=avoid_tolls,
+        avoid_motorways=avoid_motorways,
+        avoid_ferries=avoid_ferries,
+        prefer_scenic=prefer_scenic,
+        prefer_quiet=prefer_quiet,
+        avoid_unpaved=avoid_unpaved,
+        route_optimization=route_optimization,
+    )
 
     if valhalla_costing == 'auto':
-        if departure_time:
-            payload["date_time"] = {"type": 1, "value": departure_time}
-        else:
-            payload["date_time"] = {"type": 1, "value": datetime.now().strftime('%Y-%m-%dT%H:%M')}
+        attach_valhalla_datetime(payload, departure_time)
     return payload
+
+
+def build_valhalla_minimal_request_payload(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_locations: Optional[List[Dict[str, Any]]] = None,
+    has_waypoints: bool = False,
+    valhalla_costing: str = 'auto',
+) -> Dict[str, Any]:
+    """
+    Last-ditch Valhalla /route JSON: locations + costing only.
+
+    Used when a richer payload is rejected (HTTP 400 from unknown language,
+    missing timezone tiles on date_time, alternates over the service limit, etc.).
+    Omitting date_time/language/alternates still returns a usable path.
+    """
+    return {
+        "locations": route_locations if has_waypoints and route_locations else [
+            {"lat": start_lat, "lon": start_lon},
+            {"lat": end_lat, "lon": end_lon},
+        ],
+        "costing": valhalla_costing,
+        "units": "kilometers",
+    }
 
 
 def classify_valhalla_route_data(route_data: Dict[str, Any]) -> Optional[str]:
