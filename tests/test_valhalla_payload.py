@@ -8,10 +8,16 @@ from voyagr.services.routing.orchestrator import (
     post_valhalla_route,
     build_valhalla_baseline_request_payload,
     build_valhalla_discovery_payload,
+    build_valhalla_minimal_request_payload,
     build_valhalla_retry_payload,
     build_valhalla_route_payload,
     classify_valhalla_route_data,
+    describe_valhalla_http_error,
     find_baseline_cameras_on_route,
+    normalize_valhalla_datetime,
+    sanitize_valhalla_exclude_locations,
+    VALHALLA_MAX_ALTERNATES,
+    VALHALLA_MAX_EXCLUDE_LOCATIONS,
 )
 
 
@@ -33,9 +39,11 @@ class TestBuildValhallaRoutePayload(unittest.TestCase):
     def test_auto_two_point_defaults(self):
         p = build_valhalla_route_payload(**BASE)
         self.assertEqual(p['costing'], 'auto')
-        self.assertEqual(p['alternates'], 3)
+        self.assertEqual(p['alternates'], VALHALLA_MAX_ALTERNATES)
         self.assertEqual(p['units'], 'kilometers')
         self.assertEqual(p['language'], 'en-GB')
+        self.assertEqual(p['generalize'], 0)
+        self.assertNotIn('directions_options', p)
         self.assertEqual(p['locations'], [{'lat': 53.5, 'lon': -1.4}, {'lat': 53.4, 'lon': -1.1}])
         self.assertEqual(p['date_time'], {'type': 1, 'value': '2026-01-01T12:00'})
 
@@ -52,7 +60,22 @@ class TestBuildValhallaRoutePayload(unittest.TestCase):
     def test_bicycle_costing_options(self):
         p = build_valhalla_route_payload(**{**BASE, 'valhalla_costing': 'bicycle'})
         self.assertIn('bicycle', p['costing_options'])
-        self.assertTrue(p['costing_options']['bicycle']['use_bike_lanes'])
+        self.assertNotIn('use_bike_lanes', p['costing_options']['bicycle'])
+        self.assertEqual(p['costing_options']['bicycle']['cycling_speed'], 18)
+
+    def test_hhmm_departure_time_is_expanded_to_iso_local(self):
+        p = build_valhalla_route_payload(**{**BASE, 'departure_time': '08:00'})
+        self.assertEqual(p['date_time']['type'], 1)
+        self.assertRegex(p['date_time']['value'], r'^\d{4}-\d{2}-\d{2}T08:00$')
+
+    def test_datetime_local_with_seconds_is_trimmed(self):
+        p = build_valhalla_route_payload(**{**BASE, 'departure_time': '2026-06-01T09:30:00'})
+        self.assertEqual(p['date_time'], {'type': 1, 'value': '2026-06-01T09:30'})
+
+    def test_exclude_locations_capped_at_valhalla_limit(self):
+        excl = [{'lat': 53.0 + i * 0.001, 'lon': -1.2} for i in range(80)]
+        p = build_valhalla_route_payload(**{**BASE, 'exclude_locations': excl})
+        self.assertEqual(len(p['exclude_locations']), VALHALLA_MAX_EXCLUDE_LOCATIONS)
 
     def test_explicit_departure_time(self):
         p = build_valhalla_route_payload(**{**BASE, 'departure_time': '2026-06-01T09:30'})
@@ -86,7 +109,7 @@ class TestBuildValhallaRetryPayload(unittest.TestCase):
     def test_two_point_with_exclusions_no_datetime(self):
         p = build_valhalla_retry_payload(**RETRY_BASE)
         self.assertEqual(p['costing'], 'auto')
-        self.assertEqual(p['alternates'], 3)
+        self.assertEqual(p['alternates'], VALHALLA_MAX_ALTERNATES)
         self.assertEqual(p['exclude_locations'], [{'lat': 53.45, 'lon': -1.2}])
         self.assertEqual(len(p['locations']), 2)
         # Retry never adds time-dependent routing.
@@ -114,7 +137,7 @@ class TestBuildValhallaBaselinePayload(unittest.TestCase):
     def test_no_exclude_locations_key(self):
         p = build_valhalla_baseline_request_payload(**self.BASE)
         self.assertNotIn('exclude_locations', p)
-        self.assertEqual(p['alternates'], 3)
+        self.assertEqual(p['alternates'], VALHALLA_MAX_ALTERNATES)
 
     def test_waypoints_disable_alternates(self):
         p = build_valhalla_baseline_request_payload(**{**self.BASE, 'has_waypoints': True})
@@ -137,6 +160,58 @@ class TestClassifyValhallaRouteData(unittest.TestCase):
 
     def test_usable_body_returns_none(self):
         self.assertIsNone(classify_valhalla_route_data({'trip': {'legs': []}}))
+
+
+class TestValhallaPayloadSanitizers(unittest.TestCase):
+    def test_hhmm_uses_supplied_now(self):
+        from datetime import datetime as dt
+        self.assertEqual(
+            normalize_valhalla_datetime('08:00', now=dt(2026, 9, 13, 15, 45)),
+            '2026-09-13T08:00',
+        )
+
+    def test_iso_with_seconds_and_space_separator(self):
+        self.assertEqual(normalize_valhalla_datetime('2026-09-13T08:00:00'), '2026-09-13T08:00')
+        self.assertEqual(normalize_valhalla_datetime('2026-09-13 08:00'), '2026-09-13T08:00')
+
+    def test_garbage_datetime_returns_none(self):
+        self.assertIsNone(normalize_valhalla_datetime('soon'))
+        self.assertIsNone(normalize_valhalla_datetime(''))
+
+    def test_exclude_locations_drop_invalid_and_cap(self):
+        locs = (
+            [{'lat': 91, 'lon': 0}]
+            + [{'lat': 51.5, 'lon': -0.1 + i * 0.001} for i in range(60)]
+            + [{'foo': 1}]
+        )
+        out = sanitize_valhalla_exclude_locations(locs)
+        self.assertEqual(len(out), VALHALLA_MAX_EXCLUDE_LOCATIONS)
+        self.assertEqual(out[0], {'lat': 51.5, 'lon': -0.1})
+
+    def test_describe_http_error_prefers_json_error(self):
+        class _Resp:
+            status_code = 400
+            text = '{"error":"Exceeded max alternates"}'
+
+            def json(self):
+                return {'error': 'Exceeded max alternates', 'error_code': 158}
+
+        self.assertEqual(
+            describe_valhalla_http_error(_Resp()),
+            'HTTP 400: Exceeded max alternates',
+        )
+
+    def test_minimal_payload_omits_fields_that_400(self):
+        p = build_valhalla_minimal_request_payload(
+            start_lat=53.5, start_lon=-1.4, end_lat=53.4, end_lon=-1.1,
+        )
+        self.assertEqual(p['costing'], 'auto')
+        self.assertEqual(len(p['locations']), 2)
+        self.assertNotIn('alternates', p)
+        self.assertNotIn('date_time', p)
+        self.assertNotIn('language', p)
+        self.assertNotIn('exclude_locations', p)
+        self.assertNotIn('directions_options', p)
 
 
 class _FakeResp:
