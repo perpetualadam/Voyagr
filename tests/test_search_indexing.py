@@ -171,6 +171,24 @@ def test_favicon_ico_permanent_redirect(client):
     assert dest.data.startswith(b"<svg") or dest.data.startswith(b"<?xml")
 
 
+def test_nginx_http_www_is_single_hop_to_apex():
+    """http://www must not hop via https://www (GSC: Page with redirect / Redirect error)."""
+    from pathlib import Path
+
+    conf = (Path(__file__).resolve().parents[1] / "deploy" / "nginx-vibevoyager.org.conf").read_text(
+        encoding="utf-8"
+    )
+    http_idx = conf.index("# --- HTTP")
+    https_www_idx = conf.index("# --- HTTPS www")
+    http_block = conf[http_idx:https_www_idx]
+    assert "listen 80" in http_block
+    assert "www.vibevoyager.org" in http_block
+    assert "https://vibevoyager.org$request_uri" in http_block
+    assert "https://$host$request_uri" not in http_block
+    https_www_block = conf[https_www_idx : conf.index("# --- HTTPS (app")]
+    assert "return 301 https://vibevoyager.org$request_uri;" in https_www_block
+
+
 def test_index_html_redirects_to_home(client):
     rv = client.get("/index.html", follow_redirects=False)
     assert rv.status_code == 301
