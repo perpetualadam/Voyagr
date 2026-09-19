@@ -62,6 +62,7 @@ class TestAppSettings:
         assert data['settings']['gesture_enabled'] == 1
         assert data['settings']['gesture_sensitivity'] == 'medium'
         assert data['settings']['map_theme'] == 'standard'
+        assert 'avg_camera_avoid_default_applied' not in data['settings']
     
     def test_update_gesture_settings(self, client):
         """Test updating gesture settings."""

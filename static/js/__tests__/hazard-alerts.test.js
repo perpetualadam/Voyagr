@@ -98,6 +98,7 @@ describe('hazard-alerts module', () => {
         expect(HA.isHazardPreferenceEnabled(null)).toBe(true);
         expect(HA.isHazardPreferenceEnabled({ enabled: 0 })).toBe(false);
         expect(HA.HAZARD_CAMERA_PREF_SUBTYPES).toContain('camera_speed');
+        expect(HA.HAZARD_CAMERA_PREF_SUBTYPES).toContain('camera_average_speed');
     });
 
     test('buildHazardCameraTogglesApplyPlan maps API prefs to toggle states', () => {
@@ -108,6 +109,7 @@ describe('hazard-alerts module', () => {
         expect(plan.find((item) => item.hazardType === 'camera_speed').enabled).toBe(false);
         expect(plan.find((item) => item.hazardType === 'camera_red_light').enabled).toBe(true);
         expect(plan.find((item) => item.hazardType === 'camera_mobile').enabled).toBe(true);
+        expect(plan.find((item) => item.hazardType === 'camera_average_speed').enabled).toBe(true);
     });
 
     test('buildHazardCameraTogglesFallbackApplyPlan defaults all toggles to enabled', () => {
