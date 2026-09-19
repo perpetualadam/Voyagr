@@ -7,6 +7,8 @@ render because crawlers do not persist localStorage.
 """
 
 import json
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +17,8 @@ from voyagr.discoverability import (
     SEARCH_CRAWLER_UA_WORD_TOKENS,
     is_search_crawler,
 )
+
+_INDEX_HTML = Path(__file__).resolve().parents[1] / "templates" / "index.html"
 
 
 GOOGLEBOT_UA = (
@@ -69,7 +73,63 @@ def test_is_search_crawler_does_not_match_chrome_google_token():
 
 def test_is_search_crawler_slurp_requires_word_boundary():
     assert is_search_crawler("Mozilla/5.0 slurpee-browser/1.0") is False
+    # "_" is a word character (regex \w / \b). Treating it as a boundary
+    # would skip the legal safety notice for ordinary UAs like slurp_browser.
+    assert is_search_crawler("Mozilla/5.0 slurp_browser/1.0") is False
+    assert is_search_crawler("Mozilla/5.0 slurp浏览器/1.0") is False
     assert is_search_crawler("Mozilla/5.0 (compatible; Yahoo! Slurp)") is True
+    assert is_search_crawler(
+        "Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)"
+    ) is True
+
+
+def _homepage_crawler_js() -> str:
+    html = _INDEX_HTML.read_text(encoding="utf-8")
+    start = html.index("function voyagrIsUaWordChar(ch) {")
+    end = html.index("function init() {")
+    return html[start:end]
+
+
+def test_homepage_js_slurp_browser_does_not_skip_safety_notice():
+    """The in-page matcher must use regex \\w boundaries, including '_'."""
+    js_src = _homepage_crawler_js()
+    script = f"""
+    global.window = {{
+        VOYAGR_SEARCH_CRAWLER_UA_TOKENS: {json.dumps(list(SEARCH_CRAWLER_UA_TOKENS))},
+        VOYAGR_SEARCH_CRAWLER_UA_WORD_TOKENS: {json.dumps(sorted(SEARCH_CRAWLER_UA_WORD_TOKENS))}
+    }};
+    global.navigator = {{ userAgent: '' }};
+    {js_src}
+    function check(ua, expected, label) {{
+        navigator.userAgent = ua;
+        var got = voyagrUaIsSearchCrawler();
+        if (got !== expected) {{
+            console.error(label + ': expected ' + expected + ' got ' + got + ' for ' + ua);
+            process.exit(1);
+        }}
+    }}
+    if (voyagrIsUaWordChar('_') !== true) {{
+        console.error('underscore must be a word character');
+        process.exit(1);
+    }}
+    if (voyagrIsUaWordChar('浏') !== true) {{
+        console.error('non-ASCII letter must be a word character');
+        process.exit(1);
+    }}
+    check('Mozilla/5.0 slurp_browser/1.0', false, 'slurp_browser');
+    check('Mozilla/5.0 slurp浏览器/1.0', false, 'slurp+CJK');
+    check('Mozilla/5.0 slurpee-browser/1.0', false, 'slurpee');
+    check('Mozilla/5.0 (compatible; Yahoo! Slurp)', true, 'Yahoo Slurp');
+    check('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', true, 'Googlebot');
+    check({json.dumps(CHROME_UA)}, false, 'Chrome');
+    """
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 def test_is_search_crawler_does_not_match_similar_product_names():
@@ -124,6 +184,9 @@ def test_home_still_shows_safety_overlay_for_browsers(client):
     assert "function voyagrUaIsSearchCrawler()" in body
     assert 'id="safetyNoticeOverlay"' in body
     assert 'name="robots" content="index, follow' in body
+    # JS word-char helper must treat "_" as \w so slurp_browser is not Slurp.
+    assert "function voyagrIsUaWordChar(ch)" in body
+    assert "ch === '_'" in body
 
 
 def test_privacy_indexable(client):

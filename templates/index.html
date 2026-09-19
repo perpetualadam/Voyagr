@@ -2494,7 +2494,18 @@
                 showSafetyNotice();
             };
             function voyagrIsUaWordChar(ch) {
-                return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z');
+                // Same as regex \w / \b: ASCII alnum, underscore, and
+                // non-ASCII letters/digits. "_" must count so slurp_browser
+                // is not treated as Yahoo Slurp (previous \bslurp\b did not match it).
+                if (!ch) return false;
+                if (ch === '_' || (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z')) {
+                    return true;
+                }
+                try {
+                    return /[\p{L}\p{N}]/u.test(ch);
+                } catch (e) {
+                    return ch.toLowerCase() !== ch.toUpperCase();
+                }
             }
             function voyagrUaIsSearchCrawler() {
                 // Token list (not a regex): Python re and JS RegExp disagree on

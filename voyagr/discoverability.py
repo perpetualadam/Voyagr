@@ -37,8 +37,11 @@ SEARCH_CRAWLER_UA_TOKENS: Tuple[str, ...] = (
 # Short tokens that appear inside ordinary words (e.g. "slurpee").
 SEARCH_CRAWLER_UA_WORD_TOKENS: FrozenSet[str] = frozenset({"slurp"})
 
+# Same characters as regex \w / \b: letters, digits, and underscore
+# (Unicode-aware in Python 3). [0-9a-z] alone treats "_" as a boundary,
+# so a normal UA such as slurp_browser would look like Yahoo Slurp.
 _WORD_TOKEN_RE = {
-    token: re.compile(rf"(?<![0-9a-z]){re.escape(token)}(?![0-9a-z])")
+    token: re.compile(rf"(?<!\w){re.escape(token)}(?!\w)")
     for token in SEARCH_CRAWLER_UA_WORD_TOKENS
 }
 
