@@ -2494,9 +2494,9 @@
                 showSafetyNotice();
             };
             function voyagrIsUaWordChar(ch) {
-                // Same as regex \w / \b: ASCII alnum, underscore, and
+                // Same as a regex word character: ASCII alnum, underscore, and
                 // non-ASCII letters/digits. "_" must count so slurp_browser
-                // is not treated as Yahoo Slurp (previous \bslurp\b did not match it).
+                // is not treated as Yahoo Slurp.
                 if (!ch) return false;
                 if (ch === '_' || (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z')) {
                     return true;

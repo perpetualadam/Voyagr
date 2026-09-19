@@ -91,38 +91,49 @@ def _homepage_crawler_js() -> str:
 
 
 def test_homepage_js_slurp_browser_does_not_skip_safety_notice():
-    """The in-page matcher must use regex \\w boundaries, including '_'."""
+    """The in-page matcher must use regex word-character boundaries, including '_'."""
     js_src = _homepage_crawler_js()
-    script = f"""
-    global.window = {{
-        VOYAGR_SEARCH_CRAWLER_UA_TOKENS: {json.dumps(list(SEARCH_CRAWLER_UA_TOKENS))},
-        VOYAGR_SEARCH_CRAWLER_UA_WORD_TOKENS: {json.dumps(sorted(SEARCH_CRAWLER_UA_WORD_TOKENS))}
-    }};
-    global.navigator = {{ userAgent: '' }};
-    {js_src}
-    function check(ua, expected, label) {{
-        navigator.userAgent = ua;
+    # Node 22 exposes a built-in navigator.userAgent; override it per check.
+    script = """
+    global.window = {
+        VOYAGR_SEARCH_CRAWLER_UA_TOKENS: %s,
+        VOYAGR_SEARCH_CRAWLER_UA_WORD_TOKENS: %s
+    };
+    %s
+    function setUa(ua) {
+        Object.defineProperty(navigator, 'userAgent', {
+            configurable: true,
+            get: function () { return ua; }
+        });
+    }
+    function check(ua, expected, label) {
+        setUa(ua);
         var got = voyagrUaIsSearchCrawler();
-        if (got !== expected) {{
+        if (got !== expected) {
             console.error(label + ': expected ' + expected + ' got ' + got + ' for ' + ua);
             process.exit(1);
-        }}
-    }}
-    if (voyagrIsUaWordChar('_') !== true) {{
+        }
+    }
+    if (voyagrIsUaWordChar('_') !== true) {
         console.error('underscore must be a word character');
         process.exit(1);
-    }}
-    if (voyagrIsUaWordChar('浏') !== true) {{
+    }
+    if (voyagrIsUaWordChar('浏') !== true) {
         console.error('non-ASCII letter must be a word character');
         process.exit(1);
-    }}
+    }
     check('Mozilla/5.0 slurp_browser/1.0', false, 'slurp_browser');
     check('Mozilla/5.0 slurp浏览器/1.0', false, 'slurp+CJK');
     check('Mozilla/5.0 slurpee-browser/1.0', false, 'slurpee');
     check('Mozilla/5.0 (compatible; Yahoo! Slurp)', true, 'Yahoo Slurp');
     check('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', true, 'Googlebot');
-    check({json.dumps(CHROME_UA)}, false, 'Chrome');
-    """
+    check(%s, false, 'Chrome');
+    """ % (
+        json.dumps(list(SEARCH_CRAWLER_UA_TOKENS)),
+        json.dumps(sorted(SEARCH_CRAWLER_UA_WORD_TOKENS)),
+        js_src,
+        json.dumps(CHROME_UA),
+    )
     result = subprocess.run(
         ["node", "-e", script],
         capture_output=True,
