@@ -11,12 +11,13 @@ import re
 # Search / social crawlers that render JS but do not persist localStorage.
 # First-run interstitials then cover the page on every visit, which Google
 # reports as "Crawled — currently not indexed" or Soft 404.
-_SEARCH_CRAWLER_RE = re.compile(
+# Shared with the homepage JS (navigator.userAgent) so HTML does not vary by UA.
+SEARCH_CRAWLER_UA_PATTERN = (
     r"(?:googlebot|google-inspectiontool|storebot-google|adsbot-google|"
-    r"bingbot|bingpreview|slurp|duckduckbot|baiduspider|yandex(?:bot|images)|"
-    r"applebot|facebookexternalhit|twitterbot|linkedinbot)",
-    re.IGNORECASE,
+    r"bingbot|bingpreview|\bslurp\b|duckduckbot|baiduspider|yandex(?:bot|images)|"
+    r"applebot|facebookexternalhit|twitterbot|linkedinbot)"
 )
+_SEARCH_CRAWLER_RE = re.compile(SEARCH_CRAWLER_UA_PATTERN, re.IGNORECASE)
 
 
 def block_search_indexing() -> bool:

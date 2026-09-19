@@ -2463,7 +2463,10 @@
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
         window.VoyagrWakeBackendDefault = {{ wake_backend_default | tojson }};
         window.VOYAGR_SHOW_FIREFOX_HINT = {{ show_firefox_browser_hint | tojson }};
-        window.VOYAGR_IS_SEARCH_CRAWLER = {{ voyagr_is_search_crawler|default(false) | tojson }};
+        window.VOYAGR_SEARCH_CRAWLER_UA_RE = (function (pattern) {
+            if (!pattern) return null;
+            try { return new RegExp(pattern, 'i'); } catch (e) { return null; }
+        })({{ search_crawler_ua_pattern|default('')|tojson }});
     </script>
     <!-- First-run safety + privacy notice: show once until acknowledged -->
     <script>
@@ -2492,10 +2495,21 @@
                 }
                 showSafetyNotice();
             };
+            function voyagrUaIsSearchCrawler() {
+                // Decide from this JS realm's UA, not a server-baked flag.
+                // Cached homepage HTML (service worker stores /) must not skip
+                // the legal notice for a real browser.
+                try {
+                    var re = window.VOYAGR_SEARCH_CRAWLER_UA_RE;
+                    return !!(re && re.test(navigator.userAgent || ''));
+                } catch (e) {
+                    return false;
+                }
+            }
             function init() {
                 // Crawlers do not persist localStorage, so the overlay would cover
                 // the page on every render (GSC: Crawled — currently not indexed / Soft 404).
-                if (window.VOYAGR_IS_SEARCH_CRAWLER) {
+                if (voyagrUaIsSearchCrawler()) {
                     return;
                 }
                 var acked = false;

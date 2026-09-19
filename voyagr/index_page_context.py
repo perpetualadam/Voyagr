@@ -8,7 +8,7 @@ import json
 import os
 from typing import Any, Dict, Tuple
 
-from voyagr.discoverability import block_search_indexing, is_search_crawler
+from voyagr.discoverability import SEARCH_CRAWLER_UA_PATTERN, block_search_indexing
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.seo import (
     APP_DESCRIPTION,
@@ -31,18 +31,6 @@ from voyagr.seo import (
 def project_root() -> str:
     """Repository root (parent of the voyagr package directory)."""
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-
-def _request_user_agent() -> str:
-    """User-Agent for the current Flask request, or empty outside a request."""
-    try:
-        from flask import has_request_context, request
-
-        if has_request_context():
-            return request.headers.get("User-Agent") or ""
-    except Exception:
-        pass
-    return ""
 
 
 def tomtom_client_surface() -> Tuple[str, bool]:
@@ -98,7 +86,9 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     # Resolve OG dimensions once so index meta matches privacy (and custom cards).
     og_dims = og_image_dimensions()
     return {
-        "voyagr_is_search_crawler": is_search_crawler(_request_user_agent()),
+        # Pattern only (same for every request) — JS tests navigator.userAgent.
+        # Do not bake a per-UA boolean into the HTML: the service worker caches /.
+        "search_crawler_ua_pattern": SEARCH_CRAWLER_UA_PATTERN,
         "tomtom_api_key": _tt_key,
         "tomtom_traffic_proxy": _tt_proxy,
         "show_firefox_browser_hint": show_firefox_browser_hint,

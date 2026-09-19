@@ -6,9 +6,11 @@ the first-run safety overlay, which otherwise covers the homepage after JS
 render because crawlers do not persist localStorage.
 """
 
+import json
+
 import pytest
 
-from voyagr.discoverability import is_search_crawler
+from voyagr.discoverability import SEARCH_CRAWLER_UA_PATTERN, is_search_crawler
 
 
 GOOGLEBOT_UA = (
@@ -43,6 +45,7 @@ def client():
         ("Mozilla/5.0 (compatible; Google-InspectionTool/1.0)", True),
         ("Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)", True),
         ("Mozilla/5.0 (compatible; Baiduspider/2.0)", True),
+        ("Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)", True),
         (CHROME_UA, False),
         ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", False),
         ("", False),
@@ -60,6 +63,11 @@ def test_is_search_crawler_does_not_match_chrome_google_token():
     ) is False
 
 
+def test_is_search_crawler_slurp_requires_word_boundary():
+    assert is_search_crawler("Mozilla/5.0 slurpee-browser/1.0") is False
+    assert is_search_crawler("Mozilla/5.0 (compatible; Yahoo! Slurp)") is True
+
+
 def test_home_indexable_for_googlebot(client):
     rv = client.get("/", headers={"User-Agent": GOOGLEBOT_UA})
     assert rv.status_code == 200
@@ -68,18 +76,36 @@ def test_home_indexable_for_googlebot(client):
     assert 'name="robots" content="index, follow' in body
     assert (rv.headers.get("X-Robots-Tag") or "").lower().find("noindex") < 0
     assert 'rel="canonical"' in body
-    assert "window.VOYAGR_IS_SEARCH_CRAWLER = true" in body
-    assert "if (window.VOYAGR_IS_SEARCH_CRAWLER)" in body
+    assert "window.VOYAGR_IS_SEARCH_CRAWLER =" not in body
+    assert "function voyagrUaIsSearchCrawler()" in body
+    assert "navigator.userAgent" in body
+    assert json.dumps(SEARCH_CRAWLER_UA_PATTERN) in body
     assert "voyagr-aeo-faq" in body
     assert "<noscript>" in body
+
+
+def test_home_html_does_not_vary_crawler_flag_by_user_agent(client):
+    """Baked-in UA flags can skip the legal overlay when the SW caches /."""
+    bot = client.get("/", headers={"User-Agent": GOOGLEBOT_UA})
+    browser = client.get("/", headers={"User-Agent": CHROME_UA})
+    assert bot.status_code == 200
+    assert browser.status_code == 200
+    bot_body = bot.data.decode("utf-8", errors="replace")
+    browser_body = browser.data.decode("utf-8", errors="replace")
+    assert "VOYAGR_SEARCH_CRAWLER_UA_RE" in bot_body
+    assert "VOYAGR_SEARCH_CRAWLER_UA_RE" in browser_body
+    assert json.dumps(SEARCH_CRAWLER_UA_PATTERN) in bot_body
+    assert json.dumps(SEARCH_CRAWLER_UA_PATTERN) in browser_body
+    assert "window.VOYAGR_IS_SEARCH_CRAWLER = true" not in bot_body
+    assert "window.VOYAGR_IS_SEARCH_CRAWLER = false" not in browser_body
 
 
 def test_home_still_shows_safety_overlay_for_browsers(client):
     rv = client.get("/", headers={"User-Agent": CHROME_UA})
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert "window.VOYAGR_IS_SEARCH_CRAWLER = false" in body
     assert "function showSafetyNotice()" in body
+    assert "function voyagrUaIsSearchCrawler()" in body
     assert 'id="safetyNoticeOverlay"' in body
     assert 'name="robots" content="index, follow' in body
 
