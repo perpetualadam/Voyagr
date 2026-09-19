@@ -57,9 +57,10 @@ def test_init_db_seeds_camera_hazard_buckets(fresh_db):
     from voyagr.config import CAMERA_HAZARD_BUCKETS
     for bucket in CAMERA_HAZARD_BUCKETS:
         assert bucket in rows, f"missing seeded bucket {bucket}"
-    # apply_camera_hazard_penalty_defaults: red-light 1200s, other camera_* 800s.
+    # apply_camera_hazard_penalty_defaults: speed 1000s, red-light 1200s, other camera_* 800s.
+    assert rows['camera_speed'] == 1000
     assert rows['camera_red_light'] == 1200
-    for bucket in ('camera_speed', 'camera_average_speed', 'camera_bus_lane',
+    for bucket in ('camera_average_speed', 'camera_bus_lane',
                    'camera_mobile', 'camera_other'):
         assert rows[bucket] == 800
 

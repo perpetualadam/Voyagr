@@ -872,7 +872,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                 preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
                 if not preferences:
                     preferences = {
-                        'camera_speed': {'penalty': 800, 'threshold': 500},
+                        'camera_speed': {'penalty': 1000, 'threshold': 500},
                         'camera_red_light': {'penalty': 1200, 'threshold': 120},
                         'camera_average_speed': {'penalty': 800, 'threshold': 500},
                         'camera_bus_lane': {'penalty': 800, 'threshold': 500},
@@ -886,7 +886,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                     }
             except Exception:
                 preferences = {
-                    'camera_speed': {'penalty': 800, 'threshold': 500},
+                    'camera_speed': {'penalty': 1000, 'threshold': 500},
                     'camera_red_light': {'penalty': 1200, 'threshold': 120},
                     'camera_average_speed': {'penalty': 800, 'threshold': 500},
                     'camera_bus_lane': {'penalty': 800, 'threshold': 500},

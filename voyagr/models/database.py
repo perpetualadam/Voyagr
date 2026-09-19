@@ -256,13 +256,16 @@ def migrate_legacy_camera_hazard_preferences(cursor: sqlite3.Cursor) -> None:
 
 
 def apply_camera_hazard_penalty_defaults(cursor: sqlite3.Cursor) -> None:
-    """Keep SCDB camera penalty_seconds aligned: red-light 1200s, all other camera_* buckets 800s."""
+    """Keep SCDB camera penalty_seconds aligned: speed 1000s, red-light 1200s, other camera_* 800s."""
     cursor.execute(
         "UPDATE hazard_preferences SET penalty_seconds = 1200 WHERE hazard_type = 'camera_red_light'"
     )
     cursor.execute(
+        "UPDATE hazard_preferences SET penalty_seconds = 1000 WHERE hazard_type = 'camera_speed'"
+    )
+    cursor.execute(
         """UPDATE hazard_preferences SET penalty_seconds = 800 WHERE hazard_type IN (
-            'camera_speed', 'camera_average_speed', 'camera_bus_lane', 'camera_mobile', 'camera_other'
+            'camera_average_speed', 'camera_bus_lane', 'camera_mobile', 'camera_other'
         )"""
     )
 
@@ -659,7 +662,7 @@ def init_db():
 
     # Insert default hazard preferences if not exists
     hazard_preferences = [
-        ('camera_speed', 800, 1, 100),
+        ('camera_speed', 1000, 1, 100),
         ('camera_red_light', 1200, 1, 100),
         ('camera_average_speed', 800, 1, 100),
         ('camera_bus_lane', 800, 1, 100),
