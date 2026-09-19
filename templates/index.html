@@ -115,7 +115,7 @@
     <script defer src="/static/js/modules/navigation/search-autocomplete.js?v=20260711s"></script>
     <script defer src="/static/js/modules/navigation/geocoding-locations.js?v=20260712aaaq"></script>
     <script defer src="/static/js/modules/navigation/route-progress.js?v=20260712aaba"></script>
-    <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20260812loc1"></script>
+    <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20260919loc1"></script>
     <script defer src="/static/js/modules/ui/device-environment.js?v=20260810toast1"></script>
     <script defer src="/static/js/modules/navigation/favorites.js?v=20260711y"></script>
     <script defer src="/static/js/modules/navigation/caz-info.js?v=20260711s"></script>
@@ -127,7 +127,7 @@
     <script defer src="/static/js/modules/map/map-overlay-toggles.js?v=20260711zzzp"></script>
     <script defer src="/static/js/modules/map/map-view-3d.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/map/map-theme.js?v=20260712maptheme1"></script>
-    <script defer src="/static/js/modules/map/center-on-location.js?v=20260812loc1"></script>
+    <script defer src="/static/js/modules/map/center-on-location.js?v=20260919loc1"></script>
     <script defer src="/static/js/modules/map/map-recovery.js?v=20260728maprec1"></script>
     <script defer src="/static/js/modules/map/camera-map-markers.js?v=20260711zzzv"></script>
     <script defer src="/static/js/modules/map/hazard-map-markers.js?v=20260712aabd"></script>
@@ -158,7 +158,7 @@
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260811noshake"></script>
     <script defer src="/static/js/modules/navigation/google-plus-codes-prefs.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/voyagr-modules.js?v=20260812loc1"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20260812loc1"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20260919loc1"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
@@ -208,7 +208,7 @@
     <script defer src="/static/js/app/location-orchestration.js?v=20260712ab50"></script>
     <script defer src="/static/js/app/units-preferences-orchestration.js?v=20260712ab54"></script>
     <script defer src="/static/js/app/smart-zoom-orchestration.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/app/center-on-location-orchestration.js?v=20260812loc1"></script>
+    <script defer src="/static/js/app/center-on-location-orchestration.js?v=20260919loc1"></script>
     <script defer src="/static/js/app/map-theme-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/auto-gps-orchestration.js?v=20260827pwa02"></script>
     <script defer src="/static/js/app/ml-predictions-orchestration.js?v=20260712ab06"></script>
@@ -1057,7 +1057,7 @@
 
                         <div class="preference-item">
                             <span class="preference-label">📍 Center on my location</span>
-                            <button type="button" class="toggle-switch active" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" style="background: #4CAF50; border-color: #4CAF50;" title="Move the map to your GPS position when location is available"></button>
+                            <button type="button" class="toggle-switch" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" title="Move the map to your GPS position when location is available"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0; line-height: 1.45;">
                             When on, the map moves from the default view to your GPS position when location is available. Turn off to keep the map on the default area.

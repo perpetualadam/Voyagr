@@ -4,10 +4,11 @@
 const COL = require('../modules/map/center-on-location.js');
 
 describe('center-on-location module', () => {
-    test('resolveCenterOnLocationEnabledFromStorage defaults to enabled when unset', () => {
-        expect(COL.resolveCenterOnLocationEnabledFromStorage(null)).toBe(true);
-        expect(COL.resolveCenterOnLocationEnabledFromStorage(undefined)).toBe(true);
-        expect(COL.resolveCenterOnLocationEnabledFromStorage('')).toBe(true);
+    test('resolveCenterOnLocationEnabledFromStorage defaults to disabled when unset', () => {
+        expect(COL.CENTER_ON_LOCATION_DEFAULT_ENABLED).toBe(false);
+        expect(COL.resolveCenterOnLocationEnabledFromStorage(null)).toBe(false);
+        expect(COL.resolveCenterOnLocationEnabledFromStorage(undefined)).toBe(false);
+        expect(COL.resolveCenterOnLocationEnabledFromStorage('')).toBe(false);
     });
 
     test('resolveCenterOnLocationEnabledFromStorage respects stored off values', () => {

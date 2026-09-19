@@ -147,20 +147,20 @@ describe('settings-snapshot module', () => {
         expect(dom.standardToggles.find((item) => item.id === 'routeTrafficToggle').enabled).toBe(false);
     });
 
-    test('buildSettingsUiDomApplyPlan includes centerOnLocationToggle defaulting on', () => {
+    test('buildSettingsUiDomApplyPlan includes centerOnLocationToggle defaulting off', () => {
         const defaultDom = SS.buildSettingsUiDomApplyPlan(
             SS.buildSettingsUiApplyPlan({ smartZoomEnabled: true })
         );
         expect(
             defaultDom.standardToggles.find((item) => item.id === 'centerOnLocationToggle').enabled
-        ).toBe(true);
+        ).toBe(false);
 
-        const offDom = SS.buildSettingsUiDomApplyPlan(
-            SS.buildSettingsUiApplyPlan({ smartZoomEnabled: true, centerMapOnLocation: false })
+        const onDom = SS.buildSettingsUiDomApplyPlan(
+            SS.buildSettingsUiApplyPlan({ smartZoomEnabled: true, centerMapOnLocation: true })
         );
         expect(
-            offDom.standardToggles.find((item) => item.id === 'centerOnLocationToggle').enabled
-        ).toBe(false);
+            onDom.standardToggles.find((item) => item.id === 'centerOnLocationToggle').enabled
+        ).toBe(true);
     });
 
     test('buildSettingsRestorePlan restores centerMapOnLocation pref', () => {
@@ -337,6 +337,7 @@ describe('settings-snapshot module', () => {
         expect(plan.runtimeDefaults.autoTrafficUpdateEnabled).toBe(true);
         expect(plan.runtimeDefaults.routeTrafficEnabled).toBe(true);
         expect(plan.runtimeDefaults.showCamerasEnabled).toBe(true);
+        expect(plan.runtimeDefaults.centerMapOnLocation).toBe(false);
         expect(plan.reloadAfterReset).toBe(true);
     });
 

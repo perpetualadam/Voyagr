@@ -236,10 +236,10 @@ function initializeMap() {
                 && typeof VoyagrCenterOnLocation.resolveCenterOnLocationEnabledFromStorage === 'function') {
                 return VoyagrCenterOnLocation.resolveCenterOnLocationEnabledFromStorage(raw);
             }
-            if (raw === null || raw === undefined || raw === '') return true;
+            if (raw === null || raw === undefined || raw === '') return false;
             return raw === '1' || raw === 'true';
         } catch (_) {
-            return true;
+            return false;
         }
     }
 
@@ -1138,7 +1138,7 @@ function initializeMap() {
     );
 
     // Attempt to center on current location after the basemap has painted (London default first).
-    // Skipped when the user disables "Center on my location" in Map & display settings.
+    // Off by default; only runs when the user enables "Center on my location" in Map & display.
     if (navigator.geolocation && voyagrCenterMapOnLocationEnabled()) {
         navigator.geolocation.getCurrentPosition(
             (position) => {

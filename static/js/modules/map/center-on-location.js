@@ -9,11 +9,11 @@
 
     var CENTER_ON_LOCATION_STORAGE_KEY = 'centerMapOnLocation';
     var CENTER_ON_LOCATION_TOGGLE_ID = 'centerOnLocationToggle';
-    var CENTER_ON_LOCATION_DEFAULT_ENABLED = true;
+    var CENTER_ON_LOCATION_DEFAULT_ENABLED = false;
 
     /**
      * Resolve center-on-location enabled from localStorage value.
-     * Default is enabled when unset (matches current product behaviour).
+     * Default is disabled when unset so startup keeps the default map view.
      * @param {string|null|undefined} storageValue
      * @returns {boolean}
      */

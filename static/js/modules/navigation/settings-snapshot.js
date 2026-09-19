@@ -781,7 +781,7 @@
                 currentVehicleType: 'petrol_diesel',
                 currentRoutingMode: 'auto',
                 smartZoomEnabled: true,
-                centerMapOnLocation: true,
+                centerMapOnLocation: false,
                 autoTrafficUpdateEnabled: true,
                 autoRerouteOnDeviationEnabled: true,
                 routeTrafficEnabled: true,
@@ -1131,7 +1131,7 @@
                 smartZoom: !!input.smartZoomEnabled,
                 centerOnLocation: input.centerMapOnLocation !== undefined
                     ? !!input.centerMapOnLocation
-                    : true,
+                    : false,
                 autoTrafficUpdate: !!input.autoTrafficUpdateEnabled,
                 autoRerouteOnDeviation: !!input.autoRerouteOnDeviationEnabled,
                 routeTraffic: !!input.routeTrafficEnabled,
@@ -1227,7 +1227,7 @@
                 { id: 'smartZoomToggle', enabled: toggles.smartZoom },
                 {
                     id: 'centerOnLocationToggle',
-                    enabled: toggles.centerOnLocation !== undefined ? toggles.centerOnLocation : true,
+                    enabled: toggles.centerOnLocation !== undefined ? toggles.centerOnLocation : false,
                 },
                 { id: 'autoTrafficUpdateToggle', enabled: toggles.autoTrafficUpdate },
                 { id: 'autoRerouteDeviationToggle', enabled: toggles.autoRerouteOnDeviation },

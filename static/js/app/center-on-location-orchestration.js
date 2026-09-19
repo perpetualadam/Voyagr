@@ -12,7 +12,7 @@
             localStorage.getItem('centerMapOnLocation')
         )
         : (localStorage.getItem('centerMapOnLocation') === null
-            ? true
+            ? false
             : localStorage.getItem('centerMapOnLocation') === '1'
                 || localStorage.getItem('centerMapOnLocation') === 'true'));
 
