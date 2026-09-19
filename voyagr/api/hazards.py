@@ -111,7 +111,7 @@ def hazard_preferences():
             # Defaults for camera subtype rows (matches voyagr_web init_db)
             _cam_penalty: dict[str, int] = {
                 'camera_red_light': 1200,
-                'camera_speed': 800,
+                'camera_speed': 1000,
                 'camera_average_speed': 800,
                 'camera_bus_lane': 800,
                 'camera_mobile': 800,
