@@ -104,6 +104,27 @@ def test_robots_allows_public_pages_and_lists_sitemap(client):
     assert "/privacy" in client.get("/sitemap.xml").data.decode("utf-8", errors="replace")
 
 
+def _charset_count(content_type: str) -> int:
+    return content_type.lower().count("charset=")
+
+
+@pytest.mark.parametrize(
+    "path,mime_prefix",
+    (
+        ("/robots.txt", "text/plain"),
+        ("/llms.txt", "text/plain"),
+        ("/llms-full.txt", "text/plain"),
+        ("/sitemap.xml", "application/xml"),
+    ),
+)
+def test_discoverability_text_content_type_has_one_charset(client, path, mime_prefix):
+    rv = client.get(path)
+    assert rv.status_code == 200
+    ct = rv.headers.get("Content-Type") or ""
+    assert ct.lower().startswith(mime_prefix)
+    assert _charset_count(ct) == 1
+
+
 def test_sitemap_urls_are_live_html(client):
     sm = client.get("/sitemap.xml")
     assert sm.status_code == 200

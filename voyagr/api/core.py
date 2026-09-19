@@ -152,7 +152,9 @@ def robots_txt():
     HTML <meta robots> tag and the sitemap contents.
     """
     body = render_robots_txt(allow=not block_search_indexing())
-    response = Response(body, mimetype='text/plain; charset=utf-8')
+    # Werkzeug appends charset=utf-8; passing it in mimetype duplicated it
+    # (text/plain; charset=utf-8; charset=utf-8) on the live site.
+    response = Response(body, mimetype='text/plain')
     response.headers['Cache-Control'] = 'public, max-age=3600'
     return response
 
@@ -164,7 +166,7 @@ def sitemap_xml():
         body = render_empty_sitemap_xml()
     else:
         body = render_sitemap_xml()
-    response = Response(body, mimetype='application/xml; charset=utf-8')
+    response = Response(body, mimetype='application/xml')
     response.headers['Cache-Control'] = 'public, max-age=3600'
     return response
 
@@ -178,7 +180,7 @@ def llms_txt():
     Falls back to a minimal opt-out notice when indexing is blocked.
     """
     body = render_llms_txt(allow=not block_search_indexing())
-    response = Response(body, mimetype='text/plain; charset=utf-8')
+    response = Response(body, mimetype='text/plain')
     response.headers['Cache-Control'] = 'public, max-age=3600'
     return response
 
@@ -187,7 +189,7 @@ def llms_txt():
 def llms_full_txt():
     """Extended LLMO context — entity summary, use cases, citation guidance + shared FAQ."""
     body = render_llms_full_txt(allow=not block_search_indexing())
-    response = Response(body, mimetype='text/plain; charset=utf-8')
+    response = Response(body, mimetype='text/plain')
     response.headers['Cache-Control'] = 'public, max-age=3600'
     return response
 
