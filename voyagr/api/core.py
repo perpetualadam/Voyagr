@@ -225,6 +225,17 @@ def favicon():
     return redirect('/static/images/icons/icon.svg', code=302)
 
 
+@core_bp.route('/apple-touch-icon.png')
+@core_bp.route('/apple-touch-icon-precomposed.png')
+def apple_touch_icon():
+    """Crawlers and iOS probe these root paths even when <link> tags exist.
+
+    Live vibevoyager.org returned 404, which Search Console lists as
+    Not found. 301 to the existing 192px touch icon (no new asset).
+    """
+    return redirect('/static/images/icons/icon-192.png', code=301)
+
+
 @core_bp.route('/service-worker.js')
 def service_worker():
     """Serve the service worker script."""
