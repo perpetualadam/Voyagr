@@ -14,7 +14,7 @@ import json
 import os
 from typing import Optional
 
-from flask import Blueprint, jsonify, render_template, current_app, Response, make_response
+from flask import Blueprint, jsonify, render_template, current_app, Response, make_response, redirect
 
 from voyagr.deployed_version import build_deployed_version_payload
 from voyagr.discoverability import block_search_indexing
@@ -66,6 +66,15 @@ def index():
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+
+@core_bp.route('/index.html')
+def index_html():
+    """Crawlers still request /index.html. 301 to the canonical homepage.
+
+    Without this, Search Console lists /index.html as Not found (404).
+    """
+    return redirect('/', code=301)
 
 
 @core_bp.route('/api/deployed-version')
@@ -213,7 +222,6 @@ def favicon():
     and some platform scrapers still probe /favicon.ico directly. Point them
     at the current app icon so we don't 404 and so the branding stays consistent.
     """
-    from flask import redirect
     return redirect('/static/images/icons/icon.svg', code=302)
 
 
@@ -269,4 +277,14 @@ def privacy_policy():
             ga4=ga4_template_kwargs(),
         ),
     )
+
+
+@core_bp.route('/privacy/')
+def privacy_policy_slash():
+    """301 the trailing-slash variant so Google does not record a 404.
+
+    Flask strict slashes treat /privacy/ as a different URL from /privacy
+    (the sitemap loc). Search Console then lists /privacy/ as Not found.
+    """
+    return redirect('/privacy', code=301)
 

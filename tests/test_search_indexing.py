@@ -114,3 +114,23 @@ def test_sitemap_urls_are_live_html(client):
         assert rv.status_code == 200, path
         assert b"<html" in rv.data.lower()
         assert b"noindex" not in rv.data
+
+
+def test_privacy_trailing_slash_redirects_to_canonical(client):
+    rv = client.get("/privacy/", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers.get("Location", "").endswith("/privacy")
+    # Canonical page remains 200 HTML (not a redirect loop).
+    dest = client.get("/privacy", follow_redirects=False)
+    assert dest.status_code == 200
+    assert b"<html" in dest.data.lower()
+
+
+def test_index_html_redirects_to_home(client):
+    rv = client.get("/index.html", follow_redirects=False)
+    assert rv.status_code == 301
+    location = rv.headers.get("Location", "")
+    assert location.endswith("/")
+    assert "/index.html" not in location
+    dest = client.get("/", follow_redirects=False)
+    assert dest.status_code == 200
