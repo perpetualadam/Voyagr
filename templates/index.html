@@ -2463,6 +2463,7 @@
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
         window.VoyagrWakeBackendDefault = {{ wake_backend_default | tojson }};
         window.VOYAGR_SHOW_FIREFOX_HINT = {{ show_firefox_browser_hint | tojson }};
+        window.VOYAGR_IS_SEARCH_CRAWLER = {{ voyagr_is_search_crawler|default(false) | tojson }};
     </script>
     <!-- First-run safety + privacy notice: show once until acknowledged -->
     <script>
@@ -2492,6 +2493,11 @@
                 showSafetyNotice();
             };
             function init() {
+                // Crawlers do not persist localStorage, so the overlay would cover
+                // the page on every render (GSC: Crawled — currently not indexed / Soft 404).
+                if (window.VOYAGR_IS_SEARCH_CRAWLER) {
+                    return;
+                }
                 var acked = false;
                 try { acked = !!localStorage.getItem(ACK_KEY); } catch (e) { acked = false; }
                 if (!acked) {

@@ -6,6 +6,17 @@ This is not a substitute for authentication — share the URL only with people y
 """
 
 import os
+import re
+
+# Search / social crawlers that render JS but do not persist localStorage.
+# First-run interstitials then cover the page on every visit, which Google
+# reports as "Crawled — currently not indexed" or Soft 404.
+_SEARCH_CRAWLER_RE = re.compile(
+    r"(?:googlebot|google-inspectiontool|storebot-google|adsbot-google|"
+    r"bingbot|bingpreview|slurp|duckduckbot|baiduspider|yandex(?:bot|images)|"
+    r"applebot|facebookexternalhit|twitterbot|linkedinbot)",
+    re.IGNORECASE,
+)
 
 
 def block_search_indexing() -> bool:
@@ -15,3 +26,10 @@ def block_search_indexing() -> bool:
         'yes',
         'on',
     )
+
+
+def is_search_crawler(user_agent: str = "") -> bool:
+    """True when the User-Agent is a well-known search or link-preview crawler."""
+    if not user_agent:
+        return False
+    return _SEARCH_CRAWLER_RE.search(user_agent) is not None
