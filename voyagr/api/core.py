@@ -222,7 +222,7 @@ def favicon():
     and some platform scrapers still probe /favicon.ico directly. Point them
     at the current app icon so we don't 404 and so the branding stays consistent.
     """
-    return redirect('/static/images/icons/icon.svg', code=302)
+    return redirect('/static/images/icons/icon.svg', code=301)
 
 
 @core_bp.route('/apple-touch-icon.png')

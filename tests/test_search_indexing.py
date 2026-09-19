@@ -140,6 +140,16 @@ def test_apple_touch_icon_probes_redirect(client, path):
     assert dest.data[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_favicon_ico_permanent_redirect(client):
+    rv = client.get("/favicon.ico", follow_redirects=False)
+    assert rv.status_code == 301
+    location = rv.headers.get("Location", "")
+    assert location.endswith("/static/images/icons/icon.svg")
+    dest = client.get("/static/images/icons/icon.svg")
+    assert dest.status_code == 200
+    assert dest.data.startswith(b"<svg") or dest.data.startswith(b"<?xml")
+
+
 def test_index_html_redirects_to_home(client):
     rv = client.get("/index.html", follow_redirects=False)
     assert rv.status_code == 301
