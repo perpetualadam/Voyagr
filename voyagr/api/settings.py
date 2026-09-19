@@ -32,7 +32,11 @@ def manage_app_settings():
                 row = cursor.fetchone()
                 if row:
                     col_names = [desc[0] for desc in cursor.description]
-                    settings = {col: row[i] for i, col in enumerate(col_names) if col != 'id' and col != 'timestamp'}
+                    settings = {
+                        col: row[i]
+                        for i, col in enumerate(col_names)
+                        if col not in ('id', 'timestamp', 'avg_camera_avoid_default_applied')
+                    }
                     # Ensure defaults for multi-drop fields
                     settings.setdefault('optimize_stop_order', 1)
                     settings.setdefault('round_trip', 0)

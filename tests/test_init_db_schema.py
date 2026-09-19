@@ -64,6 +64,76 @@ def test_init_db_seeds_camera_hazard_buckets(fresh_db):
         assert rows[bucket] == 800
 
 
+def test_init_db_defaults_average_speed_cameras_enabled(fresh_db):
+    """Average-speed cameras default on like the other camera_* map-data filters."""
+    from voyagr.config import CAMERA_HAZARD_BUCKETS
+    enabled = dict(fresh_db.execute(
+        "SELECT hazard_type, enabled FROM hazard_preferences "
+        "WHERE hazard_type LIKE 'camera_%'"
+    ).fetchall())
+    for bucket in CAMERA_HAZARD_BUCKETS:
+        assert enabled.get(bucket) == 1, f"{bucket} should default to avoided"
+    flag = fresh_db.execute(
+        "SELECT avg_camera_avoid_default_applied FROM app_settings LIMIT 1"
+    ).fetchone()
+    assert flag is not None and flag[0] == 1
+
+
+def test_average_speed_camera_default_enables_legacy_disabled_row(tmp_path, monkeypatch):
+    """Existing installs with camera_average_speed off are enabled once."""
+    db_path = str(tmp_path / "legacy_avg_camera.db")
+    monkeypatch.setattr(dbmod, "DB_FILE", db_path)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        '''
+        CREATE TABLE hazard_preferences (
+            hazard_type TEXT PRIMARY KEY,
+            penalty_seconds INTEGER,
+            enabled INTEGER,
+            proximity_threshold_meters INTEGER
+        )
+        '''
+    )
+    conn.execute(
+        '''
+        CREATE TABLE app_settings (
+            id INTEGER PRIMARY KEY,
+            map_theme TEXT
+        )
+        '''
+    )
+    conn.execute("INSERT INTO app_settings (map_theme) VALUES ('standard')")
+    conn.execute(
+        "INSERT INTO hazard_preferences VALUES ('camera_average_speed', 800, 0, 100)"
+    )
+    conn.execute(
+        "INSERT INTO hazard_preferences VALUES ('camera_speed', 800, 1, 100)"
+    )
+    conn.commit()
+    dbmod.apply_camera_average_speed_avoidance_default(conn.cursor())
+    conn.commit()
+    enabled = conn.execute(
+        "SELECT enabled FROM hazard_preferences WHERE hazard_type = 'camera_average_speed'"
+    ).fetchone()[0]
+    assert enabled == 1
+    flag = conn.execute(
+        "SELECT avg_camera_avoid_default_applied FROM app_settings LIMIT 1"
+    ).fetchone()[0]
+    assert flag == 1
+
+    conn.execute(
+        "UPDATE hazard_preferences SET enabled = 0 WHERE hazard_type = 'camera_average_speed'"
+    )
+    conn.commit()
+    dbmod.apply_camera_average_speed_avoidance_default(conn.cursor())
+    conn.commit()
+    still_off = conn.execute(
+        "SELECT enabled FROM hazard_preferences WHERE hazard_type = 'camera_average_speed'"
+    ).fetchone()[0]
+    assert still_off == 0
+    conn.close()
+
+
 def test_init_db_app_settings_has_multidrop_columns(fresh_db):
     cols = {r[1] for r in fresh_db.execute("PRAGMA table_info(app_settings)").fetchall()}
     for col in ('optimize_stop_order', 'round_trip', 'traffic_aware_routing',

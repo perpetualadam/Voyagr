@@ -267,6 +267,50 @@ def apply_camera_hazard_penalty_defaults(cursor: sqlite3.Cursor) -> None:
     )
 
 
+def apply_camera_average_speed_avoidance_default(cursor: sqlite3.Cursor) -> None:
+    """Default average-speed camera avoidance on, like other camera_* buckets.
+
+    Fresh DBs already seed ``camera_average_speed`` as enabled. Existing installs
+    may still have it off from a legacy copy of the old ``camera`` row. Apply
+    that enable once so Settings can still turn the toggle off afterwards.
+    """
+    cursor.execute(
+        '''
+        INSERT OR IGNORE INTO hazard_preferences
+        (hazard_type, penalty_seconds, enabled, proximity_threshold_meters)
+        VALUES (?, 800, 1, 100)
+        ''',
+        ('camera_average_speed',),
+    )
+    try:
+        cursor.execute(
+            'ALTER TABLE app_settings ADD COLUMN avg_camera_avoid_default_applied INTEGER DEFAULT 0'
+        )
+    except Exception:
+        pass
+
+    cursor.execute('SELECT COUNT(*) FROM app_settings')
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "UPDATE hazard_preferences SET enabled = 1 WHERE hazard_type = 'camera_average_speed'"
+        )
+        return
+
+    cursor.execute(
+        'SELECT avg_camera_avoid_default_applied FROM app_settings LIMIT 1'
+    )
+    row = cursor.fetchone()
+    if row and row[0]:
+        return
+
+    cursor.execute(
+        "UPDATE hazard_preferences SET enabled = 1 WHERE hazard_type = 'camera_average_speed'"
+    )
+    cursor.execute(
+        'UPDATE app_settings SET avg_camera_avoid_default_applied = 1'
+    )
+
+
 def init_db():
     """Initialize database with all tables."""
     conn = sqlite3.connect(DB_FILE)
@@ -641,6 +685,7 @@ def init_db():
     migrate_legacy_camera_hazard_preferences(cursor)
     migrate_persistent_route_cache_cache_key(cursor)
     apply_camera_hazard_penalty_defaults(cursor)
+    apply_camera_average_speed_avoidance_default(cursor)
 
     conn.commit()
     conn.close()

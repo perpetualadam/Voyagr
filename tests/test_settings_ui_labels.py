@@ -106,6 +106,7 @@ class TestSettingsUILabels(unittest.TestCase):
         html = self._settings_html()
         self.assertIn('Speed cameras', html)
         self.assertIn('Traffic light cameras', html)
+        self.assertIn('Average-speed zones', html)
 
     def test_settings_responsibility_notice_present(self):
         html = self._settings_html()
