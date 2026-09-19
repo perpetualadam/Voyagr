@@ -7,17 +7,40 @@ This is not a substitute for authentication — share the URL only with people y
 
 import os
 import re
+from typing import FrozenSet, Tuple
 
 # Search / social crawlers that render JS but do not persist localStorage.
 # First-run interstitials then cover the page on every visit, which Google
 # reports as "Crawled — currently not indexed" or Soft 404.
-# Shared with the homepage JS (navigator.userAgent) so HTML does not vary by UA.
-SEARCH_CRAWLER_UA_PATTERN = (
-    r"(?:googlebot|google-inspectiontool|storebot-google|adsbot-google|"
-    r"bingbot|bingpreview|\bslurp\b|duckduckbot|baiduspider|yandex(?:bot|images)|"
-    r"applebot|facebookexternalhit|twitterbot|linkedinbot)"
+#
+# Shared with the homepage as a JSON token list (not a regex). Python `re`
+# and JavaScript RegExp do not treat escapes like `\b` the same after JSON
+# transport (`\b` is a word boundary in regex and a backspace in JSON).
+SEARCH_CRAWLER_UA_TOKENS: Tuple[str, ...] = (
+    "googlebot",
+    "google-inspectiontool",
+    "storebot-google",
+    "adsbot-google",
+    "bingbot",
+    "bingpreview",
+    "slurp",
+    "duckduckbot",
+    "baiduspider",
+    "yandexbot",
+    "yandeximages",
+    "applebot",
+    "facebookexternalhit",
+    "twitterbot",
+    "linkedinbot",
 )
-_SEARCH_CRAWLER_RE = re.compile(SEARCH_CRAWLER_UA_PATTERN, re.IGNORECASE)
+
+# Short tokens that appear inside ordinary words (e.g. "slurpee").
+SEARCH_CRAWLER_UA_WORD_TOKENS: FrozenSet[str] = frozenset({"slurp"})
+
+_WORD_TOKEN_RE = {
+    token: re.compile(rf"(?<![0-9a-z]){re.escape(token)}(?![0-9a-z])")
+    for token in SEARCH_CRAWLER_UA_WORD_TOKENS
+}
 
 
 def block_search_indexing() -> bool:
@@ -33,4 +56,11 @@ def is_search_crawler(user_agent: str = "") -> bool:
     """True when the User-Agent is a well-known search or link-preview crawler."""
     if not user_agent:
         return False
-    return _SEARCH_CRAWLER_RE.search(user_agent) is not None
+    lower = user_agent.lower()
+    for token in SEARCH_CRAWLER_UA_TOKENS:
+        if token in SEARCH_CRAWLER_UA_WORD_TOKENS:
+            if _WORD_TOKEN_RE[token].search(lower):
+                return True
+        elif token in lower:
+            return True
+    return False

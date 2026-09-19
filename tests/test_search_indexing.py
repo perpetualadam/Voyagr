@@ -10,7 +10,11 @@ import json
 
 import pytest
 
-from voyagr.discoverability import SEARCH_CRAWLER_UA_PATTERN, is_search_crawler
+from voyagr.discoverability import (
+    SEARCH_CRAWLER_UA_TOKENS,
+    SEARCH_CRAWLER_UA_WORD_TOKENS,
+    is_search_crawler,
+)
 
 
 GOOGLEBOT_UA = (
@@ -68,6 +72,13 @@ def test_is_search_crawler_slurp_requires_word_boundary():
     assert is_search_crawler("Mozilla/5.0 (compatible; Yahoo! Slurp)") is True
 
 
+def test_is_search_crawler_does_not_match_similar_product_names():
+    assert is_search_crawler("Mozilla/5.0 DuckDuckGo/7") is False
+    assert is_search_crawler("Mozilla/5.0 YaBrowser/24.1.0.0") is False
+    assert is_search_crawler("Mozilla/5.0 AppleWebKit/605.1.15") is False
+    assert is_search_crawler("Mozilla/5.0 (compatible; YandexBot/3.0)") is True
+
+
 def test_home_indexable_for_googlebot(client):
     rv = client.get("/", headers={"User-Agent": GOOGLEBOT_UA})
     assert rv.status_code == 200
@@ -77,9 +88,11 @@ def test_home_indexable_for_googlebot(client):
     assert (rv.headers.get("X-Robots-Tag") or "").lower().find("noindex") < 0
     assert 'rel="canonical"' in body
     assert "window.VOYAGR_IS_SEARCH_CRAWLER =" not in body
+    assert "VOYAGR_SEARCH_CRAWLER_UA_RE" not in body
     assert "function voyagrUaIsSearchCrawler()" in body
     assert "navigator.userAgent" in body
-    assert json.dumps(SEARCH_CRAWLER_UA_PATTERN) in body
+    assert json.dumps(list(SEARCH_CRAWLER_UA_TOKENS)) in body
+    assert json.dumps(sorted(SEARCH_CRAWLER_UA_WORD_TOKENS)) in body
     assert "voyagr-aeo-faq" in body
     assert "<noscript>" in body
 
@@ -92,10 +105,13 @@ def test_home_html_does_not_vary_crawler_flag_by_user_agent(client):
     assert browser.status_code == 200
     bot_body = bot.data.decode("utf-8", errors="replace")
     browser_body = browser.data.decode("utf-8", errors="replace")
-    assert "VOYAGR_SEARCH_CRAWLER_UA_RE" in bot_body
-    assert "VOYAGR_SEARCH_CRAWLER_UA_RE" in browser_body
-    assert json.dumps(SEARCH_CRAWLER_UA_PATTERN) in bot_body
-    assert json.dumps(SEARCH_CRAWLER_UA_PATTERN) in browser_body
+    assert "VOYAGR_SEARCH_CRAWLER_UA_TOKENS" in bot_body
+    assert "VOYAGR_SEARCH_CRAWLER_UA_TOKENS" in browser_body
+    assert json.dumps(list(SEARCH_CRAWLER_UA_TOKENS)) in bot_body
+    assert json.dumps(list(SEARCH_CRAWLER_UA_TOKENS)) in browser_body
+    assert "\\bslurp\\b" not in bot_body
+    crawler_boot = bot_body[bot_body.find("VOYAGR_SEARCH_CRAWLER_UA_TOKENS"):bot_body.find("voyagrAcceptSafetyNotice")]
+    assert "new RegExp" not in crawler_boot
     assert "window.VOYAGR_IS_SEARCH_CRAWLER = true" not in bot_body
     assert "window.VOYAGR_IS_SEARCH_CRAWLER = false" not in browser_body
 

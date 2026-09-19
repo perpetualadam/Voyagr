@@ -2463,10 +2463,8 @@
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
         window.VoyagrWakeBackendDefault = {{ wake_backend_default | tojson }};
         window.VOYAGR_SHOW_FIREFOX_HINT = {{ show_firefox_browser_hint | tojson }};
-        window.VOYAGR_SEARCH_CRAWLER_UA_RE = (function (pattern) {
-            if (!pattern) return null;
-            try { return new RegExp(pattern, 'i'); } catch (e) { return null; }
-        })({{ search_crawler_ua_pattern|default('')|tojson }});
+        window.VOYAGR_SEARCH_CRAWLER_UA_TOKENS = {{ search_crawler_ua_tokens|default([])|tojson }};
+        window.VOYAGR_SEARCH_CRAWLER_UA_WORD_TOKENS = {{ search_crawler_ua_word_tokens|default([])|tojson }};
     </script>
     <!-- First-run safety + privacy notice: show once until acknowledged -->
     <script>
@@ -2495,13 +2493,41 @@
                 }
                 showSafetyNotice();
             };
+            function voyagrIsUaWordChar(ch) {
+                return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z');
+            }
             function voyagrUaIsSearchCrawler() {
-                // Decide from this JS realm's UA, not a server-baked flag.
-                // Cached homepage HTML (service worker stores /) must not skip
-                // the legal notice for a real browser.
+                // Token list (not a regex): Python re and JS RegExp disagree on
+                // escapes like \b after JSON transport. Same rules as
+                // voyagr.discoverability.is_search_crawler.
                 try {
-                    var re = window.VOYAGR_SEARCH_CRAWLER_UA_RE;
-                    return !!(re && re.test(navigator.userAgent || ''));
+                    var ua = String(navigator.userAgent || '').toLowerCase();
+                    if (!ua) return false;
+                    var tokens = window.VOYAGR_SEARCH_CRAWLER_UA_TOKENS || [];
+                    var wordTokens = window.VOYAGR_SEARCH_CRAWLER_UA_WORD_TOKENS || [];
+                    var word = {};
+                    for (var w = 0; w < wordTokens.length; w++) {
+                        word[String(wordTokens[w] || '').toLowerCase()] = true;
+                    }
+                    for (var i = 0; i < tokens.length; i++) {
+                        var token = String(tokens[i] || '').toLowerCase();
+                        if (!token) continue;
+                        if (word[token]) {
+                            var idx = ua.indexOf(token);
+                            while (idx !== -1) {
+                                var before = idx === 0 ? '' : ua.charAt(idx - 1);
+                                var after = ua.charAt(idx + token.length);
+                                if ((!before || !voyagrIsUaWordChar(before)) &&
+                                    (!after || !voyagrIsUaWordChar(after))) {
+                                    return true;
+                                }
+                                idx = ua.indexOf(token, idx + 1);
+                            }
+                        } else if (ua.indexOf(token) !== -1) {
+                            return true;
+                        }
+                    }
+                    return false;
                 } catch (e) {
                     return false;
                 }

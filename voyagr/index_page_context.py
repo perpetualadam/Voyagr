@@ -8,7 +8,11 @@ import json
 import os
 from typing import Any, Dict, Tuple
 
-from voyagr.discoverability import SEARCH_CRAWLER_UA_PATTERN, block_search_indexing
+from voyagr.discoverability import (
+    SEARCH_CRAWLER_UA_TOKENS,
+    SEARCH_CRAWLER_UA_WORD_TOKENS,
+    block_search_indexing,
+)
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.seo import (
     APP_DESCRIPTION,
@@ -86,9 +90,10 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     # Resolve OG dimensions once so index meta matches privacy (and custom cards).
     og_dims = og_image_dimensions()
     return {
-        # Pattern only (same for every request) — JS tests navigator.userAgent.
-        # Do not bake a per-UA boolean into the HTML: the service worker caches /.
-        "search_crawler_ua_pattern": SEARCH_CRAWLER_UA_PATTERN,
+        # Token lists (same for every request) — JS tests navigator.userAgent.
+        # Do not bake a per-UA boolean or a regex-with-\\b into the HTML.
+        "search_crawler_ua_tokens": list(SEARCH_CRAWLER_UA_TOKENS),
+        "search_crawler_ua_word_tokens": sorted(SEARCH_CRAWLER_UA_WORD_TOKENS),
         "tomtom_api_key": _tt_key,
         "tomtom_traffic_proxy": _tt_proxy,
         "show_firefox_browser_hint": show_firefox_browser_hint,
