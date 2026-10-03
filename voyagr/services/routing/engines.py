@@ -351,7 +351,12 @@ def route_with_graphhopper(
         response: Optional[requests.Response] = None
 
         if custom_model:
-            # Custom model + CH disable must be sent as a query param.
+            # GraphHopper's custom-model docs only apply priority rules (including
+            # multiply_by "0" camera blocks) on a flexible request. The documented
+            # POST body sets "ch.disable": true. A query param alone is ignored by
+            # some builds, contraction hierarchies stay on, and the custom model
+            # never blocks the camera areas.
+            payload["ch.disable"] = True
             response = requests.post(
                 url,
                 params={"ch.disable": "true"},
