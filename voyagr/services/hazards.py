@@ -1206,9 +1206,10 @@ def build_prioritised_valhalla_exclude_locations(
     request, respecting Valhalla's hard cap of 50 avoid locations.
 
     Priority order (highest first): explicit ``avoid_point`` reroute markers, road
-    closures, CAZ sample points, then general hazards (cameras/etc.). Returns [] on
-    any failure so routing still proceeds. Extracted verbatim from
-    voyagr_web.calculate_route.
+    closures, CAZ sample points, then general hazards (cameras/etc.).
+    ``omit_camera_hazards`` drops camera points so Fastest can stay the time
+    option while ⚡ Optimised owns camera avoidance. Returns [] on any failure
+    so routing still proceeds.
     """
     exclude_locations: List[Dict[str, float]] = []
     try:
