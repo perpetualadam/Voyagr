@@ -627,6 +627,24 @@ def _is_camera_hazard_type(hazard_type: str) -> bool:
     return hazard_type == 'camera' or hazard_type.startswith('camera_')
 
 
+# Valhalla exclude_locations use the locations schema. `radius` is the metres
+# of candidate edges (roads between intersections) mapped onto the point.
+# The default is 0, which keeps a single closest edge, so the opposite
+# carriageway of a camera stays in the route. 50m covers that carriageway
+# and the one beside it; Valhalla still falls back to the closest edge when
+# nothing lies inside the radius.
+VALHALLA_CAMERA_EXCLUDE_RADIUS_M = 50
+
+
+def valhalla_camera_exclude_location(lat: float, lon: float) -> Dict[str, float]:
+    """Camera avoid-point in the documented exclude_locations shape."""
+    return {
+        'lat': float(lat),
+        'lon': float(lon),
+        'radius': float(VALHALLA_CAMERA_EXCLUDE_RADIUS_M),
+    }
+
+
 def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
                                      route_bbox: Optional[Dict[str, float]] = None,
                                      max_hazards: int = 100,
@@ -635,8 +653,9 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
                                      omit_camera_hazards: bool = False) -> List[Dict[str, float]]:
     """Build Valhalla exclude_locations to avoid hazards.
 
-    ``omit_camera_hazards`` leaves cameras off this list so a separate ⚡ Optimised
-    request can own camera avoidance. Closures and other hazards stay.
+    Camera points include ``radius`` so every candidate edge near the camera is
+    excluded. Other hazards stay lat/lon only. ``omit_camera_hazards`` drops
+    camera points; the primary route request does not set it.
     """
     try:
         hazard_weights = {
@@ -695,7 +714,12 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
             logger.warning("[VALHALLA] No high-priority hazards found for exclude_locations")
             return []
 
-        exclude_locations = [{"lat": h['lat'], "lon": h['lon']} for h in all_hazards]
+        exclude_locations = [
+            valhalla_camera_exclude_location(h['lat'], h['lon'])
+            if _is_camera_hazard_type(h['type'])
+            else {"lat": h['lat'], "lon": h['lon']}
+            for h in all_hazards
+        ]
         logger.info(f"[VALHALLA] Built {len(exclude_locations)} exclude_locations")
         return exclude_locations
 
@@ -1206,10 +1230,9 @@ def build_prioritised_valhalla_exclude_locations(
     request, respecting Valhalla's hard cap of 50 avoid locations.
 
     Priority order (highest first): explicit ``avoid_point`` reroute markers, road
-    closures, CAZ sample points, then general hazards (cameras/etc.).
-    ``omit_camera_hazards`` drops camera points so Fastest can stay the time
-    option while ⚡ Optimised owns camera avoidance. Returns [] on any failure
-    so routing still proceeds.
+    closures, CAZ sample points, then general hazards (cameras/etc.). Camera
+    points carry a radius so both nearby carriageways are excluded. Returns []
+    on any failure so routing still proceeds.
     """
     exclude_locations: List[Dict[str, float]] = []
     try:

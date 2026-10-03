@@ -101,11 +101,30 @@ def normalize_valhalla_datetime(value: Optional[Any], *, now: Optional[datetime]
         return None
 
 
+def _valhalla_exclude_radius_meters(loc: Dict[str, Any]) -> Optional[float]:
+    """Positive location radius, or None when the point should stay lat/lon only."""
+    if 'radius' not in loc or loc.get('radius') is None:
+        return None
+    try:
+        radius = float(loc['radius'])
+    except (TypeError, ValueError):
+        return None
+    if radius <= 0:
+        return None
+    # Valhalla clamps radius to the service limit. Keep a finite metre value.
+    return min(radius, 1000.0)
+
+
 def sanitize_valhalla_exclude_locations(
     exclude_locations: Optional[List[Dict[str, Any]]],
     max_locations: int = VALHALLA_MAX_EXCLUDE_LOCATIONS,
 ) -> List[Dict[str, float]]:
-    """Keep only numeric lat/lon pairs, capped at Valhalla's exclude_locations limit (error 157)."""
+    """Keep numeric lat/lon pairs, plus a positive radius when one was set.
+
+    Capped at Valhalla's exclude_locations limit (error 157). Radius is the
+    documented candidate-edge search on a location; lat/lon-only points are
+    unchanged.
+    """
     out: List[Dict[str, float]] = []
     for loc in exclude_locations or []:
         try:
@@ -114,7 +133,11 @@ def sanitize_valhalla_exclude_locations(
         except (KeyError, TypeError, ValueError):
             continue
         if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0:
-            out.append({'lat': lat, 'lon': lon})
+            point: Dict[str, float] = {'lat': lat, 'lon': lon}
+            radius = _valhalla_exclude_radius_meters(loc)
+            if radius is not None:
+                point['radius'] = radius
+            out.append(point)
         if len(out) >= max_locations:
             break
     return out

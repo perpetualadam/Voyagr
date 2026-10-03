@@ -35,7 +35,10 @@ class ValhallaExcludeWeightsTest(unittest.TestCase):
         }
         out = hz.build_valhalla_exclude_locations(hazards, max_hazards=1)
         # Highest weight kept = camera_red_light (50) over police (40).
-        self.assertEqual(out[0], {'lat': 51.0, 'lon': -0.1})
+        # Cameras also carry the documented candidate-edge radius.
+        self.assertEqual(out[0], {
+            'lat': 51.0, 'lon': -0.1, 'radius': hz.VALHALLA_CAMERA_EXCLUDE_RADIUS_M,
+        })
 
 
 class MarkerDisplayTypeTest(unittest.TestCase):

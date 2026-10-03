@@ -86,6 +86,17 @@ class TestBuildValhallaRoutePayload(unittest.TestCase):
         p = build_valhalla_route_payload(**{**BASE, 'exclude_locations': excl})
         self.assertEqual(p['exclude_locations'], excl)
 
+    def test_camera_exclude_radius_reaches_the_route_request(self):
+        excl = [
+            {'lat': 53.45, 'lon': -1.2, 'radius': 50, 'type': 'camera'},
+            {'lat': 53.46, 'lon': -1.21},
+        ]
+        p = build_valhalla_route_payload(**{**BASE, 'exclude_locations': excl})
+        self.assertEqual(p['exclude_locations'], [
+            {'lat': 53.45, 'lon': -1.2, 'radius': 50.0},
+            {'lat': 53.46, 'lon': -1.21},
+        ])
+
     def test_no_exclude_locations_key_when_empty(self):
         p = build_valhalla_route_payload(**BASE)
         self.assertNotIn('exclude_locations', p)
@@ -187,6 +198,18 @@ class TestValhallaPayloadSanitizers(unittest.TestCase):
         out = sanitize_valhalla_exclude_locations(locs)
         self.assertEqual(len(out), VALHALLA_MAX_EXCLUDE_LOCATIONS)
         self.assertEqual(out[0], {'lat': 51.5, 'lon': -0.1})
+
+    def test_exclude_locations_keep_positive_radius_only(self):
+        out = sanitize_valhalla_exclude_locations([
+            {'lat': 51.5, 'lon': -0.1, 'radius': 50},
+            {'lat': 51.51, 'lon': -0.11},
+            {'lat': 51.52, 'lon': -0.12, 'radius': 0},
+            {'lat': 51.53, 'lon': -0.13, 'radius': 'nope'},
+        ])
+        self.assertEqual(out[0], {'lat': 51.5, 'lon': -0.1, 'radius': 50.0})
+        self.assertEqual(out[1], {'lat': 51.51, 'lon': -0.11})
+        self.assertNotIn('radius', out[2])
+        self.assertNotIn('radius', out[3])
 
     def test_describe_http_error_prefers_json_error(self):
         class _Resp:

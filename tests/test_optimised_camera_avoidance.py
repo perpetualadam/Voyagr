@@ -8,7 +8,6 @@ from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     cameras_near_polyline_exclude_points,
     count_cameras_near_polyline,
-    fastest_should_leave_cameras_to_optimised,
     fetch_valhalla_auto_json,
     fetch_valhalla_auto_shorter_json,
     graphhopper_qualifies_as_optimised,
@@ -40,24 +39,6 @@ class TestGraphhopperQualifiesAsOptimised:
     def test_rejects_failed_route(self):
         assert graphhopper_qualifies_as_optimised(None, avoid_cameras=True) is False
         assert graphhopper_qualifies_as_optimised({'success': False}, avoid_cameras=True) is False
-
-
-class TestFastestLeavesCamerasToOptimised:
-    def test_omits_cameras_when_graphhopper_optimised_exists(self):
-        gh = {'success': True, 'camera_avoidance': True}
-        assert fastest_should_leave_cameras_to_optimised(
-            enable_hazard_avoidance=True, avoid_cameras=True, graphhopper_route=gh,
-        ) is True
-
-    def test_keeps_cameras_on_fastest_when_optimised_was_not_produced(self):
-        gh = {'success': True, 'camera_avoidance': False}
-        assert fastest_should_leave_cameras_to_optimised(
-            enable_hazard_avoidance=True, avoid_cameras=True, graphhopper_route=gh,
-        ) is False
-        assert fastest_should_leave_cameras_to_optimised(
-            enable_hazard_avoidance=False, avoid_cameras=True,
-            graphhopper_route={'success': True, 'camera_avoidance': True},
-        ) is False
 
 
 class TestFetchValhallaAutoJson:
@@ -145,6 +126,13 @@ class TestFetchValhallaAutoShorterJson:
         assert len(merged) == 2
         assert merged[0] == {'lat': 1.0, 'lon': 2.0}
 
+    def test_merge_keeps_camera_radius_from_the_first_group(self):
+        merged = merge_valhalla_exclude_locations(
+            [{'lat': 1.0, 'lon': 2.0, 'radius': 50}],
+            [{'lat': 1.0, 'lon': 2.0}],
+        )
+        assert merged == [{'lat': 1.0, 'lon': 2.0, 'radius': 50.0}]
+
 
 class TestShortestRouteNaming:
     def test_shortest_name_detection(self):
@@ -173,9 +161,7 @@ class TestPolylineCameraCounting:
             'geometry_precision': 6,
         }
         pts = cameras_near_polyline_exclude_points(route, hazards, threshold_m=150)
-        assert len(pts) == 1
-        assert pts[0]['lat'] == 51.500
-        assert pts[0]['lon'] == -0.100
+        assert pts == [{'lat': 51.500, 'lon': -0.100, 'radius': 50.0}]
 
 
 class TestOptimisedRouteQualification:

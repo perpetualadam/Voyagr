@@ -9,7 +9,10 @@ import requests
 
 from voyagr.config import CAMERA_HAZARD_BUCKETS
 from voyagr.utils.geometry import get_distance_between_points
-from voyagr.services.hazards import build_valhalla_exclude_locations
+from voyagr.services.hazards import (
+    build_valhalla_exclude_locations,
+    valhalla_camera_exclude_location,
+)
 from voyagr.services.routing.valhalla_parsing import valhalla_trip_json_to_std_route_entry
 
 logger = logging.getLogger(__name__)
@@ -54,7 +57,14 @@ def merge_valhalla_exclude_locations(
             if key in seen:
                 continue
             seen.add(key)
-            merged.append({'lat': lat, 'lon': lon})
+            point: Dict[str, Any] = {'lat': lat, 'lon': lon}
+            try:
+                radius = float(loc['radius']) if loc.get('radius') is not None else 0.0
+            except (KeyError, TypeError, ValueError):
+                radius = 0.0
+            if radius > 0:
+                point['radius'] = radius
+            merged.append(point)
             if len(merged) >= max_points:
                 return merged
     return merged
@@ -169,7 +179,7 @@ def cameras_near_polyline_exclude_points(
         if min_dist <= threshold_m:
             near.append((min_dist, clat, clon))
     near.sort(key=lambda x: x[0])
-    return [{'lat': lat, 'lon': lon} for _, lat, lon in near[:max_points]]
+    return [valhalla_camera_exclude_location(lat, lon) for _, lat, lon in near[:max_points]]
 
 
 def fetch_valhalla_auto_json(
@@ -625,25 +635,6 @@ def routes_are_distinct(
     if abs(dist_a - dist_b) >= min_distance_delta_km:
         return True
     return dist_a != dist_b
-
-
-def fastest_should_leave_cameras_to_optimised(
-    *,
-    enable_hazard_avoidance: bool,
-    avoid_cameras: bool,
-    graphhopper_route: Optional[Dict[str, Any]],
-) -> bool:
-    """
-    Fastest is the time option. When GraphHopper already produced a camera-avoiding
-    ⚡ Optimised route, the Valhalla Fastest request must not apply those same
-    camera excludes — otherwise both options follow the same road.
-
-    When Optimised was not produced, Fastest keeps camera excludes so avoidance
-    is not dropped entirely.
-    """
-    if not (enable_hazard_avoidance and avoid_cameras):
-        return False
-    return graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=True)
 
 
 def graphhopper_qualifies_as_optimised(

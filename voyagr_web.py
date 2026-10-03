@@ -1152,7 +1152,6 @@ from voyagr.services.routing.optimised_route import (
     ensure_costing_preference_variety_routes,  # noqa: F401 - re-exported for enrichment.py vw.* calls
     ensure_shortest_respects_camera_avoidance,  # noqa: F401 - re-exported for enrichment.py vw.* calls
     graphhopper_qualifies_as_optimised,
-    fastest_should_leave_cameras_to_optimised,
 )
 from voyagr.services.routing.valhalla_parsing import (
     valhalla_route_json_to_standard_routes,
@@ -1485,13 +1484,8 @@ def calculate_route():
 
             # Build exclude_locations (more efficient than exclude_polygons)
             # No circumference limit - can send many more locations.
-            # When GraphHopper already has a camera-avoiding Optimised route, leave
-            # cameras off the Fastest request so the two options are not the same road.
-            omit_cameras_from_fastest = fastest_should_leave_cameras_to_optimised(
-                enable_hazard_avoidance=enable_hazard_avoidance,
-                avoid_cameras=avoid_cameras,
-                graphhopper_route=graphhopper_route,
-            )
+            # Camera points carry a radius so Valhalla excludes each nearby
+            # carriageway, including when GraphHopper also returned Optimised.
             exclude_locations = []
             if enable_hazard_avoidance:
                 exclude_locations = build_prioritised_valhalla_exclude_locations(
@@ -1500,7 +1494,6 @@ def calculate_route():
                     start_lat=start_lat, start_lon=start_lon,
                     end_lat=end_lat, end_lon=end_lon,
                     apply_caz_routing_avoidance=apply_caz_routing_avoidance,
-                    omit_camera_hazards=omit_cameras_from_fastest,
                 )
 
             # ================================================================
@@ -1820,7 +1813,6 @@ def calculate_route():
                             start_lon=start_lon,
                             end_lat=end_lat,
                             end_lon=end_lon,
-                            omit_camera_hazards=omit_cameras_from_fastest,
                         )
 
                         # Build retry payload (use same costing as initial request).

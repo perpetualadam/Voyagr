@@ -6,7 +6,10 @@ Valhalla's 50-avoid cap and keep the priority order avoid_point > road_closed >
 CAZ > general hazards, and never raise (return [] on failure/empty).
 """
 
-from voyagr.services.hazards import build_prioritised_valhalla_exclude_locations
+from voyagr.services.hazards import (
+    VALHALLA_CAMERA_EXCLUDE_RADIUS_M,
+    build_prioritised_valhalla_exclude_locations,
+)
 
 BBOX = {'min_lat': 51.5, 'max_lat': 51.6, 'min_lon': -0.2, 'max_lon': -0.1}
 KW = dict(route_bbox=BBOX, start_lat=51.5, start_lon=-0.2,
@@ -54,8 +57,9 @@ def test_omit_camera_hazards_keeps_closures_and_drops_cameras():
     }
     out = build_prioritised_valhalla_exclude_locations(hz, omit_camera_hazards=True, **KW)
     assert {'lat': 51.52, 'lon': -0.14} in out
-    assert {'lat': 51.53, 'lon': -0.13} not in out
-    assert {'lat': 51.54, 'lon': -0.12} not in out
+    coords = {(loc['lat'], loc['lon']) for loc in out}
+    assert (51.53, -0.13) not in coords
+    assert (51.54, -0.12) not in coords
 
 
 def test_cameras_stay_in_the_fastest_exclude_list_by_default():
@@ -64,7 +68,19 @@ def test_cameras_stay_in_the_fastest_exclude_list_by_default():
         'camera_speed': [{'lat': 51.53, 'lon': -0.13}],
     }
     out = build_prioritised_valhalla_exclude_locations(hz, **KW)
-    assert {'lat': 51.53, 'lon': -0.13} in out
+    assert out[0] == {'lat': 51.52, 'lon': -0.14}
+    assert {'lat': 51.53, 'lon': -0.13, 'radius': VALHALLA_CAMERA_EXCLUDE_RADIUS_M} in out
+
+
+def test_camera_exclude_locations_use_documented_search_radius():
+    """Radius selects every candidate edge near the camera, not one closest edge."""
+    hz = {'camera': [{'lat': 51.54, 'lon': -0.12}]}
+    out = build_prioritised_valhalla_exclude_locations(hz, **KW)
+    assert out == [{
+        'lat': 51.54,
+        'lon': -0.12,
+        'radius': VALHALLA_CAMERA_EXCLUDE_RADIUS_M,
+    }]
 
 
 def test_malformed_hazards_do_not_raise():
