@@ -46,6 +46,27 @@ def test_never_exceeds_fifty_locations():
     assert len(out) <= 50
 
 
+def test_omit_camera_hazards_keeps_closures_and_drops_cameras():
+    hz = {
+        'road_closed': [{'lat': 51.52, 'lon': -0.14}],
+        'camera_speed': [{'lat': 51.53, 'lon': -0.13}],
+        'camera': [{'lat': 51.54, 'lon': -0.12}],
+    }
+    out = build_prioritised_valhalla_exclude_locations(hz, omit_camera_hazards=True, **KW)
+    assert {'lat': 51.52, 'lon': -0.14} in out
+    assert {'lat': 51.53, 'lon': -0.13} not in out
+    assert {'lat': 51.54, 'lon': -0.12} not in out
+
+
+def test_cameras_stay_in_the_fastest_exclude_list_by_default():
+    hz = {
+        'road_closed': [{'lat': 51.52, 'lon': -0.14}],
+        'camera_speed': [{'lat': 51.53, 'lon': -0.13}],
+    }
+    out = build_prioritised_valhalla_exclude_locations(hz, **KW)
+    assert {'lat': 51.53, 'lon': -0.13} in out
+
+
 def test_malformed_hazards_do_not_raise():
     # Missing lat/lon keys must be skipped, not raise.
     hz = {'avoid_point': [{'foo': 'bar'}], 'road_closed': [{'lat': 51.52}]}

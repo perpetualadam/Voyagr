@@ -4,6 +4,7 @@ import inspect
 import unittest
 from unittest.mock import MagicMock, patch
 
+import polyline
 import voyagr_web as vw
 from voyagr.services.routing.enrichment import (
     RouteEnrichmentContext,
@@ -70,6 +71,23 @@ class TestMergeGraphhopperOptimisedRoute(unittest.TestCase):
         self.assertEqual(out[0]['name'], '⚡ Optimised')
         self.assertEqual(len(out), 2)
         self.assertTrue(out[0].get('routing_preferences_limited'))
+
+    @patch('voyagr.services.routing.route_entries.build_graphhopper_optimised_route_entry')
+    @patch('voyagr.services.routing.enrichment.graphhopper_qualifies_as_optimised', return_value=True)
+    def test_skips_optimised_that_follows_the_same_road_as_fastest(self, _qual, mock_build):
+        shape = polyline.encode([(51.50, -0.12), (51.51, -0.11), (51.52, -0.10)], precision=6)
+        mock_build.return_value = {
+            'id': 0, 'name': '⚡ Optimised', 'source': 'GraphHopper',
+            'hazard_count': 0, 'distance_km': 10.0, 'duration_minutes': 12,
+            'geometry': shape, 'geometry_precision': 6, 'maneuvers': [],
+        }
+        routes = [{
+            'name': 'Fastest', 'id': 1, 'hazard_count': 4,
+            'distance_km': 10.2, 'geometry': shape, 'geometry_precision': 6,
+        }]
+        ctx = _ctx(graphhopper_route={'success': True, 'camera_avoidance': True})
+        out = merge_graphhopper_optimised_route(routes, ctx)
+        self.assertEqual([r['name'] for r in out], ['Fastest'])
 
 
 class TestEnsureKwargsCompatibility(unittest.TestCase):

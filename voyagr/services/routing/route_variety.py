@@ -82,16 +82,38 @@ def should_append_distinct_valhalla_route_types(
     return distinct < min_distinct
 
 
+def _drop_optimised_routes_on_the_same_road(
+    routes: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Drop ⚡ Optimised when it follows the same road as Fastest or another option.
+
+    A real camera detour is kept. Fastest is never dropped here, including when
+    Optimised was listed first.
+    """
+    others = [r for r in routes if not is_primary_optimised_route(r)]
+    if not others:
+        return routes
+    kept: List[Dict[str, Any]] = []
+    for route in routes:
+        if is_primary_optimised_route(route) and any(
+            not routes_are_distinct(route, other) for other in others
+        ):
+            continue
+        kept.append(route)
+    return kept
+
+
 def dedupe_similar_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Drop secondary routes that are too similar to an already-kept option.
 
-    The first route (Fastest / primary) and any ⚡ Optimised options are always
-    retained — Optimised is the primary camera-avoidance product route.
+    ⚡ Optimised is kept when it is a different road (the camera-avoidance
+    option). It is dropped when it follows the same road as Fastest, so the
+    preview does not offer two labels for one path.
 
-    Similarity is judged only against non-Optimised peers so a geometrically
-    similar Fastest is not dropped when Optimised is already first (e.g. after
-    GraphHopper merge or ``pin_optimised_route_first``).
+    Similarity of non-Optimised routes is judged only against non-Optimised
+    peers so Fastest is not dropped when Optimised is already first.
     """
     if len(routes) <= 1:
         return routes
@@ -103,6 +125,7 @@ def dedupe_similar_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         peers = [existing for existing in kept if not is_primary_optimised_route(existing)]
         if not peers or all(routes_are_distinct(route, existing) for existing in peers):
             kept.append(route)
+    kept = _drop_optimised_routes_on_the_same_road(kept)
     for idx, route in enumerate(kept):
         route['id'] = idx + 1
     return kept
@@ -230,11 +253,13 @@ def finalize_route_variety(
     """
     Last-pass dedupe + max-detour filter, then pin ⚡ Optimised first.
 
-    Pin runs after filters so Optimised-as-primary cannot collapse a similar
-    Fastest during dedupe; max-detour uses Fastest (not Optimised) as the ETA
-    baseline so a camera-safer Optimised pin cannot cull the time option, and
-    gives 🌿 Scenic / 🛤️ Quiet the wider preference allowance so those options
-    survive the default cap. The client still sees Optimised as the top option.
+    Pin runs after filters so Optimised-as-primary cannot collapse Fastest
+    during dedupe. An Optimised option on the same road as Fastest is removed
+    first, so the preview does not list one path twice. Max-detour uses Fastest
+    (not Optimised) as the ETA baseline so a camera-safer Optimised pin cannot
+    cull the time option, and gives 🌿 Scenic / 🛤️ Quiet the wider preference
+    allowance so those options survive the default cap. The client still sees
+    Optimised as the top option when it is a different road.
 
     Durations are only comparable because every option in a response is scaled by
     the same traffic multiplier; see ``PREFERENCE_ROUTE_MIN_DETOUR_PERCENT``.

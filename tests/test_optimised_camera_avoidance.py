@@ -8,6 +8,7 @@ from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     cameras_near_polyline_exclude_points,
     count_cameras_near_polyline,
+    fastest_should_leave_cameras_to_optimised,
     fetch_valhalla_auto_json,
     fetch_valhalla_auto_shorter_json,
     graphhopper_qualifies_as_optimised,
@@ -39,6 +40,24 @@ class TestGraphhopperQualifiesAsOptimised:
     def test_rejects_failed_route(self):
         assert graphhopper_qualifies_as_optimised(None, avoid_cameras=True) is False
         assert graphhopper_qualifies_as_optimised({'success': False}, avoid_cameras=True) is False
+
+
+class TestFastestLeavesCamerasToOptimised:
+    def test_omits_cameras_when_graphhopper_optimised_exists(self):
+        gh = {'success': True, 'camera_avoidance': True}
+        assert fastest_should_leave_cameras_to_optimised(
+            enable_hazard_avoidance=True, avoid_cameras=True, graphhopper_route=gh,
+        ) is True
+
+    def test_keeps_cameras_on_fastest_when_optimised_was_not_produced(self):
+        gh = {'success': True, 'camera_avoidance': False}
+        assert fastest_should_leave_cameras_to_optimised(
+            enable_hazard_avoidance=True, avoid_cameras=True, graphhopper_route=gh,
+        ) is False
+        assert fastest_should_leave_cameras_to_optimised(
+            enable_hazard_avoidance=False, avoid_cameras=True,
+            graphhopper_route={'success': True, 'camera_avoidance': True},
+        ) is False
 
 
 class TestFetchValhallaAutoJson:

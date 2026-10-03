@@ -44,6 +44,31 @@ class TestRouteVariety(unittest.TestCase):
         mixed = [_route('Fastest', SHAPE_A, route_id=1), _route('Shortest', SHAPE_B, route_id=2, distance=7.0)]
         self.assertEqual(count_distinct_routes(mixed), 2)
 
+    def test_same_road_with_different_vertex_counts_is_not_distinct(self):
+        """GraphHopper and Valhalla encode one road with different point counts."""
+        dense = []
+        steps = 5
+        for i in range(len(COORDS_A) - 1):
+            a, b = COORDS_A[i], COORDS_A[i + 1]
+            for s in range(steps):
+                t = s / steps
+                dense.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+        dense.append(COORDS_A[-1])
+        shape_dense = polyline.encode(dense, precision=6)
+        # Length labels differ by more than the old 0.25 km shortcut, but the line is the same.
+        same_road = [
+            _route('Fastest', SHAPE_A, distance=10.0, route_id=1),
+            _route('⚡ Optimised', shape_dense, distance=10.4, route_id=2),
+        ]
+        self.assertEqual(count_distinct_routes(same_road), 1)
+
+    def test_different_road_with_similar_length_stays_distinct(self):
+        mixed = [
+            _route('Fastest', SHAPE_A, distance=10.0, route_id=1),
+            _route('⚡ Optimised', SHAPE_B, distance=10.1, route_id=2),
+        ]
+        self.assertEqual(count_distinct_routes(mixed), 2)
+
     def test_dedupe_keeps_primary(self):
         routes = [
             _route('Fastest', SHAPE_A, route_id=1),
@@ -57,18 +82,28 @@ class TestRouteVariety(unittest.TestCase):
         self.assertEqual(out[0]['id'], 1)
         self.assertEqual(out[1]['id'], 2)
 
-    def test_dedupe_keeps_optimised_even_when_similar(self):
+    def test_dedupe_drops_optimised_on_the_same_road_as_fastest(self):
+        """The same geometry must not be offered as both Fastest and Optimised."""
         routes = [
             _route('Fastest', SHAPE_A, route_id=1),
             {'id': 2, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
              'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 10},
         ]
         out = dedupe_similar_routes(routes)
-        assert len(out) == 2
-        assert out[1]['name'] == PRIMARY_OPTIMISED_NAME
+        self.assertEqual([r['name'] for r in out], ['Fastest'])
+        self.assertEqual(out[0]['id'], 1)
+
+    def test_dedupe_keeps_optimised_when_it_is_a_different_road(self):
+        routes = [
+            _route('Fastest', SHAPE_A, route_id=1),
+            {'id': 2, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_B,
+             'geometry_precision': 6, 'distance_km': 7.5, 'duration_minutes': 12},
+        ]
+        out = dedupe_similar_routes(routes)
+        self.assertEqual([r['name'] for r in out], ['Fastest', PRIMARY_OPTIMISED_NAME])
 
     def test_dedupe_keeps_fastest_when_optimised_already_first(self):
-        """Regression: Optimised-first must not collapse a similar Fastest."""
+        """Same-road Optimised listed first must not replace Fastest."""
         routes = [
             {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
              'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 12},
@@ -76,8 +111,7 @@ class TestRouteVariety(unittest.TestCase):
             _route('Alternate', SHAPE_A, duration=11, route_id=3),
         ]
         out = dedupe_similar_routes(routes)
-        names = [r['name'] for r in out]
-        self.assertEqual(names, [PRIMARY_OPTIMISED_NAME, 'Fastest'])
+        self.assertEqual([r['name'] for r in out], ['Fastest'])
 
     def test_max_detour_keeps_optimised_even_when_slow(self):
         routes = [
@@ -120,30 +154,25 @@ class TestRouteVariety(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['name'], 'Fastest')
 
-    def test_finalize_keeps_fastest_and_pins_similar_optimised(self):
-        """Route preview needs >=2 options when Optimised ≈ Fastest."""
+    def test_finalize_drops_optimised_that_matches_fastest(self):
+        """One road must not appear as both Fastest and Optimised."""
         routes = [
             _route('Fastest', SHAPE_A, duration=10, route_id=1),
             {'id': 2, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
              'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 12},
         ]
         out = finalize_route_variety(routes, max_detour_percent=20)
-        self.assertEqual(len(out), 2)
-        self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
-        self.assertEqual(out[1]['name'], 'Fastest')
+        self.assertEqual([r['name'] for r in out], ['Fastest'])
         self.assertEqual(out[0]['id'], 1)
-        self.assertEqual(out[1]['id'], 2)
 
-    def test_finalize_keeps_both_when_optimised_already_first(self):
+    def test_finalize_keeps_fastest_when_same_road_optimised_is_first(self):
         routes = [
             {'id': 1, 'name': PRIMARY_OPTIMISED_NAME, 'geometry': SHAPE_A,
              'geometry_precision': 6, 'distance_km': 5.0, 'duration_minutes': 12},
             _route('Fastest', SHAPE_A, duration=10, route_id=2),
         ]
         out = finalize_route_variety(routes, max_detour_percent=20)
-        self.assertEqual(len(out), 2)
-        self.assertEqual(out[0]['name'], PRIMARY_OPTIMISED_NAME)
-        self.assertEqual(out[1]['name'], 'Fastest')
+        self.assertEqual([r['name'] for r in out], ['Fastest'])
 
     def test_max_detour_uses_fastest_baseline_not_optimised(self):
         """Regression: Optimised-first must not drop a modestly slower Fastest."""

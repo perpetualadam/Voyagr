@@ -18,6 +18,7 @@ from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     graphhopper_qualifies_as_optimised,
     is_primary_optimised_route,
+    routes_are_distinct,
 )
 
 logger = logging.getLogger('voyagr_web')
@@ -164,6 +165,16 @@ def merge_graphhopper_optimised_route(
 
         gh_hazard_count = gh_route_entry.get('hazard_count', 0)
         gh_distance_km = gh_route_entry.get('distance_km', 0)
+        if any(
+            not routes_are_distinct(gh_route_entry, existing)
+            for existing in routes
+            if not is_primary_optimised_route(existing)
+        ):
+            logger.info(
+                '[GRAPHHOPPER] Optimised follows the same road as an existing option — '
+                'not offering a duplicate; Valhalla camera ensure may still add a detour'
+            )
+            return routes
         if log_label == 'primary':
             logger.info(
                 '[GRAPHHOPPER] Converted %d instructions to maneuvers',

@@ -554,31 +554,96 @@ def annotate_routes_camera_proximity(
     return routes
 
 
+def _resample_polyline(
+    coords: List[Tuple[float, float]],
+    count: int = 20,
+) -> List[Tuple[float, float]]:
+    """Evenly sample a polyline by straight-line fraction so engines can be compared.
+
+    GraphHopper and Valhalla encode the same road with different vertex counts.
+    Comparing raw indices treated that as a different route.
+    """
+    if not coords or count <= 0:
+        return []
+    if len(coords) == 1 or count == 1:
+        return [coords[0]]
+    cumulative = [0.0]
+    for i in range(1, len(coords)):
+        dlat = coords[i][0] - coords[i - 1][0]
+        dlon = coords[i][1] - coords[i - 1][1]
+        cumulative.append(cumulative[-1] + (dlat * dlat + dlon * dlon) ** 0.5)
+    total = cumulative[-1]
+    if total <= 0:
+        return [coords[0]] * count
+    samples: List[Tuple[float, float]] = []
+    seg = 0
+    last = len(coords) - 1
+    for i in range(count):
+        target = total * (i / (count - 1))
+        while seg < last - 1 and cumulative[seg + 1] < target:
+            seg += 1
+        span = cumulative[seg + 1] - cumulative[seg]
+        if span <= 0:
+            samples.append(coords[seg])
+            continue
+        t = max(0.0, min(1.0, (target - cumulative[seg]) / span))
+        samples.append((
+            coords[seg][0] + t * (coords[seg + 1][0] - coords[seg][0]),
+            coords[seg][1] + t * (coords[seg + 1][1] - coords[seg][1]),
+        ))
+    return samples
+
+
 def routes_are_distinct(
     route_a: Dict[str, Any],
     route_b: Dict[str, Any],
     *,
     min_distance_delta_km: float = 0.25,
 ) -> bool:
-    """True when two routes differ enough to show as separate options."""
+    """True when two routes differ enough to show as separate options.
+
+    When both geometries decode, the roads are compared after resampling. A
+    matching corridor is the same option even if the engines disagree on vertex
+    count or report a slightly different length. ``min_distance_delta_km`` is
+    only used when geometry is missing.
+    """
     try:
         dist_a = float(route_a.get('distance_km') or 0)
         dist_b = float(route_b.get('distance_km') or 0)
     except (TypeError, ValueError):
-        return True
-    if abs(dist_a - dist_b) >= min_distance_delta_km:
-        return True
+        dist_a = dist_b = 0.0
     geom_a = decode_route_coords(route_a)
     geom_b = decode_route_coords(route_b)
-    if not geom_a or not geom_b:
-        return dist_a != dist_b
-    if len(geom_a) != len(geom_b):
+    if geom_a and geom_b:
+        # ~33 m. A parallel street is farther than this; a re-encoded copy of
+        # the same carriageway is not.
+        tolerance_deg = 0.0003
+        for a, b in zip(_resample_polyline(geom_a), _resample_polyline(geom_b)):
+            if abs(a[0] - b[0]) > tolerance_deg or abs(a[1] - b[1]) > tolerance_deg:
+                return True
+        return False
+    if abs(dist_a - dist_b) >= min_distance_delta_km:
         return True
-    sample = max(1, len(geom_a) // 20)
-    for i in range(0, min(len(geom_a), len(geom_b)), sample):
-        if abs(geom_a[i][0] - geom_b[i][0]) > 0.0003 or abs(geom_a[i][1] - geom_b[i][1]) > 0.0003:
-            return True
-    return False
+    return dist_a != dist_b
+
+
+def fastest_should_leave_cameras_to_optimised(
+    *,
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    graphhopper_route: Optional[Dict[str, Any]],
+) -> bool:
+    """
+    Fastest is the time option. When GraphHopper already produced a camera-avoiding
+    ⚡ Optimised route, the Valhalla Fastest request must not apply those same
+    camera excludes — otherwise both options follow the same road.
+
+    When Optimised was not produced, Fastest keeps camera excludes so avoidance
+    is not dropped entirely.
+    """
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return False
+    return graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=True)
 
 
 def graphhopper_qualifies_as_optimised(
@@ -743,12 +808,17 @@ def ensure_optimised_camera_avoiding_route(
         traffic_multiplier=traffic_multiplier, traffic_level=traffic_level,
     )
     if entry and int(entry.get('hazard_count') or 0) <= baseline:
-        entry['camera_exclusions_applied'] = True
-        routes.append(entry)
-        logger.info(
-            f'[VALHALLA] Added Optimised route (ensure): {entry["distance_km"]:.1f}km, '
-            f'{entry.get("hazard_count", 0)} cameras (baseline {baseline})'
-        )
+        if any(not routes_are_distinct(entry, existing) for existing in routes):
+            logger.info(
+                '[VALHALLA] ensure Optimised follows the same road as an existing option — not offered'
+            )
+        else:
+            entry['camera_exclusions_applied'] = True
+            routes.append(entry)
+            logger.info(
+                f'[VALHALLA] Added Optimised route (ensure): {entry["distance_km"]:.1f}km, '
+                f'{entry.get("hazard_count", 0)} cameras (baseline {baseline})'
+            )
     elif entry:
         logger.warning(
             f'[VALHALLA] ensure Optimised: excluded route still has '

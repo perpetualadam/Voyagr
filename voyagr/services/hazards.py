@@ -623,12 +623,21 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
         return {}
 
 
+def _is_camera_hazard_type(hazard_type: str) -> bool:
+    return hazard_type == 'camera' or hazard_type.startswith('camera_')
+
+
 def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
                                      route_bbox: Optional[Dict[str, float]] = None,
                                      max_hazards: int = 100,
                                      start_lat: Optional[float] = None, start_lon: Optional[float] = None,
-                                     end_lat: Optional[float] = None, end_lon: Optional[float] = None) -> List[Dict[str, float]]:
-    """Build Valhalla exclude_locations to avoid hazards."""
+                                     end_lat: Optional[float] = None, end_lon: Optional[float] = None,
+                                     omit_camera_hazards: bool = False) -> List[Dict[str, float]]:
+    """Build Valhalla exclude_locations to avoid hazards.
+
+    ``omit_camera_hazards`` leaves cameras off this list so a separate ⚡ Optimised
+    request can own camera avoidance. Closures and other hazards stay.
+    """
     try:
         hazard_weights = {
             'avoid_point': 60.0,       # Explicit client reroute avoid (congestion/closure) - top priority
@@ -642,6 +651,8 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
         all_hazards = []
 
         for hazard_type, hazard_list in hazards.items():
+            if omit_camera_hazards and _is_camera_hazard_type(hazard_type):
+                continue
             weight = hazard_weights.get(hazard_type, 10.0)
             if hazard_type.startswith('camera_'):
                 weight = hazard_weights.get('camera', 50.0)
@@ -1188,6 +1199,7 @@ def build_prioritised_valhalla_exclude_locations(
     end_lat: float,
     end_lon: float,
     apply_caz_routing_avoidance: bool,
+    omit_camera_hazards: bool = False,
 ) -> List[Dict[str, float]]:
     """
     Assemble the Valhalla ``exclude_locations`` list for the primary /api/route
@@ -1225,7 +1237,8 @@ def build_prioritised_valhalla_exclude_locations(
             start_lat=start_lat,
             start_lon=start_lon,
             end_lat=end_lat,
-            end_lon=end_lon
+            end_lon=end_lon,
+            omit_camera_hazards=omit_camera_hazards,
         )
         if caz_excludes:
             exclude_locations = caz_excludes + [
