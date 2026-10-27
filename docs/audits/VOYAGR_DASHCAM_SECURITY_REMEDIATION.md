@@ -117,3 +117,7 @@ Overall application release remains **NO-GO**. Lane inference, legal speed-limit
 - Browser: templates/index.html, static/js/modules/navigation/dashcam-capture.js, static/js/app/supabase-auth-orchestration.js, service-worker.js.
 - Tests/CI: existing dashcam service/blueprint tests updated for verified ownership and no path disclosure; tests/test_dashcam_ownership.py (new); static/js/__tests__/dashcam-private-access.test.js and dashcam-service-worker.test.js (new); scripts/test-dashcam-session-sql.py (new); .github/workflows/ci.yml.
 - Reports: this remediation report, existing remediation plan, final technical report, and security/test-results status notes. Prior audit changes elsewhere are retained unchanged by Phase 2.
+
+## External review follow-up
+
+A subsequent investigation reproduced and fixed three browser lifecycle defects: pending startup continuing after sign-out/account change, metadata timers surviving rapid stop/start, and rollback stopping an unspecified current session. Backend ownership/session enforcement was preserved. See [VOYAGR_DASHCAM_EXTERNAL_REVIEW.md](VOYAGR_DASHCAM_EXTERNAL_REVIEW.md) for reproduction evidence, source verification, fixes and updated validation. Original Phase 2 results above remain historical; production acceptance requirements remain unchanged.

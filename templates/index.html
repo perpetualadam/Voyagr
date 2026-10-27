@@ -1957,6 +1957,9 @@
             ownerUserId: null,
             localOnly: false,
             starting: false,
+            startCancelled: false,
+            pendingMediaStream: null,
+            metadataInterval: null,
             stopping: false,
             recordingStartTime: null,
             recordingDurationInterval: null,
@@ -2011,6 +2014,12 @@
             document.getElementById('dashcamTotalRecordings').textContent = '0';
             document.getElementById('dashcamTotalSize').textContent = '0 MB';
             document.getElementById('dashcamOldestRecording').textContent = '-';
+            if (dashcamState.starting && !dashcamState.localOnly &&
+                dashcamState.ownerUserId !== event.detail.userId) {
+                dashcamState.startCancelled = true;
+                getDashcamCapture().stopMediaStreamTracks(dashcamState.pendingMediaStream);
+                dashcamState.pendingMediaStream = null;
+            }
             if (dashcamState.isRecording && !dashcamState.localOnly &&
                 dashcamState.ownerUserId !== event.detail.userId) {
                 // Stop locally; identity-pinned transport will refuse server writes.
@@ -2084,7 +2093,15 @@
             preview.style.display = stream ? 'block' : 'none';
         }
 
+        function stopDashcamMetadataCollection() {
+            if (dashcamState.metadataInterval !== null) {
+                clearInterval(dashcamState.metadataInterval);
+                dashcamState.metadataInterval = null;
+            }
+        }
+
         function releaseDashcamMedia() {
+            stopDashcamMetadataCollection();
             const DC = getDashcamCapture();
             if (DC) DC.stopMediaStreamTracks(dashcamState.mediaStream);
             else if (dashcamState.mediaStream && dashcamState.mediaStream.getTracks) {
@@ -2143,20 +2160,25 @@
             }
 
             dashcamState.starting = true;
+            dashcamState.startCancelled = false;
             let stream = null;
             let serverSessionStarted = false;
+            let startedRecordingId = null;
             try {
                 const localOnly = document.getElementById('dashcamLocalOnly').checked;
+                dashcamState.localOnly = localOnly;
                 const session = localOnly ? null : await getDashcamSession();
                 if (!localOnly && !session) {
                     sendNotification('📹 Dashcam', 'Sign in for private server storage, or select device-only recording', 'info');
                     return;
                 }
-                dashcamState.localOnly = localOnly;
                 dashcamState.ownerUserId = session ? session.user.id : null;
+                if (dashcamState.startCancelled) throw new Error('Account changed during recording startup');
                 const settings = readDashcamCaptureSettings();
                 const constraints = DC.buildMediaConstraints(settings);
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
+                dashcamState.pendingMediaStream = stream;
+                if (dashcamState.startCancelled) throw new Error('Account changed during recording startup');
 
                 const response = localOnly ? null : await dashcamFetch('/api/dashcam/start', { method: 'POST' }, dashcamState.ownerUserId);
                 const data = localOnly ? { success: true, recording_id: null } : await response.json();
@@ -2166,6 +2188,9 @@
                     return;
                 }
                 serverSessionStarted = !localOnly;
+                startedRecordingId = data.recording_id;
+                if (!localOnly) await assertDashcamResponseOwner(response);
+                if (dashcamState.startCancelled) throw new Error('Account changed during recording startup');
 
                 const mimeType = DC.pickSupportedMimeType(
                     window.MediaRecorder.isTypeSupported.bind(window.MediaRecorder)
@@ -2183,6 +2208,7 @@
                 dashcamState.currentRecordingId = data.recording_id;
                 dashcamState.recordingMetadata = [];
                 dashcamState.mediaStream = stream;
+                dashcamState.pendingMediaStream = null;
                 dashcamState.mediaRecorder = recorder;
                 dashcamState.recordingChunks = chunks;
                 dashcamState.recorderMimeType = mimeType || recorder.mimeType || 'video/webm';
@@ -2209,9 +2235,13 @@
                         url: '/api/dashcam/stop',
                         method: 'POST',
                     };
-                if (abortPlan.shouldAbort) {
+                if (abortPlan.shouldAbort && startedRecordingId) {
                     try {
-                        await dashcamFetch(abortPlan.url, { method: abortPlan.method || 'POST' }, dashcamState.ownerUserId);
+                        await dashcamFetch(abortPlan.url, {
+                            method: abortPlan.method || 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ recording_id: startedRecordingId }),
+                        }, dashcamState.ownerUserId);
                     } catch (stopError) {
                         console.error('Error rolling back dashcam session:', stopError);
                     }
@@ -2227,6 +2257,7 @@
                     : 'Error starting dashcam recording';
                 sendNotification('📹 Dashcam', message, 'error');
             } finally {
+                dashcamState.pendingMediaStream = null;
                 dashcamState.starting = false;
             }
         }
@@ -2248,6 +2279,7 @@
             const DC = getDashcamCapture();
 
             dashcamState.isRecording = false;
+            stopDashcamMetadataCollection();
             clearInterval(dashcamState.recordingDurationInterval);
 
             let blob = null;
@@ -2367,10 +2399,11 @@
         }
 
         function startDashcamMetadataCollection() {
-            // Collect GPS metadata every 5 seconds during recording
-            const metadataInterval = setInterval(async () => {
+            stopDashcamMetadataCollection();
+            // One timer per capture; stop/start cannot inherit the previous timer.
+            dashcamState.metadataInterval = setInterval(async () => {
                 if (!dashcamState.isRecording) {
-                    clearInterval(metadataInterval);
+                    stopDashcamMetadataCollection();
                     return;
                 }
 
