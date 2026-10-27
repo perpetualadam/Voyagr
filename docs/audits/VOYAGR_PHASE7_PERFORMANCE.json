@@ -1,0 +1,116 @@
+{
+  "runtime": "v24.19.0",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "platform": "linux",
+  "policy": "20 warmups; 300 samples except 30 index builds /100 complete replays. Milliseconds. Heap delta is noisy retained-allocation observation, not peak memory or mobile battery.",
+  "results": [
+    {
+      "name": "candidate_generation_100_segments",
+      "samples": 300,
+      "median_ms": 0.004776999999997145,
+      "p95_ms": 0.010635999999998091,
+      "max_ms": 0.4438510000000022
+    },
+    {
+      "name": "directional_matching_100_segments",
+      "samples": 300,
+      "median_ms": 0.011597000000001856,
+      "p95_ms": 0.049103999999999814,
+      "max_ms": 0.26055399999999906
+    },
+    {
+      "name": "index_build_100_segments",
+      "samples": 30,
+      "median_ms": 0.031897999999998206,
+      "p95_ms": 0.11345200000000233,
+      "max_ms": 0.160933
+    },
+    {
+      "name": "candidate_generation_1000_segments",
+      "samples": 300,
+      "median_ms": 0.0021330000000006066,
+      "p95_ms": 0.004367000000002008,
+      "max_ms": 0.29563699999999926
+    },
+    {
+      "name": "directional_matching_1000_segments",
+      "samples": 300,
+      "median_ms": 0.010446000000001732,
+      "p95_ms": 0.028824000000000183,
+      "max_ms": 0.6999179999999967
+    },
+    {
+      "name": "index_build_1000_segments",
+      "samples": 30,
+      "median_ms": 0.2304979999999972,
+      "p95_ms": 0.8069890000000015,
+      "max_ms": 0.9291340000000048
+    },
+    {
+      "name": "candidate_generation_10000_segments",
+      "samples": 300,
+      "median_ms": 0.0039260000000069795,
+      "p95_ms": 0.004698000000004754,
+      "max_ms": 1.8041949999999929
+    },
+    {
+      "name": "directional_matching_10000_segments",
+      "samples": 300,
+      "median_ms": 0.02327499999999816,
+      "p95_ms": 0.06769199999999387,
+      "max_ms": 0.7704139999999882
+    },
+    {
+      "name": "index_build_10000_segments",
+      "samples": 30,
+      "median_ms": 3.4264960000000144,
+      "p95_ms": 5.773325,
+      "max_ms": 7.755464999999987
+    },
+    {
+      "name": "road_attribute_lookup",
+      "samples": 300,
+      "median_ms": 0.0003609999999980573,
+      "p95_ms": 0.0004109999999855063,
+      "max_ms": 0.00266399999998157
+    },
+    {
+      "name": "hazard_association",
+      "samples": 300,
+      "median_ms": 0.0003510000000233049,
+      "p95_ms": 0.0004710000000045511,
+      "max_ms": 0.020071000000029926
+    },
+    {
+      "name": "route_progress_lookup",
+      "samples": 300,
+      "median_ms": 0.00022100000001046283,
+      "p95_ms": 0.0002800000000320324,
+      "max_ms": 0.04337500000002592
+    },
+    {
+      "name": "20_scenario_pipeline_replay",
+      "samples": 100,
+      "median_ms": 0.6927059999999869,
+      "p95_ms": 1.9512980000000084,
+      "max_ms": 2.373665000000017
+    }
+  ],
+  "memory": [
+    {
+      "segments": 100,
+      "grid_cells": 3,
+      "heap_delta_bytes": 110440
+    },
+    {
+      "segments": 1000,
+      "grid_cells": 25,
+      "heap_delta_bytes": 645464
+    },
+    {
+      "segments": 10000,
+      "grid_cells": 125,
+      "heap_delta_bytes": 1945584
+    }
+  ]
+}

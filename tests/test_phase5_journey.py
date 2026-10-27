@@ -110,11 +110,11 @@ def test_optimized_incomplete_result_does_not_fall_through_to_route_skipping_sto
 def test_camera_on_intermediate_or_final_leg_cannot_be_hidden(hazard_leg):
     from voyagr.utils.hazard_matching import HazardDataset
     out=build(2)
-    for i,l in enumerate(out['legs']): l['road_segments']=[{'begin_shape_index':0,'end_shape_index':1,'road_id':str(i)}]
+    for i,l in enumerate(out['legs']): l['road_segments']=[{'begin_shape_index':0,'end_shape_index':1,'road_id':str(i),'road_id_namespace':'phase5-fixture','observed_at_ms':1800000000000}]
     p=POINTS[hazard_leg];q=POINTS[hazard_leg+1]
-    h={'lat':(p[0]+q[0])/2,'lon':(p[1]+q[1])/2,'road_id':str(hazard_leg),'directionality':'both'}
+    h={'lat':(p[0]+q[0])/2,'lon':(p[1]+q[1])/2,'road_id':str(hazard_leg),'road_id_namespace':'phase5-fixture','observed_at_ms':1800000000000,'directionality':'both'}
     req=normalize_requirements({'avoid_caz':False,'avoidance_requirements':[{'category':'speed_cameras','enabled':True,'mode':'mandatory'}]})
-    checked=assess_response(out,req,HazardDataset({'camera_speed':[h]}))
+    checked=assess_response(out,req,HazardDataset({'camera_speed':[h]}),now=1800000000)
     assert checked['legs'][hazard_leg]['avoidance_assessment']['status']=='VIOLATED'
     assert checked['avoidance_status']=='NO_COMPLIANT_ROUTE'
     assert not checked['automatic_selection_allowed']

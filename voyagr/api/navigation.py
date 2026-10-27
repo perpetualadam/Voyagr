@@ -39,6 +39,14 @@ _speed_limit_feedback_limiter = RateLimiter(
 )
 
 navigation_bp = Blueprint('navigation', __name__)
+_road_evidence_limiter=RateLimiter(max_requests=120,window_seconds=60,key_prefix='voyagr:rl:road-evidence')
+
+
+@navigation_bp.before_request
+def limit_road_evidence_requests():
+    if request.path in ('/api/road-context','/api/road-match') and not _road_evidence_limiter.is_allowed(request.remote_addr or 'unknown'):
+        return jsonify(success=False,error='Road evidence rate limit exceeded'),429
+
 
 register_admin_before_request(
     navigation_bp,
@@ -133,6 +141,53 @@ def _fetch_osm_lane_data(lat, lon):
     except Exception as e:
         logger.debug(f"[Lane] Overpass error: {e}")
         return None
+
+
+@navigation_bp.route('/road-match', methods=['POST'])
+def get_source_road_match():
+    """Recompute from raw fixes; never accept client claims of verified identity."""
+    import time
+    from voyagr.services.road_context import local_context
+    from voyagr.utils.road_matching import RoadIndex, match_position, attribute_bundle
+    if request.content_length is None or request.content_length>8192:
+        return jsonify(success=False,error='Bounded GPS body required'),400
+    data=request.get_json(silent=True)
+    if not isinstance(data,dict) or not isinstance(data.get('position'),dict):
+        return jsonify(success=False,error='GPS position required'),400
+    position=data['position'];coords=position.get('coords')
+    if not isinstance(coords,dict):return jsonify(success=False,error='GPS coordinates required'),400
+    from voyagr.utils.validation import validate_coordinates
+    p=validate_coordinates(f"{coords.get('latitude')},{coords.get('longitude')}")
+    if not p:return jsonify(success=False,error='Valid coordinates required'),400
+    now=time.time()*1000;vehicle=data.get('vehicle_type','unknown');context=local_context(*p,vehicle=vehicle,now=now)
+    index=RoadIndex(context or {})
+    previous=None
+    if isinstance(data.get('previous_position'),dict) and isinstance(data['previous_position'].get('coords'),dict):
+        previous=match_position(data['previous_position'],index,now=now,vehicle=vehicle)
+    match=match_position(position,index,previous=previous,now=now,vehicle=vehicle)
+    bundle=None
+    if context and match.get('source_road_index') is not None:
+        bundle=attribute_bundle(context['roads'][match['source_road_index']],match,vehicle=vehicle,now=now)
+    response=jsonify(success=True,road_match=match,attributes=bundle)
+    response.headers['Cache-Control']='no-store'
+    return response
+
+
+@navigation_bp.route('/road-context', methods=['POST'])
+def get_road_context():
+    """Bounded source data only; request road IDs/source paths cannot grant trust."""
+    from voyagr.services.road_context import local_context
+    from voyagr.utils.validation import validate_coordinates
+    if request.content_length is None or request.content_length>2048:return jsonify(success=False,error='Bounded position body required'),400
+    data=request.get_json(silent=True)
+    if not isinstance(data,dict):return jsonify(success=False,error='Position required'),400
+    coordinates=validate_coordinates(f"{data.get('lat','')},{data.get('lon','')}")
+    if not coordinates:return jsonify(success=False,error='Valid coordinates required'),400
+    vehicle=data.get('vehicle_type','unknown')
+    context=local_context(*coordinates,vehicle=vehicle)
+    response=jsonify(success=True,context=context,evidence_status='AVAILABLE' if context else 'UNMATCHED')
+    response.headers['Cache-Control']='no-store'
+    return response
 
 
 @navigation_bp.route('/lane-guidance', methods=['GET'])

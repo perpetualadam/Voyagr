@@ -24,7 +24,7 @@ def requirements(category='speed_cameras', mode='mandatory'):
 def route(coords=MAIN, road='UK-main', source='Valhalla', minutes=10):
     return {'id':road, 'geometry':coords, 'geometry_precision':6,'source':source,
             'distance_km':2,'duration_minutes':minutes,'maneuvers':[],
-            'road_segments':[{'begin_shape_index':0,'end_shape_index':len(coords)-1,'road_id':road,'level':0}]}
+            'road_segments':[{'begin_shape_index':0,'end_shape_index':len(coords)-1,'road_id':road,'road_id_namespace':'synthetic-fixture','observed_at_ms':NOW*1000,'level':0}]}
 
 
 def dataset(category='speed_cameras', items=(), status='AVAILABLE', retrieved_at=NOW):
@@ -35,7 +35,7 @@ def dataset(category='speed_cameras', items=(), status='AVAILABLE', retrieved_at
 
 
 def hazard(**kw):
-    return dict(lat=53.525,lon=-1.13,road_id='UK-main',travel_bearing_deg=0,id='camera-1',**kw)
+    return dict(lat=53.525,lon=-1.13,road_id='UK-main',road_id_namespace='synthetic-fixture',observed_at_ms=NOW*1000,travel_bearing_deg=0,id='camera-1',**kw)
 
 
 def result(category='speed_cameras', items=(), r=None, status='AVAILABLE'):

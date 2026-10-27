@@ -157,6 +157,19 @@
         if (roundaboutExitCount === undefined) roundaboutExitCount = 0;
         if (guidanceStepIndex === undefined) guidanceStepIndex = null;
 
+        if (root.VoyagrRoadMatchOrchestration) {
+            var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
+            var evidence=bundle && bundle.lanes[maneuver];
+            // Native provider lanes require a typed match to their active route road.
+            var match=root.VoyagrRoadMatchOrchestration.getSnapshot();
+            var provider=match && match.attributes_allowed && match.route_relation==='MATCHED' ? getRoutingManeuverLanes(guidanceStepIndex) : null;
+            var hybrid=LG().buildHybridLaneGuidance({routingManeuverLanes:provider,apiData:evidence,
+                maneuver:maneuver,distanceToManeuver:LG().computeDistanceToManeuverMeters(lat,lon,rt().getCurrentRouteSteps(),guidanceStepIndex!=null?guidanceStepIndex:rt().getCurrentStepIndex(),rt().getRoutePolyline(),rt().call.calculateDistanceMeters),roundaboutExitCount:roundaboutExitCount});
+            clearLockedLaneGuidance();
+            renderLaneGuidanceUI(hybrid);
+            return;
+        }
+
         const requestSteps=rt().getCurrentRouteSteps();
         const resolvedStepIndex = guidanceStepIndex != null
             ? guidanceStepIndex
