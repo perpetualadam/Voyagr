@@ -62,6 +62,7 @@ class RouteRequestParams:
     end_lon: float
     force_refresh: bool
     is_reroute: bool
+    preserve_stop_order: bool = False
 
 
 def parse_route_request(data: Dict[str, Any]) -> RouteRequestParams:
@@ -201,4 +202,5 @@ def parse_route_request(data: Dict[str, Any]) -> RouteRequestParams:
         end_lon=end_lon,
         force_refresh=force_refresh,
         is_reroute=is_reroute,
+        preserve_stop_order=data.get('preserve_stop_order') is True,
     )

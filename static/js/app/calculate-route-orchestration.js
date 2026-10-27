@@ -535,6 +535,7 @@
         console.log(requestLog.multiDropLogMessage);
 
         return fetch(fetchPlan.apiPath, {
+            ...(integrity ? integrity.fetchOptions(ticket) : {}),
             method: fetchPlan.method,
             headers: fetchPlan.headers,
             body: JSON.stringify(integrity ? integrity.augment(fetchPlan.body, localStorage) : fetchPlan.body),
@@ -572,7 +573,7 @@
                     RR.buildCalculateRouteFetchErrorApplyPlan(error),
                     error
                 );
-            });
+            }).finally(function() { if (integrity) integrity.finish(ticket); });
     }
 
     function bind(nextRuntime) {

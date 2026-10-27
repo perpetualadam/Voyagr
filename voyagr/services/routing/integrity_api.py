@@ -18,6 +18,8 @@ def register_avoidance_integrity(app):
     @app.before_request
     def normalize_avoidance_contract():
         if request.path not in PATHS or request.method != 'POST': return None
+        from voyagr.utils.request_budget import RoutingBudget
+        g.routing_budget=RoutingBudget(30)
         data = request.get_json(silent=True)
         if not isinstance(data,dict): return None  # Existing endpoint handles body validation.
         try:
@@ -39,6 +41,11 @@ def register_avoidance_integrity(app):
 
     @app.after_request
     def assess_navigation_response(response):
+        budget=getattr(g,'routing_budget',None)
+        if budget and budget.remaining()<=0:
+            failure=jsonify(success=False,error='Routing request deadline exceeded; current route retained.',error_code='ROUTING_DEADLINE_EXCEEDED',automatic_selection_allowed=False)
+            failure.status_code=504
+            return failure
         requirements = getattr(g,'route_avoidance_requirements',None)
         if requirements is None or response.status_code>=400 or not response.is_json: return response
         payload = response.get_json(silent=True)
@@ -56,16 +63,32 @@ def register_avoidance_integrity(app):
             except Exception:
                 hazards = {}
         try:
-            result = assess_response(payload, requirements, hazards)
+            raw=request.get_json(silent=True) or {}
+            visits=payload.get('ordered_stops') if payload.get('multi_drop') else list(raw.get('via_points') or [])+list(raw.get('stops') or [])
+            endpoints=None
+            if visits:
+                from voyagr.utils.validation import validate_coordinates
+                start=validate_coordinates(raw.get('start',''))
+                end=start if raw.get('round_trip') else validate_coordinates(raw.get('end',''))
+                if start and end: endpoints=(start,end)
+            result = assess_response(payload, requirements, hazards, waypoints=visits,endpoints=endpoints)
+
         except Exception as error:
             # Verification failure must not replay a cached/provider claim of compliance.
             logger.error('Route compliance unavailable (%s)',type(error).__name__)
             result = dict(payload, automatic_selection_allowed=False, avoidance_status='UNVERIFIED',
                           avoidance_requirements=requirements, routing_degraded=True,
                           avoidance_assessment={'version':1,'status':'UNVERIFIED','requires_acceptance':True,
-                                                'automatic_selection_allowed':False,'requirements':requirements},
+                                                'automatic_selection_allowed':False,'geometry_valid':False,'requirements':requirements},
                           routing_warning='Avoidance verification unavailable; do not automatically select this route.')
             for route in result.get('routes',[]): route['avoidance_assessment']=result['avoidance_assessment']
+        if budget and budget.remaining()<=0:
+            failure=jsonify(success=False,error='Routing deadline exceeded during validation.',error_code='ROUTING_DEADLINE_EXCEEDED',automatic_selection_allowed=False)
+            failure.status_code=504
+            return failure
         response.set_data(app.json.dumps(result))
+        if budget:
+            response.headers['Server-Timing']=f'routing;dur={(budget.clock()-budget.started)*1000:.1f}, provider;dur={budget.transport_seconds*1000:.1f}'
+            response.headers['X-Routing-HTTP-Calls']=str(budget.calls)
         response.headers['Cache-Control']='no-store'
         return response

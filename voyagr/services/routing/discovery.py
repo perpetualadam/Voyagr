@@ -8,6 +8,8 @@ with hazard avoidance, when fewer than three distinct routes were found so far.
 
 from __future__ import annotations
 
+from voyagr.utils import request_budget as route_transport
+
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -155,7 +157,7 @@ def append_distinct_valhalla_route_types(
                     end_lat=end_lat, end_lon=end_lon,
                     exclude_locations=baseline_cameras[:50],
                 )
-                disc_response = requests.post(url, json=disc_payload, timeout=10, headers=headers)
+                disc_response = route_transport.post(url, json=disc_payload, timeout=10, headers=headers)
                 if disc_response.status_code == 200:
                     disc_data = disc_response.json()
                     if 'trip' in disc_data and 'legs' in disc_data['trip']:

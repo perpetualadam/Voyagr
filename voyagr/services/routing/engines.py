@@ -8,6 +8,7 @@ Contains:
 - get_traffic_duration_multiplier: Traffic-based ETA adjustment
 """
 
+from voyagr.utils import request_budget as route_transport
 import logging
 import os
 import threading
@@ -98,7 +99,7 @@ class ParallelRoutingEngine:
                 "ch.disable": "true"
             }
             headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
-            response = requests.get(url, params=params, timeout=10, headers=headers)
+            response = route_transport.get(url, params=params, timeout=10, headers=headers)
             elapsed = (time.time() - start_time) * 1000
 
             with self.lock:
@@ -135,7 +136,7 @@ class ParallelRoutingEngine:
                 "alternates": 3
             }
             headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Content-Type': 'application/json', 'Accept': 'application/json'}
-            response = requests.post(url, json=payload, timeout=10, headers=headers)
+            response = route_transport.post(url, json=payload, timeout=10, headers=headers)
             elapsed = (time.time() - start_time) * 1000
 
             with self.lock:
@@ -168,7 +169,7 @@ class ParallelRoutingEngine:
             url = f"{OSRM_URL}/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
             params = {'overview': 'full', 'alternatives': 'true', 'steps': 'true'}
             headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
-            response = requests.get(url, params=params, timeout=10, headers=headers)
+            response = route_transport.get(url, params=params, timeout=10, headers=headers)
             elapsed = (time.time() - start_time) * 1000
 
             with self.lock:
@@ -357,7 +358,7 @@ def route_with_graphhopper(
             # some builds, contraction hierarchies stay on, and the custom model
             # never blocks the camera areas.
             payload["ch.disable"] = True
-            response = requests.post(
+            response = route_transport.post(
                 url,
                 params={"ch.disable": "true"},
                 json=payload,
@@ -395,21 +396,21 @@ def route_with_graphhopper(
                 "elevation": "false",
                 "details": ["max_speed", "lanes", "road_class"],
             }
-            response = requests.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+            response = route_transport.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
             # Some deployments use `points` instead of `point` (historical / custom setups).
             if response.status_code != 200:
                 params_points = dict(params_point)
                 params_points.pop("point", None)
                 params_points["points"] = [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"]
-                response = requests.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+                response = route_transport.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
             # If GET fails, try POST without a custom model (some deployments accept JSON POST only).
             if response.status_code != 200:
                 logger.warning(f"[GRAPHHOPPER] GET failed (HTTP {response.status_code}); retrying POST(no custom_model)")
                 payload_no_model = dict(payload)
                 payload_no_model.pop("custom_model", None)
-                response = requests.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
+                response = route_transport.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
 
         if response.status_code == 200:
             data = response.json()
@@ -565,7 +566,7 @@ def get_traffic_duration_multiplier(lat: float, lon: float) -> tuple:
             'unit': 'KMPH'
         }
 
-        response = requests.get(url, params=params, timeout=3)
+        response = route_transport.get(url, params=params, timeout=3)
         if response.status_code == 200:
             data = response.json()
             flow_data = data.get('flowSegmentData', {})

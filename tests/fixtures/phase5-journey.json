@@ -1,0 +1,568 @@
+{
+  "success": true,
+  "legs": [
+    {
+      "leg_index": 0,
+      "from": {
+        "lat": 53.52,
+        "lon": -1.13
+      },
+      "to": {
+        "lat": 53.522,
+        "lon": -1.129
+      },
+      "distance_km": 1.25,
+      "duration_seconds": 120,
+      "duration_minutes": 2.0,
+      "geometry": "_graeB~_~cA_|Bo}@",
+      "geometry_precision": 6,
+      "maneuvers": [
+        {
+          "instruction": "Start",
+          "type": 1,
+          "begin_shape_index": 0,
+          "end_shape_index": 1
+        },
+        {
+          "instruction": "Arrive",
+          "type": 4,
+          "begin_shape_index": 1,
+          "end_shape_index": 1
+        }
+      ],
+      "source": "Valhalla",
+      "eta": "2026-10-27T15:59:30.854829",
+      "stop": {
+        "name": "Stop 0",
+        "duration_minutes": 1,
+        "sequence": 1,
+        "original_index": 0,
+        "time_window_ok": true
+      }
+    },
+    {
+      "leg_index": 1,
+      "from": {
+        "lat": 53.522,
+        "lon": -1.129
+      },
+      "to": {
+        "lat": 53.524,
+        "lon": -1.128
+      },
+      "distance_km": 1.25,
+      "duration_seconds": 120,
+      "duration_minutes": 2.0,
+      "geometry": "_dvaeBna|cA_|Bo}@",
+      "geometry_precision": 6,
+      "maneuvers": [
+        {
+          "instruction": "Start",
+          "type": 1,
+          "begin_shape_index": 0,
+          "end_shape_index": 1
+        },
+        {
+          "instruction": "Arrive",
+          "type": 4,
+          "begin_shape_index": 1,
+          "end_shape_index": 1
+        }
+      ],
+      "source": "Valhalla",
+      "eta": "2026-10-27T16:02:30.854870",
+      "stop": {
+        "name": "Stop 1",
+        "duration_minutes": 1,
+        "sequence": 2,
+        "original_index": 1,
+        "time_window_ok": true
+      }
+    },
+    {
+      "leg_index": 2,
+      "from": {
+        "lat": 53.524,
+        "lon": -1.128
+      },
+      "to": {
+        "lat": 53.526,
+        "lon": -1.127
+      },
+      "distance_km": 1.25,
+      "duration_seconds": 120,
+      "duration_minutes": 2.0,
+      "geometry": "_azaeB~bzcA_|Bo}@",
+      "geometry_precision": 6,
+      "maneuvers": [
+        {
+          "instruction": "Start",
+          "type": 1,
+          "begin_shape_index": 0,
+          "end_shape_index": 1
+        },
+        {
+          "instruction": "Arrive",
+          "type": 4,
+          "begin_shape_index": 1,
+          "end_shape_index": 1
+        }
+      ],
+      "source": "Valhalla",
+      "eta": "2026-10-27T16:05:30.854894",
+      "stop": {
+        "name": "Stop 2",
+        "duration_minutes": 1,
+        "sequence": 3,
+        "original_index": 2,
+        "time_window_ok": true
+      }
+    },
+    {
+      "leg_index": 3,
+      "from": {
+        "lat": 53.526,
+        "lon": -1.127
+      },
+      "to": {
+        "lat": 53.528,
+        "lon": -1.126
+      },
+      "distance_km": 1.25,
+      "duration_seconds": 120,
+      "duration_minutes": 2.0,
+      "geometry": "_~}aeBndxcA_|Bo}@",
+      "geometry_precision": 6,
+      "maneuvers": [
+        {
+          "instruction": "Start",
+          "type": 1,
+          "begin_shape_index": 0,
+          "end_shape_index": 1
+        },
+        {
+          "instruction": "Arrive",
+          "type": 4,
+          "begin_shape_index": 1,
+          "end_shape_index": 1
+        }
+      ],
+      "source": "Valhalla",
+      "eta": "2026-10-27T16:08:30.854914"
+    }
+  ],
+  "total_distance_km": 5.0,
+  "total_duration_seconds": 660,
+  "total_duration_minutes": 11.0,
+  "total_stop_time_minutes": 3,
+  "stop_count": 3,
+  "optimized": false,
+  "round_trip": false,
+  "ordered_stops": [
+    {
+      "lat": 53.522,
+      "lon": -1.129,
+      "name": "Stop 0",
+      "duration": 1,
+      "original_index": 0,
+      "sequence": 1
+    },
+    {
+      "lat": 53.524,
+      "lon": -1.128,
+      "name": "Stop 1",
+      "duration": 1,
+      "original_index": 1,
+      "sequence": 2
+    },
+    {
+      "lat": 53.526,
+      "lon": -1.127,
+      "name": "Stop 2",
+      "duration": 1,
+      "original_index": 2,
+      "sequence": 3
+    }
+  ],
+  "all_geometry": [
+    "_graeB~_~cA_|Bo}@",
+    "_dvaeBna|cA_|Bo}@",
+    "_azaeB~bzcA_|Bo}@",
+    "_~}aeBndxcA_|Bo}@"
+  ],
+  "all_maneuvers": [
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 0,
+      "end_shape_index": 1,
+      "leg_index": 0
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 1,
+      "end_shape_index": 1,
+      "leg_index": 0,
+      "intermediate_arrival": true
+    },
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 1,
+      "end_shape_index": 2,
+      "leg_index": 1
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 2,
+      "end_shape_index": 2,
+      "leg_index": 1,
+      "intermediate_arrival": true
+    },
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 2,
+      "end_shape_index": 3,
+      "leg_index": 2
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 3,
+      "end_shape_index": 3,
+      "leg_index": 2,
+      "intermediate_arrival": true
+    },
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 3,
+      "end_shape_index": 4,
+      "leg_index": 3
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 4,
+      "end_shape_index": 4,
+      "leg_index": 3
+    }
+  ],
+  "optimization": null,
+  "geometry": "_graeB~_~cA_|Bo}@_|Bo}@_|Bo}@_|Bo}@",
+  "geometry_precision": 6,
+  "maneuvers": [
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 0,
+      "end_shape_index": 1,
+      "leg_index": 0
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 1,
+      "end_shape_index": 1,
+      "leg_index": 0,
+      "intermediate_arrival": true
+    },
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 1,
+      "end_shape_index": 2,
+      "leg_index": 1
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 2,
+      "end_shape_index": 2,
+      "leg_index": 1,
+      "intermediate_arrival": true
+    },
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 2,
+      "end_shape_index": 3,
+      "leg_index": 2
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 3,
+      "end_shape_index": 3,
+      "leg_index": 2,
+      "intermediate_arrival": true
+    },
+    {
+      "instruction": "Start",
+      "type": 1,
+      "begin_shape_index": 3,
+      "end_shape_index": 4,
+      "leg_index": 3
+    },
+    {
+      "instruction": "Arrive",
+      "type": 4,
+      "begin_shape_index": 4,
+      "end_shape_index": 4,
+      "leg_index": 3
+    }
+  ],
+  "leg_geometry_ranges": [
+    {
+      "leg_index": 0,
+      "begin_shape_index": 0,
+      "end_shape_index": 1,
+      "stop": {
+        "name": "Stop 0",
+        "duration_minutes": 1,
+        "sequence": 1,
+        "original_index": 0,
+        "time_window_ok": true
+      },
+      "waypoint": {
+        "lat": 53.522,
+        "lon": -1.129
+      }
+    },
+    {
+      "leg_index": 1,
+      "begin_shape_index": 1,
+      "end_shape_index": 2,
+      "stop": {
+        "name": "Stop 1",
+        "duration_minutes": 1,
+        "sequence": 2,
+        "original_index": 1,
+        "time_window_ok": true
+      },
+      "waypoint": {
+        "lat": 53.524,
+        "lon": -1.128
+      }
+    },
+    {
+      "leg_index": 2,
+      "begin_shape_index": 2,
+      "end_shape_index": 3,
+      "stop": {
+        "name": "Stop 2",
+        "duration_minutes": 1,
+        "sequence": 3,
+        "original_index": 2,
+        "time_window_ok": true
+      },
+      "waypoint": {
+        "lat": 53.526,
+        "lon": -1.127
+      }
+    },
+    {
+      "leg_index": 3,
+      "begin_shape_index": 3,
+      "end_shape_index": 4,
+      "stop": null,
+      "waypoint": {
+        "lat": 53.528,
+        "lon": -1.126
+      }
+    }
+  ],
+  "geometry_complete": true,
+  "avoidance_assessment": {
+    "version": 1,
+    "status": "SATISFIED",
+    "requirements": [
+      {
+        "category": "speed_cameras",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "red_light_cameras",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "other_cameras",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "traffic_lights",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "railway_crossings",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "other_hazards",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "avoid_points",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "tolls",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "caz",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "congestion_charging",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "motorways",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "ferries",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      },
+      {
+        "category": "unpaved",
+        "enabled": false,
+        "mode": "preference",
+        "scope": "route",
+        "status": "SATISFIED",
+        "coverage": "UNKNOWN",
+        "verification": "disabled",
+        "engine": "Valhalla",
+        "engine_capability": "not_requested",
+        "conflicts": 0,
+        "uncertain_matches": 0
+      }
+    ],
+    "request_fingerprint": "b11bf0836a39c8700aead1ea",
+    "engine_capabilities": {
+      "point_exclusions": "requested",
+      "penalties": "requested",
+      "polygons": "not_used",
+      "verified_installation": false
+    },
+    "automatic_selection_allowed": true,
+    "requires_acceptance": false,
+    "geometry_valid": true,
+    "geometry_binding": "aa2620ed",
+    "checked_at": 1793116650.8553538,
+    "claim": "avoidance_disabled",
+    "scope": "all_legs"
+  }
+}

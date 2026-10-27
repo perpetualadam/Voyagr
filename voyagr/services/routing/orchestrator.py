@@ -9,6 +9,8 @@ return/jsonify-heavy and require live-engine verification to move safely).
 
 from __future__ import annotations
 
+from voyagr.utils import request_budget as route_transport
+
 import logging
 import re
 from dataclasses import dataclass
@@ -56,7 +58,7 @@ def post_valhalla_route(url: str, payload: Dict[str, Any], headers: Dict[str, st
     HTTP status handling and JSON parsing stay in the caller.
     """
     try:
-        resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
+        resp = route_transport.post(url, json=payload, timeout=timeout, headers=headers)
         return ValhallaPostOutcome(resp, None, False)
     except requests.exceptions.Timeout:
         return ValhallaPostOutcome(None, None, True)

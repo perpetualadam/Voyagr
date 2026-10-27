@@ -814,6 +814,7 @@
         try {
             const routeRequest = rt().buildRouteRequest(rt().getCurrentLat(), rt().getCurrentLon(), entry.destination, avoidPoints);
             const response = await fetch(entry.fetchOrch.apiPath, {
+                ...(integrity ? integrity.fetchOptions(ticket) : {}),
                 method: entry.fetchOrch.method,
                 headers: entry.fetchOrch.headers,
                 body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage) : routeRequest),
@@ -841,7 +842,7 @@
         } catch (error) {
             if (integrity && !integrity.current(ticket,localStorage)) return;
             console.error(entry.errorLogPrefix, error);
-        }
+        } finally { if (integrity) integrity.finish(ticket); }
     }
 
     /**

@@ -9,6 +9,7 @@ Provides TSP-style optimization for routes with multiple stops using:
 - Traffic-aware distance matrix via routing engine
 """
 
+from voyagr.utils import request_budget as route_transport
 import logging
 import math
 import os
@@ -98,7 +99,7 @@ def _valhalla_matrix(locations: List[Dict[str, float]]) -> Optional[List[List[fl
             "targets": sources,
             "costing": "auto",
         }
-        resp = requests.post(url, json=payload, timeout=15,
+        resp = route_transport.post(url, json=payload, timeout=15,
                              headers={"Content-Type": "application/json",
                                       "User-Agent": "Voyagr-PWA/1.0"})
         if resp.status_code == 200:
@@ -396,7 +397,7 @@ def build_multidrop_route(
         for i, s in enumerate(stops):
             ordered_stops.append({
                 **s,
-                "original_index": i,
+                "original_index": s.get("original_index",i),
                 "sequence": i + 1,
             })
         opt_result = None
@@ -474,6 +475,8 @@ def build_multidrop_route(
             "eta": arrival_dt.isoformat() if arrival_dt else None,
         }
 
+        if leg_data.get('road_segments'):
+            leg_info['road_segments']=leg_data['road_segments']
         if stop_info:
             leg_info["stop"] = {
                 "name": stop_info.get("name", f"Stop {i + 1}"),
@@ -490,7 +493,7 @@ def build_multidrop_route(
         if leg_data.get("maneuvers"):
             all_maneuvers.extend(leg_data["maneuvers"])
 
-    return {
+    result = {
         "success": True,
         "legs": legs,
         "total_distance_km": round(total_distance_km, 2),
@@ -505,6 +508,20 @@ def build_multidrop_route(
         "all_maneuvers": all_maneuvers,
         "optimization": opt_result if opt_result else None,
     }
+    from voyagr.services.routing.journey_geometry import stitch_legs, decode_geometry, IncompleteJourney
+    import polyline
+    try:
+        result.update(stitch_legs(legs))
+        result['all_maneuvers'] = result['maneuvers']
+        for leg in legs:
+            leg['source_geometry_precision']=leg.get('geometry_precision',6)
+            leg['geometry']=polyline.encode(decode_geometry(leg['geometry'],leg.get('geometry_precision',6)),precision=6)
+            leg['geometry_precision']=6
+        result['all_geometry']=[leg['geometry'] for leg in legs]
+    except (IncompleteJourney, KeyError, TypeError, ValueError):
+        result.update(success=False, error='Journey geometry is incomplete; recalculate before navigation.',
+                      error_code='INCOMPLETE_ROUTE', geometry_complete=False, automatic_selection_allowed=False)
+    return result
 
 
 def _route_leg(
@@ -693,7 +710,7 @@ def _valhalla_leg(
             if auto_opts:
                 payload["costing_options"] = {costing: auto_opts}
 
-        resp = requests.post(url, json=payload, timeout=10,
+        resp = route_transport.post(url, json=payload, timeout=10,
                              headers={"Content-Type": "application/json",
                                       "User-Agent": "Voyagr-PWA/1.0"})
 
@@ -758,7 +775,7 @@ def _osrm_leg(
                f"{to_loc['lon']},{to_loc['lat']}"
                f"?overview=full&steps=true")
 
-        resp = requests.get(url, timeout=10,
+        resp = route_transport.get(url, timeout=10,
                             headers={"User-Agent": "Voyagr-PWA/1.0"})
 
         if resp.status_code == 200:
@@ -955,7 +972,7 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
     routing_mode = params.routing_mode
 
     all_intermediate = list(via_points) + list(stops)
-    if not (params.optimize_stop_order and len(all_intermediate) >= 2):
+    if not ((params.optimize_stop_order and len(all_intermediate) >= 2) or (params.preserve_stop_order and all_intermediate)):
         return None
 
     logger.info(f"[ROUTE] Multi-drop optimization requested with {len(all_intermediate)} stops")
@@ -968,6 +985,7 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
             'name': item.get('name', 'Stop'),
             'duration': item.get('duration', 0),
             'type': item.get('type', 'via'),
+            'original_index':item.get('original_index',len(md_stops)),
         })
 
     md_exclude = []
@@ -1047,7 +1065,7 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
         start={'lat': start_lat, 'lon': start_lon},
         end={'lat': end_lat, 'lon': end_lon},
         stops=md_stops,
-        optimize_order=True,
+        optimize_order=not params.preserve_stop_order,
         round_trip=params.round_trip,
         routing_mode=routing_mode,
         enable_hazard_avoidance=enable_hazard_avoidance,
@@ -1073,7 +1091,7 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
 
     if not md_result.get('success'):
         logger.warning("[MULTI-DROP] Optimization failed, falling through to standard routing")
-        return None
+        return md_result if md_result.get('error_code') == 'INCOMPLETE_ROUTE' else None
 
     md_result['distance'] = f"{md_result['total_distance_km']:.2f} km"
     md_result['time'] = f"{md_result['total_duration_minutes']:.0f} minutes"
@@ -1084,22 +1102,14 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
     md_result['source'] = 'Voyagr Multi-Drop'
     md_result['start_lat'] = start_lat
     md_result['start_lon'] = start_lon
-    md_result['end_lat'] = end_lat
-    md_result['end_lon'] = end_lon
+    md_result['end_lat'] = start_lat if params.round_trip else end_lat
+    md_result['end_lon'] = start_lon if params.round_trip else end_lon
     md_result['cached'] = False
     md_result['multi_drop'] = True
 
-    geometry = md_result.get('all_geometry', [])
-    first_geom = geometry[0] if geometry else None
-    first_precision = md_result['legs'][0].get('geometry_precision', 6) if md_result.get('legs') else 6
-
-    if first_geom:
-        md_result['geometry'] = first_geom
-        md_result['geometry_precision'] = first_precision
-
-    maneuvers = md_result.get('all_maneuvers', [])
-    if maneuvers:
-        md_result['maneuvers'] = maneuvers
+    journey_geometry = md_result.get('geometry')
+    journey_precision = md_result.get('geometry_precision', 6)
+    maneuvers = md_result.get('maneuvers', md_result.get('all_maneuvers', []))
 
     # Build a routes array for compatibility with route comparison UI
     md_result['routes'] = [{
@@ -1113,8 +1123,10 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
         'caz_cost': 0,
         'hazard_count': 0,
         'hazard_penalty_seconds': 0,
-        'geometry': first_geom,
-        'geometry_precision': first_precision,
+        'geometry': journey_geometry,
+        'geometry_precision': journey_precision,
+        'leg_geometry_ranges': md_result.get('leg_geometry_ranges', []),
+        'geometry_complete': md_result.get('geometry_complete', False),
         'maneuvers': maneuvers,
         'source': 'Voyagr Multi-Drop',
     }]

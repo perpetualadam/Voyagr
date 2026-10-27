@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from voyagr.utils import request_budget as route_transport
+
 import logging
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -214,7 +216,7 @@ def fetch_valhalla_auto_json(
         attempts.append(base_payload)
     for payload in attempts:
         try:
-            resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
+            resp = route_transport.post(url, json=payload, timeout=timeout, headers=headers)
             if resp.status_code != 200:
                 continue
             data = resp.json()
@@ -278,7 +280,7 @@ def fetch_valhalla_auto_costing_preference_json(
 
     for attempt_payload in attempts:
         try:
-            resp = requests.post(url, json=attempt_payload, timeout=timeout, headers=headers)
+            resp = route_transport.post(url, json=attempt_payload, timeout=timeout, headers=headers)
             if resp.status_code != 200:
                 continue
             data = resp.json()
@@ -508,7 +510,7 @@ def fetch_valhalla_auto_shorter_json(
         attempts.append(base_payload)
     for payload in attempts:
         try:
-            resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
+            resp = route_transport.post(url, json=payload, timeout=timeout, headers=headers)
             if resp.status_code != 200:
                 continue
             data = resp.json()

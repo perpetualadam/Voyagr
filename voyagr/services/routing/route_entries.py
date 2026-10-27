@@ -232,7 +232,9 @@ def build_valhalla_route_entry(
     base_time_minutes = summary.get('time', 0) / 60
     time_minutes = base_time_minutes * traffic_multiplier
 
-    geometry = _first_leg_shape(trip)
+    from voyagr.services.routing.journey_geometry import valhalla_journey
+    journey = valhalla_journey(trip,length_in_meters=maneuver_length_in_meters)
+    geometry = journey['geometry'] if journey else _first_leg_shape(trip)
     route_coords = decode_route_geometry(geometry, precision=6)
 
     costs = cost_calculator.calculate_costs(
@@ -248,7 +250,7 @@ def build_valhalla_route_entry(
         hazard_penalty, hazard_count = score_route_by_hazards(geometry, hazards)
         hazards_list = get_hazards_on_route(geometry, hazards)
 
-    maneuvers = extract_valhalla_maneuvers(trip, length_in_meters=maneuver_length_in_meters)
+    maneuvers = journey['maneuvers'] if journey else extract_valhalla_maneuvers(trip, length_in_meters=maneuver_length_in_meters)
 
     entry: Dict[str, Any] = {
         'id': route_id,
@@ -268,6 +270,8 @@ def build_valhalla_route_entry(
         'maneuvers': maneuvers,
         'source': 'Valhalla',
     }
+    if journey:
+        entry.update(journey)
     if include_traffic_fields:
         entry['base_duration_minutes'] = round(base_time_minutes, 0)
         entry['traffic_multiplier'] = round(traffic_multiplier, 2)
