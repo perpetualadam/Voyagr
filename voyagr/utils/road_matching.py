@@ -47,7 +47,7 @@ class RoadIndex:
     """Bounded grid of source segments; no network in the GPS hot path."""
     def __init__(self,dataset):
         self.dataset=dataset if isinstance(dataset,dict) else {}
-        self.grid={};self.segments=[];self.invalid=False;refs=0;graph_ids={}
+        self.grid={};self.segments=[];self.invalid=False;refs=0;graph_ids={};way_ids=set();node_coordinates={}
         restrictions=self.dataset.get('restrictions',[])
         if not isinstance(restrictions,list) or len(restrictions)>10000 or any(not isinstance(r,dict) for r in restrictions):self.invalid=True;return
         roads=self.dataset.get('roads',[])
@@ -63,6 +63,15 @@ class RoadIndex:
             if not isinstance(g,list) or not 2<=len(g)<=20000 or any(not isinstance(p,list) or len(p)!=2 or not all(finite(v) for v in p) or abs(p[0])>90 or abs(p[1])>180 for p in g):
                 self.invalid=True;continue
             if nodes and (not isinstance(nodes,list) or len(nodes)!=len(g)):self.invalid=True;continue
+            way=road.get('osm_way_id')
+            if way is not None and road.get('graph_edge_id') is None:
+                if str(way) in way_ids:self.invalid=True;continue
+                way_ids.add(str(way))
+            for node,point in zip(nodes,g):
+                if not isinstance(node,(str,int)) or isinstance(node,bool):self.invalid=True;return
+                key=str(node)
+                if key in node_coordinates and any(abs(a-b)>1e-7 for a,b in zip(node_coordinates[key],point)):self.invalid=True;return
+                node_coordinates[key]=point
             along=0
             for i,(a,b) in enumerate(zip(g,g[1:])):
                 length=distance(a,b)
@@ -138,7 +147,7 @@ def match_position(position,index,*,previous=None,now,route_generation=0,active_
             if cost>max(10,c.get('speed') if finite(c.get('speed')) else 0)*gap+2*c['accuracy']+20:return outcome('AMBIGUOUS','Connectivity exists only beyond plausible travel distance')
             for restriction in d.get('restrictions',[]):
                 if str(restriction.get('from_way'))==str(prev.get('osm_way_id')) and str(restriction.get('via_node')) in shared:
-                    target=str(road.get('osm_way_id'));kind=restriction.get('restriction','')
+                    target=str(road.get('osm_way_id'));kind=restriction.get('restriction') or ''
                     if kind.startswith('no_') and str(restriction.get('to_way'))==target or kind.startswith('only_') and str(restriction.get('to_way'))!=target:return outcome('AMBIGUOUS','Source turn restriction conflicts')
         if prev.get('matched_coordinate') and distance(prev['matched_coordinate'],best['coordinate'])>max(10,c.get('speed') if finite(c.get('speed')) else 0)*gap+2*c['accuracy']+20:return outcome('AMBIGUOUS','Implausible transition distance')
         if same_road(prev,road) and prev.get('direction')!=best['direction']:continuous=False

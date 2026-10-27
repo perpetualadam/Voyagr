@@ -29,6 +29,10 @@ def load_context():
             if not isinstance(bounds,list) or len(bounds)!=4 or not all(finite(v) for v in bounds) or not (-90<=bounds[0]<bounds[2]<=90 and -180<=bounds[1]<bounds[3]<=180) or not finite(context.get('acquired_at_ms')):return None
             if any(r.get('jurisdiction') is not None and not isinstance(r['jurisdiction'],str) for r in context.get('roads',[]) if isinstance(r,dict)):return None
             index=RoadIndex(context)
+            from voyagr.utils.road_evidence import validate_evidence
+            quality=validate_evidence(context,index=index)
+            if not quality['valid']:return None
+            if not quality['attribute_eligible']:context=dict(context,coverage='PARTIAL')
             if index.invalid or context.get('schema_version')!=1 or context.get('source_kind') not in ('OSM_EXTRACT','REVIEWED_PROVIDER'):return None
             # Revision binds the complete trusted source input, not frontend IDs.
             context=copy.deepcopy(context);context['revision']=hashlib.sha256(raw).hexdigest()

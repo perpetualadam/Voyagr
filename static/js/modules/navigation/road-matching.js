@@ -8,7 +8,7 @@
     function project(p,a,b){var x=111320*Math.cos(p[0]*Math.PI/180),ax=(a[1]-p[1])*x,ay=(a[0]-p[0])*110574,dx=(b[1]-a[1])*x,dy=(b[0]-a[0])*110574;var t=dx||dy ? Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy))) : 0;return {t:t,distance:Math.hypot(ax+t*dx,ay+t*dy),coordinate:[a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]};}
     function sameRoad(a,b){if(a.osm_way_id!=null && b.osm_way_id!=null)return String(a.osm_way_id)===String(b.osm_way_id);return a.graph_edge_id!=null && b.graph_edge_id!=null && !!a.graph_provider && a.graph_provider===b.graph_provider && String(a.graph_edge_id)===String(b.graph_edge_id);}
     function createIndex(dataset){
-        var index={dataset:dataset||{},grid:new Map(),segments:[],bySegment:new Map(),invalid:false},refs=0,graphIds=new Map();
+        var index={dataset:dataset||{},grid:new Map(),segments:[],bySegment:new Map(),invalid:false},refs=0,graphIds=new Map(),wayIds=new Set(),nodeCoordinates=new Map();
         var restrictions=index.dataset.restrictions||[];if(!Array.isArray(restrictions)||restrictions.length>10000||restrictions.some(function(r){return !r||typeof r!=='object'||Array.isArray(r);})){index.invalid=true;return index;}
         var roads=index.dataset.roads;
         if(!Array.isArray(roads)||roads.length>20000){index.invalid=true;return index;}
@@ -19,6 +19,13 @@
             if(road.graph_provider&&road.graph_edge_id!=null){if(graphIds.has(graphKey)&&graphIds.get(graphKey)!==road.osm_way_id){index.invalid=true;return;}graphIds.set(graphKey,road.osm_way_id);}
             var g=road.geometry,nodes=road.node_ids||[];
             if(!Array.isArray(g)||g.length<2||g.length>20000||g.some(function(p){return !Array.isArray(p)||p.length!==2||!p.every(finite)||Math.abs(p[0])>90||Math.abs(p[1])>180;}) || (nodes.length && (!Array.isArray(nodes)||nodes.length!==g.length))){index.invalid=true;return;}
+            if(road.osm_way_id!=null && road.graph_edge_id==null){if(wayIds.has(String(road.osm_way_id))){index.invalid=true;return;}wayIds.add(String(road.osm_way_id));}
+            for(var ni=0;ni<nodes.length;ni++){
+                if(!['string','number'].includes(typeof nodes[ni]) || (typeof nodes[ni]==='number'&&!Number.isInteger(nodes[ni]))){index.invalid=true;return;}
+                var nk=String(nodes[ni]),old=nodeCoordinates.get(nk);
+                if(old&&old.some(function(v,j){return Math.abs(v-g[ni][j])>1e-7;})){index.invalid=true;return;}
+                nodeCoordinates.set(nk,g[ni]);
+            }
             var along=0;
             for(var i=0;i<g.length-1;i++){
                 var a=g[i],b=g[i+1],length=distance(a,b);if(length<=0)continue;
