@@ -145,6 +145,7 @@
     }
 
     function resetVoiceAnnouncementStateForNewRoute() {
+        if (root.VoyagrVoiceAnnouncementsOrchestration && root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech();
         if (root.VoyagrLaneGuidanceOrchestration &&
                 typeof root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute === 'function') {
             root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();

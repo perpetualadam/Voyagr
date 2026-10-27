@@ -643,7 +643,7 @@ class SpeedLimitDetector:
                                      road_type: str = 'residential',
                                      vehicle_type: str = 'car',
                                      valhalla_hint_mph: Optional[int] = None,
-                                     heading_deg: Optional[float] = None) -> Dict:
+                                     heading_deg: Optional[float] = None, *, road_evidence: Optional[Dict] = None) -> Dict:
         """
         Get speed limit for a specific location.
 
@@ -655,7 +655,7 @@ class SpeedLimitDetector:
 
         Returns:
             dict: Speed limit information with change detection.
-            speed_limit_mph may be None only if road-type fallback is disabled and no OSM/TomTom data.
+            speed_limit_mph is None unless trusted applicable mapped evidence is supplied.
             source / posted_limit_source indicate OSM-maxspeed, TomTom-SnapToRoads, road-type-default, etc.
         """
         try:
@@ -677,6 +677,17 @@ class SpeedLimitDetector:
                 heading_deg=heading_deg,
             )
 
+            from voyagr.utils.navigation_evidence import legal_speed_evidence
+            estimate=speed_limit
+            context=dict(road_evidence or {});context['vehicle']=vehicle_type
+            evidence=legal_speed_evidence(**context)
+            if not evidence['applicable'] and evidence['evidence_state']=='UNKNOWN':
+                if posted_source in ('road-type-default','OSM-highway-inferred'):
+                    evidence.update(evidence_state='LEGAL_RULE_INFERRED',reason='Road class is not an applicable legal limit')
+                elif posted_source in ('OSM-maxspeed','TomTom-SnapToRoads'):
+                    evidence.update(evidence_state='UNKNOWN',reason='Mapped candidate road/direction/legal context not verified')
+            speed_limit=evidence['speed_limit_mph']
+
             # Detect speed limit changes (skip first-ever / unknown→unknown)
             speed_limit_changed = False
             if self.current_speed_limit is not None and self.current_speed_limit != speed_limit:
@@ -696,6 +707,8 @@ class SpeedLimitDetector:
             )
 
             return {
+                'evidence_state':evidence['evidence_state'],'applicable':evidence['applicable'],
+                'evidence_reason':evidence['reason'],'observed_at':evidence['observed_at'],'jurisdiction':evidence['jurisdiction'],'candidate_source':posted_source,'estimated_speed_mph':estimate if not evidence['applicable'] else None,
                 'speed_limit_mph': speed_limit,
                 'speed_limit_kmh': speed_limit_kmh,
                 'road_type': detected_road_type or road_type,
@@ -707,8 +720,8 @@ class SpeedLimitDetector:
                 'motorway_name': smart_motorway_info.get('motorway_name'),
                 'speed_limit_changed': speed_limit_changed,
                 'previous_speed_limit_mph': self.previous_speed_limit,
-                'posted_limit_source': posted_source,
-                'source': posted_source,
+                'posted_limit_source': evidence['source'] if evidence['applicable'] else posted_source,
+                'source': evidence['source'] if evidence['applicable'] else posted_source,
                 'timestamp': int(time.time())
             }
         except Exception as e:
@@ -719,6 +732,7 @@ class SpeedLimitDetector:
                 'road_type': road_type,
                 'vehicle_type': vehicle_type,
                 'error': str(e),
+                'evidence_state': 'UNKNOWN', 'applicable': False,
                 'posted_limit_source': 'error',
                 'source': 'error',
                 'timestamp': int(time.time())
@@ -1070,7 +1084,7 @@ class SpeedLimitDetector:
         if len(self.speed_limit_cache) % 100 == 0:
             self._cleanup_expired_cache()
 
-        cache_key = f"{lat:.4f},{lon:.4f}"
+        cache_key = f"{lat:.4f},{lon:.4f}|{_normalize_road_type(road_type)}|{region}|{None if heading_deg is None else round(heading_deg/15)*15}|{valhalla_hint_mph}"
         norm_road = _normalize_road_type(road_type)
         try:
             if cache_key in self.speed_limit_cache:
@@ -1237,7 +1251,9 @@ class SpeedLimitDetector:
             dict: Speed violation status
         """
         try:
-            if speed_limit_mph is None or speed_limit_mph <= 0:
+            if (not isinstance(current_speed_mph,(int,float)) or not math.isfinite(current_speed_mph) or current_speed_mph<0 or
+                not isinstance(warning_threshold_mph,(int,float)) or not math.isfinite(warning_threshold_mph) or warning_threshold_mph<0 or
+                speed_limit_mph is None or not isinstance(speed_limit_mph,(int,float)) or not math.isfinite(speed_limit_mph) or speed_limit_mph <= 0):
                 return {
                     'status': 'unknown',
                     'color': 'gray',

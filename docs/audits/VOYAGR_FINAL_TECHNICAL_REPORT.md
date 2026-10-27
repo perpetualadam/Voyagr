@@ -113,3 +113,11 @@ First complete deployment acceptance of the Phase 2 owner/session protections an
 ## J. Production-readiness assessment
 
 **NO-GO — pending dashcam security deployment acceptance and insufficient navigation safety evidence.** Selected automated checks passing does not establish real-world driving or public-deployment safety. No production deployment performed. After critical fixes and integration gates, a GO CANDIDATE would mean ready for controlled field validation only, never that driving validation already passed.
+
+## Phase 6 update — evidence-bounded UK navigation
+
+**PHASE6_PARTIALLY_VERIFIED; overall production NO-GO.** Inferred lane choices no longer become actionable; native active provider choices are preserved. Canonical legal speed evidence distinguishes mapped applicability from candidates/defaults and unknown values. Provider exit counts/fork/merge semantics survive normalization; geometry-only instructions are non-definitive. GPS ambiguity/causal-progress guards pause unsafe guidance, dense junction lookahead no longer skips manoeuvres, and arrival respects pending stops. Selected-route offline persistence invalidates stale compliance and requires fresh GPS. Desktop fallback coordinates are no longer invented on GPS errors, but full Kivy parity is unverified.
+
+Local final checks: **662 Python +68 subtests**, **40 additional Python +4 PWA endpoint checks**, **1,856 Jest /91 suites**, **11 isolated SQL policy tests**, test lint and coverage thresholds passed. All 16 synthetic GPS scenarios pass; real road/graph/sensor acceptance remains unverified. Current lane/speed acquisition lacks trusted driven-road matching and conservatively reports unknown; national/conditional/heavy-vehicle rules are not implemented as verified legal values. Prior raw helper tests do not establish live navigation accuracy. See [Phase 6 report](VOYAGR_PHASE6_UK_NAVIGATION_ACCURACY.md), [test/performance results](VOYAGR_PHASE6_TEST_RESULTS.md).
+
+Next priority: trusted versioned directional road/provider evidence and supervised UK device/junction/sign acceptance, alongside pending deployed dashcam session/proxy and avoidance-data acceptance. No deployment or production change.

@@ -12,6 +12,7 @@
     var lastLaneGuidanceStepIndex = null;
     var lastLaneVoiceKey = '';
     var laneGuidanceCache = new Map();
+    var laneRequestGeneration=0;
     var lockedLaneGuidance = null;
     var lockedLaneStepIndex = -1;
 
@@ -114,6 +115,9 @@
         const text = document.getElementById('laneGuidanceText');
 
         if (!display || !visual || !text) return;
+        const gps=root.VoyagrGpsOrchestration;
+        const gpsEvidence=gps && gps.getNavigationPositionEvidence ? gps.getNavigationPositionEvidence() : null;
+        if ((gps && gps.getNavigationPositionEvidence && (!gpsEvidence || gpsEvidence.state!=='RELIABLE')) || (gps && gps.getLastGpsFixAgeMs && gps.getLastGpsFixAgeMs()>15000) || !LG().isActionableLaneGuidance(data)) {display.classList.remove('show');lastLaneVoiceKey=null;return;}
 
         const domPlan = LG().buildLaneGuidanceDomApplyPlan(data, lastLaneVoiceKey);
         const apply = LG().buildLaneGuidanceDomStateApplyPlan(domPlan, {
@@ -153,6 +157,7 @@
         if (roundaboutExitCount === undefined) roundaboutExitCount = 0;
         if (guidanceStepIndex === undefined) guidanceStepIndex = null;
 
+        const requestSteps=rt().getCurrentRouteSteps();
         const resolvedStepIndex = guidanceStepIndex != null
             ? guidanceStepIndex
             : rt().getCurrentStepIndex();
@@ -219,10 +224,12 @@
         }
 
         const fetchPlan = apply.fetch;
+        const requestGeneration=++laneRequestGeneration;
         const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         const timeoutId = controller ? setTimeout(function () { controller.abort(); }, fetchPlan.timeoutMs) : null;
 
         const useFallback = function (reason) {
+            if (requestGeneration!==laneRequestGeneration || rt().getCurrentRouteSteps()!==requestSteps) return;
             const outcome = LG().buildLaneGuidanceFetchOutcomePlan({
                 apiSuccess: false,
                 errorReason: reason,
@@ -248,6 +255,7 @@
         fetch(fetchPlan.url, controller ? { signal: controller.signal } : undefined)
             .then(function (response) { return response.json(); })
             .then(function (data) {
+                if (requestGeneration!==laneRequestGeneration || rt().getCurrentRouteSteps()!==requestSteps || rt().getCurrentStepIndex()>resolvedStepIndex) return;
                 if (timeoutId) clearTimeout(timeoutId);
                 const outcome = LG().buildLaneGuidanceFetchOutcomePlan({
                     apiSuccess: !!(data && data.success),
@@ -278,6 +286,7 @@
     }
 
     function resetLaneGuidanceForNewRoute() {
+        laneRequestGeneration++;
         clearLockedLaneGuidance();
         laneGuidanceCache.clear();
         lastLaneGuidanceFetch = 0;

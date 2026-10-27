@@ -204,7 +204,7 @@ class TestLowConfidenceGuidanceCopy(unittest.TestCase):
         self.assertIsNone(data['recommended_lane'])
         self.assertEqual(data['urgency'], 'none')
         self.assertEqual(data['urgency_text'], '')
-        self.assertEqual(data['guidance_text'], 'Stay in current lane')
+        self.assertIn('lane assignment unknown', data['guidance_text'])
         self.assertFalse(data['lane_change_needed'])
         combined = data['urgency_text'] + data['guidance_text']
         self.assertNotIn('  ', combined)
@@ -234,10 +234,11 @@ class TestRoundaboutEarlyUrgency(unittest.TestCase):
                 data = get_lane_guidance().get_json()
 
         self.assertTrue(data['success'])
-        self.assertTrue(data['show_lane_guidance'])
-        self.assertEqual(data['urgency'], 'info')
-        self.assertIn('right lane', data['guidance_text'])
-        self.assertIn('3rd exit', data['guidance_text'])
+        self.assertFalse(data['show_lane_guidance'])
+        self.assertEqual(data['evidence_state'], 'UNKNOWN')
+        self.assertEqual(data['recommended_lanes'], [])
+        self.assertEqual(data['urgency'], 'none')
+        self.assertNotIn('right lane', data['guidance_text'])
 
     def test_ordinary_right_turn_still_hides_beyond_1500m(self):
         app = Flask(__name__)
@@ -258,9 +259,10 @@ class TestRoundaboutEarlyUrgency(unittest.TestCase):
                 data = get_lane_guidance().get_json()
 
         self.assertTrue(data['success'])
-        self.assertTrue(data['show_lane_guidance'])
+        self.assertFalse(data['show_lane_guidance'])
+        self.assertEqual(data['evidence_state'], 'UNKNOWN')
         self.assertEqual(data['urgency'], 'none')
-        self.assertEqual(data['guidance_text'], 'Stay in current lane')
+        self.assertIn('lane assignment unknown', data['guidance_text'])
 
 
 class TestConfidenceLaneSelection(unittest.TestCase):

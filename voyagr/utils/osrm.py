@@ -21,20 +21,20 @@ OSRM_MANEUVER_TO_VALHALLA = {
     ('turn', 'sharp right'): 11,
     ('turn', 'slight right'): 9,
     ('turn', 'uturn'): 13,
-    ('fork', 'left'): 15,
-    ('fork', 'slight left'): 16,
-    ('fork', 'right'): 10,
-    ('fork', 'slight right'): 9,
+    ('fork', 'left'): 24,
+    ('fork', 'slight left'): 24,
+    ('fork', 'right'): 23,
+    ('fork', 'slight right'): 23,
     ('end of road', 'left'): 15,
     ('end of road', 'right'): 10,
     ('merge', None): 25,
     ('merge', 'slight left'): 24,
     ('merge', 'slight right'): 23,
-    ('on ramp', None): 20,
-    ('on ramp', 'slight left'): 20,
-    ('on ramp', 'slight right'): 20,
-    ('on ramp', 'left'): 20,
-    ('on ramp', 'right'): 20,
+    ('on ramp', None): 25,
+    ('on ramp', 'slight left'): 25,
+    ('on ramp', 'slight right'): 25,
+    ('on ramp', 'left'): 25,
+    ('on ramp', 'right'): 25,
     ('off ramp', None): 20,
     ('off ramp', 'slight left'): 21,
     ('off ramp', 'slight right'): 20,
@@ -144,6 +144,10 @@ def osrm_step_instruction(step: Dict[str, Any], maneuver: Dict[str, Any]) -> str
 
     if m_type == 'depart':
         return f'Head {" ".join(str(x) for x in [modifier, label] if x)}'.strip() or 'Head north'
+    if m_type in ('fork','on ramp','off ramp'):
+        side='left' if modifier and 'left' in modifier else 'right' if modifier and 'right' in modifier else None
+        action=('Keep '+side) if m_type=='fork' and side else 'Merge' if m_type=='on ramp' else 'Take the exit' if m_type=='off ramp' else 'Continue'
+        return action+((' toward '+label) if label else '')
     if m_type == 'arrive':
         return 'You have arrived at your destination'
     if m_type in ('roundabout', 'rotary'):
@@ -211,6 +215,13 @@ def build_osrm_maneuvers(
                 'end_shape_index': begin_idx,
             }
 
+            exit_number=maneuver_raw.get('exit')
+            if str(m_type).lower() in ('roundabout','rotary','exit roundabout','roundabout turn') and isinstance(exit_number,int) and not isinstance(exit_number,bool) and 1<=exit_number<=50:
+                maneuver['roundabout_exit_count']=exit_number
+                maneuver['roundabout_exit_source']='OSRM'
+
+            maneuver['maneuver_kind']=m_type
+            if m_type=='off ramp' and not modifier: maneuver['direction_override']='exit'
             road_class = infer_road_class_from_names(ref, street_names)
             if road_class:
                 maneuver['road_class'] = road_class

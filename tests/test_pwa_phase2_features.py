@@ -196,31 +196,39 @@ class TestSpeedWarnings:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['success'] is True
-        assert data['status'] == 'compliant'
-        assert data['color'] == 'green'
+        assert data['status'] == 'unknown'
+        assert data['evidence_state'] == 'UNKNOWN'
+        assert data['speed_limit_mph'] is None
+        assert data['color'] == 'gray'
     
     def test_get_speed_warning_approaching(self, client):
         """Test speed warning when approaching limit."""
         response = client.get('/api/speed-warnings?lat=51.5074&lon=-0.1278&speed=33&road_type=local')
         data = json.loads(response.data)
         assert data['success'] is True
-        assert data['status'] == 'approaching'
-        assert data['color'] == 'amber'
+        assert data['status'] == 'unknown'
+        assert data['evidence_state'] == 'UNKNOWN'
+        assert data['speed_limit_mph'] is None
+        assert data['color'] == 'gray'
     
     def test_get_speed_warning_exceeding(self, client):
         """Test speed warning when exceeding limit."""
         response = client.get('/api/speed-warnings?lat=51.5074&lon=-0.1278&speed=40&road_type=local')
         data = json.loads(response.data)
         assert data['success'] is True
-        assert data['status'] == 'exceeding'
-        assert data['color'] == 'red'
+        assert data['status'] == 'unknown'
+        assert data['evidence_state'] == 'UNKNOWN'
+        assert data['speed_limit_mph'] is None
+        assert data['color'] == 'gray'
     
     def test_speed_warning_motorway(self, client):
         """Test speed warning on motorway."""
         response = client.get('/api/speed-warnings?lat=51.5074&lon=-0.1278&speed=75&road_type=motorway')
         data = json.loads(response.data)
         assert data['success'] is True
-        assert data['speed_limit_mph'] == 70
+        assert data['speed_limit_mph'] is None
+        assert data['status'] == 'unknown'
+        assert data['evidence_state'] == 'UNKNOWN'
 
 
 if __name__ == '__main__':

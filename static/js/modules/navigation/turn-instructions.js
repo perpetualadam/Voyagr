@@ -60,6 +60,11 @@
         return null;  // 0,1,2,3,7,8,17,22 and transit/ferry types are not "turns"
     }
 
+    function directionForManeuver(step) {
+        if (step && step.maneuver_kind==='off ramp' && step.direction_override==='exit') return 'exit';
+        return maneuverTypeToDirectionKey(step && step.type || 0);
+    }
+
     /** AR overlay uses hyphenated direction keys. */
     var AR_DIRECTION_KEY_MAP = {
         9: 'slight-right', 18: 'slight-right', 23: 'slight-right',
@@ -246,7 +251,8 @@
      * @returns {string}
      */
     function getRoundaboutDirectionText(valhallaType, exitCount) {
-        var n = Number(exitCount) || 0;
+        var n = Number(exitCount);
+        if (!Number.isInteger(n) || n<1 || n>50) n=0;
         if (valhallaType === 27 && n > 0) {
             return 'take the ' + ordinalExit(n) + ' exit';
         }
@@ -428,11 +434,11 @@
         if (!steps || stepIndex == null || stepIndex < 0 || stepIndex >= steps.length) return 0;
         var s = steps[stepIndex];
         var n = Number(s.roundabout_exit_count) || 0;
-        if (n > 0) return n;
+        if (Number.isInteger(n) && n>=1 && n<=50) return n;
         var mt = s.type || 0;
         if (mt === 26 && stepIndex + 1 < steps.length) {
             var next = steps[stepIndex + 1];
-            if ((next.type || 0) === 27) return Number(next.roundabout_exit_count) || 0;
+            if ((next.type || 0) === 27) {var exit=Number(next.roundabout_exit_count);return Number.isInteger(exit) && exit>=1 && exit<=50 ? exit : 0;}
         }
         return 0;
     }
@@ -453,7 +459,7 @@
         var initIdx = Math.min(Math.max(0, stepIndex || 0), steps.length - 1);
         var step = steps[initIdx];
         var type = step.type || 0;
-        var direction = maneuverTypeToDirectionKey(type) || 'straight';
+        var direction = directionForManeuver(step) || 'straight';
         var roadClass = opts.resolveRoadClass ? opts.resolveRoadClass(step) : (step.road_class || null);
         direction = refineManeuverDirection(type, direction, roadClass);
         var firstManeuverIndex = step.begin_shape_index || 0;
@@ -575,7 +581,7 @@
         for (var j = currentIndex + 1; j < steps.length; j++) {
             var m = steps[j];
             var type = m.type || 0;
-            var baseDir = maneuverTypeToDirectionKey(type);
+            var baseDir = directionForManeuver(m);
             if (!baseDir) continue;
             var dir = refineManeuverDirection(type, baseDir, resolveRoadClass(m));
             var targetIdx = m.begin_shape_index || 0;
@@ -821,7 +827,7 @@
             if (maneuverShapeIndex < snapIdx) continue;
 
             var type = maneuver.type || 0;
-            var direction = maneuverTypeToDirectionKey(type);
+            var direction = directionForManeuver(maneuver);
             if (direction === null) continue;
             direction = refineManeuverDirection(type, direction, resolveRoadClass(maneuver));
 
@@ -926,6 +932,7 @@
             lon: nextTurnPoint[1],
             index: nextTurnIndex,
             direction: turnDirection,
+            evidence_state:'INFERRED',
             streetName: '',
         };
     }
@@ -941,8 +948,8 @@
         if (!turnInfo) return null;
         return {
             distance: turnInfo.distance,
-            direction: turnInfo.direction,
-            instruction: turnInfo.instruction || '',
+            direction: turnInfo.evidence_state==='INFERRED' ? 'straight' : turnInfo.direction,
+            instruction: turnInfo.evidence_state==='INFERRED' ? 'Follow the route; junction instruction unavailable' : (turnInfo.instruction || ''),
             streetName: turnInfo.streetName || '',
             maneuver: turnInfo.maneuver,
             maneuverIndex: turnInfo.maneuverIndex,
@@ -1402,6 +1409,7 @@
         isLaneNeutralManeuverDir: isLaneNeutralManeuverDir,
         LANE_LOOKAHEAD_ROUNDABOUT_MAX_M: LANE_LOOKAHEAD_ROUNDABOUT_MAX_M,
         calculateTurnDirection: calculateTurnDirection,
+        directionForManeuver:directionForManeuver,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
         maneuverTypeToLaneDirectionKey: maneuverTypeToLaneDirectionKey,
         maneuverTypeToARDirectionKey: maneuverTypeToARDirectionKey,

@@ -209,7 +209,9 @@ def log_validation_error(error_msg, context=""):
 class SatNavApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.current_pos = (53.5526, -1.4797)  # Barnsley
+        self.current_pos = (53.5526, -1.4797)  # Initial map centre, not a verified GPS fix
+        self.gps_fix_state = "UNKNOWN"
+        self.gps_fix_timestamp = None
         self.current_route = None
         self.hazard_alerts = {}
         self.incident_alerts = {}
@@ -6980,6 +6982,7 @@ class SatNavApp(App):
 
     def update_vehicle_marker(self):
         """Update or create the vehicle position marker on the map."""
+        if getattr(self,"gps_fix_state","UNKNOWN")!="RELIABLE": return
         try:
             # Remove old marker if it exists
             if self.vehicle_marker and self.vehicle_marker in self.mapview.children:
@@ -7269,6 +7272,8 @@ class SatNavApp(App):
                 # Keep current position instead of updating
                 return
 
+            self.gps_fix_state = "RELIABLE"
+            self.gps_fix_timestamp = time.time()
             self.current_pos = (lat, lon)
             self.gps_poll_count += 1
 
@@ -7310,8 +7315,8 @@ class SatNavApp(App):
         except Exception as e:
             print(f"GPS update error: {e}")
             log_validation_error(str(e), "GPS location handler")
-            notification.notify(title="GPS Error", message="Using Barnsley as default location")
-            self.current_pos = (53.5526, -1.4797)
+            self.gps_fix_state = "UNKNOWN"
+            notification.notify(title="GPS Error", message="GPS unavailable; retaining last position as stale")
 
     # ============================================================================
     # VEHICLE TRACKING METHODS - Position History, Route Recording, Geofencing
@@ -7353,6 +7358,7 @@ class SatNavApp(App):
 
     def start_route_recording(self, route_name=""):
         """Start recording a route."""
+        if getattr(self,"gps_fix_state","UNKNOWN")!="RELIABLE": return False
         try:
             self.route_recording = {
                 'route_name': str(route_name)[:255] if route_name else f"Route_{int(time.time())}",
@@ -7515,6 +7521,7 @@ class SatNavApp(App):
 
     def share_location(self, recipient_id):
         """Share current location with a recipient."""
+        if getattr(self,"gps_fix_state","UNKNOWN")!="RELIABLE": return False
         try:
             is_valid, error_msg = validate_coordinates(self.current_pos[0], self.current_pos[1], "share_location")
             if not is_valid:

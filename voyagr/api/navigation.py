@@ -116,6 +116,7 @@ def _fetch_osm_lane_data(lat, lon):
                 tags = element.get('tags', {})
                 if 'lanes' in tags:
                     result = {
+                        'tags':dict(tags),'way_id':element.get('id'),
                         'total_lanes': int(tags['lanes']),
                         'turn_lanes': tags.get('turn:lanes', ''),
                         'turn_lanes_forward': tags.get('turn:lanes:forward', ''),
@@ -137,155 +138,24 @@ def _fetch_osm_lane_data(lat, lon):
 @navigation_bp.route('/lane-guidance', methods=['GET'])
 def get_lane_guidance():
     """Get smart lane guidance for current location using OSM data and route context."""
+    from voyagr.utils.navigation_evidence import lane_evidence
+    from voyagr.utils.validation import validate_coordinates
     try:
-        lat = float(request.args.get('lat', 0))
-        lon = float(request.args.get('lon', 0))
-        next_maneuver = request.args.get('maneuver', 'straight')
-        distance_to_maneuver = float(request.args.get('distance', 9999))
-        road_type = request.args.get('road_type', 'unknown')
-        roundabout_exit_count = int(request.args.get('roundabout_exit_count', 0))
-
-        # Try to get real lane data from OSM
-        osm_data = _fetch_osm_lane_data(lat, lon)
-
-        if osm_data:
-            total_lanes = osm_data.get('lanes_forward', osm_data['total_lanes'])
-            turn_lanes_str = osm_data.get('turn_lanes_forward') or osm_data.get('turn_lanes', '')
-            road_name = osm_data.get('name', '')
-            highway_type = osm_data.get('highway', road_type)
-        else:
-            total_lanes = DEFAULT_LANE_CONFIGS.get(road_type, 2)
-            turn_lanes_str = ''
-            road_name = ''
-            highway_type = road_type
-
-        # Ensure at least 1 lane
-        total_lanes = max(1, total_lanes)
-
-        # UK left-hand default: slight keep hints on 2-lane non-motorway => straight
-        lane_maneuver = _normalize_lane_maneuver_for_uk(
-            next_maneuver, total_lanes, highway_type
-        )
-
-        # Parse turn:lanes data if available
-        parsed_lanes = _parse_turn_lanes(turn_lanes_str, total_lanes)
-
-        # Build per-lane arrow/direction info
-        lane_arrows = []
-        if parsed_lanes:
-            for dirs in parsed_lanes:
-                # Pick the primary direction for display
-                primary = dirs[0] if dirs else 'through'
-                arrow = LANE_ARROWS.get(primary, '↑')
-                lane_arrows.append({
-                    'directions': dirs,
-                    'arrow': arrow,
-                    'primary': primary
-                })
-        else:
-            # Generate default arrows based on total lanes
-            for i in range(total_lanes):
-                lane_arrows.append({
-                    'directions': ['through'],
-                    'arrow': '↑',
-                    'primary': 'through'
-                })
-
-        # Determine recommended lane(s)
-        recommended_lane = None
-        candidate_lanes = []
-        if parsed_lanes:
-            candidate_lanes = _recommend_lanes_from_turn_lanes(
-                parsed_lanes, lane_maneuver, roundabout_exit_count
-            )
-            recommended_lane = candidate_lanes[0] if candidate_lanes else None
-
-        if recommended_lane is None:
-            recommended_lane = _get_recommended_lane_simple(
-                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
-            )
-            candidate_lanes = _estimate_candidate_lanes_uk(
-                lane_maneuver, total_lanes, roundabout_exit_count, highway_type
-            )
-
-        has_turn_lanes = parsed_lanes is not None
-        has_osm_data = osm_data is not None
-        confidence = _score_lane_guidance_confidence(
-            has_turn_lanes, has_osm_data, highway_type, lane_maneuver, total_lanes
-        )
-        source = 'osm_turn_lanes' if has_turn_lanes else ('osm_lanes' if has_osm_data else 'estimated')
-        # Keep get_recommended_lane_simple's primary (e.g. centre for merge) even when
-        # candidate lists are edge-ordered like [1, total_lanes].
-        recommended_lanes, recommended_lane = _apply_confidence_lane_selection(
-            candidate_lanes or ([recommended_lane] if recommended_lane else []),
-            confidence,
-            preferred_primary=recommended_lane,
-        )
-
-        show_lane_guidance = (
-            confidence >= 70 and total_lanes > 1 and bool(recommended_lanes)
-        )
-
-        if show_lane_guidance:
-            lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
-            # Match JS laneUrgencyFields: 2nd+/3rd+ roundabouts keep info urgency out to
-            # 4 km so motorway off-slip drivers see right-lane prep immediately.
-            info_max_m = 4000 if (
-                next_maneuver == 'roundabout' and roundabout_exit_count >= 2
-            ) else 1500
-
-            if distance_to_maneuver <= 100:
-                urgency = 'now'
-                urgency_text = f'Get in the {lane_name} now!'
-            elif distance_to_maneuver <= 300:
-                urgency = 'soon'
-                urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
-            elif distance_to_maneuver <= 800:
-                urgency = 'ahead'
-                urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
-            elif distance_to_maneuver <= info_max_m:
-                urgency = 'info'
-                urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
-            else:
-                urgency = 'none'
-                urgency_text = ''
-
-            if next_maneuver == 'straight' or distance_to_maneuver > info_max_m:
-                guidance_text = 'Stay in current lane'
-            elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
-                exit_ordinal = _ordinal(roundabout_exit_count)
-                guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
-            else:
-                guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
-        else:
-            urgency = 'none'
-            urgency_text = ''
-            guidance_text = 'Stay in current lane'
-
-        return jsonify({
-            'success': True,
-            'total_lanes': total_lanes,
-            'recommended_lane': recommended_lane,
-            'recommended_lanes': recommended_lanes,
-            'confidence': confidence,
-            'source': source,
-            'lane_arrows': lane_arrows,
-            'lane_change_needed': True if urgency in ('now', 'soon', 'ahead') else False,
-            'next_maneuver': next_maneuver,
-            'distance_to_maneuver': distance_to_maneuver,
-            'urgency': urgency,
-            'urgency_text': urgency_text,
-            'guidance_text': guidance_text,
-            'road_name': road_name,
-            'highway_type': highway_type,
-            'has_osm_data': has_osm_data,
-            'has_turn_lanes': has_turn_lanes,
-            'roundabout_exit_count': roundabout_exit_count,
-            'show_lane_guidance': show_lane_guidance,
-        })
-    except Exception as e:
-        logger.error(f"[Lane Guidance] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        lat=float(request.args.get('lat','nan'));lon=float(request.args.get('lon','nan'))
+        if not validate_coordinates(f'{lat},{lon}'):
+            return jsonify(success=False,error='Valid coordinates required'),400
+        maneuver=request.args.get('maneuver','straight')
+        data=_fetch_osm_lane_data(lat,lon) or {}
+        evidence=lane_evidence(data.get('tags',{}),road_matched=data.get('route_match_verified') is True,
+            direction=data.get('matched_direction'),maneuver=maneuver)
+        actionable=evidence['show_lane_guidance']
+        return jsonify(dict(evidence,success=True,total_lanes=evidence.get('total_lanes',0),confidence=95 if actionable else 0,
+            source='osm_turn_lanes' if actionable else 'unverified_nearby_osm',has_osm_data=bool(data),has_turn_lanes=actionable,
+            lane_arrows=[],lane_change_needed=False,next_maneuver=maneuver,urgency='info' if actionable else 'none',
+            guidance_text='Follow the signed lane markings' if actionable else 'Follow ordinary turn guidance; lane assignment unknown',
+            urgency_text='',distance_to_maneuver=request.args.get('distance'),road_name=data.get('name','')))
+    except (ValueError,TypeError):
+        return jsonify(success=False,error='Invalid lane request'),400
 
 
 def _maneuver_action(maneuver):
@@ -338,40 +208,9 @@ def get_speed_warnings():
         current_speed_mph = float(request.args.get('speed', 0))
         road_type = request.args.get('road_type', 'local')
 
-        speed_limits = {
-            'motorway': 70,
-            'a_road': 60,
-            'b_road': 50,
-            'local': 30
-        }
-        speed_limit_mph = speed_limits.get(road_type, 30)
-
-        speed_diff = current_speed_mph - speed_limit_mph
-        warning_threshold = 5
-
-        if speed_diff >= warning_threshold:
-            status = 'exceeding'
-            color = 'red'
-            message = f'Exceeding speed limit by {int(speed_diff)} mph'
-        elif speed_diff > 0:
-            status = 'approaching'
-            color = 'amber'
-            message = f'Approaching speed limit ({int(current_speed_mph)} mph)'
-        else:
-            status = 'compliant'
-            color = 'green'
-            message = f'Speed compliant ({int(current_speed_mph)} mph)'
-
-        return jsonify({
-            'success': True,
-            'status': status,
-            'color': color,
-            'current_speed_mph': current_speed_mph,
-            'speed_limit_mph': speed_limit_mph,
-            'speed_diff_mph': round(speed_diff, 1),
-            'message': message,
-            'warning_threshold_mph': warning_threshold
-        })
+        return jsonify(success=True,status='unknown',color='gray',current_speed_mph=current_speed_mph,
+            speed_limit_mph=None,speed_diff_mph=None,evidence_state='UNKNOWN',
+            message='Applicable legal speed limit unknown; follow road signs',warning_threshold_mph=5)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -383,8 +222,10 @@ def get_speed_limit():
         if not speed_limit_detector:
             return jsonify({'success': False, 'error': 'Speed limit detector not available'})
 
-        lat = float(request.args.get('lat', 51.5074))
-        lon = float(request.args.get('lon', -0.1278))
+        from voyagr.utils.validation import validate_coordinates
+        coords=validate_coordinates(f"{request.args.get('lat','')},{request.args.get('lon','')}")
+        if not coords: return jsonify(success=False,error='Valid coordinates required'),400
+        lat,lon=coords
         road_type = request.args.get('road_type', 'residential')
         vehicle_type = request.args.get('vehicle_type', 'car')
         # Optional route-accurate hint from the client's Valhalla edge (mph). Used only to

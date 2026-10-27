@@ -33,9 +33,7 @@ describe('lane-guidance-orchestration lookahead roadType', () => {
             return Promise.reject(new Error('network off in test'));
         });
 
-        LaneGuidanceOrchestration.bind({
-            laneGuidance: () => LaneGuidance,
-            getCurrentRouteSteps: () => [
+        const routeSteps = [
                 { type: 8, distance: 1.2, road_class: 'residential' },
                 {
                     type: 26,
@@ -44,7 +42,10 @@ describe('lane-guidance-orchestration lookahead roadType', () => {
                     road_class: 'primary',
                     lanes: [{ active: false }, { active: true }],
                 },
-            ],
+            ];
+        LaneGuidanceOrchestration.bind({
+            laneGuidance: () => LaneGuidance,
+            getCurrentRouteSteps: () => routeSteps,
             getCurrentStepIndex: () => 0,
             getRoutePolyline: () => [[51.5, -0.1], [51.51, -0.09]],
             getLastSnappedRouteIndex: () => 0,
