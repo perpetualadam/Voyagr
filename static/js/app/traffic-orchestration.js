@@ -6,6 +6,9 @@
     'use strict';
 
     var runtime = null;
+    let displayRequest = null;
+    let displayGeneration = 0;
+    let lastDisplay = null;
 
     function rt() {
         if (!runtime) {
@@ -206,6 +209,9 @@
         if (!execute || !execute.shouldApply) return;
         const TU = tuModule();
         routeTrafficEnabled = execute.nextEnabled;
+        displayGeneration++;
+        displayRequest = null;
+        lastDisplay = null;
         if (execute.useWriteBoolPref) {
             TU.writeBoolPref(execute.storageKey, routeTrafficEnabled);
         }
@@ -266,8 +272,7 @@
     function applyFetchAndDisplayRouteTrafficResultFromPlan(result) {
         if (!result) return;
         if (result.shouldDisplay) {
-            displayRouteTrafficEdges(result.segments);
-            console.log(result.displayLogMessage);
+            return displayRouteTrafficEdges(result.segments);
         } else if (result.debugMessage) {
             console.debug(result.debugMessage);
         }
@@ -294,17 +299,39 @@
             return;
         }
 
-        console.log(orchestration.fetchLogMessage);
-
-        try {
-            const data = await fetchRouteTrafficFlowPayload(rt().getRoutePolyline(), orchestration.sampleInterval);
-            applyFetchAndDisplayRouteTrafficResultFromPlan(
-                RTF.buildFetchAndDisplayRouteTrafficResultPipelinePlan(data).resultApply
-            );
-        } catch (error) {
-            const errPrefix = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan({}).errorDebugPrefix;
-            console.debug(errPrefix, error);
+        const targetMap = rt().getMap();
+        if (!targetMap || (targetMap.isStyleLoaded && !targetMap.isStyleLoaded())) return;
+        const points = rt().getRoutePolyline().map(point => point.slice());
+        const key = JSON.stringify(points);
+        const epoch = window.__voyagrMapStyleGeneration || 0;
+        if (displayRequest && displayRequest.key === key && displayRequest.map === targetMap && displayRequest.epoch === epoch) {
+            return displayRequest.promise;
         }
+        if (lastDisplay && lastDisplay.key === key && lastDisplay.map === targetMap && lastDisplay.epoch === epoch && Date.now() - lastDisplay.at < 1000) return;
+        const generation = ++displayGeneration;
+        const request = { key, map: targetMap, epoch };
+        const current = () => generation === displayGeneration && routeTrafficEnabled &&
+            rt().getMap() === targetMap && JSON.stringify(rt().getRoutePolyline()) === key &&
+            (window.__voyagrMapStyleGeneration || 0) === epoch;
+        console.log(orchestration.fetchLogMessage);
+        request.promise = (async () => {
+            try {
+                const data = await fetchRouteTrafficFlowPayload(points, orchestration.sampleInterval);
+                if (!current()) return;
+                if (targetMap.isStyleLoaded && !targetMap.isStyleLoaded()) return;
+                const rendered = applyFetchAndDisplayRouteTrafficResultFromPlan(
+                    RTF.buildFetchAndDisplayRouteTrafficResultPipelinePlan(data).resultApply
+                );
+                if (rendered !== undefined) lastDisplay = { key, map: targetMap, epoch, at: Date.now() };
+            } catch (error) {
+                const errPrefix = RTF.buildFetchAndDisplayRouteTrafficResultApplyPlan({}).errorDebugPrefix;
+                console.debug(errPrefix, error);
+            } finally {
+                if (displayRequest === request) displayRequest = null;
+            }
+        })();
+        displayRequest = request;
+        return request.promise;
     }
 
     function applyDisplayRouteTrafficEdgesMountFromPlan(apply) {
@@ -320,24 +347,26 @@
                     log.polylineLength
                 );
             }
-            return;
+            return undefined;
         }
 
         console.log(apply.levelCountsLogPrefix, apply.levelCounts);
 
+        let mounted = 0;
         (apply.mountApply.polylines || []).forEach((polylinePlan) => {
             const trafficLine = rt().getMapLibreHelpers().addPolyline(rt().getMap(), polylinePlan.points, {
                 color: polylinePlan.color,
                 weight: polylinePlan.weight,
                 opacity: polylinePlan.opacity,
             });
-            if (polylinePlan.registerInRouteTrafficLayers) {
+            if (trafficLine && polylinePlan.registerInRouteTrafficLayers) {
+                mounted++;
                 routeTrafficLayers.push(trafficLine);
             }
         });
 
         const postDisplay = apply.postDisplay || {};
-        if (postDisplay.logMessage) console.log(postDisplay.logMessage);
+        console.log('[Route Traffic] Mounted ' + mounted + ' congested traffic overlays');
 
         if (postDisplay.bringTrafficEdgesToTop) {
             bringTrafficEdgesToTop();
@@ -345,21 +374,30 @@
         if (postDisplay.bringNavRouteAboveTrafficEdges) {
             bringNavRouteAboveTrafficEdges();
         }
+        return mounted;
     }
 
     function displayRouteTrafficEdges(segments) {
-        clearRouteTrafficLayers();
-
-        applyDisplayRouteTrafficEdgesMountFromPlan(
-            rtfModule().buildDisplayRouteTrafficEdgesMountApplyPlan(
-                rtfModule().buildRouteTrafficEdgesDisplayOrchestrationPlan({
-                    segments,
-                    polyline: rt().getRoutePolyline(),
-                    hasMap: !!rt().getMap(),
-                    layersBeforeMount: routeTrafficLayers.length,
-                })
-            )
+        const map = rt().getMap();
+        if (!map || (map.isStyleLoaded && !map.isStyleLoaded())) return undefined;
+        const plan = rtfModule().buildDisplayRouteTrafficEdgesMountApplyPlan(
+            rtfModule().buildRouteTrafficEdgesDisplayOrchestrationPlan({
+                segments, polyline: rt().getRoutePolyline(), hasMap: true, layersBeforeMount: 0,
+            })
         );
+        if (!plan.shouldApply) {
+            const validClear = Array.isArray(segments) && segments.length > 0 &&
+                segments.every(segment => (segment.traffic_level || 'green') === 'green');
+            if (validClear) {
+                clearRouteTrafficLayers();
+                console.log('[Route Traffic] Mounted 0 congested traffic overlays (no congestion returned)');
+                return 0;
+            }
+            console.debug('[Route Traffic] No drawable traffic overlays; existing display retained');
+            return undefined;
+        }
+        clearRouteTrafficLayers();
+        return applyDisplayRouteTrafficEdgesMountFromPlan(plan);
     }
 
     /**
@@ -871,7 +909,7 @@
         switch (key) {
             case 'autoTrafficUpdateEnabled': autoTrafficUpdateEnabled = value; break;
             case 'autoRerouteOnDeviationEnabled': autoRerouteOnDeviationEnabled = value; break;
-            case 'routeTrafficEnabled': routeTrafficEnabled = value; break;
+            case 'routeTrafficEnabled': routeTrafficEnabled = value; displayGeneration++; lastDisplay = null; displayRequest = null; break;
             default: break;
         }
     }

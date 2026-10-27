@@ -450,6 +450,19 @@ function initializeMap() {
             const msg = evt?.error?.message || evt?.message || '';
             if (!msg) return;
 
+            const sourceId = evt && evt.sourceId;
+            const expected = window.__voyagrExpectedSourceAborts && window.__voyagrExpectedSourceAborts.get(sourceId);
+            if (evt && evt.error && evt.error.name === 'AbortError' && expected &&
+                expected.until >= Date.now() && map.getSource(sourceId) === expected.source) {
+                console.debug('[MapLibre] Expected source-reload cancellation', sourceId);
+                return;
+            }
+            const currentStyle = map.getStyle && map.getStyle();
+            const sourceDef = sourceId && currentStyle && currentStyle.sources && currentStyle.sources[sourceId];
+            if (sourceDef && ['vector', 'raster', 'raster-dem'].includes(sourceDef.type)) {
+                if (!window.__voyagrFailedMapSources) window.__voyagrFailedMapSources = new Set();
+                window.__voyagrFailedMapSources.add(sourceId);
+            }
             _mapErrorCount++;
 
             // Only log the first few errors to avoid flooding the console with
@@ -599,6 +612,7 @@ function initializeMap() {
         }
     }
 
+    map.on('style.load', voyagrMapInvalidateRecovery);
     map.on('style.load', onVoyagrStyleLoaded);
 
     // Handle missing images (POI icons) by providing a transparent placeholder
@@ -618,25 +632,37 @@ function initializeMap() {
     // can also have stale dimensions when the mobile browser chrome shows or hides
     // (100dvh / innerHeight change without a full reload). Both cases produce a
     // blank basemap, no road labels, and vehicle markers that look "gone" (wrong transform).
+    function voyagrMapInvalidateRecovery() {
+        window.__voyagrMapRecoveryGeneration = (window.__voyagrMapRecoveryGeneration || 0) + 1;
+        window.__voyagrMapStyleGeneration = (window.__voyagrMapStyleGeneration || 0) + 1;
+        for (const key of ['__voyagrMapRecoverSourceTimer', '__voyagrMapRecoverVerifyTimer', '__voyagrMapRecoverEscalateTimer']) {
+            clearTimeout(window[key]);
+            window[key] = null;
+        }
+        window.__voyagrMapRecoverLastAt = 0;
+        window.__voyagrFailedMapSources = new Set();
+        window.__voyagrExpectedSourceAborts = new Map();
+    }
+
     function voyagrMapResizeAndRepaint() {
-        if (!map || typeof map.resize !== 'function') return;
+        if (!map || typeof map.resize !== 'function' || window.__voyagrMapResizePending) return;
+        window.__voyagrMapResizePending = true;
+        const targetMap = map;
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+                window.__voyagrMapResizePending = false;
+                if (map !== targetMap) return;
                 try {
                     map.resize();
-                    if (typeof map.triggerRepaint === 'function') {
-                        map.triggerRepaint();
-                    }
-                } catch (e) {
-                    /* ignore */
-                }
+                    if (typeof map.triggerRepaint === 'function') map.triggerRepaint();
+                } catch (e) { /* map may have been removed */ }
             });
         });
     }
     window.__voyagrMapResizeAndRepaint = voyagrMapResizeAndRepaint;
 
     /**
-     * Force every map source to re-issue its tile (or TileJSON) requests.
+     * Retry failed tile sources; confirmed stuck checks may also retry unloaded sources.
      *
      * Why this exists: when a phone switches radio (e.g. 4G→5G, WiFi↔cellular)
      * the OS tears down active TCP connections. Any in-flight MapLibre tile
@@ -652,7 +678,7 @@ function initializeMap() {
      *
      * Has its own 1.5s debounce so multiple recovery triggers don't spam.
      */
-    function voyagrMapForceReloadAllSources(reason) {
+    function voyagrMapForceReloadAllSources(reason, retryUnloaded = false) {
         try {
             if (!map || typeof map.getStyle !== 'function' || typeof map.getSource !== 'function') return 0;
             const now = Date.now();
@@ -664,14 +690,22 @@ function initializeMap() {
             for (const id of Object.keys(style.sources)) {
                 try {
                     const def = style.sources[id];
-                    if (!def) continue;
+                    if (!def || !['vector', 'raster', 'raster-dem'].includes(def.type)) continue;
+                    const failed = window.__voyagrFailedMapSources && window.__voyagrFailedMapSources.has(id);
+                    const unloaded = retryUnloaded && typeof map.isSourceLoaded === 'function' && !map.isSourceLoaded(id);
+                    if (!failed && !unloaded) continue;
                     const source = map.getSource(id);
                     if (!source) continue;
+                    if (!window.__voyagrExpectedSourceAborts) window.__voyagrExpectedSourceAborts = new Map();
                     if (Array.isArray(def.tiles) && def.tiles.length > 0 && typeof source.setTiles === 'function') {
+                        window.__voyagrExpectedSourceAborts.set(id, { source, until: now + 2000 });
                         source.setTiles(def.tiles);
+                        if (window.__voyagrFailedMapSources) window.__voyagrFailedMapSources.delete(id);
                         reloaded++;
                     } else if (def.url && typeof source.setUrl === 'function') {
+                        window.__voyagrExpectedSourceAborts.set(id, { source, until: now + 2000 });
                         source.setUrl(def.url);
+                        if (window.__voyagrFailedMapSources) window.__voyagrFailedMapSources.delete(id);
                         reloaded++;
                     }
                 } catch (_) {
@@ -690,7 +724,7 @@ function initializeMap() {
 
     /**
      * After flaky mobile data (e.g. 4G↔5G) MapLibre can stop drawing basemap lines while
-     * overlays/nav keep working. Resize + repaint + a no-op jumpTo nudges the renderer,
+     * overlays/nav keep working. A coalesced resize/repaint nudges the renderer,
      * and `voyagrMapForceReloadAllSources` re-fetches any tiles that were aborted mid-flight
      * when the network swapped. A delayed verification escalates to a soft style reload
      * if the map is still not painting tiles a few seconds later.
@@ -705,42 +739,27 @@ function initializeMap() {
                 return;
             }
             const now = Date.now();
-            if (now - (window.__voyagrMapRecoverLastAt || 0) < 650) {
+            if (window.__voyagrMapRecoverLastAt && now - window.__voyagrMapRecoverLastAt < 5000) {
                 return;
             }
             window.__voyagrMapRecoverLastAt = now;
+            const targetMap = map;
+            const generation = window.__voyagrMapRecoveryGeneration = (window.__voyagrMapRecoveryGeneration || 0) + 1;
+            const styleIdentity = JSON.stringify(map.getStyle());
+            const isCurrent = () => map === targetMap && window.__voyagrMapRecoveryGeneration === generation &&
+                JSON.stringify(map.getStyle()) === styleIdentity;
+            for (const key of ['__voyagrMapRecoverSourceTimer', '__voyagrMapRecoverVerifyTimer', '__voyagrMapRecoverEscalateTimer']) {
+                clearTimeout(window[key]);
+                window[key] = null;
+            }
             voyagrMapResizeAndRepaint();
-            const kickRepaint = () => {
-                try {
-                    if (typeof map.triggerRepaint === 'function') {
-                        map.triggerRepaint();
-                    }
-                } catch (_) {
-                    /* ignore */
-                }
-            };
-            requestAnimationFrame(() => {
-                kickRepaint();
-                requestAnimationFrame(() => {
-                    kickRepaint();
-                    try {
-                        const c = map.getCenter();
-                        map.jumpTo({
-                            center: [c.lng, c.lat],
-                            zoom: map.getZoom(),
-                            bearing: map.getBearing(),
-                            pitch: map.getPitch()
-                        });
-                    } catch (_) {
-                        /* ignore */
-                    }
-                    kickRepaint();
-                });
-            });
 
-            // Re-fetch tiles that may have been aborted by the network swap.
+            // Retry sources with observed failures, never reset healthy sources on focus.
             // Small delay so the radio has a moment to settle on the new network.
-            setTimeout(() => {
+            window.__voyagrMapRecoverSourceTimer = setTimeout(() => {
+                if (!isCurrent()) return;
+                window.__voyagrMapRecoverSourceTimer = null;
+                if (map.isStyleLoaded && !map.isStyleLoaded()) return;
                 try { voyagrMapForceReloadAllSources(reason); } catch (_) { /* ignore */ }
                 try {
                     if (typeof window.__voyagrRedrawNavigationOverlays === 'function') {
@@ -760,6 +779,7 @@ function initializeMap() {
             }
             const recoverStartedAt = now;
             window.__voyagrMapRecoverVerifyTimer = setTimeout(() => {
+                if (!isCurrent()) return;
                 window.__voyagrMapRecoverVerifyTimer = null;
                 try {
                     if (!map) return;
@@ -781,11 +801,12 @@ function initializeMap() {
                         })
                         : (!styleOk || (tilesLoaded === false && !cameraOpts.isMapMoving));
                     if (!shouldRetry) return;
-                    voyagrMapForceReloadAllSources((reason || 'verify') + ' (retry)');
+                    voyagrMapForceReloadAllSources((reason || 'verify') + ' (retry)', true);
                     if (window.__voyagrMapRecoverEscalateTimer) {
                         clearTimeout(window.__voyagrMapRecoverEscalateTimer);
                     }
                     window.__voyagrMapRecoverEscalateTimer = setTimeout(() => {
+                        if (!isCurrent()) return;
                         window.__voyagrMapRecoverEscalateTimer = null;
                         try {
                             if (!map) return;
@@ -850,18 +871,7 @@ function initializeMap() {
             `(${window.__voyagrMapStyleReloadCount}/${__MAP_MAX_STYLE_RELOADS})`
         );
         try {
-            let savedView = null;
-            try {
-                const c = map.getCenter();
-                savedView = {
-                    center: [c.lng, c.lat],
-                    zoom: map.getZoom(),
-                    bearing: map.getBearing(),
-                    pitch: map.getPitch()
-                };
-            } catch (_) {
-                savedView = null;
-            }
+            const targetMap = map;
             const style = map.getStyle();
             if (style) {
                 const clone = JSON.parse(JSON.stringify(style));
@@ -871,10 +881,8 @@ function initializeMap() {
             }
             requestAnimationFrame(() => voyagrMapResizeAndRepaint());
             map.once('style.load', () => {
+                if (map !== targetMap) return;
                 try {
-                    if (savedView) {
-                        map.jumpTo(savedView);
-                    }
                     if (typeof window.__voyagrRedrawNavigationOverlays === 'function') {
                         window.__voyagrRedrawNavigationOverlays('soft style reload');
                     }
@@ -1109,7 +1117,7 @@ function initializeMap() {
                         const reloaded = voyagrMapForceReloadAllSources(
                             'tiles unloaded for >' +
                                 Math.round(MAP_RENDER_HEARTBEAT_MS / 1000) +
-                                's (heartbeat)'
+                                's (heartbeat)', true
                         );
                         if (reloaded === 0) {
                             // Force reload was debounced or no sources matched —
