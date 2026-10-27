@@ -14,6 +14,7 @@ Usage:
     result = client.query(query_string, cache_key="my_query", cache_ttl=300)
 """
 
+from voyagr.utils import request_budget as route_transport
 import os
 import hashlib
 import json
@@ -232,9 +233,11 @@ class OverpassClient:
             
             for retry in range(self.max_retries):
                 try:
+                    budget=route_transport.current_budget()
+                    if budget: budget.check()
                     logger.debug(f"[Overpass] Querying {endpoint} (attempt {retry + 1}/{self.max_retries})")
                     
-                    response = requests.post(
+                    response = route_transport.post(
                         endpoint,
                         data={'data': query},
                         timeout=self.timeout,
@@ -245,7 +248,7 @@ class OverpassClient:
                     if response.status_code == 429:
                         delay = self._calculate_delay(retry)
                         logger.warning(f"[Overpass] Rate limited, waiting {delay:.1f}s...")
-                        time.sleep(delay)
+                        route_transport.retry_wait(delay)
                         continue
                     
                     # Handle server errors (retry)
@@ -253,7 +256,7 @@ class OverpassClient:
                         self._endpoint_failures[endpoint] = self._endpoint_failures.get(endpoint, 0) + 1
                         delay = self._calculate_delay(retry)
                         logger.warning(f"[Overpass] Server error {response.status_code}, retrying in {delay:.1f}s...")
-                        time.sleep(delay)
+                        route_transport.retry_wait(delay)
                         continue
                     
                     # Handle client errors (don't retry)
@@ -280,7 +283,7 @@ class OverpassClient:
                     last_error = "Request timed out"
                     delay = self._calculate_delay(retry)
                     logger.warning(f"[Overpass] Timeout on {endpoint}, retrying in {delay:.1f}s...")
-                    time.sleep(delay)
+                    route_transport.retry_wait(delay)
                     
                 except requests.exceptions.ConnectionError:
                     self._endpoint_failures[endpoint] = self._endpoint_failures.get(endpoint, 0) + 1

@@ -126,7 +126,10 @@ def test_route_multidrop_success_formats_full_response():
         'optimized': True,
         'legs': [{'geometry_precision': 6}],
         'all_geometry': ['abc'],
+        'geometry': 'abc',  # Core now supplies the validated complete summary.
+        'geometry_precision': 6,
         'all_maneuvers': [{'instruction': 'Go'}],
+        'maneuvers': [{'instruction': 'Go'}],
     }
     with patch.object(multidrop, 'build_multidrop_route', return_value=fake):
         result = build_route_multidrop_response(p)

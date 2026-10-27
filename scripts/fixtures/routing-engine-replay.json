@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "graph_fixture_verified": false,
+  "instructions": "Fill providers per case with graph-grounded method/path/json/params and forbidden_polygons (lat,lon), or expect_no_route. Set graph_fixture_verified only after recording graph/version/profile and authoritative fixture evidence. No synthetic graph claims. Timeout tests should use an isolated local fault proxy; no production endpoint.",
+  "required_evidence": [
+    "installed_version",
+    "build",
+    "graph_date",
+    "profile",
+    "road_and_restriction_ground_truth"
+  ],
+  "providers": {
+    "Valhalla": {
+      "url": "http://127.0.0.1:8002",
+      "metadata_path": "/status"
+    },
+    "GraphHopper": {
+      "url": "http://127.0.0.1:8989",
+      "metadata_path": "/info"
+    },
+    "OSRM": {
+      "url": "http://127.0.0.1:5001",
+      "metadata_path": "/route/v1/driving/-1.13,53.52;-1.12,53.53"
+    }
+  },
+  "cases": [
+    {
+      "name": "normal_route",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "exclusion_point",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "exclusion_polygon",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "excluded_road_segment",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "mandatory_camera",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "railway_crossing",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "toll_road",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "alternatives",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "multiple_waypoints",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "unsupported_restriction",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "no_compliant_route",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    },
+    {
+      "name": "timeout_or_failure",
+      "providers": {},
+      "required_oracle": "Graph-grounded road/polygon evidence; request acceptance is insufficient"
+    }
+  ],
+  "request_schema_example": {
+    "method": "POST",
+    "path": "/route",
+    "json": {
+      "locations": [
+        {
+          "lat": 53.52,
+          "lon": -1.13
+        },
+        {
+          "lat": 53.53,
+          "lon": -1.12
+        }
+      ],
+      "costing": "auto"
+    },
+    "forbidden_polygons": [],
+    "note": "Example only, not a proven road-network fixture"
+  }
+}

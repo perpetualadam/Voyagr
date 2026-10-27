@@ -13,6 +13,7 @@ Includes:
 - score_route_by_hazards: Calculate hazard penalty score for route
 """
 
+from voyagr.utils import request_budget as route_transport
 import os
 import json
 import time
@@ -335,7 +336,7 @@ def fetch_tomtom_incidents(bbox: Dict[str, float], incident_types: Optional[List
         }
 
         logger.info("[TOMTOM] Fetching incidents for route area")
-        response = requests.get(url, params=params, timeout=3)
+        response = route_transport.get(url, params=params, timeout=3)
 
         if response.status_code == 200:
             data = response.json()

@@ -122,6 +122,8 @@ jobs:
           tests/test_traffic_tile_proxy.py
           tests/test_dashcam_ownership.py
           tests/test_routing_avoidance_integrity.py
+          tests/test_phase5_journey.py
+          tests/test_routing_request_budget.py
 
   dashcam-session-policy:
     name: Dashcam session SQL policy

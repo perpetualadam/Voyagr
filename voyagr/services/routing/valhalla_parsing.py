@@ -84,6 +84,9 @@ def valhalla_route_json_to_standard_routes(
         traffic_multiplier, traffic_level = 1.0, 'N/A'
     time_minutes = base_time_minutes * traffic_multiplier
 
+    from voyagr.services.routing.journey_geometry import valhalla_journey
+    journey=valhalla_journey(route_data['trip'])
+    if journey: route_geometry=journey['geometry']
     route_coords = decode_route_geometry(route_geometry, precision=6)
     costs = cost_calculator.calculate_costs(
         distance_km, vehicle_type, fuel_efficiency, fuel_price,
@@ -97,7 +100,7 @@ def valhalla_route_json_to_standard_routes(
         hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
         hazards_list = get_hazards_on_route(route_geometry, hazards)
 
-    maneuvers = extract_valhalla_maneuvers(route_data['trip'], length_in_meters=False)
+    maneuvers = journey['maneuvers'] if journey else extract_valhalla_maneuvers(route_data['trip'], length_in_meters=False)
 
     routes.append({
         'id': 1,
@@ -121,6 +124,7 @@ def valhalla_route_json_to_standard_routes(
         'source': 'Valhalla',
     })
 
+    if journey: routes[-1].update(journey)
     if 'alternates' in route_data:
         for idx, alt_route in enumerate(route_data['alternates'][:3]):
             if 'trip' not in alt_route or 'summary' not in alt_route['trip']:
@@ -141,6 +145,10 @@ def valhalla_route_json_to_standard_routes(
                         for m in leg['maneuvers']:
                             alt_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=False))
 
+            alt_journey=valhalla_journey(alt_route['trip'])
+            if alt_journey:
+                alt_geometry=alt_journey['geometry']
+                alt_maneuvers=alt_journey['maneuvers']
             alt_route_coords = decode_route_geometry(alt_geometry, precision=6)
             alt_costs = cost_calculator.calculate_costs(
                 alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
@@ -177,6 +185,7 @@ def valhalla_route_json_to_standard_routes(
                 'source': 'Valhalla',
             })
 
+            if alt_journey: routes[-1].update(alt_journey)
     return routes
 
 
@@ -211,7 +220,9 @@ def valhalla_trip_json_to_std_route_entry(
     legs = trip_json['trip']['legs']
     if not legs or 'shape' not in legs[0]:
         return None
-    sh_geom = legs[0]['shape']
+    from voyagr.services.routing.journey_geometry import valhalla_journey
+    journey=valhalla_journey(trip_json['trip'],length_in_meters=True)
+    sh_geom = journey['geometry'] if journey else legs[0]['shape']
     sh_dist = trip_json['trip']['summary']['length']
     sh_time = trip_json['trip']['summary']['time']
     if not polyline:
@@ -228,7 +239,7 @@ def valhalla_trip_json_to_std_route_entry(
 
     base_time_minutes = sh_time / 60
 
-    return {
+    entry = {
         'id': route_id,
         'name': name,
         'distance_km': round(sh_dist, 2),
@@ -249,3 +260,6 @@ def valhalla_trip_json_to_std_route_entry(
         'maneuvers': route_maneuvers,
         'source': 'Valhalla',
     }
+
+    if journey: entry.update(journey)
+    return entry

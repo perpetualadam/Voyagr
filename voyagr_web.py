@@ -7,6 +7,7 @@ Features: Route calculation, cost estimation, multi-stop routing, trip history, 
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from voyagr.utils import request_budget as route_transport
 import requests
 import os
 from dotenv import load_dotenv
@@ -1500,6 +1501,11 @@ def calculate_route():
                         'duration': s.get('duration', 15)
                     })
 
+                if not optimize_stop_order:
+                    locations.extend({'lat':wp['lat'],'lon':wp['lon']} for wp in intermediate)
+                    locations.append({'lat':end_lat,'lon':end_lon})
+                    return locations
+
                 # Simple greedy optimization: visit closest point next
                 if intermediate:
                     remaining = intermediate.copy()
@@ -1802,7 +1808,7 @@ def calculate_route():
                             route_optimization=route_optimization,
                         )
 
-                        retry_response = requests.post(url, json=retry_payload, timeout=10, headers=headers)
+                        retry_response = route_transport.post(url, json=retry_payload, timeout=10, headers=headers)
 
                         if retry_response.status_code == 200:
                             retry_data = retry_response.json()
@@ -1994,7 +2000,7 @@ def calculate_route():
                             ('minimal Valhalla (locations+costing)', minimal_payload),
                         ):
                             logger.info(f"[ROUTING] Recovery: requesting {rec_label}")
-                            vrec = requests.post(url, json=rec_payload, timeout=15, headers=headers)
+                            vrec = route_transport.post(url, json=rec_payload, timeout=15, headers=headers)
                             if vrec.status_code == 200:
                                 rd = vrec.json()
                                 if rd.get('error'):
@@ -2124,7 +2130,7 @@ def calculate_route():
                 }
                 logger.debug("[OSRM] fallback_request_prepared")
                 osrm_start = time.time()
-                response = requests.get(osrm_url, timeout=15, headers=headers)
+                response = route_transport.get(osrm_url, timeout=15, headers=headers)
                 osrm_elapsed = (time.time() - osrm_start) * 1000
                 logger.info(f"[OSRM] Response status: {response.status_code}, elapsed: {osrm_elapsed:.0f}ms")
 
@@ -2242,6 +2248,9 @@ def calculate_route():
             })
 
     except Exception as e:
+        from voyagr.services.routing.journey_geometry import IncompleteJourney
+        if isinstance(e,IncompleteJourney):
+            return jsonify(success=False,error='Journey geometry is incomplete; recalculate before navigation.',error_code='INCOMPLETE_ROUTE',geometry_complete=False,automatic_selection_allowed=False),422
         logger.error("[ROUTE] calculation_failed error_type=%s", type(e).__name__)
         return jsonify({'success': False, 'error': 'Route calculation failed'}), 500
     finally:

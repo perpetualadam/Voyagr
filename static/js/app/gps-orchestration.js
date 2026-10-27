@@ -1565,6 +1565,7 @@
             console.log('[Reroute] Sending request start=' + routeRequest.start + ' end=' + routeRequest.end);
 
             const response = await fetch(fetchOrch.apiPath, {
+                ...(integrity ? integrity.fetchOptions(requestTicket) : {}),
                 method: fetchOrch.method,
                 headers: fetchOrch.headers,
                 body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage) : routeRequest),
@@ -1619,7 +1620,7 @@
                 startLon: originLon,
                 destination,
             });
-        }
+        } finally { if (integrity) integrity.finish(requestTicket); }
     }
 
     /**

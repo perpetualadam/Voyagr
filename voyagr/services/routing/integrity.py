@@ -9,7 +9,6 @@ import json
 import math
 import time
 
-from voyagr.utils.geometry import decode_route_geometry
 from voyagr.utils.hazard_matching import SegmentIndex
 
 VERSION = 1
@@ -85,19 +84,9 @@ def engine_name(route, fallback=''):
 
 
 def _geometry(route):
-    geometry = route.get('geometry')
-    if isinstance(geometry,dict):
-        if geometry.get('type') != 'LineString': return []
-        raw = geometry.get('coordinates',[])
-        if not isinstance(raw,list) or any(not isinstance(p,(list,tuple)) or len(p)<2 for p in raw): return []
-        points = [(p[1],p[0]) for p in raw]
-    else:
-        points = decode_route_geometry(geometry, precision=route.get('geometry_precision',6))
-    try:
-        if len(points)<2 or any(len(p)<2 or not all(isinstance(v,(int,float)) and math.isfinite(v) for v in p[:2]) or abs(p[0])>90 or abs(p[1])>180 for p in points): return []
-        if all(p[:2]==points[0][:2] for p in points): return []
-    except (TypeError,ValueError): return []
-    return points
+    from voyagr.services.routing.journey_geometry import decode_geometry, IncompleteJourney
+    try: return decode_geometry(route.get('geometry'),route.get('geometry_precision',6))
+    except IncompleteJourney: return []
 
 
 def _coverage_for(category, buckets, hazards, coords, now):
@@ -120,6 +109,7 @@ def _coverage_for(category, buckets, hazards, coords, now):
 def assess_route(route, requirements, hazards=None, *, fallback_source='', now=None):
     hazards = hazards if hazards is not None else {}
     now = time.time() if now is None else now
+    from voyagr.services.routing.journey_geometry import geometry_binding
     coords = _geometry(route)
     index = SegmentIndex(coords, route.get('road_segments',())) if coords else None
     engine = engine_name(route, fallback_source)
@@ -162,11 +152,11 @@ def assess_route(route, requirements, hazards=None, *, fallback_source='', now=N
     automatic = bool(coords) and all(r['status']=='SATISFIED' for r in mandatory)
     return {'version':VERSION,'status':status,'requirements':rows,'request_fingerprint':requirement_fingerprint(requirements),
             'engine_capabilities':CAPABILITIES[engine], 'automatic_selection_allowed':automatic,
-            'requires_acceptance':not automatic,'geometry_valid':bool(coords),'checked_at':now,
+            'requires_acceptance':not automatic,'geometry_valid':bool(coords),'geometry_binding':geometry_binding(route),'checked_at':now,
             'claim':'checked_available_data_only' if status=='SATISFIED' and active else 'avoidance_disabled' if not active else 'best_effort_or_unverified'}
 
 
-def assess_response(payload, requirements, hazards=None, *, now=None):
+def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=None, endpoints=None):
     """Copy before annotating: no mutation of shared in-memory/persistent cache values."""
     result = copy.deepcopy(payload)
     routes = result.get('routes')
@@ -176,6 +166,10 @@ def assess_response(payload, requirements, hazards=None, *, now=None):
     for route in routes:
         if isinstance(route,dict):
             route['avoidance_assessment'] = assess_route(route,requirements,hazards,fallback_source=result.get('source',''),now=now)
+            if route.get('legs') and not result.get('legs'):
+                nested=assess_response(dict(route,success=True,routes=[dict(route,legs=None)]),requirements,hazards,now=now)
+                route['avoidance_assessment']=nested['avoidance_assessment']
+                route['legs']=nested['legs']
     legs = result.get('legs')
     if isinstance(legs,list) and legs:
         assessments = []
@@ -197,7 +191,27 @@ def assess_response(payload, requirements, hazards=None, *, now=None):
         aggregate['status'] = next((status for status in ('VIOLATED','UNSUPPORTED','UNVERIFIED') if any(r['status']==status for r in aggregate['requirements'] if r['enabled'])), 'SATISFIED')
         if aggregate['status']!='SATISFIED': aggregate['claim']='best_effort_or_unverified'
         if not routes: routes = [dict(result)]
-        for route in routes: route['avoidance_assessment']=copy.deepcopy(aggregate)
+        from voyagr.services.routing.journey_geometry import stitch_legs, geometry_binding, IncompleteJourney
+        try: expected_binding = geometry_binding(stitch_legs(legs))
+        except (IncompleteJourney,KeyError,TypeError,ValueError): expected_binding = None
+        for route in routes:
+            a = copy.deepcopy(aggregate)
+            a['geometry_binding'] = geometry_binding(route)
+            if not expected_binding or a['geometry_binding']!=expected_binding or geometry_binding(result)!=expected_binding:
+                a.update(geometry_valid=False,automatic_selection_allowed=False,requires_acceptance=True,
+                         geometry_error='Journey geometry differs from its assessed legs')
+            route['avoidance_assessment']=a
+    if waypoints or endpoints:
+        from voyagr.services.routing.journey_geometry import visits_in_order, distance
+        for route in routes:
+            points=_geometry(route)
+            endpoints_valid=not endpoints or (points and distance(points[0],endpoints[0])<=75 and distance(points[-1],endpoints[1])<=75)
+            if not endpoints_valid or (waypoints and not visits_in_order(route,waypoints)):
+                route['avoidance_assessment'].update(geometry_valid=False,automatic_selection_allowed=False,requires_acceptance=True,
+                    geometry_error='Route omits or reorders a requested waypoint')
+        routes.sort(key=lambda r:not r['avoidance_assessment']['geometry_valid'])
+        if routes and not any(r['avoidance_assessment']['geometry_valid'] for r in routes):
+            result.update(success=False,error_code='INCOMPLETE_ROUTE',error='Route does not include every requested visit in order.',geometry_complete=False)
     usable = [r for r in routes if isinstance(r,dict) and r.get('avoidance_assessment',{}).get('automatic_selection_allowed')]
     # Preserve preference ranking. Only mandatory-compliant alternatives move ahead.
     if any(r['enabled'] and r['mode']=='mandatory' for r in requirements):
