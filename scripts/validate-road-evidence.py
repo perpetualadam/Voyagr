@@ -7,5 +7,5 @@ from voyagr.utils.road_evidence import read_bounded,validate_evidence,MAX_EVIDEN
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('input',type=Path);args=p.parse_args()
     try:result=validate_evidence(json.loads(read_bounded(args.input,MAX_EVIDENCE_BYTES)))
-    except (ValueError,OSError) as error:result={'valid':False,'errors':[str(error)]}
+    except (ValueError,OSError) as error:result={'valid':False,'source_state':'SOURCE_UNAVAILABLE' if isinstance(error,OSError) else 'SOURCE_CONFLICTING','errors':[str(error)]}
     print(json.dumps(result,indent=2));sys.exit(0 if result['valid'] else 1)

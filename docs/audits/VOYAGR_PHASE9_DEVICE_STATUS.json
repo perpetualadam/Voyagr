@@ -1,0 +1,20 @@
+{
+  "status": "REAL_DEVICE_ACCEPTANCE_NOT_TESTED",
+  "errors": [
+    "No physical-device execution attested",
+    "Missing device_model",
+    "Missing os_version",
+    "Missing browser_version",
+    "Missing recorded_at",
+    "Invalid recorded_at: require a past/present timezone-aware timestamp",
+    "Exact app commit required",
+    "Stationary/passenger observations required"
+  ],
+  "counts": {
+    "PASS": 0,
+    "FAIL": 0,
+    "NOT_TESTED": 20,
+    "BLOCKED": 0
+  },
+  "production_release_authorized": false
+}

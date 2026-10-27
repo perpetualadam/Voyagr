@@ -126,6 +126,7 @@ jobs:
           tests/test_phase6_navigation_evidence.py
           tests/test_phase7_road_matching.py
           tests/test_phase8_evidence.py
+          tests/test_phase9_evidence.py
           tests/test_routing_request_budget.py
 
   dashcam-session-policy:

@@ -1,0 +1,10 @@
+{
+  "kind": "SYNTHETIC_LOCAL_CPU",
+  "runtime": "v24.19.0",
+  "operation": "in_memory_offline_restore",
+  "samples": 200,
+  "median_ms": 0.007460999999999274,
+  "p95_ms": 0.031744000000003325,
+  "max_ms": 0.5660949999999971,
+  "limitations": "No physical device, IndexedDB, service-worker, rendering, network or battery measurement."
+}

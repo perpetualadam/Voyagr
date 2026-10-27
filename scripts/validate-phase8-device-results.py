@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Validate operator result completeness, never infer physical tests from simulation."""
-import argparse,json,re,sys
+import argparse,datetime,json,re,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from voyagr.utils.road_evidence import read_bounded
@@ -18,6 +18,11 @@ def validate(data):
     if data.get('execution_environment')!='physical-device':errors.append('No physical-device execution attested')
     for field in ('device_model','os_version','browser_version','recorded_at'):
         if not isinstance(data.get(field),str) or not data[field].strip():errors.append('Missing '+field)
+    try:
+        stamp=datetime.datetime.fromisoformat(data.get('recorded_at','').replace('Z','+00:00'))
+        if stamp.tzinfo is None or stamp>datetime.datetime.now(datetime.timezone.utc):raise ValueError()
+    except (ValueError,TypeError,AttributeError,OverflowError):
+        errors.append('Invalid recorded_at: require a past/present timezone-aware timestamp')
     if not isinstance(data.get('app_commit'),str) or not re.fullmatch('[0-9a-f]{40}',data['app_commit']):errors.append('Exact app commit required')
     if data.get('observation_role') not in ('stationary','passenger'):errors.append('Stationary/passenger observations required')
     if any(c.get('status') not in ('PASS','FAIL','NOT_TESTED','BLOCKED') for c in cases):errors.append('Unknown case outcome')

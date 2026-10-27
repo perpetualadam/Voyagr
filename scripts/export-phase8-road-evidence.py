@@ -60,7 +60,7 @@ def export(raw,bounds,observed,source,jurisdiction,now=None):
     value.update(coordinate_order='lat,lon',exported_at_ms=now,source_data_at_ms=data_time)
     value['source_hazards']=[]
     for node in root.findall('node'):
-        tags={t.get('k'):t.get('v') for t in node.findall('tag')}
+        tags=acquisition.source_tags(node)
         if tags.get('highway') in ('traffic_signals','speed_camera') or tags.get('railway')=='level_crossing':
             value['source_hazards'].append({'osm_node_id':node.get('id'),'lat':float(node.get('lat')),'lon':float(node.get('lon')),'tags':tags,
                 'candidate_osm_way_ids':[r['osm_way_id'] for r in value['roads'] if node.get('id') in r['node_ids']],
