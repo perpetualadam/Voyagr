@@ -136,7 +136,17 @@
         call.initMobilePwaOnPageLoad();
     }
 
+    var viewportResizePending = false;
     function handleViewportResize() {
+        if (viewportResizePending) return;
+        viewportResizePending = true;
+        requestAnimationFrame(() => {
+            viewportResizePending = false;
+            applyViewportResize();
+        });
+    }
+
+    function applyViewportResize() {
         console.log('[Viewport] Window resized; follow padding recomputed on next frame');
         if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
             window.__voyagrMapResizeAndRepaint();
