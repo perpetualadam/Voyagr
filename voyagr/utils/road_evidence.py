@@ -26,7 +26,7 @@ def write_new_json(path,value,limit=MAX_EVIDENCE_BYTES):
 def validate_evidence(data,now=None,index=None):
     now=time.time()*1000 if now is None else now
     errors=[];warnings=[]
-    result={'schema_version':1,'valid':False,'errors':errors,'warnings':warnings,'coverage':'UNKNOWN',
+    result={'schema_version':1,'source_state':'SOURCE_UNAVAILABLE' if data is None else 'SOURCE_CONFLICTING','valid':False,'errors':errors,'warnings':warnings,'coverage':'UNKNOWN',
             'hazard_coverage':'UNKNOWN','attribute_eligible':False,'surveyed_truth':False}
     if not isinstance(data,dict):errors.append('Evidence must be an object');return result
     if data.get('schema_version')!=1:errors.append('Unsupported evidence schema')
@@ -85,6 +85,7 @@ def validate_evidence(data,now=None,index=None):
             errors.append('Restriction has unresolved way/node references')
     result['valid']=not errors
     result['attribute_eligible']=not errors and fresh and coverage=='COMPLETE' and not unsupported and data.get('source_kind') in ('OSM_EXTRACT','REVIEWED_PROVIDER')
+    result['source_state']=('SOURCE_CONFLICTING' if errors else 'SOURCE_STALE' if not fresh else 'SOURCE_VALIDATED' if result['attribute_eligible'] else 'SOURCE_PARTIAL')
     result['road_count']=len(roads)
     result['errors']=list(dict.fromkeys(errors));result['warnings']=list(dict.fromkeys(warnings))
     return result

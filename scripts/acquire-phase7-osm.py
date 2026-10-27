@@ -7,22 +7,32 @@ review material, never installs/enables a production dataset. No road-truth clai
 import argparse,datetime,hashlib,json,time,urllib.request,xml.etree.ElementTree as ET
 from pathlib import Path
 
+def source_tags(element):
+    """Reject contradictory tags instead of granting the final value authority."""
+    tags={}
+    for tag in element.findall('tag'):
+        key,value=tag.attrib['k'],tag.attrib['v']
+        if key in tags and tags[key]!=value:raise ValueError('Conflicting source tag: '+key)
+        tags[key]=value
+    return tags
+
 def normalize(raw,bounds,acquired,source,jurisdiction=None):
     if b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():raise ValueError('XML entities/DTDs not supported')
     root=ET.fromstring(raw)
     if root.tag!='osm' or root.find('remark') is not None:raise ValueError('Not a successful OSM extract')
     nodes={};roads=[];restrictions=[]
     for node in root.findall('node'):
+        source_tags(node)
         key=node.attrib['id'];point=[float(node.attrib['lat']),float(node.attrib['lon'])]
         if key in nodes and nodes[key]!=point:raise ValueError('Conflicting source node coordinates')
         nodes[key]=point
     for way in root.findall('way'):
-        tags={t.attrib['k']:t.attrib['v'] for t in way.findall('tag')};ids=[n.attrib['ref'] for n in way.findall('nd')]
+        tags=source_tags(way);ids=[n.attrib['ref'] for n in way.findall('nd')]
         if 'highway' not in tags or len(ids)<2:continue
         if any(n not in nodes for n in ids):raise ValueError('Incomplete way nodes')
         roads.append(dict(osm_way_id=way.attrib['id'],osm_version=way.attrib.get('version'),node_ids=ids,geometry=[nodes[n] for n in ids],tags=tags,jurisdiction=jurisdiction))
     for relation in root.findall('relation'):
-        tags={t.attrib['k']:t.attrib['v'] for t in relation.findall('tag')}
+        tags=source_tags(relation)
         if tags.get('type')!='restriction':continue
         raw_members=relation.findall('member')
         members={m.attrib.get('role'):m.attrib for m in raw_members}

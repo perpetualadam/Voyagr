@@ -1,0 +1,56 @@
+{
+  "runtime": "3.12.14",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "kind": "SYNTHETIC_LOCAL_CPU",
+  "limitations": "No Contabo, actual source acquisition, graph requests or physical devices measured. QC includes full index construction on source load, not every GPS tick.",
+  "results": [
+    {
+      "name": "JSON_parse_100_segments",
+      "samples": 20,
+      "median_ms": 0.046426499999999996,
+      "p95_ms": 0.094961,
+      "max_ms": 0.094961,
+      "single_call_peak_traced_bytes": 19918
+    },
+    {
+      "name": "evidence_QC_and_index_100_segments",
+      "samples": 20,
+      "median_ms": 0.260187,
+      "p95_ms": 0.358457,
+      "max_ms": 0.358457,
+      "single_call_peak_traced_bytes": 43104
+    },
+    {
+      "name": "JSON_parse_1000_segments",
+      "samples": 20,
+      "median_ms": 0.6206035,
+      "p95_ms": 0.883389,
+      "max_ms": 0.883389,
+      "single_call_peak_traced_bytes": 266882
+    },
+    {
+      "name": "evidence_QC_and_index_1000_segments",
+      "samples": 20,
+      "median_ms": 2.8976945,
+      "p95_ms": 6.796071,
+      "max_ms": 6.796071,
+      "single_call_peak_traced_bytes": 405596
+    },
+    {
+      "name": "JSON_parse_10000_segments",
+      "samples": 20,
+      "median_ms": 6.5751695,
+      "p95_ms": 8.647375,
+      "max_ms": 8.647375,
+      "single_call_peak_traced_bytes": 2857018
+    },
+    {
+      "name": "evidence_QC_and_index_10000_segments",
+      "samples": 20,
+      "median_ms": 34.673715,
+      "p95_ms": 51.586271,
+      "max_ms": 51.586271,
+      "single_call_peak_traced_bytes": 4348816
+    }
+  ]
+}
