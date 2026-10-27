@@ -1,0 +1,19 @@
+{
+  "scope": "Node pure frontend processing, five vertices; excludes browser/rendering/network",
+  "cases": [
+    {
+      "alternatives": 1,
+      "samples": 200,
+      "median_ms": 0.007300999999998226,
+      "p95_ms": 0.04276399999999825,
+      "max_ms": 3.482998999999996
+    },
+    {
+      "alternatives": 3,
+      "samples": 200,
+      "median_ms": 0.00515800000000155,
+      "p95_ms": 0.009554000000001395,
+      "max_ms": 0.326473
+    }
+  ]
+}
