@@ -1,0 +1,91 @@
+{
+  "kind": "LOCAL_OFFICIAL_GH8_DESERIALIZATION_NOT_REAL_ROUTING",
+  "upstream_tag": "8.0",
+  "upstream_commit": "1e224ae6bb1807ebc5037fb8de07c4f7cfaee749",
+  "runtime": "OpenJDK 21.0.12.1 source-file launcher",
+  "libraries": [
+    {
+      "file": "graphhopper-web-api-8.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/graphhopper/graphhopper-web-api/8.0/graphhopper-web-api-8.0.jar",
+      "sha256": "432887f5bc02a3b958bfa5246884308a3ac65277c7a1bc3222236de0188fa976",
+      "bytes": 102609
+    },
+    {
+      "file": "jackson-core-2.13.5.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.13.5/jackson-core-2.13.5.jar",
+      "sha256": "48f36a025311d0464ad8dda4512a20c79e279a9550f63f3179d731d94482474b",
+      "bytes": 375186
+    },
+    {
+      "file": "jackson-databind-2.13.5.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.13.5/jackson-databind-2.13.5.jar",
+      "sha256": "5fedb24b2356491815d18267f65da9a21dd67413345ad7795f221afa25c78984",
+      "bytes": 1537543
+    },
+    {
+      "file": "jackson-annotations-2.13.5.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.13.5/jackson-annotations-2.13.5.jar",
+      "sha256": "80aea8ed7232db5040ced4b3f982f29da95bb3d802343dbf6fd82ccd98c21c4f",
+      "bytes": 75718
+    },
+    {
+      "file": "jts-core-1.19.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/locationtech/jts/jts-core/1.19.0/jts-core-1.19.0.jar",
+      "sha256": "dbb8644cf324123d06c27aa982f570811e10b4cb1f2aef893b00de237d33efc0",
+      "bytes": 1103721
+    },
+    {
+      "file": "jackson-datatype-jts-2.14.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/graphhopper/external/jackson-datatype-jts/2.14/jackson-datatype-jts-2.14.jar",
+      "sha256": "a24bd4e6205e1d978163b94fbbd4ddb3f4c71be08db9985e40838a2bfba2321b",
+      "bytes": 22160
+    }
+  ],
+  "cases": [
+    {
+      "fixture": "scripts/fixtures/graphhopper8/duplicate-areas-before.json",
+      "sha256": "288e31aa5d9129c68f6629e28674590f6302856b47fa7d54319086eb1bc7f144",
+      "bytes": 1633,
+      "result": "REJECTED_DUPLICATE_AREA",
+      "input_area_count": 4,
+      "unique_area_count": 2,
+      "invalid_geometry_count": null
+    },
+    {
+      "fixture": "scripts/fixtures/graphhopper8/unique-areas-after.json",
+      "sha256": "58c57df5a50b70f26b21f9a6a7aaabbcf1edd0cc4ac992c25537a53dd3c033f4",
+      "bytes": 1661,
+      "result": "PARSED",
+      "input_area_count": 4,
+      "unique_area_count": 4,
+      "invalid_geometry_count": 0
+    }
+  ],
+  "mixed_model": {
+    "origin": "actual builders: two SCDB + two OSM + eight CAZ, existing camera-section references",
+    "bytes": 6978,
+    "sha256": "6c15b794552167d4657eac4500a1cb13a5be8bde543191f955212d8f4d0ecb70",
+    "result": "PARSED",
+    "area_count": 12,
+    "unique_area_count": 12,
+    "invalid_geometry_count": 0,
+    "fixture": "scripts/fixtures/graphhopper8/mixed-after.json"
+  },
+  "repository_camera_inventory": {
+    "sha256": "65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f",
+    "features": 128,
+    "unique_ids": 128,
+    "geometry_types": [
+      "MultiPolygon"
+    ],
+    "jts_invalid_geometry_count": 102,
+    "installed_file_equivalence": "NOT_VERIFIED",
+    "production_changes": false
+  },
+  "limitations": [
+    "No installed GraphHopper HTTP or graph execution",
+    "Deserialization and JTS validity do not compile expressions or prove avoidance enforcement",
+    "Actual combined production request/response not inspected",
+    "137 log count does not prove dataset identity or missing installed area references"
+  ]
+}

@@ -15,6 +15,8 @@ Includes:
 
 from voyagr.utils import request_budget as route_transport
 import os
+import copy
+import re
 import json
 import time
 import math
@@ -1080,9 +1082,56 @@ def merge_graphhopper_custom_model_parts(
     Merge any number of GraphHopper custom models (camera rules, OSM hazard polygons, CAZ polygons).
     Concatenates priority rules and combines all FeatureCollection areas.
     """
-    models = [p for p in parts if p]
+    models = [copy.deepcopy(p) for p in parts if p]
     if not models:
         return None
+    # Each builder starts dynamic IDs at hazard_0. GraphHopper 8 rejects duplicate
+    # FeatureCollection IDs before compiling conditions. Preserve every geometry,
+    # and rewrite only the owning part's exact area-reference tokens.
+    area_token = re.compile(r"\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|\bin_([A-Za-z0-9_]+)\b")
+    reserved = set()
+    for model in models:
+        for feature in (model.get('areas') or {}).get('features', []):
+            identity = feature.get('id')
+            if not isinstance(identity, str) or not identity:
+                raise ValueError('Invalid GraphHopper area identity')
+            reserved.add(identity)
+        for field in ('priority', 'speed'):
+            for rule in model.get(field, []):
+                for condition in ('if', 'else_if'):
+                    if isinstance(rule.get(condition), str):
+                        reserved.update(match.group(1) for match in area_token.finditer(rule[condition]) if match.group(1))
+    used = set()
+    for part_index, model in enumerate(models):
+        replacements = {}
+        local_ids = set()
+        for feature in (model.get('areas') or {}).get('features', []):
+            identity = feature['id']
+            if identity in local_ids:
+                # Already ambiguous within one part: no unique geometry-to-rule map.
+                raise ValueError('Duplicate GraphHopper area identity within model part')
+            local_ids.add(identity)
+            if identity in used:
+                candidate = f'{identity}_part_{part_index}'
+                suffix = 1
+                while candidate in reserved:
+                    candidate = f'{identity}_part_{part_index}_{suffix}'
+                    suffix += 1
+                replacements[identity] = candidate
+                feature['id'] = candidate
+                reserved.add(candidate)
+            used.add(feature['id'])
+        if replacements:
+            for field in ('priority', 'speed'):
+                for rule in model.get(field, []):
+                    for condition in ('if', 'else_if'):
+                        if isinstance(rule.get(condition), str):
+                            rule[condition] = area_token.sub(
+                                lambda match: ('in_' + replacements.get(match.group(1), match.group(1)))
+                                if match.group(1) else match.group(0),
+                                rule[condition],
+                            )
+
     merged: Dict[str, Any] = {'priority': []}
     speed_rules: List[Dict[str, Any]] = []
     for m in models:
