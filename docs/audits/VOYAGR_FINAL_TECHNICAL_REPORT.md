@@ -10,6 +10,14 @@ Final Phase 2 results: **538 Python tests + 68 subtests**, **1,796 Jest tests ac
 
 Application-code remediation is complete for this blocker, but the SQL function must be applied/reviewed and deployed GoTrue revocation/proxy/storage protections verified before public exposure. Overall status remains **NO-GO** for separate lane/limit/avoidance/device-validation concerns and pending security deployment acceptance.
 
+## Phase 4 update — routing avoidance integrity
+
+**PARTIALLY_VERIFIED; overall production NO-GO.** The active Flask/PWA now uses a canonical mandatory/preference contract, independently evaluates every returned alternative and multidrop leg, revalidates cached results and refuses automatic selection when mandatory constraints are violated, unsupported or unverified. Manual acceptance preserves the unresolved status. Shared request ordering/preferences prevent stale calculation/reroute decisions. Segment scoring fixes missed mid-route hazards; OSRM precision, legacy Valhalla geometry/units and configured driving-only OSRM fallback handling are corrected.
+
+Final local validation: **594 Python tests + 68 subtests**, **1,821 Jest tests / 89 suites**, and **11 isolated PostgreSQL policy tests**, all passed; no final selected failures/skips. Test lint and configured coverage thresholds passed (82.71% statements, 75.47% branches, 80.99% functions, 84.56% lines). Three-alternative synthetic evaluator medians: **7.197/16.188/111.211 ms** for 100/1,000/10,000 hazard records; peak traced allocation up to 2.839 MiB. These are software/synthetic checks, not live road or mobile measurements.
+
+Installed engine capabilities, trustworthy camera/road/zone coverage, desktop direct-provider parity, full multidrop journey geometry and real-device acceptance remain open. Mandatory CAZ/congestion and incomplete camera evidence honestly remain unresolved; a successful engine option is not proof. No live configuration, production data or deployment changed. Full data flow, matrix, evidence, fixture outcomes and remaining gates: [VOYAGR_ROUTING_AVOIDANCE_INTEGRITY.md](VOYAGR_ROUTING_AVOIDANCE_INTEGRITY.md). Earlier audit sections below are historical findings; this update supersedes their statements that Flask/PWA compliance gating is wholly unimplemented.
+
 ## A. Executive summary
 
 Voyagr has a substantial modular Flask/PWA test foundation and working local web development workflow. Confirmed privacy, admin access, cache, GPS, speed-unit and input-validation defects received narrow fixes. Broad feature documentation overstates evidence for offline navigation, lane accuracy and guaranteed camera avoidance. The Phase 2 dashcam ownership patch addresses public application-level access; deployed security acceptance and remaining navigation safety gaps prevent public-release approval. This review inventories the repository and traces major active flows; it is not proof that every historical file or deployed component is defect-free.

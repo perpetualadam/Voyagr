@@ -35,7 +35,8 @@ function applyRouteUpdateDuringNavigation(routeData) {
     }
 
     if (plan.updateRouteOnMap) {
-        rt().call.updateRouteOnMap(plan.activeRoute);
+        const result = rt().call.updateRouteOnMap(plan.activeRoute);
+        if (result && result.ok===false) return;
     }
 
     if (plan.patchLastCalculatedRoute) {
@@ -210,6 +211,9 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
  * @returns {*} Return value description
  */
 function showRoutePreview(routeData, skipMapDisplay = false) {
+    const integrity = root.VoyagrAvoidanceIntegrity;
+    const notice = document.getElementById('routeAvoidanceNotice');
+    if (notice && integrity) notice.textContent=integrity.summary(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()));
     const orch = RS().buildShowRoutePreviewOrchestrationPlan(
         collectShowRoutePreviewInput(routeData, skipMapDisplay)
     );
@@ -397,12 +401,12 @@ function applyStartNavigationFromPreviewFromPlan(apply) {
         rt().call.syncLastCalculatedRouteFromSelection(apply.selectedRouteIndex);
     }
 
+    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return;
+
     apply.hideStartNavButtonIds.forEach((id) => {
         const btn = document.getElementById(id);
         if (btn) btn.style.display = 'none';
     });
-
-    rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute);
 
     if (apply.collapseBottomSheet) rt().call.collapseBottomSheet();
 }
@@ -433,7 +437,7 @@ function startNavigation() {
         rt().call.syncLastCalculatedRouteFromSelection(plan.selectedRouteIndex);
     }
 
-    rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute);
+    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return;
 
     (plan.hideStartNavButtonIds || []).forEach(function (id) {
         const btn = document.getElementById(id);

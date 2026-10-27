@@ -232,6 +232,16 @@
     }
 
     function updateRouteOnMap(newRoute) {
+        var integrity = root.VoyagrAvoidanceIntegrity;
+        if (!integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
+            rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
+            setRerouteInProgress(false);
+            return {ok:false,scheduleRetry:false,reason:'avoidance_not_established'};
+        }
+        if (integrity && !integrity.gate(newRoute, {storage:localStorage,automatic:true,quiet:true,showStatus:rt().call.showStatus})) {
+            setRerouteInProgress(false);
+            return {ok:false,scheduleRetry:false,reason:'avoidance_not_established'};
+        }
         var RD = rt().rerouteDecision();
         var hasCurrentGps = rt().getCurrentLat() != null && rt().getCurrentLon() != null;
         // During active navigation, automatic/traffic/in-nav recalcs start from GPS.

@@ -85,13 +85,17 @@ class ValhallaEngine(RoutingEngine):
             data = response.json()
             
             if 'trip' in data and len(data['trip']['legs']) > 0:
-                leg = data['trip']['legs'][0]
-                return {
-                    'distance_km': leg['summary']['length'] / 1000,
-                    'duration_minutes': leg['summary']['time'] / 60,
-                    'geometry': polyline.encode([(p['lat'], p['lon']) for p in leg['shape']]),
-                    'source': 'Valhalla'
+                legs = data['trip']['legs']
+                coords = []
+                for leg in legs:
+                    points = polyline.decode(leg['shape'], precision=6)
+                    coords.extend(points[1:] if coords and points and coords[-1]==points[0] else points)
+                summary = data['trip'].get('summary') or {
+                    'length':sum(leg['summary']['length'] for leg in legs),
+                    'time':sum(leg['summary']['time'] for leg in legs),
                 }
+                return {'distance_km':summary['length'],'duration_minutes':summary['time']/60,
+                        'geometry':polyline.encode(coords,precision=6),'geometry_precision':6,'source':'Valhalla'}
         except Exception as e:
             print(f"[Valhalla] Error: {e}")
         return None
@@ -136,6 +140,7 @@ class GraphHopperEngine(RoutingEngine):
                     'distance_km': path['distance'] / 1000,
                     'duration_minutes': path['time'] / 60000,
                     'geometry': path['points'],
+                    'geometry_precision':5,
                     'source': 'GraphHopper'
                 }
         except Exception as e:
@@ -161,9 +166,11 @@ class OSRMEngine(RoutingEngine):
                        end_lat: float, end_lon: float,
                        routing_mode: str = 'auto') -> Optional[Dict]:
         """Calculate route using OSRM API."""
+        if routing_mode != 'auto':
+            return None  # This configured public provider exposes driving only.
         try:
             url = f'{self.url}/{start_lon},{start_lat};{end_lon},{end_lat}'
-            response = requests.get(url, timeout=self.timeout)
+            response = requests.get(url, params={'geometries':'polyline6','overview':'full'}, timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
             
@@ -172,7 +179,8 @@ class OSRMEngine(RoutingEngine):
                 return {
                     'distance_km': route['distance'] / 1000,
                     'duration_minutes': route['duration'] / 60,
-                    'geometry': polyline.encode([(p[1], p[0]) for p in route['geometry']['coordinates']]),
+                    'geometry': route['geometry'] if isinstance(route['geometry'],str) else polyline.encode([(p[1],p[0]) for p in route['geometry']['coordinates']],precision=6),
+                    'geometry_precision':6,
                     'source': 'OSRM'
                 }
         except Exception as e:
@@ -203,7 +211,7 @@ class RoutingEngineManager:
     def calculate_route(self, start_lat: float, start_lon: float,
                        end_lat: float, end_lon: float,
                        routing_mode: str = 'auto',
-                       preferred_engine: Optional[str] = None) -> Optional[Dict]:
+                       preferred_engine: Optional[str] = None, *, avoidance=None, hazards=None) -> Optional[Dict]:
         """Calculate route with fallback chain.
         
         Args:
@@ -215,26 +223,30 @@ class RoutingEngineManager:
         Returns:
             Route data dict or None if all engines fail
         """
-        # Try preferred engine first
-        if preferred_engine:
-            for engine in self.engines:
-                if engine.name == preferred_engine:
-                    result = engine.calculate_route(start_lat, start_lon, end_lat, end_lon, routing_mode)
-                    if result:
-                        self.stats[engine.name]['success'] += 1
-                        return result
+        from voyagr.services.routing.integrity import normalize_requirements, assess_response
+        requirements = normalize_requirements({'avoid_caz':False, **(avoidance or {})})
+        best_effort = None
+        engines = sorted(self.engines,key=lambda e:e.name!=preferred_engine) if preferred_engine else self.engines
+        for engine in engines:
+            try:
+                result = engine.calculate_route(start_lat,start_lon,end_lat,end_lon,routing_mode)
+                if not isinstance(result,dict):
                     self.stats[engine.name]['failure'] += 1
-        
-        # Try all engines in order
-        for engine in self.engines:
-            result = engine.calculate_route(start_lat, start_lon, end_lat, end_lon, routing_mode)
-            if result:
+                    continue
+                envelope = assess_response({'success':True,'routes':[result]},requirements,hazards)
+                assessed = envelope['routes'][0]
+                if not assessed['avoidance_assessment']['geometry_valid']:
+                    self.stats[engine.name]['failure'] += 1
+                    continue
                 self.stats[engine.name]['success'] += 1
-                return result
-            self.stats[engine.name]['failure'] += 1
-        
-        return None
-    
+                assessed['avoidance_status'] = envelope['avoidance_status']
+                if assessed['avoidance_assessment']['automatic_selection_allowed']:
+                    return assessed
+                if best_effort is None: best_effort = assessed
+            except Exception:
+                self.stats[engine.name]['failure'] += 1
+        return best_effort
+
     def get_available_engines(self) -> List[str]:
         """Get list of available engines."""
         return [engine.name for engine in self.engines if engine.is_available()]

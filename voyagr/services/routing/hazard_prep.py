@@ -44,10 +44,15 @@ def prepare_route_hazards(
     when avoidance is off). Mirrors the previous inline logic exactly.
     """
     import voyagr_web as vw
+    from voyagr.utils.hazard_matching import HazardDataset
+    from voyagr.services.routing.integrity_api import capture_hazard_snapshot
 
     # Fetch hazards (always fetch for scoring, even if avoidance is disabled)
     hazard_start = time.time()
-    hazards = vw.fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
+    import copy
+    hazards = copy.deepcopy(vw.fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon))
+    coverage = getattr(hazards, 'coverage', {}).copy()
+    verification_cameras = {k:copy.deepcopy(v) for k,v in hazards.items() if k=='camera' or k.startswith('camera_')}
     hazard_elapsed = (time.time() - hazard_start) * 1000
     logger.info(
         f"[HAZARDS] Fetched camera hazards in {hazard_elapsed:.0f}ms: "
@@ -129,4 +134,9 @@ def prepare_route_hazards(
     else:
         logger.info("[HAZARDS] Hazard avoidance DISABLED - will score route but not avoid hazards")
 
+    if prefs.avoid_points:
+        coverage['avoid_point'] = {'status':'AVAILABLE','bounds':[-90,-180,90,180],
+                                   'retrieved_at':time.time(),'source':'explicit_geographic_avoid_points'}
+    # Ranking/display preferences must not erase evidence for an enabled contract category.
+    capture_hazard_snapshot(HazardDataset({**hazards, **verification_cameras}, coverage=coverage))
     return hazards

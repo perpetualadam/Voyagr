@@ -540,6 +540,15 @@
         const mergedRoute = rt().routeSelection().mergeNavigationRouteFromSelected(
             routeData, rt().getRouteOptions(), rt().getSelectedRouteIndex()
         );
+        const integrity = root.VoyagrAvoidanceIntegrity;
+        if (integrity && !integrity.gate(mergedRoute, {
+            storage:localStorage, offline:navigator.onLine===false,
+            showStatus:rt().call.showStatus, confirm:message => root.confirm(message),
+        })) return false;
+        if (!integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
+            rt().call.showStatus('Avoidance verification unavailable; navigation not started.', 'warning');
+            return false;
+        }
         const entry = MC().buildNavStartEntryOrchestrationPlan(mergedRoute, navStartOpts);
         if (!entry.shouldStart) {
             rt().call.showStatus(entry.errorStatusMessage, 'error');

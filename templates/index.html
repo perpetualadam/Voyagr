@@ -104,8 +104,8 @@
     <script defer src="/static/js/modules/navigation/live-data-refresh.js?v=20260711zzzy"></script>
     <script defer src="/static/js/modules/navigation/trip-history.js?v=20260712aacg"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
-    <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260827pwa04"></script>
-    <script defer src="/static/js/modules/navigation/route-selection.js?v=20260728maprec1"></script>
+    <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027integrity1"></script>
+    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261027integrity1"></script>
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20260712aack"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20260711zb"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
@@ -134,6 +134,7 @@
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
     <script defer src="/static/js/modules/ui/pwa-install.js?v=20260906app01"></script>
     <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
+    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261027integrity1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20260712aaaz"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20260711zzzx"></script>
@@ -164,10 +165,10 @@
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
     <script defer src="/static/js/app/parking-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20260827pwa01"></script>
-    <script defer src="/static/js/app/traffic-orchestration.js?v=20260715opt1"></script>
+    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261027integrity1"></script>
+    <script defer src="/static/js/app/traffic-orchestration.js?v=20261027integrity1"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/gps-orchestration.js?v=20260827pwa04"></script>
+    <script defer src="/static/js/app/gps-orchestration.js?v=20261027integrity1"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20260712aaej"></script>
@@ -187,11 +188,11 @@
     <script defer src="/static/js/app/mobile-pwa-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/hazard-preferences-orchestration.js?v=20260712aaer"></script>
     <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
-    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20260712maptheme1"></script>
+    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261027integrity1"></script>
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20260712ab47"></script>
     <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
-    <script defer src="/static/js/app/route-preview-orchestration.js?v=20260712ab21"></script>
+    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261027integrity1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
@@ -225,10 +226,10 @@
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/ar-navigation-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712dark4"></script>
-    <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20260712ab57"></script>
+    <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261027integrity1"></script>
     <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20260712ab13"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
-    <script defer src="/static/js/app/calculate-route-orchestration.js?v=20260712ab58"></script>
+    <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261027integrity1"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/voyagr-app.js?v=20260827pwa03"></script>
@@ -895,6 +896,15 @@
                     <!-- Route Preferences Section -->
                     <div class="preferences-section">
                         <h3>🛣️ Route style</h3>
+                        <label>Avoidance enforcement
+                            <select id="avoidanceMode" onchange="localStorage.setItem('pref_avoidance_mode', this.value); window.VoyagrAvoidanceIntegrity.invalidate();">
+                                <option value="preference">Best effort (existing preferences)</option>
+                                <option value="mandatory">Require selected avoidances; review unverified routes</option>
+                            </select>
+                        </label>
+                        <p>Available map data cannot guarantee hazard-free travel. Mandatory conflicts require explicit acceptance before navigation.</p>
+                        <script>window.addEventListener('load', function () { document.getElementById('avoidanceMode').value = localStorage.getItem('pref_avoidance_mode') || 'preference'; });</script>
+
                         <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Road types and how routes are calculated</p>
 
                         <div class="preference-item">
@@ -1578,6 +1588,7 @@
                 <div id="routePreviewTab" style="display: none;">
                     <div class="preferences-section">
                         <h3>📍 Route Preview</h3>
+                        <p id="routeAvoidanceNotice" role="status">Avoidance verification pending.</p>
 
                         <!-- Route Summary -->
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">

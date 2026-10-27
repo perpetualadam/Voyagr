@@ -11,6 +11,7 @@ Provides TSP-style optimization for routes with multiple stops using:
 
 import logging
 import math
+import os
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -749,6 +750,9 @@ def _osrm_leg(
         elif costing == "bicycle":
             profile = "bike"
 
+        if profile not in {p.strip() for p in os.getenv('OSRM_SUPPORTED_PROFILES','driving').split(',') if p.strip()}:
+            return None
+
         url = (f"{OSRM_URL}/{profile}/"
                f"{from_loc['lon']},{from_loc['lat']};"
                f"{to_loc['lon']},{to_loc['lat']}"
@@ -872,6 +876,8 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
                     'min_lon': min_lon, 'max_lon': max_lon,
                 }
                 hazards = _merge_tomtom_incidents_for_bbox(hazards, bbox)
+                from voyagr.services.routing.integrity_api import capture_hazard_snapshot
+                capture_hazard_snapshot(hazards)
                 camera_hazards_md, incident_hazards_md = _graphhopper_hazard_slices(
                     hazards,
                     avoid_cameras=data.get('avoid_cameras', True),
@@ -981,7 +987,9 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
             )
             all_lats = [start_lat, end_lat] + [s['lat'] for s in md_stops]
             all_lons = [start_lon, end_lon] + [s['lon'] for s in md_stops]
-            hazards_md = fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons))
+            import copy
+            hazards_md = copy.deepcopy(fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons)))
+            verification_cameras = {k:copy.deepcopy(v) for k,v in hazards_md.items() if k=='camera' or k.startswith('camera_')}
             if not params.avoid_cameras:
                 vw.clear_camera_hazard_buckets(hazards_md)
             else:
@@ -1016,6 +1024,9 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
                 md_rx_for_gh = hazards_md.get('railway_crossing')
             else:
                 hazards_md['railway_crossing'] = []
+            from voyagr.services.routing.integrity_api import capture_hazard_snapshot
+            from voyagr.utils.hazard_matching import HazardDataset
+            capture_hazard_snapshot(HazardDataset({**hazards_md, **verification_cameras}))
             md_caz_pts = get_caz_valhalla_exclude_points(bbox_md, max_points=10) if params.apply_caz_routing_avoidance else []
             md_cap = max(50 - len(md_caz_pts), 8)
             md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=md_cap)

@@ -559,6 +559,15 @@ function displayRouteComparison() {
 
 function applySelectRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return;
+    const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
+    const integrity = root.VoyagrAvoidanceIntegrity;
+    if (lifecycle && lifecycle.getRouteInProgress() && !integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
+        rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
+        return;
+    }
+    if (lifecycle && lifecycle.getRouteInProgress() && integrity && !integrity.gate(apply.selectedRoute || apply.route, {
+        storage:localStorage,automatic:true,quiet:true,showStatus:rt().call.showStatus,
+    })) return;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
 
@@ -711,6 +720,15 @@ function showAllRoutes() {
 
 function applyUseRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return;
+    const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
+    const integrity = root.VoyagrAvoidanceIntegrity;
+    if (lifecycle && lifecycle.getRouteInProgress() && !integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
+        rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
+        return;
+    }
+    if (lifecycle && lifecycle.getRouteInProgress() && integrity && !integrity.gate(apply.selectedRoute || apply.route, {
+        storage:localStorage,automatic:true,quiet:true,showStatus:rt().call.showStatus,
+    })) return;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
     if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);

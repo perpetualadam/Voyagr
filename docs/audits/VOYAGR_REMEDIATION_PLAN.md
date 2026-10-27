@@ -2,7 +2,7 @@
 
 ## Release decision
 
-**NO-GO for public production release.** Phase 2 remediates the recording-access defect at application-code level; deployed session-policy/storage verification remains mandatory. Lane/posted-limit/GPS/fallback guarantees retain unresolved P1 safety issues. See [dashcam remediation](VOYAGR_DASHCAM_SECURITY_REMEDIATION.md). No automatic deployment. These are source-level findings, not a claim production has been exploited.
+**NO-GO for public production release.** Phase 2 remediates the recording-access defect at application-code level; deployed session-policy/storage verification remains mandatory. Phase 4 adds evidence-bounded Flask/PWA avoidance enforcement; installed providers, road data and desktop parity remain unverified. Lane/posted-limit/GPS and field acceptance retain unresolved P1 safety issues. See [dashcam remediation](VOYAGR_DASHCAM_SECURITY_REMEDIATION.md). No automatic deployment. These are source-level findings, not a claim production has been exploited.
 
 ## Completed reversible batches
 
@@ -17,17 +17,23 @@
 
 Authenticated owner scoping now covers every dashcam endpoint, metadata, file, active session, settings and retention. Legacy ownership stays NULL; no automatic attribution or deletion. Browser video requests use Bearer headers, local-only capture is explicit, account changes discard stale private responses, and the service worker bypasses caching/replay. Existing Supabase identity verification is reused with an online own-session check; absent/unavailable session policy fails closed. Final Phase 2 selected runs: 538 Python tests + 68 subtests; 1,796 Jest tests in 88 suites; 11 isolated PostgreSQL policy tests passed. Live deployment verification is still required; no deployment was performed.
 
+## Phase 4 completed at Flask/PWA code level
+
+**PARTIALLY_VERIFIED; overall NO-GO.** Canonical mandatory/preference requirements, independent per-alternative/leg compliance, cache reassessment, bounded coverage/age, direction/road-aware evidence matching, explicit manual acceptance and automatic reroute refusal are implemented. Stale responses cannot overwrite newer requests/preferences. Segment scoring fixes mid-route misses; OSRM precision and legacy adapter geometry/units are corrected. Public OSRM fallback defaults to driving-only capability.
+
+Final local validation: **594 Python tests + 68 subtests**, **1,821 Jest tests in 89 suites**, and **11 isolated PostgreSQL policy tests passed**; no final selected failures/skips. This includes previous dashcam security/lifecycle regressions. Synthetic three-alternative compliance overhead was 7.197/16.188/111.211 ms median for 100/1,000/10,000 hazards. See [Phase 4 report](VOYAGR_ROUTING_AVOIDANCE_INTEGRITY.md) for exact scope, fixtures, engine matrix and measurements. No production configuration/data/deployment changes.
+
 ## Prioritized remaining work
 
 | Priority | Work | Why deferred / concrete acceptance criteria |
 |---|---|---|
 | P0 SEC-03 deployment gate | Verify deployed private dashcam protections | Code, owner-scoped SQLite/files, authenticated browser requests and live-session-check SQL are implemented and locally tested. Apply reviewed session RPC migration and verify real Supabase revocation, two-account access and proxy/static isolation before public exposure. Legacy NULL-owned rows remain quarantined and unchanged. |
-| P1 NAV-03 | Explicit engine/route capability and constraint outcomes | Every primary/retry/recovery/OSRM/multidrop option must list requested/enforced/relaxed/unknown constraints. Reduced exclusions cannot claim full avoidance. Test provider failures and missing camera data; frontend must require clear user acknowledgement where route constraints relax. |
+| P1 NAV-03 acceptance | Validate deployed engine/data avoidance and desktop parity | Flask/PWA evidence contract and selection gates are implemented/tested in Phase 4. Verify installed engine restrictions, camera direction/coverage/age, CAZ/congestion road polygons, full multidrop geometry and real-device/offline acceptance. Desktop direct paths remain NOT_VERIFIED; do not claim universal mandatory avoidance. |
 | P1 lane | Data-grounded lane instructions | Replace heading-derived lane occupancy/default lane counts with unknown/source states. Preserve genuine lane arrays; test UK motorways, roundabouts, multiple exits and directional turn lanes. Requires desktop tests and real OSM/maneuver fixtures. |
 | P1 speed | Applicable posted/estimated/unknown legal-limit contract | Eliminate ungrounded legal-limit assertions without removing valid strict alerts; direction/vehicle/conditional/cache isolation tests and UK sign fixtures. Free-flow speed must remain ETA-only. |
 | P1 desktop GPS | Last-reliable/unknown state across desktop consumers | Stop Barnsley substitution and guard navigation start, without breaking tuple-assuming consumers. Provision Kivy test environment and simulate GPS loss/update exception. |
 | P1 dependencies | Upgrade advisory-affected runtime packages and npm transitive graph | Use advisory metadata in JSON, supported Python/Node versions and migration review (Flask/CORS/Gunicorn/JWT especially). Run CI plus proxy/header/auth integration checks; do not run blind npm audit fix --force. |
-| P1 route mode | Verify public fallback profile capability | Walking/cycling requests must never silently become driving routes; controlled provider fixtures and integration checks required. |
+| P1 route mode acceptance | Verify installed fallback profile capability | Configured public fallback now refuses non-driving modes by default. Operator-declared extra profiles still require actual graph-backed walking/cycling validation; a URL profile name is not evidence. |
 | P2 auth/payment | Strict issuer and checkout redirect/account contract | Signed missing-issuer/cross-project fixtures; parsed allowlisted redirect origins; authenticated customer association; verified webhook reconciliation before entitlement updates. |
 | P2 cache | Separate cached geometry from current prices/provider state | Change cost fields on identical geometry and prove fresh costs; test hazard dataset revision/constraint provenance and route mode isolation. |
 | P2 privacy | Whole-app location retention/logging policy | Browser/desktop/speed detector/multidrop errors, request access logs, database retention/export/delete; prove coordinates and credentials absent where not operationally justified. |

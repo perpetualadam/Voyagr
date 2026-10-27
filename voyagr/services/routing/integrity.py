@@ -1,0 +1,229 @@
+"""Versioned avoidance requirements and independent, evidence-bounded compliance.
+
+Provider option acceptance is never proof of compliance. Client-supplied coverage
+and claims are deliberately not inputs to the HTTP integration's evaluator.
+"""
+import copy
+import hashlib
+import json
+import math
+import time
+
+from voyagr.utils.geometry import decode_route_geometry
+from voyagr.utils.hazard_matching import SegmentIndex
+
+VERSION = 1
+CATEGORIES = {
+    'speed_cameras': ('camera_speed','camera_average_speed'),
+    'red_light_cameras': ('camera_red_light',),
+    'other_cameras': ('camera_other','camera_bus_lane','camera_mobile','camera'),
+    'traffic_lights': ('traffic_light',), 'railway_crossings': ('railway_crossing',),
+    'other_hazards': ('police','roadworks','accident','pothole','debris','road_closed'),
+    'avoid_points': ('avoid_point',),
+    'tolls': (), 'caz': (), 'congestion_charging': (), 'motorways': (), 'ferries': (), 'unpaved': (),
+}
+FLAGS = {
+    'speed_cameras':'avoid_cameras','red_light_cameras':'avoid_cameras','other_cameras':'avoid_cameras',
+    'traffic_lights':'avoid_traffic_lights','railway_crossings':'avoid_railway_crossings',
+    'tolls':'avoid_tolls','caz':'avoid_caz','congestion_charging':'avoid_caz',
+    'motorways':'avoid_motorways','ferries':'avoid_ferries','unpaved':'avoid_unpaved',
+}
+# Configured integration capabilities, not assertions about an installed server build.
+CAPABILITIES = {
+    'Valhalla': {'point_exclusions':'requested', 'penalties':'requested', 'polygons':'not_used', 'verified_installation':False},
+    'GraphHopper': {'polygons':'custom_model_requested', 'penalties':'requested', 'point_exclusions':'via_areas', 'verified_installation':False},
+    'OSRM': {'polygons':'unsupported', 'point_exclusions':'unsupported', 'penalties':'unsupported', 'verified_installation':False},
+    'Unknown': {'verified_installation':False},
+}
+
+
+def normalize_requirements(data):
+    mode = data.get('avoidance_mode', 'preference')
+    if mode not in ('mandatory','preference'):
+        raise ValueError('Invalid avoidance mode')
+    for flag in set(FLAGS.values()) | {'enable_hazard_avoidance'}:
+        if flag in data and not isinstance(data[flag], bool):
+            raise ValueError('Avoidance flags must be booleans')
+    master = data.get('enable_hazard_avoidance', False) or bool(data.get('avoid_points'))
+    legacy = {
+        'speed_cameras': master and data.get('avoid_cameras',True),
+        'red_light_cameras': master and data.get('avoid_cameras',True),
+        'other_cameras': master and data.get('avoid_cameras',True),
+        'traffic_lights': master and data.get('avoid_traffic_lights',True),
+        'railway_crossings': master and data.get('avoid_railway_crossings',True),
+        'other_hazards': master,
+        'avoid_points': bool(data.get('avoid_points')),
+        'caz': data.get('avoid_caz',True) and not data.get('caz_exempt',False) and data.get('vehicle_type') != 'electric',
+        'congestion_charging': data.get('avoid_caz',True) and not data.get('caz_exempt',False) and data.get('vehicle_type') != 'electric',
+    }
+    legacy.update({k:data.get(v,False) for k,v in FLAGS.items() if k not in legacy})
+    result = {k: {'category':k,'enabled':bool(legacy.get(k)), 'mode':mode,'scope':'route'} for k in CATEGORIES}
+    explicit = data.get('avoidance_requirements', [])
+    if not isinstance(explicit,list) or len(explicit)>len(CATEGORIES):
+        raise ValueError('Invalid avoidance requirements')
+    seen = set()
+    for item in explicit:
+        if not isinstance(item,dict) or not isinstance(item.get('category'),str) or item['category'] not in CATEGORIES or item['category'] in seen:
+            raise ValueError('Unknown or duplicate avoidance category')
+        category = item['category']; seen.add(category)
+        if not isinstance(item.get('enabled'),bool) or item.get('mode') not in ('mandatory','preference') or item.get('scope','route') != 'route':
+            raise ValueError('Invalid avoidance requirement')
+        result[category] = {'category':category,'enabled':item['enabled'],'mode':item['mode'],'scope':'route'}
+    return list(result.values())
+
+
+def requirement_fingerprint(requirements):
+    return hashlib.sha256(json.dumps(requirements, sort_keys=True, separators=(',',':')).encode()).hexdigest()[:24]
+
+
+def engine_name(route, fallback=''):
+    source = str(route.get('source') or fallback)
+    for name in ('OSRM','GraphHopper','Valhalla'):
+        if name.lower() in source.lower():
+            return name
+    return 'Unknown'
+
+
+def _geometry(route):
+    geometry = route.get('geometry')
+    if isinstance(geometry,dict):
+        if geometry.get('type') != 'LineString': return []
+        raw = geometry.get('coordinates',[])
+        if not isinstance(raw,list) or any(not isinstance(p,(list,tuple)) or len(p)<2 for p in raw): return []
+        points = [(p[1],p[0]) for p in raw]
+    else:
+        points = decode_route_geometry(geometry, precision=route.get('geometry_precision',6))
+    try:
+        if len(points)<2 or any(len(p)<2 or not all(isinstance(v,(int,float)) and math.isfinite(v) for v in p[:2]) or abs(p[0])>90 or abs(p[1])>180 for p in points): return []
+        if all(p[:2]==points[0][:2] for p in points): return []
+    except (TypeError,ValueError): return []
+    return points
+
+
+def _coverage_for(category, buckets, hazards, coords, now):
+    coverage = getattr(hazards,'coverage',{})
+    # Each relevant bucket must have explicit successful, untruncated coverage.
+    statuses = []
+    sources = []
+    for bucket in buckets:
+        c = getattr(hazards.get(bucket),'coverage',None) or coverage.get(bucket,{})
+        status = c.get('status','UNKNOWN')
+        bounds = c.get('bounds')
+        if status == 'AVAILABLE':
+            if not isinstance(bounds,(list,tuple)) or len(bounds)!=4 or not all(isinstance(v,(int,float)) and math.isfinite(v) for v in bounds): status='UNKNOWN'
+            elif not bounds or not all(bounds[0]<=p[0]<=bounds[2] and bounds[1]<=p[1]<=bounds[3] for p in coords): status='PARTIAL'
+            if not isinstance(c.get('retrieved_at'),(int,float)) or not 0<=now-c['retrieved_at']<=600: status='STALE'
+        statuses.append(status); sources.append(c.get('source','unknown'))
+    return ('AVAILABLE' if statuses and all(s=='AVAILABLE' for s in statuses) else 'UNKNOWN' if not statuses else next((s for s in statuses if s!='AVAILABLE'),'UNKNOWN')), sorted(set(sources))
+
+
+def assess_route(route, requirements, hazards=None, *, fallback_source='', now=None):
+    hazards = hazards if hazards is not None else {}
+    now = time.time() if now is None else now
+    coords = _geometry(route)
+    index = SegmentIndex(coords, route.get('road_segments',())) if coords else None
+    engine = engine_name(route, fallback_source)
+    rows = []
+    for requirement in requirements:
+        row = dict(requirement, status='SATISFIED', coverage='NOT_APPLICABLE', verification='disabled',
+                   engine=engine, engine_capability='not_requested', conflicts=0, uncertain_matches=0)
+        if requirement['enabled']:
+            category = requirement['category']; buckets = CATEGORIES[category]
+            row.update(status='UNVERIFIED', coverage='UNKNOWN', verification='insufficient_evidence', engine_capability='unsupported' if engine=='OSRM' else 'best_effort')
+            if index and buckets:
+                coverage, sources = _coverage_for(category,buckets,hazards,coords,now)
+                row.update(coverage=coverage, sources=sources)
+                seen = set()
+                for bucket in buckets:
+                    for hazard in hazards.get(bucket,[]) or []:
+                        if not isinstance(hazard,dict): row['uncertain_matches']+=1; continue
+                        identity = (bucket, str(hazard.get('id')), str(hazard.get('lat')), str(hazard.get('lon')), str(hazard.get('road_id')), str(hazard.get('travel_bearing_deg')))
+                        if identity in seen: continue
+                        seen.add(identity)
+                        match = index.match(hazard, category, now)
+                        if match=='MATCH': row['conflicts']+=1
+                        elif match=='POSSIBLE': row['uncertain_matches']+=1
+                if row['conflicts']: row.update(status='VIOLATED', verification='matched_available_data')
+                elif row['uncertain_matches']: row.update(status='UNVERIFIED', verification='road_or_direction_unknown')
+                elif coverage=='AVAILABLE': row.update(status='SATISFIED', verification='checked_available_data')
+            elif index and not buckets:
+                # Road-class/toll/caz estimates or an accepted provider option are not evidence.
+                field = {'tolls':'toll','motorways':'motorway','ferries':'ferry','unpaved':'unpaved'}.get(category)
+                attributes = list(index.attributes.values())
+                if field and any(a.get(field) is True for a in attributes): row.update(status='VIOLATED',verification='road_attribute_conflict',conflicts=1)
+                elif field and len(index.attributes)==len(coords)-1 and all(a.get(field) is False for a in attributes) and isinstance(route.get('road_attributes_verified_at'),(int,float)) and 0<=now-route['road_attributes_verified_at']<=600:
+                    row.update(status='SATISFIED',coverage='AVAILABLE',verification='checked_route_attributes')
+                elif engine=='OSRM': row['status']='UNSUPPORTED'
+            if not coords: row.update(status='UNVERIFIED',verification='invalid_or_missing_geometry')
+        rows.append(row)
+    active = [r for r in rows if r['enabled']]
+    mandatory = [r for r in active if r['mode']=='mandatory']
+    status = next((s for s in ('VIOLATED','UNSUPPORTED','UNVERIFIED') if any(r['status']==s for r in active)), 'SATISFIED')
+    automatic = bool(coords) and all(r['status']=='SATISFIED' for r in mandatory)
+    return {'version':VERSION,'status':status,'requirements':rows,'request_fingerprint':requirement_fingerprint(requirements),
+            'engine_capabilities':CAPABILITIES[engine], 'automatic_selection_allowed':automatic,
+            'requires_acceptance':not automatic,'geometry_valid':bool(coords),'checked_at':now,
+            'claim':'checked_available_data_only' if status=='SATISFIED' and active else 'avoidance_disabled' if not active else 'best_effort_or_unverified'}
+
+
+def assess_response(payload, requirements, hazards=None, *, now=None):
+    """Copy before annotating: no mutation of shared in-memory/persistent cache values."""
+    result = copy.deepcopy(payload)
+    routes = result.get('routes')
+    if not isinstance(routes,list):
+        routes = [result] if result.get('geometry') else []
+    routes = [r for r in routes if isinstance(r,dict)]
+    for route in routes:
+        if isinstance(route,dict):
+            route['avoidance_assessment'] = assess_route(route,requirements,hazards,fallback_source=result.get('source',''),now=now)
+    legs = result.get('legs')
+    if isinstance(legs,list) and legs:
+        assessments = []
+        for leg in legs:
+            if not isinstance(leg,dict): leg = {}
+            leg['avoidance_assessment'] = assess_route(leg,requirements,hazards,now=now)
+            assessments.append(leg['avoidance_assessment'])
+        aggregate = copy.deepcopy(assessments[0])
+        aggregate['scope'] = 'all_legs'
+        aggregate['geometry_valid'] = all(a['geometry_valid'] for a in assessments)
+        aggregate['automatic_selection_allowed'] = all(a['automatic_selection_allowed'] for a in assessments)
+        aggregate['requires_acceptance'] = not aggregate['automatic_selection_allowed']
+        for i, row in enumerate(aggregate['requirements']):
+            peers = [a['requirements'][i] for a in assessments]
+            row['status'] = next((status for status in ('VIOLATED','UNSUPPORTED','UNVERIFIED') if any(p['status']==status for p in peers)), 'SATISFIED')
+            row['conflicts'] = sum(p['conflicts'] for p in peers)
+            row['uncertain_matches'] = sum(p['uncertain_matches'] for p in peers)
+            if any(p['coverage']!='AVAILABLE' for p in peers): row['coverage']='UNKNOWN'
+        aggregate['status'] = next((status for status in ('VIOLATED','UNSUPPORTED','UNVERIFIED') if any(r['status']==status for r in aggregate['requirements'] if r['enabled'])), 'SATISFIED')
+        if aggregate['status']!='SATISFIED': aggregate['claim']='best_effort_or_unverified'
+        if not routes: routes = [dict(result)]
+        for route in routes: route['avoidance_assessment']=copy.deepcopy(aggregate)
+    usable = [r for r in routes if isinstance(r,dict) and r.get('avoidance_assessment',{}).get('automatic_selection_allowed')]
+    # Preserve preference ranking. Only mandatory-compliant alternatives move ahead.
+    if any(r['enabled'] and r['mode']=='mandatory' for r in requirements):
+        routes.sort(key=lambda r:not r.get('avoidance_assessment',{}).get('automatic_selection_allowed',False))
+    result['avoidance_requirements'] = requirements
+    result['avoidance_request_fingerprint'] = requirement_fingerprint(requirements)
+    result['automatic_selection_allowed'] = bool(usable)
+    result['avoidance_status'] = 'NO_COMPLIANT_ROUTE' if not usable and routes else (routes[0]['avoidance_assessment']['status'] if routes else 'UNVERIFIED')
+    if routes:
+        if 'routes' in result: result['routes']=routes
+        result['avoidance_assessment']=routes[0]['avoidance_assessment']
+        if 'routes' in result:
+            primary = routes[0]
+            for key in ('geometry','geometry_precision','maneuvers','fuel_cost','fuel_litres','toll_cost','caz_cost','hazards','hazard_count'):
+                if key in primary: result[key]=primary[key]
+            if 'distance_km' in primary: result['distance']=f"{primary['distance_km']:.2f} km"
+            if 'duration_minutes' in primary: result['time']=f"{primary['duration_minutes']:.0f} minutes"
+        fastest = min((r.get('duration_minutes',float('inf')) for r in routes if isinstance(r.get('duration_minutes'),(int,float)) and r['duration_minutes']>0), default=None)
+        for route in routes:
+            duration = route.get('duration_minutes')
+            route['avoidance_tradeoff'] = {'baseline':'fastest_returned_alternative',
+                'duration_detour_percent':round((duration/fastest-1)*100,1) if fastest and isinstance(duration,(int,float)) else None,
+                'maneuver_count':len(route.get('maneuvers') or []), 'ranking_changed':bool(any(r['enabled'] and r['mode']=='mandatory' for r in requirements))}
+
+    if any(r.get('avoidance_assessment',{}).get('status')!='SATISFIED' for r in routes):
+        result['routing_degraded']=True
+        warning='Avoidance is best effort or unverified against available data, not guaranteed; review route limitations before navigation.'
+        result['routing_warning']=(str(result.get('routing_warning',''))+' '+warning).strip()
+    return result

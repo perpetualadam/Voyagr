@@ -59,7 +59,7 @@ def build_osrm_routes(
 
     Processes up to the first 4 alternatives. Mirrors the previous inline logic
     exactly, including the inline fuel-cost estimate (not via cost_calculator),
-    passing the *encoded* geometry to the hazard scorers, and decoding at OSRM's
+    passing precision-5-decoded coordinates to the hazard scorers, and decoding at OSRM's
     precision 5 for maneuver shape indices.
     """
     import voyagr_web as vw
@@ -102,8 +102,8 @@ def build_osrm_routes(
         hazard_count = 0
         hazards_list: List[Dict[str, Any]] = []
         if ctx.hazards:
-            hazard_penalty, hazard_count = vw.score_route_by_hazards(route_geometry, ctx.hazards)
-            hazards_list = vw.get_hazards_on_route(route_geometry, ctx.hazards)
+            hazard_penalty, hazard_count = vw.score_route_by_hazards(route_coords, ctx.hazards)
+            hazards_list = vw.get_hazards_on_route(route_coords, ctx.hazards)
             logger.info(
                 f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, "
                 f"count={hazard_count}, hazards_list={len(hazards_list)}"

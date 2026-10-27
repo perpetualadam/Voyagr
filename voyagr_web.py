@@ -2108,6 +2108,10 @@ def calculate_route():
 
             # Fallback to OSRM (public service); use profile matching routing mode
             osrm_profile = 'driving' if valhalla_costing == 'auto' else ('foot' if valhalla_costing == 'pedestrian' else 'bike')
+            supported_profiles = {p.strip() for p in os.getenv('OSRM_SUPPORTED_PROFILES','driving').split(',') if p.strip()}
+            if osrm_profile not in supported_profiles:
+                return jsonify(success=False, error='Fallback routing does not support this travel mode; keep the current route or retry the local engines.',
+                               error_code='UNSUPPORTED_ROUTING_MODE', avoidance_status='UNSUPPORTED', routing_degraded=True)
             logger.info("[OSRM] fallback_started profile=%s", osrm_profile)
             osrm_url = (
                 f"{OSRM_URL}/{osrm_profile}/{start_lon},{start_lat};{end_lon},{end_lat}"
@@ -2304,6 +2308,10 @@ set_fallback_optimizer(fallback_optimizer)
 # /api/monitoring/phase5/performance-summary, /api/monitoring/phase5/validation-stats, /api/batch
 # All these routes are now served by voyagr/api/routing.py blueprint
 
+
+# All navigation response branches, including caches and reduced-constraint recovery.
+from voyagr.services.routing.integrity_api import register_avoidance_integrity
+register_avoidance_integrity(app)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))

@@ -35,6 +35,8 @@ from voyagr.models import db_connection
 from voyagr.utils import get_distance_between_points
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 
+from voyagr.utils.hazard_matching import HazardList, SegmentIndex
+
 logger = logging.getLogger('voyagr_web')
 
 # ============================================================================
@@ -856,9 +858,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
             logger.error(f"Error decoding polyline: {type(e).__name__}")
             return []
 
-        # Sample route points — match score_route density so hazard lists align with counts.
-        sample_interval = max(1, len(decoded_points) // 500)
-        sampled_points = decoded_points[::sample_interval]
+        segment_index = SegmentIndex(decoded_points)
 
         for hazard_type, hazard_list in hazards.items():
             if hazard_type not in preferences or len(hazard_list) == 0:
@@ -870,12 +870,10 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
                 hazard_lat = hazard.get('lat')
                 hazard_lon = hazard.get('lon')
 
-                min_distance = float('inf')
-                for point_lat, point_lon in sampled_points:
-                    distance = get_distance_between_points(hazard_lat, hazard_lon, point_lat, point_lon)
-                    min_distance = min(min_distance, distance)
-                    if min_distance > threshold * 2:
-                        break
+                if not isinstance(hazard_lat, (int,float)) or not isinstance(hazard_lon, (int,float)):
+                    continue
+                distances = segment_index.nearby(hazard_lat, hazard_lon, threshold)
+                min_distance = min((distance for distance, _ in distances), default=float('inf'))
 
                 if min_distance <= threshold:
                     display_type = _hazard_marker_display_type(hazard_type, hazard)
@@ -948,6 +946,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
         if not decoded_points:
             return 0, 0
 
+        segment_index = SegmentIndex(decoded_points)
         for hazard_type, hazard_list in hazards.items():
             if hazard_type not in preferences or len(hazard_list) == 0:
                 continue
@@ -956,19 +955,14 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
             threshold = pref['threshold']
             penalty = pref['penalty']
 
-            sample_interval = max(1, len(decoded_points) // 500)
-            sampled_points = decoded_points[::sample_interval]
-
             for hazard in hazard_list:
                 hazard_lat = hazard.get('lat')
                 hazard_lon = hazard.get('lon')
 
-                min_distance = float('inf')
-                for point_lat, point_lon in sampled_points:
-                    distance = get_distance_between_points(hazard_lat, hazard_lon, point_lat, point_lon)
-                    min_distance = min(min_distance, distance)
-                    if min_distance > threshold * 2:
-                        break
+                if not isinstance(hazard_lat, (int,float)) or not isinstance(hazard_lon, (int,float)):
+                    continue
+                distances = segment_index.nearby(hazard_lat, hazard_lon, threshold)
+                min_distance = min((distance for distance, _ in distances), default=float('inf'))
 
                 if min_distance <= threshold:
                     if hazard_type == 'traffic_light' or hazard_type.startswith('camera_') or hazard_type == 'camera':
@@ -996,7 +990,7 @@ def fetch_traffic_lights_osm_bbox(
     max_nodes: int = 120,
 ) -> List[Dict[str, Any]]:
     """Load traffic signal nodes from OpenStreetMap via Overpass (bounding box)."""
-    out: List[Dict[str, Any]] = []
+    out: List[Dict[str, Any]] = HazardList()
     try:
         from overpass_helper import query_overpass, build_traffic_signals_query
     except ImportError:
@@ -1014,10 +1008,14 @@ def fetch_traffic_lights_osm_bbox(
         logger.warning(f"[TRAFFIC_LIGHTS] Overpass failed: {result.get('error')}")
         return out
 
+    elements = result.get('elements', [])
+    out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes else 'AVAILABLE',
+                    'bounds':[south,west,north,east], 'retrieved_at':time.time()-(300 if result.get('cached') else 0), 'source':'Overpass OSM'}
     for el in result.get('elements', [])[:max_nodes]:
         lat = el.get('lat')
         lon = el.get('lon')
         if lat is None or lon is None:
+            out.coverage['status']='PARTIAL'
             continue
         out.append({
             'lat': float(lat),
@@ -1037,7 +1035,7 @@ def fetch_railway_crossings_osm_bbox(
     max_nodes: int = 100,
 ) -> List[Dict[str, Any]]:
     """Load road–rail level crossing nodes from OpenStreetMap via Overpass (bounding box)."""
-    out: List[Dict[str, Any]] = []
+    out: List[Dict[str, Any]] = HazardList()
     try:
         from overpass_helper import query_overpass, build_railway_level_crossings_query
     except ImportError:
@@ -1055,10 +1053,14 @@ def fetch_railway_crossings_osm_bbox(
         logger.warning(f"[RAILWAY_CROSSINGS] Overpass failed: {result.get('error')}")
         return out
 
+    elements = result.get('elements', [])
+    out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes else 'AVAILABLE',
+                    'bounds':[south,west,north,east], 'retrieved_at':time.time()-(300 if result.get('cached') else 0), 'source':'Overpass OSM'}
     for el in result.get("elements", [])[:max_nodes]:
         lat = el.get("lat")
         lon = el.get("lon")
         if lat is None or lon is None:
+            out.coverage['status']='PARTIAL'
             continue
         out.append({
             "lat": float(lat),
