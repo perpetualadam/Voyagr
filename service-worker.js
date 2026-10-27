@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v44';
+const CACHE_VERSION = 'v45';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -151,6 +151,15 @@ self.addEventListener('fetch', event => {
   if (url.pathname.startsWith('/api/dashcam/')) {
     event.respondWith(fetch(request).catch(() => new Response(
       JSON.stringify({ success: false, error: 'Private recordings unavailable offline' }),
+      { status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
+    )));
+    return;
+  }
+
+  // GPS evidence must never be cached, queued or replayed across navigation fixes.
+  if (url.pathname === '/api/road-context' || url.pathname === '/api/road-match') {
+    event.respondWith(fetch(request).catch(() => new Response(
+      JSON.stringify({ success: false, error: 'Road evidence unavailable offline' }),
       { status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
     )));
     return;

@@ -14,6 +14,7 @@ module.exports = {
     collectCoverageFrom: [
         'static/js/modules/map/weather-layer.js',
         'static/js/modules/navigation/camera-pitch.js',
+        'static/js/modules/navigation/road-matching.js',
         'static/js/modules/navigation/turn-instructions.js',
         'static/js/modules/navigation/voice-announcements.js',
         'static/js/modules/navigation/lane-guidance.js',
@@ -33,6 +34,9 @@ module.exports = {
             functions: 20,
             lines: 24,
             statements: 24
+        },
+        'static/js/modules/navigation/road-matching.js': {
+            statements: 80, branches: 70, functions: 80, lines: 90
         },
         // Floors aligned with measured coverage after modularisation expansion (Jul 2026).
         // Raise individual floors as targeted tests land; global suites stay at 1473/1473.

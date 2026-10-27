@@ -795,6 +795,16 @@
     }
 
     function applyGpsTrackingTick(position) {
+        var roadOwner=root.VoyagrRoadMatchOrchestration;
+        var roadMatch=roadOwner ? roadOwner.observe(position,rt().g('routePolyline'),window.lastCalculatedRoute) : null;
+        if (rt().g('routeInProgress') && roadMatch && root.VoyagrRoadMatching.shouldPauseNavigation(roadMatch)) {
+            var knownDeviation=root.VoyagrRoadMatching.supportsDeviation(roadMatch,Date.now());
+            navigationPositionEvidence={state:knownDeviation?'OFF_ROUTE':'UNKNOWN',reason:roadMatch.reason,road_match:roadMatch};
+            pauseUncertainNavigation();
+            rt().call.showStatus(knownDeviation?'Off route — checking a safe reroute':'Road association uncertain — navigation progress paused','warning');
+            if(knownDeviation)checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
+            return;
+        }
         if (rt().g('routeInProgress') && rgModule().assessNavigationPosition) {
             var line=rt().g('routePolyline');
             if (line!==evidencePolyline) {navigationPositionEvidence=null;navigationAnchor=null;evidencePolyline=line;}
@@ -873,6 +883,7 @@
             (position) => {
                 const fix = sgModule().validateNavigationGpsFix(position, Date.now(), getLastGpsFixAtMs());
                 if (!fix.accepted) {
+                    if(root.VoyagrRoadMatchOrchestration)root.VoyagrRoadMatchOrchestration.invalidate(fix.reason);
                     navigationPositionEvidence={state:'UNKNOWN',reason:fix.reason};
                     pauseUncertainNavigation();
                     rt().call.showStatus('GPS unreliable — showing last reliable position', 'warning');
@@ -882,6 +893,7 @@
                 applyGpsTrackingTick(position);
             },
             (error) => {
+                if(root.VoyagrRoadMatchOrchestration)root.VoyagrRoadMatchOrchestration.invalidate('GPS unavailable');
                 navigationPositionEvidence={state:'UNKNOWN',reason:'GPS unavailable'};
                 pauseUncertainNavigation();
                 const message = (error && error.message) ? error.message : 'unknown';
@@ -1872,7 +1884,10 @@
         const alerts = HA.collectHazardsToAnnounce(params);
 
         alerts.forEach(({ hazard, distanceM, unavoidableRouteCamera }) => {
-            announceCameraOrHazard(hazard, distanceM, { unavoidableRouteCamera });
+            var owner=root.VoyagrRoadMatchOrchestration;
+            var association=owner ? owner.classifyHazard(hazard) : 'POSSIBLE';
+            if (association==='UNRELATED') return;
+            announceCameraOrHazard(Object.assign({},hazard,{road_match_status:association}), distanceM, { unavoidableRouteCamera });
         });
     }
 

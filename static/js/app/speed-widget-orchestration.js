@@ -191,6 +191,15 @@
     }
 
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
+        if (root.VoyagrRoadMatchOrchestration) {
+            var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
+            var legal=bundle && bundle.speed;
+            var known=legal && legal.applicable===true && legal.evidence_state==='MAPPED_POSTED';
+            applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
+                statePatch:{currentLimitMph:known ? legal.speed_limit_mph : null,currentSpeedLimitMph:known ? legal.speed_limit_mph : null},
+                widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:known ? legal.speed_limit_mph : null}});
+            return;
+        }
         if (roadType === undefined) roadType = 'residential';
         if (valhallaSpeedLimit === undefined) valhallaSpeedLimit = null;
         if (headingDeg === undefined) headingDeg = null;

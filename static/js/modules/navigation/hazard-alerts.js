@@ -641,6 +641,10 @@
             plan.spokenMessage = friendlyType + ', ' + distStr + ' ahead';
         }
 
+        if (hazard.road_match_status==='POSSIBLE') {
+            plan.notification.message='Possible '+friendlyType+' nearby, '+distStr+' — road association uncertain';
+            if(plan.speak) plan.spokenMessage='Possible '+friendlyType+' nearby. Road association uncertain.';
+        }
         return plan;
     }
 
