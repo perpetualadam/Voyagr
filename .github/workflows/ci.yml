@@ -90,6 +90,7 @@ jobs:
           tests/test_valhalla_excludes.py
           tests/test_graphhopper_attempt.py
           tests/test_graphhopper_diagnostics.py
+          tests/test_graphhopper_model_composition.py
           tests/test_graphhopper_route_request.py
           tests/test_graphhopper_fallback.py
           tests/test_route_discovery.py

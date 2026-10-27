@@ -15,7 +15,7 @@ Every non-200 response on those four attempts now emits one WARNING in the **Voy
 Only fixed enum values reach the logger, including its deferred formatting arguments:
 
 - `body_state`: json / malformed_json / unexpected_json / oversized / unavailable.
-- `categories`: request_json_invalid, encoded_value_error, profile_error, custom_model_error, parameter_error, or unclassified_http_error. Categories are heuristic clues, not proof of the precise defect. Several may apply.
+- `categories`: request_json_invalid, encoded_value_error, profile_error, custom_model_error, parameter_error, area_identity_error, or unclassified_http_error. Categories are heuristic clues, not proof of the precise defect. Several may apply.
 - `error_types`: allowlisted Java exception types mapped to fixed labels such as invalid_argument, invalid_state, json_parse_error, unknown_property, json_input_mismatch. Unknown types are omitted.
 - `names`: at most eight fixed allowlisted parameter/encoded-value tokens, e.g. custom_model, ch.disable, profile, max_speed, lanes, road_class, toll. Names indicate recognised mentions, not proven invalidity. Unknown names and actual profile identifiers are omitted.
 

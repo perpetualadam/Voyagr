@@ -55,6 +55,8 @@ def summarise_graphhopper_error(response):
         if not isinstance(message, str):
             continue
         message = message[:MAX_MESSAGE_CHARS].lower()
+        if 'duplicate area' in message or ('area ' in message and 'already exists' in message):
+            categories.add('area_identity_error')
         if any(s in message for s in ('cannot parse', 'deserialize', 'malformed json', 'unrecognized field', 'unexpected character')):
             categories.add('request_json_invalid')
         if any(s in message for s in ('encoded value', 'encoded_value', 'encodedvalue')):
