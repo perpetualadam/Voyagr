@@ -9,6 +9,7 @@ Contains:
 """
 
 from voyagr.utils import request_budget as route_transport
+from voyagr.services.routing.graphhopper_diagnostics import log_graphhopper_error
 import logging
 import os
 import threading
@@ -368,6 +369,7 @@ def route_with_graphhopper(
             if response.status_code == 200:
                 custom_model_applied = True
             else:
+                log_graphhopper_error(logger, response, 'post_custom_model')
                 from voyagr.services.routing.graphhopper_fallback import (
                     should_refuse_graphhopper_unfiltered_fallback,
                 )
@@ -398,6 +400,9 @@ def route_with_graphhopper(
             }
             response = route_transport.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
+            if response.status_code != 200:
+                log_graphhopper_error(logger, response, 'get_point')
+
             # Some deployments use `points` instead of `point` (historical / custom setups).
             if response.status_code != 200:
                 params_points = dict(params_point)
@@ -405,12 +410,17 @@ def route_with_graphhopper(
                 params_points["points"] = [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"]
                 response = route_transport.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
+                if response.status_code != 200:
+                    log_graphhopper_error(logger, response, 'get_points')
+
             # If GET fails, try POST without a custom model (some deployments accept JSON POST only).
             if response.status_code != 200:
                 logger.warning(f"[GRAPHHOPPER] GET failed (HTTP {response.status_code}); retrying POST(no custom_model)")
                 payload_no_model = dict(payload)
                 payload_no_model.pop("custom_model", None)
                 response = route_transport.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
+                if response.status_code != 200:
+                    log_graphhopper_error(logger, response, 'post_default')
 
         if response.status_code == 200:
             data = response.json()
