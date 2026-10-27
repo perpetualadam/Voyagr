@@ -66,7 +66,8 @@ function inlineDashcam(session = null, localOnly = false, recorderFails = false)
             'dashcamTotalSize','dashcamOldestRecording'].map(id => `<div id="${id}"></div>`),
     ].join('');
     document.getElementById('dashcamLocalOnly').checked = localOnly;
-    const stream = { getTracks: () => [{ stop: jest.fn() }] };
+    const track = { stop: jest.fn() };
+    const stream = { getTracks: () => [track] };
     class Recorder {
         static isTypeSupported() { return true; }
         constructor() { if (recorderFails) throw new Error('Camera recorder failed'); this.state = 'inactive'; }
@@ -99,7 +100,7 @@ function inlineDashcam(session = null, localOnly = false, recorderFails = false)
     const run = new Function('window','document','navigator','MediaRecorder','sendNotification', section +
         '\nreturn { startDashcamRecording, stopDashcamRecording, playDashcamRecording, loadDashcamRecordings, getState: () => dashcamState };');
     const app = run(win, document, nav, Recorder, notify);
-    return { ...app, win, fetch, nav, notify, listeners, setSession: s => { currentSession = s; } };
+    return { ...app, win, fetch, nav, notify, listeners, track, setSession: s => { currentSession = s; } };
 }
 
 describe('actual inline dashcam controls', () => {
@@ -151,8 +152,65 @@ describe('actual inline dashcam controls', () => {
         await app.startDashcamRecording();
         expect(app.fetch.mock.calls.map(c => c[0])).toEqual(['/api/dashcam/start', '/api/dashcam/stop']);
         expect(app.fetch.mock.calls[1][1].headers.get('Authorization')).toBe('Bearer '+sessionA.access_token);
+        expect(JSON.parse(app.fetch.mock.calls[1][1].body)).toEqual({ recording_id: 'dashcam_clip' });
         expect(app.getState().isRecording).toBe(false);
         expect(app.getState().starting).toBe(false);
+    });
+
+    test.each(['sign-out', 'switch-away-and-back'])('%s while the start response body is pending cannot start the camera recorder', async mode => {
+        const app = inlineDashcam(sessionA);
+        let finishBody;
+        let bodyStarted;
+        const pendingBody = new Promise(resolve => { bodyStarted = resolve; });
+        app.fetch.mockImplementationOnce(async () => ({
+            status: 200, ok: true,
+            json: () => { bodyStarted(); return new Promise(resolve => { finishBody = resolve; }); },
+        }));
+        const starting = app.startDashcamRecording();
+        await pendingBody;
+        app.setSession(mode === 'sign-out' ? null : sessionB);
+        app.listeners['voyagr-auth-changed']({ detail: { userId: mode === 'sign-out' ? null : 'user-B' } });
+        if (mode !== 'sign-out') {
+            app.setSession(sessionA);
+            app.listeners['voyagr-auth-changed']({ detail: { userId: 'user-A' } });
+        }
+        expect(app.track.stop).toHaveBeenCalled();
+        finishBody({ success: true, recording_id: 'dashcam_clip' });
+        await starting;
+        expect(app.getState().isRecording).toBe(false);
+        expect(app.getState().mediaRecorder).toBeNull();
+        expect(app.getState().starting).toBe(false);
+    });
+
+    test('rapid stop/start replaces the metadata timer instead of collecting duplicate GPS samples', async () => {
+        const app = inlineDashcam(sessionA);
+        app.nav.geolocation = { getCurrentPosition: jest.fn(done => done({
+            coords: { latitude: 51.5, longitude: -0.1, speed: 0, heading: 0 },
+        })) };
+        await app.startDashcamRecording();
+        await app.stopDashcamRecording();
+        await app.startDashcamRecording();
+        await jest.advanceTimersByTimeAsync(5000);
+        expect(app.nav.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
+        expect(app.fetch.mock.calls.filter(c => c[0] === '/api/dashcam/metadata')).toHaveLength(1);
+        await app.stopDashcamRecording();
+        await jest.advanceTimersByTimeAsync(5000);
+        expect(app.nav.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
+    });
+
+    test('switching to device-only capture cannot inherit the server GPS metadata timer', async () => {
+        const app = inlineDashcam(sessionA);
+        app.nav.geolocation = { getCurrentPosition: jest.fn(done => done({
+            coords: { latitude: 51.5, longitude: -0.1, speed: 0, heading: 0 },
+        })) };
+        await app.startDashcamRecording();
+        await app.stopDashcamRecording();
+        document.getElementById('dashcamLocalOnly').checked = true;
+        await app.startDashcamRecording();
+        await jest.advanceTimersByTimeAsync(5000);
+        expect(app.nav.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+        expect(app.fetch.mock.calls.filter(c => c[0] === '/api/dashcam/metadata')).toHaveLength(0);
+        await app.stopDashcamRecording();
     });
 
     test('sign-out during capture saves locally and cannot upload under a new account', async () => {
