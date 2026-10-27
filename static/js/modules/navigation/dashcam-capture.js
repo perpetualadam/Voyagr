@@ -176,7 +176,38 @@
         );
     }
 
+    /** Authenticated same-origin media/API transport. Never put tokens in URLs.
+     * expectedOwner pins recording operations to the account that started capture.
+     */
+    async function privateFetch(url, options, deps, expectedOwner) {
+        if (typeof url !== 'string' || !/^\/api\/dashcam\//.test(url) || url.includes('..')) {
+            throw new Error('Invalid dashcam resource');
+        }
+        var session = await deps.getSession();
+        if (!session || !session.access_token || !session.user || !session.user.id) {
+            throw new Error('Sign in to use private server recordings');
+        }
+        if (expectedOwner && session.user.id !== expectedOwner) {
+            throw new Error('Account changed; recording remains on this device');
+        }
+        var headers = new Headers((options && options.headers) || {});
+        headers.set('Authorization', 'Bearer ' + session.access_token);
+        var response = await deps.fetch(url, Object.assign({}, options || {}, {
+            headers: headers, cache: 'no-store', redirect: 'error', credentials: 'omit',
+        }));
+        if (response.status === 401 || response.status === 403) {
+            throw new Error('Session expired or revoked; sign in again');
+        }
+        var after = await deps.getSession();
+        if (!after || !after.user || after.user.id !== session.user.id) {
+            throw new Error('Account changed; private response discarded');
+        }
+        response.dashcamOwnerUserId = session.user.id;
+        return response;
+    }
+
     var api = {
+        privateFetch: privateFetch,
         RESOLUTION_PIXELS: RESOLUTION_PIXELS,
         MIME_CANDIDATES: MIME_CANDIDATES,
         buildMediaConstraints: buildMediaConstraints,

@@ -1,0 +1,1112 @@
+[
+  {
+    "path": "/static/<path:filename>",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "static",
+    "file": "/workspace/Voyagr/.venv/lib/python3.12/site-packages/flask/app.py",
+    "line": 502
+  },
+  {
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.index",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 58
+  },
+  {
+    "path": "/index.html",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.index_html",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 71
+  },
+  {
+    "path": "/api/deployed-version",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.get_deployed_version",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 80
+  },
+  {
+    "path": "/api/config",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.get_config",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 95
+  },
+  {
+    "path": "/robots.txt",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.robots_txt",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 145
+  },
+  {
+    "path": "/sitemap.xml",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.sitemap_xml",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 162
+  },
+  {
+    "path": "/llms.txt",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.llms_txt",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 174
+  },
+  {
+    "path": "/llms-full.txt",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.llms_full_txt",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 188
+  },
+  {
+    "path": "/monitoring",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.monitoring_dashboard",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 197
+  },
+  {
+    "path": "/manifest.json",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.manifest",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 204
+  },
+  {
+    "path": "/favicon.ico",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.favicon",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 219
+  },
+  {
+    "path": "/apple-touch-icon-precomposed.png",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.apple_touch_icon",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 230
+  },
+  {
+    "path": "/apple-touch-icon.png",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.apple_touch_icon",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 230
+  },
+  {
+    "path": "/service-worker.js",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.service_worker",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 241
+  },
+  {
+    "path": "/.well-known/assetlinks.json",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.asset_links",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 254
+  },
+  {
+    "path": "/privacy",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.privacy_policy",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 283
+  },
+  {
+    "path": "/privacy/",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "core.privacy_policy_slash",
+    "file": "/workspace/Voyagr/voyagr/api/core.py",
+    "line": 295
+  },
+  {
+    "path": "/api/me",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "auth.me",
+    "file": "/workspace/Voyagr/voyagr/api/auth.py",
+    "line": 21
+  },
+  {
+    "path": "/api/vehicles",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "vehicles.manage_vehicles",
+    "file": "/workspace/Voyagr/voyagr/api/vehicles.py",
+    "line": 28
+  },
+  {
+    "path": "/api/vehicles/<int:vehicle_id>/caz-pass",
+    "methods": [
+      "PUT"
+    ],
+    "endpoint": "vehicles.update_vehicle_caz_pass",
+    "file": "/workspace/Voyagr/voyagr/api/vehicles.py",
+    "line": 100
+  },
+  {
+    "path": "/api/caz-zones",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "caz.get_caz_zones",
+    "file": "/workspace/Voyagr/voyagr/api/caz.py",
+    "line": 23
+  },
+  {
+    "path": "/api/caz-pass-types",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "caz.get_caz_pass_types",
+    "file": "/workspace/Voyagr/voyagr/api/caz.py",
+    "line": 48
+  },
+  {
+    "path": "/api/caz-check",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "caz.check_caz_for_route",
+    "file": "/workspace/Voyagr/voyagr/api/caz.py",
+    "line": 57
+  },
+  {
+    "path": "/api/charging-stations",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "caz.get_charging_stations",
+    "file": "/workspace/Voyagr/voyagr/api/caz.py",
+    "line": 86
+  },
+  {
+    "path": "/api/test-routing-engines",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.test_routing_engines",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 72
+  },
+  {
+    "path": "/api/debug-route",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "routing.debug_route",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 154
+  },
+  {
+    "path": "/api/cache-stats",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.get_cache_stats",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 256
+  },
+  {
+    "path": "/api/cache-clear",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "routing.clear_cache",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 270
+  },
+  {
+    "path": "/api/fallback-chain-health",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.fallback_chain_health",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 283
+  },
+  {
+    "path": "/api/fallback-chain-status",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.fallback_chain_status",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 303
+  },
+  {
+    "path": "/api/parallel-routing",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "routing.parallel_routing_test",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 353
+  },
+  {
+    "path": "/api/routing-performance-report",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "routing.routing_performance_report",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 407
+  },
+  {
+    "path": "/api/monitoring/phase5/metrics",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.get_phase5_metrics",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 478
+  },
+  {
+    "path": "/api/monitoring/phase5/engine-comparison",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "routing.engine_comparison",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 500
+  },
+  {
+    "path": "/api/monitoring/phase5/performance-summary",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.performance_summary",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 550
+  },
+  {
+    "path": "/api/monitoring/phase5/validation-stats",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "routing.validation_stats",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 584
+  },
+  {
+    "path": "/api/batch",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "routing.batch_requests",
+    "file": "/workspace/Voyagr/voyagr/api/routing.py",
+    "line": 610
+  },
+  {
+    "path": "/api/traffic-conditions",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "traffic.get_traffic_conditions",
+    "file": "/workspace/Voyagr/voyagr/api/traffic.py",
+    "line": 104
+  },
+  {
+    "path": "/api/route-traffic-flow",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "traffic.get_route_traffic_flow",
+    "file": "/workspace/Voyagr/voyagr/api/traffic.py",
+    "line": 311
+  },
+  {
+    "path": "/api/tomtom-incidents",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "traffic.get_tomtom_incidents",
+    "file": "/workspace/Voyagr/voyagr/api/traffic.py",
+    "line": 381
+  },
+  {
+    "path": "/api/tomtom/traffic-tile/<int:z>/<int:x>/<int:y>.png",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "traffic.tomtom_traffic_tile_proxy",
+    "file": "/workspace/Voyagr/voyagr/api/traffic.py",
+    "line": 420
+  },
+  {
+    "path": "/api/hazard-preferences",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "hazards.hazard_preferences",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 78
+  },
+  {
+    "path": "/api/hazards/add-camera",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "hazards.add_camera",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 155
+  },
+  {
+    "path": "/api/hazards/report",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "hazards.report_hazard",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 184
+  },
+  {
+    "path": "/api/hazards/nearby",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "hazards.get_nearby_hazards",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 222
+  },
+  {
+    "path": "/api/traffic-lights/area",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "hazards.get_traffic_lights_in_area",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 274
+  },
+  {
+    "path": "/api/railway-crossings/area",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "hazards.get_railway_crossings_in_area",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 297
+  },
+  {
+    "path": "/api/cameras/area",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "hazards.get_cameras_in_area",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 328
+  },
+  {
+    "path": "/api/traffic-lights",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "hazards.get_traffic_lights",
+    "file": "/workspace/Voyagr/voyagr/api/hazards.py",
+    "line": 373
+  },
+  {
+    "path": "/api/trip-history/<int:trip_id>",
+    "methods": [
+      "DELETE"
+    ],
+    "endpoint": "trips.trip_history",
+    "file": "/workspace/Voyagr/voyagr/api/trips.py",
+    "line": 22
+  },
+  {
+    "path": "/api/trip-history",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "trips.trip_history",
+    "file": "/workspace/Voyagr/voyagr/api/trips.py",
+    "line": 22
+  },
+  {
+    "path": "/api/trip-analytics",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "trips.get_trip_analytics",
+    "file": "/workspace/Voyagr/voyagr/api/trips.py",
+    "line": 120
+  },
+  {
+    "path": "/api/geocode",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "search.geocode",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 313
+  },
+  {
+    "path": "/api/reverse-geocode",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "search.reverse_geocode",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 446
+  },
+  {
+    "path": "/api/parking-search",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "search.search_parking",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 541
+  },
+  {
+    "path": "/api/poi-search",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "search.search_poi",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 755
+  },
+  {
+    "path": "/api/poi-along-route",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "search.search_poi_along_route",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 868
+  },
+  {
+    "path": "/api/search-history",
+    "methods": [
+      "DELETE",
+      "GET",
+      "POST"
+    ],
+    "endpoint": "search.manage_search_history",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 928
+  },
+  {
+    "path": "/api/favorites",
+    "methods": [
+      "DELETE",
+      "GET",
+      "POST",
+      "PUT"
+    ],
+    "endpoint": "search.manage_favorites",
+    "file": "/workspace/Voyagr/voyagr/api/search.py",
+    "line": 989
+  },
+  {
+    "path": "/api/lane-guidance",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_lane_guidance",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 137
+  },
+  {
+    "path": "/api/speed-warnings",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_speed_warnings",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 334
+  },
+  {
+    "path": "/api/speed-limit",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_speed_limit",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 379
+  },
+  {
+    "path": "/api/speed-violation",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "navigation.check_speed_violation",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 421
+  },
+  {
+    "path": "/api/speed-limit/metrics",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_speed_limit_metrics",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 451
+  },
+  {
+    "path": "/api/speed-limit/quota",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_tomtom_quota",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 464
+  },
+  {
+    "path": "/api/speed-limit/metrics/reset",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "navigation.reset_speed_limit_metrics",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 477
+  },
+  {
+    "path": "/api/speed-limit/feedback",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "navigation.speed_limit_feedback",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 490
+  },
+  {
+    "path": "/api/road-info",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_road_info",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 557
+  },
+  {
+    "path": "/api/best-time-to-leave",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "navigation.best_time_to_leave",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 633
+  },
+  {
+    "path": "/api/weather",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_weather",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 752
+  },
+  {
+    "path": "/api/analytics",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "navigation.get_analytics",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 782
+  },
+  {
+    "path": "/api/voice/speak",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "navigation.voice_speak",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 829
+  },
+  {
+    "path": "/api/voice/command",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "navigation.voice_command",
+    "file": "/workspace/Voyagr/voyagr/api/navigation.py",
+    "line": 870
+  },
+  {
+    "path": "/api/monitoring/engine-status",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_engine_status_endpoint",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 41
+  },
+  {
+    "path": "/api/monitoring/engine-status/<engine_name>",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_single_engine_status",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 55
+  },
+  {
+    "path": "/api/monitoring/alerts",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_alerts_endpoint",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 72
+  },
+  {
+    "path": "/api/monitoring/alerts/<int:alert_id>/resolve",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "monitoring.resolve_alert_endpoint",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 87
+  },
+  {
+    "path": "/api/monitoring/costs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "monitoring.manage_costs_endpoint",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 101
+  },
+  {
+    "path": "/api/monitoring/health-check",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "monitoring.manual_health_check",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 124
+  },
+  {
+    "path": "/api/monitoring/alerts/summary",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_alerts_summary",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 147
+  },
+  {
+    "path": "/api/monitoring/alerts/severity/<severity>",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_alerts_by_severity",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 161
+  },
+  {
+    "path": "/api/monitoring/alerts/engine/<engine_name>",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_alerts_by_engine_endpoint",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 176
+  },
+  {
+    "path": "/api/monitoring/alerts/unresolved",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_unresolved_alerts",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 191
+  },
+  {
+    "path": "/api/monitoring/alerts/<int:alert_id>/notify",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "monitoring.send_alert_notification",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 206
+  },
+  {
+    "path": "/api/monitoring/alerts/engine/<engine_name>/resolve-all",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "monitoring.resolve_all_engine_alerts",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 225
+  },
+  {
+    "path": "/api/monitoring/alerts/resolve-all",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "monitoring.resolve_all_alerts",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 239
+  },
+  {
+    "path": "/api/monitoring/costs/bandwidth",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_bandwidth_usage",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 255
+  },
+  {
+    "path": "/api/monitoring/costs/requests",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_request_counts",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 270
+  },
+  {
+    "path": "/api/monitoring/costs/estimate",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.estimate_monthly_cost",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 285
+  },
+  {
+    "path": "/api/monitoring/costs/trends",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.analyze_cost_trends",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 300
+  },
+  {
+    "path": "/api/monitoring/costs/history",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.get_cost_history",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 315
+  },
+  {
+    "path": "/api/monitoring/costs/export",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "monitoring.export_cost_history",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 330
+  },
+  {
+    "path": "/api/monitoring/costs/track",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "monitoring.track_bandwidth_and_requests",
+    "file": "/workspace/Voyagr/voyagr/api/monitoring.py",
+    "line": 350
+  },
+  {
+    "path": "/api/app-settings",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "settings.manage_app_settings",
+    "file": "/workspace/Voyagr/voyagr/api/settings.py",
+    "line": 23
+  },
+  {
+    "path": "/api/gesture-event",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "settings.log_gesture_event",
+    "file": "/workspace/Voyagr/voyagr/api/settings.py",
+    "line": 79
+  },
+  {
+    "path": "/api/ml-predictions",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "settings.manage_ml_predictions",
+    "file": "/workspace/Voyagr/voyagr/api/settings.py",
+    "line": 98
+  },
+  {
+    "path": "/api/traffic-patterns",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "endpoint": "settings.manage_traffic_patterns",
+    "file": "/workspace/Voyagr/voyagr/api/settings.py",
+    "line": 155
+  },
+  {
+    "path": "/api/cost-breakdown",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "costs.get_cost_breakdown",
+    "file": "/workspace/Voyagr/voyagr/api/costs.py",
+    "line": 36
+  },
+  {
+    "path": "/api/route-comparison",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "costs.compare_routes",
+    "file": "/workspace/Voyagr/voyagr/api/costs.py",
+    "line": 68
+  },
+  {
+    "path": "/api/cache-statistics",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "costs.get_cache_statistics",
+    "file": "/workspace/Voyagr/voyagr/api/costs.py",
+    "line": 92
+  },
+  {
+    "path": "/api/cost-prediction",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "costs.predict_cost",
+    "file": "/workspace/Voyagr/voyagr/api/costs.py",
+    "line": 106
+  },
+  {
+    "path": "/api/cost-optimization",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "costs.optimize_route_cost",
+    "file": "/workspace/Voyagr/voyagr/api/costs.py",
+    "line": 135
+  },
+  {
+    "path": "/api/alternative-route-cache-info",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "costs.get_alternative_route_cache_info",
+    "file": "/workspace/Voyagr/voyagr/api/costs.py",
+    "line": 168
+  },
+  {
+    "path": "/api/support/stripe-checkout",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "support.create_stripe_checkout_session",
+    "file": "/workspace/Voyagr/voyagr/api/support.py",
+    "line": 34
+  },
+  {
+    "path": "/api/coupons/status",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "coupons.coupons_status",
+    "file": "/workspace/Voyagr/voyagr/api/coupons.py",
+    "line": 33
+  },
+  {
+    "path": "/api/coupons/redeem",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "coupons.coupons_redeem",
+    "file": "/workspace/Voyagr/voyagr/api/coupons.py",
+    "line": 53
+  },
+  {
+    "path": "/api/admin/promo-coupons",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "coupons.admin_create_promo_coupon",
+    "file": "/workspace/Voyagr/voyagr/api/coupons.py",
+    "line": 170
+  },
+  {
+    "path": "/api/dashcam/start",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "dashcam.start_recording",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 35
+  },
+  {
+    "path": "/api/dashcam/stop",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "dashcam.stop_recording",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 48
+  },
+  {
+    "path": "/api/dashcam/status",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "dashcam.get_status",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 59
+  },
+  {
+    "path": "/api/dashcam/metadata",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "dashcam.add_metadata",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 70
+  },
+  {
+    "path": "/api/dashcam/recordings",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "dashcam.get_recordings",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 87
+  },
+  {
+    "path": "/api/dashcam/recordings/<recording_id>/metadata",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "dashcam.get_recording_metadata",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 99
+  },
+  {
+    "path": "/api/dashcam/recordings/<recording_id>/video",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "dashcam.get_recording_video",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 111
+  },
+  {
+    "path": "/api/dashcam/recordings/<recording_id>/upload",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "dashcam.upload_recording",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 133
+  },
+  {
+    "path": "/api/dashcam/recordings/<recording_id>",
+    "methods": [
+      "DELETE"
+    ],
+    "endpoint": "dashcam.delete_recording",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 163
+  },
+  {
+    "path": "/api/dashcam/cleanup",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "dashcam.cleanup",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 175
+  },
+  {
+    "path": "/api/dashcam/settings",
+    "methods": [
+      "GET"
+    ],
+    "endpoint": "dashcam.get_settings",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 186
+  },
+  {
+    "path": "/api/dashcam/settings",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "dashcam.update_settings",
+    "file": "/workspace/Voyagr/dashcam_blueprint.py",
+    "line": 197
+  },
+  {
+    "path": "/api/route",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "calculate_route",
+    "file": "/workspace/Voyagr/voyagr_web.py",
+    "line": 1207
+  },
+  {
+    "path": "/api/multi-stop-route",
+    "methods": [
+      "POST"
+    ],
+    "endpoint": "calculate_multi_stop_route",
+    "file": "/workspace/Voyagr/voyagr_web.py",
+    "line": 2249
+  }
+]

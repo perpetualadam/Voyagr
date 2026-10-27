@@ -4,6 +4,7 @@ Input validation and sanitization utilities.
 
 import re
 import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger('voyagr_web')
@@ -64,6 +65,8 @@ def validate_coordinates(coord_str: str) -> Optional[Tuple[float, float]]:
         lat: float = float(parts[0].strip())
         lon: float = float(parts[1].strip())
         # Validate ranges
+        if not math.isfinite(lat) or not math.isfinite(lon):
+            return None
         if lat < -90 or lat > 90 or lon < -180 or lon > 180:
             return None
         return (lat, lon)

@@ -838,7 +838,12 @@
 
         setGpsWatchId(navigator.geolocation.watchPosition(
             (position) => {
-                setLastGpsFixAtMs(Date.now());
+                const fix = sgModule().validateNavigationGpsFix(position, Date.now(), getLastGpsFixAtMs());
+                if (!fix.accepted) {
+                    rt().call.showStatus('GPS unreliable — showing last reliable position', 'warning');
+                    return;
+                }
+                setLastGpsFixAtMs(fix.timestamp);
                 applyGpsTrackingTick(position);
             },
             (error) => {
@@ -1385,7 +1390,7 @@
         if (stateApply.logJoinLine) console.log(stateApply.logJoinLine);
 
         if (stateApply.triggerReroute) {
-            if (stateApply.incrementRerouteAttemptCount) rt().g('rerouteAttemptCount')++;
+            if (stateApply.incrementRerouteAttemptCount) rt().s('rerouteAttemptCount', rt().g('rerouteAttemptCount') + 1);
             if (stateApply.logDeviationLine) console.log(stateApply.logDeviationLine);
             rt().call.sendNotification(
                 stateApply.notification.title,

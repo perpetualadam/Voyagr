@@ -60,7 +60,7 @@ def load_camera_areas() -> Optional[Dict[str, Any]]:
                 return CAMERA_AREAS_DATA
         logger.warning("[HAZARDS] camera_areas.geojson not found")
     except Exception as e:
-        logger.error(f"[HAZARDS] Failed to load camera_areas.geojson: {e}")
+        logger.error(f"[HAZARDS] Failed to load camera_areas.geojson: {type(e).__name__}")
     return None
 
 # Load on module import
@@ -274,7 +274,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
 
         return hazards
     except Exception as e:
-        logger.error(f"Error fetching hazards: {e}")
+        logger.error(f"Error fetching hazards: {type(e).__name__}")
         return {}
 
 
@@ -332,7 +332,7 @@ def fetch_tomtom_incidents(bbox: Dict[str, float], incident_types: Optional[List
             'timeValidityFilter': 'present'
         }
 
-        logger.info(f"[TOMTOM] Fetching incidents for bbox: {bbox_str}")
+        logger.info("[TOMTOM] Fetching incidents for route area")
         response = requests.get(url, params=params, timeout=3)
 
         if response.status_code == 200:
@@ -393,7 +393,7 @@ def fetch_tomtom_incidents(bbox: Dict[str, float], incident_types: Optional[List
                                     'source': 'TomTom', 'original_type': icon_category
                                 })
                 except Exception as parse_error:
-                    logger.warning(f"[TOMTOM] Error parsing incident: {parse_error}")
+                    logger.warning(f"[TOMTOM] Error parsing incident: {type(parse_error).__name__}")
                     continue
 
             total_incidents = sum(len(v) for v in incidents.values())
@@ -411,7 +411,7 @@ def fetch_tomtom_incidents(bbox: Dict[str, float], incident_types: Optional[List
         if hasattr(e, '__class__') and e.__class__.__name__ == 'Timeout':
             logger.warning("[TOMTOM] API request timed out")
         else:
-            logger.error(f"[TOMTOM] Error fetching incidents: {e}")
+            logger.error(f"[TOMTOM] Error fetching incidents: {type(e).__name__}")
         return {}
 
 
@@ -619,7 +619,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
         return custom_model
 
     except Exception as e:
-        logger.error(f"[CUSTOM_MODEL] Error building custom model: {e}")
+        logger.error(f"[CUSTOM_MODEL] Error building custom model: {type(e).__name__}")
         return {}
 
 
@@ -724,7 +724,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
         return exclude_locations
 
     except Exception as e:
-        logger.error(f"[VALHALLA] Error building exclude_locations: {e}")
+        logger.error(f"[VALHALLA] Error building exclude_locations: {type(e).__name__}")
         return []
 
 
@@ -783,7 +783,7 @@ def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, floa
         }
 
     except Exception as e:
-        logger.error(f'[GRAPHHOPPER] Error building camera avoidance model: {e}')
+        logger.error(f'[GRAPHHOPPER] Error building camera avoidance model: {type(e).__name__}')
         return {}
 
 
@@ -853,7 +853,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
             else:
                 decoded_points = route_points
         except Exception as e:
-            logger.error(f"Error decoding polyline: {e}")
+            logger.error(f"Error decoding polyline: {type(e).__name__}")
             return []
 
         # Sample route points — match score_route density so hazard lists align with counts.
@@ -888,7 +888,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
 
         return hazards_on_route
     except Exception as e:
-        logger.error(f"Error getting hazards on route: {e}")
+        logger.error(f"Error getting hazards on route: {type(e).__name__}")
         return []
 
 
@@ -942,7 +942,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
             else:
                 decoded_points = route_points
         except Exception as e:
-            logger.error(f"[HAZARDS] Error decoding polyline: {e}")
+            logger.error(f"[HAZARDS] Error decoding polyline: {type(e).__name__}")
             return 0, 0
 
         if not decoded_points:
@@ -984,7 +984,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
         logger.info(f"[HAZARDS] Route scoring complete: total_penalty={total_penalty:.0f}s, hazard_count={hazard_count}")
         return total_penalty, hazard_count
     except Exception as e:
-        logger.error(f"Error scoring route: {e}")
+        logger.error(f"Error scoring route: {type(e).__name__}")
         return 0, 0
 
 
@@ -1290,6 +1290,6 @@ def build_prioritised_valhalla_exclude_locations(
         else:
             logger.warning("[VALHALLA] No exclude_locations generated, using standard routing")
     except Exception as e:
-        logger.warning(f"[VALHALLA] Failed to build exclude_locations: {e}")
+        logger.warning(f"[VALHALLA] Failed to build exclude_locations: {type(e).__name__}")
         exclude_locations = []
     return exclude_locations

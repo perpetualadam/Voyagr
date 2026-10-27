@@ -61,7 +61,7 @@ class TestDashcamService(unittest.TestCase):
         conn.commit()
         conn.close()
         
-        self.service = DashcamService(self.db_path, self.storage_dir)
+        self.service = DashcamService(self.db_path, self.storage_dir, owner_user_id="test-owner")
     
     def tearDown(self):
         """Clean up test fixtures"""
@@ -116,7 +116,7 @@ class TestDashcamService(unittest.TestCase):
         self.assertEqual(stop['metadata_points'], 2)
         self.assertEqual(len(self.service.metadata_buffer), 0)
 
-        meta_path = os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+        meta_path = self.service._metadata_path(recording_id)
         self.assertTrue(os.path.isfile(meta_path))
         with open(meta_path, 'r', encoding='utf-8') as fh:
             payload = json.load(fh)
@@ -136,7 +136,7 @@ class TestDashcamService(unittest.TestCase):
         recording_id = start['recording_id']
         self.service.add_metadata(51.5, -0.12, 10.0, 0.0)
         self.service.stop_recording()
-        meta_path = os.path.join(self.storage_dir, f'{recording_id}.meta.json')
+        meta_path = self.service._metadata_path(recording_id)
         self.assertTrue(os.path.isfile(meta_path))
         self.service.delete_recording(recording_id)
         self.assertFalse(os.path.isfile(meta_path))

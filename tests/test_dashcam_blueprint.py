@@ -10,6 +10,7 @@ import os
 import json
 import sqlite3
 from flask import Flask
+from unittest.mock import patch, Mock
 from dashcam_blueprint import dashcam_bp, init_dashcam_blueprint
 
 
@@ -54,6 +55,17 @@ class TestDashcamBlueprint(unittest.TestCase):
             storage_dir=self.storage_dir,
         )
         self.client = self.app.test_client()
+        self.owner = '11111111-1111-4111-8111-111111111111'
+        self.client.environ_base['HTTP_AUTHORIZATION'] = 'Bearer test-token'
+        for patcher in [
+            patch.dict(os.environ, {'SUPABASE_URL': 'https://auth.example.test', 'SUPABASE_ANON_KEY': 'public-test-key'}),
+            patch('voyagr.utils.dashcam_auth.verify_supabase_jwt', return_value={
+                'sub': self.owner, 'session_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'role': 'authenticated'}),
+            patch('voyagr.utils.dashcam_auth.requests.post', return_value=Mock(status_code=200, json=lambda: True)),
+        ]:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     
     def tearDown(self):
         """Clean up test fixtures"""
@@ -179,13 +191,17 @@ class TestDashcamBlueprint(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertTrue(data['success'])
-        self.assertTrue(os.path.isfile(data['file_path']))
-        with open(data['file_path'], 'rb') as f:
+        self.assertNotIn('file_path', data)
+        private = self.app.extensions['voyagr_dashcam'].for_owner(self.owner).get_recording_file(recording_id)
+        self.assertTrue(os.path.isfile(private['file_path']))
+        with open(private['file_path'], 'rb') as f:
             self.assertEqual(f.read(), payload)
 
         listing = json.loads(self.client.get('/api/dashcam/recordings').data)
         match = next(r for r in listing['recordings'] if r['recording_id'] == recording_id)
-        self.assertEqual(match['file_path'], data['file_path'])
+        self.assertTrue(match['has_video'])
+        self.assertNotIn('file_path', match)
+        self.assertNotIn('owner_user_id', match)
         self.assertGreater(match['file_size_mb'], 0)
 
     def test_upload_recording_endpoint_missing_file(self):

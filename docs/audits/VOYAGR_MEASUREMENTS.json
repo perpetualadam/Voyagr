@@ -1,0 +1,23 @@
+{
+  "decode_10000_points": {
+    "iterations_per_repeat": 100,
+    "repeats": 5,
+    "median_ms_per_call": 5.444837310060393,
+    "min_ms_per_call": 5.236213289972511
+  },
+  "cache_key_20_waypoints": {
+    "iterations_per_repeat": 1000,
+    "repeats": 5,
+    "median_ms_per_call": 0.014005967997945845,
+    "min_ms_per_call": 0.013893418996303808
+  },
+  "tracked_files": 1375,
+  "python_files": 331,
+  "javascript_files": 248,
+  "large_module_lines": {
+    "satnav.py": 10926,
+    "voyagr_web.py": 2347,
+    "static/js/voyagr-app.js": 3128,
+    "static/js/modules/navigation/route-selection.js": 4663
+  }
+}

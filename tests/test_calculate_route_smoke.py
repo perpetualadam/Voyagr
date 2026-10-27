@@ -441,6 +441,8 @@ class ValhallaHttp400RecoverySmokeTest(unittest.TestCase):
         self.assertNotIn('All routing engines failed', d.get('error') or '')
         self.assertIn('Valhalla', d.get('source') or '')
         self.assertGreaterEqual(len(d.get('routes') or []), 1)
+        self.assertTrue(d['routing_degraded'])
+        self.assertIn('not guaranteed', d['routing_warning'])
 
 
 if __name__ == '__main__':

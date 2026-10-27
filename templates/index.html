@@ -152,7 +152,7 @@
     <script defer src="/static/js/modules/navigation/battery-saving.js?v=20260712aaah"></script>
     <script defer src="/static/js/modules/navigation/app-state.js?v=20260712aaac"></script>
     <script defer src="/static/js/modules/navigation/gesture-control.js?v=20260811noshake"></script>
-    <script defer src="/static/js/modules/navigation/dashcam-capture.js?v=20260811dash3"></script>
+    <script defer src="/static/js/modules/navigation/dashcam-capture.js?v=20261027ownership1"></script>
     <script defer src="/static/js/modules/navigation/legacy-prefs-restore.js?v=20260811noshake"></script>
     <script defer src="/static/js/modules/navigation/smart-zoom.js?v=20260711zzzj"></script>
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260811noshake"></script>
@@ -1338,6 +1338,8 @@
                         </div>
 
                         <!-- Live camera preview (shown while recording) -->
+                        <label><input id="dashcamLocalOnly" type="checkbox"> Record on this device only (no upload)</label>
+                        <p>Private server recordings require sign-in. Device-only clips download locally when stopped.</p>
                         <video id="dashcamPreview" muted autoplay playsinline style="display: none; width: 100%; max-height: 220px; border-radius: 8px; margin-bottom: 15px; background: #111; object-fit: cover;"></video>
 
                         <!-- Recording Controls -->
@@ -1952,6 +1954,10 @@
 
         let dashcamState = {
             isRecording: false,
+            ownerUserId: null,
+            localOnly: false,
+            starting: false,
+            stopping: false,
             recordingStartTime: null,
             recordingDurationInterval: null,
             currentRecordingId: null,
@@ -1967,6 +1973,90 @@
             loadDashcamRecordings();
             loadDashcamSettings();
         });
+
+        async function getDashcamSession() {
+            const auth = window.VoyagrSupabaseAuthOrchestration;
+            const client = auth && auth.getSupabaseClient();
+            if (!client) return null;
+            const result = await client.auth.getSession();
+            return result.data && result.data.session;
+        }
+
+        function dashcamFetch(url, options, expectedOwner) {
+            return getDashcamCapture().privateFetch(url, options, {
+                getSession: getDashcamSession,
+                fetch: window.fetch.bind(window),
+            }, expectedOwner);
+        }
+
+        async function assertDashcamResponseOwner(response) {
+            const session = await getDashcamSession();
+            if (!session || session.user.id !== response.dashcamOwnerUserId) {
+                throw new Error('Account changed; private response discarded');
+            }
+        }
+
+        const dashcamPlaybackResources = new Set();
+        function clearDashcamPlayback() {
+            dashcamPlaybackResources.forEach(resource => {
+                if (resource.popup && !resource.popup.closed) resource.popup.close();
+                URL.revokeObjectURL(resource.url);
+            });
+            dashcamPlaybackResources.clear();
+        }
+        window.addEventListener('pagehide', clearDashcamPlayback);
+        window.addEventListener('voyagr-auth-changed', event => {
+            clearDashcamPlayback();
+            document.getElementById('dashcamRecordingsList').textContent = 'Sign in to view your private recordings';
+            document.getElementById('dashcamTotalRecordings').textContent = '0';
+            document.getElementById('dashcamTotalSize').textContent = '0 MB';
+            document.getElementById('dashcamOldestRecording').textContent = '-';
+            if (dashcamState.isRecording && !dashcamState.localOnly &&
+                dashcamState.ownerUserId !== event.detail.userId) {
+                // Stop locally; identity-pinned transport will refuse server writes.
+                void stopDashcamRecording();
+            }
+            if (event.detail.userId) { loadDashcamRecordings(); loadDashcamSettings(); }
+        });
+
+        function saveDashcamOnDevice(blob) {
+            if (!blob || !blob.size) return;
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'voyagr-dashcam.' + (blob.type.includes('mp4') ? 'mp4' : 'webm');
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+
+        async function playDashcamRecording(recordingId, download) {
+            const popup = download ? null : window.open('', '_blank');
+            if (popup) popup.opener = null;
+            try {
+                const response = await dashcamFetch('/api/dashcam/recordings/' + encodeURIComponent(recordingId) + '/video' + (download ? '?download=1' : ''));
+                if (!response.ok) throw new Error('Recording unavailable');
+                const blob = await response.blob();
+                await assertDashcamResponseOwner(response);
+                if (download) { saveDashcamOnDevice(blob); return; }
+                if (!popup) throw new Error('Allow the playback window to open');
+                const url = URL.createObjectURL(blob);
+                const resource = { url, popup };
+                dashcamPlaybackResources.add(resource);
+                const video = popup.document.createElement('video');
+                video.controls = true;
+                video.src = url;
+                video.style.width = '100%';
+                popup.document.body.appendChild(video);
+                const check = setInterval(() => {
+                    if (popup.closed) {
+                        URL.revokeObjectURL(url); dashcamPlaybackResources.delete(resource); clearInterval(check);
+                    }
+                }, 1000);
+            } catch (error) {
+                if (popup) popup.close();
+                sendNotification('📹 Dashcam', error.message || 'Recording unavailable', 'error');
+            }
+        }
 
         function toggleDashcamAudio() {
             const audioBtn = document.getElementById('dashcamAudio');
@@ -2023,7 +2113,7 @@
             });
         }
 
-        async function uploadDashcamBlob(recordingId, blob, mimeType) {
+        async function uploadDashcamBlob(recordingId, blob, mimeType, recordingOwner) {
             const DC = getDashcamCapture();
             const plan = DC
                 ? DC.buildUploadRequestPlan({ recordingId, mimeType })
@@ -2036,36 +2126,46 @@
             if (!plan.shouldUpload || !blob || !blob.size) {
                 return { success: false, error: plan.error || 'Empty recording' };
             }
-            const response = await fetch(plan.url, {
+            const response = await dashcamFetch(plan.url, {
                 method: plan.method,
                 headers: plan.headers,
                 body: blob,
-            });
+            }, recordingOwner);
             return response.json();
         }
 
         async function startDashcamRecording() {
+            if (dashcamState.isRecording || dashcamState.starting || dashcamState.stopping) return;
             const DC = getDashcamCapture();
             if (!DC || !DC.isCaptureSupported({ navigator: navigator, window: window })) {
                 sendNotification('📹 Dashcam', 'Camera recording is not supported in this browser', 'error');
                 return;
             }
 
+            dashcamState.starting = true;
             let stream = null;
             let serverSessionStarted = false;
             try {
+                const localOnly = document.getElementById('dashcamLocalOnly').checked;
+                const session = localOnly ? null : await getDashcamSession();
+                if (!localOnly && !session) {
+                    sendNotification('📹 Dashcam', 'Sign in for private server storage, or select device-only recording', 'info');
+                    return;
+                }
+                dashcamState.localOnly = localOnly;
+                dashcamState.ownerUserId = session ? session.user.id : null;
                 const settings = readDashcamCaptureSettings();
                 const constraints = DC.buildMediaConstraints(settings);
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-                const response = await fetch('/api/dashcam/start', { method: 'POST' });
-                const data = await response.json();
+                const response = localOnly ? null : await dashcamFetch('/api/dashcam/start', { method: 'POST' }, dashcamState.ownerUserId);
+                const data = localOnly ? { success: true, recording_id: null } : await response.json();
                 if (!data.success) {
                     DC.stopMediaStreamTracks(stream);
                     sendNotification('📹 Dashcam', 'Failed to start recording: ' + (data.error || 'unknown'), 'error');
                     return;
                 }
-                serverSessionStarted = true;
+                serverSessionStarted = !localOnly;
 
                 const mimeType = DC.pickSupportedMimeType(
                     window.MediaRecorder.isTypeSupported.bind(window.MediaRecorder)
@@ -2091,7 +2191,7 @@
                 updateDashcamUI();
                 startRecordingTimer();
                 document.getElementById('dashcamIndicator').style.display = 'block';
-                startDashcamMetadataCollection();
+                if (!localOnly) startDashcamMetadataCollection();
                 sendNotification('📹 Dashcam', 'Dashcam recording started', 'success');
             } catch (error) {
                 console.error('Error starting dashcam:', error);
@@ -2111,7 +2211,7 @@
                     };
                 if (abortPlan.shouldAbort) {
                     try {
-                        await fetch(abortPlan.url, { method: abortPlan.method || 'POST' });
+                        await dashcamFetch(abortPlan.url, { method: abortPlan.method || 'POST' }, dashcamState.ownerUserId);
                     } catch (stopError) {
                         console.error('Error rolling back dashcam session:', stopError);
                     }
@@ -2126,6 +2226,8 @@
                     ? 'Camera permission denied'
                     : 'Error starting dashcam recording';
                 sendNotification('📹 Dashcam', message, 'error');
+            } finally {
+                dashcamState.starting = false;
             }
         }
 
@@ -2134,7 +2236,12 @@
                 return;
             }
 
+            if (dashcamState.stopping) return;
+            dashcamState.stopping = true;
+            try {
             const recordingId = dashcamState.currentRecordingId;
+            const recordingOwner = dashcamState.ownerUserId;
+            const wasLocalOnly = dashcamState.localOnly;
             const recorder = dashcamState.mediaRecorder;
             const chunks = dashcamState.recordingChunks;
             const mimeType = dashcamState.recorderMimeType || 'video/webm';
@@ -2155,11 +2262,17 @@
             updateDashcamUI();
             document.getElementById('dashcamIndicator').style.display = 'none';
 
+            if (wasLocalOnly) {
+                saveDashcamOnDevice(blob);
+                sendNotification('📹 Dashcam', 'Device-only recording saved locally; nothing uploaded', 'success');
+                return;
+            }
+
             let stopSuccess = false;
             let stopError = '';
             let serverRecordingId = null;
             try {
-                const response = await fetch('/api/dashcam/stop', { method: 'POST' });
+                const response = await dashcamFetch('/api/dashcam/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recording_id: recordingId }) }, recordingOwner);
                 const data = await response.json();
                 stopSuccess = !!data.success;
                 stopError = data.error || '';
@@ -2188,7 +2301,7 @@
 
             if (plan.shouldUpload) {
                 try {
-                    const upload = await uploadDashcamBlob(plan.recordingId, blob, mimeType);
+                    const upload = await uploadDashcamBlob(plan.recordingId, blob, mimeType, recordingOwner);
                     if (upload.success) {
                         if (plan.stopSucceeded) {
                             sendNotification('📹 Dashcam', 'Dashcam recording saved', 'success');
@@ -2200,8 +2313,10 @@
                             );
                         }
                     } else if (plan.stopSucceeded) {
+                        saveDashcamOnDevice(blob);
                         sendNotification('📹 Dashcam', 'Recording stopped but upload failed: ' + (upload.error || 'unknown'), 'error');
                     } else {
+                        saveDashcamOnDevice(blob);
                         sendNotification(
                             '📹 Dashcam',
                             'Failed to stop recording and upload failed: ' + (upload.error || plan.stopError || 'unknown'),
@@ -2209,6 +2324,7 @@
                         );
                     }
                 } catch (uploadError) {
+                    saveDashcamOnDevice(blob);
                     console.error('Error uploading dashcam blob:', uploadError);
                     sendNotification(
                         '📹 Dashcam',
@@ -2227,6 +2343,9 @@
             }
 
             loadDashcamRecordings();
+            } finally {
+                dashcamState.stopping = false;
+            }
         }
 
         function startRecordingTimer() {
@@ -2257,24 +2376,27 @@
 
                 // Get current GPS position if available
                 if (navigator.geolocation) {
+                    const recordingId = dashcamState.currentRecordingId;
+                    const recordingOwner = dashcamState.ownerUserId;
                     navigator.geolocation.getCurrentPosition(async (position) => {
+                        if (!dashcamState.isRecording || dashcamState.currentRecordingId !== recordingId) return;
                         const { latitude, longitude } = position.coords;
                         const speed = position.coords.speed || 0;
                         const heading = position.coords.heading || 0;
 
                         try {
-                            await fetch('/api/dashcam/metadata', {
+                            await dashcamFetch('/api/dashcam/metadata', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    recording_id: dashcamState.currentRecordingId,
+                                    recording_id: recordingId,
                                     latitude,
                                     longitude,
                                     speed,
                                     heading,
                                     timestamp: new Date().toISOString()
                                 })
-                            });
+                            }, recordingOwner);
                         } catch (error) {
                             console.error('Error sending metadata:', error);
                         }
@@ -2288,6 +2410,7 @@
             const stopBtn = document.getElementById('dashcamStopBtn');
             const statusText = document.getElementById('dashcamStatusText');
             const recordingTime = document.getElementById('dashcamRecordingTime');
+            document.getElementById('dashcamLocalOnly').disabled = dashcamState.isRecording;
 
             if (dashcamState.isRecording) {
                 startBtn.style.display = 'none';
@@ -2306,8 +2429,9 @@
 
         async function loadDashcamRecordings() {
             try {
-                const response = await fetch('/api/dashcam/recordings');
+                const response = await dashcamFetch('/api/dashcam/recordings');
                 const data = await response.json();
+                await assertDashcamResponseOwner(response);
 
                 if (data.success && data.recordings) {
                     const recordingsList = document.getElementById('dashcamRecordingsList');
@@ -2328,11 +2452,12 @@
                         const points = recording.metadata_points != null ? recording.metadata_points : 0;
                         // Sanitize recording_id to prevent XSS via onclick
                         const recordingId = String(recording.recording_id).replace(/[^a-zA-Z0-9_-]/g, '');
-                        const hasFile = !!recording.file_path;
+                        const hasFile = !!recording.has_video;
                         const playControls = hasFile
-                            ? `<a href="/api/dashcam/recordings/${recordingId}/video" target="_blank" rel="noopener noreferrer" style="background: #2196F3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;">▶️ Play</a>
-                                <a href="/api/dashcam/recordings/${recordingId}/video?download=1" style="background: #607D8B; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;">⬇️</a>`
+                            ? `<button type="button" onclick="playDashcamRecording('${recordingId}', false)">▶️ Play</button>
+                               <button type="button" onclick="playDashcamRecording('${recordingId}', true)">⬇️ Download</button>`
                             : '';
+
 
                         html += `
                             <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
@@ -2342,6 +2467,7 @@
                                 </div>
                                 <div style="display: flex; gap: 6px; align-items: center;">
                                     ${playControls}
+                                    ${recording.status === 'recording' ? `<button type="button" onclick="finishInterruptedDashcamRecording('${recordingId}')">End interrupted session</button>` : ''}
                                     <button onclick="deleteDashcamRecording('${recordingId}')" style="background: #F44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
                                 </div>
                             </div>
@@ -2361,7 +2487,24 @@
                     }
                 }
             } catch (error) {
+                document.getElementById('dashcamRecordingsList').textContent = 'Private server recordings unavailable. Sign in and check your connection.';
                 console.error('Error loading dashcam recordings:', error);
+            }
+        }
+
+        async function finishInterruptedDashcamRecording(recordingId) {
+            if (dashcamState.isRecording && dashcamState.currentRecordingId === recordingId) {
+                sendNotification('📹 Dashcam', 'Use Stop Recording to save the current clip', 'info');
+                return;
+            }
+            try {
+                await dashcamFetch('/api/dashcam/stop', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recording_id: recordingId }),
+                });
+                loadDashcamRecordings();
+            } catch (error) {
+                sendNotification('📹 Dashcam', 'Could not end interrupted session; sign in again', 'error');
             }
         }
 
@@ -2369,7 +2512,7 @@
             if (!confirm('Are you sure you want to delete this recording?')) return;
 
             try {
-                const response = await fetch(`/api/dashcam/recordings/${recordingId}`, { method: 'DELETE' });
+                const response = await dashcamFetch(`/api/dashcam/recordings/${recordingId}`, { method: 'DELETE' });
                 const data = await response.json();
 
                 if (data.success) {
@@ -2388,7 +2531,7 @@
             if (!confirm('This will delete all recordings older than the retention period. Continue?')) return;
 
             try {
-                const response = await fetch('/api/dashcam/cleanup', { method: 'POST' });
+                const response = await dashcamFetch('/api/dashcam/cleanup', { method: 'POST' });
                 const data = await response.json();
 
                 if (data.success) {
@@ -2405,8 +2548,8 @@
 
         function loadDashcamSettings() {
             try {
-                const response = fetch('/api/dashcam/settings');
-                response.then(r => r.json()).then(data => {
+                const response = dashcamFetch('/api/dashcam/settings');
+                response.then(async r => { const data = await r.json(); await assertDashcamResponseOwner(r); return data; }).then(data => {
                     if (data.success && data.settings) {
                         document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
                         document.getElementById('dashcamFps').value = String(data.settings.fps != null ? data.settings.fps : '30');
@@ -2436,7 +2579,7 @@
                     retention_days: parseInt(document.getElementById('dashcamRetention').value)
                 };
 
-                const response = await fetch('/api/dashcam/settings', {
+                const response = await dashcamFetch('/api/dashcam/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(settings)
