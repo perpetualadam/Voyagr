@@ -28,14 +28,14 @@ def test_source_ids_direction_and_two_fix_attribute_gate():
     assert bundle['lanes']['straight']['recommended_lanes']==[1]
 
 def test_parallel_road_cannot_be_resolved_by_nearest_distance_or_route_hint():
-    d=dataset();other=copy.deepcopy(d['roads'][0]);other.update(osm_way_id='200',geometry=[[53.52,-1.1299],[53.53,-1.1299]])
+    d=dataset();other=copy.deepcopy(d['roads'][0]);other.update(osm_way_id='200',node_ids=['3','4'],geometry=[[53.52,-1.1299],[53.53,-1.1299]])
     d['roads'].append(other)
     r=match(d)
     assert r['evidence_status']=='AMBIGUOUS' and not r['attributes_allowed']
     assert r['osm_way_id'] is None
 
 def test_opposite_carriageway_is_excluded_only_with_qualified_heading():
-    d=dataset();other=copy.deepcopy(d['roads'][0]);other.update(osm_way_id='200',geometry=[[53.53,-1.1299],[53.52,-1.1299]])
+    d=dataset();other=copy.deepcopy(d['roads'][0]);other.update(osm_way_id='200',node_ids=['4','3'],geometry=[[53.53,-1.1299],[53.52,-1.1299]])
     d['roads'].append(other)
     assert match(d)['osm_way_id']=='100'
     p=fix();p['coords']['speed']=0

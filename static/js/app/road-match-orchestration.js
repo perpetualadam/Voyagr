@@ -29,6 +29,7 @@
     }
     function getSnapshot(){
         if(!snapshot)return null;
+        if(currentVehicle()!==vehicle){invalidate('Vehicle context changed');return snapshot;}
         if(Date.now()-snapshot.match_timestamp_ms>15000)return Object.assign({},snapshot,{evidence_status:'STALE',attributes_allowed:false});
         return snapshot;
     }
