@@ -1096,8 +1096,29 @@
         };
     }
 
+    /** Validate actual browser fixes before navigation state or freshness changes.
+     * Rejected fixes preserve the last reliable position; no dead reckoning.
+     */
+    function validateNavigationGpsFix(position, now, lastAcceptedAt) {
+        var c = position && position.coords;
+        if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)
+            || Math.abs(c.latitude) > 90 || Math.abs(c.longitude) > 180) {
+            return { accepted: false, reason: 'invalid_coordinates' };
+        }
+        var at = position.timestamp;
+        if (!Number.isFinite(at) || at <= 0 || now - at > 15000 || at - now > 1000
+            || (lastAcceptedAt > 0 && at <= lastAcceptedAt)) {
+            return { accepted: false, reason: 'stale_fix' };
+        }
+        if (!Number.isFinite(c.accuracy) || c.accuracy < 0 || c.accuracy > 150) {
+            return { accepted: false, reason: 'poor_accuracy' };
+        }
+        return { accepted: true, timestamp: at };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
+        validateNavigationGpsFix: validateNavigationGpsFix,
         KMH_TO_MPH: KMH_TO_MPH,
         COORD_SPEED_LIKELY_KMH_THRESHOLD: COORD_SPEED_LIKELY_KMH_THRESHOLD,
         metersPerSecondToMph: metersPerSecondToMph,

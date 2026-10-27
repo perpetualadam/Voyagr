@@ -268,3 +268,19 @@ class TestSpeedWarnings(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+
+
+class TestOsmMaxspeedUnits(unittest.TestCase):
+    def test_numeric_tags_are_kmh_in_every_region(self):
+        from speed_limit_detector import _parse_osm_maxspeed_to_mph
+        for region in ('uk', 'us', 'metric'):
+            with self.subTest(region=region):
+                self.assertEqual(_parse_osm_maxspeed_to_mph('50', region), 31)
+                self.assertEqual(_parse_osm_maxspeed_to_mph('30 mph', region), 30)
+                self.assertEqual(_parse_osm_maxspeed_to_mph('50 km/h', region), 31)
+
+    def test_variable_and_missing_limits_remain_unknown(self):
+        from speed_limit_detector import _parse_osm_maxspeed_to_mph
+        for value in ('signals', 'variable', 'none', ''):
+            with self.subTest(value=value):
+                self.assertIsNone(_parse_osm_maxspeed_to_mph(value, 'uk'))

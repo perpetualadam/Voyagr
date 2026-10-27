@@ -1,8 +1,8 @@
 """
-Optional admin gate for ops/debug/write routes.
+Fail-closed admin gate for ops/debug/write routes.
 
-When ``VOYAGR_ADMIN_SECRET`` is unset, protected routes behave exactly as before
-(PWA unchanged). When set, callers must send::
+Protected routes are disabled when ``VOYAGR_ADMIN_SECRET`` is unset.
+When configured, callers must send::
 
     X-Voyagr-Admin-Key: <same value>
 
@@ -13,6 +13,7 @@ that normal navigation clients must not depend on.
 from __future__ import annotations
 
 import logging
+import hmac
 import os
 from functools import wraps
 from typing import Any, Callable, Optional, Set, TypeVar
@@ -37,14 +38,14 @@ def admin_auth_enabled() -> bool:
 def check_admin_request() -> Optional[Any]:
     """
     Return a Flask response tuple if the request should be denied, else None.
-    No-op when VOYAGR_ADMIN_SECRET is not configured.
+    Disable privileged operations when VOYAGR_ADMIN_SECRET is not configured.
     """
     secret = admin_secret()
     if not secret:
-        return None
+        return jsonify({'success': False, 'error': 'Administrative access is not configured'}), 503
 
     provided = request.headers.get(_ADMIN_HEADER, '').strip()
-    if provided and provided == secret:
+    if provided and hmac.compare_digest(provided.encode('utf-8'), secret.encode('utf-8')):
         return None
 
     logger.warning(
@@ -57,7 +58,7 @@ def check_admin_request() -> Optional[Any]:
 
 
 def require_admin_if_configured(f: F) -> F:
-    """Decorator: require admin header when VOYAGR_ADMIN_SECRET is set."""
+    """Require a configured admin secret and a matching admin header."""
 
     @wraps(f)
     def decorated(*args: Any, **kwargs: Any) -> Any:

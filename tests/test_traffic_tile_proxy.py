@@ -2,11 +2,18 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
+from flask import Flask
 
 from voyagr.api.traffic import tomtom_traffic_tile_proxy
 
 
 class TestTrafficTileProxy(unittest.TestCase):
+    def setUp(self):
+        # The proxy reads request headers and constructs a Flask response.
+        context = Flask(__name__).test_request_context('/api/traffic-tile/17/1/1.png')
+        context.push()
+        self.addCleanup(context.pop)
+
     def test_upstream_500_returns_transparent_png_200(self):
         upstream = MagicMock()
         upstream.status_code = 500

@@ -50,10 +50,11 @@ def test_no_route_sets_error():
 
 
 def test_exception_is_captured_as_error():
-    with patch.object(engines, 'route_with_graphhopper', side_effect=RuntimeError('boom')):
+    with patch.object(engines, 'route_with_graphhopper', side_effect=RuntimeError('private-coordinate-payload')):
         route, error = attempt_graphhopper_camera_route(hazards={}, **BASE)
     assert route is None
-    assert error == 'boom'
+    assert error == 'RuntimeError'
+    assert 'private-coordinate-payload' not in error
 
 
 def test_camera_hazards_forwarded_when_present():

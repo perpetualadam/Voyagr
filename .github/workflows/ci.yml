@@ -112,3 +112,25 @@ jobs:
           tests/test_optimised_camera_avoidance.py
           tests/test_graphhopper_shape_index.py
           tests/test_graphhopper_camera_areas.py
+          tests/test_admin_auth.py
+          tests/test_route_logging_privacy.py
+          tests/test_speed_limit_fixes.py
+          tests/test_dashcam_service.py
+          tests/test_dashcam_blueprint.py
+          tests/test_page_dos_hardening.py
+          tests/test_api_keys.py
+          tests/test_traffic_tile_proxy.py
+          tests/test_dashcam_ownership.py
+
+  dashcam-session-policy:
+    name: Dashcam session SQL policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install isolated PostgreSQL test tools
+        run: python -m pip install pgserver==0.1.4 psycopg2-binary==2.9.13
+      - name: Verify session policy on temporary PostgreSQL
+        run: python scripts/test-dashcam-session-sql.py

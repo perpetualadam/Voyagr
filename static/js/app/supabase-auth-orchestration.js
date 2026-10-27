@@ -12,6 +12,14 @@
     var supabaseClient = null;
     var supabasePublicConfig = null;
     var authGateStripeOffer = null;
+    var announcedPrivateUserId = null;
+
+    function announcePrivateAccount(session) {
+        var userId = session && session.user ? session.user.id : null;
+        if (userId === announcedPrivateUserId) return;
+        announcedPrivateUserId = userId;
+        window.dispatchEvent(new CustomEvent('voyagr-auth-changed', { detail: { userId: userId } }));
+    }
 
     function rt() {
         if (!runtime) {
@@ -512,9 +520,11 @@
             win.supabaseClient = supabaseClient;
 
             var sessionData = await supabaseClient.auth.getSession();
+            announcePrivateAccount(sessionData.data?.session || null);
             await handleSupabaseSession(sessionData.data?.session || null);
 
             supabaseClient.auth.onAuthStateChange(async function (_event, nextSession) {
+                announcePrivateAccount(nextSession);
                 await handleSupabaseSession(nextSession || null);
             });
         } catch (e) {

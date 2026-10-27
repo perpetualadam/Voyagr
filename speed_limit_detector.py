@@ -298,9 +298,7 @@ def _parse_osm_maxspeed_to_mph(speed_str: str, region: str) -> Optional[int]:
         return int(round(val))
     if has_kmh:
         return int(round(val * 0.621371))
-    # Bare number: UK/US mappers often mean mph; elsewhere OSM default is km/h
-    if region in ('uk', 'us'):
-        return int(round(val))
+    # OSM unqualified maxspeed values are km/h worldwide. mph must be explicit.
     return int(round(val * 0.621371))
 
 

@@ -1223,18 +1223,18 @@ def calculate_route():
     sys.stdout.flush()
 
     try:
-        data = request.json
-        print(f"[API] Request data: {data}", flush=True)
-        sys.stdout.flush()
-        logger.info(f"[ROUTE] Received request: {data}")
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Request body must be a JSON object'}), 400
+        logger.info('[ROUTE] request_received', extra={'route_event': 'request_received'})
 
         # ================================================================
         # PHASE 5: Validate request parameters
         # ================================================================
         is_valid, error_msg = validate_route_request(data)
-        logger.info(f"[ROUTE] Validation result: is_valid={is_valid}, error={error_msg}")
+        logger.info("[ROUTE] validation valid=%s", is_valid)
         if not is_valid:
-            logger.warning(f"[VALIDATION] Request validation failed: {error_msg}")
+            logger.warning("[ROUTE] validation_failed")
             return jsonify({'success': False, 'error': error_msg}), 400
 
         # Parse + normalize the request body (pure; unit-tested in
@@ -1309,7 +1309,7 @@ def calculate_route():
         print("[API REQUEST] /api/route called")
         print(f"[API REQUEST] enable_hazard_avoidance={enable_hazard_avoidance}")
         print(f"{'='*80}\n")
-        logger.info(f"[API REQUEST] Route calculation started: ({start},{end}), hazard_avoidance={enable_hazard_avoidance}")
+        logger.info("[ROUTE] calculation_started", extra={"route_event": "calculation_started", "hazard_avoidance": enable_hazard_avoidance, "via_count": len(via_points), "stop_count": len(stops)})
 
         # ====================================================================
         # MULTI-DROP ROUTING: when optimize_stop_order is set and there are >= 2
@@ -1344,20 +1344,14 @@ def calculate_route():
                 start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, **cache_kwargs,
             )
             if cached_route:
-                logger.info(
-                    f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) "
-                    f"with hazard_avoidance={enable_hazard_avoidance}"
-                )
+                logger.info("[CACHE] route_hit tier=%s", "memory")
                 cached_route['cached'] = True
                 cached_route['cache_stats'] = route_cache.get_stats()
                 return jsonify(cached_route)
 
             db_cached_route = cost_calculator.get_cached_route_from_db(db_cache_key)
             if db_cached_route:
-                logger.info(
-                    f"[CACHE] DB HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) "
-                    f"key={db_cache_key[:48]}..."
-                )
+                logger.info("[CACHE] route_hit tier=%s", "persistent")
                 db_cached_route['cached'] = True
                 db_cached_route['cache_stats'] = route_cache.get_stats()
                 route_cache.set(
@@ -1366,22 +1360,8 @@ def calculate_route():
                 )
                 return jsonify(db_cached_route)
 
-            # Fallback to legacy coord-only lookup for pre-migration cache rows
-            legacy_cached_route = cost_calculator.get_cached_route_from_db_legacy(
-                start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type
-            )
-            if legacy_cached_route:
-                logger.info(
-                    f"[CACHE] DB LEGACY HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) "
-                    "(coord-only match, pre-migration row)"
-                )
-                legacy_cached_route['cached'] = True
-                legacy_cached_route['cache_stats'] = route_cache.get_stats()
-                route_cache.set(
-                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                    legacy_cached_route, **cache_kwargs,
-                )
-                return jsonify(legacy_cached_route)
+            # Pre-migration rows have no preference provenance. A keyed miss
+            # must calculate a fresh route rather than replay unknown constraints.
         elif is_reroute or force_refresh or avoid_points:
             logger.info('[CACHE] BYPASS: reroute/force_refresh/avoid_points requires live routing')
 
@@ -1407,7 +1387,7 @@ def calculate_route():
         # ====================================================================
         valhalla_error = None
 
-        logger.debug(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        logger.debug("[ROUTING] Starting route calculation")
 
         # Calculate route bounding box for camera area selection
         route_bbox = {
@@ -1599,8 +1579,8 @@ def calculate_route():
             # PHASE 4 OPTIMIZATION: Reduce timeout to max 10s to fit within Gateway limits
             route_timeout = max(5, min(10, int(3 + straight_line_km / 100)))  # 5-10 seconds cap
 
-            print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-            print(f"[Valhalla] URL: {url}")
+            logger.info("[VALHALLA] request_started")
+
             print(f"[Valhalla] Hazard avoidance: {enable_hazard_avoidance}, Locations: {len(exclude_locations) if exclude_locations else 0}")
             print(f"[Valhalla] Estimated distance: {straight_line_km:.0f} km, Timeout: {route_timeout}s")
             # HTTP POST + transport-error classification extracted to
@@ -1613,27 +1593,23 @@ def calculate_route():
                 valhalla_error = f"Timeout (>{route_timeout}s)"
             response = _post_outcome.response
             if _post_outcome.error:
-                print(f"[Valhalla] Request failed: {_post_outcome.error}")
-                valhalla_error = _post_outcome.error
+                logger.warning("[VALHALLA] transport_failure")
+                valhalla_error = "Routing engine transport failure"
             if response is not None:
                 print(f"[Valhalla] Response status: {response.status_code}", flush=True)
             if response and response.status_code != 200:
-                _vb = response.text[:1200] if response.text else ''
-                print(f"[Valhalla] Response body: {_vb}", flush=True)
-                logger.warning(f"[VALHALLA] HTTP {response.status_code} body: {_vb}")
+                logger.warning("[VALHALLA] HTTP status=%s", response.status_code)
 
             if response and response.status_code == 200:
                 route_data = response.json()
-                print(f"[Valhalla] Response keys: {route_data.keys()}", flush=True)
+
 
                 # Classify the parsed 200 body (error / missing trip). Extracted to
                 # orchestrator.classify_valhalla_route_data (pure; control flow unchanged).
-                valhalla_error = classify_valhalla_route_data(route_data)
+                valhalla_error = "Invalid routing engine response" if classify_valhalla_route_data(route_data) else None
                 if valhalla_error:
                     print(f"[Valhalla] {valhalla_error}", flush=True)
-                    if 'trip' not in route_data:
-                        print(f"[Valhalla] Response keys: {list(route_data.keys())}", flush=True)
-                        print(f"[Valhalla] Full response: {json.dumps(route_data, indent=2)[:1000]}", flush=True)
+
 
                 if 'trip' in route_data and 'legs' in route_data['trip']:
                     # Extract all available routes
@@ -1765,26 +1741,21 @@ def calculate_route():
 
                     return jsonify(response_data)
                 else:
-                    valhalla_error = f"Unexpected response format: {route_data.keys()}"
+                    valhalla_error = "Unexpected routing engine response format"
             elif response is not None:
-                valhalla_error = describe_valhalla_http_error(response)
+                valhalla_error = f"Routing engine HTTP {response.status_code}"
             # else: transport failure already set valhalla_error (timeout / unreachable)
         except requests.exceptions.Timeout:
             valhalla_error = "Timeout (>10s)"
             print(f"[Valhalla] Timeout error: {valhalla_error}")
         except requests.exceptions.ConnectionError as e:
-            valhalla_error = f"Connection error: {str(e)}"
+            valhalla_error = "Routing engine connection failure"
             print(f"[Valhalla] Connection error: {valhalla_error}")
         except Exception as e:
-            valhalla_error = str(e)
+            valhalla_error = type(e).__name__
             print(f"[Valhalla] Exception: {valhalla_error}")
             print(f"[Valhalla] Exception type: {type(e).__name__}")
             print(f"[Valhalla] Response type: {type(response) if 'response' in locals() else 'N/A'}")
-            if 'response' in locals():
-                print(f"[Valhalla] Response status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
-                print(f"[Valhalla] Response text: {response.text if hasattr(response, 'text') else 'N/A'}")
-            import traceback
-            traceback.print_exc()
 
         if valhalla_error:
             print(f"[Valhalla] Failed: {valhalla_error}")
@@ -1940,7 +1911,7 @@ def calculate_route():
                                 # Return the successful retry response
                                 return jsonify(response_data)
                     except Exception as retry_e:
-                        logger.warning(f"[VALHALLA] Retry with {retry_limit} exclusions failed: {retry_e}")
+                        logger.warning(f"[VALHALLA] Retry with {retry_limit} exclusions failed: {type(retry_e).__name__}")
                         continue  # Try next retry limit
 
             # ================================================================
@@ -2027,7 +1998,7 @@ def calculate_route():
                             if vrec.status_code == 200:
                                 rd = vrec.json()
                                 if rd.get('error'):
-                                    logger.warning(f"[ROUTING] Recovery Valhalla error in JSON: {rd.get('error')}")
+                                    logger.warning("[ROUTING] Recovery Valhalla returned an error")
                                     continue
                                 if 'trip' not in rd:
                                     continue
@@ -2054,8 +2025,7 @@ def calculate_route():
                                     logger.info(f"[ROUTING] Recovery: {rec_label} returned {len(v_routes)} route(s)")
                                     break
                             else:
-                                _rbody = vrec.text[:800] if vrec.text else ''
-                                logger.warning(f"[ROUTING] Recovery {rec_label} HTTP {vrec.status_code}: {_rbody}")
+                                logger.warning("[ROUTING] Recovery HTTP status=%s", vrec.status_code)
 
                     if routes_out:
                         recovery_enrich = RouteEnrichmentContext(
@@ -2112,6 +2082,15 @@ def calculate_route():
                             start_lat=start_lat, start_lon=start_lon,
                             end_lat=end_lat, end_lon=end_lon,
                         )
+                        # Recovery omits exclusions and may omit costing preferences.
+                        # Scoring a route is not evidence that constraints were enforced.
+                        recovery_data.update({
+                            'routing_degraded': True,
+                            'routing_warning': (
+                                'Routing recovery used reduced constraints. Camera, traffic-light, '
+                                'railway-crossing, CAZ and other avoidance preferences are not guaranteed.'
+                            ),
+                        })
                         route_cache.set(
                             start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
                             recovery_data, **cache_kwargs,
@@ -2122,14 +2101,14 @@ def calculate_route():
                         )
                         logger.info(f"[ROUTING] Recovery response: {routing_source}, {len(routes_out)} route(s)")
             except Exception as rec_e:
-                logger.warning(f"[ROUTING] GraphHopper/Valhalla recovery failed: {rec_e}")
+                logger.warning(f"[ROUTING] GraphHopper/Valhalla recovery failed: {type(rec_e).__name__}")
 
             if recovery_data is not None:
                 return jsonify(recovery_data)
 
             # Fallback to OSRM (public service); use profile matching routing mode
             osrm_profile = 'driving' if valhalla_costing == 'auto' else ('foot' if valhalla_costing == 'pedestrian' else 'bike')
-            logger.info(f"[OSRM] Trying fallback with profile={osrm_profile} ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
+            logger.info("[OSRM] fallback_started profile=%s", osrm_profile)
             osrm_url = (
                 f"{OSRM_URL}/{osrm_profile}/{start_lon},{start_lat};{end_lon},{end_lat}"
                 f"?alternatives=true&overview=full&steps=true&annotations=maxspeed"
@@ -2139,7 +2118,7 @@ def calculate_route():
                     'User-Agent': 'Voyagr-PWA/1.0',
                     'Accept': 'application/json'
                 }
-                logger.debug(f"[OSRM] URL: {osrm_url}")
+                logger.debug("[OSRM] fallback_request_prepared")
                 osrm_start = time.time()
                 response = requests.get(osrm_url, timeout=15, headers=headers)
                 osrm_elapsed = (time.time() - osrm_start) * 1000
@@ -2232,22 +2211,22 @@ def calculate_route():
                 print("[OSRM] Timeout (>10s)")
                 fallback_optimizer.record_failure('osrm')
             except requests.exceptions.ConnectionError as e:
-                print(f"[OSRM] Connection error: {str(e)}")
+                print(f"[OSRM] Connection error: {type(e).__name__}")
                 fallback_optimizer.record_failure('osrm')
             except Exception as e:
-                print(f"[OSRM] Error: {str(e)}")
+                print(f"[OSRM] Error: {type(e).__name__}")
                 fallback_optimizer.record_failure('osrm')
 
             # All routing engines failed - log summary
             logger.error("\n[ROUTING SUMMARY]")
             logger.error(f"  Valhalla ({VALHALLA_URL}): {valhalla_error}")
             logger.error("  OSRM (fallback): Failed")
-            logger.error(f"[ROUTING] All routing engines failed for route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+            logger.error("[ROUTING] all_engines_failed")
 
             # Provide diagnostic information
             diagnostic_info = {
-                'valhalla_url': VALHALLA_URL,
-                'osrm_url': 'http://router.project-osrm.org',
+                'valhalla_status': 'unavailable',
+                'osrm_status': 'unavailable',
                 'valhalla_error': str(valhalla_error),
                 'deployment_hint': 'Try /api/test-routing-engines for diagnostics.'
             }
@@ -2259,8 +2238,13 @@ def calculate_route():
             })
 
     except Exception as e:
-        print(f"[Error] {str(e)}")
-        return jsonify({'success': False, 'error': f'Error: {str(e)}'})
+        logger.error("[ROUTE] calculation_failed error_type=%s", type(e).__name__)
+        return jsonify({'success': False, 'error': 'Route calculation failed'}), 500
+    finally:
+        logger.info("[ROUTE] request_completed", extra={
+            "route_event": "request_completed",
+            "duration_ms": round((time.time() - route_start_time) * 1000),
+        })
 
 @app.route('/api/multi-stop-route', methods=['POST'])
 def calculate_multi_stop_route():

@@ -579,22 +579,9 @@ def init_db():
         )
     ''')
 
-    # Dashcam recordings table (Dashcam feature)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS dashcam_recordings (
-            id INTEGER PRIMARY KEY,
-            recording_id TEXT UNIQUE NOT NULL,
-            trip_id TEXT,
-            start_time DATETIME NOT NULL,
-            end_time DATETIME,
-            duration_seconds REAL,
-            status TEXT DEFAULT 'recording',
-            metadata_points INTEGER DEFAULT 0,
-            file_path TEXT,
-            file_size_mb REAL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
+    # Nullable ownership quarantines legacy rows; no automatic assignment/deletion.
+    from dashcam_schema import ensure_dashcam_schema
+    ensure_dashcam_schema(conn)
 
     # Promo coupons (trial / person-bound lifetime) + per-user entitlements
     cursor.execute('''

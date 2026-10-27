@@ -406,7 +406,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
         )
         self.assertEqual(
             _osm_way_maxspeed_mph({'highway': 'primary', 'maxspeed': '40'}, 'uk'),
-            40,
+            25,  # Unqualified OSM numeric values are km/h, including in the UK.
         )
 
         detector = SpeedLimitDetector()

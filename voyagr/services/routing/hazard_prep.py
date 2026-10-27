@@ -76,7 +76,7 @@ def prepare_route_hazards(
         else:
             logger.debug("[TOMTOM] No real-time incidents found for route area")
     except Exception as e:
-        logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {e}")
+        logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {type(e).__name__}")
 
     # Fold explicit avoid_points into the hazard set (same prioritisation as other avoids).
     if prefs.avoid_points:
@@ -102,7 +102,7 @@ def prepare_route_hazards(
                 f"[TRAFFIC_LIGHTS] Merged {len(hazards.get('traffic_light', []))} OSM traffic signals for routing"
             )
         except Exception as e:
-            logger.warning(f"[TRAFFIC_LIGHTS] Could not load OSM traffic lights: {e}")
+            logger.warning(f"[TRAFFIC_LIGHTS] Could not load OSM traffic lights: {type(e).__name__}")
             hazards['traffic_light'] = []
     else:
         hazards['traffic_light'] = []
@@ -119,7 +119,7 @@ def prepare_route_hazards(
                 f"[RAILWAY_CROSSINGS] Merged {len(hazards.get('railway_crossing', []))} OSM level crossings for routing"
             )
         except Exception as e:
-            logger.warning(f"[RAILWAY_CROSSINGS] Could not load OSM railway crossings: {e}")
+            logger.warning(f"[RAILWAY_CROSSINGS] Could not load OSM railway crossings: {type(e).__name__}")
             hazards['railway_crossing'] = []
     else:
         hazards['railway_crossing'] = []

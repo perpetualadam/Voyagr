@@ -343,7 +343,7 @@ def route_with_graphhopper(
             payload["custom_model"] = custom_model
             logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
 
-        logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        logger.info("[GRAPHHOPPER] request_started")
 
         # GraphHopper deployments vary:
         # - Many self-hosted instances support GET /route with query params.
@@ -438,7 +438,7 @@ def route_with_graphhopper(
                 logger.warning("[GRAPHHOPPER] No paths in response")
                 return None
         else:
-            error_msg = response.text[:500] if response.text else f"HTTP {response.status_code}"
+            error_msg = f"HTTP {response.status_code}"
             logger.warning(f"[GRAPHHOPPER] Request failed: {error_msg}")
             return None
 
@@ -446,7 +446,7 @@ def route_with_graphhopper(
         logger.warning(f"[GRAPHHOPPER] Request timeout after {GRAPHHOPPER_TIMEOUT}s")
         return None
     except Exception as e:
-        logger.error(f"[GRAPHHOPPER] Error: {e}")
+        logger.error(f"[GRAPHHOPPER] Error: {type(e).__name__}")
         return None
 
 
@@ -524,8 +524,8 @@ def attempt_graphhopper_camera_route(
             graphhopper_error = "No route found"
             logger.warning("[GRAPHHOPPER] No route found, falling back to Valhalla")
     except Exception as e:
-        graphhopper_error = str(e)
-        logger.warning(f"[GRAPHHOPPER] Error: {e}, falling back to Valhalla")
+        graphhopper_error = type(e).__name__
+        logger.warning(f"[GRAPHHOPPER] Error: {type(e).__name__}, falling back to Valhalla")
 
     return graphhopper_route, graphhopper_error
 
@@ -593,7 +593,7 @@ def get_traffic_duration_multiplier(lat: float, lon: float) -> tuple:
 
         return (1.0, 'Unknown')
     except Exception as e:
-        logger.warning(f"[TRAFFIC] Failed to get traffic multiplier: {e}")
+        logger.warning(f"[TRAFFIC] Failed to get traffic multiplier: {type(e).__name__}")
         return (1.0, 'Unknown')
 
 
