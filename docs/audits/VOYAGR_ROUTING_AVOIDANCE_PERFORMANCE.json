@@ -1,0 +1,40 @@
+{
+  "workload": "synthetic UK geometry, 1000 segments, 3 alternatives, 1 enabled mandatory category",
+  "scope": "local CPU, no providers or paid requests; not a device or real-road benchmark",
+  "cases": [
+    {
+      "hazards": 100,
+      "peak_traced_mib": 0.142,
+      "median_ms": 7.197,
+      "max_ms": 8.244,
+      "repetitions": 5
+    },
+    {
+      "hazards": 1000,
+      "peak_traced_mib": 0.287,
+      "median_ms": 16.188,
+      "max_ms": 18.157,
+      "repetitions": 5
+    },
+    {
+      "hazards": 10000,
+      "peak_traced_mib": 2.839,
+      "median_ms": 111.211,
+      "max_ms": 139.372,
+      "repetitions": 5
+    }
+  ],
+  "same_result_proximity_comparison": {
+    "hazards": 1000,
+    "indexed": {
+      "median_ms": 1.644,
+      "max_ms": 1.796,
+      "repetitions": 5
+    },
+    "full_scan": {
+      "median_ms": 660.138,
+      "max_ms": 719.418,
+      "repetitions": 5
+    }
+  }
+}

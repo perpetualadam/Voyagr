@@ -726,6 +726,8 @@
     function pickRerouteRouteFromResponse(routes, opts) {
         opts = opts || {};
         if (!routes || !routes.length) return null;
+        routes=routes.filter(function(r) { return !r.avoidance_assessment || r.avoidance_assessment.automatic_selection_allowed; });
+        if (!routes.length) return null;
         if (opts.preferPrimary) return routes[0];
 
         var prevName = opts.previousRouteName ? String(opts.previousRouteName).toLowerCase() : '';
@@ -765,7 +767,10 @@
             var newRoute = pickRerouteRouteFromResponse(data.routes, {
                 previousRouteName: opts.previousRouteName,
                 previousRouteSource: opts.previousRouteSource,
-            }) || data.routes[0];
+            });
+            if (!newRoute) return {ok:false,scheduleRetry:false,resetRerouteInProgress:true,
+                errorLog:'[Rerouting] No automatically selectable avoidance-compliant route',
+                notification:{title:'Route limitation',body:'Mandatory avoidance could not be established; current route retained.',type:'warning'}};
             var hazardCount = newRoute.hazard_count || 0;
             var hazardsList = newRoute.hazards || newRoute.hazards_on_route || [];
             var displayDist = typeof opts.convertDistance === 'function'

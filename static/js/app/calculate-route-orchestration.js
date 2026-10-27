@@ -151,7 +151,10 @@
         }
 
         if (plan.hideRouteProgressBar) hideRouteProgressBar();
-        if (plan.updateRouteOnMap) rt().call.updateRouteOnMap(plan.activeRoute);
+        if (plan.updateRouteOnMap) {
+            var mapResult = rt().call.updateRouteOnMap(plan.activeRoute);
+            if (mapResult && mapResult.ok===false) return;
+        }
 
         window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute, plan.lastCalculatedRoutePatch);
 
@@ -192,6 +195,8 @@
 
         var delayMs = plan.delayedPreview?.delayMs ?? 300;
         setTimeout(function () {
+            var integrity = root.VoyagrAvoidanceIntegrity;
+            if (integrity && data.avoidance_request_sequence && !integrity.responseCurrent(data,localStorage)) return;
             rt().call.showRoutePreview(data);
             if (plan.updateArButtonVisibility) {
                 rt().call.updateARButtonVisibility();
@@ -487,6 +492,8 @@
     }
 
     async function calculateRoute() {
+        var integrity = root.VoyagrAvoidanceIntegrity;
+        var ticket = integrity ? integrity.begin(localStorage) : null;
         var RR = rt().routingRequest();
         var startInput = document.getElementById('start');
         var endInput = document.getElementById('end');
@@ -505,6 +512,7 @@
             return;
         }
 
+        if (integrity && !integrity.current(ticket, localStorage)) return;
         var geocodedStart = geocodedResult.start;
         var geocodedEnd = geocodedResult.end;
 
@@ -529,10 +537,21 @@
         return fetch(fetchPlan.apiPath, {
             method: fetchPlan.method,
             headers: fetchPlan.headers,
-            body: JSON.stringify(fetchPlan.body),
+            body: JSON.stringify(integrity ? integrity.augment(fetchPlan.body, localStorage) : fetchPlan.body),
         })
             .then(function (response) { return applyCalculateRouteFetchHttpResponse(response, fetchPlan); })
             .then(function (data) {
+                if (integrity && !integrity.current(ticket, localStorage)) {
+                    if (integrity.isLatest(ticket)) {
+                        hideRouteProgressBar();
+                        rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
+                    }
+                    return;
+                }
+                if (integrity) integrity.tag(data,ticket);
+                if (integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
+                    storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
+                })) { hideRouteProgressBar(); return; }
                 applyCalculateRouteResponseFromPlan(
                     RR.buildCalculateRouteResponseApplyPlan(
                         RR.buildCalculateRouteResponseExecutePlan(data, rt().getRouteInProgress())
@@ -542,6 +561,13 @@
                 );
             })
             .catch(function (error) {
+                if (integrity && !integrity.current(ticket, localStorage)) {
+                    if (integrity.isLatest(ticket)) {
+                        hideRouteProgressBar();
+                        rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
+                    }
+                    return;
+                }
                 applyCalculateRouteFetchErrorFromPlan(
                     RR.buildCalculateRouteFetchErrorApplyPlan(error),
                     error

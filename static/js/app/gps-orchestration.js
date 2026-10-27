@@ -14,6 +14,7 @@
     var isTrackingActive = false;
     /** True after stopGPSTracking(); cleared when a watch is started again. */
     var gpsTrackingStoppedByUser = false;
+    var activeRerouteTicket = null;
     var gpsWatchId = null;
     var lastGpsFixAtMs = 0;
     var gpsWatchStartedAtMs = 0;
@@ -1548,6 +1549,9 @@
         }
 
         rt().s('rerouteInProgress',  triggerExecute.rerouteInProgress);
+        const integrity = root.VoyagrAvoidanceIntegrity;
+        const requestTicket = integrity ? integrity.begin(localStorage) : null;
+        activeRerouteTicket = requestTicket;
         try {
             if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
             console.log(
@@ -1563,10 +1567,23 @@
             const response = await fetch(fetchOrch.apiPath, {
                 method: fetchOrch.method,
                 headers: fetchOrch.headers,
-                body: JSON.stringify(routeRequest),
+                body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage) : routeRequest),
             });
 
             const data = await response.json();
+            if (integrity && !integrity.current(requestTicket,localStorage)) {
+                if (activeRerouteTicket===requestTicket) rt().s('rerouteInProgress',false);
+                return;
+            }
+            if (integrity) integrity.tag(data,requestTicket);
+            const candidate = data && data.routes && data.routes[0];
+            if (integrity && candidate && !integrity.gate(candidate, {
+                storage:localStorage, automatic:true, quiet:true, offline:navigator.onLine===false,
+                showStatus:rt().call.showStatus,
+            })) {
+                rt().s('rerouteInProgress',false);
+                return; // Retain current route. Never open confirmation while moving.
+            }
             const routeCount = data && data.routes ? data.routes.length : 0;
             console.log(
                 '[Reroute] Response received success=' + !!(data && data.success) +
@@ -1589,6 +1606,10 @@
                 destination,
             });
         } catch (error) {
+            if (integrity && !integrity.current(requestTicket,localStorage)) {
+                if (activeRerouteTicket===requestTicket) rt().s('rerouteInProgress',false);
+                return;
+            }
             console.error('[Rerouting] Error during automatic reroute:', error);
             console.log('[Reroute] Reroute failed: ' + (error && error.message ? error.message : error));
             const errorPlans = RD.buildAutomaticRerouteErrorResponsePlans({ rerouteFailureRetryCount: rt().g('rerouteFailureRetryCount') });

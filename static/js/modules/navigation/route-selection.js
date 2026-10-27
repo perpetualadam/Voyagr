@@ -1821,6 +1821,9 @@
             hazards: route.hazards || [],
             maneuvers: route.maneuvers || [],
             source: route.source || routeSource,
+            avoidance_assessment: route.avoidance_assessment,
+            avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
+            avoidance_tradeoff: route.avoidance_tradeoff,
         };
     }
 
@@ -1858,6 +1861,8 @@
             geometry: data.geometry,
             maneuvers: data.maneuvers || [],
             source: data.source || 'Unknown',
+            avoidance_assessment:data.avoidance_assessment,
+            avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
         }];
     }
 
@@ -2435,6 +2440,9 @@
                 caz_cost: sel.caz_cost != null ? sel.caz_cost : routeData.caz_cost,
                 source: sel.source || routeData.source,
                 hazards: sel.hazards || routeData.hazards || [],
+                avoidance_assessment: sel.avoidance_assessment,
+                avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
+                avoidance_preferences_snapshot: sel.avoidance_preferences_snapshot || routeData.avoidance_preferences_snapshot,
             });
         } catch (_e) {
             return routeData;
@@ -2453,6 +2461,7 @@
         return {
             ...p,
             ...route,
+            avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
             geometry_precision: Number.isFinite(route.geometry_precision)
                 ? route.geometry_precision

@@ -773,7 +773,8 @@
             return;
         }
 
-        rt().updateRouteOnMap(apply.newRoute);
+        const result = rt().updateRouteOnMap(apply.newRoute);
+        if (result && result.ok===false) return;
         if (apply.clearTrafficCache) _routeTrafficSampleCache = null;
         if (apply.clearLastTrafficData) lastTrafficData = null;
         rt().sendNotification(apply.notificationTitle, apply.notificationMessage, apply.notificationType);
@@ -808,16 +809,19 @@
         }
 
         console.log(entry.fetchOrch.logMessage);
-
+        const integrity = root.VoyagrAvoidanceIntegrity;
+        const ticket = integrity ? integrity.begin(localStorage) : null;
         try {
             const routeRequest = rt().buildRouteRequest(rt().getCurrentLat(), rt().getCurrentLon(), entry.destination, avoidPoints);
             const response = await fetch(entry.fetchOrch.apiPath, {
                 method: entry.fetchOrch.method,
                 headers: entry.fetchOrch.headers,
-                body: JSON.stringify(routeRequest),
+                body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage) : routeRequest),
             });
 
             const data = await response.json();
+            if (integrity && !integrity.current(ticket,localStorage)) return;
+            if (integrity) integrity.tag(data,ticket);
             const dispatch = TC.buildTrafficRerouteApiResponseDispatchPlan({
                 data,
                 isSevere: entry.preflight.isSevere,
@@ -835,6 +839,7 @@
                 console.log(dispatch.logMessage);
             }
         } catch (error) {
+            if (integrity && !integrity.current(ticket,localStorage)) return;
             console.error(entry.errorLogPrefix, error);
         }
     }
