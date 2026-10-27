@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "execution_environment": "NOT_EXECUTED",
+  "device_model": null,
+  "os_version": null,
+  "browser_version": null,
+  "app_commit": null,
+  "recorded_at": null,
+  "observation_role": "stationary-or-passenger",
+  "private_traces_retained": false,
+  "cases": [
+    {
+      "id": "normal_route_start",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "route_preview",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "alternative_selection",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "multi_stop_navigation",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "intermediate_arrival",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "final_arrival",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "wrong_turn",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "automatic_rerouting",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "gps_loss",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "gps_reacquisition",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "screen_lock",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "browser_background",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "browser_resume",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "network_loss",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "network_restore",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "service_worker_update",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "stale_offline_route",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "camera_alert",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "lane_guidance",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    },
+    {
+      "id": "speed_limit_change",
+      "status": "NOT_TESTED",
+      "evidence_notes": ""
+    }
+  ]
+}

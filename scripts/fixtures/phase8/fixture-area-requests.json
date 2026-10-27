@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "status": "NOT_ACQUIRED",
+  "instructions": "Operator selects legitimately sourced bounded areas. No coordinates/topology are invented. Each bbox must be west,south,east,north and at most .01 degree per dimension.",
+  "areas": [
+    {
+      "category": "Doncaster urban streets",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "South Yorkshire dual carriageways",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "motorway junction",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "motorway slip road",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "roundabout",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "parallel roads",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "bridge/tunnel",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "railway crossing",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "traffic-light junction",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    },
+    {
+      "category": "speed-camera location",
+      "approved_bbox": null,
+      "source_revision": null,
+      "source_acquired_at": null,
+      "ground_truth_review": "NOT_EXECUTED"
+    }
+  ]
+}

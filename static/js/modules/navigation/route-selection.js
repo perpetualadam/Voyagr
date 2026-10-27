@@ -2485,6 +2485,7 @@
      * @returns {object|null}
      */
     function buildRoutePayloadFromPersisted(saved, encodePolyline) {
+        if(saved && saved.navigation_schema_version!=null && (!Number.isInteger(saved.navigation_schema_version) || saved.navigation_schema_version<1 || saved.navigation_schema_version>3))return null;
         if (!saved || !Array.isArray(saved.polyline) || saved.polyline.length < 2) return null;
         if (saved.polyline.some(function(p){return !Array.isArray(p) || p.length<2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) || Math.abs(p[0])>90 || Math.abs(p[1])>180;})) return null;
         var base = saved.routeData && typeof saved.routeData === 'object' ? { ...saved.routeData } : {};

@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "graph_fixture_verified": false,
-  "instructions": "Fill providers per case with graph-grounded method/path/json/params and forbidden_polygons (lat,lon), or expect_no_route. Set graph_fixture_verified only after recording graph/version/profile and authoritative fixture evidence. No synthetic graph claims. Timeout tests should use an isolated local fault proxy; no production endpoint.",
+  "instructions": "Run only against explicitly approved isolated loopback engines with --approved-local-services. Each provider fixture needs oracle.reviewed=true, source_sha256, engine_version, graph_revision, profile. Record actual installed metadata and compare graph/profile scope before interpreting results. Generic HTTP errors are not no-route evidence. All alternatives and ordered required_waypoints are checked. Never target production or use provider option acceptance as proof.",
   "required_evidence": [
     "installed_version",
     "build",
