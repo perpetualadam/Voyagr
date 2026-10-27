@@ -61,7 +61,9 @@ def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = Fa
     rc = maneuver.get('roundabout_exit_count')
     if rc is not None and mt in (26, 27):
         try:
-            out['roundabout_exit_count'] = int(rc)
+            count=int(rc)
+            out['roundabout_exit_count']=count if not isinstance(rc,bool) and str(count)==str(rc) and 1<=count<=50 else 0
+            out['roundabout_exit_source']='Valhalla'
         except (TypeError, ValueError):
             out['roundabout_exit_count'] = 0
     lanes = maneuver.get('lanes')

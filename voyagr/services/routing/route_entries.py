@@ -112,13 +112,13 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
     def _exit_count(instr: Dict[str, Any]) -> int:
         for key in ('exit_number', 'roundabout_exit_count', 'exited'):
             raw = instr.get(key)
-            if raw is None:
+            if raw is None or isinstance(raw,bool):
                 continue
             try:
                 n = int(raw)
             except (TypeError, ValueError):
                 continue
-            if n > 0:
+            if 0<n<=50:
                 return n
         return 0
 
@@ -154,6 +154,7 @@ def maneuvers_from_graphhopper_route(graphhopper_route: Dict[str, Any]) -> List[
             maneuver['road_class'] = gh_rc
         if exit_count > 0 and valhalla_type in (26, 27):
             maneuver['roundabout_exit_count'] = exit_count
+            maneuver['roundabout_exit_source']='GraphHopper'
         attach_lanes_to_graphhopper_maneuver(
             maneuver,
             instr,

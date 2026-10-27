@@ -90,11 +90,13 @@
     <!-- External JavaScript modules -->
     <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script defer src="/static/js/modules/navigation/camera-pitch.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20260712dark4"></script>
+    <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/speech-synthesis.js?v=20260712voice1"></script>
-    <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20260712aacm"></script>
-    <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20260712aacp"></script>
-    <script defer src="/static/js/modules/navigation/route-geometry.js?v=20260712dark4"></script>
+    <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20261027phase6a"></script>
+    <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20261027phase6a"></script>
+    <script defer src="/static/js/modules/navigation/road-matching.js?v=20261027phase7a"></script>
+    <script defer src="/static/js/app/road-match-orchestration.js?v=20261027phase7a"></script>
+    <script defer src="/static/js/modules/navigation/route-geometry.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/units.js?v=20260711zzzd"></script>
     <script defer src="/static/js/modules/navigation/traffic-change.js?v=20260715opt1"></script>
     <script defer src="/static/js/modules/navigation/route-traffic-flow.js?v=20260712aacm"></script>
@@ -105,16 +107,16 @@
     <script defer src="/static/js/modules/navigation/trip-history.js?v=20260712aacg"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027phase5a"></script>
-    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261027phase5a"></script>
+    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20260712aack"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20260711zb"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
     <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20260712aacn"></script>
-    <script defer src="/static/js/modules/navigation/offline-navigation.js?v=20260712voice1"></script>
+    <script defer src="/static/js/modules/navigation/offline-navigation.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/ml-predictions.js?v=20260711zzzf"></script>
     <script defer src="/static/js/modules/navigation/search-autocomplete.js?v=20260711s"></script>
     <script defer src="/static/js/modules/navigation/geocoding-locations.js?v=20260712aaaq"></script>
-    <script defer src="/static/js/modules/navigation/route-progress.js?v=20260712aaba"></script>
+    <script defer src="/static/js/modules/navigation/route-progress.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20260919loc1"></script>
     <script defer src="/static/js/modules/ui/device-environment.js?v=20260810toast1"></script>
     <script defer src="/static/js/modules/navigation/favorites.js?v=20260711y"></script>
@@ -137,7 +139,7 @@
     <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261027phase5a"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20260712aaaz"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
-    <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20260711zzzx"></script>
+    <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
     <script defer src="/static/js/modules/navigation/road-report.js?v=20260711zzzk"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20260711zzzc"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260711zzzn"></script>
@@ -165,20 +167,20 @@
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
     <script defer src="/static/js/app/parking-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261027phase5a"></script>
+    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261027phase6a"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20261027phase5a"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/gps-orchestration.js?v=20261027phase5a"></script>
+    <script defer src="/static/js/app/gps-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/geocoding-orchestration.js?v=20260712ab58"></script>
-    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20260712ab37"></script>
+    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20260712ab46"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20260712aaek"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
     <script defer src="/static/js/app/route-preferences-orchestration.js?v=20260712ab24"></script>
-    <script defer src="/static/js/app/offline-navigation-orchestration.js?v=20260712ab23"></script>
+    <script defer src="/static/js/app/offline-navigation-orchestration.js?v=20261027phase6a"></script>
     <script defer src="/static/js/app/search-favorites-orchestration.js?v=20260712aaem"></script>
     <script defer src="/static/js/app/poi-search-orchestration.js?v=20260712aaen"></script>
     <script defer src="/static/js/app/best-time-leave-orchestration.js?v=20260712aaen"></script>
@@ -199,7 +201,7 @@
     <script defer src="/static/js/app/profile-store-orchestration.js?v=20260712ab14"></script>
     <script defer src="/static/js/app/settings-orchestration.js?v=20260812loc1"></script>
     <script defer src="/static/js/app/voice-control-orchestration.js?v=20260712aaf3"></script>
-    <script defer src="/static/js/app/voice-announcements-orchestration.js?v=20260827androidtts1"></script>
+    <script defer src="/static/js/app/voice-announcements-orchestration.js?v=20261027phase6a"></script>
     <script defer src="/static/js/app/page-init-orchestration.js?v=20260712dark4"></script>
     <script defer src="/static/js/app/map-explore-orchestration.js?v=20260712aaf7"></script>
     <script defer src="/static/js/app/battery-monitoring-orchestration.js?v=20260712aaf8"></script>
@@ -227,7 +229,7 @@
     <script defer src="/static/js/app/ar-navigation-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712dark4"></script>
     <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261027phase5a"></script>
-    <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20260712ab13"></script>
+    <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261027phase5a"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260827pwa03"></script>

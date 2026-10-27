@@ -15,6 +15,10 @@
     /** True after stopGPSTracking(); cleared when a watch is started again. */
     var gpsTrackingStoppedByUser = false;
     var activeRerouteTicket = null;
+    var navigationPositionEvidence=null;
+    var navigationAnchor=null;
+    var uncertaintySpeechCleared=false;
+    var evidencePolyline=null;
     var gpsWatchId = null;
     var lastGpsFixAtMs = 0;
     var gpsWatchStartedAtMs = 0;
@@ -80,6 +84,7 @@
     }
 
     function resolveGpsRouteSnapForTick(lat, lon, speedMph) {
+        if (navigationPositionEvidence && navigationPositionEvidence.state==='RELIABLE' && evidencePolyline===rt().g('routePolyline')) return navigationPositionEvidence.snap;
         const RG = rgModule();
         const stationary = !Number.isFinite(speedMph) || speedMph < 2;
         const plan = RG.buildGpsRouteSnapTickPlan({
@@ -778,7 +783,44 @@
      * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
      * @param {GeolocationPosition} position
      */
+    function pauseUncertainNavigation() {
+        if (!uncertaintySpeechCleared) {
+            if (root.VoyagrVoiceAnnouncementsOrchestration && root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech();
+            if (root.VoyagrLaneGuidanceOrchestration && root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute) root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();
+            uncertaintySpeechCleared=true;
+            if (rt().call.clearInitialETAAnnouncement) rt().call.clearInitialETAAnnouncement();
+        }
+        var nl=root.VoyagrNavigationLifecycleOrchestration;
+        if (nl && nl.resetNavigationArrivalState) nl.resetNavigationArrivalState();
+    }
+
     function applyGpsTrackingTick(position) {
+        var roadOwner=root.VoyagrRoadMatchOrchestration;
+        var roadMatch=roadOwner ? roadOwner.observe(position,rt().g('routePolyline'),window.lastCalculatedRoute) : null;
+        if (rt().g('routeInProgress') && roadMatch && root.VoyagrRoadMatching.shouldPauseNavigation(roadMatch)) {
+            var knownDeviation=root.VoyagrRoadMatching.supportsDeviation(roadMatch,Date.now());
+            navigationPositionEvidence={state:knownDeviation?'OFF_ROUTE':'UNKNOWN',reason:roadMatch.reason,road_match:roadMatch};
+            pauseUncertainNavigation();
+            rt().call.showStatus(knownDeviation?'Off route — checking a safe reroute':'Road association uncertain — navigation progress paused','warning');
+            if(knownDeviation)checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
+            return;
+        }
+        if (rt().g('routeInProgress') && rgModule().assessNavigationPosition) {
+            var line=rt().g('routePolyline');
+            if (line!==evidencePolyline) {navigationPositionEvidence=null;navigationAnchor=null;evidencePolyline=line;}
+            var evidence=rgModule().assessNavigationPosition(position,line,navigationAnchor,Date.now());
+            navigationPositionEvidence=evidence;
+            if (evidence.state==='RELIABLE' || evidence.state==='REACQUIRING') navigationAnchor=evidence;
+            if (evidence.state!=='RELIABLE') {
+                pauseUncertainNavigation();
+                rt().call.showStatus(evidence.state==='OFF_ROUTE' ? 'Off route — checking a safe reroute' : 'GPS uncertain — navigation progress paused','warning');
+                if (root.VoyagrSpeedWidgetOrchestration && root.VoyagrSpeedWidgetOrchestration.updateSpeedWidget && Number.isFinite(position.coords.speed)) root.VoyagrSpeedWidgetOrchestration.updateSpeedWidget(position.coords.speed*2.236936,null);
+                if (evidence.state==='OFF_ROUTE') checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
+                return;
+            }
+            uncertaintySpeechCleared=false;
+            rt().s('lastSnappedRouteIndex',evidence.snap.index);
+        }
         const SGsample = sgModule();
         const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
         const pos = applyGpsPositionTick(sample);
@@ -841,6 +883,9 @@
             (position) => {
                 const fix = sgModule().validateNavigationGpsFix(position, Date.now(), getLastGpsFixAtMs());
                 if (!fix.accepted) {
+                    if(root.VoyagrRoadMatchOrchestration)root.VoyagrRoadMatchOrchestration.invalidate(fix.reason);
+                    navigationPositionEvidence={state:'UNKNOWN',reason:fix.reason};
+                    pauseUncertainNavigation();
                     rt().call.showStatus('GPS unreliable — showing last reliable position', 'warning');
                     return;
                 }
@@ -848,6 +893,9 @@
                 applyGpsTrackingTick(position);
             },
             (error) => {
+                if(root.VoyagrRoadMatchOrchestration)root.VoyagrRoadMatchOrchestration.invalidate('GPS unavailable');
+                navigationPositionEvidence={state:'UNKNOWN',reason:'GPS unavailable'};
+                pauseUncertainNavigation();
                 const message = (error && error.message) ? error.message : 'unknown';
                 console.warn('[GPS] watchPosition error:', message);
                 rt().call.showStatus('GPS Error: ' + message, 'error');
@@ -1075,6 +1123,7 @@
      * @returns {number}
      */
     function getNavigationRemainingDistanceMeters(lat, lon) {
+        if (navigationPositionEvidence && evidencePolyline===rt().g('routePolyline')) return navigationPositionEvidence.state==='RELIABLE' ? navigationPositionEvidence.remainingM : Infinity;
         const plan = rgModule().buildNavigationRemainingDistancePlan({
             lat,
             lon,
@@ -1098,7 +1147,10 @@
         const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
         const RP = rpModule();
         const NL = root.VoyagrNavigationLifecycleOrchestration;
-        const tick = RP.buildNavigationArrivalTickPlan({
+        const tick = RP.buildEvidenceNavigationArrivalTickPlan({
+            positionEvidence:navigationPositionEvidence,
+            accuracy:navigationPositionEvidence && navigationPositionEvidence.accuracy,
+            legRanges:window.lastCalculatedRoute && window.lastCalculatedRoute.leg_geometry_ranges || [],
             routeInProgress: rt().g('routeInProgress'),
             arrivalTriggered: NL.getNavigationArrivalTriggered(),
             remainingM,
@@ -1215,6 +1267,7 @@
      * @returns {*} Return value description
      */
     function announceDistanceToDestination(currentLat, currentLon) {
+        if (navigationPositionEvidence && (navigationPositionEvidence.state!=='RELIABLE' || getLastGpsFixAgeMs()>15000)) return;
         if (!rt().g('routeInProgress') || !rt().g('routePolyline') || rt().g('routePolyline').length === 0 || !rt().g('voiceAnnouncementsEnabled')) return;
 
         const remainingDistance = getNavigationRemainingDistanceMeters(rt().g('currentLat'), rt().g('currentLon'));
@@ -1251,6 +1304,8 @@
      * @returns {*} Return value description
      */
     function announceUpcomingTurn(turnInfo) {
+        if (turnInfo && turnInfo.evidence_state==='INFERRED') return;
+        if (navigationPositionEvidence && (navigationPositionEvidence.state!=='RELIABLE' || getLastGpsFixAgeMs()>15000)) return;
         const TI = _turnInstructions();
         const VA = vaModule();
 
@@ -1829,7 +1884,10 @@
         const alerts = HA.collectHazardsToAnnounce(params);
 
         alerts.forEach(({ hazard, distanceM, unavoidableRouteCamera }) => {
-            announceCameraOrHazard(hazard, distanceM, { unavoidableRouteCamera });
+            var owner=root.VoyagrRoadMatchOrchestration;
+            var association=owner ? owner.classifyHazard(hazard) : 'POSSIBLE';
+            if (association==='UNRELATED') return;
+            announceCameraOrHazard(Object.assign({},hazard,{road_match_status:association}), distanceM, { unavoidableRouteCamera });
         });
     }
 
@@ -1910,6 +1968,7 @@
         checkRouteHazardCamerasAhead: checkRouteHazardCamerasAhead,
         saveCameraAlertPreferences: saveCameraAlertPreferences,
         loadCameraAlertPreferences: loadCameraAlertPreferences,
+        getNavigationPositionEvidence:function(){return navigationPositionEvidence;},
         triggerAutomaticRerouteWithHazardHandling: triggerAutomaticRerouteWithHazardHandling,
         triggerAutomaticReroute: triggerAutomaticReroute,
         getSnapBlendWeightState: getSnapBlendWeightState,

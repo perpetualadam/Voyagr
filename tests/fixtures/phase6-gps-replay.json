@@ -1,0 +1,769 @@
+{
+  "source": "Synthetic UK-style traces; no personal histories or surveyed accuracy",
+  "routes": {
+    "main": [
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.525,
+        -1.13
+      ],
+      [
+        53.53,
+        -1.13
+      ]
+    ],
+    "parallel": [
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.53,
+        -1.13
+      ],
+      [
+        53.53,
+        -1.1298
+      ],
+      [
+        53.52,
+        -1.1298
+      ]
+    ],
+    "overlap": [
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.53,
+        -1.13
+      ],
+      [
+        53.54,
+        -1.12
+      ],
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.53,
+        -1.13
+      ]
+    ],
+    "roundabout": [
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.521,
+        -1.131
+      ],
+      [
+        53.522,
+        -1.13
+      ],
+      [
+        53.521,
+        -1.129
+      ],
+      [
+        53.5205,
+        -1.129
+      ]
+    ],
+    "close": [
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.5202,
+        -1.13
+      ],
+      [
+        53.5202,
+        -1.1296
+      ],
+      [
+        53.5204,
+        -1.1296
+      ],
+      [
+        53.5204,
+        -1.1292
+      ]
+    ],
+    "exit": [
+      [
+        53.52,
+        -1.13
+      ],
+      [
+        53.525,
+        -1.13
+      ],
+      [
+        53.525,
+        -1.14
+      ]
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "normal_urban",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    },
+    {
+      "name": "motorway",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    },
+    {
+      "name": "parallel_carriageways",
+      "route": "parallel",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.525,
+          "lon": -1.1299,
+          "accuracy": 15,
+          "speed": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.525,
+          "lon": -1.1299,
+          "accuracy": 15,
+          "speed": 0
+        }
+      ],
+      "expected_last_state": "UNKNOWN"
+    },
+    {
+      "name": "roundabout",
+      "route": "roundabout",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.5201,
+          "lon": -1.1301,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.52015,
+          "lon": -1.13015,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE",
+      "steps": [
+        {
+          "begin_shape_index": 0,
+          "type": 26,
+          "roundabout_exit_count": 2
+        }
+      ],
+      "expected_last_direction": "roundabout"
+    },
+    {
+      "name": "motorway_exit",
+      "route": "exit",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.5248,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5249,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 3000,
+          "lat": 53.525,
+          "lon": -1.1301,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE",
+      "steps": [
+        {
+          "begin_shape_index": 0,
+          "type": 8
+        },
+        {
+          "begin_shape_index": 1,
+          "type": 21
+        }
+      ],
+      "expected_last_direction": "exit_left"
+    },
+    {
+      "name": "closely_spaced_junctions",
+      "route": "close",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52005,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.1298,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 3000,
+          "lat": 53.5203,
+          "lon": -1.1296,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 4000,
+          "lat": 53.5204,
+          "lon": -1.1294,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE",
+      "steps": [
+        {
+          "begin_shape_index": 0,
+          "type": 8
+        },
+        {
+          "begin_shape_index": 1,
+          "type": 10
+        },
+        {
+          "begin_shape_index": 3,
+          "type": 15
+        }
+      ],
+      "expected_maneuvers": [
+        null,
+        0,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "name": "multi_level_interchange",
+      "route": "overlap",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5251,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "UNKNOWN"
+    },
+    {
+      "name": "gps_drift",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 3000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 120,
+          "speed": 0
+        }
+      ],
+      "expected_last_state": "UNKNOWN",
+      "hold_last_progress": true
+    },
+    {
+      "name": "tunnel_loss",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 18000,
+          "signal": false
+        },
+        {
+          "t": 22000,
+          "lat": 53.522,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 23000,
+          "lat": 53.5221,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    },
+    {
+      "name": "stationary",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52011,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0
+        },
+        {
+          "t": 3000,
+          "lat": 53.52011,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0
+        }
+      ],
+      "expected_last_state": "RELIABLE",
+      "hold_last_progress": true
+    },
+    {
+      "name": "wrong_turn",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 3000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 8000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 14000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 20000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 26000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "OFF_ROUTE",
+      "expect_reroute": true
+    },
+    {
+      "name": "rejoining",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 3000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 8000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 14000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 20000,
+          "lat": 53.5202,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 40000,
+          "lat": 53.522,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 41000,
+          "lat": 53.5221,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    },
+    {
+      "name": "multi_stop_arrival",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 60000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 61000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    },
+    {
+      "name": "final_arrival",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 90000,
+          "lat": 53.53,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 91000,
+          "lat": 53.53,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE",
+      "expect_arrival": true
+    },
+    {
+      "name": "suspension_resume",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 120000,
+          "signal": false
+        },
+        {
+          "t": 121000,
+          "lat": 53.522,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        },
+        {
+          "t": 122000,
+          "lat": 53.5221,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    },
+    {
+      "name": "network_loss",
+      "route": "main",
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "network": false
+        },
+        {
+          "t": 1000,
+          "lat": 53.5201,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "network": false
+        },
+        {
+          "t": 2000,
+          "lat": 53.5202,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "network": false
+        }
+      ],
+      "expected_last_state": "RELIABLE"
+    }
+  ]
+}

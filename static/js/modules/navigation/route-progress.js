@@ -142,20 +142,12 @@
      */
     function resolveStepIndexFromSnapIndex(steps, snapIndex) {
         if (!steps || steps.length === 0) return 0;
-        var stepIdx = 0;
-        for (var i = 0; i < steps.length; i++) {
-            var begin = steps[i].begin_shape_index || 0;
-            if (begin <= snapIndex + 5) {
-                stepIdx = i;
-            } else {
-                break;
-            }
-        }
-        for (var j = stepIdx; j < steps.length; j++) {
-            var beginJ = steps[j].begin_shape_index || 0;
-            if (beginJ >= snapIndex - 5) {
-                return j;
-            }
+        var stepIdx=0;
+        for (var i=0;i<steps.length;i++) {
+            var begin=steps[i].begin_shape_index;
+            if (!Number.isFinite(begin)) continue;
+            if (begin<=snapIndex) stepIdx=i;
+            else break;
         }
         return stepIdx;
     }
@@ -366,7 +358,20 @@
         };
     }
 
+    function buildEvidenceNavigationArrivalTickPlan(opts) {
+        opts=opts || {};
+        var e=opts.positionEvidence;
+        if (!e || e.state!=='RELIABLE' || !Number.isFinite(e.timestamp) || opts.now-e.timestamp>15000 || e.timestamp>opts.now+1000) return {action:'skip',reason:'unreliable-position'};
+        var snap=e.snap;
+        if (!snap || (opts.legRanges || []).some(function(r){return r.stop && (r.end_shape_index>snap.index || (r.end_shape_index===snap.index && snap.t<=0));})) return {action:'skip',reason:'pending-intermediate-stop'};
+        if (!Number.isFinite(opts.accuracy) || opts.accuracy>35 || opts.accuracy<0) return {action:'skip',reason:'inaccurate-position'};
+        var radius=Math.max(8,Math.min(35,opts.accuracy));
+        return buildNavigationArrivalTickPlan(Object.assign({},opts,{remainingM:e.remainingM,
+            constants:Object.assign({},NAV_ARRIVAL_DEFAULTS,{END_REMAINING_M:radius,DWELL_REMAINING_M:Math.min(40,radius+5)})}));
+    }
+
     var api = {
+        buildEvidenceNavigationArrivalTickPlan:buildEvidenceNavigationArrivalTickPlan,
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
         ROUTE_PROGRESS_TEXT_ID: ROUTE_PROGRESS_TEXT_ID,

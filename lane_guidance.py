@@ -60,28 +60,13 @@ class LaneGuidance:
             if not lane_data:
                 return {'error': 'No lane data available'}
             
-            # Determine current lane based on heading
-            current_lane = self._determine_current_lane(heading, lane_data)
-            
-            # Determine recommended lane for maneuver
-            recommended_lane = self._get_recommended_lane(
-                next_maneuver, lane_data, current_lane
-            )
-            
-            # Check if lane change is needed
-            lane_change_needed = current_lane != recommended_lane
-            
-            return {
-                'current_lane': current_lane,
-                'recommended_lane': recommended_lane,
-                'total_lanes': lane_data['total_lanes'],
-                'lane_change_needed': lane_change_needed,
-                'next_maneuver': next_maneuver,
-                'lane_guidance_text': self._generate_lane_guidance_text(
-                    current_lane, recommended_lane, next_maneuver
-                ),
-                'timestamp': int(time.time())
-            }
+            # Ordinary GPS heading does not identify lane occupancy or permissions.
+            from voyagr.utils.navigation_evidence import lane_evidence
+            evidence=lane_evidence(lane_data.get('tags',{}),road_matched=lane_data.get('route_match_verified') is True,
+                direction=lane_data.get('matched_direction'),maneuver=next_maneuver)
+            return dict(evidence,total_lanes=evidence.get('total_lanes',lane_data.get('total_lanes')),
+                lane_change_needed=False,next_maneuver=next_maneuver,
+                lane_guidance_text='Follow ordinary turn guidance; current lane is unknown',timestamp=int(time.time()))
         except Exception as e:
             print(f"Error getting lane guidance: {e}")
             return {'error': str(e)}

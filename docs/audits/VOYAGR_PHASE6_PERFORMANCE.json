@@ -1,0 +1,73 @@
+{
+  "runtime": "v24.19.0",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "platform": "linux",
+  "units": "milliseconds",
+  "limitations": "Synthetic local CPU only; no API, rendering, IndexedDB IO, battery, audio or device timing.",
+  "results": [
+    {
+      "name": "route_matching_100_segments",
+      "samples": 200,
+      "median_ms": 0.02459699999999998,
+      "p95_ms": 0.13566499999999948,
+      "max_ms": 0.5083879999999965
+    },
+    {
+      "name": "route_matching_1000_segments",
+      "samples": 200,
+      "median_ms": 0.0799910000000068,
+      "p95_ms": 0.36164600000000036,
+      "max_ms": 0.5161590000000018
+    },
+    {
+      "name": "route_matching_10000_segments",
+      "samples": 200,
+      "median_ms": 0.9563840000000141,
+      "p95_ms": 1.4554779999999994,
+      "max_ms": 3.5202209999999923
+    },
+    {
+      "name": "provider_lane_parsing",
+      "samples": 200,
+      "median_ms": 0.00048100000003614696,
+      "p95_ms": 0.0009620000000154505,
+      "max_ms": 0.06683099999997921
+    },
+    {
+      "name": "manoeuvre_lookup_1000",
+      "samples": 200,
+      "median_ms": 0.03822700000000623,
+      "p95_ms": 0.15894999999994752,
+      "max_ms": 0.9089119999999866
+    },
+    {
+      "name": "turn_instruction",
+      "samples": 200,
+      "median_ms": 0.00015000000001919034,
+      "p95_ms": 0.00022999999998774,
+      "max_ms": 0.0025739999999814245
+    },
+    {
+      "name": "persisted_state_JSON",
+      "samples": 200,
+      "median_ms": 0.054552000000001044,
+      "p95_ms": 0.19064800000001014,
+      "max_ms": 0.31894199999999273
+    },
+    {
+      "name": "complete_16_scenario_replay",
+      "samples": 50,
+      "median_ms": 0.1374270000000024,
+      "p95_ms": 0.3800640000000044,
+      "max_ms": 0.46968899999995983
+    },
+    {
+      "name": "legal_speed_evidence_no_network",
+      "samples": 1000,
+      "median_ms": 0.002864,
+      "p95_ms": 0.003265,
+      "max_ms": 0.132282
+    }
+  ],
+  "python_runtime": "3.12.14"
+}

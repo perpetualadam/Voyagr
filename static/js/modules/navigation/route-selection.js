@@ -2486,7 +2486,17 @@
      */
     function buildRoutePayloadFromPersisted(saved, encodePolyline) {
         if (!saved || !Array.isArray(saved.polyline) || saved.polyline.length < 2) return null;
+        if (saved.polyline.some(function(p){return !Array.isArray(p) || p.length<2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) || Math.abs(p[0])>90 || Math.abs(p[1])>180;})) return null;
         var base = saved.routeData && typeof saved.routeData === 'object' ? { ...saved.routeData } : {};
+        var integrity=root.VoyagrAvoidanceIntegrity;
+        var encoded=encodePolyline(saved.polyline,6);
+        if (integrity && base.geometry && integrity.geometryBinding(base)!==integrity.geometryBinding({geometry:encoded,geometry_precision:6})) return null;
+        delete base.routes;
+        if (base.avoidance_assessment) {
+            base.avoidance_assessment=Object.assign({},base.avoidance_assessment,{checked_at:0,resume_state:'UNVERIFIED'});
+            if (base.avoidance_assessment.status==='SATISFIED') base.avoidance_assessment.status='UNVERIFIED';
+        }
+        base.navigation_resume_requires_fresh_gps=true;
         base.maneuvers = saved.steps || base.maneuvers || [];
         if (!base.geometry || typeof base.geometry !== 'string') {
             base.geometry = encodePolyline(saved.polyline, 6);

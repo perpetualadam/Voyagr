@@ -1,0 +1,4650 @@
+{
+  "schema_version": 1,
+  "provenance": "SYNTHETIC; not acquired OSM or surveyed UK truth",
+  "scenarios": [
+    {
+      "name": "parallel_motorway_carriageways",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "AMBIGUOUS",
+      "expected_attributes": false,
+      "expected_road": null,
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "0"
+    },
+    {
+      "name": "opposite_direction_traffic",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "1"
+    },
+    {
+      "name": "parallel_urban_roads",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "AMBIGUOUS",
+      "expected_attributes": false,
+      "expected_road": null,
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "0"
+    },
+    {
+      "name": "slip_road_entry",
+      "route": [
+        [
+          53.524,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.5247,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52475,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 6000,
+          "lat": 53.52515,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "200",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 25,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "slip_road_entry",
+      "expected_hazard": "UNRELATED",
+      "expected_final_direction": "merge"
+    },
+    {
+      "name": "slip_road_exit",
+      "route": [
+        [
+          53.524,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.526,
+          -1.1285
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.5247,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52475,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 6000,
+          "lat": 53.52515,
+          "lon": -1.129775,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 42
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "200",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 20,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "slip_road_exit",
+      "expected_hazard": "UNRELATED",
+      "expected_final_direction": "exit_right"
+    },
+    {
+      "name": "multi_level_junction",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": null
+        },
+        {
+          "t": 1000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": null
+        },
+        {
+          "t": 2000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": null
+        }
+      ],
+      "expected_match_state": "AMBIGUOUS",
+      "expected_attributes": false,
+      "expected_road": null,
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "3"
+    },
+    {
+      "name": "bridges_and_tunnels",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": null
+        },
+        {
+          "t": 1000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": null
+        },
+        {
+          "t": 2000,
+          "lat": 53.525,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": null
+        }
+      ],
+      "expected_match_state": "AMBIGUOUS",
+      "expected_attributes": false,
+      "expected_road": null,
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "3"
+    },
+    {
+      "name": "roundabout_entry",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "4"
+    },
+    {
+      "name": "roundabout_exit",
+      "route": [
+        [
+          53.524,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.526,
+          -1.129
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 15000,
+          "lat": 53.5252,
+          "lon": -1.1298,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 31
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "4"
+    },
+    {
+      "name": "gps_drift_near_junctions",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 60,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "UNMATCHED",
+      "expected_attributes": false,
+      "expected_road": null,
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "low_speed_heading_instability",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": 180
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": 180
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": 180
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": false,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "stationary_drift",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": 180
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": 180
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 0,
+          "heading": 180
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": false,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "temporary_gps_loss",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0,
+          "signal": false
+        }
+      ],
+      "expected_match_state": "UNMATCHED",
+      "expected_attributes": false,
+      "expected_road": null,
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "gps_reacquisition",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 30000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": false,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "wrong_turn",
+      "route": [
+        [
+          53.524,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.5247,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52475,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 6000,
+          "lat": 53.525,
+          "lon": -1.1298,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        },
+        {
+          "t": 10000,
+          "lat": 53.525,
+          "lon": -1.129,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        },
+        {
+          "t": 16000,
+          "lat": 53.525,
+          "lon": -1.128,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        },
+        {
+          "t": 22000,
+          "lat": 53.525,
+          "lon": -1.1275,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        },
+        {
+          "t": 28000,
+          "lat": 53.525,
+          "lon": -1.1275,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        },
+        {
+          "t": 35000,
+          "lat": 53.525,
+          "lon": -1.1275,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        },
+        {
+          "t": 40000,
+          "lat": 53.525,
+          "lon": -1.1275,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 90
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "200",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 20,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "wrong_turn",
+      "expected_hazard": "UNRELATED",
+      "expect_reroute": true,
+      "expected_final_direction": null
+    },
+    {
+      "name": "route_rejoining",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.125,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": false,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "closely_spaced_manoeuvres",
+      "route": [
+        [
+          53.5239,
+          -1.13
+        ],
+        [
+          53.524,
+          -1.13
+        ],
+        [
+          53.52408,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 15,
+          "begin_shape_index": 1
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 2
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "intermediate_stop_arrival",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "legRanges": [
+        {
+          "stop": true,
+          "end_shape_index": 2
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "final_destination_arrival",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.52995,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 1000,
+          "lat": 53.52995,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        },
+        {
+          "t": 2000,
+          "lat": 53.52995,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    },
+    {
+      "name": "network_interruption",
+      "route": [
+        [
+          53.52,
+          -1.13
+        ],
+        [
+          53.525,
+          -1.13
+        ],
+        [
+          53.53,
+          -1.13
+        ]
+      ],
+      "frames": [
+        {
+          "t": 0,
+          "lat": 53.524,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0,
+          "network": false
+        },
+        {
+          "t": 1000,
+          "lat": 53.52405,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0,
+          "network": false
+        },
+        {
+          "t": 2000,
+          "lat": 53.5241,
+          "lon": -1.13,
+          "accuracy": 5,
+          "speed": 10,
+          "heading": 0,
+          "network": false
+        }
+      ],
+      "expected_match_state": "PROBABLE",
+      "expected_attributes": true,
+      "expected_road": "100",
+      "hazards": [
+        {
+          "type": "camera_speed",
+          "lat": 53.5245,
+          "lon": -1.13,
+          "osm_way_id": "100",
+          "direction": "forward",
+          "observed_at_ms": 1800000000000
+        }
+      ],
+      "steps": [
+        {
+          "type": 8,
+          "begin_shape_index": 0
+        },
+        {
+          "type": 10,
+          "begin_shape_index": 1
+        }
+      ],
+      "context": "2"
+    }
+  ],
+  "contexts": {
+    "0": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2"
+          ],
+          "geometry": [
+            [
+              53.52,
+              -1.13
+            ],
+            [
+              53.53,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        },
+        {
+          "osm_way_id": "200",
+          "node_ids": [
+            "3",
+            "4"
+          ],
+          "geometry": [
+            [
+              53.52,
+              -1.1299
+            ],
+            [
+              53.53,
+              -1.1299
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "1": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2"
+          ],
+          "geometry": [
+            [
+              53.52,
+              -1.13
+            ],
+            [
+              53.53,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        },
+        {
+          "osm_way_id": "200",
+          "node_ids": [
+            "4",
+            "3"
+          ],
+          "geometry": [
+            [
+              53.53,
+              -1.1299
+            ],
+            [
+              53.52,
+              -1.1299
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "2": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2"
+          ],
+          "geometry": [
+            [
+              53.52,
+              -1.13
+            ],
+            [
+              53.53,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "3": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2"
+          ],
+          "geometry": [
+            [
+              53.52,
+              -1.13
+            ],
+            [
+              53.53,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        },
+        {
+          "osm_way_id": "200",
+          "node_ids": [
+            "3",
+            "4"
+          ],
+          "geometry": [
+            [
+              53.525,
+              -1.131
+            ],
+            [
+              53.525,
+              -1.129
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "no",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph",
+            "layer": "1"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "4": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2",
+            "3"
+          ],
+          "geometry": [
+            [
+              53.524,
+              -1.13
+            ],
+            [
+              53.525,
+              -1.13
+            ],
+            [
+              53.526,
+              -1.129
+            ]
+          ],
+          "tags": {
+            "highway": "primary",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph",
+            "junction": "roundabout"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "slip_road_entry": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2"
+          ],
+          "geometry": [
+            [
+              53.524,
+              -1.13
+            ],
+            [
+              53.525,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "motorway_link",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        },
+        {
+          "osm_way_id": "200",
+          "node_ids": [
+            "2",
+            "3"
+          ],
+          "geometry": [
+            [
+              53.525,
+              -1.13
+            ],
+            [
+              53.53,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "motorway",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "slip_road_exit": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2"
+          ],
+          "geometry": [
+            [
+              53.524,
+              -1.13
+            ],
+            [
+              53.525,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "motorway",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        },
+        {
+          "osm_way_id": "200",
+          "node_ids": [
+            "2",
+            "3"
+          ],
+          "geometry": [
+            [
+              53.525,
+              -1.13
+            ],
+            [
+              53.526,
+              -1.1285
+            ]
+          ],
+          "tags": {
+            "highway": "motorway_link",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    },
+    "wrong_turn": {
+      "schema_version": 1,
+      "source": "synthetic-uk-network",
+      "source_kind": "SYNTHETIC",
+      "revision": "phase7-v1",
+      "acquired_at_ms": 1800000000000,
+      "bounds": [
+        53.5,
+        -1.15,
+        53.55,
+        -1.1
+      ],
+      "coverage": "COMPLETE",
+      "roads": [
+        {
+          "osm_way_id": "100",
+          "node_ids": [
+            "1",
+            "2",
+            "4"
+          ],
+          "geometry": [
+            [
+              53.524,
+              -1.13
+            ],
+            [
+              53.525,
+              -1.13
+            ],
+            [
+              53.53,
+              -1.13
+            ]
+          ],
+          "tags": {
+            "highway": "motorway",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "100",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        },
+        {
+          "osm_way_id": "200",
+          "node_ids": [
+            "2",
+            "3"
+          ],
+          "geometry": [
+            [
+              53.525,
+              -1.13
+            ],
+            [
+              53.525,
+              -1.126
+            ]
+          ],
+          "tags": {
+            "highway": "motorway_link",
+            "oneway": "yes",
+            "lanes": "2",
+            "turn:lanes": "through|right",
+            "maxspeed": "30 mph"
+          },
+          "jurisdiction": "England",
+          "attribute_bundles": {
+            "forward": {
+              "speed": {
+                "evidence_state": "MAPPED_POSTED",
+                "speed_limit_mph": 30.0,
+                "applicable": true,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Fresh matched directional numeric mapped limit; not surveyed signage"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "straight": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    1
+                  ],
+                  "recommended_lane": 1,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "exit_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [
+                    2
+                  ],
+                  "recommended_lane": 2,
+                  "current_lane": null,
+                  "show_lane_guidance": true,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_left": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                },
+                "slight_right": {
+                  "evidence_state": "EXPLICIT",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Matched directional turn:lanes",
+                  "total_lanes": 2,
+                  "destination_lanes": null,
+                  "has_turn_lanes": true,
+                  "source": "matched_directional_source",
+                  "source_revision": null,
+                  "osm_way_id": "200",
+                  "direction": "forward"
+                }
+              },
+              "vehicle": "car"
+            },
+            "backward": {
+              "speed": {
+                "evidence_state": "UNKNOWN",
+                "speed_limit_mph": null,
+                "applicable": false,
+                "source": "mapped_road_evidence",
+                "jurisdiction": "England",
+                "vehicle_type": "car",
+                "observed_at": 1800000000.0,
+                "reason": "Applicable road/legal context is unknown"
+              },
+              "lanes": {
+                "left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "straight": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "exit_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_left": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                },
+                "slight_right": {
+                  "evidence_state": "UNKNOWN",
+                  "recommended_lanes": [],
+                  "recommended_lane": null,
+                  "current_lane": null,
+                  "show_lane_guidance": false,
+                  "reason": "Applicable road/direction not established"
+                }
+              },
+              "vehicle": "car"
+            }
+          }
+        }
+      ],
+      "restrictions": []
+    }
+  }
+}

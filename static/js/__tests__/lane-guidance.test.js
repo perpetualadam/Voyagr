@@ -589,8 +589,9 @@ describe('buildLaneGuidanceFetchStateApplyPlan', () => {
 });
 
 describe('buildLaneGuidanceFetchOutcomePlan', () => {
-    test('caches successful API data for render', () => {
+    test('caches explicitly applicable API data for render', () => {
         const data = {
+            evidence_state:'EXPLICIT',show_lane_guidance:true,
             success: true,
             total_lanes: 3,
             recommended_lane: 2,
@@ -622,7 +623,9 @@ describe('buildLaneGuidanceFetchOutcomePlan', () => {
         });
         expect(outcome.action).toBe('fallback');
         expect(outcome.warnLine).toContain('timeout');
-        expect(outcome.renderData.total_lanes).toBeGreaterThan(0);
+        expect(outcome.renderData.total_lanes).toBe(0);
+        expect(outcome.renderData.show_lane_guidance).toBe(false);
+        expect(outcome.renderData.evidence_state).toBe('UNKNOWN');
         expect(outcome.cacheEntry.fallback).toBe(true);
     });
 });
@@ -731,18 +734,18 @@ describe('confidence-based hybrid lane guidance', () => {
         expect(LG.shouldShow(hybrid)).toBe(false);
     });
 
-    test('motorway exit estimation can show with multiple lanes at medium confidence', () => {
+    test('motorway exit estimation cannot invent a displayed lane', () => {
         const hybrid = LG.buildHybridLaneGuidance({
             maneuver: 'exit_right',
             distanceToManeuver: 250,
             roadType: 'motorway',
         });
-        expect(hybrid.confidence).toBeGreaterThanOrEqual(LG.LANE_CONFIDENCE_DISPLAY_MIN);
-        expect(hybrid.recommended_lanes.length).toBeGreaterThanOrEqual(1);
-        expect(LG.shouldShow(hybrid)).toBe(true);
+        expect(hybrid.confidence).toBe(0);
+        expect(hybrid.recommended_lanes).toEqual([]);
+        expect(LG.shouldShow(hybrid)).toBe(false);
     });
 
-    test('2nd-exit roundabout always recommends the left lane for straight ahead', () => {
+    test('2nd-exit roundabout retains provider choices instead of pinning left', () => {
         expect(LG.isRoundaboutSecondExitStraight('roundabout', 2)).toBe(true);
         expect(LG.isRoundaboutSecondExitStraight('roundabout', 3)).toBe(false);
         expect(LG.isRoundaboutSecondExitStraight('left', 2)).toBe(false);
@@ -756,8 +759,9 @@ describe('confidence-based hybrid lane guidance', () => {
             distanceToManeuver: 200,
             roadType: 'primary',
         });
-        expect(estimated.recommended_lane).toBe(1);
-        expect(estimated.recommended_lanes).toEqual([1]);
+        expect(estimated.recommended_lane).toBeNull();
+        expect(estimated.recommended_lanes).toEqual([]);
+        expect(estimated.show_lane_guidance).toBe(false);
 
         // Routing may mark a middle/right through lane active — still pin to left
         // when the left lane itself allows the 2nd-exit departure.
@@ -771,8 +775,8 @@ describe('confidence-based hybrid lane guidance', () => {
                 { active: true, valid_indications: ['through', 'right'] },
             ],
         });
-        expect(routingHybrid.recommended_lane).toBe(1);
-        expect(routingHybrid.recommended_lanes).toEqual([1]);
+        expect(routingHybrid.recommended_lane).toBe(2);
+        expect(routingHybrid.recommended_lanes).toEqual([2]);
 
         // right|through|through: lane 1 is not usable for 2nd exit — keep leftmost through.
         const rightOnlyLeft = LG.buildHybridLaneGuidance({
@@ -796,6 +800,7 @@ describe('confidence-based hybrid lane guidance', () => {
             distanceToManeuver: 200,
             roadType: 'primary',
             apiData: {
+                evidence_state:'EXPLICIT',show_lane_guidance:true,
                 success: true,
                 total_lanes: 3,
                 recommended_lane: 2,
@@ -1083,13 +1088,12 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
         const validSingle = LG.extractRoutingLaneGuidance([
             { valid_indications: [] }, { valid_indications: ['right'] },
         ]);
-        expect(validSingle.confidence).toBe(92);
-        expect(validSingle.recommended_lanes).toEqual([2]);
+        expect(validSingle).toBeNull();
 
         const validMulti = LG.extractRoutingLaneGuidance([
             { valid_indications: ['left'] }, { valid_indications: ['right'] },
         ]);
-        expect(validMulti.confidence).toBe(82);
+        expect(validMulti).toBeNull();
 
         const noSignal = LG.extractRoutingLaneGuidance([
             null, { valid_indications: [] },
@@ -1191,12 +1195,13 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
     test('merge hybrid urgency uses centre primary, not recommended_lanes[0]', () => {
         const hybrid = LG.buildHybridLaneGuidance({
             apiData: {
+                evidence_state:'EXPLICIT',show_lane_guidance:true,
                 success: true,
                 total_lanes: 3,
                 has_osm_data: true,
                 has_turn_lanes: false,
                 recommended_lane: 2,
-                recommended_lanes: [1, 3],
+                recommended_lanes: [1, 2, 3],
                 confidence: 80,
             },
             maneuver: 'merge',
@@ -1204,7 +1209,7 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             roadType: 'motorway',
         });
         expect(hybrid.recommended_lane).toBe(2);
-        expect(hybrid.recommended_lanes).toEqual([1, 3]);
+        expect(hybrid.recommended_lanes).toEqual([1, 2, 3]);
         expect(hybrid.urgency_text).toBe('Move to the middle lane');
         expect(hybrid.guidance_text).toBe('Use the middle lane');
     });
@@ -1233,8 +1238,10 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             distanceToManeuver: 400,
             roadType: 'motorway',
         });
-        expect(hybrid.source).toBe('osm_lanes');
-        expect(hybrid.confidence).toBe(78);
+        expect(hybrid.source).toBe('unverified');
+        expect(hybrid.confidence).toBe(0);
+        expect(hybrid.recommended_lanes).toEqual([]);
+        expect(hybrid.show_lane_guidance).toBe(false);
     });
 
     test('buildLaneGuidanceStabilityPlan route recalc, clear, upgrade, and update paths', () => {
@@ -1356,11 +1363,12 @@ describe('lane-guidance hybrid helpers (coverage)', () => {
             }),
             { next_maneuver: 'roundabout', roundabout_exit_count: 2 }
         );
-        expect(secondExit.recommended_lanes).toEqual([1]);
+        expect(secondExit.recommended_lanes).toEqual([1,2]);
         const secondPlan = LG.buildLaneVoiceAnnouncementPlan(secondExit, '');
-        expect(secondPlan.message).toContain('left lane');
+        expect(secondPlan.message).toContain('left or right lane');
 
         const aheadHybrid = LG.buildHybridLaneGuidance({
+            routingManeuverLanes:[{active:false},{active:true}],
             maneuver: 'exit_right',
             distanceToManeuver: 600,
             roadType: 'motorway',

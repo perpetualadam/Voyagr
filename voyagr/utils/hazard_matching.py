@@ -78,10 +78,20 @@ class SegmentIndex:
         possible = False
         for _, i in near:
             evidence = self.attributes.get(i, {})
-            road, hazard_road = evidence.get('road_id'), hazard.get('road_id')
-            if road is not None and hazard_road is not None and str(road) != str(hazard_road):
+            from voyagr.utils.road_matching import same_road, finite
+            def fresh(record):
+                stamp=record.get('observed_at_ms')
+                return finite(stamp) and 0<=now*1000-stamp<=600000 and (record.get('valid_until') is None or finite(record['valid_until']) and record['valid_until']>=now)
+            typed=(evidence.get('osm_way_id') is not None and hazard.get('osm_way_id') is not None or
+                   evidence.get('graph_edge_id') is not None and hazard.get('graph_edge_id') is not None and
+                   bool(evidence.get('graph_provider')) and evidence.get('graph_provider')==hazard.get('graph_provider'))
+            legacy=(evidence.get('road_id') is not None and hazard.get('road_id') is not None and
+                    bool(evidence.get('road_id_namespace')) and evidence.get('road_id_namespace')==hazard.get('road_id_namespace'))
+            associated=(typed or legacy) and fresh(evidence) and fresh(hazard)
+            equal=same_road(evidence,hazard) if typed else str(evidence.get('road_id'))==str(hazard.get('road_id'))
+            if associated and not equal:
                 continue
-            if evidence.get('level') is not None and hazard.get('level') is not None and evidence['level'] != hazard['level']:
+            if associated and evidence.get('level') is not None and hazard.get('level') is not None and evidence['level']!=hazard['level']:
                 continue
             bearing = hazard.get('travel_bearing_deg')
             direction_known = hazard.get('directionality') == 'both' or category in ('railway_crossings', 'avoid_points')
@@ -89,7 +99,7 @@ class SegmentIndex:
                 a, b = self.coords[i], self.coords[i+1]
                 travel = math.degrees(math.atan2((b[1]-a[1])*math.cos(math.radians(a[0])), b[0]-a[0])) % 360
                 delta = abs((bearing-travel+180)%360-180)
-                if delta >= 135:
+                if delta >= 135 and associated:
                     continue
                 direction_known = delta <= 45
             try:
@@ -97,7 +107,7 @@ class SegmentIndex:
             except (ValueError,TypeError):
                 stale = True
             # Explicit avoid points are geographic constraints, not inferred roads.
-            associated = category == 'avoid_points' or (road is not None and hazard_road is not None)
+            associated = category == 'avoid_points' or associated
             if associated and direction_known and not stale:
                 return 'MATCH'
             possible = True

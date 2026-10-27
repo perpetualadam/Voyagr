@@ -410,7 +410,12 @@ def build_lanes_for_maneuver(
     if not recommended:
         return None
 
-    return build_valhalla_lane_objects(total_lanes, recommended, lane_dirs)
+    lanes=build_valhalla_lane_objects(total_lanes, recommended, lane_dirs)
+    from voyagr.utils.navigation_evidence import TURNS
+    wanted=TURNS.get(maneuver,set())
+    evidence='PROVIDER' if lane_dirs and wanted and all(set(lane_dirs[i-1]) & wanted for i in recommended) else 'INFERRED'
+    for lane in lanes: lane['evidence_state']=evidence
+    return lanes
 
 
 def attach_lanes_to_graphhopper_maneuver(
@@ -422,6 +427,11 @@ def attach_lanes_to_graphhopper_maneuver(
     shape_index_src: int,
 ) -> None:
     """Attach Valhalla-shaped ``lanes`` to a GraphHopper-derived maneuver when possible."""
+    explicit=instr.get('lanes')
+    if isinstance(explicit,list) and explicit and isinstance(explicit[-1],list): explicit=explicit[-1]
+    if isinstance(explicit,list) and 1<len(explicit)<=12 and all(isinstance(l,dict) for l in explicit) and any(l.get('active') is True for l in explicit):
+        maneuver['lanes']=[dict(l,evidence_state='PROVIDER') for l in explicit]
+        return
     road_class = maneuver.get('road_class')
     if not road_class and path_details:
         gh_rc = path_detail_value_at_index(path_details.get('road_class'), shape_index_src)

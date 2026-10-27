@@ -97,7 +97,16 @@
                 message = 'Exit now' + exitSide + streetInfo;
             }
         } else if (direction === 'roundabout') {
-            var rbExit = Number(opts.roundaboutExitCount) || 0;
+            var rbExit = Number(opts.roundaboutExitCount);
+            if (!Number.isInteger(rbExit) || rbExit<1 || rbExit>50) rbExit=0;
+            if (rbExit>0) {
+                var ordinals=['first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth','eleventh','twelfth'];
+                var consistent=function(text) {
+                    var tokens=String(text || '').toLowerCase().match(/\b(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)\b/g) || [];
+                    return tokens.length && tokens.every(function(t){var n=ordinals.indexOf(t)+1;return (n || parseInt(t,10))===rbExit;}) ? text : '';
+                };
+                verbalAlert=consistent(verbalAlert);verbalPre=consistent(verbalPre);
+            } // Contradictory or unnumbered verbal text cannot override the topology count.
             var rbType = Number(opts.valhallaType) || 26;
             var rbStreet = streetName ? ' onto ' + streetName : '';
             var exitPhrase = rbExit > 0

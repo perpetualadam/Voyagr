@@ -71,72 +71,15 @@
     function extractRoutingLaneGuidance(maneuverLanes) {
         if (!Array.isArray(maneuverLanes) || maneuverLanes.length <= 1) return null;
 
-        var activeLanes = [];
-        var validLanes = [];
-        for (var i = 0; i < maneuverLanes.length; i++) {
-            var lane = maneuverLanes[i];
-            if (!lane) continue;
-            if (lane.active === true || lane.active_indication === true) {
-                activeLanes.push(i + 1);
-            }
-            if (Array.isArray(lane.valid_indications) && lane.valid_indications.length > 0) {
-                validLanes.push(i + 1);
-            }
-        }
-
-        if (activeLanes.length === 1) {
-            return {
-                total_lanes: maneuverLanes.length,
-                recommended_lanes: activeLanes.slice(),
-                recommended_lane: activeLanes[0],
-                confidence: 97,
-                source: 'routing',
-                has_routing_lanes: true,
-                has_turn_lanes: true,
-                has_osm_data: false,
-                estimated: false,
-            };
-        }
-        if (activeLanes.length > 1) {
-            return {
-                total_lanes: maneuverLanes.length,
-                recommended_lanes: activeLanes.slice(),
-                recommended_lane: activeLanes[0],
-                confidence: 88,
-                source: 'routing',
-                has_routing_lanes: true,
-                has_turn_lanes: true,
-                has_osm_data: false,
-                estimated: false,
-            };
-        }
-        if (validLanes.length === 1) {
-            return {
-                total_lanes: maneuverLanes.length,
-                recommended_lanes: validLanes.slice(),
-                recommended_lane: validLanes[0],
-                confidence: 92,
-                source: 'routing',
-                has_routing_lanes: true,
-                has_turn_lanes: true,
-                has_osm_data: false,
-                estimated: false,
-            };
-        }
-        if (validLanes.length > 1) {
-            return {
-                total_lanes: maneuverLanes.length,
-                recommended_lanes: validLanes.slice(),
-                recommended_lane: validLanes[0],
-                confidence: 82,
-                source: 'routing',
-                has_routing_lanes: true,
-                has_turn_lanes: true,
-                has_osm_data: false,
-                estimated: false,
-            };
-        }
-        return null;
+        if (maneuverLanes.some(function(l) {return l && l.evidence_state==='INFERRED';})) return null;
+        var active=[];
+        maneuverLanes.forEach(function(l,i) {
+            if (l && l.active===true && l.access!=='no' && l.access!=='private' && l.vehicle_allowed!==false && !l.bus_only) active.push(i+1);
+        });
+        if (!active.length) return null;
+        return {total_lanes:maneuverLanes.length,recommended_lanes:active,recommended_lane:active[0],
+            confidence:active.length===1 ? 97 : 88,source:'routing',evidence_state:'PROVIDER',
+            has_routing_lanes:true,has_turn_lanes:true,has_osm_data:false,estimated:false};
     }
 
     /**
@@ -255,71 +198,6 @@
     }
 
     /** Directions that may take a 2nd-exit (straight) departure. */
-    var SECOND_EXIT_USABLE_DIRS = {
-        left: true,
-        slight_left: true,
-        through: true,
-        none: true,
-        '': true,
-    };
-
-    /**
-     * True when a direction list can serve a 2nd-exit roundabout departure.
-     * @param {Array<string>|null|undefined} dirs
-     * @returns {boolean}
-     */
-    function directionsAllowSecondExit(dirs) {
-        if (!Array.isArray(dirs) || dirs.length === 0) return false;
-        for (var i = 0; i < dirs.length; i++) {
-            if (SECOND_EXIT_USABLE_DIRS[dirs[i]]) return true;
-        }
-        return false;
-    }
-
-    /**
-     * Leftmost lane usable for a 2nd-exit departure from routing/OSM markings.
-     * Falls back to 1 when markings are absent (UK left-ahead heuristic).
-     * @param {Array<Object>|null|undefined} routingLanes
-     * @param {Object|null|undefined} base
-     * @returns {number}
-     */
-    function resolveSecondExitPinnedLane(routingLanes, base) {
-        var usable = [];
-        var i;
-
-        if (Array.isArray(routingLanes) && routingLanes.length >= 2) {
-            for (i = 0; i < routingLanes.length; i++) {
-                var lane = routingLanes[i];
-                if (lane && directionsAllowSecondExit(lane.valid_indications)) {
-                    usable.push(i + 1);
-                }
-            }
-        }
-
-        if (!usable.length && base && base.has_turn_lanes && !base.has_routing_lanes) {
-            var arrows = base.lane_arrows;
-            if (Array.isArray(arrows) && arrows.length >= 2) {
-                for (i = 0; i < arrows.length; i++) {
-                    if (arrows[i] && directionsAllowSecondExit(arrows[i].directions)) {
-                        usable.push(i + 1);
-                    }
-                }
-            }
-            // OSM scoring already excluded lane 1 (e.g. right|through|through).
-            if (!usable.length) {
-                var scored = getRecommendedLaneNumbers(base);
-                if (scored.length > 0 && scored.indexOf(1) < 0) {
-                    usable = scored.slice();
-                }
-            }
-        }
-
-        if (usable.length > 0) {
-            return Math.min.apply(null, usable);
-        }
-        return 1;
-    }
-
     /**
      * UK heuristic: candidate lanes for a manoeuvre (1-based indices).
      * @param {string} maneuver
@@ -439,41 +317,14 @@
         var routing = extractRoutingLaneGuidance(opts.routingManeuverLanes);
         var base = null;
 
-        if (routing) {
-            base = Object.assign({}, routing);
-        } else if (opts.apiData && opts.apiData.success) {
-            var apiConfidence = typeof opts.apiData.confidence === 'number'
-                ? opts.apiData.confidence
-                : scoreApiLaneGuidanceConfidence(opts.apiData);
-            if (apiConfidence > 0 || opts.apiData.has_osm_data || opts.apiData.has_turn_lanes) {
-                base = Object.assign({}, opts.apiData, {
-                    confidence: apiConfidence,
-                    source: opts.apiData.source || (opts.apiData.has_turn_lanes ? 'osm_turn_lanes' : 'osm_lanes'),
-                    estimated: opts.apiData.estimated === true,
-                });
-                base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount, roadType);
-            }
-        }
-        if (!base) {
-            var fb = buildDeterministicLaneGuidance(maneuver, dist, exitCount, roadType);
-            var estConfidence = scoreEstimatedLaneConfidence(fb, maneuver, roadType);
-            base = Object.assign({}, fb, {
-                confidence: estConfidence,
-                source: 'estimated',
-            });
-            base = enrichGuidanceWithRecommendedLanes(base, maneuver, exitCount, roadType);
-        }
-
-        base = applyConfidenceLaneSelection(base);
-
-        // 2nd-exit roundabout = straight on the left lane. Routing/OSM can still
-        // highlight a middle/right through lane — pin to the leftmost *usable*
-        // lane (lane 1 when it allows the exit; otherwise the leftmost candidate).
-        if (isRoundaboutSecondExitStraight(maneuver, exitCount) && (base.total_lanes || 0) >= 2) {
-            var pinLane = resolveSecondExitPinnedLane(opts.routingManeuverLanes, base);
-            base.recommended_lane = pinLane;
-            base.recommended_lanes = [pinLane];
-        }
+        if (routing) base=Object.assign({},routing);
+        else if (opts.apiData && opts.apiData.evidence_state==='EXPLICIT' && isActionableLaneGuidance(opts.apiData)) base=Object.assign({confidence:95,source:'osm_turn_lanes'},opts.apiData);
+        if (!base) return {success:true,total_lanes:0,recommended_lanes:[],recommended_lane:null,
+            confidence:0,source:'unverified',evidence_state:'UNKNOWN',show_lane_guidance:false,
+            urgency:'none',guidance_text:'Follow ordinary turn guidance; lane assignment unknown',lane_arrows:[]};
+        var permitted=getRecommendedLaneNumbers(base).slice();
+        base=applyConfidenceLaneSelection(base);
+        if (base.evidence_state==='EXPLICIT') base.recommended_lanes=permitted;
 
         var valuable = isLaneGuidanceValuableManeuver({
             totalLanes: base.total_lanes,
@@ -747,7 +598,13 @@
      * @returns {boolean} Whether the lane overlay should be visible. Hidden on single-lane
      *   roads, when no maneuver is approaching, or after the maneuver is complete.
      */
+    function isActionableLaneGuidance(data) {
+        return !!data && ['EXPLICIT','PROVIDER'].indexOf(data.evidence_state)>=0 &&
+            getRecommendedLaneNumbers(data).length>0 && getRecommendedLaneNumbers(data).every(function(n){return Number.isInteger(n) && n>=1 && n<=data.total_lanes;}) &&
+            (data.recommended_lane==null || getRecommendedLaneNumbers(data).indexOf(data.recommended_lane)>=0) && data.show_lane_guidance!==false;
+    }
     function shouldShow(data) {
+        if (data && data.evidence_state && !isActionableLaneGuidance(data)) return false;
         if (!data || data.total_lanes <= 1 || data.urgency === 'none') return false;
         if (data.show_lane_guidance === false) return false;
         if ((data.confidence || 0) < LANE_CONFIDENCE_DISPLAY_MIN) return false;
@@ -1292,6 +1149,7 @@
         isRoundaboutSecondExitStraight: isRoundaboutSecondExitStraight,
         enrichGuidanceWithRecommendedLanes: enrichGuidanceWithRecommendedLanes,
         applyConfidenceLaneSelection: applyConfidenceLaneSelection,
+        isActionableLaneGuidance:isActionableLaneGuidance,
         buildHybridLaneGuidance: buildHybridLaneGuidance,
         buildLaneGuidanceStabilityPlan: buildLaneGuidanceStabilityPlan,
         refreshLockedGuidanceUrgency: refreshLockedGuidanceUrgency,

@@ -77,7 +77,7 @@
         return r.value;
     }
 
-    function updateSpeedWidget(currentSpeedInMph, speedLimitInMph) {
+    function updateSpeedWidget(currentSpeedInMph, speedLimitInMph, evidence) {
         if (speedLimitInMph === undefined) speedLimitInMph = null;
         const widget = document.getElementById('speedWidget');
         if (!widget) return;
@@ -100,7 +100,7 @@
         const limitValueEl = document.getElementById('speedLimitValue');
         const limitUnitEl = document.getElementById('speedLimitUnit');
         if (limitValueEl && limitUnitEl) {
-            const resolvedLimit = (speedLimitInMph !== null && speedLimitInMph > 0)
+            const resolvedLimit = (evidence && evidence.applicable===true && evidence.evidence_state==='MAPPED_POSTED' && speedLimitInMph !== null && speedLimitInMph > 0)
                 ? speedLimitInMph
                 : null;
 
@@ -111,7 +111,8 @@
                 limitUnitEl.textContent = limitDisplay.unitLabel;
                 widget.style.borderLeft = '4px solid #4285F4';
             } else {
-                limitValueEl.textContent = '…';
+                setCurrentSpeedLimitMph(null);
+                limitValueEl.textContent = '—';
                 limitUnitEl.textContent = displaySpeedUnit;
                 widget.style.borderLeft = '4px solid #999';
             }
@@ -165,17 +166,17 @@
         if (patch.lastSpeedLimitRegion) setLastSpeedLimitRegion(patch.lastSpeedLimitRegion);
 
         const state = _getSpeedLimitFetchState();
-        if (patch.currentLimitMph != null && state) {
+        if (Object.prototype.hasOwnProperty.call(patch,'currentLimitMph') && state) {
             state.currentLimitMph = patch.currentLimitMph;
         }
-        if (patch.currentSpeedLimitMph != null) {
+        if (Object.prototype.hasOwnProperty.call(patch,'currentSpeedLimitMph')) {
             setCurrentSpeedLimitMph(patch.currentSpeedLimitMph);
         }
 
         if (outcomeApply.widgetUpdate) {
             updateSpeedWidget(
                 outcomeApply.widgetUpdate.displaySpeedMph,
-                outcomeApply.widgetUpdate.shownLimit
+                outcomeApply.widgetUpdate.shownLimit, outcomeApply.legalEvidence
             );
         }
 
@@ -190,6 +191,15 @@
     }
 
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
+        if (root.VoyagrRoadMatchOrchestration) {
+            var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
+            var legal=bundle && bundle.speed;
+            var known=legal && legal.applicable===true && legal.evidence_state==='MAPPED_POSTED';
+            applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
+                statePatch:{currentLimitMph:known ? legal.speed_limit_mph : null,currentSpeedLimitMph:known ? legal.speed_limit_mph : null},
+                widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:known ? legal.speed_limit_mph : null}});
+            return;
+        }
         if (roadType === undefined) roadType = 'residential';
         if (valhallaSpeedLimit === undefined) valhallaSpeedLimit = null;
         if (headingDeg === undefined) headingDeg = null;
@@ -242,34 +252,15 @@
                 return response.json();
             })
             .then((data) => {
-                acceptIfFresh(speedLimit.buildSpeedLimitApiSuccessApplyPlan({
-                    data,
-                    lat: ctx.lat,
-                    lon: ctx.lon,
-                    roadType: ctx.roadType,
-                    valhallaSpeedLimit: ctx.valhallaSpeedLimit,
-                    currentSpeedMph: ctx.currentSpeedMph,
-                    currentGpsSpeedMph: ctx.currentGpsSpeedMph,
-                    lastSpeedLimitRegion: ctx.lastSpeedLimitRegion,
-                    speedGpsModule: speedGps,
-                }));
+                const p=data && data.success && data.data;
+                const known=p && p.applicable===true && p.evidence_state==='MAPPED_POSTED' && Number.isFinite(p.speed_limit_mph) && p.speed_limit_mph>0;
+                acceptIfFresh({action:'apply',legalEvidence:known ? p : null,
+                    statePatch:{currentLimitMph:known ? p.speed_limit_mph : null,currentSpeedLimitMph:known ? p.speed_limit_mph : null},
+                    widgetUpdate:{displaySpeedMph:ctx.currentGpsSpeedMph,shownLimit:known ? p.speed_limit_mph : null}});
             })
-            .catch(async () => {
-                let cachedLimitMph = null;
-                if (rt().getIsOffline() || !navigator.onLine) {
-                    try {
-                        const cached = await rt().call.getCachedSpeedLimit(lat, lon);
-                        cachedLimitMph = speedLimit.readCachedLimitMph(cached, Date.now());
-                    } catch (_) { /* ignore */ }
-                }
-                acceptIfFresh(speedLimit.buildSpeedLimitFetchFallbackApplyPlan({
-                    cachedLimitMph,
-                    valhallaSpeedLimit: ctx.valhallaSpeedLimit,
-                    roadType: ctx.roadType,
-                    lastDetectedRoadType: ctx.lastDetectedRoadType,
-                    lastSpeedLimitRegion: ctx.lastSpeedLimitRegion,
-                    currentGpsSpeedMph: ctx.currentGpsSpeedMph,
-                }));
+            .catch(() => {
+                acceptIfFresh({action:'apply',legalEvidence:null,statePatch:{currentLimitMph:null,currentSpeedLimitMph:null},
+                    widgetUpdate:{displaySpeedMph:ctx.currentGpsSpeedMph,shownLimit:null}});
             })
             .finally(() => {
                 state.inFlight = false;

@@ -203,6 +203,12 @@
         }
     }
 
+    function cancelNavigationSpeech() {
+        pendingSpeechRetry=null;
+        try {if (root.speechSynthesis && root.speechSynthesis.cancel) root.speechSynthesis.cancel();} catch (_) {}
+        try {if (root.AndroidTTS && root.AndroidTTS.stop) root.AndroidTTS.stop();} catch (_) {}
+    }
+
     function collectVoicePreferencesDomInput() {
         return {
             turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
@@ -329,6 +335,7 @@
 
     var api = {
         bind: bind,
+        cancelNavigationSpeech:cancelNavigationSpeech,
         speakMessage: speakMessage,
         saveVoicePreferences: saveVoicePreferences,
         loadVoicePreferences: loadVoicePreferences,

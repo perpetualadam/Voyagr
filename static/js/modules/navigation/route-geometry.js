@@ -285,7 +285,46 @@
         };
     }
 
+    /** Route-geometry evidence only: not proof of road/lane identity or bridge level. */
+    function assessNavigationPosition(position,polyline,previous,now) {
+        var c=position && position.coords || {}, stamp=position && position.timestamp;
+        var unknown=function(reason) {return {state:'UNKNOWN',reason:reason,timestamp:stamp};};
+        if (![c.latitude,c.longitude,c.accuracy,stamp].every(Number.isFinite) || Math.abs(c.latitude)>90 || Math.abs(c.longitude)>180 || c.accuracy<0 || c.accuracy>35 || now-stamp>15000 || stamp>now+1000) return unknown('Invalid, stale or inaccurate GPS');
+        if (!Array.isArray(polyline) || polyline.length<2) return unknown('No complete route geometry');
+        if (previous && stamp<=previous.timestamp) return unknown('Out-of-order GPS');
+        var gap=previous ? (stamp-previous.timestamp)/1000 : null;
+        var candidates=[],along=0,cos=Math.cos(c.latitude*Math.PI/180),nearest=Infinity;
+        for (var i=0;i<polyline.length-1;i++) {
+            var a=polyline[i],b=polyline[i+1];
+            if (!Array.isArray(a) || !Array.isArray(b) || ![a[0],a[1],b[0],b[1]].every(Number.isFinite) || Math.abs(a[0])>90 || Math.abs(a[1])>180 || Math.abs(b[0])>90 || Math.abs(b[1])>180) return unknown('Invalid route geometry');
+            var length=haversineDistanceMeters(a[0],a[1],b[0],b[1]);
+            var proj=projectToSegment(c.latitude,c.longitude,a[0],a[1],b[0],b[1],cos);
+            var d=haversineDistanceMeters(c.latitude,c.longitude,proj.projLat,proj.projLon);
+            nearest=Math.min(nearest,d);
+            var progress=along+proj.t*length;
+            var headingKnown=Number.isFinite(c.heading) && Number.isFinite(c.speed) && c.speed>=3 && c.accuracy<=15 && (c.headingAccuracy==null || (Number.isFinite(c.headingAccuracy) && c.headingAccuracy>=0 && c.headingAccuracy<=30));
+            var delta=headingKnown ? Math.abs(((bearing(a[0],a[1],b[0],b[1])-c.heading+540)%360)-180) : 0;
+            var reachable=!previous || !Number.isFinite(previous.alongM) || gap>15 ||
+                (progress>=previous.alongM-10 && progress<=previous.alongM+Math.max(10,Number.isFinite(c.speed) ? c.speed : 0)*Math.max(0,gap)+2*c.accuracy+20);
+            if (length>0 && d<=Math.max(12,c.accuracy) && delta<=60 && reachable) candidates.push({alongM:progress,index:i,t:proj.t,lat:proj.projLat,lon:proj.projLon,distance:d});
+            along+=length;
+        }
+        if (!candidates.length) return {state:nearest>Math.max(50,2*c.accuracy) ? 'OFF_ROUTE' : 'UNKNOWN',reason:'Route association not established',timestamp:stamp};
+        candidates.sort(function(a,b){return a.distance-b.distance;});
+        var best=candidates[0];
+        var ordered=candidates.slice().sort(function(a,b){return a.index-b.index;}),groups=[],group=[];
+        ordered.forEach(function(x){if(group.length && x.index>group[group.length-1].index+1){groups.push(group);group=[];}group.push(x);});
+        if(group.length)groups.push(group);
+        if (groups.some(function(g){return !g.some(function(x){return x===best;}) && g.some(function(x){return Math.abs(x.alongM-best.alongM)>30;});})) return unknown('Ambiguous overlapping or parallel route segments');
+        var acquiring=!previous || !Number.isFinite(previous.alongM) || gap>15;
+        if (!acquiring && Number.isFinite(c.speed) && c.speed<.5 && Math.abs(best.alongM-previous.alongM)<=Math.max(10,2*c.accuracy) && previous.snap) best=Object.assign({},previous.snap,{alongM:previous.alongM});
+        if (!acquiring && best.alongM<previous.alongM && previous.snap) best=Object.assign({},previous.snap,{alongM:previous.alongM});
+        return {state:acquiring ? 'REACQUIRING' : 'RELIABLE',timestamp:stamp,accuracy:c.accuracy,alongM:best.alongM,
+            remainingM:Math.max(0,along-best.alongM),snap:best,reason:'Matched route geometry; road/lane identity unverified'};
+    }
+
     var api = {
+        assessNavigationPosition:assessNavigationPosition,
         haversineDistanceMeters: haversineDistanceMeters,
         bearing: bearing,
         blendHeadingsCircular: blendHeadingsCircular,

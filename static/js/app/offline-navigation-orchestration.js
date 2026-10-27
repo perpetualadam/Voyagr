@@ -129,6 +129,7 @@
                 polyline: rt().getRoutePolyline(),
                 steps: rt().getCurrentRouteSteps(),
                 stepIndex: rt().getCurrentStepIndex(),
+                progressHint:root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
                 destination: rt().getLastCalculatedRoute()?.destination || null,
                 routeData: rt().getLastCalculatedRoute() || null,
             }));
@@ -276,6 +277,8 @@
             document.getElementById(mount.resumeYesId).onclick = () => {
                 resumeBanner.remove();
                 const payload = buildRoutePayloadFromPersisted(saved);
+                if (!payload) {rt().call.showStatus('Saved route geometry is inconsistent; calculate a new route.','warning');return;}
+                rt().call.showStatus('Saved route loaded; waiting for fresh reliable GPS.','warning');
                 const yesAction = off.buildTryResumeNavigationYesActionPlan({
                     saved,
                     preflight,

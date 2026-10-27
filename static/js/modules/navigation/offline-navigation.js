@@ -40,7 +40,7 @@
      * @returns {string}
      */
     function buildOfflineBannerInnerHtml() {
-        return '<span>📡</span><span>You\'re offline — GPS, voice guidance & cached map tiles still work</span>';
+        return '<span>📡</span><span>You\'re offline — voice guidance needs reliable GPS and available resources. Cached maps may be incomplete; avoidance cannot be refreshed.</span>';
     }
 
     /**
@@ -84,7 +84,7 @@
     function isPersistedRouteExpired(savedAt, now, maxAgeMs) {
         now = now != null ? now : Date.now();
         maxAgeMs = maxAgeMs != null ? maxAgeMs : ROUTE_PERSIST_MAX_AGE_MS;
-        return (now - (savedAt || 0)) > maxAgeMs;
+        return !Number.isFinite(savedAt) || savedAt>now || (now-savedAt)>maxAgeMs;
     }
 
     /**
@@ -93,13 +93,17 @@
      */
     function buildActiveRoutePersistRecord(snapshot) {
         snapshot = snapshot || {};
+        var selected=snapshot.routeData ? Object.assign({},snapshot.routeData) : null;
+        if (selected) delete selected.routes; // A persisted selection must not revert to primary alternative.
         return {
+            navigation_schema_version:3,
+            progress_hint:snapshot.progressHint || null,
             id: 'current',
             polyline: snapshot.polyline,
             steps: snapshot.steps,
             stepIndex: snapshot.stepIndex,
             destination: snapshot.destination || null,
-            routeData: snapshot.routeData || null,
+            routeData: selected,
             savedAt: snapshot.savedAt != null ? snapshot.savedAt : Date.now(),
         };
     }

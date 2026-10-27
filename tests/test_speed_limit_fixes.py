@@ -239,7 +239,9 @@ class TestAPIIntegration(unittest.TestCase):
         result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
         
         self.assertIsNotNone(result)
-        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 30)
         print("   ✅ PASS: Overpass integration working")
     
     def test_default_speed_limit(self):
@@ -285,7 +287,9 @@ class TestOsmSnapPipeline(unittest.TestCase):
         with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
             result = detector.get_speed_limit_for_location(51.5074, -0.1278)
 
-        self.assertEqual(result.get('speed_limit_mph'), 50)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 50)
         self.assertEqual(detector.metrics['overpass_nearby_no_usable_maxspeed'], 1)
 
     def test_snap_crosscheck_logs_disagreement_keeps_tomtom(self):
@@ -316,13 +320,15 @@ class TestOsmSnapPipeline(unittest.TestCase):
         }
 
         with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
-            # Client edge is motorway — TomTom 70 is plausible and stays authoritative
+            # Candidate pipeline retains TomTom 70 as an estimate, not legal authority
             # even when a nearby residential OSM way disagrees (crosscheck is metrics-only).
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='motorway'
             )
 
-        self.assertEqual(result.get('speed_limit_mph'), 70)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 70)
         self.assertEqual(result.get('source'), 'TomTom-SnapToRoads')
         self.assertEqual(detector.metrics['snap_crosscheck_invocations'], 1)
         self.assertEqual(detector.metrics['snap_crosscheck_disagree'], 1)
@@ -340,7 +346,9 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='residential'
             )
-        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 30)
         self.assertEqual(result.get('source'), 'road-type-default')
 
     def test_trunk_fallback_is_60_not_70(self):
@@ -351,7 +359,9 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='trunk'
             )
-        self.assertEqual(result.get('speed_limit_mph'), 60)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 60)
         self.assertEqual(result.get('source'), 'road-type-default')
 
     def test_tomtom_70_rejected_for_residential_falls_back_to_osm(self):
@@ -389,7 +399,9 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
                 51.5074, -0.1278, road_type='residential'
             )
 
-        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 30)
         self.assertIn(result.get('source'), ('OSM-maxspeed', 'osm'))
 
     def test_osm_zone_maxspeed_gb30_without_maxspeed_tag(self):
@@ -427,7 +439,9 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
                 result = detector.get_speed_limit_for_location(
                     51.5074, -0.1278, road_type='primary'
                 )
-        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 30)
         self.assertEqual(result.get('source'), 'OSM-maxspeed')
 
     def test_osm_nsl_single_not_inferred_as_70(self):
@@ -449,7 +463,9 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
                 result = detector.get_speed_limit_for_location(
                     51.5074, -0.1278, road_type='trunk'
                 )
-        self.assertEqual(result.get('speed_limit_mph'), 60)
+        self.assertIsNone(result.get('speed_limit_mph'))
+        self.assertFalse(result.get('applicable'))
+        self.assertEqual(result.get('estimated_speed_mph'), 60)
         self.assertEqual(result.get('source'), 'OSM-maxspeed')
 
     def test_overpass_radius_from_env(self):

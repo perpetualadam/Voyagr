@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "kind": "SYNTHETIC",
+    "attribution": "Voyagr deterministic test geometry; no OSM acquisition or survey",
+    "acquired_at": null,
+    "version": "1"
+  },
+  "roundabout_graph": {
+    "schema_version": 1,
+    "source": "synthetic-junctions",
+    "source_kind": "SYNTHETIC",
+    "revision": "junction-v1",
+    "acquired_at_ms": 1800000000000,
+    "coverage": "COMPLETE",
+    "bounds": [
+      53.5,
+      -1.15,
+      53.55,
+      -1.1
+    ],
+    "roads": [
+      {
+        "osm_way_id": "ring",
+        "node_ids": [
+          "a",
+          "b",
+          "c",
+          "d",
+          "a"
+        ],
+        "geometry": [
+          [
+            53.525,
+            -1.131
+          ],
+          [
+            53.526,
+            -1.13
+          ],
+          [
+            53.525,
+            -1.129
+          ],
+          [
+            53.524,
+            -1.13
+          ],
+          [
+            53.525,
+            -1.131
+          ]
+        ],
+        "tags": {
+          "junction": "roundabout",
+          "oneway": "yes",
+          "highway": "primary"
+        }
+      },
+      {
+        "osm_way_id": "exit1",
+        "node_ids": [
+          "b",
+          "exit1end"
+        ],
+        "geometry": [
+          [
+            53.526,
+            -1.13
+          ],
+          [
+            53.527,
+            -1.13
+          ]
+        ],
+        "tags": {
+          "oneway": "yes",
+          "highway": "primary"
+        }
+      },
+      {
+        "osm_way_id": "exit2",
+        "node_ids": [
+          "c",
+          "exit2end"
+        ],
+        "geometry": [
+          [
+            53.525,
+            -1.129
+          ],
+          [
+            53.525,
+            -1.128
+          ]
+        ],
+        "tags": {
+          "oneway": "yes",
+          "highway": "primary"
+        }
+      },
+      {
+        "osm_way_id": "private-service",
+        "node_ids": [
+          "b",
+          "s"
+        ],
+        "geometry": [
+          [
+            53.526,
+            -1.13
+          ],
+          [
+            53.5265,
+            -1.1305
+          ]
+        ],
+        "tags": {
+          "highway": "service",
+          "access": "private"
+        }
+      }
+    ],
+    "restrictions": []
+  },
+  "cases": [
+    {
+      "name": "standard_roundabout",
+      "source": "SYNTHETIC",
+      "validation_scope": "source exit connectivity",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "mini_roundabout",
+      "source": "SYNTHETIC",
+      "validation_scope": "source exit connectivity",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "multi_lane_roundabout",
+      "source": "SYNTHETIC",
+      "validation_scope": "source exit connectivity",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "spiral_roundabout",
+      "source": "SYNTHETIC",
+      "validation_scope": "source exit connectivity",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "signal_controlled_roundabout",
+      "source": "SYNTHETIC",
+      "validation_scope": "source exit connectivity",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "motorway_junction",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "motorway_fork",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "slip_road",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "dual_carriageway",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "multi_level_interchange",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "closely_spaced_junctions",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "parallel_roads",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "lane_drop_gain",
+      "source": "SYNTHETIC",
+      "validation_scope": "directional replay graph; no surveyed junction acceptance",
+      "real_source_validation": "NOT_EXECUTED"
+    },
+    {
+      "name": "gyratory",
+      "source": "SYNTHETIC",
+      "validation_scope": "source exit connectivity",
+      "real_source_validation": "NOT_EXECUTED"
+    }
+  ]
+}
