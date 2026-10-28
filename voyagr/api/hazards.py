@@ -13,12 +13,15 @@ import logging
 import math
 import os
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 import requests
 from flask import Blueprint, jsonify, request
 
 from voyagr.utils import overpass_audit as audit
+from voyagr.utils import request_budget as route_transport
+from voyagr.utils.hazard_matching import HazardList
 
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import sanitize_string
@@ -38,29 +41,47 @@ _hazard_report_limiter = RateLimiter(
 )
 _osm_area_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='osm-area')
 _OSM_AREA_FETCH_TIMEOUT_SEC = 12
+_osm_area_slots = threading.BoundedSemaphore(2)
 
 
 def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
-    """Wait at most 12s; submitted work can continue after the HTTP response."""
+    """Two owned tasks, no pending backlog; cooperative cancellation, never hard preemption."""
+    if not _osm_area_slots.acquire(blocking=False):
+        audit.emit('area_admission_rejected')
+        return HazardList(coverage={'status':'UNAVAILABLE','reason':'acquisition_busy'})
     current = audit.trace()
+    budget = route_transport.WorkBudget(_OSM_AREA_FETCH_TIMEOUT_SEC)
     def run():
-        with audit.bind_trace(current):
+        with audit.bind_trace(current), route_transport.use_budget(budget):
             audit.emit('area_task_started')
             try:
-                return fetch_fn(*args, **kwargs)
+                budget.check()
+                result = fetch_fn(*args, **kwargs)
+                budget.check()
+                return result
             finally:
                 audit.emit('area_task_finished')
+    try:
+        future = _osm_area_executor.submit(run)
+    except Exception:
+        _osm_area_slots.release()
+        raise
+    future.add_done_callback(lambda done: _osm_area_slots.release())
     audit.emit('area_task_submitted')
-    future = _osm_area_executor.submit(run)
     try:
         return future.result(timeout=_OSM_AREA_FETCH_TIMEOUT_SEC)
     except FuturesTimeout:
-        audit.emit('area_wait_timeout')
-        logger.warning('[OSM area] %s timed out after %ss', getattr(fetch_fn, '__name__', 'fetch'), _OSM_AREA_FETCH_TIMEOUT_SEC)
-        return []
+        budget.cancel()
+        cancelled = future.cancel()
+        audit.emit('area_wait_timeout', queued_task_cancelled=cancelled)
+        return HazardList(coverage={'status':'UNAVAILABLE','reason':'deadline_exceeded'})
+    except route_transport.RoutingDeadlineExceeded:
+        budget.cancel()
+        return HazardList(coverage={'status':'UNAVAILABLE','reason':'deadline_exceeded'})
     except Exception as exc:
-        logger.warning('[OSM area] %s failed: %s', getattr(fetch_fn, '__name__', 'fetch'), exc)
-        return []
+        audit.emit('area_task_error', error_type=type(exc).__name__)
+        return HazardList(coverage={'status':'UNAVAILABLE','reason':'acquisition_failed'})
+
 
 ALLOWED_COMMUNITY_HAZARD_TYPES = frozenset({
     'accident', 'roadwork', 'police', 'hazard', 'congestion', 'weather', 'closure',
@@ -300,7 +321,9 @@ def get_traffic_lights_in_area():
             fetch_traffic_lights_osm_bbox, south, north, west, east, max_nodes=200
         )
         out = [{'lat': x['lat'], 'lon': x['lon'], 'type': 'traffic_light', 'description': x.get('description', '')} for x in lights]
-        return jsonify({'success': True, 'traffic_lights': out, 'count': len(out)})
+        return jsonify({'success': True, 'traffic_lights': out, 'count': len(out), 'coverage':getattr(lights,'coverage',{'status':'UNKNOWN'})})
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.error(f"Error fetching traffic lights in area: {e}")
         return jsonify({'success': False, 'error': str(e)})
@@ -331,7 +354,9 @@ def get_railway_crossings_in_area():
             }
             for x in crossings
         ]
-        return jsonify({'success': True, 'railway_crossings': out, 'count': len(out)})
+        return jsonify({'success': True, 'railway_crossings': out, 'count': len(out), 'coverage':getattr(crossings,'coverage',{'status':'UNKNOWN'})})
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.error(f"Error fetching railway crossings in area: {e}")
         return jsonify({'success': False, 'error': str(e)})
@@ -413,50 +438,14 @@ def get_traffic_lights():
         diagonal_sq = (lat_diff * lat_diff) + (lon_diff * lon_diff * 0.6)
         estimated_km = int(math.sqrt(diagonal_sq) * 111)
 
-        # Try to use overpass_helper if available
-        try:
-            from overpass_helper import get_client, query_overpass, build_traffic_signals_query
-            OVERPASS_HELPER_AVAILABLE = True
-        except ImportError:
-            OVERPASS_HELPER_AVAILABLE = False
-
-        if OVERPASS_HELPER_AVAILABLE:
-            active_endpoint = get_client()._get_next_endpoint()
-            logger.info(f"[Traffic Lights] Route (~{estimated_km}km). Using BBox search via {active_endpoint}")
-            query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
-            cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
-
-            result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
-
-            if not result.get('success'):
-                logger.warning(f"[Traffic Lights] Overpass query failed: {result.get('error')}")
-                return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
-
-            elements = result.get('elements', [])
-            cached = result.get('cached', False)
-            logger.info(f"[Traffic Lights] Query returned {len(elements)} raw elements (cached={cached})")
-        else:
-            overpass_url = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
-            logger.info(f"[Traffic Lights] Querying Overpass (Direct): {overpass_url}")
-
-            query = f'''
-            [out:json][timeout:30];
-            (
-                node["highway"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
-                node["crossing"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
-            );
-            out body;
-            '''
-            try:
-                response = requests.post(overpass_url, data={'data': query}, timeout=30)
-                if response.status_code != 200:
-                    logger.warning(f"[Traffic Lights] Direct query failed: {response.status_code}")
-                    return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
-                elements = response.json().get('elements', [])
-                cached = False
-            except Exception as e:
-                logger.error(f"[Traffic Lights] Direct query error: {e}")
-                return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
+        if max_lat-min_lat>0.35 or max_lng-min_lng>0.35:
+            return jsonify(success=True, lights=[], count=0, warning='Area too large for bounded traffic signal acquisition', coverage={'status':'PARTIAL'})
+        from overpass_helper import query_overpass, build_traffic_signals_query
+        result = query_overpass(build_traffic_signals_query(min_lat,min_lng,max_lat,max_lng),cache_ttl=300)
+        if not result.get('success'):
+            return jsonify(success=True, lights=[], count=0, warning='Traffic signal data unavailable', coverage={'status':'UNKNOWN'})
+        elements = result['elements']
+        cached = result.get('cached',False)
 
         lights = []
         seen_ids = set()
@@ -512,9 +501,12 @@ def get_traffic_lights():
             'lights': lights,
             'count': len(lights),
             'source': 'openstreetmap',
+            'coverage': {'status':'PARTIAL','dataset_coverage':result.get('dataset_coverage','UNVERIFIED'),'retrieved_at':result.get('retrieved_at'),'response_state':result.get('response_state')},
             'cached': cached if 'cached' in dir() else False
         })
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.error(f"[Traffic Lights] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})

@@ -1008,12 +1008,16 @@ def fetch_traffic_lights_osm_bbox(
     cache_key = f"tl_bbox_{south:.4f}_{west:.4f}_{north:.4f}_{east:.4f}"
     result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
     if not result.get('success'):
-        logger.warning(f"[TRAFFIC_LIGHTS] Overpass failed: {result.get('error')}")
+        out.coverage = {'status':result.get('coverage_status','UNKNOWN'),'response_state':result.get('response_state','UNAVAILABLE')}
+        logger.warning('[TRAFFIC_LIGHTS] OSM acquisition unavailable')
         return out
 
     elements = result.get('elements', [])
-    out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes else 'AVAILABLE',
-                    'bounds':[south,west,north,east], 'retrieved_at':time.time()-(300 if result.get('cached') else 0), 'source':'Overpass OSM'}
+    out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes or result.get('dataset_coverage')!='VERIFIED' else 'AVAILABLE',
+                    'bounds':[south,west,north,east], 'retrieved_at':result.get('retrieved_at', time.time()-(300 if result.get('cached') else 0)), 'source':'Overpass OSM',
+                    'endpoint_class':result.get('endpoint_class','UNKNOWN'), 'source_version':result.get('source_version','unknown'),
+                    'response_state':result.get('response_state','UNKNOWN'), 'dataset_coverage':result.get('dataset_coverage','UNVERIFIED')}
+    if time.time()-out.coverage['retrieved_at']>300: out.coverage['status']='STALE'
     for el in result.get('elements', [])[:max_nodes]:
         lat = el.get('lat')
         lon = el.get('lon')
@@ -1023,6 +1027,7 @@ def fetch_traffic_lights_osm_bbox(
         out.append({
             'lat': float(lat),
             'lon': float(lon),
+            'id': f"osm_node_{el.get('id')}", 'source':'Overpass OSM', 'observed_at_ms':out.coverage['retrieved_at']*1000,
             'description': 'Traffic light (OSM)',
             'severity': 'medium',
         })
@@ -1053,12 +1058,16 @@ def fetch_railway_crossings_osm_bbox(
     cache_key = f"rx_bbox_{south:.4f}_{west:.4f}_{north:.4f}_{east:.4f}"
     result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
     if not result.get("success"):
-        logger.warning(f"[RAILWAY_CROSSINGS] Overpass failed: {result.get('error')}")
+        out.coverage = {'status':result.get('coverage_status','UNKNOWN'),'response_state':result.get('response_state','UNAVAILABLE')}
+        logger.warning('[RAILWAY_CROSSINGS] OSM acquisition unavailable')
         return out
 
     elements = result.get('elements', [])
-    out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes else 'AVAILABLE',
-                    'bounds':[south,west,north,east], 'retrieved_at':time.time()-(300 if result.get('cached') else 0), 'source':'Overpass OSM'}
+    out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes or result.get('dataset_coverage')!='VERIFIED' else 'AVAILABLE',
+                    'bounds':[south,west,north,east], 'retrieved_at':result.get('retrieved_at', time.time()-(300 if result.get('cached') else 0)), 'source':'Overpass OSM',
+                    'endpoint_class':result.get('endpoint_class','UNKNOWN'), 'source_version':result.get('source_version','unknown'),
+                    'response_state':result.get('response_state','UNKNOWN'), 'dataset_coverage':result.get('dataset_coverage','UNVERIFIED')}
+    if time.time()-out.coverage['retrieved_at']>300: out.coverage['status']='STALE'
     for el in result.get("elements", [])[:max_nodes]:
         lat = el.get("lat")
         lon = el.get("lon")
@@ -1068,6 +1077,7 @@ def fetch_railway_crossings_osm_bbox(
         out.append({
             "lat": float(lat),
             "lon": float(lon),
+            "id": f"osm_node_{el.get('id')}", "source":"Overpass OSM", "observed_at_ms":out.coverage['retrieved_at']*1000,
             "description": "Railway level crossing (OSM)",
             "severity": "medium",
         })

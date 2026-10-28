@@ -14,6 +14,8 @@ import logging
 import os
 from typing import Any, Dict
 import requests
+from voyagr.utils import request_budget as route_transport
+
 from flask import Blueprint, jsonify, request, send_file, after_this_request
 
 from voyagr.models import get_db_connection, return_db_connection, db_connection
@@ -100,6 +102,7 @@ DEFAULT_LANE_CONFIGS = {
 
 def _fetch_osm_lane_data(lat, lon):
     """Fetch lane information from OpenStreetMap via Overpass API with caching."""
+    route_transport.check_budget()
     import time as _time
 
     cache_key = f"{lat:.4f},{lon:.4f}"
@@ -111,15 +114,16 @@ def _fetch_osm_lane_data(lat, lon):
             return cached['data']
 
     try:
-        overpass_url = "http://overpass-api.de/api/interpreter"
         query = f"""
-        [out:json][timeout:5];
+        [out:json][timeout:5][maxsize:2097152];
         way(around:30,{lat},{lon})[highway~"motorway|trunk|primary|secondary|tertiary"];
         out tags;
         """
-        resp = requests.get(overpass_url, params={'data': query}, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
+        from overpass_helper import query_overpass
+        acquisition = query_overpass(query)
+        if not acquisition['success']: return None
+        if acquisition['success']:
+            data = acquisition
             for element in data.get('elements', []):
                 tags = element.get('tags', {})
                 if 'lanes' in tags:
@@ -132,14 +136,16 @@ def _fetch_osm_lane_data(lat, lon):
                         'name': tags.get('name', ''),
                         'lanes_forward': int(tags.get('lanes:forward', tags['lanes'])),
                     }
-                    _lane_data_cache[cache_key] = {'data': result, 'timestamp': now}
+                    _lane_data_cache[cache_key] = {'data': result, 'timestamp': acquisition['retrieved_at']}
                     return result
 
         # Nothing found - return None so caller uses defaults
-        _lane_data_cache[cache_key] = {'data': None, 'timestamp': now}
+        _lane_data_cache[cache_key] = {'data': None, 'timestamp': acquisition['retrieved_at']}
         return None
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
-        logger.debug(f"[Lane] Overpass error: {e}")
+        logger.debug("[Lane] OSM acquisition error type=%s", type(e).__name__)
         return None
 
 
@@ -310,6 +316,8 @@ def get_speed_limit():
         )
 
         return jsonify({'success': True, 'data': result})
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

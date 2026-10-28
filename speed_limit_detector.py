@@ -12,6 +12,7 @@ No traffic-flow guesses, smart-motorway simulation, or vehicle-type caps on post
 
 import time
 import requests
+from voyagr.utils import request_budget as route_transport
 import math
 import os
 import logging
@@ -621,23 +622,16 @@ class SpeedLimitDetector:
             logger.info(f"[TomTom Quota] Daily: {self.tomtom_quota['daily_calls']} calls, Monthly: {self.tomtom_quota['monthly_calls']}, Est. Cost: ${self.tomtom_quota['estimated_cost']:.2f}")
 
     def _wait_for_overpass_rate_limit(self) -> None:
-        """
-        Enforce rate limiting for Overpass API calls.
-        Skipped for local instances (rate_limit = 0).
-        """
-        # Skip rate limiting for local Overpass instances
+        """Preserve the existing public speed-query throttle within the caller budget."""
+        route_transport.check_budget()
         if self.overpass_rate_limit == 0.0:
             return
-
-        current_time = time.time()
-        time_since_last = current_time - self.overpass_last_request
-
-        if time_since_last < self.overpass_min_interval:
-            sleep_time = self.overpass_min_interval - time_since_last
-            logger.info(f"[Overpass Rate Limit] Waiting {sleep_time:.2f}s (limit: {self.overpass_rate_limit} req/s)")
-            time.sleep(sleep_time)
-
-        self.overpass_last_request = time.time()
+        current_time = time.monotonic()
+        delay = self.overpass_min_interval - (current_time - self.overpass_last_request)
+        if delay > 0:
+            route_transport.retry_wait(delay)
+        route_transport.check_budget()
+        self.overpass_last_request = time.monotonic()
 
     def get_speed_limit_for_location(self, lat: float, lon: float,
                                      road_type: str = 'residential',
@@ -658,6 +652,7 @@ class SpeedLimitDetector:
             speed_limit_mph is None unless trusted applicable mapped evidence is supplied.
             source / posted_limit_source indicate OSM-maxspeed, TomTom-SnapToRoads, road-type-default, etc.
         """
+        route_transport.check_budget()
         try:
             # Track total requests
             self.metrics['total_requests'] += 1
@@ -724,6 +719,8 @@ class SpeedLimitDetector:
                 'source': evidence['source'] if evidence['applicable'] else posted_source,
                 'timestamp': int(time.time())
             }
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except Exception as e:
             logger.error(f"Error getting speed limit: {e}")
             return {
@@ -938,21 +935,20 @@ class SpeedLimitDetector:
 
         try:
             self.metrics['overpass_calls'] += 1
-
-            overpass_url = os.getenv('OVERPASS_API_URL', 'http://overpass-api.de/api/interpreter')
-
             self._wait_for_overpass_rate_limit()
 
+
             query = f"""
-            [out:json][timeout:8];
+            [out:json][timeout:8][maxsize:2097152];
             way(around:{around_m},{lat},{lon})[highway];
             out geom tags;
             """
 
-            response = requests.get(overpass_url, params={'data': query}, timeout=8)
+            from overpass_helper import query_overpass
+            acquisition = query_overpass(query)
 
-            if response.status_code == 200:
-                data = response.json()
+            if acquisition['success']:
+                data = acquisition
                 elements = data.get('elements', [])
 
                 if elements:
@@ -1060,13 +1056,15 @@ class SpeedLimitDetector:
                     logger.warning("[Speed Limit] OSM returned no highway elements nearby")
             else:
                 self.metrics['overpass_failures'] += 1
-                logger.warning(f"[Speed Limit] OSM API error: status={response.status_code}")
+                logger.warning("[Speed Limit] OSM acquisition unavailable category=%s", acquisition.get("response_state","UNAVAILABLE"))
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except requests.exceptions.Timeout:
             self.metrics['overpass_failures'] += 1
-            logger.warning("[Speed Limit] OSM API timeout (8s)")
+            logger.warning("[Speed Limit] OSM acquisition provider timeout")
         except Exception as e:
             self.metrics['overpass_failures'] += 1
-            logger.error(f"[Speed Limit] OSM failed: {e}")
+            logger.error("[Speed Limit] OSM failed type=%s", type(e).__name__)
 
         return None, best_highway_no_max, 'none'
 
@@ -1125,6 +1123,8 @@ class SpeedLimitDetector:
                     detected = cached_data.get('detected_road_type') or cached_road or norm_road
                     return lim, src, detected
                 del self.speed_limit_cache[cache_key]
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except Exception as e:
             logger.error(f"[Speed Limit] Cache check failed: {e}")
 

@@ -90,3 +90,10 @@ Exact bounded operator export/import/checksum/provenance steps, installation/rep
 ## Phase 10 update — 2026-10-28
 
 PHASE10_PARTIALLY_VERIFIED; production remains NO-GO. GraphHopper-first display follows independent geometry/mandatory assessment, not nearby-camera minimization. Conflicting-source evidence deduplication and shared-deadline exception propagation are corrected. Browser errors avoid HTML body logging and unsupported504 attribution. Local configured backend, Jest/coverage, lint and isolated SQL checks pass; installed-engine, dataset provenance,20/10 discrepancy, real504 origin and physical-device acceptance remain unexecuted. See [routing quality](VOYAGR_PHASE10_ROUTING_QUALITY.md), [test results](VOYAGR_PHASE10_TEST_RESULTS.md) and [operator acceptance](VOYAGR_PHASE10_CONTABO_ACCEPTANCE.md). No production changes or deployment.
+
+
+## Phase 11B — 2026-10-28
+
+PHASE11B_PARTIALLY_VERIFIED; production remains NO-GO. Confirmed11A invalid-empty, endpoint recovery, duplicate-miss, viewport ownership and deadline defects are remediated with strict bounded validation, full evidence cache envelopes, ordered cooldown/fallback policy, process-local coalescing and independent cooperative budgets. Active PWA speed/lane/search acquisition uses the common policy. Unknown UK dataset completeness remains PARTIAL; no mandatory safety gate or GraphHopper-first policy was weakened. Existing11A reports remain historical evidence. Final local backend882tests +68subtests, Jest1,924tests/coverage, lint and SQL11tests pass. Hosted results are recorded on the PR. No deployment or infrastructure change.
+
+See [remediation](VOYAGR_PHASE11_OVERPASS_REMEDIATION.md), [retry/deadline tests](VOYAGR_PHASE11_RETRY_AND_DEADLINE_TESTS.md), [performance](VOYAGR_PHASE11_OVERPASS_PERFORMANCE.md) and [unexecuted operator acceptance](VOYAGR_PHASE11_CONTABO_ACCEPTANCE.md). Synthetic4caller queries reduced4HTTP calls to1, while validation/copies increased large-payload CPU/memory cost. Phase11C must verify source provenance/coverage, actual502/invalid-response/504 origin, multiworker load and graph/device acceptance before production GO.

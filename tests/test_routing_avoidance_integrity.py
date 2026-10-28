@@ -259,7 +259,7 @@ def test_query_failure_and_truncation_distinguished_from_empty_success():
     from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
     with patch('overpass_helper.query_overpass',return_value={'success':False,'elements':[]}):
         assert fetch_traffic_lights_osm_bbox(53.50,53.55,-1.2,-1.1).coverage['status']=='UNKNOWN'
-    with patch('overpass_helper.query_overpass',return_value={'success':True,'elements':[]}):
+    with patch('overpass_helper.query_overpass',return_value={'success':True,'elements':[],'dataset_coverage':'VERIFIED'}):
         assert fetch_traffic_lights_osm_bbox(53.50,53.55,-1.2,-1.1).coverage['status']=='AVAILABLE'
     elements=[{'lat':53.52,'lon':-1.13}]*3
     with patch('overpass_helper.query_overpass',return_value={'success':True,'elements':elements}):
