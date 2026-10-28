@@ -198,7 +198,8 @@ def test_http_boundary_chooses_verified_alternative_after_failover(client):
     app,c=client
     app.config.update(dataset=dataset(items=[hazard()]), payload={'success':True,'source':'OSRM (Fallback)',
         'routes':[route(source='OSRM'),route(ADJACENT,'UK-adjacent',source='OSRM')]})
-    rv=c.post('/api/route',json={'start':'53.52,-1.13','end':'53.53,-1.13','avoid_caz':False,
+    # A fallback must start on the requested road; a 20m parallel-road jump is not a connector.
+    rv=c.post('/api/route',json={'start':'53.52,-1.1297','end':'53.53,-1.1297','avoid_caz':False,
         'avoidance_requirements':[{'category':'speed_cameras','enabled':True,'mode':'mandatory'}]})
     assert rv.status_code==200
     assert rv.json['routes'][0]['id']=='UK-adjacent'

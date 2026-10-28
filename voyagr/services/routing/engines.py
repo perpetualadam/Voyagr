@@ -469,6 +469,9 @@ def route_with_graphhopper(
                     'provider_capabilities': public_capabilities(capabilities),
                 }
 
+                if 'snapped_waypoints' in path:
+                    route_data['provider_snapped_waypoints'] = path['snapped_waypoints']
+                    route_data['provider_snap_precision'] = 5
                 logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")
                 return route_data
             else:

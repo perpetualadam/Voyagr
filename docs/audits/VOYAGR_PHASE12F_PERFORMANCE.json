@@ -1,0 +1,51 @@
+{
+  "scope": "OFFLINE_SYNTHETIC_COORDINATES_WITH_REPOSITORY_AREA_GEOMETRY",
+  "engine_samples": 0,
+  "samples": {
+    "coincident_preference": {
+      "baseline_assessment": {
+        "n": 25,
+        "median_ms": 0.0949,
+        "p95_ms": 2.4751,
+        "max_ms": 2.5808
+      },
+      "with_origin": {
+        "n": 25,
+        "median_ms": 0.1291,
+        "p95_ms": 1.2806,
+        "max_ms": 1.8654
+      },
+      "median_added_ms": 0.0342
+    },
+    "relocated_preference": {
+      "baseline_assessment": {
+        "n": 25,
+        "median_ms": 0.0925,
+        "p95_ms": 0.1375,
+        "max_ms": 0.2145
+      },
+      "with_origin": {
+        "n": 25,
+        "median_ms": 0.1316,
+        "p95_ms": 0.7259,
+        "max_ms": 2.435
+      },
+      "median_added_ms": 0.0391
+    },
+    "mandatory_local_geometry": {
+      "baseline_assessment": {
+        "n": 25,
+        "median_ms": 0.0957,
+        "p95_ms": 0.4747,
+        "max_ms": 0.9821
+      },
+      "with_origin": {
+        "n": 25,
+        "median_ms": 151.775,
+        "p95_ms": 171.5521,
+        "max_ms": 173.2076
+      },
+      "median_added_ms": 151.6793
+    }
+  }
+}

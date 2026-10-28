@@ -21,6 +21,7 @@
     var evidencePolyline=null;
     var gpsWatchId = null;
     var lastGpsFixAtMs = 0;
+    var lastAcceptedOriginFix = null;
     var gpsWatchStartedAtMs = 0;
     var gpsEnsureRetryTimer = null;
     var currentUserMarker = null;
@@ -889,6 +890,7 @@
                     rt().call.showStatus('GPS unreliable — showing last reliable position', 'warning');
                     return;
                 }
+                lastAcceptedOriginFix = {lat:position.coords.latitude,lon:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:fix.timestamp};
                 setLastGpsFixAtMs(fix.timestamp);
                 applyGpsTrackingTick(position);
             },
@@ -1611,19 +1613,18 @@
             if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
             console.log(
                 '[Reroute] Provider=' + (previousSource || 'unknown') +
-                ' origin=' + Number(originLat).toFixed(5) + ',' + Number(originLon).toFixed(5) +
-                ' destination=' + destination
+                ' origin_source=requested_position'
             );
 
             const routeRequest = rt().call.buildRouteRequest(originLat, originLon, destination);
             const fetchOrch = RD.buildAutomaticRerouteFetchOrchestrationPlan();
-            console.log('[Reroute] Sending request start=' + routeRequest.start + ' end=' + routeRequest.end);
+            console.log('[Reroute] Sending origin-preserving request');
 
             const response = await fetch(fetchOrch.apiPath, {
                 ...(integrity ? integrity.fetchOptions(requestTicket) : {}),
                 method: fetchOrch.method,
                 headers: fetchOrch.headers,
-                body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage) : routeRequest),
+                body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage,lastAcceptedOriginFix) : routeRequest),
             });
 
             const data = await response.json();
@@ -1751,7 +1752,7 @@
             hazardCount,
             routePrefs: _routePrefs(),
         });
-        console.log('[Rerouting] Event logged:', result.event);
+        console.log('[Rerouting] Event recorded; route body omitted');
     }
 
     // Keep old function for backwards compatibility
@@ -1968,6 +1969,7 @@
         checkRouteHazardCamerasAhead: checkRouteHazardCamerasAhead,
         saveCameraAlertPreferences: saveCameraAlertPreferences,
         loadCameraAlertPreferences: loadCameraAlertPreferences,
+        getAcceptedOriginFix:function(){return lastAcceptedOriginFix && Object.assign({},lastAcceptedOriginFix);},
         getNavigationPositionEvidence:function(){return navigationPositionEvidence;},
         triggerAutomaticRerouteWithHazardHandling: triggerAutomaticRerouteWithHazardHandling,
         triggerAutomaticReroute: triggerAutomaticReroute,

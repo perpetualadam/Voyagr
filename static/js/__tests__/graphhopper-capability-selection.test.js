@@ -6,9 +6,9 @@ test('route alternatives retain their own provider limitations and mandatory ass
     const gh={id:'gh',source:'GraphHopper',geometry:points,geometry_precision:6,
         provider_limitations:[{category:'tolls',reason:'attribute_not_verified'}],
         provider_capabilities:{state:'verified',profile_available:true},
-        avoidance_assessment:{status:'UNVERIFIED',checked_at:Date.now()/1000,requirements:[{category:'tolls',mode:'mandatory',enabled:true,status:'UNVERIFIED'}]}};
+        avoidance_assessment:{status:'UNVERIFIED',checked_at:Date.now()/1000,origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false},requirements:[{category:'tolls',mode:'mandatory',enabled:true,status:'UNVERIFIED'}]}};
     const vh={id:'vh',source:'Valhalla',geometry:points,geometry_precision:6,
-        avoidance_assessment:{status:'SATISFIED',checked_at:Date.now()/1000,requirements:[{category:'tolls',mode:'mandatory',enabled:true,status:'SATISFIED'}]}};
+        avoidance_assessment:{status:'SATISFIED',checked_at:Date.now()/1000,origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false},requirements:[{category:'tolls',mode:'mandatory',enabled:true,status:'SATISFIED'}]}};
     const options=RS.buildRouteOptionsFromApiResponse({routes:[gh,vh]},()=>points);
     expect(options[0].provider_limitations).toEqual(gh.provider_limitations);
     expect(options[1].provider_limitations).toBeUndefined();
@@ -18,7 +18,7 @@ test('route alternatives retain their own provider limitations and mandatory ass
 });
 
 test('best-effort preference can be reviewed without claiming enforcement',()=>{
-    const route={provider_limitations:[{category:'tolls'}],avoidance_assessment:{status:'UNVERIFIED',checked_at:Date.now()/1000,requirements:[{category:'tolls',enabled:true,mode:'preference',status:'UNVERIFIED'}]}};
+    const route={provider_limitations:[{category:'tolls'}],avoidance_assessment:{status:'UNVERIFIED',checked_at:Date.now()/1000,origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false},requirements:[{category:'tolls',enabled:true,mode:'preference',status:'UNVERIFIED'}]}};
     expect(AI.decision(route).allowed).toBe(true);
     expect(AI.summary(route)).toContain('Toll avoidance was not applied');
 });
