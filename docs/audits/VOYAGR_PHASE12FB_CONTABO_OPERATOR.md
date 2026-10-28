@@ -102,22 +102,25 @@ try:
     started=time.monotonic()
     with requests.Session() as session:
         session.trust_env=False
-        prepared=session.prepare_request(requests.Request('POST',origin+'/route',params={'ch.disable':'true'},json=body))
+        prepared=session.prepare_request(requests.Request('POST',origin+'/route',params={'ch.disable':'true'},json=body,headers={'Accept-Encoding':'identity'}))
         sent=prepared.body.encode() if isinstance(prepared.body,str) else prepared.body
         with session.send(prepared,stream=True,allow_redirects=False,timeout=(2,5)) as response:
             if response.request.method!=prepared.method or response.request.path_url!=prepared.path_url or response.request.body!=prepared.body:
                 raise ValueError('request_binding')
             received=bytearray()
-            for chunk in response.iter_content(16384):
+            for chunk in response.raw.stream(16384,decode_content=False):
                 if time.monotonic()-started>30 or len(received)+len(chunk)>2*1024*1024:raise ValueError('response_limit')
                 received.extend(chunk)
             if time.monotonic()-started>30:raise ValueError('late_response')
             status=response.status_code
+            encoding=response.headers.get('Content-Encoding','identity')
     response_raw=bytes(received)
-    try:parsed=json.loads(response_raw,object_pairs_hook=unique)
+    try:
+        if encoding.strip().lower() not in ('','identity'):raise ValueError('encoded_response_needs_review')
+        parsed=json.loads(response_raw,object_pairs_hook=unique)
     except ValueError:parsed=None  # Raw error bytes are preserved privately, never called a valid route.
     record={'reviewed':False,'method':prepared.method,'request_target':prepared.path_url,
-            'request':body,'response':parsed,'http_status':status,
+            'request':body,'response':parsed,'http_status':status,'response_content_encoding':encoding,
             'request_body_base64':base64.b64encode(sent).decode(),
             'response_body_base64':base64.b64encode(response_raw).decode(),
             'source_request_file_sha256':hashlib.sha256(raw).hexdigest(),
@@ -133,4 +136,4 @@ except Exception as error:
 PY
 ```
 
-The example deliberately requires a dedicated exact camera75 hard rule; a combined reviewed model needs independent rule review rather than weakening that assertion or stripping other restrictions. Keep requested points/restrictions from the intended fixture; do not disable avoidance. Preserve all old capture files separately. Independently compare raw byte hashes, strict parsed objects and intended request/response/status/build/graph binding, then derive canonical fixture and separate transport hashes. Raw recording bytes belong only in the restricted private evidence file. `reviewed:false` must remain until independent review; no successful capture or printed message certifies routing safety or production GO.
+The example deliberately requires a dedicated exact camera75 hard rule; a combined reviewed model needs independent rule review rather than weakening that assertion or stripping other restrictions. Keep requested points/restrictions from the intended fixture; do not disable avoidance. Preserve all old capture files separately. Independently compare raw byte hashes, strict parsed objects and intended request/response/status/build/graph binding, then derive canonical fixture and separate transport hashes. The recorder requests identity encoding and retains undecoded response entity bytes (excluding HTTP transfer framing); an unexpected content encoding stays raw/unparsed pending review. Raw recording bytes belong only in the restricted private evidence file. `reviewed:false` must remain until independent review; no successful capture or printed message certifies routing safety or production GO.
