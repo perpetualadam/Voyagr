@@ -89,6 +89,8 @@ _env_path = os.path.join(_script_dir, '.env')
 load_dotenv(_env_path)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+from voyagr.utils.overpass_audit import register as register_overpass_audit
+register_overpass_audit(app)
 
 # Cap request bodies early (Werkzeug 413). JSON APIs are small; dashcam video
 # uploads need a larger ceiling (see DASHCAM_MAX_UPLOAD_BYTES).

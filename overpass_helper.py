@@ -22,6 +22,8 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import requests
+from voyagr.utils import overpass_audit as audit
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -196,12 +198,32 @@ class OverpassClient:
         delay = self.base_delay * (2 ** attempt)
         return min(delay, self.max_delay)
     
-    def query(
+    def query(self, query, cache_key=None, cache_ttl=None, skip_cache=False):
+        operation = uuid.uuid4().hex
+        budget = route_transport.current_budget()
+        started = time.monotonic()
+        kind = ('traffic_signals' if 'traffic_signals' in query else 'railway_crossings' if 'level_crossing' in query else 'parking' if 'parking' in query else 'poi_or_other')
+        audit.emit('query_started', operation=operation, query_kind=kind, budget_present=budget is not None,
+                   remaining_ms=round(budget.remaining()*1000, 3) if budget else None)
+        outcome = 'exception'
+        try:
+            result = self._query(query, cache_key, cache_ttl, skip_cache, operation)
+            outcome = 'cache_hit' if result.get('cached') else 'success' if result.get('success') else 'failure'
+            return result
+        except route_transport.RoutingDeadlineExceeded:
+            outcome = 'deadline_exceeded'
+            raise
+        finally:
+            audit.emit('query_finished', operation=operation, outcome=outcome,
+                       duration_ms=round((time.monotonic()-started)*1000, 3))
+
+    def _query(
         self,
         query: str,
         cache_key: Optional[str] = None,
         cache_ttl: Optional[int] = None,
-        skip_cache: bool = False
+        skip_cache: bool = False,
+        operation: str = "none"
     ) -> Dict[str, Any]:
         """
         Execute an Overpass API query with caching and retry logic.
@@ -237,6 +259,7 @@ class OverpassClient:
                     if budget: budget.check()
                     logger.debug(f"[Overpass] Querying {endpoint} (attempt {retry + 1}/{self.max_retries})")
                     
+                    audit.emit('attempt_started', operation=operation, endpoint_slot=self.endpoints.index(endpoint), attempt=retry+1)
                     response = route_transport.post(
                         endpoint,
                         data={'data': query},
@@ -244,6 +267,8 @@ class OverpassClient:
                         headers={'User-Agent': 'Voyagr-PWA/1.0'}
                     )
                     
+                    audit.emit('http_response', operation=operation, endpoint_slot=self.endpoints.index(endpoint), status=response.status_code)
+
                     # Handle rate limiting
                     if response.status_code == 429:
                         delay = self._calculate_delay(retry)
@@ -298,7 +323,7 @@ class OverpassClient:
                     
                 except Exception as e:
                     last_error = str(e)
-                    logger.error(f"[Overpass] Unexpected error: {e}")
+                    logger.error("[Overpass] Unexpected error type=%s", type(e).__name__)
                     break
             
             # Mark this endpoint as failed, try next
