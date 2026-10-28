@@ -111,12 +111,14 @@
     }
     function summary(route) {
         var a=route && route.avoidance_assessment;
-        if (!a) return 'Unverified: avoidance has not been checked for this route.';
-        if (a.claim==='avoidance_disabled') return 'Avoidance disabled.';
+        var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
+        var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
+        if (!a) return 'Unverified: avoidance has not been checked for this route.'+limitation;
+        if (a.claim==='avoidance_disabled') return 'Avoidance disabled.'+limitation;
         var labels={SATISFIED:'Verified against available data only',VIOLATED:'Known conflict',UNVERIFIED:'Unverified',UNSUPPORTED:'Unsupported'};
         var unresolved=(a.requirements || []).filter(function(r) { return r.enabled && r.status!=='SATISFIED'; });
         return (labels[a.status] || 'Unverified') + (unresolved.length ? ': '+unresolved.map(function(r) { return r.category.replace(/_/g,' '); }).join(', ') : '') +
-            '. Map coverage, road association and data age may be limited.';
+            '. Map coverage, road association and data age may be limited.'+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
         decision:decision,gate:gate,tag:tag,summary:summary,geometryBinding:geometryBinding,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};

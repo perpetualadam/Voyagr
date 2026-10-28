@@ -2,25 +2,27 @@
 
 from voyagr.services.routing.costing import build_graphhopper_costing_preference_model
 
+CAPS = {"state":"verified", "profile_available":True, "encoded_values":{"toll":["NO","HGV","ALL"], "road_class":["MOTORWAY","TRACK","PATH","LIVING_STREET"],"road_environment":["FERRY"]}}
+
 
 def test_graphhopper_costing_model_empty_when_no_prefs():
     assert build_graphhopper_costing_preference_model() == {}
 
 
 def test_graphhopper_costing_model_avoid_motorways():
-    model = build_graphhopper_costing_preference_model(avoid_motorways=True)
+    model = build_graphhopper_costing_preference_model(avoid_motorways=True, capabilities=CAPS)
     assert model['priority']
     assert any('MOTORWAY' in rule['if'] for rule in model['priority'])
 
 
 def test_graphhopper_costing_model_avoid_tolls_and_ferries():
-    model = build_graphhopper_costing_preference_model(avoid_tolls=True, avoid_ferries=True)
+    model = build_graphhopper_costing_preference_model(avoid_tolls=True, avoid_ferries=True, capabilities=CAPS)
     rules = ' '.join(rule['if'] for rule in model['priority'])
     assert 'toll' in rules
     assert 'FERRY' in rules
 
 
 def test_graphhopper_costing_model_eco_speed_cap():
-    model = build_graphhopper_costing_preference_model(route_optimization='eco')
+    model = build_graphhopper_costing_preference_model(route_optimization='eco', capabilities=CAPS)
     assert model.get('speed')
     assert any(rule.get('limit_to') == '90' for rule in model['speed'])

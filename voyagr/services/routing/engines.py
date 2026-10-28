@@ -10,6 +10,7 @@ Contains:
 
 from voyagr.utils import request_budget as route_transport
 from voyagr.services.routing.graphhopper_diagnostics import log_graphhopper_error
+from voyagr.services.routing.graphhopper_capabilities import (get_graphhopper_capabilities, invalidate_graphhopper_capabilities, public_capabilities)
 import logging
 import os
 import threading
@@ -258,6 +259,13 @@ def route_with_graphhopper(
         )
 
         url = f"{GRAPHHOPPER_URL}/route"
+        capabilities = get_graphhopper_capabilities(GRAPHHOPPER_URL, 'car')
+        if capabilities['state'] == 'verified' and not capabilities['profile_available']:
+            logger.warning('[GRAPHHOPPER] Configured profile is not advertised; use another provider')
+            return None
+        provider_limitations = []
+        available_details = [name for name in ('max_speed', 'lanes', 'road_class')
+                             if name in capabilities.get('encoded_values', {})]
 
         headers = {
             'User-Agent': 'Voyagr-PWA/1.0',
@@ -275,7 +283,7 @@ def route_with_graphhopper(
             "elevation": False,
             # Ask GraphHopper for per-edge speed limits so the optimised route can supply a
             # speed-limit hint to the widget (parity with Valhalla's maneuver speed_limit).
-            "details": ["max_speed", "lanes", "road_class"]
+            "details": available_details
         }
 
         custom_model: Optional[Dict[str, Any]] = None
@@ -336,6 +344,8 @@ def route_with_graphhopper(
             prefer_scenic=prefer_scenic,
             prefer_quiet=prefer_quiet,
             route_optimization=route_optimization,
+            capabilities=capabilities,
+            limitations=provider_limitations,
         ) or None
 
         custom_model = merge_graphhopper_custom_model_parts(
@@ -370,6 +380,7 @@ def route_with_graphhopper(
                 custom_model_applied = True
             else:
                 log_graphhopper_error(logger, response, 'post_custom_model')
+                if response.status_code in (400, 422): invalidate_graphhopper_capabilities(GRAPHHOPPER_URL)
                 from voyagr.services.routing.graphhopper_fallback import (
                     should_refuse_graphhopper_unfiltered_fallback,
                 )
@@ -396,12 +407,13 @@ def route_with_graphhopper(
                 "instructions": "true",
                 "points_encoded": "true",
                 "elevation": "false",
-                "details": ["max_speed", "lanes", "road_class"],
+                "details": available_details,
             }
             response = route_transport.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
             if response.status_code != 200:
                 log_graphhopper_error(logger, response, 'get_point')
+                if response.status_code in (400, 422): invalidate_graphhopper_capabilities(GRAPHHOPPER_URL)
 
             # Some deployments use `points` instead of `point` (historical / custom setups).
             if response.status_code != 200:
@@ -412,6 +424,7 @@ def route_with_graphhopper(
 
                 if response.status_code != 200:
                     log_graphhopper_error(logger, response, 'get_points')
+                    if response.status_code in (400, 422): invalidate_graphhopper_capabilities(GRAPHHOPPER_URL)
 
             # If GET fails, try POST without a custom model (some deployments accept JSON POST only).
             if response.status_code != 200:
@@ -421,6 +434,7 @@ def route_with_graphhopper(
                 response = route_transport.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
                 if response.status_code != 200:
                     log_graphhopper_error(logger, response, 'post_default')
+                    if response.status_code in (400, 422): invalidate_graphhopper_capabilities(GRAPHHOPPER_URL)
 
         if response.status_code == 200:
             data = response.json()
@@ -441,6 +455,8 @@ def route_with_graphhopper(
                     'camera_avoidance': camera_model_included and custom_model_applied,
                     'custom_model_applied': custom_model_applied,
                     'custom_model_requested': bool(custom_model),
+                    'provider_limitations': provider_limitations,
+                    'provider_capabilities': public_capabilities(capabilities),
                 }
 
                 logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")

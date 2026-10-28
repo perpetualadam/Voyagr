@@ -91,27 +91,50 @@ def build_graphhopper_costing_preference_model(
     prefer_scenic: bool = False,
     prefer_quiet: bool = False,
     route_optimization: str = 'fastest',
+    capabilities=None,
+    limitations=None,
 ) -> Dict[str, Any]:
     """
     Mirror Valhalla auto costing preferences as GraphHopper custom-model priority rules.
-    Returns an empty dict when no preference rules apply.
+    Attribute expressions require an observed capability snapshot. Omitted rules
+    are recorded in the supplied limitations list; unknown metadata grants no support.
+    Returns an empty dict when no supported preference rules apply.
     """
     priority: List[Dict[str, str]] = []
+    import re
+    capabilities = capabilities or {}
+    domains = capabilities.get('encoded_values', {}) if capabilities.get('state') == 'verified' and capabilities.get('profile_available') else {}
+    limitations = limitations if limitations is not None else []
+    def add(condition, multiplier, category):
+        pairs = re.findall(r'(toll|road_class|road_environment)\s*==\s*(\w+)', condition or '')
+        if condition and pairs and all(value in domains.get(name, []) for name, value in pairs):
+            priority.append({'if': condition, 'multiply_by': multiplier})
+        else:
+            item = {'engine': 'GraphHopper', 'category': category, 'reason': 'attribute_not_verified', 'status': 'UNVERIFIED'}
+            if item not in limitations: limitations.append(item)
+    toll_values = set(domains.get('toll', []))
+    if toll_values == {'true', 'false'}:
+        toll_condition = 'toll == true'
+    elif {'NO', 'ALL'} <= toll_values <= {'NO', 'ALL', 'HGV'}:
+        toll_condition = 'toll == ALL' + (' || toll == HGV' if 'HGV' in toll_values else '')
+    else:
+        toll_condition = None
+
 
     if avoid_tolls:
-        priority.append({'if': 'toll == ALL || toll == HGV', 'multiply_by': '0.01'})
+        add(toll_condition, '0.01', 'tolls')
     if avoid_motorways:
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.01'})
+        add('road_class == MOTORWAY', '0.01', 'motorways')
     if avoid_ferries:
-        priority.append({'if': 'road_environment == FERRY', 'multiply_by': '0.01'})
+        add('road_environment == FERRY', '0.01', 'ferries')
     if avoid_unpaved:
-        priority.append({'if': 'road_class == TRACK || road_class == PATH', 'multiply_by': '0.05'})
+        add('road_class == TRACK || road_class == PATH', '0.05', 'unpaved')
 
     if prefer_scenic:
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.2'})
+        add('road_class == MOTORWAY', '0.2', 'route_optimization')
     if prefer_quiet:
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.3'})
-        priority.append({'if': 'road_class == LIVING_STREET', 'multiply_by': '1.2'})
+        add('road_class == MOTORWAY', '0.3', 'route_optimization')
+        add('road_class == LIVING_STREET', '1.2', 'route_optimization')
 
     ro = (route_optimization or 'fastest').lower()
     if ro == 'shortest':
@@ -119,15 +142,15 @@ def build_graphhopper_costing_preference_model(
     if ro not in VALID_ROUTE_OPTIMIZATIONS:
         ro = 'fastest'
     if ro == 'scenic':
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.2'})
+        add('road_class == MOTORWAY', '0.2', 'route_optimization')
     elif ro == 'quiet':
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.3'})
-        priority.append({'if': 'road_class == LIVING_STREET', 'multiply_by': '1.2'})
+        add('road_class == MOTORWAY', '0.3', 'route_optimization')
+        add('road_class == LIVING_STREET', '1.2', 'route_optimization')
     elif ro == 'cheapest':
-        priority.append({'if': 'toll == ALL || toll == HGV', 'multiply_by': '0.01'})
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.4'})
+        add(toll_condition, '0.01', 'tolls')
+        add('road_class == MOTORWAY', '0.4', 'route_optimization')
     elif ro == 'eco':
-        priority.append({'if': 'road_class == MOTORWAY', 'multiply_by': '0.5'})
+        add('road_class == MOTORWAY', '0.5', 'route_optimization')
 
     if not priority and ro != 'eco':
         return {}
@@ -135,6 +158,8 @@ def build_graphhopper_costing_preference_model(
     model: Dict[str, Any] = {}
     if priority:
         model['priority'] = priority
-    if ro == 'eco':
+    if ro == 'eco' and capabilities.get('state') == 'verified' and capabilities.get('profile_available'):
         model.setdefault('speed', []).append({'if': 'true', 'limit_to': '90'})
+    elif ro == 'eco':
+        limitations.append({'engine':'GraphHopper','category':'route_optimization','reason':'profile_not_verified','status':'UNVERIFIED'})
     return model

@@ -112,3 +112,7 @@ New tests preserve all camera/OSM geometries and hard blocks, mixed camera/CAZ o
 Local outcomes: **771 Python tests +68 subtests** in the backend CI selection; **53 focused Python checks**; **97 Jest suites /1,918 tests**, test lint and coverage thresholds passed; **11 isolated SQL policy tests** passed; whitespace check passed. Full desktop/Kivy/native/live-service suites are outside this web task and unrun. Actual Java deserialization/JTS checks are reported separately above, not counted as graph-backed routing tests. Required hosted CI and PR/merge state are verified at publication.
 
 Changed files: `voyagr/services/hazards.py`, `voyagr/services/routing/graphhopper_diagnostics.py`, `tests/test_graphhopper_model_composition.py`, `tests/test_graphhopper_diagnostics.py`, `.github/workflows/ci.yml`, `scripts/CheckGraphHopper8Model.java`, the three JSON fixtures and README under `scripts/fixtures/graphhopper8/`, this report, `VOYAGR_GRAPHHOPPER8_PARSER_EVIDENCE.json`, and the existing HTTP400 diagnostic report's category list. No production/graph/camera-area data or routing avoidance configuration changed.
+
+## Subsequent toll capability finding (2026-10-28)
+
+Operator evidence separately confirms the installed graph rejects the unavailable toll encoded value. The duplicate-ID fix remains valid; it was not the only compatibility issue. See [verified capability construction, cache policy and operator procedure](VOYAGR_GRAPHHOPPER_TOLL_CAPABILITIES.md). No camera-area or production graph/configuration changes accompany that fix.

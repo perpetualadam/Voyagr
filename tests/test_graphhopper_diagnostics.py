@@ -21,6 +21,7 @@ def response(body, status=400):
 
 
 @pytest.mark.parametrize('body,category,name', [
+    ({'message': 'Cannot compile expression: priority entry invalid condition \"toll == true\": toll not available ' + PRIVATE}, 'custom_model_error', 'toll'),
     ({'message': 'Cannot handle duplicate area hazard_0 ' + PRIVATE}, 'area_identity_error', None),
     ({'message': 'Cannot deserialize custom_model: ' + PRIVATE}, 'request_json_invalid', 'custom_model'),
     ({'message': 'Cannot compile expression road_class == INVALID: ' + PRIVATE}, 'custom_model_error', 'road_class'),

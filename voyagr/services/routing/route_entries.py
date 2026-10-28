@@ -411,6 +411,8 @@ def build_graphhopper_optimised_route_entry(
             'maneuvers': gh_maneuvers,
             'source': 'GraphHopper',
         }
+        for field in ('provider_limitations', 'provider_capabilities'):
+            if field in graphhopper_route: entry[field] = graphhopper_route[field]
         # Only set camera_exclusions_applied when cameras were actually in the custom model
         if graphhopper_route.get('camera_avoidance'):
             entry['camera_exclusions_applied'] = True
