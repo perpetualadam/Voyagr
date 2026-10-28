@@ -93,6 +93,7 @@ jobs:
           tests/test_graphhopper_model_composition.py
           tests/test_graphhopper_capabilities.py
           tests/test_phase10_routing.py
+          tests/test_phase11c_acceptance_tools.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py
           tests/test_graphhopper_costing_parity.py

@@ -1,0 +1,42 @@
+{
+  "scope": "workspace_offline_parser_dependencies",
+  "reference": "VOYAGR_GRAPHHOPPER8_PARSER_EVIDENCE.json",
+  "artifacts": [
+    {
+      "artifact": "graphhopper-web-api-8.0.jar",
+      "sha256": "432887f5bc02a3b958bfa5246884308a3ac65277c7a1bc3222236de0188fa976",
+      "matches_recorded_digest": true
+    },
+    {
+      "artifact": "jackson-core-2.13.5.jar",
+      "sha256": "48f36a025311d0464ad8dda4512a20c79e279a9550f63f3179d731d94482474b",
+      "matches_recorded_digest": true
+    },
+    {
+      "artifact": "jackson-databind-2.13.5.jar",
+      "sha256": "5fedb24b2356491815d18267f65da9a21dd67413345ad7795f221afa25c78984",
+      "matches_recorded_digest": true
+    },
+    {
+      "artifact": "jackson-annotations-2.13.5.jar",
+      "sha256": "80aea8ed7232db5040ced4b3f982f29da95bb3d802343dbf6fd82ccd98c21c4f",
+      "matches_recorded_digest": true
+    },
+    {
+      "artifact": "jts-core-1.19.0.jar",
+      "sha256": "dbb8644cf324123d06c27aa982f570811e10b4cb1f2aef893b00de237d33efc0",
+      "matches_recorded_digest": true
+    },
+    {
+      "artifact": "jackson-datatype-jts-2.14.jar",
+      "sha256": "a24bd4e6205e1d978163b94fbbd4ddb3f4c71be08db9985e40838a2bfba2321b",
+      "matches_recorded_digest": true
+    }
+  ],
+  "negative_input_check": {
+    "input": "synthetic_non_polygon_area",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "status": "PASS"
+  }
+}

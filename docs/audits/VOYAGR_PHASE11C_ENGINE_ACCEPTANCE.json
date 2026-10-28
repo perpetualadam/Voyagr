@@ -1,0 +1,206 @@
+{
+  "execution_status": "REAL_ENGINE_EXECUTION_NOT_TESTED",
+  "providers": {
+    "Valhalla": {
+      "available": false,
+      "installed_metadata": {},
+      "enforcement": "UNVERIFIED",
+      "access_approved": false
+    },
+    "GraphHopper": {
+      "available": false,
+      "installed_metadata": {},
+      "enforcement": "UNVERIFIED",
+      "access_approved": false
+    },
+    "OSRM": {
+      "available": false,
+      "installed_metadata": {},
+      "enforcement": "UNVERIFIED",
+      "access_approved": false
+    }
+  },
+  "cases": [
+    {
+      "engine": "Valhalla",
+      "case": "normal_route",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "exclusion_point",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "exclusion_polygon",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "excluded_road_segment",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "mandatory_camera",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "railway_crossing",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "toll_road",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "alternatives",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "multiple_waypoints",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "unsupported_restriction",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "no_compliant_route",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "Valhalla",
+      "case": "timeout_or_failure",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "normal_route",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "exclusion_point",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "exclusion_polygon",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "excluded_road_segment",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "mandatory_camera",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "railway_crossing",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "toll_road",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "alternatives",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "multiple_waypoints",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "unsupported_restriction",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "no_compliant_route",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "GraphHopper",
+      "case": "timeout_or_failure",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "normal_route",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "exclusion_point",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "exclusion_polygon",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "excluded_road_segment",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "mandatory_camera",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "railway_crossing",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "toll_road",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "alternatives",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "multiple_waypoints",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "unsupported_restriction",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "no_compliant_route",
+      "status": "NOT_TESTED"
+    },
+    {
+      "engine": "OSRM",
+      "case": "timeout_or_failure",
+      "status": "NOT_TESTED"
+    }
+  ],
+  "routing_requests_attempted": 0
+}

@@ -1,0 +1,30 @@
+{
+  "scope": "offline_repository_or_operator_supplied_file_only",
+  "sha256": "65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f",
+  "bytes": 1706076,
+  "features": 128,
+  "geometry_types": {
+    "MultiPolygon": 128
+  },
+  "counts": {
+    "feature_id_present": 128,
+    "reference_present": 0,
+    "source_present": 0,
+    "acquisition_time_present": 0,
+    "road_identity_present": 0,
+    "direction_present": 0,
+    "average_section_identity_present": 0,
+    "polygon_components": 8301,
+    "declared_camera_count": 8301,
+    "duplicate_feature_ids": 0,
+    "duplicate_point_positions": 0,
+    "colocated_distinct_records": 0,
+    "reference_ids_at_multiple_positions": 0,
+    "colocated_different_type_candidates": 0
+  },
+  "topology_validation": "NOT_TESTED_USE_JTS",
+  "source_identity": "UNVERIFIED",
+  "acquisition_time": "UNKNOWN",
+  "road_association": "NOT_TESTED",
+  "installed_file_identity": "NOT_TESTED"
+}

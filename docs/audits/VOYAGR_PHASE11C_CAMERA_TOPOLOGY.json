@@ -1,0 +1,1 @@
+{"status":"FAIL","scope":"offline_JTS_not_installed_engine","areas":128,"unique_ids":128,"invalid_areas":102,"components":8301,"invalid_components":0,"exact_duplicate_components":106,"areas_with_positive_area_component_overlap":102,"overlap_component_pairs":1911,"reasons":{"Self-intersection":102}}
