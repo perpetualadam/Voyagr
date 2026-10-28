@@ -1,0 +1,150 @@
+{
+  "scope": "synthetic actual helper functions; mocked transport; no Overpass engine or Contabo",
+  "baseline": "d0482d3eb00ba883b74b362692f67a69eb873372",
+  "samples_per_case": 20,
+  "cases": {
+    "before": {
+      "cache_miss": {
+        "samples": 20,
+        "median_ms": 0.031,
+        "p95_ms": 0.082,
+        "max_ms": 0.252
+      },
+      "miss_http_calls": 20,
+      "cache_hit": {
+        "samples": 20,
+        "median_ms": 0.006,
+        "p95_ms": 0.009,
+        "max_ms": 0.012
+      },
+      "cache_hit_added_http_calls": 0,
+      "large_5295": {
+        "samples": 20,
+        "median_ms": 9.205,
+        "p95_ms": 10.223,
+        "max_ms": 10.944
+      },
+      "large_peak_traced_bytes": 3757846,
+      "four_identical_requests": {
+        "samples": 20,
+        "median_ms": 6.651,
+        "p95_ms": 6.918,
+        "max_ms": 7.594
+      },
+      "coalesced_http_calls_per_sample": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "concurrent_caller_throughput_per_second": 601.41,
+      "retry_exhaustion_scaled_backoff": {
+        "samples": 20,
+        "median_ms": 7.548,
+        "p95_ms": 7.833,
+        "max_ms": 8.983
+      },
+      "expired_flask_request": {
+        "samples": 20,
+        "median_ms": 0.102,
+        "p95_ms": 0.338,
+        "max_ms": 24.728
+      }
+    },
+    "after": {
+      "cache_miss": {
+        "samples": 20,
+        "median_ms": 0.086,
+        "p95_ms": 0.193,
+        "max_ms": 0.483
+      },
+      "miss_http_calls": 20,
+      "cache_hit": {
+        "samples": 20,
+        "median_ms": 0.022,
+        "p95_ms": 0.059,
+        "max_ms": 0.195
+      },
+      "cache_hit_added_http_calls": 0,
+      "large_5295": {
+        "samples": 20,
+        "median_ms": 57.527,
+        "p95_ms": 67.653,
+        "max_ms": 72.006
+      },
+      "large_peak_traced_bytes": 7488134,
+      "four_identical_requests": {
+        "samples": 20,
+        "median_ms": 6.666,
+        "p95_ms": 7.116,
+        "max_ms": 7.357
+      },
+      "coalesced_http_calls_per_sample": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "concurrent_caller_throughput_per_second": 600.06,
+      "retry_exhaustion_scaled_backoff": {
+        "samples": 20,
+        "median_ms": 3.618,
+        "p95_ms": 3.86,
+        "max_ms": 4.104
+      },
+      "expired_flask_request": {
+        "samples": 20,
+        "median_ms": 0.135,
+        "p95_ms": 0.312,
+        "max_ms": 0.409
+      }
+    }
+  },
+  "mock_http": {
+    "scope": "loopback HTTP fixture, not Overpass",
+    "ten_elements": {
+      "samples": 20,
+      "median_ms": 1.756,
+      "p95_ms": 2.481,
+      "max_ms": 2.791
+    }
+  },
+  "validation_only_5295": {
+    "samples": 20,
+    "median_ms": 11.239,
+    "p95_ms": 12.117,
+    "max_ms": 27.232
+  }
+}

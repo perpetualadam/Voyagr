@@ -235,8 +235,9 @@ class TestAPIIntegration(unittest.TestCase):
         }
         mock_get.return_value = mock_response
         
-        # Should use self-hosted URL first
-        result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
+        # Endpoint failover is covered by the acquisition integration tests; retain speed semantics here.
+        with patch('overpass_helper.query_overpass', return_value={'success':True, **mock_response.json.return_value}):
+            result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
         
         self.assertIsNotNone(result)
         self.assertIsNone(result.get('speed_limit_mph'))
@@ -250,7 +251,7 @@ class TestAPIIntegration(unittest.TestCase):
 
         # Mock all API calls to fail
         with patch.dict(os.environ, {'SPEED_LIMIT_ROAD_TYPE_FALLBACK': 'false'}, clear=False):
-            with patch('speed_limit_detector.requests.get') as mock_get:
+            with patch('speed_limit_detector.requests.get') as mock_get, patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'}):
                 mock_get.side_effect = Exception("API unavailable")
 
                 result = self.detector.get_speed_limit_for_location(
@@ -284,7 +285,7 @@ class TestOsmSnapPipeline(unittest.TestCase):
             }]
         }
 
-        with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
+        with patch('speed_limit_detector.requests.get', return_value=snap_resp), patch('overpass_helper.query_overpass', return_value={'success':True, **overpass_resp.json.return_value}):
             result = detector.get_speed_limit_for_location(51.5074, -0.1278)
 
         self.assertIsNone(result.get('speed_limit_mph'))
@@ -319,7 +320,7 @@ class TestOsmSnapPipeline(unittest.TestCase):
             }]
         }
 
-        with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
+        with patch('speed_limit_detector.requests.get', return_value=snap_resp), patch('overpass_helper.query_overpass', return_value={'success':True, **overpass_resp.json.return_value}):
             # Candidate pipeline retains TomTom 70 as an estimate, not legal authority
             # even when a nearby residential OSM way disagrees (crosscheck is metrics-only).
             result = detector.get_speed_limit_for_location(
@@ -341,7 +342,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
     def test_road_type_fallback_when_apis_fail(self):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
-        with patch('speed_limit_detector.requests.get') as mock_get:
+        with patch('speed_limit_detector.requests.get') as mock_get, patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'}):
             mock_get.side_effect = Exception('API unavailable')
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='residential'
@@ -354,7 +355,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
     def test_trunk_fallback_is_60_not_70(self):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
-        with patch('speed_limit_detector.requests.get') as mock_get:
+        with patch('speed_limit_detector.requests.get') as mock_get, patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'}):
             mock_get.side_effect = Exception('API unavailable')
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='trunk'
@@ -394,7 +395,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
             }]
         }
 
-        with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
+        with patch('speed_limit_detector.requests.get', return_value=snap_resp), patch('overpass_helper.query_overpass', return_value={'success':True, **overpass_resp.json.return_value}):
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='residential'
             )
@@ -435,7 +436,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
             }]
         }
         with patch.dict(os.environ, {'TOMTOM_API_KEY': ''}, clear=False):
-            with patch('speed_limit_detector.requests.get', return_value=overpass_resp):
+            with patch('overpass_helper.query_overpass', return_value={'success':True, **overpass_resp.json.return_value}):
                 result = detector.get_speed_limit_for_location(
                     51.5074, -0.1278, road_type='primary'
                 )
@@ -459,7 +460,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
             }]
         }
         with patch.dict(os.environ, {'TOMTOM_API_KEY': ''}, clear=False):
-            with patch('speed_limit_detector.requests.get', return_value=overpass_resp):
+            with patch('overpass_helper.query_overpass', return_value={'success':True, **overpass_resp.json.return_value}):
                 result = detector.get_speed_limit_for_location(
                     51.5074, -0.1278, road_type='trunk'
                 )

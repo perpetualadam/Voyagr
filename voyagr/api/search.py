@@ -14,6 +14,7 @@ import os
 import re
 import time
 import requests
+from voyagr.utils import request_budget as route_transport
 from typing import Any
 from flask import Blueprint, jsonify, request
 
@@ -546,6 +547,7 @@ def search_parking():
         lat = float(data.get('lat', 0))
         lon = float(data.get('lon', 0))
         radius = int(data.get('radius', 800))
+        if not 1<=radius<=5000: return jsonify(success=False,error='Radius must be between 1 and 5000 metres'),400
         parking_type = data.get('type', 'any')
         price_pref = data.get('price', 'any')
 
@@ -553,7 +555,7 @@ def search_parking():
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
 
         overpass_query = f"""
-        [out:json][timeout:25];
+        [out:json][timeout:25][maxsize:2097152];
         (
           node["amenity"="parking"](around:{radius},{lat},{lon});
           way["amenity"="parking"](around:{radius},{lat},{lon});
@@ -561,36 +563,11 @@ def search_parking():
         out center tags {min(20, max(1, radius // 50))};
         """
 
-        logger.info(f"[Parking] Querying Overpass for parking near ({lat},{lon}) radius={radius}m")
+        logger.info("[Parking] OSM parking acquisition")
 
-        # Use the shared Overpass helper, which retries and falls back to public
-        # mirrors when a self-hosted instance (OVERPASS_API_URL) is unreachable.
-        # Previously this endpoint hit OVERPASS_API_URL directly with no fallback,
-        # so parking search silently returned nothing whenever the local Overpass
-        # was down (unlike POI search, which already uses this helper).
-        elements = []
-        try:
-            from overpass_helper import query_overpass
-            cache_key = f"parking_{lat:.4f}_{lon:.4f}_{radius}"
-            result = query_overpass(overpass_query, cache_key=cache_key, cache_ttl=300)
-            if result.get('success'):
-                elements = result.get('elements', [])
-                logger.info(f"[Parking] Overpass returned {len(elements)} elements")
-            else:
-                logger.warning(f"[Parking] Overpass query failed: {result.get('error')}")
-        except ImportError:
-            # Fallback: direct request if the helper module is unavailable.
-            try:
-                headers = {'User-Agent': 'Voyagr-PWA/1.0'}
-                response = requests.post(OVERPASS_API_URL, data={'data': overpass_query}, timeout=10, headers=headers)
-                if response.status_code == 429:
-                    time.sleep(2)
-                    response = requests.post(OVERPASS_API_URL, data={'data': overpass_query}, timeout=10, headers=headers)
-                if response.status_code == 200:
-                    elements = response.json().get('elements', [])
-                    logger.info(f"[Parking] Overpass API returned {len(elements)} elements")
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"[Parking] Overpass direct request failed: {str(e)}")
+        from overpass_helper import query_overpass
+        result = query_overpass(overpass_query, cache_ttl=300)
+        elements = result.get('elements', []) if result.get('success') else []
 
         if not elements:
             return jsonify({'success': True, 'parking': []})
@@ -666,6 +643,8 @@ def search_parking():
         logger.info(f"[Parking] Found {len(parking_list)} parking options")
         return jsonify({'success': True, 'parking': parking_list[:10]})
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.error(f"[Parking] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
@@ -761,6 +740,7 @@ def search_poi():
         lon = float(data.get('lon', 0))
         poi_type = data.get('type', 'fuel')
         radius = int(data.get('radius', 2000))
+        if not 1<=radius<=5000: return jsonify(success=False,error='Radius must be between 1 and 5000 metres'),400
 
         if lat == 0 or lon == 0:
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
@@ -793,42 +773,13 @@ def search_poi():
             amenities = ['fuel']
         shops = list(poi_shop_tags.get(poi_type, []))
 
-        try:
-            from overpass_helper import query_overpass, build_poi_query
-            OVERPASS_HELPER_AVAILABLE = True
-        except ImportError:
-            OVERPASS_HELPER_AVAILABLE = False
-
-        if OVERPASS_HELPER_AVAILABLE:
-            query = build_poi_query(lat, lon, radius, amenities, shops)
-            cache_key = f"poi_{poi_type}_{lat:.4f}_{lon:.4f}_{radius}"
-            result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
-
-            if not result.get('success'):
-                return _nominatim_poi_fallback(lat, lon, poi_type, radius)
-
-            results = result.get('elements', [])
-            cached = result.get('cached', False)
-        else:
-            overpass_url = OVERPASS_API_URL
-            amenity_queries = ''.join([
-                f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
-            ])
-            shop_queries = ''.join([
-                f'node["shop"="{s}"](around:{radius},{lat},{lon});' for s in shops
-            ])
-            query = f'''
-            [out:json][timeout:10];
-            (
-                {amenity_queries}{shop_queries}
-            );
-            out body;
-            '''
-            response = requests.post(overpass_url, data={'data': query}, timeout=15)
-            if response.status_code != 200:
-                return _nominatim_poi_fallback(lat, lon, poi_type, radius)
-            results = response.json().get('elements', [])
-            cached = False
+        from overpass_helper import query_overpass, build_poi_query
+        query = build_poi_query(lat, lon, radius, amenities, shops)
+        result = query_overpass(query, cache_ttl=300)
+        if not result.get('success'):
+            return _nominatim_poi_fallback(lat, lon, poi_type, radius)
+        results = result['elements']
+        cached = result.get('cached', False)
 
         if not results:
             return jsonify({'success': True, 'results': [], 'message': f'No {poi_type} found nearby'})
@@ -860,6 +811,8 @@ def search_poi():
         logger.info(f"[POI] Found {len(poi_list)} {poi_type} locations (Overpass)")
         return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type, 'cached': cached, 'source': 'Overpass'})
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.error(f"[POI] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})

@@ -66,7 +66,7 @@ def test_overpass_rate_limit_stops_when_shared_budget_is_exhausted():
     with app.test_request_context():
         g.routing_budget=rb.RoutingBudget(.5,clock=lambda:now[0])
         client=oh.OverpassClient(endpoints=['http://127.0.0.1/overpass'],max_retries=3)
-        with patch.object(rb.requests,'post',return_value=Mock(status_code=429)) as post,patch.object(rb.time,'sleep') as sleep:
+        with patch.object(rb.requests,'post',return_value=Mock(status_code=429,headers={})) as post,patch.object(rb.time,'sleep') as sleep:
             # Insufficient backoff budget exits the helper rather than repeatedly sleeping.
             with pytest.raises(rb.RoutingDeadlineExceeded): client.query('synthetic-query',skip_cache=True)
             assert post.call_count==1

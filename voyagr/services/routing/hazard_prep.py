@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
+from voyagr.utils import request_budget as route_transport
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -47,6 +48,7 @@ def prepare_route_hazards(
     from voyagr.utils.hazard_matching import HazardDataset
     from voyagr.services.routing.integrity_api import capture_hazard_snapshot
 
+    route_transport.check_budget()
     # Fetch hazards (always fetch for scoring, even if avoidance is disabled)
     hazard_start = time.time()
     import copy
@@ -80,6 +82,8 @@ def prepare_route_hazards(
                 )
         else:
             logger.debug("[TOMTOM] No real-time incidents found for route area")
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {type(e).__name__}")
 
@@ -106,6 +110,8 @@ def prepare_route_hazards(
             logger.info(
                 f"[TRAFFIC_LIGHTS] Merged {len(hazards.get('traffic_light', []))} OSM traffic signals for routing"
             )
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except Exception as e:
             logger.warning(f"[TRAFFIC_LIGHTS] Could not load OSM traffic lights: {type(e).__name__}")
             hazards['traffic_light'] = []
@@ -123,6 +129,8 @@ def prepare_route_hazards(
             logger.info(
                 f"[RAILWAY_CROSSINGS] Merged {len(hazards.get('railway_crossing', []))} OSM level crossings for routing"
             )
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except Exception as e:
             logger.warning(f"[RAILWAY_CROSSINGS] Could not load OSM railway crossings: {type(e).__name__}")
             hazards['railway_crossing'] = []
