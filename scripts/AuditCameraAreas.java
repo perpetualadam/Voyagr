@@ -17,12 +17,14 @@ public class AuditCameraAreas {
             if(bytes.length>16*1024*1024)throw new IllegalArgumentException();
             String raw=new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
             CustomModel model=Jackson.newObjectMapper().readValue("{\"areas\":"+raw+"}",CustomModel.class);
+            if(model.getAreas().getFeatures().isEmpty())throw new IllegalArgumentException();
             int invalid=0, components=0, invalidParts=0, duplicates=0, overlapAreas=0, overlapPairs=0;
             Map<String,Integer> reasons=new TreeMap<>();
             Set<String> seen=new HashSet<>();
             for(var feature:model.getAreas().getFeatures()) {
                 Geometry geometry=feature.getGeometry();
                 if(geometry==null){invalid++;reasons.merge("missing_geometry",1,Integer::sum);continue;}
+                if(!(geometry instanceof org.locationtech.jts.geom.Polygon) && !(geometry instanceof org.locationtech.jts.geom.MultiPolygon))throw new IllegalArgumentException();
                 var error=new IsValidOp(geometry).getValidationError();
                 if(error!=null){invalid++;reasons.merge(error.getMessage(),1,Integer::sum);}
                 STRtree index=new STRtree();

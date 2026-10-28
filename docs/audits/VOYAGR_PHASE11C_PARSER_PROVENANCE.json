@@ -32,5 +32,11 @@
       "sha256": "a24bd4e6205e1d978163b94fbbd4ddb3f4c71be08db9985e40838a2bfba2321b",
       "matches_recorded_digest": true
     }
-  ]
+  ],
+  "negative_input_check": {
+    "input": "synthetic_non_polygon_area",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "status": "PASS"
+  }
 }

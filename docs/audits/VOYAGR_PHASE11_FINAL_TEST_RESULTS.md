@@ -19,6 +19,7 @@ PASS below means the stated local check passed, not production acceptance. FAIL 
 |Lint|npm run lint:tests|PASS|
 |SQL|11 isolated session-policy cases on disposable local pgserver|PASS|
 |Repository camera topology|Actual GH8/JTS offline file parsing, verified jar digests|FAIL:102/128 MultiPolygons invalid|
+|Java audit-tool negative input|Synthetic non-polygon area refused with expected exit1|PASS|
 |Real-engine replay|Unapproved/default manifest safety path,0HTTP routing attempts|NOT_TESTED|
 |Actual Contabo calls / physical device|None executed|NOT_TESTED|
 
