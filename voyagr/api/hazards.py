@@ -18,6 +18,8 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 import requests
 from flask import Blueprint, jsonify, request
 
+from voyagr.utils import overpass_audit as audit
+
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import sanitize_string
 from voyagr.utils.admin_auth import require_admin_if_configured
@@ -39,11 +41,21 @@ _OSM_AREA_FETCH_TIMEOUT_SEC = 12
 
 
 def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
-    """Cap Overpass-backed viewport fetches so nginx never returns a 504 HTML page."""
-    future = _osm_area_executor.submit(fetch_fn, *args, **kwargs)
+    """Wait at most 12s; submitted work can continue after the HTTP response."""
+    current = audit.trace()
+    def run():
+        with audit.bind_trace(current):
+            audit.emit('area_task_started')
+            try:
+                return fetch_fn(*args, **kwargs)
+            finally:
+                audit.emit('area_task_finished')
+    audit.emit('area_task_submitted')
+    future = _osm_area_executor.submit(run)
     try:
         return future.result(timeout=_OSM_AREA_FETCH_TIMEOUT_SEC)
     except FuturesTimeout:
+        audit.emit('area_wait_timeout')
         logger.warning('[OSM area] %s timed out after %ss', getattr(fetch_fn, '__name__', 'fetch'), _OSM_AREA_FETCH_TIMEOUT_SEC)
         return []
     except Exception as exc:
