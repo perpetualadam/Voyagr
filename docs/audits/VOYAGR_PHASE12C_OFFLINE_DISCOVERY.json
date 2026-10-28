@@ -1,0 +1,1180 @@
+{
+  "scope": "ISOLATED_OPERATOR_ACCEPTANCE",
+  "engine_execution": "NOT_TESTED",
+  "dataset_integrity": {
+    "resolution": "HASH_MATCHED_MANIFEST_SIBLING",
+    "candidate_file": "camera_areas_candidate.geojson",
+    "source_sha256": "65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f",
+    "candidate_sha256": "6a397b69a10d9284dfa3c2cc6a05ac070e81e3850c33b75b4827ddced9fe38d7",
+    "ids": [
+      "camera_area_0",
+      "camera_area_1",
+      "camera_area_2",
+      "camera_area_3",
+      "camera_area_4",
+      "camera_area_5",
+      "camera_area_6",
+      "camera_area_7",
+      "camera_area_8",
+      "camera_area_9",
+      "camera_area_10",
+      "camera_area_11",
+      "camera_area_12",
+      "camera_area_13",
+      "camera_area_14",
+      "camera_area_15",
+      "camera_area_16",
+      "camera_area_17",
+      "camera_area_18",
+      "camera_area_19",
+      "camera_area_20",
+      "camera_area_21",
+      "camera_area_22",
+      "camera_area_23",
+      "camera_area_24",
+      "camera_area_25",
+      "camera_area_26",
+      "camera_area_27",
+      "camera_area_28",
+      "camera_area_29",
+      "camera_area_30",
+      "camera_area_31",
+      "camera_area_32",
+      "camera_area_33",
+      "camera_area_34",
+      "camera_area_35",
+      "camera_area_36",
+      "camera_area_37",
+      "camera_area_38",
+      "camera_area_39",
+      "camera_area_40",
+      "camera_area_41",
+      "camera_area_42",
+      "camera_area_43",
+      "camera_area_44",
+      "camera_area_45",
+      "camera_area_46",
+      "camera_area_47",
+      "camera_area_48",
+      "camera_area_49",
+      "camera_area_50",
+      "camera_area_51",
+      "camera_area_52",
+      "camera_area_53",
+      "camera_area_54",
+      "camera_area_55",
+      "camera_area_56",
+      "camera_area_57",
+      "camera_area_58",
+      "camera_area_59",
+      "camera_area_60",
+      "camera_area_61",
+      "camera_area_62",
+      "camera_area_63",
+      "camera_area_64",
+      "camera_area_65",
+      "camera_area_66",
+      "camera_area_67",
+      "camera_area_68",
+      "camera_area_69",
+      "camera_area_70",
+      "camera_area_71",
+      "camera_area_72",
+      "camera_area_73",
+      "camera_area_74",
+      "camera_area_75",
+      "camera_area_76",
+      "camera_area_77",
+      "camera_area_78",
+      "camera_area_79",
+      "camera_area_80",
+      "camera_area_81",
+      "camera_area_82",
+      "camera_area_83",
+      "camera_area_84",
+      "camera_area_85",
+      "camera_area_86",
+      "camera_area_87",
+      "camera_area_88",
+      "camera_area_89",
+      "camera_area_90",
+      "camera_area_91",
+      "camera_area_92",
+      "camera_area_93",
+      "camera_area_94",
+      "camera_area_95",
+      "camera_area_96",
+      "camera_area_97",
+      "camera_area_98",
+      "camera_area_99",
+      "camera_area_100",
+      "camera_area_101",
+      "camera_area_102",
+      "camera_area_103",
+      "camera_area_104",
+      "camera_area_105",
+      "camera_area_106",
+      "camera_area_107",
+      "camera_area_108",
+      "camera_area_109",
+      "camera_area_110",
+      "camera_area_111",
+      "camera_area_112",
+      "camera_area_113",
+      "camera_area_114",
+      "camera_area_115",
+      "camera_area_116",
+      "camera_area_117",
+      "camera_area_118",
+      "camera_area_119",
+      "camera_area_120",
+      "camera_area_121",
+      "camera_area_122",
+      "camera_area_123",
+      "camera_area_124",
+      "camera_area_125",
+      "camera_area_126",
+      "camera_area_127"
+    ],
+    "properties_preserved": true,
+    "geographic_equivalence": true
+  },
+  "area_compilation": {
+    "original": [
+      {
+        "id": "camera_area_0",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_1",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_2",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_3",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_4",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_5",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_6",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_7",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_8",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_9",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_10",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_11",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_12",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_13",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_14",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_15",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_16",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_17",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_18",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_19",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_20",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_21",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_22",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_23",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_24",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_25",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_26",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_27",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_28",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_29",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_30",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_31",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_32",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_33",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_34",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_35",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_36",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_37",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_38",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_39",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_40",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_41",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_42",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_43",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_44",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_45",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_46",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_47",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_48",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_49",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_50",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_51",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_52",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_53",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_54",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_55",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_56",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_57",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_58",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_59",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_60",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_61",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_62",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_63",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_64",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_65",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_66",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_67",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_68",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_69",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_70",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_71",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_72",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_73",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_74",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_75",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_76",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_77",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_78",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_79",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_80",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_81",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_82",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_83",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_84",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_85",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_86",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_87",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_88",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_89",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_90",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_91",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_92",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_93",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_94",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_95",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_96",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_97",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_98",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_99",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_100",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_101",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_102",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_103",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_104",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_105",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_106",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_107",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_108",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_109",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_110",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_111",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_112",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_113",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_114",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_115",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_116",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_117",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_118",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_119",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_120",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_121",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_122",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_123",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_124",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_125",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_126",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_127",
+        "status": "NOT_TESTED"
+      }
+    ],
+    "candidate": [
+      {
+        "id": "camera_area_0",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_1",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_2",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_3",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_4",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_5",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_6",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_7",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_8",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_9",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_10",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_11",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_12",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_13",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_14",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_15",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_16",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_17",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_18",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_19",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_20",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_21",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_22",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_23",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_24",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_25",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_26",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_27",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_28",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_29",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_30",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_31",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_32",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_33",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_34",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_35",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_36",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_37",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_38",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_39",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_40",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_41",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_42",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_43",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_44",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_45",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_46",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_47",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_48",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_49",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_50",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_51",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_52",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_53",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_54",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_55",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_56",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_57",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_58",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_59",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_60",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_61",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_62",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_63",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_64",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_65",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_66",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_67",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_68",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_69",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_70",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_71",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_72",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_73",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_74",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_75",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_76",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_77",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_78",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_79",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_80",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_81",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_82",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_83",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_84",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_85",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_86",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_87",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_88",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_89",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_90",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_91",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_92",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_93",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_94",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_95",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_96",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_97",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_98",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_99",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_100",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_101",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_102",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_103",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_104",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_105",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_106",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_107",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_108",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_109",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_110",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_111",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_112",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_113",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_114",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_115",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_116",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_117",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_118",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_119",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_120",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_121",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_122",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_123",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_124",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_125",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_126",
+        "status": "NOT_TESTED"
+      },
+      {
+        "id": "camera_area_127",
+        "status": "NOT_TESTED"
+      }
+    ]
+  },
+  "instances": {},
+  "fixture_results": [],
+  "comparisons": [],
+  "request_count": 0,
+  "latency": {},
+  "replacement_decision": "CANDIDATE_NOT_VERIFIED",
+  "production_release": "NO_GO",
+  "graphhopper_primary_policy": "PRESERVED"
+}
