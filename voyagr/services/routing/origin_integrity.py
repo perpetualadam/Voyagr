@@ -43,13 +43,15 @@ def accuracy(value):
     )
 
 
-def _ring(point, ring):
+def _ring(point, ring, *, validated=False):
     if not isinstance(ring, (list, tuple)) or len(ring) < 4 or ring[0] != ring[-1]:
         raise ValueError("invalid_ring")
     lat, lon = point
     inside = False
     for a, b in zip(ring, ring[1:]):
-        if coordinate((a[1], a[0])) is None or coordinate((b[1], b[0])) is None:
+        if not validated and (
+            coordinate((a[1], a[0])) is None or coordinate((b[1], b[0])) is None
+        ):
             raise ValueError("invalid_ring")
         # Conservative numerical boundary band ~millimetres, not a road buffer.
         dx, dy = b[0] - a[0], b[1] - a[1]
@@ -67,44 +69,107 @@ def _ring(point, ring):
     return "INSIDE" if inside else "OUTSIDE"
 
 
-def area_relation(point, collection):
-    """Union of polygon members, with holes. Outside does not prove OSM completeness."""
-    if not coordinate(point) or not isinstance(collection, dict):
-        return "UNKNOWN"
+def prepare_areas(collection):
+    """Request-local immutable envelope index, never a cross-request result cache.
+
+    Validate all rings before filtering: malformed outside members/holes are
+    UNKNOWN evidence too. This validates shape structure, not source provenance
+    or arbitrary polygon topology. No production Shapely dependency is added.
+    """
+    if not isinstance(collection, dict):
+        return None
     features = collection.get("features")
-    if not isinstance(features, list) or not features or len(features) > 512:
-        return "UNKNOWN"
-    found = "OUTSIDE"
-    count = 0
+    if not isinstance(features, list) or not 1 <= len(features) <= 512:
+        return None
+    prepared = []
+    vertices = 0
     try:
         for feature in features:
-            geometry = feature["geometry"]
-            kind = geometry["type"]
+            g = feature["geometry"]
+            kind = g["type"]
             if kind not in ("Polygon", "MultiPolygon"):
-                return "UNKNOWN"
-            polygons = (
-                [geometry["coordinates"]]
-                if kind == "Polygon"
-                else geometry["coordinates"]
-            )
+                return None
+            polygons = [g["coordinates"]] if kind == "Polygon" else g["coordinates"]
+            if not isinstance(polygons, (list, tuple)) or not polygons:
+                return None
             for polygon in polygons:
-                count += 1
-                if count % 128 == 0:
+                if len(prepared) % 128 == 0:
                     request_budget.check_budget()
-                if count > 20000 or not polygon or sum(len(r) for r in polygon) > 20000:
-                    return "UNKNOWN"
-                relation = _ring(point, polygon[0])
-                if relation == "OUTSIDE":
-                    continue
-                holes = [_ring(point, hole) for hole in polygon[1:]]
-                if "INSIDE" in holes:
-                    continue
-                if relation == "INSIDE" and "BOUNDARY" not in holes:
-                    return "INSIDE"
-                found = "BOUNDARY"
-        return found
+                if (
+                    len(prepared) >= 20000
+                    or not isinstance(polygon, (list, tuple))
+                    or not polygon
+                ):
+                    return None
+                if sum(len(ring) for ring in polygon) > 20000:
+                    return None
+                rings = []
+                for ring in polygon:
+                    if (
+                        not isinstance(ring, (list, tuple))
+                        or not 4 <= len(ring) <= 20000
+                        or ring[0] != ring[-1]
+                    ):
+                        return None
+                    normalized = []
+                    for point in ring:
+                        vertices += 1
+                        if vertices % 512 == 0:
+                            request_budget.check_budget()
+                        if (
+                            vertices > 500000
+                            or not isinstance(point, (list, tuple))
+                            or len(point) != 2
+                            or coordinate((point[1], point[0])) is None
+                        ):
+                            return None
+                        normalized.append(tuple(point))
+                    if len(set(normalized)) < 3:
+                        return None
+                    rings.append(tuple(normalized))
+                shell = rings[0]
+                bounds = (
+                    min(p[0] for p in shell),
+                    min(p[1] for p in shell),
+                    max(p[0] for p in shell),
+                    max(p[1] for p in shell),
+                )
+                prepared.append((bounds, tuple(rings)))
+        request_budget.check_budget()
+        return tuple(prepared) or None
     except (ValueError, KeyError, TypeError, IndexError):
+        return None
+
+
+def relation_from_prepared(point, prepared):
+    if coordinate(point) is None or prepared is None:
         return "UNKNOWN"
+    lat, lon = point
+    found = "OUTSIDE"
+    for i, (bounds, polygon) in enumerate(prepared):
+        if i % 128 == 0:
+            request_budget.check_budget()
+        # Include the same tiny boundary band as _ring, so near-boundary candidates are never lost.
+        if (
+            not bounds[0] - 1e-8 <= lon <= bounds[2] + 1e-8
+            or not bounds[1] - 1e-8 <= lat <= bounds[3] + 1e-8
+        ):
+            continue
+        relation = _ring(point, polygon[0], validated=True)
+        if relation == "OUTSIDE":
+            continue
+        holes = [_ring(point, hole, validated=True) for hole in polygon[1:]]
+        if "INSIDE" in holes:
+            continue
+        if relation == "INSIDE" and "BOUNDARY" not in holes:
+            return "INSIDE"
+        found = "BOUNDARY"
+    return found
+
+
+def area_relation(point, collection):
+    """Union with holes; an outside result never proves source completeness."""
+    return relation_from_prepared(point, prepare_areas(collection))
 
 
 def context_for_request(raw, requirements):
@@ -135,7 +200,11 @@ def context_for_request(raw, requirements):
 
         features = list((collection or {}).get("features", []))
         for zone in CAZ_ZONES_DATA.values():
-            ring = [[p[1], p[0]] for p in zone.get("polygon", []) if coordinate(p)]
+            source_ring = zone.get("polygon", [])
+            if len(source_ring) < 4 or any(coordinate(p) is None for p in source_ring):
+                geometry_complete = False
+                continue
+            ring = [[p[1], p[0]] for p in source_ring]
             if ring:
                 if ring[0] != ring[-1]:
                     ring.append(ring[0])
@@ -158,8 +227,14 @@ def context_for_request(raw, requirements):
 def _relation(context, point):
     key = tuple(point) if point else None
     if key not in context["relations"]:
+        if (
+            context["camera_mandatory"]
+            and context.get("geometry_complete", True)
+            and "prepared_areas" not in context
+        ):
+            context["prepared_areas"] = prepare_areas(context["areas"])
         context["relations"][key] = (
-            area_relation(point, context["areas"])
+            relation_from_prepared(point, context.get("prepared_areas"))
             if context["camera_mandatory"] and context.get("geometry_complete", True)
             else "UNKNOWN" if context["camera_mandatory"] else "NOT_REQUESTED"
         )

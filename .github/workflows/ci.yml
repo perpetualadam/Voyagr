@@ -97,6 +97,7 @@ jobs:
           tests/test_phase12b_geometry.py
           tests/test_phase12c_acceptance.py
           tests/test_phase12f_origin.py
+          tests/test_phase12fb_acceptance.py
           tests/test_phase11c_acceptance_tools.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py

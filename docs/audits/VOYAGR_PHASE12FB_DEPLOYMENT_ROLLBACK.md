@@ -1,0 +1,11 @@
+# Phase12F-B — Deployment and rollback readiness
+
+**PHASE12FB_PARTIALLY_VERIFIED; production NO-GO.** Base: merged Phase12F PR357 `8a01e63d98a15f56395bae5fae506cad0fb9cdf2`. GraphHopper remains preferred first eligible Optimised; Valhalla alternatives and honest OSRM fallback remain gated. No server access, deployment, dataset replacement, graph rebuild or restart. Live lab/device acceptance is NOT_TESTED.
+
+**NO-GO.** Ready to run controlled operator acceptance tooling; not verified for production release. Outstanding: raw five-case replay, actual boundary/no-path/directed-edge/connectivity evidence,2m false-positive rates, physical-device lifecycle, source provenance/freshness, active128/137 reconciliation, multiworker/load and candidate import identity.
+
+The repaired camera dataset and **its compatible imported candidate graph cache are a matched pair**. Candidate file SHA `6a397b69a10d9284dfa3c2cc6a05ac070e81e3850c33b75b4827ddced9fe38d7`; original SHA `65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f`. Do not propose a candidate-GeoJSON-only replacement while retaining the original graph cache. Original/candidate graph profile identities may differ compatibly; receipts must bind each pair to build, roads, profile/config/encoded values and matching file hash. Current disk hash is not proof of loaded graph contents.
+
+Any later separately authorised rollout review must inventory and back up the original **dataset + imported graph cache + profile/config identity**, retain matching candidate counterparts, prove paired routing/import identity, review resources and client/server compatibility, and separately authorise operational changes. This audit does none of those production actions. Rollback planning must restore the original matched pair and matching config/client contract, not mix components; source revert alone would reopen corrected origin/evidence gaps. No commands here swap files, rebuild graphs or restart services.
+
+Historical reports discussing geometry-only candidate review are not authorisation for a dataset-only deployment. This matched-pair requirement supersedes such an interpretation. No production GO can follow solely from green CI, HTTP200, accepted expressions or12D regional equality. GraphHopper remains the preferred eligible engine regardless of candidate acceptance or rollback decision.

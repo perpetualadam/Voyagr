@@ -1,0 +1,56 @@
+{
+  "kind": "RECORDED_GRAPH_HOPPER8_CAPTURE",
+  "reviewed": false,
+  "engine": {
+    "version": "8.0",
+    "profile": "car",
+    "dataset_sha256": null,
+    "graph_sha256": null,
+    "import_receipt_sha256": null,
+    "engine_build_sha256": null,
+    "road_source_sha256": null,
+    "oracle_sha256": null
+  },
+  "fixtures": [
+    {
+      "id": 0,
+      "http_status": null,
+      "request": null,
+      "request_sha256": null,
+      "response": null,
+      "response_sha256": null
+    },
+    {
+      "id": 1,
+      "http_status": null,
+      "request": null,
+      "request_sha256": null,
+      "response": null,
+      "response_sha256": null
+    },
+    {
+      "id": 2,
+      "http_status": null,
+      "request": null,
+      "request_sha256": null,
+      "response": null,
+      "response_sha256": null
+    },
+    {
+      "id": 3,
+      "http_status": null,
+      "request": null,
+      "request_sha256": null,
+      "response": null,
+      "response_sha256": null
+    },
+    {
+      "id": 4,
+      "http_status": null,
+      "request": null,
+      "request_sha256": null,
+      "response": null,
+      "response_sha256": null
+    }
+  ]
+}
