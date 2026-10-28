@@ -1,0 +1,28 @@
+{
+  "scope": "offline_repository_or_operator_supplied_file_only",
+  "sha256": "2244bd638c37aa356032f20645e43236c5b4e0dea48e0c0381ca3d7664a122af",
+  "bytes": 2943236,
+  "features": 8301,
+  "geometry_types": {
+    "Point": 8301
+  },
+  "counts": {
+    "feature_id_present": 0,
+    "reference_present": 8301,
+    "source_present": 0,
+    "acquisition_time_present": 0,
+    "road_identity_present": 0,
+    "direction_present": 0,
+    "average_section_identity_present": 0,
+    "duplicate_feature_ids": 0,
+    "duplicate_point_positions": 106,
+    "colocated_distinct_records": 106,
+    "reference_ids_at_multiple_positions": 7,
+    "colocated_different_type_candidates": 0
+  },
+  "topology_validation": "NOT_TESTED_USE_JTS",
+  "source_identity": "UNVERIFIED",
+  "acquisition_time": "UNKNOWN",
+  "road_association": "NOT_TESTED",
+  "installed_file_identity": "NOT_TESTED"
+}
