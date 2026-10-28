@@ -114,6 +114,22 @@ def bundle():
             f[key + "_sha256"] = hashlib.sha256(
                 json.dumps(f[key], sort_keys=True, separators=(",", ":")).encode()
             ).hexdigest()
+        transport = {
+            "schema_version": 1,
+            "reviewed": True,
+            "method": "POST",
+            "request_target": "/route",
+            "request_sha256": f["request_sha256"],
+            "response_sha256": f["response_sha256"],
+            "http_status": 200,
+            "evidence_sha256": "b" * 64,
+            "engine_build_sha256": "a" * 64,
+            "graph_sha256": "a" * 64,
+        }
+        f["transport"] = transport
+        f["transport_sha256"] = hashlib.sha256(
+            json.dumps(transport, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         fixtures.append(f)
     return {
         "kind": "SYNTHETIC_PROTOCOL_TEST",
@@ -324,6 +340,10 @@ def test_native_waypoint_mismatch_cannot_pass_a_recorded_fixture_protocol():
     f = value["fixtures"][0]
     f["response_sha256"] = hashlib.sha256(
         json.dumps(f["response"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    f["transport"]["response_sha256"] = f["response_sha256"]
+    f["transport_sha256"] = hashlib.sha256(
+        json.dumps(f["transport"], sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     out = replay.replay(value, tiny_area(), check_caches=False, check_browser=False)
     assert out["fixtures"][0]["native_matches_geometry"] is False
