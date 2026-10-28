@@ -170,13 +170,14 @@ def assess_route(route, requirements, hazards=None, *, fallback_source='', now=N
             'claim':'checked_available_data_only' if status=='SATISFIED' and active else 'avoidance_disabled' if not active else 'best_effort_or_unverified'}
 
 
-def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=None, endpoints=None):
+def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=None, endpoints=None, origin_context=None):
     """Copy before annotating: no mutation of shared in-memory/persistent cache values."""
     result = copy.deepcopy(payload)
     routes = result.get('routes')
     if not isinstance(routes,list):
         routes = [result] if result.get('geometry') else []
     routes = [r for r in routes if isinstance(r,dict)]
+    if 'routes' in result: result['routes']=routes
     for route in routes:
         if isinstance(route,dict):
             route['avoidance_assessment'] = assess_route(route,requirements,hazards,fallback_source=result.get('source',''),now=now)
@@ -236,12 +237,40 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
         routes.sort(key=lambda r:not r['avoidance_assessment']['geometry_valid'])
         if routes and not any(r['avoidance_assessment']['geometry_valid'] for r in routes):
             result.update(success=False,error_code='INCOMPLETE_ROUTE',error='Route does not include every requested visit in order.',geometry_complete=False)
+    if origin_context is not None:
+        from voyagr.services.routing.origin_integrity import assess_origin
+        from voyagr.utils import request_budget
+        with request_budget.stage('origin_validation'):
+            for route in routes:
+                origin = assess_origin(route, origin_context, now)
+                # Every leg has independent requested endpoints, including intermediate stops.
+                leg_origins = []
+                from voyagr.services.routing.origin_integrity import coordinate
+                journey_points = [origin_context.get('start')] + [coordinate(p) for p in (waypoints or [])] + [origin_context.get('end')]
+                origin_legs = route.get('legs') or result.get('legs') or []
+                for leg_index, leg in enumerate(origin_legs):
+                    bound = len(origin_legs) == len(journey_points)-1
+                    context = dict(origin_context, start=journey_points[leg_index] if bound else None,
+                                   end=journey_points[leg_index+1] if bound else None, accuracy_m=None)
+                    evidence = assess_origin(leg, context, now)
+                    leg['origin_integrity'] = evidence
+                    leg_origins.append(evidence)
+                if leg_origins:
+                    origin['legs'] = leg_origins
+                    if any(not a['navigation_allowed'] for a in leg_origins):
+                        origin.update(navigation_allowed=False, status='UNVERIFIED', reason='unverified_leg_endpoint')
+                a = route['avoidance_assessment']
+                a['origin_integrity_required'] = True
+                a['origin_integrity'] = origin
+                if not origin['navigation_allowed']:
+                    a.update(automatic_selection_allowed=False, requires_acceptance=True, claim='origin_connectivity_unverified')
+                    if a['status']=='SATISFIED': a['status']='UNVERIFIED'
     from voyagr.services.routing.route_variety import is_graphhopper_optimised
     mandatory = any(r['enabled'] and r['mode']=='mandatory' for r in requirements)
     # Product display policy follows independent assessment, never proximity counts.
     routes.sort(key=lambda r:(
         not r['avoidance_assessment']['geometry_valid'],
-        mandatory and not r['avoidance_assessment']['automatic_selection_allowed'],
+        not r['avoidance_assessment']['automatic_selection_allowed'],
         not is_graphhopper_optimised(r),
     ))
     if routes and is_graphhopper_optimised(routes[0]) and routes[0]['avoidance_assessment']['automatic_selection_allowed']:
@@ -269,9 +298,13 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
             'provider_limitations':route.get('provider_limitations',[]),
             'geometry_binding':assessment.get('geometry_binding'),
             'automatic_selection_allowed':assessment['automatic_selection_allowed'],
+            'origin_integrity':assessment.get('origin_integrity'),
             'ranking_reason':'blocked_mandatory_or_geometry' if not assessment['automatic_selection_allowed'] else
                 'graphhopper_primary_policy' if is_graphhopper_optimised(route) else 'fallback_or_alternative',
         }
+    if origin_context is not None and routes and not any(r['avoidance_assessment']['automatic_selection_allowed'] for r in routes):
+        result['navigation_state'] = 'UNRESOLVED'
+        result['routing_warning'] = 'Navigation cannot start: origin or mandatory route safety is unresolved. Recalculate from the actual location.'
     usable = [r for r in routes if r['avoidance_assessment']['automatic_selection_allowed']]
     result['avoidance_requirements'] = requirements
     result['avoidance_request_fingerprint'] = requirement_fingerprint(requirements)
@@ -285,7 +318,7 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
             for field in ('provider_limitations', 'provider_capabilities', 'camera_evidence', 'route_comparison'):
                 result.pop(field, None)
                 if field in primary: result[field] = copy.deepcopy(primary[field])
-            for key in ('geometry','geometry_precision','maneuvers','fuel_cost','fuel_litres','toll_cost','caz_cost','hazards','hazard_count'):
+            for key in ('source','name','geometry','geometry_precision','maneuvers','fuel_cost','fuel_litres','toll_cost','caz_cost','hazards','hazard_count'):
                 if key in primary: result[key]=primary[key]
             if 'distance_km' in primary: result['distance']=f"{primary['distance_km']:.2f} km"
             if 'duration_minutes' in primary: result['time']=f"{primary['duration_minutes']:.0f} minutes"

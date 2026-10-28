@@ -514,8 +514,7 @@
         var geocodedStart = geocodedResult.start;
         var geocodedEnd = geocodedResult.end;
 
-        console.log('[calculateRoute] Geocoded start:', geocodedStart);
-        console.log('[calculateRoute] Geocoded end:', geocodedEnd);
+        console.log('[calculateRoute] Endpoints resolved');
 
         applyCalculateRouteLoadingFromPlan(
             RR.buildCalculateRouteLoadingApplyPlan(RR.buildCalculateRouteLoadingExecutePlan())
@@ -536,7 +535,7 @@
             ...(integrity ? integrity.fetchOptions(ticket) : {}),
             method: fetchPlan.method,
             headers: fetchPlan.headers,
-            body: JSON.stringify(integrity ? integrity.augment(fetchPlan.body, localStorage) : fetchPlan.body),
+            body: JSON.stringify(integrity ? integrity.augment(fetchPlan.body, localStorage, geocodedStart) : fetchPlan.body),
         })
             .then(function (response) { return applyCalculateRouteFetchHttpResponse(response, fetchPlan); })
             .then(function (data) {

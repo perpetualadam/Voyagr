@@ -159,6 +159,7 @@ def stage(name):
         "valhalla",
         "osrm",
         "assessment",
+        "origin_validation",
         "serialization",
     }:
         raise ValueError("Unknown routing stage")

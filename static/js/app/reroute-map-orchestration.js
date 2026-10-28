@@ -234,7 +234,7 @@
 
     function updateRouteOnMap(newRoute) {
         var integrity = root.VoyagrAvoidanceIntegrity;
-        if (!integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
+        if (!integrity && ((newRoute && newRoute.avoidance_assessment && newRoute.avoidance_assessment.origin_integrity_required) || localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
             rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
             setRerouteInProgress(false);
             return {ok:false,scheduleRetry:false,reason:'avoidance_not_established'};

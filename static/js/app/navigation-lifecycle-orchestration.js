@@ -545,7 +545,7 @@
             storage:localStorage, offline:navigator.onLine===false,
             showStatus:rt().call.showStatus, confirm:message => root.confirm(message),
         })) return false;
-        if (!integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
+        if (!integrity && ((mergedRoute && mergedRoute.avoidance_assessment && mergedRoute.avoidance_assessment.origin_integrity_required) || localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
             rt().call.showStatus('Avoidance verification unavailable; navigation not started.', 'warning');
             return false;
         }

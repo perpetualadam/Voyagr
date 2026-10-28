@@ -8,7 +8,7 @@ const RerouteMap=require('../app/reroute-map-orchestration.js');
 
 function assessed(status='SATISFIED',mode='mandatory') {
     return {geometry:'shape',name:'UK A1',avoidance_assessment:{version:1,status,
-        checked_at:Date.now()/1000, geometry_valid:true, requires_acceptance:status!=='SATISFIED',
+        checked_at:Date.now()/1000, origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false}, geometry_valid:true, requires_acceptance:status!=='SATISFIED',
         automatic_selection_allowed:status==='SATISFIED',claim:'checked_available_data_only',
         requirements:[{category:'speed_cameras',enabled:true,mode,status}]},
         avoidance_preferences_snapshot:AI.snapshot(localStorage)};
@@ -50,8 +50,8 @@ test('legacy offline route without assessment is unverified and cannot silently 
     expect(AI.summary({geometry:'legacy'})).toContain('Unverified');
 });
 
-test('disabled/default preference mode does not block ordinary navigation',()=>{
-    expect(AI.gate({geometry:'legacy'}, {storage:localStorage,automatic:true})).toBe(true);
+test('legacy origins require recalculation while assessed preference routes remain usable',()=>{
+    expect(AI.gate({geometry:'legacy'}, {storage:localStorage,automatic:true})).toBe(false);
     const r=assessed('UNVERIFIED','preference');r.avoidance_assessment.requires_acceptance=false;
     expect(AI.gate(r,{storage:localStorage,automatic:true})).toBe(true);
 });

@@ -22,8 +22,19 @@
     }
     function current(ticket, storage) { return !!ticket && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage); }
     function invalidate() { revision++; cancel(activeTicket); }
-    function augment(body, storage) {
+    function augment(body, storage, fix) {
         var next = Object.assign({},body);
+        // Only fresh matching GPS evidence, never a geocoded address or old marker accuracy.
+        delete next.origin_accuracy_m;
+        if ((!fix || !Number.isFinite(fix.timestamp)) && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getAcceptedOriginFix) fix=root.VoyagrGpsOrchestration.getAcceptedOriginFix();
+        var start=typeof next.start==='string' ? next.start.split(',').map(Number) : [];
+        var at=fix && (fix.timestamp || fix.observed_at_ms);
+        if (fix && start.length===2 && Number.isFinite(at) && Date.now()-at>=-1000 && Date.now()-at<=15000 &&
+            Number.isFinite(fix.accuracy) && fix.accuracy>0 && fix.accuracy<=150 &&
+            Number.isFinite(fix.lat) && Number.isFinite(fix.lon) &&
+            Math.hypot((start[0]-fix.lat)*111195,(start[1]-fix.lon)*111195*Math.cos(start[0]*Math.PI/180))<=2) {
+            next.origin_accuracy_m=fix.accuracy;
+        }
         var mode = storage.getItem('pref_avoidance_mode') || 'preference';
         next.avoidance_mode = mode; // Invalid values are rejected by server; never silently downgrade.
         var raw = storage.getItem('pref_avoidance_requirements');
@@ -62,6 +73,22 @@
     function decision(route, options) {
         options = options || {};
         var assessment = route && route.avoidance_assessment;
+        var origin=assessment && assessment.origin_integrity;
+        if (!origin || origin.navigation_allowed!==true || origin.transition_verified===true ||
+            origin.status!=='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE') {
+            return {allowed:false,acceptance:false,message:'Route start or stop continuity is unverified. Recalculate from your actual location; navigation cannot start.'};
+        }
+        var originAge=Date.now()/1000-origin.checked_at;
+        if (!Number.isFinite(originAge) || originAge<0 || originAge>600 || !Number.isFinite(assessment.checked_at) || assessment.checked_at<=0 || options.offline) {
+            return {allowed:false,acceptance:false,message:'Route start validation is stale or offline. Recalculate online before navigation.'};
+        }
+        var gps=root.VoyagrGpsOrchestration;
+        var actual=gps && gps.getAcceptedOriginFix && gps.getAcceptedOriginFix();
+        var requested=origin.requested_origin;
+        if (actual && Number.isFinite(actual.timestamp) && Date.now()-actual.timestamp<=15000 && Date.now()-actual.timestamp>=-1000 &&
+            (!Array.isArray(requested) || Math.hypot((requested[0]-actual.lat)*111195,(requested[1]-actual.lon)*111195*Math.cos(actual.lat*Math.PI/180))>2)) {
+            return {allowed:false,acceptance:false,message:'Your position changed since route calculation. Recalculate from the actual location.'};
+        }
         var requirements = assessment && assessment.requirements || route && route.avoidance_requirements || [];
         var mandatory = options.mandatory || requirements.some(function(r) { return r.enabled && r.mode==='mandatory'; });
         if (assessment && assessment.geometry_binding && assessment.geometry_binding!==geometryBinding(route)) return {allowed:false,acceptance:false,message:'Route geometry changed after assessment; recalculate before navigation.'};
@@ -113,7 +140,7 @@
         var a=route && route.avoidance_assessment;
         var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
         var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
-        if (!a) return 'Unverified: avoidance has not been checked for this route.'+limitation;
+        if (!a || !a.origin_integrity || a.origin_integrity.navigation_allowed!==true) return 'Unverified route start: navigation is unresolved. Recalculate from the actual location.'+limitation;
         if (a.claim==='avoidance_disabled') return 'Avoidance disabled.'+limitation;
         var labels={SATISFIED:'Verified against available data only',VIOLATED:'Known conflict',UNVERIFIED:'Unverified',UNSUPPORTED:'Unsupported'};
         var unresolved=(a.requirements || []).filter(function(r) { return r.enabled && r.status!=='SATISFIED'; });

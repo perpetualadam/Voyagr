@@ -479,7 +479,7 @@ def build_multidrop_route(
             "eta": arrival_dt.isoformat() if arrival_dt else None,
         }
 
-        for field in ('provider_limitations', 'provider_capabilities'):
+        for field in ('provider_limitations', 'provider_capabilities', 'provider_snapped_waypoints', 'provider_snap_precision'):
             if field in leg_data: leg_info[field] = leg_data[field]
         if leg_data.get('road_segments'):
             leg_info['road_segments']=leg_data['road_segments']
@@ -650,6 +650,7 @@ def _graphhopper_leg(
                 m['time_seconds'] = m['time']
 
         return {
+            **{k: gh[k] for k in ("provider_snapped_waypoints", "provider_snap_precision") if k in gh},
             "provider_limitations": gh.get('provider_limitations', []),
             "provider_capabilities": gh.get('provider_capabilities', {}),
             "distance_km": gh.get('distance_km', 0),
