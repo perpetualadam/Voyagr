@@ -137,3 +137,45 @@ PY
 ```
 
 The example deliberately requires a dedicated exact camera75 hard rule; a combined reviewed model needs independent rule review rather than weakening that assertion or stripping other restrictions. Keep requested points/restrictions from the intended fixture; do not disable avoidance. Preserve all old capture files separately. Independently compare raw byte hashes, strict parsed objects and intended request/response/status/build/graph binding, then derive canonical fixture and separate transport hashes. The recorder requests identity encoding and retains undecoded response entity bytes (excluding HTTP transfer framing); an unexpected content encoding stays raw/unparsed pending review. Raw recording bytes belong only in the restricted private evidence file. `reviewed:false` must remain until independent review; no successful capture or printed message certifies routing safety or production GO.
+
+## Independent offline road diagnostic
+
+See [the technical audit](VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md) for the
+supported topology subset, exact schemas and unverified coverage limitations.
+This procedure authorizes no server access. Use existing private exports/captures
+and independently reviewed receipts; do not download OSM or contact a routing engine.
+Install the existing `requirements-geometry.txt` in the disposable checkout first.
+Keep private inputs outside git, with `umask 077`. The tool only reads them.
+
+The private specification is an object with `fixture_id`, `origin`, `target`, and an
+optional `candidate` list. Endpoints each have `way`, zero-based `segment`, ordered
+`nodes:[start_id,end_id]` and `coordinate:[latitude,longitude]`. Origin must match
+the recorded requested origin; target must match the recorded native snapped origin.
+Use genuine independently checked IDs/coordinates, not chat summaries. Each candidate
+entry is `[way_id,segment_index,+1_or_minus_1]`; start with the actual projected
+origin partial segment, never a downstream junction. The separate reviewed binding
+receipt must contain all fields documented in the audit. No fill-in receipt is
+provided: identities must come from genuine private evidence.
+
+```bash
+umask 077
+.venv/bin/python scripts/diagnose-phase12fb-road-oracle.py \
+  --export /tmp/private-osm-export.json \
+  --capture /tmp/phase12fb-private-bundle.json \
+  --receipt /tmp/private-independent-binding.json \
+  --specification /tmp/private-segment-specification.json \
+  > /tmp/private-road-diagnostic.json
+```
+
+Stdout contains sanitized classifications/counts/digests and projection distances;
+stderr contains a fixed human summary. Neither includes coordinates, OSM tags,
+paths, candidate edges or response bodies. Exit 0 means diagnostic execution only;
+exit 2 means refusal/unavailability. Every output stays unreviewed and navigation
+unauthorized. Treat even sanitized hashes as private evidence until reviewed.
+
+To attach a diagnostic to the existing replay, add `--oracle-export`,
+`--oracle-receipt`, `--oracle-specification` to its existing `--bundle`/`--areas`
+command. All three are required together. Normal replay still needs its independently
+accepted `oracle_sha256`; the standalone diagnostic can prepare evidence before
+that acceptance reference exists and never generates it. Missing reviewed evidence
+is a blocker, never a reason to fabricate a hash or modify an old capture.
