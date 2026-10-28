@@ -144,6 +144,9 @@ def assess_route(route, requirements, hazards=None, *, fallback_source='', now=N
                 elif field and len(index.attributes)==len(coords)-1 and all(a.get(field) is False for a in attributes) and isinstance(route.get('road_attributes_verified_at'),(int,float)) and 0<=now-route['road_attributes_verified_at']<=600:
                     row.update(status='SATISFIED',coverage='AVAILABLE',verification='checked_route_attributes')
                 elif engine=='OSRM': row['status']='UNSUPPORTED'
+            limitation = next((item for item in route.get('provider_limitations', []) if item.get('category') == category), None)
+            if limitation:
+                row.update(engine_capability='not_verified', provider_limitation=limitation['reason'])
             if not coords: row.update(status='UNVERIFIED',verification='invalid_or_missing_geometry')
         rows.append(row)
     active = [r for r in rows if r['enabled']]
@@ -177,6 +180,11 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
             if not isinstance(leg,dict): leg = {}
             leg['avoidance_assessment'] = assess_route(leg,requirements,hazards,now=now)
             assessments.append(leg['avoidance_assessment'])
+        limitations = []
+        for leg in legs:
+            for item in leg.get('provider_limitations', []):
+                if item not in limitations: limitations.append(item)
+        if limitations: result['provider_limitations'] = limitations
         aggregate = copy.deepcopy(assessments[0])
         aggregate['scope'] = 'all_legs'
         aggregate['geometry_valid'] = all(a['geometry_valid'] for a in assessments)
@@ -185,6 +193,8 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
         for i, row in enumerate(aggregate['requirements']):
             peers = [a['requirements'][i] for a in assessments]
             row['status'] = next((status for status in ('VIOLATED','UNSUPPORTED','UNVERIFIED') if any(p['status']==status for p in peers)), 'SATISFIED')
+            limitation = next((p.get('provider_limitation') for p in peers if p.get('provider_limitation')), None)
+            if limitation: row.update(engine_capability='not_verified', provider_limitation=limitation)
             row['conflicts'] = sum(p['conflicts'] for p in peers)
             row['uncertain_matches'] = sum(p['uncertain_matches'] for p in peers)
             if any(p['coverage']!='AVAILABLE' for p in peers): row['coverage']='UNKNOWN'
@@ -196,6 +206,7 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
         except (IncompleteJourney,KeyError,TypeError,ValueError): expected_binding = None
         for route in routes:
             a = copy.deepcopy(aggregate)
+            if limitations: route['provider_limitations'] = copy.deepcopy(limitations)
             a['geometry_binding'] = geometry_binding(route)
             if not expected_binding or a['geometry_binding']!=expected_binding or geometry_binding(result)!=expected_binding:
                 a.update(geometry_valid=False,automatic_selection_allowed=False,requires_acceptance=True,
@@ -225,6 +236,9 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
         result['avoidance_assessment']=routes[0]['avoidance_assessment']
         if 'routes' in result:
             primary = routes[0]
+            for field in ('provider_limitations', 'provider_capabilities'):
+                result.pop(field, None)
+                if field in primary: result[field] = copy.deepcopy(primary[field])
             for key in ('geometry','geometry_precision','maneuvers','fuel_cost','fuel_litres','toll_cost','caz_cost','hazards','hazard_count'):
                 if key in primary: result[key]=primary[key]
             if 'distance_km' in primary: result['distance']=f"{primary['distance_km']:.2f} km"
@@ -236,6 +250,9 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
                 'duration_detour_percent':round((duration/fastest-1)*100,1) if fastest and isinstance(duration,(int,float)) else None,
                 'maneuver_count':len(route.get('maneuvers') or []), 'ranking_changed':bool(any(r['enabled'] and r['mode']=='mandatory' for r in requirements))}
 
+    if result.get('provider_limitations'):
+        result['routing_degraded'] = True
+        result['routing_warning'] = (str(result.get('routing_warning', '')) + ' GraphHopper could not apply one or more requested preferences; review this route as best effort.').strip()
     if any(r.get('avoidance_assessment',{}).get('status')!='SATISFIED' for r in routes):
         result['routing_degraded']=True
         warning='Avoidance is best effort or unverified against available data, not guaranteed; review route limitations before navigation.'

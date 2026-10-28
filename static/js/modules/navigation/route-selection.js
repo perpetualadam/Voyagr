@@ -1823,6 +1823,8 @@
             source: route.source || routeSource,
             leg_geometry_ranges:route.leg_geometry_ranges,
             geometry_complete:route.geometry_complete,
+            provider_limitations: route.provider_limitations,
+            provider_capabilities: route.provider_capabilities,
             avoidance_assessment: route.avoidance_assessment,
             avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
             avoidance_tradeoff: route.avoidance_tradeoff,
@@ -1863,6 +1865,8 @@
             geometry: data.geometry,
             maneuvers: data.maneuvers || [],
             source: data.source || 'Unknown',
+            provider_limitations:data.provider_limitations,
+            provider_capabilities:data.provider_capabilities,
             avoidance_assessment:data.avoidance_assessment,
             avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
         }];
@@ -2444,6 +2448,8 @@
                 hazards: sel.hazards || routeData.hazards || [],
                 leg_geometry_ranges:sel.leg_geometry_ranges,
                 geometry_complete:sel.geometry_complete,
+                provider_limitations: sel.provider_limitations,
+                provider_capabilities: sel.provider_capabilities,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
                 avoidance_preferences_snapshot: sel.avoidance_preferences_snapshot || routeData.avoidance_preferences_snapshot,
@@ -2465,6 +2471,8 @@
         return {
             ...p,
             ...route,
+            provider_limitations: route.provider_limitations,
+            provider_capabilities: route.provider_capabilities,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
             geometry_precision: Number.isFinite(route.geometry_precision)
