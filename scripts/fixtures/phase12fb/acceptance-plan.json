@@ -1,0 +1,97 @@
+{
+  "reviewed": false,
+  "scope": "OPERATOR_PLAN_NOT_GRAPH_BACKED_FIXTURES",
+  "cases": [
+    {
+      "category": "origin_inside",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "destination_inside",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "origin_boundary",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "route_boundary_touch",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "near_miss",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "one_way",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "divided_carriageways",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "disconnected_roads",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "all_alternatives_blocked",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "genuine_no_path",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "validation_failure",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "deadline_exhaustion",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    },
+    {
+      "category": "inside_recalculation",
+      "status": "NOT_TESTED",
+      "road_oracle_sha256": null,
+      "graph_revision_sha256": null,
+      "private_input_path": null
+    }
+  ]
+}
