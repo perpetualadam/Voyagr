@@ -1,0 +1,53 @@
+{
+  "scope": "OFFICIAL_UPSTREAM_SOURCE_REVIEW_NOT_INSTALLED_ENGINE_ACCEPTANCE",
+  "upstream_commit": "1e224ae6bb1807ebc5037fb8de07c4f7cfaee749",
+  "tag": "8.0",
+  "files": [
+    {
+      "path": "web-bundle/src/main/java/com/graphhopper/resources/RouteResource.java",
+      "sha256": "ca05340b671b26aa3dcb399e395212c87158d787f6ffc8a0ad84b340703c85db",
+      "lines": [
+        108,
+        167,
+        170
+      ],
+      "url": "https://github.com/graphhopper/graphhopper/blob/1e224ae6bb1807ebc5037fb8de07c4f7cfaee749/web-bundle/src/main/java/com/graphhopper/resources/RouteResource.java"
+    },
+    {
+      "path": "web-api/src/main/java/com/graphhopper/GHRequest.java",
+      "sha256": "4351b018e7496054663b0acdbe1fff49976a68f92acd3fceba32ad5291da77bd",
+      "lines": [
+        183
+      ],
+      "url": "https://github.com/graphhopper/graphhopper/blob/1e224ae6bb1807ebc5037fb8de07c4f7cfaee749/web-api/src/main/java/com/graphhopper/GHRequest.java"
+    },
+    {
+      "path": "core/src/main/java/com/graphhopper/routing/Router.java",
+      "sha256": "3c0c4cbbc326f443e000d354b66b2fd8ba6bc2bfa23cd531e9179c6dad4c8ab6",
+      "lines": [
+        88,
+        183,
+        334,
+        455
+      ],
+      "url": "https://github.com/graphhopper/graphhopper/blob/1e224ae6bb1807ebc5037fb8de07c4f7cfaee749/core/src/main/java/com/graphhopper/routing/Router.java"
+    },
+    {
+      "path": "web-bundle/src/main/java/com/graphhopper/http/GHRequestTransformer.java",
+      "sha256": "dba1bd8baf3a38dde9bf205c2feb45a9296a2cda3e287a3ad14070a0a879729b",
+      "lines": [
+        22
+      ],
+      "url": "https://github.com/graphhopper/graphhopper/blob/1e224ae6bb1807ebc5037fb8de07c4f7cfaee749/web-bundle/src/main/java/com/graphhopper/http/GHRequestTransformer.java"
+    },
+    {
+      "path": "web-bundle/src/main/java/com/graphhopper/http/GraphHopperBundle.java",
+      "sha256": "d63cab9a0c18ef3893cedc11f5ab9bf7d353beb45f65795c3590df46c2e5d449",
+      "lines": [
+        144,
+        147
+      ],
+      "url": "https://github.com/graphhopper/graphhopper/blob/1e224ae6bb1807ebc5037fb8de07c4f7cfaee749/web-bundle/src/main/java/com/graphhopper/http/GraphHopperBundle.java"
+    }
+  ]
+}

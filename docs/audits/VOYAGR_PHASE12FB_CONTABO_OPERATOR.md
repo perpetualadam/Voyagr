@@ -30,7 +30,7 @@ Rehashing alone does not turn an edited body into a genuine capture; retain orig
 
 ## 3. Replay existing captures — no engine calls
 
-Use a disposable offline checkout with repository Python web/geometry dependencies and Node installed. The harness imports the real Flask app and uses deterministic mocked cache backends; do not run it inside a live production worker or against production databases. Backend import may initialise only the disposable local development DB. All outbound HTTP during cache replay is explicitly refused.
+Use a disposable offline checkout with repository Python web/geometry dependencies and Node installed. The current harness uses a minimal Flask fixture around the shipped production response gate with cache-tier stubs; it does not import the full application or initialise a database. Network/SQLite/application DB operations are forbidden during replay. This does not test production cache storage lookups. Do not run it inside a live production worker. See TRANSPORT_COMPATIBILITY for the separately reviewed transport requirement.
 
 ```bash
 .venv/bin/python scripts/replay-phase12fb-origin.py
@@ -56,3 +56,84 @@ The thirteen slots in `scripts/fixtures/phase12fb/acceptance-plan.json` are **un
 In an approved isolated app/PWA, replay actual captures through initial preview, manual selection, Start Navigation, moving GPS reroute, cache hits, multi-stop/current visits, stale/offline resume, cancellation/late result and voice/progress pausing. Verify quarantined routes are not applied and cannot be confirmed into navigation. Verify eligible GH remains first and each eligible alternative retains its own limitations. No physical-device result was obtained here.
 
 Review backup/rollback for the original **dataset+compatible imported graph+profile/config identity** together. Candidate deployment must use its matched imported candidate graph. A source-only revert reopens evidence gaps; a GeoJSON-only swap against the old graph is not an acceptable proposal. No backup restoration, swap, service restart, deployment or production change is authorised by this procedure. Share redacted aggregate results, not private fixtures/coordinates, before any separate release decision.
+
+
+## Transport compatibility addendum — preserve original captures
+
+The body/query distinction and sidecar schema are specified in [transport compatibility](VOYAGR_PHASE12FB_TRANSPORT_COMPATIBILITY.md). Keep existing bodies/responses/hashes intact and reviewed false until independent review. Every fixture now needs exact recorded method/target, request/response/build/graph bindings, an independent transport evidence SHA and separate sidecar SHA. The raw receipt should retain exact request/response byte hashes and recording hop; canonical object hashes remain the existing immutable fixture hashes.
+
+For URL-only POST, stock GH8 does not merge query hints. Independently reviewed adapter/effective-hint proof or global absence of loaded CH graphs is necessary. If those records are missing, **require new separate captures**, not retrospective guesses. Do not manufacture source/import/oracle receipts.
+
+Fresh bounded capture procedure (operator-run isolated lab only, NOT_EXECUTED here):
+
+1. Verify the approved isolated service, build/graph/import identities read-only. Do not access production, restart, rebuild or swap files.
+2. Prepare a **new** private request file with car, original reviewed route points/camera75 hard-zero rule and JSON boolean `ch.disable:true`. Retain old files/hashes untouched. Matching URL query true is optional. This is a fresh request, not a repaired historical capture.
+3. Use one metadata GET plus one POST at most, no retry/redirect,2s connect/5s read,30s cooperative batch and2MiB response bound as in Phase12F. Capture the actual prepared/sent request's method, complete origin-form target, exact body bytes, HTTP status and full response bytes privately. In a Requests-based recorder use `PreparedRequest.method`, `.path_url` and `.body`, verify `response.request` matches, and preserve the stream-bounded response before JSON decoding. Do not log auth headers or secrets.
+4. Write the **new** complete private record exclusively (no overwrite), with reviewed false and original byte hashes. Store it outside git with restrictive permissions. Independently verify method/target/body/response/status/build/graph bindings and strict JSON (no duplicate keys) before filling the new sidecar/receipt hashes. Do not replace the existing five with new results until independently reviewed as the intended five cases.
+5. Leave bundle/sidecar reviewed false while review is pending. When independently approved, copy references/attestations into a separate versioned wrapper, preserving each original request/response object and its established hash. Run the existing offline CLI. Query-only legacy captures without the required independently established effect remain refused.
+
+No fresh capture is authorised on production. No missing transport/source/import/road oracle is filled automatically. Any response change or mismatch with the expected five metrics stays unverified pending review.
+
+Example **fresh-only** one-POST recorder, for the approved isolated lab (NOT_EXECUTED here). `/tmp/phase12fb-new-request.json` must be a separate reviewed request file; this command never overwrites it or an existing output. Obtain metadata/import identity with the separate bounded read-only check first. Do not point this at production. The output is a private, unreviewed recording, not an automatic replay bundle or receipt/oracle substitute.
+
+```bash
+umask 077
+ISOLATED_GH_URL=http://127.0.0.1:18989 .venv/bin/python - <<'PY'
+import base64,hashlib,json,os,time
+from pathlib import Path
+import requests
+from voyagr.utils.graphhopper_acceptance import isolated_origin,checked_request
+
+def unique(pairs):
+    value={}
+    for k,v in pairs:
+        if k in value:raise ValueError('duplicate_key')
+        value[k]=v
+    return value
+try:
+    origin=isolated_origin(os.environ['ISOLATED_GH_URL'])
+    raw=Path('/tmp/phase12fb-new-request.json').read_bytes()
+    if len(raw)>65536:raise ValueError('request_limit')
+    body=json.loads(raw,object_pairs_hook=unique)
+    checked_request({'points':body.get('points')})
+    if body.get('profile')!='car' or body.get('ch.disable') is not True:raise ValueError('required_flags')
+    if not any(str(r.get('multiply_by'))=='0' and r.get('if')=='in_camera_area_75' for r in body.get('custom_model',{}).get('priority',[])):
+        raise ValueError('review_camera75_hard_rule')
+    started=time.monotonic()
+    with requests.Session() as session:
+        session.trust_env=False
+        prepared=session.prepare_request(requests.Request('POST',origin+'/route',params={'ch.disable':'true'},json=body,headers={'Accept-Encoding':'identity'}))
+        sent=prepared.body.encode() if isinstance(prepared.body,str) else prepared.body
+        with session.send(prepared,stream=True,allow_redirects=False,timeout=(2,5)) as response:
+            if response.request.method!=prepared.method or response.request.path_url!=prepared.path_url or response.request.body!=prepared.body:
+                raise ValueError('request_binding')
+            received=bytearray()
+            for chunk in response.raw.stream(16384,decode_content=False):
+                if time.monotonic()-started>30 or len(received)+len(chunk)>2*1024*1024:raise ValueError('response_limit')
+                received.extend(chunk)
+            if time.monotonic()-started>30:raise ValueError('late_response')
+            status=response.status_code
+            encoding=response.headers.get('Content-Encoding','identity')
+    response_raw=bytes(received)
+    try:
+        if encoding.strip().lower() not in ('','identity'):raise ValueError('encoded_response_needs_review')
+        parsed=json.loads(response_raw,object_pairs_hook=unique)
+    except ValueError:parsed=None  # Raw error bytes are preserved privately, never called a valid route.
+    record={'reviewed':False,'method':prepared.method,'request_target':prepared.path_url,
+            'request':body,'response':parsed,'http_status':status,'response_content_encoding':encoding,
+            'request_body_base64':base64.b64encode(sent).decode(),
+            'response_body_base64':base64.b64encode(response_raw).decode(),
+            'source_request_file_sha256':hashlib.sha256(raw).hexdigest(),
+            'wire_request_body_sha256':hashlib.sha256(sent).hexdigest(),
+            'wire_response_body_sha256':hashlib.sha256(response_raw).hexdigest()}
+    encoded=json.dumps(record,allow_nan=False).encode()
+    descriptor=os.open('/tmp/phase12fb-new-private-record.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(descriptor,'wb') as output:output.write(encoded)
+    print('FRESH_CAPTURE_STORED_REVIEW_REQUIRED')
+except Exception as error:
+    print('CAPTURE_REFUSED_OR_FAILED '+type(error).__name__)
+    raise SystemExit(1)
+PY
+```
+
+The example deliberately requires a dedicated exact camera75 hard rule; a combined reviewed model needs independent rule review rather than weakening that assertion or stripping other restrictions. Keep requested points/restrictions from the intended fixture; do not disable avoidance. Preserve all old capture files separately. Independently compare raw byte hashes, strict parsed objects and intended request/response/status/build/graph binding, then derive canonical fixture and separate transport hashes. The recorder requests identity encoding and retains undecoded response entity bytes (excluding HTTP transfer framing); an unexpected content encoding stays raw/unparsed pending review. Raw recording bytes belong only in the restricted private evidence file. `reviewed:false` must remain until independent review; no successful capture or printed message certifies routing safety or production GO.

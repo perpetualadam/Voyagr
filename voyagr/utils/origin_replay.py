@@ -7,6 +7,8 @@ import re
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
+from contextlib import contextmanager
+from urllib.parse import urlsplit, parse_qsl
 
 from voyagr.services.routing.origin_integrity import assess_origin, area_relation
 from voyagr.services.routing.journey_geometry import decode_geometry, distance
@@ -31,7 +33,17 @@ def unexecuted():
 
 
 def load_bundle(path, area_path):
-    _, bundle = read_json(path, 16 * 1024 * 1024)
+    raw_bundle, _ = read_json(path, 16 * 1024 * 1024)
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate_capture_json_key")
+            result[key] = value
+        return result
+
+    bundle = json.loads(raw_bundle, object_pairs_hook=unique_object)
     raw, areas = read_json(area_path)
     digest = hashlib.sha256(raw).hexdigest()
     if (
@@ -40,6 +52,136 @@ def load_bundle(path, area_path):
     ):
         raise ValueError("dataset_binding")
     return bundle, areas
+
+
+def _digest(value):
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def transport_mode(fixture, engine):
+    """Bind independent transport evidence; never rewrite a captured body.
+
+    Stock GH8 POST does not merge URI hints. Query-only captures need additional
+    installed-build/graph evidence, not a successful status or URL alone.
+    """
+    t = fixture.get("transport")
+    if (
+        not isinstance(t, dict)
+        or type(t.get("schema_version")) is not int
+        or t.get("schema_version") != 1
+        or t.get("reviewed") is not True
+        or fixture.get("transport_sha256") != _digest(t)
+    ):
+        raise ValueError("reviewed_transport_required")
+    if t.get("method") != "POST" or t.get("http_status") != fixture.get("http_status"):
+        raise ValueError("transport_method_or_status")
+    for key in ("request_sha256", "response_sha256"):
+        if t.get(key) != fixture.get(key):
+            raise ValueError("transport_capture_binding")
+    for key in ("engine_build_sha256", "graph_sha256"):
+        if t.get(key) != engine.get(key):
+            raise ValueError("transport_engine_binding")
+    if not isinstance(t.get("evidence_sha256"), str) or not re.fullmatch(
+        "[0-9a-f]{64}", t["evidence_sha256"]
+    ):
+        raise ValueError("transport_receipt_required")
+    target = t.get("request_target")
+    if (
+        not isinstance(target, str)
+        or not 1 <= len(target) <= 4096
+        or any(ord(c) < 33 or ord(c) > 126 for c in target)
+        or re.search(r"%(?![0-9a-fA-F]{2})", target)
+    ):
+        raise ValueError("ambiguous_request_target")
+    u = urlsplit(target)
+    if u.scheme or u.netloc or u.path != "/route" or u.fragment or "#" in target:
+        raise ValueError("origin_form_route_target_required")
+    pairs = parse_qsl(
+        u.query, keep_blank_values=True, strict_parsing=True, max_num_fields=32
+    )
+    if any(any(ord(c) < 33 or ord(c) > 126 for c in k + v) for k, v in pairs):
+        raise ValueError("ambiguous_request_target")
+    if any(k.lower() == "ch.disable" and k != "ch.disable" for k, v in pairs):
+        raise ValueError("ambiguous_ch_disable")
+    query = [v for k, v in pairs if k == "ch.disable"]
+    if len(query) > 1 or any(v not in ("true", "false") for v in query):
+        raise ValueError("ambiguous_ch_disable")
+    request = fixture["request"]
+    if (
+        any(k.lower() == "ch.disable" and k != "ch.disable" for k in request)
+        or isinstance(request.get("hints"), dict)
+        and "ch.disable" in request["hints"]
+    ):
+        raise ValueError("ambiguous_ch_disable")
+    present = "ch.disable" in request
+    body = request.get("ch.disable")
+    if present and type(body) is not bool:
+        raise ValueError("ambiguous_ch_disable")
+    if present and query and body != (query[0] == "true"):
+        raise ValueError("conflicting_ch_disable")
+    if present and body is True:
+        return "BODY_TRUE" if not query else "BODY_AND_QUERY_TRUE"
+    if present or query != ["true"]:
+        raise ValueError("missing_ch_disable")
+    proof = t.get("routing_evidence")
+    if (
+        not isinstance(proof, dict)
+        or proof.get("reviewed") is not True
+        or proof.get("profile") != "car"
+        or proof.get("mode") not in ("POST_QUERY_HINT_APPLIED", "NO_CH_GRAPHS_LOADED")
+    ):
+        raise ValueError("post_query_effect_unverified")
+    if any(
+        proof.get(k) != engine.get(k) for k in ("engine_build_sha256", "graph_sha256")
+    ):
+        raise ValueError("post_query_engine_binding")
+    if not isinstance(proof.get("evidence_sha256"), str) or not re.fullmatch(
+        "[0-9a-f]{64}", proof["evidence_sha256"]
+    ):
+        raise ValueError("post_query_receipt_required")
+    if proof["mode"] == "POST_QUERY_HINT_APPLIED" and (
+        proof.get("effective_ch_disable") is not True
+        or not isinstance(proof.get("adapter_sha256"), str)
+        or not re.fullmatch("[0-9a-f]{64}", proof["adapter_sha256"])
+    ):
+        raise ValueError("post_query_effect_unverified")
+    if proof["mode"] == "NO_CH_GRAPHS_LOADED" and (
+        type(proof.get("ch_graphs_loaded")) is not int or proof["ch_graphs_loaded"] != 0
+    ):
+        raise ValueError("post_query_effect_unverified")
+    return "QUERY_RECORDED_" + proof["mode"]
+
+
+@contextmanager
+def offline_guard():
+    """Replay only: block Python HTTP/socket/SQLite and known application DB APIs."""
+    from contextlib import ExitStack
+
+    targets = (
+        "requests.sessions.Session.request",
+        "socket.socket.connect",
+        "socket.socket.connect_ex",
+        "socket.create_connection",
+        "sqlite3.connect",
+        "sqlite3.dbapi2.connect",
+        "voyagr.models.database.db_connection",
+        "voyagr.models.database.get_db_connection",
+        "voyagr.models.database.get_pool",
+        "voyagr.models.database.init_db",
+        "voyagr.models.db_connection",
+        "voyagr.models.get_db_connection",
+        "voyagr.models.get_pool",
+        "voyagr.models.init_db",
+        "voyagr.services.hazards.db_connection",
+    )
+    with ExitStack() as stack:
+        for target in targets:
+            stack.enter_context(
+                patch(target, side_effect=RuntimeError("offline_replay_io_forbidden"))
+            )
+        yield
 
 
 def validate_bundle(bundle):
@@ -74,6 +216,7 @@ def validate_bundle(bundle):
     ):
         raise ValueError("five_unique_cases_required")
     pairs = set()
+    transport_modes = {}
     for fixture in fixtures:
         for key, limit in (("request", 65536), ("response", 2 * 1024 * 1024)):
             if len(json.dumps(fixture.get(key)).encode()) > limit:
@@ -85,16 +228,13 @@ def validate_bundle(bundle):
                 raise ValueError("capture_hash_mismatch")
         request = fixture["request"]
         rules = request.get("custom_model", {}).get("priority", [])
-        if (
-            request.get("profile") != "car"
-            or request.get("ch.disable") is not True
-            or not any(
-                str(r.get("multiply_by")) == "0"
-                and re.search(r"\bin_camera_area_75\b", str(r.get("if", "")))
-                for r in rules
-            )
+        if request.get("profile") != "car" or not any(
+            str(r.get("multiply_by")) == "0"
+            and re.search(r"\bin_camera_area_75\b", str(r.get("if", "")))
+            for r in rules
         ):
             raise ValueError("camera_restriction_binding")
+        transport_modes[fixture["id"]] = transport_mode(fixture, engine)
         points = request.get("points")
         from voyagr.utils.graphhopper_acceptance import checked_request
 
@@ -111,6 +251,7 @@ def validate_bundle(bundle):
         pairs.add((fixture["request_sha256"], fixture["response_sha256"]))
     if len(pairs) != 5:
         raise ValueError("duplicate_capture_pair")
+    return transport_modes
 
 
 def normalized(fixture):
@@ -155,57 +296,57 @@ process.stdout.write(JSON.stringify({manual,automatic,confirmation_calls:calls})
 
 
 def cache_checks(route, application_request, areas):
-    """Actual Flask cache ingress + after_request, with deterministic offline backends.
-
-    This is recorded-fixture integration, not a deployed cache/network experiment.
-    """
-    import voyagr_web as web
+    """Production response gate with two cache-tier stubs, no full-app import/DB."""
+    from flask import Flask, g, jsonify
     from voyagr.services import hazards
+    from voyagr.services.routing.integrity_api import register_avoidance_integrity
 
     results = {}
-    for tier in ("memory", "persistent"):
-        value = {
-            "success": True,
-            "source": "GraphHopper",
-            "routes": [copy.deepcopy(route)],
-        }
-        value["routes"][0]["avoidance_assessment"] = {
-            "origin_integrity": {"navigation_allowed": True}
-        }
-        with patch(
-            "requests.sessions.Session.request",
-            side_effect=RuntimeError("offline_capture_replay_no_network"),
-        ), patch.object(hazards, "CAMERA_AREAS_DATA", areas), patch.object(
-            hazards, "fetch_hazards_for_route", return_value={}
-        ), patch.object(
-            web.route_cache, "get", return_value=value if tier == "memory" else None
-        ) as memory, patch.object(
-            web.cost_calculator,
-            "get_cached_route_from_db",
-            return_value=value if tier == "persistent" else None,
-        ) as persistent, patch.object(
-            web.cost_calculator, "get_cached_route_from_db_legacy", return_value=None
-        ):
-            response = web.app.test_client().post(
-                "/api/route", json=application_request
+    with offline_guard(), patch.object(hazards, "CAMERA_AREAS_DATA", areas):
+        for tier in ("memory", "persistent"):
+            app = Flask(__name__)
+            register_avoidance_integrity(app)
+            stored = {
+                "success": True,
+                "source": "GraphHopper",
+                "routes": [copy.deepcopy(route)],
+            }
+            stored["routes"][0]["avoidance_assessment"] = {
+                "origin_integrity": {"navigation_allowed": True}
+            }
+
+            @app.post("/api/route")
+            def endpoint():
+                g.route_avoidance_hazards = {}
+                # Both tiers return stale storage data to the *same shipped* gate.
+                return jsonify(dict(copy.deepcopy(stored), cached=True))
+
+            response = app.test_client().post("/api/route", json=application_request)
+            body = response.get_json(silent=True) or {}
+            origin = (
+                (body.get("routes") or [{}])[0]
+                .get("avoidance_assessment", {})
+                .get("origin_integrity", {})
             )
-        body = response.get_json(silent=True) or {}
-        assessed = (body.get("routes") or [{}])[0].get("avoidance_assessment", {})
-        origin = assessed.get("origin_integrity", {})
-        results[tier] = bool(
-            response.status_code == 200
-            and body.get("cached")
-            and memory.called
-            and (tier == "memory" or persistent.called)
-            and not body.get("automatic_selection_allowed", True)
-            and origin.get("navigation_allowed") is False
-            and origin.get("reason") == "mandatory_endpoint_in_or_on_exclusion"
-        )
+            results[tier] = bool(
+                response.status_code == 200
+                and body.get("cached")
+                and not body.get("automatic_selection_allowed", True)
+                and origin.get("navigation_allowed") is False
+                and origin.get("reason") == "mandatory_endpoint_in_or_on_exclusion"
+            )
     return results
 
 
 def replay(bundle, areas, *, check_browser=True, check_caches=True):
-    validate_bundle(bundle)
+    with offline_guard():
+        return _replay(
+            bundle, areas, check_browser=check_browser, check_caches=check_caches
+        )
+
+
+def _replay(bundle, areas, *, check_browser=True, check_caches=True):
+    transport_modes = validate_bundle(bundle)
     report = {
         "scope": bundle["kind"],
         "live_engine": "NOT_TESTED",
@@ -215,6 +356,7 @@ def replay(bundle, areas, *, check_browser=True, check_caches=True):
             else "SYNTHETIC_ONLY"
         ),
         "provenance_binding": "OPERATOR_REVIEWED_RECEIPTS_NOT_NATIVE_RUNTIME_ATTESTATION",
+        "cache_replay_scope": "PRODUCTION_RESPONSE_GATE_WITH_CACHE_TIER_STUBS_NO_DATABASE",
         "fixtures": [],
         "production": "NO_GO",
     }
@@ -296,6 +438,7 @@ def replay(bundle, areas, *, check_browser=True, check_caches=True):
                     else "PASS_SYNTHETIC_PROTOCOL" if passed else "FAIL_OR_UNVERIFIED"
                 ),
                 "capture_case_binding": bound,
+                "transport_verification": transport_modes[identity],
                 "native_matches_geometry": native_matches,
                 "native_displacement_m": round(native_displacement, 3),
                 "geometry_displacement_m": origin["origin_displacement_m"],

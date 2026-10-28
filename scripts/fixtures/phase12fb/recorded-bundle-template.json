@@ -18,7 +18,20 @@
       "request": null,
       "request_sha256": null,
       "response": null,
-      "response_sha256": null
+      "response_sha256": null,
+      "transport": {
+        "schema_version": 1,
+        "reviewed": false,
+        "method": null,
+        "request_target": null,
+        "request_sha256": null,
+        "response_sha256": null,
+        "http_status": null,
+        "engine_build_sha256": null,
+        "graph_sha256": null,
+        "evidence_sha256": null
+      },
+      "transport_sha256": null
     },
     {
       "id": 1,
@@ -26,7 +39,20 @@
       "request": null,
       "request_sha256": null,
       "response": null,
-      "response_sha256": null
+      "response_sha256": null,
+      "transport": {
+        "schema_version": 1,
+        "reviewed": false,
+        "method": null,
+        "request_target": null,
+        "request_sha256": null,
+        "response_sha256": null,
+        "http_status": null,
+        "engine_build_sha256": null,
+        "graph_sha256": null,
+        "evidence_sha256": null
+      },
+      "transport_sha256": null
     },
     {
       "id": 2,
@@ -34,7 +60,20 @@
       "request": null,
       "request_sha256": null,
       "response": null,
-      "response_sha256": null
+      "response_sha256": null,
+      "transport": {
+        "schema_version": 1,
+        "reviewed": false,
+        "method": null,
+        "request_target": null,
+        "request_sha256": null,
+        "response_sha256": null,
+        "http_status": null,
+        "engine_build_sha256": null,
+        "graph_sha256": null,
+        "evidence_sha256": null
+      },
+      "transport_sha256": null
     },
     {
       "id": 3,
@@ -42,7 +81,20 @@
       "request": null,
       "request_sha256": null,
       "response": null,
-      "response_sha256": null
+      "response_sha256": null,
+      "transport": {
+        "schema_version": 1,
+        "reviewed": false,
+        "method": null,
+        "request_target": null,
+        "request_sha256": null,
+        "response_sha256": null,
+        "http_status": null,
+        "engine_build_sha256": null,
+        "graph_sha256": null,
+        "evidence_sha256": null
+      },
+      "transport_sha256": null
     },
     {
       "id": 4,
@@ -50,7 +102,20 @@
       "request": null,
       "request_sha256": null,
       "response": null,
-      "response_sha256": null
+      "response_sha256": null,
+      "transport": {
+        "schema_version": 1,
+        "reviewed": false,
+        "method": null,
+        "request_target": null,
+        "request_sha256": null,
+        "response_sha256": null,
+        "http_status": null,
+        "engine_build_sha256": null,
+        "graph_sha256": null,
+        "evidence_sha256": null
+      },
+      "transport_sha256": null
     }
   ]
 }
