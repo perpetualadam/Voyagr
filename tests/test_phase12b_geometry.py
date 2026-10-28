@@ -258,3 +258,18 @@ def test_candidate_model_composition_retains_ids_and_all_hard_blocks():
     assert len(ids) == len(set(ids)) == 129
     assert all(f["id"] in ids for f in candidate["features"])
     assert all(rule["multiply_by"] == "0" for rule in combined["priority"])
+
+
+def test_reporting_precision_never_relaxes_zero_coverage_tolerance():
+    from voyagr.utils.camera_area_candidate import area_m2
+
+    source = feature([square()])
+    raw, _, _ = build([source])
+    candidate = json.loads(raw)["features"][0]
+    p = square()
+    inside = box(p.bounds[0] + 1e-12, p.bounds[1], p.bounds[2], p.bounds[3])
+    # The lost sliver is below the 0.01m² reporting precision but is still forbidden.
+    assert 0 < area_m2(p.difference(inside)) < 0.01
+    candidate["geometry"] = mapping(MultiPolygon([inside]))
+    with pytest.raises(ValueError, match="equivalence"):
+        validate_feature(source, candidate)

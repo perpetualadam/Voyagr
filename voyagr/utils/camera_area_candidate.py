@@ -20,12 +20,13 @@ from shapely.geometry import MultiPolygon, mapping, shape
 from shapely.ops import unary_union
 from shapely.validation import explain_validity
 
-VERSION = "phase12b-v1"
+VERSION = "phase12b-v2"
 SOURCE_SHA = "65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f"
 MAX_BYTES = 16 * 1024 * 1024
 GEOD = Geod(ellps="WGS84")
 PARAMETERS = {
     "operation": "per_feature_union_of_valid_components",
+    "absolute_area_report_decimal_places": 2,
     "coordinate_crs": "EPSG:4326 longitude,latitude",
     "area_model": "WGS84 ellipsoidal geodesic edges; square metres",
     "symmetric_difference_tolerance_m2": 0,
@@ -232,11 +233,19 @@ def validate_feature(source, candidate, timings=None):
             raise ValueError("spatial_equivalence_failed")
         return {
             "feature_id": source["id"],
-            "original_union_area_m2": old_area,
-            "candidate_area_m2": new_area,
+            "original_union_area_m2": round(
+                old_area, PARAMETERS["absolute_area_report_decimal_places"]
+            ),
+            "candidate_area_m2": round(
+                new_area, PARAMETERS["absolute_area_report_decimal_places"]
+            ),
             "symmetric_difference_m2": symmetric_area,
-            "intersection_area_m2": area_m2(intersection),
-            "combined_union_area_m2": area_m2(combined),
+            "intersection_area_m2": round(
+                area_m2(intersection), PARAMETERS["absolute_area_report_decimal_places"]
+            ),
+            "combined_union_area_m2": round(
+                area_m2(combined), PARAMETERS["absolute_area_report_decimal_places"]
+            ),
             "relative_area_difference": relative,
             "original_union_bbox": list(reference.bounds),
             "candidate_bbox": list(repaired.bounds),

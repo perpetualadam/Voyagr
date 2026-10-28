@@ -6,46 +6,46 @@
   "candidate_bytes": 1605873,
   "pipeline": {
     "samples": 5,
-    "median_ms": 3951.576,
-    "p95_ms": 5389.626,
-    "max_ms": 5389.626
+    "median_ms": 4472.713,
+    "p95_ms": 4620.902,
+    "max_ms": 4620.902
   },
   "stage_totals_per_run": {
     "loading": {
       "samples": 5,
-      "median_ms": 266.575,
-      "p95_ms": 327.522,
-      "max_ms": 327.522
+      "median_ms": 299.481,
+      "p95_ms": 364.532,
+      "max_ms": 364.532
     },
     "duplicate_and_overlap_detection": {
       "samples": 5,
-      "median_ms": 405.907,
-      "p95_ms": 598.468,
-      "max_ms": 598.468
+      "median_ms": 476.358,
+      "p95_ms": 482.87,
+      "max_ms": 482.87
     },
     "union_repair": {
       "samples": 5,
-      "median_ms": 320.465,
-      "p95_ms": 429.864,
-      "max_ms": 429.864
+      "median_ms": 362.281,
+      "p95_ms": 374.199,
+      "max_ms": 374.199
     },
     "geos_validity": {
       "samples": 5,
-      "median_ms": 14.183,
-      "p95_ms": 23.497,
-      "max_ms": 23.497
+      "median_ms": 16.311,
+      "p95_ms": 19.72,
+      "max_ms": 19.72
     },
     "spatial_equivalence": {
       "samples": 5,
-      "median_ms": 2182.504,
-      "p95_ms": 3010.75,
-      "max_ms": 3010.75
+      "median_ms": 2497.859,
+      "p95_ms": 2527.668,
+      "max_ms": 2527.668
     },
     "serialization": {
       "samples": 5,
-      "median_ms": 39.799,
-      "p95_ms": 41.427,
-      "max_ms": 41.427
+      "median_ms": 44.308,
+      "p95_ms": 51.324,
+      "max_ms": 51.324
     }
   },
   "peak_traced_bytes_one_extra_run": 18057871,

@@ -9,8 +9,8 @@ No SSH, production query, installation, graph rebuild, restart, config change, d
 ## Executed checks
 
 - New count-precedence regression failed before the correction; it now passes.
-- 21 targeted geometry/consumer/CLI tests pass. They cover duplicates, overlap, edge/point touch, nesting, holes/islands, Polygon union wrapping, invalid/empty/unclosed input, missing/duplicate-conflicting IDs, property/spatial tampering, exact equivalence, geodesic units, deterministic ordering/hash, actual repository candidate/manifest/metric reproduction, output refusal/source preservation, area collision/hard-block composition and missing-file fallback.
-- Full configured backend selection:910 passed,68 subtests passed, including all existing GraphHopper/Valhalla/OSRM, mandatory/preferences, multi-stop, road/direction/freshness, Overpass/cache/deadline and PWA integrity regressions selected by CI.
+- 22 targeted geometry/consumer/CLI tests pass. They cover duplicates, overlap, edge/point touch, nesting, holes/islands, Polygon union wrapping, invalid/empty/unclosed input, missing/duplicate-conflicting IDs, property/spatial tampering, exact equivalence, geodesic units, deterministic ordering/hash, actual repository candidate/manifest/metric reproduction, output refusal/source preservation, area collision/hard-block composition and missing-file fallback.
+- Full configured backend selection:911 passed,68 subtests passed, including all existing GraphHopper/Valhalla/OSRM, mandatory/preferences, multi-stop, road/direction/freshness, Overpass/cache/deadline and PWA integrity regressions selected by CI.
 - Frontend:99 Jest suites /1924 tests passed; existing coverage thresholds passed. Lint passed.
 - Isolated SQL policy:11 passed on temporary local PostgreSQL, never a production DSN.
 - Original SHA remains65038de... and point SHA2244bd...; neither file changed.
@@ -20,6 +20,8 @@ No SSH, production query, installation, graph rebuild, restart, config change, d
 Optional pinned geometry requirements are installed only in the backend CI/offline tool environment, not production web runtime requirements. Existing jobs/thresholds/assertions remain intact. Coverage statement/branch/function/line thresholds remain enforced by Jest. Desktop/Kivy/custom-router/live-service suites outside configured web selections were not executed. Missing graph-backed/no-route/installed expression tests are explicitly NOT_TESTED, not replaced by mocks or reported passing.
 
 The source cannot contain its own future squash SHA/CI outcome; GitHub PR/final delivery records the final hosted required Backend, Frontend and SQL status and post-merge main CI. No protection bypass or automatic deployment is authorized.
+
+The first required backend check failed on host-dependent absolute geodesic report values while reproducing candidate bytes and manifest. Failure-only CI annotations now expose failing test names, versions and changed field names through permitted check APIs, with no route/model/coordinate data. Python3.11was also reproduced in a disposable local environment. Numeric area serialization is declared separately from strict zero-tolerance validation; all assertions remain. Final hosted outcome is recorded on the PR.
 
 ## Complete changed-file inventory
 

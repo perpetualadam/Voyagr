@@ -32,7 +32,7 @@ All128 IDs and complete non-geometry feature metadata/properties are preserved, 
 4. Independently recompute a reference union from ALL original members, including duplicates and original order. Check exact set equality, all-member coverage, no introduced area, equal bounds and union-hole structure. Reject any unexplained difference under the predeclared zero-tolerance policy.
 5. Serialize deterministically, preserve source hash, and produce pinned library/operation/source/candidate metadata. Source acquisition time/direction/road/section provenance stays UNKNOWN; no creation timestamp is substituted for acquisition truth.
 
-Libraries: Shapely2.1.2 /GEOS3.13.1 and pyproj3.7.2 /PROJ9.5.1. Metric geometry is canonicalized before geodesic accumulation so component-order floating summation does not masquerade as coverage change; acceptance tolerances remain zero. Inputs with holes/nesting/touches have independent synthetic regressions. An actual8301-component reduction is not a reduction in the source8301 camera_count property total.
+Libraries: Shapely2.1.2 /GEOS3.13.1 and pyproj3.7.2 /PROJ9.5.1. Absolute area estimates are serialized at0.01m² for cross-host report reproducibility; raw zero-tolerance checks run before that reporting conversion. Metric geometry is canonicalized before geodesic accumulation so component-order floating summation does not masquerade as coverage change; acceptance tolerances remain zero. Inputs with holes/nesting/touches have independent synthetic regressions. An actual8301-component reduction is not a reduction in the source8301 camera_count property total.
 
 ## Reproducible offline commands
 

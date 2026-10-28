@@ -14,12 +14,12 @@ This is real offline file geometry processing, not synthetic route-provider late
 
 |Stage|n|Median ms|p95 ms|Max ms|
 |---|---:|---:|---:|---:|
-|pipeline|5|3951.576|5389.626|5389.626|
-|loading|5|266.575|327.522|327.522|
-|duplicate_and_overlap_detection|5|405.907|598.468|598.468|
-|union_repair|5|320.465|429.864|429.864|
-|geos_validity|5|14.183|23.497|23.497|
-|spatial_equivalence|5|2182.504|3010.75|3010.75|
-|serialization|5|39.799|41.427|41.427|
+|pipeline|5|4472.713|4620.902|4620.902|
+|loading|5|299.481|364.532|364.532|
+|duplicate_and_overlap_detection|5|476.358|482.87|482.87|
+|union_repair|5|362.281|374.199|374.199|
+|geos_validity|5|16.311|19.72|19.72|
+|spatial_equivalence|5|2497.859|2527.668|2527.668|
+|serialization|5|44.308|51.324|51.324|
 
 All5 sample hashes match. Candidate size1605873bytes. One extra run's peak Python-traced allocations:18057871bytes; GEOS/PROJ native allocations are not fully captured and this is not process RSS. Real-engine route-processing samples:0(N/A median/p95/max). Do not extrapolate local geometry costs to Contabo routing or resource limits. Raw distributions are in VOYAGR_PHASE12B_PERFORMANCE.json.
