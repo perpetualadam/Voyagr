@@ -16,6 +16,21 @@ from pyproj import CRS, Transformer, network
 LIMIT = 32 * 1024 * 1024
 MAX_ELEMENTS = 100000
 MAX_SEGMENTS = 200000
+REASONS = (
+    "uncertain_access",
+    "barrier",
+    "direction",
+    "conditional_rules",
+    "physical_rules",
+    "ambiguous_turn",
+    "restriction_complexity",
+)
+
+
+def counters():
+    return dict.fromkeys(REASONS, 0)
+
+
 HASH = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -141,6 +156,7 @@ class RoadOracle:
             target[i] = e
         self.rules = []
         self.unresolved = False
+        self.restriction_issues = []
         for r in self.relations.values():
             t = r.get("tags", {})
             if t.get("type") != "restriction":
@@ -177,6 +193,7 @@ class RoadOracle:
                 }
             ):
                 self.unresolved = True
+                self.record_restriction_issue(r)
                 continue
             f, v, to = (roles[x][0]["ref"] for x in ("from", "via", "to"))
             if (
@@ -187,12 +204,14 @@ class RoadOracle:
                 or v not in self.ways[to]["nodes"]
             ):
                 self.unresolved = True
+                self.record_restriction_issue(r)
                 continue
             self.rules.append((f, v, to, kind))
         self.turn_rules = defaultdict(list)
         for rule in self.rules:
             self.turn_rules[rule[0], rule[1]].append(rule)
         self.edges = []
+        self.edge_reasons = {}
         for w, way in self.ways.items():
             t = way.get("tags", {})
             if "highway" not in t:
@@ -237,6 +256,10 @@ class RoadOracle:
                         continue
                     access, uncertain = self.access(t, d)
                     if access:
+                        reasons = self.tag_reasons(t, d)
+                        if direction_unknown:
+                            reasons.add("direction")
+                        self.edge_reasons[w, s, d] = frozenset(reasons)
                         self.edges.append(
                             Edge(
                                 w,
@@ -247,6 +270,96 @@ class RoadOracle:
                                 uncertain or direction_unknown,
                             )
                         )
+
+    def record_restriction_issue(self, relation):
+        """Diagnostic locality only; never used to apply or waive a restriction."""
+        t = relation.get("tags", {})
+        via = [m for m in relation["members"] if m.get("role") == "via"]
+        node = (
+            via[0]["ref"]
+            if len(via) == 1
+            and via[0]["type"] == "node"
+            and via[0]["ref"] in self.nodes
+            else None
+        )
+        incomplete = any(
+            m["ref"]
+            not in {"node": self.nodes, "way": self.ways, "relation": self.relations}[
+                m["type"]
+            ]
+            for m in relation["members"]
+        )
+        incomplete |= any(
+            sum(m.get("role") == role for m in relation["members"]) != 1
+            for role in ("from", "via", "to")
+        )
+        if node is not None:
+            incomplete |= any(
+                m["type"] == "way"
+                and m.get("role") in ("from", "to")
+                and m["ref"] in self.ways
+                and node not in self.ways[m["ref"]]["nodes"]
+                for m in relation["members"]
+            )
+        self.restriction_issues.append(
+            (node, bool(incomplete), "except" in t, any("conditional" in k for k in t))
+        )
+
+    @classmethod
+    def tag_reasons(cls, t, direction, *, node=False):
+        """Observational labels only. access()/transition() remain authoritative."""
+        reasons = set()
+        _, unknown = cls.access(t, direction)
+        node_access = any(
+            k.startswith(("access", "vehicle", "motor_vehicle", "motorcar", "max"))
+            for k in t
+        )
+        if unknown and (not node or node_access):
+            reasons.add("uncertain_access")
+        if "barrier" in t:
+            reasons.add("barrier")
+        if any("conditional" in k for k in t):
+            reasons.add("conditional_rules")
+        if (not node or node_access) and (
+            any(
+                k.startswith(
+                    (
+                        "maxheight",
+                        "maxwidth",
+                        "maxlength",
+                        "maxweight",
+                        "maxaxleload",
+                        "hgv",
+                        "hazmat",
+                    )
+                )
+                for k in t
+            )
+            or "construction" in t
+            or "proposed" in t
+            or t.get("highway") in ("construction", "proposed")
+        ):
+            reasons.add("physical_rules")
+        return reasons
+
+    def transition_reasons(self, previous, edge):
+        reasons = set(self.edge_reasons.get(edge.key, ()))
+        if isinstance(edge.start, int):
+            reasons.update(
+                self.tag_reasons(
+                    self.nodes[edge.start].get("tags", {}), edge.direction, node=True
+                )
+            )
+        if previous:
+            rules = self.turn_rules.get((previous.way, edge.start), ())
+            if len(rules) > 64:
+                reasons.add("restriction_complexity")
+            elif any(
+                f == to and kind not in ("no_u_turn", "only_u_turn")
+                for f, _, to, kind in rules
+            ):
+                reasons.add("ambiguous_turn")
+        return frozenset(reasons)
 
     @staticmethod
     def access(t, direction):
@@ -401,24 +514,64 @@ class RoadOracle:
                     )
         start, finish = positions
 
+        search_reports = {}
+        representative = None
+
         def search(potential):
+            nonlocal representative
+            stats = {
+                "states_discovered": 1,
+                "edge_examinations": 0,
+                "uncertain_allowed_transitions": 0,
+                "uncertainty": counters(),
+                "global_restriction_guard_transitions": 0,
+                "limit": "NONE",
+            }
+            search_reports["potential" if potential else "known"] = stats
+            parents = {} if potential else None
             queue = deque([(start, None)])
             seen = {(start, None)}
             steps = 0
             while queue:
                 node, previous = queue.popleft()
                 if node == finish:
+                    if potential:
+                        representative = []
+                        state = (node, previous.key if previous else None)
+                        while state in parents:
+                            parent, edge, reasons = parents[state]
+                            representative.append((edge, reasons))
+                            state = parent
+                        representative.reverse()
                     return True
                 for e in adjacency[node]:
                     steps += 1
+                    stats["edge_examinations"] = steps
                     if steps > max_states * 8:
+                        stats["limit"] = "EDGE_EXAMINATIONS"
                         return None
                     ok, uncertain = self.transition(previous, e)
+                    reasons = self.transition_reasons(previous, e) if ok else ()
+                    if ok and uncertain:
+                        stats["uncertain_allowed_transitions"] += 1
+                        stats["global_restriction_guard_transitions"] += int(
+                            self.unresolved
+                        )
+                        for reason in reasons:
+                            stats["uncertainty"][reason] += 1
                     state = (e.end, e.key)
                     if ok and (potential or not uncertain) and state not in seen:
                         if len(seen) >= max_states:
+                            stats["limit"] = "STATES"
                             return None
                         seen.add(state)
+                        stats["states_discovered"] = len(seen)
+                        if potential:
+                            parents[state] = (
+                                (node, previous.key if previous else None),
+                                e,
+                                reasons,
+                            )
                         queue.append((e.end, e))
             return False
 
@@ -457,6 +610,9 @@ class RoadOracle:
             )
         return {
             "schema_version": 1,
+            "uncertainty_diagnostics": self.uncertainty_report(
+                search_reports, representative, start
+            ),
             "kind": "INDEPENDENT_OSM_DIAGNOSTIC",
             "reviewed": False,
             "navigation_authorized": False,
@@ -476,6 +632,75 @@ class RoadOracle:
                 "edges": len(self.edges),
             },
             "projection_distance_m": {"origin": round(od, 3), "target": round(td, 3)},
+        }
+
+    def uncertainty_report(self, searches, path, start):
+        export_edges, export_nodes = counters(), counters()
+        off_edges, off_nodes = counters(), counters()
+        path_counts = counters()
+        path_nodes = {start} if isinstance(start, int) else set()
+        path_keys, departure_nodes = set(), set()
+        if path is not None:
+            for edge, reasons in path:
+                for reason in reasons:
+                    path_counts[reason] += 1
+                path_keys.add(edge.key)
+                if isinstance(edge.start, int):
+                    departure_nodes.add(edge.start)
+                path_nodes.update(
+                    n for n in (edge.start, edge.end) if isinstance(n, int)
+                )
+        for key, reasons in self.edge_reasons.items():
+            for reason in reasons:
+                export_edges[reason] += 1
+                if key not in path_keys:
+                    off_edges[reason] += 1
+        for node_id, node in self.nodes.items():
+            reasons = self.tag_reasons(
+                node.get("tags", {}), 1, node=True
+            ) | self.tag_reasons(node.get("tags", {}), -1, node=True)
+            for reason in reasons:
+                export_nodes[reason] += 1
+                if node_id not in departure_nodes:
+                    off_nodes[reason] += 1
+        issues = self.restriction_issues
+        return {
+            "schema_version": 1,
+            "export": {
+                "directed_edges": export_edges,
+                "nodes": export_nodes,
+                "supported_restrictions": len(self.rules),
+                "unresolved_restrictions": len(issues),
+                "incomplete_member_evidence": sum(i[1] for i in issues),
+                "vehicle_exceptions": sum(i[2] for i in issues),
+                "conditional_restrictions": sum(i[3] for i in issues),
+            },
+            "searches": searches,
+            "outside_representative_path": {
+                "directed_edges": off_edges if path is not None else None,
+                "departure_nodes": off_nodes if path is not None else None,
+            },
+            "representative_potential_path": {
+                "available": path is not None,
+                "selection": "FIRST_BOUNDED_BFS_RESULT_NOT_LEGAL_OR_OPTIMAL_PROOF",
+                "transitions": len(path) if path is not None else None,
+                "uncertainty": path_counts if path is not None else None,
+                "global_unresolved_restriction_guard": self.unresolved,
+                "restrictions_at_path_via_nodes": (
+                    sum(i[0] in path_nodes for i in issues)
+                    if path is not None
+                    else None
+                ),
+                "restrictions_not_at_path_via_nodes": (
+                    sum(i[0] is not None and i[0] not in path_nodes for i in issues)
+                    if path is not None
+                    else None
+                ),
+                "restrictions_with_unknown_via_locality": sum(
+                    i[0] is None for i in issues
+                ),
+                "locality_is_relevance_proof": False,
+            },
         }
 
 
