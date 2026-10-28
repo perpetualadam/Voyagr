@@ -1488,6 +1488,21 @@
      * @param {Object} opts
      * @returns {string}
      */
+    function routeEngineLabel(route) {
+        var source=String(route && route.source || '').toLowerCase();
+        return source.includes('graphhopper') ? 'GraphHopper' : source.includes('valhalla') ? 'Valhalla' : source.includes('osrm') ? 'OSRM' : 'Unknown engine';
+    }
+    function buildRouteEvidenceText(route) {
+        route=route || {};
+        var labels={SATISFIED:'Checked against available data',UNVERIFIED:'Unverified',VIOLATED:'Known conflict',UNSUPPORTED:'Unsupported'};
+        var text=routeEngineLabel(route)+' · '+(labels[(route.avoidance_assessment || {}).status] || 'Unverified');
+        var evidence=route.camera_evidence;
+        function count(value) { return Number.isFinite(Number(value)) ? Math.min(1000000,Math.max(0,Math.floor(Number(value)))) : 0; }
+        text += evidence && evidence.evaluated ? ' · Applicable observations '+count(evidence.applicable)+' · Possible '+count(evidence.possible)+' (unknown/stale '+count(evidence.unknown_or_stale)+')' : ' · Camera evidence not assessed';
+        if (Array.isArray(route.provider_limitations) && route.provider_limitations.length) text+=' · Provider preferences limited';
+        return text;
+    }
+
     function buildPreviewAlternativeRouteCardHtml(route, index, opts) {
         opts = opts || {};
         var routeColor = resolveRouteColor(index, opts.routeColors);
@@ -1504,13 +1519,14 @@
                     '<span style="display: inline-block; width: 12px; height: 12px; background: ' + routeColor + '; border-radius: 50%; flex-shrink: 0;"></span>' +
                     '<strong style="color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + routeName + '</strong>' +
                 '</div>' +
-                '<span style="background: ' + hazardColor + '; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; flex-shrink: 0;">Score ' + hazardCount + '</span>' +
+                '<span style="background: ' + hazardColor + '; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; flex-shrink: 0;">Nearby ' + hazardCount + '</span>' +
             '</div>' +
             '<div style="font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' +
                 '⏱️ ' + route.duration_minutes + ' min | 📏 ' + opts.distanceText + ' ' + opts.distUnit +
                 ' | ⛽ ' + fuelLitres + ' ' + fuelUnit +
                 ' | 💰 ' + opts.currencySymbol + totalCost +
-            '</div>'
+            '</div>' +
+            '<div style="font-size:12px;color:#555">'+buildRouteEvidenceText(route)+'</div>'
         );
     }
 
@@ -1825,6 +1841,8 @@
             geometry_complete:route.geometry_complete,
             provider_limitations: route.provider_limitations,
             provider_capabilities: route.provider_capabilities,
+            camera_evidence: route.camera_evidence,
+            route_comparison: route.route_comparison,
             avoidance_assessment: route.avoidance_assessment,
             avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
             avoidance_tradeoff: route.avoidance_tradeoff,
@@ -1867,6 +1885,8 @@
             source: data.source || 'Unknown',
             provider_limitations:data.provider_limitations,
             provider_capabilities:data.provider_capabilities,
+            camera_evidence: data.camera_evidence,
+            route_comparison: data.route_comparison,
             avoidance_assessment:data.avoidance_assessment,
             avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
         }];
@@ -2450,6 +2470,8 @@
                 geometry_complete:sel.geometry_complete,
                 provider_limitations: sel.provider_limitations,
                 provider_capabilities: sel.provider_capabilities,
+                camera_evidence: sel.camera_evidence,
+                route_comparison: sel.route_comparison,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
                 avoidance_preferences_snapshot: sel.avoidance_preferences_snapshot || routeData.avoidance_preferences_snapshot,
@@ -2473,6 +2495,8 @@
             ...route,
             provider_limitations: route.provider_limitations,
             provider_capabilities: route.provider_capabilities,
+            camera_evidence: route.camera_evidence,
+            route_comparison: route.route_comparison,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
             geometry_precision: Number.isFinite(route.geometry_precision)
@@ -4487,6 +4511,8 @@
     }
 
     var api = {
+        routeEngineLabel: routeEngineLabel,
+        buildRouteEvidenceText: buildRouteEvidenceText,
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
         ROUTE_COMPARISON_MODAL_ID: ROUTE_COMPARISON_MODAL_ID,

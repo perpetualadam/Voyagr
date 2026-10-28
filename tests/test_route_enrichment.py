@@ -70,11 +70,12 @@ class TestMergeGraphhopperOptimisedRoute(unittest.TestCase):
         out = merge_graphhopper_optimised_route(routes, ctx)
         self.assertEqual(out[0]['name'], '⚡ Optimised')
         self.assertEqual(len(out), 2)
-        self.assertTrue(out[0].get('routing_preferences_limited'))
+        self.assertTrue(out[0].get('proximity_comparison_only'))
+        self.assertFalse(out[0].get('routing_preferences_limited', False))
 
     @patch('voyagr.services.routing.route_entries.build_graphhopper_optimised_route_entry')
     @patch('voyagr.services.routing.enrichment.graphhopper_qualifies_as_optimised', return_value=True)
-    def test_skips_optimised_that_follows_the_same_road_as_fastest(self, _qual, mock_build):
+    def test_retains_graphhopper_for_independent_assessment_on_same_road(self, _qual, mock_build):
         shape = polyline.encode([(51.50, -0.12), (51.51, -0.11), (51.52, -0.10)], precision=6)
         mock_build.return_value = {
             'id': 0, 'name': '⚡ Optimised', 'source': 'GraphHopper',
@@ -87,7 +88,7 @@ class TestMergeGraphhopperOptimisedRoute(unittest.TestCase):
         }]
         ctx = _ctx(graphhopper_route={'success': True, 'camera_avoidance': True})
         out = merge_graphhopper_optimised_route(routes, ctx)
-        self.assertEqual([r['name'] for r in out], ['Fastest'])
+        self.assertEqual([r['name'] for r in out], ['⚡ Optimised', 'Fastest'])
 
 
 class TestEnsureKwargsCompatibility(unittest.TestCase):

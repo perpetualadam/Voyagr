@@ -42,6 +42,8 @@ def _merge_tomtom_incidents_for_bbox(
         incidents = vw.fetch_tomtom_incidents(tomtom_bbox)
         if incidents:
             hazards = vw.merge_hazards_with_tomtom_incidents(hazards, incidents)
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.warning(f"[MULTI-DROP] TomTom incident merge failed: {e}")
     return hazards
@@ -108,6 +110,8 @@ def _valhalla_matrix(locations: List[Dict[str, float]]) -> Optional[List[List[fl
             for row in data.get("sources_to_targets", []):
                 matrix.append([cell.get("time", 999999) for cell in row])
             return matrix
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.warning(f"[MULTIDROP] Valhalla matrix failed: {e}")
     return None
@@ -659,6 +663,8 @@ def _graphhopper_leg(
                 else "GraphHopper"
             ),
         }
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.warning(f"[MULTIDROP] GraphHopper leg failed: {e}")
     return None
@@ -753,6 +759,8 @@ def _valhalla_leg(
                     "maneuvers": maneuvers,
                     "source": "Valhalla",
                 }
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.warning(f"[MULTIDROP] Valhalla leg failed: {e}")
     return None
@@ -794,6 +802,8 @@ def _osrm_leg(
                     "maneuvers": [],
                     "source": "OSRM",
                 }
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.warning(f"[MULTIDROP] OSRM leg failed: {e}")
     return None
@@ -910,6 +920,8 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
                     hazards, route_bbox=bbox, max_hazards=md_cap)
                 if md_caz_pts:
                     exclude_locations = (md_caz_pts + exclude_locations)[:50]
+            except route_transport.RoutingDeadlineExceeded:
+                raise
             except Exception as e:
                 logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
 
@@ -950,6 +962,8 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
 
         return result, 200
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         logger.error(f"[MULTI-DROP] Error: {e}")
         return {'success': False, 'error': str(e)}, 200
@@ -1054,6 +1068,8 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
             md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=md_cap)
             if md_caz_pts:
                 md_exclude = (md_caz_pts + md_exclude)[:50]
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except Exception as e:
             logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
 

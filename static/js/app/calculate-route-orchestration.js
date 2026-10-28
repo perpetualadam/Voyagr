@@ -450,10 +450,8 @@
         console.log(plan.statusLogPrefix, response.status);
 
         if (plan.action === 'reject_non_json') {
-            var text = await response.text();
             console.error(plan.nonJsonErrorLogPrefix, plan.contentType);
-            console.error(plan.responseTextLogPrefix, text.substring(0, 200));
-            throw new Error(RR.buildNonJsonRouteApiErrorMessage(plan.status, text));
+            throw new Error(RR.buildNonJsonRouteApiErrorMessage(plan.status, ''));
         }
 
         if (plan.action === 'reject_http_error') {
@@ -530,7 +528,7 @@
         var fetchPlan = apiOrch.fetchPlan;
         var requestLog = apiOrch.requestLog;
 
-        console.log(requestLog.requestLogPrefix, fetchPlan.body);
+        console.log(requestLog.requestLogPrefix);
         console.log(requestLog.viaPointsLogMessage);
         console.log(requestLog.multiDropLogMessage);
 

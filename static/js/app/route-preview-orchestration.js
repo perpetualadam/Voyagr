@@ -213,7 +213,10 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
 function showRoutePreview(routeData, skipMapDisplay = false) {
     const integrity = root.VoyagrAvoidanceIntegrity;
     const notice = document.getElementById('routeAvoidanceNotice');
-    if (notice && integrity) notice.textContent=integrity.summary(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()));
+    if (notice && integrity) {
+        const selected=RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex());
+        notice.textContent=RS().buildRouteEvidenceText(selected)+'. '+integrity.summary(selected);
+    }
     const orch = RS().buildShowRoutePreviewOrchestrationPlan(
         collectShowRoutePreviewInput(routeData, skipMapDisplay)
     );
