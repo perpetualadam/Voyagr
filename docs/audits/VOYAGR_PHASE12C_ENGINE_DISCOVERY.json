@@ -1,0 +1,33 @@
+{
+  "scope": "WORKSPACE_DISCOVERY_NOT_CONTABO",
+  "tools": {
+    "java": true,
+    "docker": true,
+    "mvn": false
+  },
+  "checks": {
+    "listeners": {
+      "returncode": 0,
+      "graphhopper_evidence": false,
+      "error_category": null,
+      "engine_default_port_listening": false
+    },
+    "docker_containers": {
+      "returncode": 1,
+      "graphhopper_evidence": false,
+      "error_category": "UNAVAILABLE_OR_DENIED"
+    },
+    "docker_images": {
+      "returncode": 1,
+      "graphhopper_evidence": false,
+      "error_category": "UNAVAILABLE_OR_DENIED"
+    }
+  },
+  "known_engine_paths": {
+    "/opt/graphhopper": false,
+    "/workspace/graphhopper": false
+  },
+  "approved_osm_or_graph_supplied": false,
+  "reviewed_graph_oracle_supplied": false,
+  "production_probed": false
+}

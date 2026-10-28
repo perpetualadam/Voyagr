@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "operator_approved": false,
+  "isolated_not_production": false,
+  "reviewed_graph_oracle": false,
+  "instructions": "Template only. Supply independently reviewed graph/import receipts and approved private requests in an isolated copy. Never mark invented coordinates as authoritative. Default execution performs no requests.",
+  "provenance": {
+    "engine_build_sha256": null,
+    "road_source_sha256": null,
+    "profile_config_sha256": null,
+    "encoded_values_sha256": null,
+    "oracle_sha256": null
+  },
+  "instances": {
+    "original": {"url":"http://127.0.0.1:18989","dataset_sha256":null,"graph_revision_sha256":null,"import_receipt_sha256":null},
+    "candidate": {"url":"http://127.0.0.1:18990","dataset_sha256":null,"graph_revision_sha256":null,"import_receipt_sha256":null}
+  },
+  "seed_request": null,
+  "fixtures": []
+}

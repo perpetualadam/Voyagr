@@ -1,0 +1,32 @@
+{
+  "scope": "OFFLINE_GH8_DESERIALIZATION_AND_JTS_NOT_EXPRESSION_COMPILATION_OR_ROUTING",
+  "verified_dependency_count": 6,
+  "cases": [
+    {
+      "case": "original_invalid",
+      "expected_exit": 2,
+      "observed_exit": 2,
+      "summary": "PARSED areas=128 unique=128 invalid_geometry=102",
+      "geometry_check": "EXPECTED_INVALID_ORIGINAL",
+      "area_count": 128
+    },
+    {
+      "case": "candidate_all_128",
+      "expected_exit": 0,
+      "observed_exit": 0,
+      "summary": "PARSED areas=128 unique=128 invalid_geometry=0",
+      "geometry_check": "PASS",
+      "area_count": 128
+    },
+    {
+      "case": "candidate_mixed_scdb_osm_caz",
+      "expected_exit": 0,
+      "observed_exit": 0,
+      "summary": "PARSED areas=140 unique=140 invalid_geometry=0",
+      "geometry_check": "PASS",
+      "area_count": 140
+    }
+  ],
+  "real_engine_enforcement": "NOT_TESTED",
+  "all_128_installed_encoded_area_expressions": "NOT_TESTED"
+}
