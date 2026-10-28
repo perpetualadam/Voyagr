@@ -546,3 +546,270 @@ def test_way_physical_evidence_stays_uncertain(tag):
     out = analyse(export(tag))
     assert out["connectivity"] == "UNVERIFIED"
     assert out["potential_path"] is True
+
+
+@pytest.mark.parametrize(
+    "tag,category",
+    [
+        ({"motorcar": "destination"}, "uncertain_access"),
+        ({"barrier": "gate"}, "barrier"),
+        ({"oneway": "reversible"}, "direction"),
+        ({"access:conditional": "yes @ (Su)"}, "conditional_rules"),
+        ({"maxheight": "2"}, "physical_rules"),
+    ],
+)
+def test_representative_path_uncertainty_categories(tag, category):
+    out = analyse(export(tag))
+    d = out["uncertainty_diagnostics"]
+    assert out["connectivity"] == "UNVERIFIED"
+    assert out["potential_path"] is True
+    path = d["representative_potential_path"]
+    assert path["available"] is True
+    assert path["uncertainty"][category] > 0
+    assert d["searches"]["potential"]["uncertainty"][category] > 0
+    assert path["global_unresolved_restriction_guard"] is False
+
+
+def test_unrelated_uncertainty_is_separate_from_representative_path():
+    data = export()
+    data["elements"].extend(
+        [
+            {
+                "type": "node",
+                "id": 800001,
+                "lat": 1.0,
+                "lon": 1.0,
+                "tags": {"barrier": "PRIVATE_SENTINEL"},
+            },
+            {"type": "node", "id": 800002, "lat": 1.0, "lon": 1.001},
+            {
+                "type": "way",
+                "id": 800003,
+                "nodes": [800001, 800002],
+                "tags": {"highway": "residential", "oneway": "PRIVATE_SENTINEL"},
+            },
+        ]
+    )
+    out = analyse(data)
+    d = out["uncertainty_diagnostics"]
+    assert out["connectivity"] == "KNOWN_PATH_IN_EXPORT"
+    assert d["export"]["directed_edges"]["direction"] == 2
+    assert d["outside_representative_path"]["directed_edges"]["direction"] == 2
+    assert d["outside_representative_path"]["departure_nodes"]["barrier"] == 1
+    assert all(
+        v == 0 for v in d["representative_potential_path"]["uncertainty"].values()
+    )
+    encoded = json.dumps(d)
+    assert all(
+        secret not in encoded
+        for secret in (
+            "800001",
+            "800002",
+            "800003",
+            "PRIVATE_SENTINEL",
+            "coordinate",
+            "geometry",
+        )
+    )
+    assert len(encoded) < 5000
+
+
+def test_global_restriction_guard_is_not_reported_as_local_turn_evidence():
+    r = relation(**{"except": "bus"})
+    r["members"][1]["ref"] = 4
+    out = analyse(export(relations=[r]))
+    d = out["uncertainty_diagnostics"]
+    path = d["representative_potential_path"]
+    assert out["connectivity"] == "UNVERIFIED"
+    assert out["potential_path"] is True
+    assert path["global_unresolved_restriction_guard"] is True
+    assert path["restrictions_at_path_via_nodes"] == 0
+    assert path["restrictions_not_at_path_via_nodes"] == 1
+    assert path["locality_is_relevance_proof"] is False
+    assert d["export"]["vehicle_exceptions"] == 1
+    assert d["searches"]["known"]["global_restriction_guard_transitions"] > 0
+
+
+def test_incomplete_unknown_and_conditional_restriction_counts():
+    r = relation()
+    r["members"][1]["ref"] = 999999
+    conditional = relation(**{"restriction:conditional": "no_right_turn @ (Su)"})
+    conditional["id"] = 101
+    out = analyse(export(relations=[r, conditional]))
+    d = out["uncertainty_diagnostics"]
+    path = d["representative_potential_path"]
+    assert d["export"]["unresolved_restrictions"] == 2
+    assert d["export"]["incomplete_member_evidence"] == 1
+    assert d["export"]["conditional_restrictions"] == 1
+    assert path["restrictions_at_path_via_nodes"] == 1
+    assert path["restrictions_with_unknown_via_locality"] == 1
+
+
+def test_representative_path_absent_and_search_limit_explained():
+    out = analyse(max_states=1)
+    d = out["uncertainty_diagnostics"]
+    assert out["potential_path"] is None
+    assert d["searches"]["potential"]["limit"] == "STATES"
+    assert d["searches"]["potential"]["states_discovered"] == 1
+    assert d["representative_potential_path"]["available"] is False
+    assert d["representative_potential_path"]["uncertainty"] is None
+    assert d["outside_representative_path"]["directed_edges"] is None
+    blocked = analyse(export({"motorcar": "no"}))
+    assert blocked["potential_path"] is False
+    assert (
+        blocked["uncertainty_diagnostics"]["searches"]["potential"]["limit"] == "NONE"
+    )
+
+
+def test_zero_transition_path_is_reconstructed_without_invented_uncertainty():
+    out = analyse(origin=endpoint(), target=endpoint())
+    path = out["uncertainty_diagnostics"]["representative_potential_path"]
+    assert path["available"] is True
+    assert path["transitions"] == 0
+    assert all(value == 0 for value in path["uncertainty"].values())
+    assert out["navigation_authorized"] is False
+
+
+@pytest.mark.parametrize(
+    "tag",
+    [
+        {},
+        {"oneway": "yes"},
+        {"motorcar": "no"},
+        {"barrier": "gate"},
+        {"oneway": "reversible"},
+    ],
+)
+def test_reporting_metadata_cannot_change_any_existing_decision(tag):
+    oracle = RoadOracle(canonical(export(tag)))
+    args = (endpoint(), endpoint(20), [[10, 0, 1], [10, 1, 1], [20, 0, 1]])
+    before = oracle.analyse(*args)
+    # Deliberately corrupt reporting-only labels: never feed them into decisions.
+    oracle.edge_reasons = {
+        key: frozenset({"barrier", "direction"}) for key in oracle.edge_reasons
+    }
+    after = oracle.analyse(*args)
+    assert {k: v for k, v in before.items() if k != "uncertainty_diagnostics"} == {
+        k: v for k, v in after.items() if k != "uncertainty_diagnostics"
+    }
+    assert after["reviewed"] is False
+    assert after["navigation_authorized"] is False
+    assert after["production"] == "PRODUCTION_NO_GO"
+    assert after["acceptance"] == "UNVERIFIED"
+
+
+def test_representative_node_barrier_and_conditional_are_reported():
+    out = analyse(
+        export(node_tags={3: {"barrier": "gate", "access:conditional": "no @ (Su)"}})
+    )
+    reasons = out["uncertainty_diagnostics"]["representative_potential_path"][
+        "uncertainty"
+    ]
+    assert reasons["barrier"] == reasons["conditional_rules"] == 1
+
+
+def test_dense_search_examination_limit_is_reported_without_no_path_claim():
+    data = export()
+    data["elements"] = [e for e in data["elements"] if e["id"] != 20]
+    data["elements"].extend(
+        {"type": "node", "id": i, "lat": 0.0, "lon": (i - 1) * 0.001}
+        for i in range(5, 13)
+    )
+    data["elements"].extend(
+        [
+            {"type": "node", "id": 100, "lat": 0.0, "lon": 0.02},
+            {"type": "node", "id": 101, "lat": 0.0, "lon": 0.021},
+            {
+                "type": "way",
+                "id": 20,
+                "nodes": [100, 101],
+                "tags": {"highway": "residential"},
+            },
+        ]
+    )
+    pairs = [(a, b) for a in range(1, 13) for b in range(a + 1, 13)]
+    data["elements"].extend(
+        {
+            "type": "way",
+            "id": 1000 + i,
+            "nodes": [a, b],
+            "tags": {"highway": "residential"},
+        }
+        for i, (a, b) in enumerate(pairs)
+    )
+    target = {"way": 20, "segment": 0, "nodes": [100, 101], "coordinate": [0.0, 0.0205]}
+    out = analyse(data, target=target, max_states=180)
+    assert (
+        out["uncertainty_diagnostics"]["searches"]["potential"]["limit"]
+        == "EDGE_EXAMINATIONS"
+    )
+    assert out["search_exhausted"] is True
+    assert out["connectivity"] == "UNVERIFIED"
+    assert out["closed_component"] == "UNVERIFIED"
+
+
+def test_ambiguous_same_way_turn_and_rule_complexity_reported():
+    data = export(relations=[relation("no_right_turn", via=2, to_way=10)])
+    data["elements"].append(
+        {"type": "way", "id": 30, "nodes": [2, 3], "tags": {"highway": "residential"}}
+    )
+    out = analyse(data)
+    assert (
+        out["uncertainty_diagnostics"]["representative_potential_path"]["uncertainty"][
+            "ambiguous_turn"
+        ]
+        > 0
+    )
+    restrictions = []
+    for i in range(65):
+        r = relation("only_right_turn")
+        r["id"] = 100 + i
+        restrictions.append(r)
+    out = analyse(export(relations=restrictions))
+    assert out["connectivity"] == "UNVERIFIED"
+    assert (
+        out["uncertainty_diagnostics"]["representative_potential_path"]["uncertainty"][
+            "restriction_complexity"
+        ]
+        == 1
+    )
+
+
+def test_representative_path_uses_first_search_result_not_unexamined_alternative():
+    # Direct branch is enqueued first; an uncertain detour exists but is not selected.
+    data = export()
+    data["elements"].append(
+        {
+            "type": "way",
+            "id": 30,
+            "nodes": [1, 4],
+            "tags": {"highway": "residential", "oneway": "reversible"},
+        }
+    )
+    out = analyse(data)
+    d = out["uncertainty_diagnostics"]
+    assert out["connectivity"] == "KNOWN_PATH_IN_EXPORT"
+    assert d["representative_potential_path"]["available"] is True
+    # A potential BFS may select an uncertain shorter alternative even when a known
+    # path exists. That is diagnostic evidence only, never a connectivity downgrade.
+    assert d["export"]["directed_edges"]["direction"] == 2
+    assert out["navigation_authorized"] is False
+
+
+@pytest.mark.parametrize("tag", [{}, {"oneway": "reversible"}, {"barrier": "gate"}])
+def test_diagnostic_path_never_authorizes_displaced_origin_or_changes_ranking(tag):
+    from tests.test_phase12f_origin import app_response, r
+
+    diagnostic_report = analyse(export(tag))
+    unsafe = r(46.31)
+    unsafe["independent_road_diagnostic"] = diagnostic_report
+    out = app_response([unsafe, r(0, "Valhalla")]).get_json()
+    assert out["routes"][0]["source"] == "Valhalla"
+    gh = next(route for route in out["routes"] if route["source"] == "GraphHopper")
+    assert gh["avoidance_assessment"]["automatic_selection_allowed"] is False
+    assert gh["avoidance_assessment"]["origin_integrity"]["navigation_allowed"] is False
+    # Reports likewise cannot demote a genuinely eligible GraphHopper route.
+    safe = r(0)
+    safe["independent_road_diagnostic"] = diagnostic_report
+    out = app_response([r(0, "Valhalla"), safe]).get_json()
+    assert out["routes"][0]["source"] == "GraphHopper"

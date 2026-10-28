@@ -128,3 +128,90 @@ Initial oracle test collection lacked pyproj; installing the repository's pinned
 geometry requirements resolved it. No assertion/security checks were weakened.
 These results are local synthetic/software validation, not CI or road acceptance.
 PR/CI/merge results are reported separately in the task handoff.
+
+## Addendum: explaining connectivity uncertainty
+
+The additive `uncertainty_diagnostics` object (schema 1) explains a result without
+changing traversal, candidate validation, eligibility or provenance acceptance.
+`access()` and `transition()` still make all decisions; diagnostic labels never
+feed into either. Existing result fields and safety flags retain their meanings.
+
+Fixed category counters identify:
+
+| Category | Meaning and limits |
+| --- | --- |
+| `uncertain_access` | The existing access evaluator reports uncertainty; includes ambiguous/default access and may overlap conditional, physical and barrier labels. Node labels respect the existing directional/access uncertainty guard. This is not a vehicle-specific legal ruling. |
+| `barrier` | A barrier tag on a traversed directed road segment or departure node. No barrier subtype or opening permission is inferred. |
+| `direction` | The existing direction classifier is uncertain: unknown/reversible values, conditional direction or unspecified link direction. |
+| `conditional_rules` | A tag contains `conditional`; conditions are not evaluated. Conditional restriction relations are separately counted at export scope. |
+| `physical_rules` | Dimensional/vehicle tags or construction/proposed evidence recognised conservatively by existing access logic; actual vehicle suitability is not evaluated. |
+| `ambiguous_turn` | A supported same-way restriction other than a supported U-turn has ambiguous interpretation at the examined transition. |
+| `restriction_complexity` | More than 64 applicable supported turn rules at a transition: existing semantics treat traversal as uncertain. |
+
+Export counters count directed original segments and nodes (node reasons union
+both directions), not unique real-world roads. Unresolved relation counts include
+missing member/role/incidence evidence, exceptions and conditionals; these counts
+can overlap. They do not establish completeness of the source or identify a
+specific exception's applicability. Unsupported relation forms remain unresolved.
+No OSM IDs, tag contents or geometry are exposed.
+
+Both searches report states discovered, edge examinations, uncertain allowed
+transitions, global restriction-guard transition counts, per-category counts and
+`limit`: `NONE`, `STATES`, or `EDGE_EXAMINATIONS`. Counts describe examined allowed
+transitions, including revisits and transitions rejected by the known-only filter;
+they are not necessarily on a successful path. The terminating examination can
+make the examination counter equal `8*max_states+1`. State storage remains bounded
+by the existing `max_states` cap. No search ordering, bounds or return values change.
+
+The potential search retains one predecessor per discovered state and reconstructs
+its first successful BFS path internally. This requires O(max_states) additional
+storage, with at most max_states-1 path transitions; no path list is serialized.
+The representative path report contains availability, transition count and aggregate
+reason counts. It is not a shortest metric route, a least-uncertain route, a legal
+route or the operator's candidate. It may be uncertain even when a different known
+path exists. Repeated path transitions count repeatedly. An identical origin/target
+has an available zero-transition path, without invented traversal uncertainty.
+If no potential path is found or search is exhausted, path/off-path counts are null,
+not zero. A search limit is not a no-path conclusion.
+
+`outside_representative_path` counts reasons on original directed segment keys not
+used by that path, and nodes not used as departure nodes. A destination-only barrier
+is therefore not claimed as a traversed barrier. Segments split by virtual endpoints
+retain their original key. These counts distinguish untraversed evidence from
+encountered evidence; they do not prove evidence is irrelevant to legal connectivity.
+
+Unresolved restrictions remain a **global guard**, even when their recorded via node
+is outside the representative path. The report separately counts unresolved
+relations whose available via node is on/off the path and relations whose via-node
+locality is unknown. Via-way relations and missing via nodes have unknown locality.
+Incomplete relations may have a locatable via node while their full extent remains
+unknown. `locality_is_relevance_proof:false` prohibits interpreting off-path location
+as a waiver. No attempt is made to resolve vehicle exceptions, missing members,
+via-way effects or conditional expressions. These limitations preserve UNVERIFIED.
+
+For the operator-reported fixture 0, the existing global unresolved flag is enough
+to prevent known non-empty traversal regardless of whether the five reported
+relations lie on a representative path. The new report can distinguish that guard
+from access/barrier/direction evidence on the selected potential path. It cannot
+establish which actual fixture 0 categories apply without the private export and
+specification. The reported 0.419 m / 0.055 m projection distances are geometric
+fit observations, not legal connectivity or permission to relocate an origin.
+No private evidence, VPS or routing/OSM requests were used for this addendum.
+
+Changed files for this focused follow-up: `voyagr/utils/road_oracle.py`,
+`tests/test_independent_road_oracle.py`, and this technical audit. No production
+routing files, configuration, acceptance validators or original captures changed.
+Every report remains `reviewed:false`, `navigation_authorized:false`,
+`acceptance:UNVERIFIED`, and **PRODUCTION_NO_GO**. No accepted oracle hash is generated.
+
+Follow-up validation (2026-10-28): configured CI backend file selection via
+`.venv/bin/python -m pytest -q`: **1,293 passed, 68 subtests passed**. Oracle suite:
+**97 passed**, including 22 new reporting/locality/privacy/limit/eligibility cases.
+A separate 162-case differential check loaded the baseline f2aa2711 implementation
+and confirmed every pre-existing report field remained identical across access,
+direction, restriction, candidate and state-bound variations. `npm run lint:tests`
+and `npm run test:ci -- --maxWorkers=2` passed (100 suites, 1,935 tests, coverage
+thresholds met). `.venv/bin/python scripts/test-dashcam-session-sql.py`: 11 passed
+on temporary local PostgreSQL. Black formatting and `git diff --check` passed.
+Desktop/custom-router/live-service suites were not run. No real-road result is
+claimed; hosted PR/main CI results are reported in the task handoff.
