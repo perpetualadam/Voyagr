@@ -73,6 +73,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-web.txt
           pip install pytest
+          pip install -r requirements-geometry.txt
 
       - name: Run Python behaviour tests
         run: >-
@@ -93,6 +94,7 @@ jobs:
           tests/test_graphhopper_model_composition.py
           tests/test_graphhopper_capabilities.py
           tests/test_phase10_routing.py
+          tests/test_phase12b_geometry.py
           tests/test_phase11c_acceptance_tools.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py

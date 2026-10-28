@@ -73,12 +73,15 @@ load_camera_areas()
 
 
 def get_graphhopper_camera_areas_count() -> int:
-    """Number of server-side camera_area_N sections (from geojson or env, default 128)."""
+    """Loaded application inventory count; env fallback is not installed-engine proof."""
     env_val = os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT')
+    if CAMERA_AREAS_DATA and CAMERA_AREAS_DATA.get('features'):
+        actual = len(CAMERA_AREAS_DATA['features'])
+        if env_val and str(env_val).strip().isdigit() and int(env_val) != actual:
+            logger.warning('[GRAPHHOPPER] Configured camera count differs from loaded inventory; using loaded feature count')
+        return actual
     if env_val and str(env_val).strip().isdigit():
         return int(env_val)
-    if CAMERA_AREAS_DATA and CAMERA_AREAS_DATA.get('features'):
-        return len(CAMERA_AREAS_DATA['features'])
     return 128
 
 
