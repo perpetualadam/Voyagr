@@ -1,0 +1,55 @@
+{
+  "scope": "actual_repository_geometry_local_CPU_not_routing_or_Contabo",
+  "source_sha256": "65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f",
+  "candidate_sha256": "6a397b69a10d9284dfa3c2cc6a05ac070e81e3850c33b75b4827ddced9fe38d7",
+  "all_sample_hashes_equal": true,
+  "candidate_bytes": 1605873,
+  "pipeline": {
+    "samples": 5,
+    "median_ms": 4472.713,
+    "p95_ms": 4620.902,
+    "max_ms": 4620.902
+  },
+  "stage_totals_per_run": {
+    "loading": {
+      "samples": 5,
+      "median_ms": 299.481,
+      "p95_ms": 364.532,
+      "max_ms": 364.532
+    },
+    "duplicate_and_overlap_detection": {
+      "samples": 5,
+      "median_ms": 476.358,
+      "p95_ms": 482.87,
+      "max_ms": 482.87
+    },
+    "union_repair": {
+      "samples": 5,
+      "median_ms": 362.281,
+      "p95_ms": 374.199,
+      "max_ms": 374.199
+    },
+    "geos_validity": {
+      "samples": 5,
+      "median_ms": 16.311,
+      "p95_ms": 19.72,
+      "max_ms": 19.72
+    },
+    "spatial_equivalence": {
+      "samples": 5,
+      "median_ms": 2497.859,
+      "p95_ms": 2527.668,
+      "max_ms": 2527.668
+    },
+    "serialization": {
+      "samples": 5,
+      "median_ms": 44.308,
+      "p95_ms": 51.324,
+      "max_ms": 51.324
+    }
+  },
+  "peak_traced_bytes_one_extra_run": 18057871,
+  "native_GEOS_PROJ_allocations": "NOT_FULLY_MEASURED",
+  "real_engine_route_samples": 0,
+  "real_engine_enforcement": "NOT_TESTED"
+}

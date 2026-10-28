@@ -1,0 +1,20 @@
+{
+  "scope": "repository_structure_not_independent_source_authentication",
+  "grid_misassigned_component_centers": 0,
+  "grid_size_degrees": 0.5,
+  "configured_square_half_width_m": 30,
+  "root_reason_counts": {
+    "Self-intersection": 102,
+    "Valid Geometry": 26
+  },
+  "total_near_equivalent_nonidentical_pairs": 0,
+  "total_edge_touch_pairs": 0,
+  "total_point_touch_pairs": 0,
+  "total_nested_nonidentical_pairs": 0,
+  "total_source_holes": 0,
+  "total_union_holes_preserved": 0,
+  "clockwise_source_exteriors": 0,
+  "source_direction_road_timestamp_section_provenance": "UNKNOWN",
+  "installed_identity_evidence": "USER_OPERATOR_REPORTED_HASH_MATCH_NOT_REPROBED",
+  "installed_original_sha256": "65038dece07721214bc3245739aeb6cc8508acef3efe780e01c054d1753cae2f"
+}

@@ -73,10 +73,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-web.txt
           pip install pytest
+          pip install -r requirements-geometry.txt
 
       - name: Run Python behaviour tests
         run: >-
-          pytest -q
+          pytest -q --junitxml=/tmp/voyagr-backend-results.xml
           tests/test_graphhopper_sign_mapping.py
           tests/test_lane_recommendation.py
           tests/test_lane_guidance.py
@@ -93,6 +94,7 @@ jobs:
           tests/test_graphhopper_model_composition.py
           tests/test_graphhopper_capabilities.py
           tests/test_phase10_routing.py
+          tests/test_phase12b_geometry.py
           tests/test_phase11c_acceptance_tools.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py
@@ -138,6 +140,29 @@ jobs:
           tests/test_phase8_evidence.py
           tests/test_phase9_evidence.py
           tests/test_routing_request_budget.py
+
+      - name: Report bounded backend failure diagnostics
+        if: failure()
+        run: |
+          python - <<'PY'
+          import json,xml.etree.ElementTree as ET
+          from pathlib import Path
+          report={}
+          try:
+              report['failed_tests']=sorted({case.get('classname','')+'.'+case.get('name','').split('[')[0] for case in ET.parse('/tmp/voyagr-backend-results.xml').iter('testcase') if case.find('failure') is not None or case.find('error') is not None})
+              from voyagr.utils.camera_area_candidate import build_candidate,encode
+              raw,manifest,metrics=build_candidate(Path('camera_areas.geojson').read_bytes())
+              target=Path('artifacts/camera-areas/phase12b')
+              expected_manifest=json.loads((target/'manifest.json').read_text())
+              expected_metrics=json.loads((target/'feature_metrics.json').read_text())
+              report['candidate_bytes_match']=raw==(target/'camera_areas_candidate.geojson').read_bytes()
+              report['manifest_changed_fields']=sorted(k for k in manifest if manifest[k]!=expected_manifest.get(k))
+              report['metrics_changed_fields']=sorted({k for actual,expected in zip(metrics,expected_metrics) for k in actual if actual[k]!=expected.get(k)})
+              report['library_versions']=manifest['libraries']
+          except Exception as error:
+              report['diagnostic_error_type']=type(error).__name__
+          print('::notice title=Bounded backend failure diagnostics::'+json.dumps(report,sort_keys=True))
+          PY
 
   dashcam-session-policy:
     name: Dashcam session SQL policy
