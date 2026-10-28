@@ -4,6 +4,7 @@ Tests speed limit detection, smart motorway support, and speed warnings
 """
 
 import unittest
+from unittest.mock import patch
 import time
 from speed_limit_detector import (
     SpeedLimitDetector,
@@ -24,6 +25,13 @@ class TestSpeedLimitDetector(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
+        # Unit tests must not depend on a live public OSM/TomTom response.
+        acquisition = patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'})
+        acquisition.start()
+        self.addCleanup(acquisition.stop)
+        transport = patch('speed_limit_detector.requests.get', side_effect=__import__('requests').ConnectionError('offline unit fixture'))
+        transport.start()
+        self.addCleanup(transport.stop)
         self.detector = SpeedLimitDetector()
     
     def test_initialization(self):

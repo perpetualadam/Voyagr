@@ -60,7 +60,7 @@ The installed502/invalid-JSON generator, memory pressure, dispatcher/proxy topol
 
 ## Complete changed-file inventory
 
-23 files:
+24 files:
 
 - `.env.example`
 - `.github/workflows/ci.yml`
@@ -78,6 +78,7 @@ The installed502/invalid-JSON generator, memory pressure, dispatcher/proxy topol
 - `tests/test_phase11b_overpass.py`
 - `tests/test_routing_avoidance_integrity.py`
 - `tests/test_routing_request_budget.py`
+- `tests/test_speed_limit_detector.py`
 - `tests/test_speed_limit_fixes.py`
 - `voyagr/api/hazards.py`
 - `voyagr/api/navigation.py`

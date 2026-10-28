@@ -251,7 +251,7 @@ class TestAPIIntegration(unittest.TestCase):
 
         # Mock all API calls to fail
         with patch.dict(os.environ, {'SPEED_LIMIT_ROAD_TYPE_FALLBACK': 'false'}, clear=False):
-            with patch('speed_limit_detector.requests.get') as mock_get:
+            with patch('speed_limit_detector.requests.get') as mock_get, patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'}):
                 mock_get.side_effect = Exception("API unavailable")
 
                 result = self.detector.get_speed_limit_for_location(
@@ -342,7 +342,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
     def test_road_type_fallback_when_apis_fail(self):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
-        with patch('speed_limit_detector.requests.get') as mock_get:
+        with patch('speed_limit_detector.requests.get') as mock_get, patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'}):
             mock_get.side_effect = Exception('API unavailable')
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='residential'
@@ -355,7 +355,7 @@ class TestRoadTypeAndOverpassConfig(unittest.TestCase):
     def test_trunk_fallback_is_60_not_70(self):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
-        with patch('speed_limit_detector.requests.get') as mock_get:
+        with patch('speed_limit_detector.requests.get') as mock_get, patch('overpass_helper.query_overpass', return_value={'success':False,'elements':[],'response_state':'UNAVAILABLE'}):
             mock_get.side_effect = Exception('API unavailable')
             result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='trunk'
