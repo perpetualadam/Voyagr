@@ -521,3 +521,28 @@ def test_diagnostic_works_with_network_and_database_blocked():
     with offline_guard():
         out = diagnostic(*matching_inputs())
     assert out["connectivity"] == "KNOWN_PATH_IN_EXPORT"
+
+
+@pytest.mark.parametrize(
+    "key", ["oneway:vehicle", "oneway:motor_vehicle", "oneway:motorcar"]
+)
+def test_vehicle_specific_direction_and_car_override(key):
+    data = export({key: "yes"})
+    assert (
+        analyse(data, endpoint(fraction=0.8), endpoint(fraction=0.2))["potential_path"]
+        is False
+    )
+    data = export({key: "yes", "oneway:motorcar": "no"})
+    assert (
+        analyse(data, endpoint(fraction=0.8), endpoint(fraction=0.2))["connectivity"]
+        == "KNOWN_PATH_IN_EXPORT"
+    )
+
+
+@pytest.mark.parametrize(
+    "tag", [{"barrier": "gate"}, {"highway": "construction", "motorcar": "yes"}]
+)
+def test_way_physical_evidence_stays_uncertain(tag):
+    out = analyse(export(tag))
+    assert out["connectivity"] == "UNVERIFIED"
+    assert out["potential_path"] is True

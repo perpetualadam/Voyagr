@@ -39,7 +39,7 @@ forbidden direction/turn is invalid. No incoming turn is invented when the actua
 origin itself is a junction; arrival at the target junction needs no outgoing turn.
 
 Explicit/implicit motorway and roundabout direction, reverse direction, bidirectional
-roads and motorcar overrides are supported. Unspecified link direction, reversible
+roads and vehicle/motor_vehicle/motorcar overrides are supported in that precedence. Unspecified link direction, reversible
 and conditional direction remain uncertain. Access precedence is motorcar,
 motor_vehicle, vehicle, access, including directional variants at each level.
 Conditional permission can add potential traversal, never known traversal. Private/no
@@ -114,8 +114,8 @@ Geometry dependencies installed from `requirements-geometry.txt`; isolated SQL t
 installed at CI-pinned pgserver 0.1.4 and psycopg2-binary 2.9.13.
 
 - `.venv/bin/python -m pytest -q` with the complete backend file list extracted
-  from CI's **Run Python behaviour tests** step: **1,266 passed, 68 subtests passed**.
-  This includes all **70** new synthetic oracle tests. It excludes the documented
+  from CI's **Run Python behaviour tests** step: **1,271 passed, 68 subtests passed**.
+  This includes all **75** new synthetic oracle tests. It excludes the documented
   desktop/Kivy, custom-router and live-service suites; those were not run.
 - Focused oracle/Phase12FB/transport selection during development: **128 passed**.
 - `npm run lint:tests`: passed.

@@ -197,18 +197,19 @@ class RoadOracle:
             t = way.get("tags", {})
             if "highway" not in t:
                 continue
-            oneway = t.get(
-                "oneway:motorcar",
-                t.get(
-                    "oneway",
-                    (
-                        "yes"
-                        if t.get("highway") == "motorway"
-                        or t.get("junction") == "roundabout"
-                        else "no"
-                    ),
-                ),
+            oneway = (
+                "yes"
+                if (t.get("highway") == "motorway" or t.get("junction") == "roundabout")
+                else "no"
             )
+            direction_keys = (
+                "oneway",
+                "oneway:vehicle",
+                "oneway:motor_vehicle",
+                "oneway:motorcar",
+            )
+            for key in direction_keys:
+                oneway = t.get(key, oneway)
             direction_unknown = oneway not in (
                 "yes",
                 "1",
@@ -221,10 +222,8 @@ class RoadOracle:
             direction_unknown |= any(
                 k.startswith("oneway") and "conditional" in k for k in t
             )
-            direction_unknown |= (
-                t.get("highway", "").endswith("_link")
-                and "oneway" not in t
-                and "oneway:motorcar" not in t
+            direction_unknown |= t.get("highway", "").endswith("_link") and not any(
+                k in t for k in direction_keys
             )
             for s, (a, b) in enumerate(zip(way["nodes"], way["nodes"][1:])):
                 if a not in self.nodes or b not in self.nodes:
@@ -271,6 +270,7 @@ class RoadOracle:
             for k in t
         )
         uncertain |= t.get("construction") is not None or t.get("proposed") is not None
+        uncertain |= "barrier" in t or t.get("highway") in ("construction", "proposed")
         if value in ("no", "private"):
             # Conditional permission is a possible path, never a known path.
             return uncertain, uncertain
