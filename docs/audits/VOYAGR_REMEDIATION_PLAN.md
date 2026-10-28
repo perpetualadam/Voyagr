@@ -119,3 +119,17 @@ PHASE12FB_PARTIALLY_VERIFIED; production NO-GO. Raw five12E captures and lab/pri
 ## Phase12F-B recorded transport compatibility — 2026-10-28
 
 The offline validator now accepts immutable body/query captures only through separately reviewed method/target/status/body-response/build-graph transport binding. Stock GH8 POST does not merge query hints: URL-only activation additionally requires independent adapter/effective-hint or global-no-CH evidence, otherwise a fresh separate complete capture is required. No original objects/hashes or reviewed flags are rewritten. Replay now uses the production response gate with cache-tier stubs, without full-app import/database initialisation; explicit offline guards and clean-process tests enforce no network/DB access. Source evidence is pinned; genuine capture replay remains NOT_TESTED. GraphHopper-first/mandatory/origin gates and production NO-GO remain. See [transport report](VOYAGR_PHASE12FB_TRANSPORT_COMPATIBILITY.md) and updated operator procedure.
+
+### Phase 12F-B independent OSM diagnostics
+
+The [offline road oracle audit](VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md)
+documents the reconstructed implementation and complete changed-file inventory.
+Synthetic topology and provenance checks prepare private independent review;
+they do not complete real-road acceptance. Obtain genuine source/export extraction,
+matched candidate GeoJSON/imported-graph receipts, native captures and reviewed
+segment identity. Independently resolve via-way/incomplete/conditional restrictions,
+barriers and coverage gaps before any legal-connectivity claim. No-path claims
+need closed-component source coverage; bounded search exhaustion is insufficient.
+Keep independently accepted replay `oracle_sha256` separate from generated diagnostics.
+Preserve GraphHopper-first eligible ranking, mandatory avoidance, Valhalla alternatives,
+2-metre continuity and fail-closed navigation. Production remains **PRODUCTION_NO_GO**.

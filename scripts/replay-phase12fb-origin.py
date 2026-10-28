@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline, default NOT_TESTED. Private native captures only; no engine HTTP calls."""
+
 import argparse, json, sys
 from pathlib import Path
 
@@ -13,9 +14,23 @@ p.add_argument(
     type=Path,
     default=Path("artifacts/camera-areas/phase12b/camera_areas_candidate.geojson"),
 )
+for name in ("oracle-export", "oracle-receipt", "oracle-specification"):
+    p.add_argument("--" + name, type=Path)
 a = p.parse_args()
 try:
     report = replay(*load_bundle(a.bundle, a.areas)) if a.bundle else unexecuted()
+    diagnostic_paths = (a.oracle_export, a.oracle_receipt, a.oracle_specification)
+    if any(diagnostic_paths):
+        if not a.bundle or not all(diagnostic_paths):
+            raise ValueError("complete_diagnostic_inputs_required")
+        from voyagr.utils.road_oracle import diagnostic, read_private
+
+        report["independent_road_diagnostic"] = diagnostic(
+            read_private(a.oracle_export),
+            read_private(a.bundle),
+            read_private(a.oracle_receipt),
+            read_private(a.oracle_specification),
+        )
 except Exception as error:
     print(
         json.dumps(
