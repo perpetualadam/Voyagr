@@ -1215,7 +1215,7 @@ def calculate_route():
     """
     import time
     import sys
-    route_start_time = time.time()
+    route_start_time = time.monotonic()
 
     # FORCE OUTPUT TO APPEAR IMMEDIATELY
     print(f"\n{'='*80}", flush=True)
@@ -1369,16 +1369,17 @@ def calculate_route():
         # Fetch + assemble hazards (SCDB cameras, TomTom incidents, avoid_points,
         # camera-preference filter, OSM traffic-light/railway overlays). Extracted to
         # voyagr.services.routing.hazard_prep; behaviour/logging unchanged.
-        hazards = prepare_route_hazards(
-            start_lat, start_lon, end_lat, end_lon,
-            HazardPrefs(
-                avoid_points=avoid_points,
-                avoid_cameras=avoid_cameras,
-                avoid_traffic_lights=avoid_traffic_lights,
-                avoid_railway_crossings=avoid_railway_crossings,
-                enable_hazard_avoidance=enable_hazard_avoidance,
-            ),
-        )
+        with route_transport.stage('hazards'):
+            hazards = prepare_route_hazards(
+                start_lat, start_lon, end_lat, end_lon,
+                HazardPrefs(
+                    avoid_points=avoid_points,
+                    avoid_cameras=avoid_cameras,
+                    avoid_traffic_lights=avoid_traffic_lights,
+                    avoid_railway_crossings=avoid_railway_crossings,
+                    enable_hazard_avoidance=enable_hazard_avoidance,
+                ),
+            )
 
         # ====================================================================
         # ROUTING ENGINE PRIORITY:
@@ -1402,6 +1403,7 @@ def calculate_route():
         # TRY GRAPHHOPPER FIRST (car-only; camera avoidance). Extracted to
         # voyagr.services.routing.engines.attempt_graphhopper_camera_route.
         # ====================================================================
+        route_transport.check_budget()
         graphhopper_route, graphhopper_error = attempt_graphhopper_camera_route(
             hazards=hazards,
             route_bbox=route_bbox,
@@ -1425,7 +1427,7 @@ def calculate_route():
 
         logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 
-        valhalla_start_time = time.time()
+        valhalla_start_time = time.monotonic()
         # Defaults if Valhalla try exits early; overwritten when waypoints are processed.
         route_locations = [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}]
         has_waypoints = False
@@ -1704,7 +1706,7 @@ def calculate_route():
                     # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
                     # ================================================================
-                    valhalla_elapsed = (time.time() - valhalla_start_time) * 1000
+                    valhalla_elapsed = (time.monotonic() - valhalla_start_time) * 1000
                     fallback_optimizer.record_success('valhalla', valhalla_elapsed)
 
                     # ================================================================
@@ -1751,6 +1753,8 @@ def calculate_route():
             elif response is not None:
                 valhalla_error = f"Routing engine HTTP {response.status_code}"
             # else: transport failure already set valhalla_error (timeout / unreachable)
+        except route_transport.RoutingDeadlineExceeded:
+            raise
         except requests.exceptions.Timeout:
             valhalla_error = "Timeout (>10s)"
             print(f"[Valhalla] Timeout error: {valhalla_error}")
@@ -1774,6 +1778,7 @@ def calculate_route():
             if enable_hazard_avoidance and exclude_locations and len(exclude_locations) > 10:
                 retry_limits = [50, 20, 10]  # Try with 50, then 20, then 10 exclusions
                 for retry_limit in retry_limits:
+                    route_transport.check_budget()
                     if retry_limit >= len(exclude_locations):
                         continue  # Skip if we already tried this many
 
@@ -1808,7 +1813,8 @@ def calculate_route():
                             route_optimization=route_optimization,
                         )
 
-                        retry_response = route_transport.post(url, json=retry_payload, timeout=10, headers=headers)
+                        with route_transport.stage('valhalla'):
+                            retry_response = route_transport.post(url, json=retry_payload, timeout=10, headers=headers)
 
                         if retry_response.status_code == 200:
                             retry_data = retry_response.json()
@@ -1877,7 +1883,7 @@ def calculate_route():
                                 print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
 
                                 # Record success
-                                valhalla_elapsed = (time.time() - valhalla_start_time) * 1000
+                                valhalla_elapsed = (time.monotonic() - valhalla_start_time) * 1000
                                 fallback_optimizer.record_success('valhalla', valhalla_elapsed)
 
                                 # Determine source
@@ -1916,6 +1922,8 @@ def calculate_route():
 
                                 # Return the successful retry response
                                 return jsonify(response_data)
+                    except route_transport.RoutingDeadlineExceeded:
+                        raise
                     except Exception as retry_e:
                         logger.warning(f"[VALHALLA] Retry with {retry_limit} exclusions failed: {type(retry_e).__name__}")
                         continue  # Try next retry limit
@@ -2000,7 +2008,8 @@ def calculate_route():
                             ('minimal Valhalla (locations+costing)', minimal_payload),
                         ):
                             logger.info(f"[ROUTING] Recovery: requesting {rec_label}")
-                            vrec = route_transport.post(url, json=rec_payload, timeout=15, headers=headers)
+                            with route_transport.stage('valhalla'):
+                                vrec = route_transport.post(url, json=rec_payload, timeout=15, headers=headers)
                             if vrec.status_code == 200:
                                 rd = vrec.json()
                                 if rd.get('error'):
@@ -2106,6 +2115,8 @@ def calculate_route():
                             recovery_data, routing_source, cache_key=db_cache_key,
                         )
                         logger.info(f"[ROUTING] Recovery response: {routing_source}, {len(routes_out)} route(s)")
+            except route_transport.RoutingDeadlineExceeded:
+                raise
             except Exception as rec_e:
                 logger.warning(f"[ROUTING] GraphHopper/Valhalla recovery failed: {type(rec_e).__name__}")
 
@@ -2118,6 +2129,7 @@ def calculate_route():
             if osrm_profile not in supported_profiles:
                 return jsonify(success=False, error='Fallback routing does not support this travel mode; keep the current route or retry the local engines.',
                                error_code='UNSUPPORTED_ROUTING_MODE', avoidance_status='UNSUPPORTED', routing_degraded=True)
+            route_transport.check_budget()
             logger.info("[OSRM] fallback_started profile=%s", osrm_profile)
             osrm_url = (
                 f"{OSRM_URL}/{osrm_profile}/{start_lon},{start_lat};{end_lon},{end_lat}"
@@ -2129,9 +2141,10 @@ def calculate_route():
                     'Accept': 'application/json'
                 }
                 logger.debug("[OSRM] fallback_request_prepared")
-                osrm_start = time.time()
-                response = route_transport.get(osrm_url, timeout=15, headers=headers)
-                osrm_elapsed = (time.time() - osrm_start) * 1000
+                osrm_start = time.monotonic()
+                with route_transport.stage('osrm'):
+                    response = route_transport.get(osrm_url, timeout=15, headers=headers)
+                osrm_elapsed = (time.monotonic() - osrm_start) * 1000
                 logger.info(f"[OSRM] Response status: {response.status_code}, elapsed: {osrm_elapsed:.0f}ms")
 
                 if response.status_code == 200:
@@ -2172,7 +2185,7 @@ def calculate_route():
                         # ================================================================
                         # PHASE 5: Record success in fallback chain optimizer
                         # ================================================================
-                        osrm_elapsed = (time.time() - route_start_time) * 1000
+                        osrm_elapsed = (time.monotonic() - route_start_time) * 1000
                         fallback_optimizer.record_success('osrm', osrm_elapsed)
 
                         response_data = {
@@ -2217,6 +2230,8 @@ def calculate_route():
                         print(f"[OSRM] Unexpected response: {route_data.get('code')}")
                 else:
                     print(f"[OSRM] HTTP {response.status_code}")
+            except route_transport.RoutingDeadlineExceeded:
+                raise
             except requests.exceptions.Timeout:
                 print("[OSRM] Timeout (>10s)")
                 fallback_optimizer.record_failure('osrm')
@@ -2249,6 +2264,7 @@ def calculate_route():
 
     except Exception as e:
         from voyagr.services.routing.journey_geometry import IncompleteJourney
+        if isinstance(e, route_transport.RoutingDeadlineExceeded): return route_transport.deadline_response()
         if isinstance(e,IncompleteJourney):
             return jsonify(success=False,error='Journey geometry is incomplete; recalculate before navigation.',error_code='INCOMPLETE_ROUTE',geometry_complete=False,automatic_selection_allowed=False),422
         logger.error("[ROUTE] calculation_failed error_type=%s", type(e).__name__)
@@ -2256,7 +2272,7 @@ def calculate_route():
     finally:
         logger.info("[ROUTE] request_completed", extra={
             "route_event": "request_completed",
-            "duration_ms": round((time.time() - route_start_time) * 1000),
+            "duration_ms": round((time.monotonic() - route_start_time) * 1000),
         })
 
 @app.route('/api/multi-stop-route', methods=['POST'])

@@ -601,7 +601,7 @@
             return 'Route calculation timed out. Try a shorter route, move start and end closer, or try again in a moment.';
         }
         if (code === 504) {
-            return 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+            return 'Gateway Timeout (504). The response did not identify which service timed out; your current route is retained. Retry when ready.';
         }
         if (code === 502) {
             return 'Bad Gateway (502): Server communication error. Please try again.';
@@ -629,7 +629,7 @@
         var text = String(responseText || '');
         var msg = 'Server error (HTTP ' + code + ')';
         if (code === 504) {
-            msg = 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+            msg = 'Gateway Timeout (504). The response did not identify which service timed out; your current route is retained. Retry when ready.';
         } else if (code === 502) {
             msg = 'Bad Gateway (502): Server communication error. Please try again.';
         } else if (code === 500) {

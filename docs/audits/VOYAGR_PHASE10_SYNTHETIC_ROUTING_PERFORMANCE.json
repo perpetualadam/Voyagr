@@ -1,0 +1,349 @@
+{
+  "scope": "synthetic actual Flask requests; mocked provider transport/acquisition/cache writes, in-memory default scoring preferences; no network or rendering",
+  "samples_per_case": 20,
+  "stages": "inclusive/nested, not additive",
+  "cases": [
+    {
+      "name": "single",
+      "request_boundary": {
+        "median_ms": 1.827,
+        "p95_ms": 2.198,
+        "max_ms": 3.763
+      },
+      "peak_traced_mib": 0.071,
+      "mocked_provider_calls_including_memory_sample": 63,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.043,
+          "p95_ms": 0.229,
+          "max_ms": 1.448,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.019,
+          "p95_ms": 0.029,
+          "max_ms": 0.058,
+          "calls": 21
+        },
+        "hazard_acquisition_fixture": {
+          "median_ms": 0.008,
+          "p95_ms": 0.02,
+          "max_ms": 0.035,
+          "calls": 21
+        },
+        "provider_fixture": {
+          "median_ms": 0.014,
+          "p95_ms": 0.027,
+          "max_ms": 0.093,
+          "calls": 63
+        },
+        "ranking_enrichment": {
+          "median_ms": 0.347,
+          "p95_ms": 0.538,
+          "max_ms": 2.4,
+          "calls": 21
+        },
+        "geometry_decoding": {
+          "median_ms": 0.012,
+          "p95_ms": 0.036,
+          "max_ms": 0.103,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 0.084,
+          "p95_ms": 0.214,
+          "max_ms": 0.82,
+          "calls": 21
+        }
+      }
+    },
+    {
+      "name": "three_stops",
+      "request_boundary": {
+        "median_ms": 3.073,
+        "p95_ms": 3.59,
+        "max_ms": 4.996
+      },
+      "peak_traced_mib": 0.173,
+      "mocked_provider_calls_including_memory_sample": 84,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.119,
+          "p95_ms": 0.603,
+          "max_ms": 6.48,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.02,
+          "p95_ms": 0.056,
+          "max_ms": 0.06,
+          "calls": 21
+        },
+        "provider_fixture": {
+          "median_ms": 0.01,
+          "p95_ms": 0.039,
+          "max_ms": 0.054,
+          "calls": 84
+        },
+        "geometry_decoding": {
+          "median_ms": 0.008,
+          "p95_ms": 0.039,
+          "max_ms": 0.156,
+          "calls": 587
+        },
+        "geometry_stitching": {
+          "median_ms": 0.114,
+          "p95_ms": 0.279,
+          "max_ms": 0.486,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 0.053,
+          "p95_ms": 0.242,
+          "max_ms": 0.73,
+          "calls": 105
+        }
+      }
+    },
+    {
+      "name": "five_stops",
+      "request_boundary": {
+        "median_ms": 4.077,
+        "p95_ms": 4.596,
+        "max_ms": 5.32
+      },
+      "peak_traced_mib": 0.282,
+      "mocked_provider_calls_including_memory_sample": 126,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.164,
+          "p95_ms": 0.739,
+          "max_ms": 5.764,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.02,
+          "p95_ms": 0.105,
+          "max_ms": 0.342,
+          "calls": 21
+        },
+        "provider_fixture": {
+          "median_ms": 0.008,
+          "p95_ms": 0.026,
+          "max_ms": 0.058,
+          "calls": 126
+        },
+        "geometry_decoding": {
+          "median_ms": 0.007,
+          "p95_ms": 0.039,
+          "max_ms": 0.164,
+          "calls": 797
+        },
+        "geometry_stitching": {
+          "median_ms": 0.159,
+          "p95_ms": 0.314,
+          "max_ms": 0.995,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 0.045,
+          "p95_ms": 0.21,
+          "max_ms": 1.242,
+          "calls": 147
+        }
+      }
+    },
+    {
+      "name": "alternatives",
+      "request_boundary": {
+        "median_ms": 2.931,
+        "p95_ms": 3.357,
+        "max_ms": 4.925
+      },
+      "peak_traced_mib": 0.071,
+      "mocked_provider_calls_including_memory_sample": 63,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.064,
+          "p95_ms": 0.268,
+          "max_ms": 2.451,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.025,
+          "p95_ms": 0.057,
+          "max_ms": 0.093,
+          "calls": 21
+        },
+        "hazard_acquisition_fixture": {
+          "median_ms": 0.011,
+          "p95_ms": 0.012,
+          "max_ms": 0.028,
+          "calls": 21
+        },
+        "provider_fixture": {
+          "median_ms": 0.048,
+          "p95_ms": 0.107,
+          "max_ms": 0.213,
+          "calls": 63
+        },
+        "ranking_enrichment": {
+          "median_ms": 0.651,
+          "p95_ms": 0.992,
+          "max_ms": 3.397,
+          "calls": 21
+        },
+        "geometry_decoding": {
+          "median_ms": 0.017,
+          "p95_ms": 0.023,
+          "max_ms": 0.084,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 0.125,
+          "p95_ms": 0.157,
+          "max_ms": 1.142,
+          "calls": 21
+        }
+      }
+    },
+    {
+      "name": "cached",
+      "request_boundary": {
+        "median_ms": 1.711,
+        "p95_ms": 2.135,
+        "max_ms": 28.085
+      },
+      "peak_traced_mib": 0.071,
+      "mocked_provider_calls_including_memory_sample": 0,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.027,
+          "p95_ms": 0.223,
+          "max_ms": 2.253,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.025,
+          "p95_ms": 0.027,
+          "max_ms": 0.09,
+          "calls": 21
+        },
+        "geometry_decoding": {
+          "median_ms": 0.021,
+          "p95_ms": 0.066,
+          "max_ms": 0.093,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 0.132,
+          "p95_ms": 3.039,
+          "max_ms": 26.612,
+          "calls": 21
+        }
+      }
+    },
+    {
+      "name": "failover",
+      "request_boundary": {
+        "median_ms": 2.177,
+        "p95_ms": 2.67,
+        "max_ms": 3.259
+      },
+      "peak_traced_mib": 0.075,
+      "mocked_provider_calls_including_memory_sample": 42,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.045,
+          "p95_ms": 0.301,
+          "max_ms": 2.205,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.026,
+          "p95_ms": 0.027,
+          "max_ms": 0.086,
+          "calls": 21
+        },
+        "hazard_acquisition_fixture": {
+          "median_ms": 0.012,
+          "p95_ms": 0.03,
+          "max_ms": 0.062,
+          "calls": 21
+        },
+        "provider_fixture": {
+          "median_ms": 0.022,
+          "p95_ms": 0.054,
+          "max_ms": 0.081,
+          "calls": 42
+        },
+        "geometry_decoding": {
+          "median_ms": 0.018,
+          "p95_ms": 0.07,
+          "max_ms": 0.088,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 0.128,
+          "p95_ms": 0.211,
+          "max_ms": 1.346,
+          "calls": 21
+        }
+      }
+    },
+    {
+      "name": "large_hazards",
+      "request_boundary": {
+        "median_ms": 1150.156,
+        "p95_ms": 2228.564,
+        "max_ms": 2250.989
+      },
+      "peak_traced_mib": 9.775,
+      "mocked_provider_calls_including_memory_sample": 147,
+      "stage_call_distributions": {
+        "serialization": {
+          "median_ms": 0.07,
+          "p95_ms": 0.443,
+          "max_ms": 1.581,
+          "calls": 63
+        },
+        "parsing": {
+          "median_ms": 0.023,
+          "p95_ms": 0.061,
+          "max_ms": 0.064,
+          "calls": 21
+        },
+        "hazard_acquisition_fixture": {
+          "median_ms": 16.769,
+          "p95_ms": 38.347,
+          "max_ms": 72.072,
+          "calls": 21
+        },
+        "provider_fixture": {
+          "median_ms": 0.028,
+          "p95_ms": 0.099,
+          "max_ms": 0.506,
+          "calls": 147
+        },
+        "ranking_enrichment": {
+          "median_ms": 537.358,
+          "p95_ms": 1100.682,
+          "max_ms": 10008.109,
+          "calls": 21
+        },
+        "geometry_decoding": {
+          "median_ms": 0.021,
+          "p95_ms": 0.076,
+          "max_ms": 0.123,
+          "calls": 42
+        },
+        "avoidance_assessment": {
+          "median_ms": 73.067,
+          "p95_ms": 157.511,
+          "max_ms": 932.711,
+          "calls": 21
+        }
+      }
+    }
+  ]
+}

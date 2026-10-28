@@ -1,6 +1,7 @@
 """One HTTP boundary for primary, recovery, fallback, multidrop and cached routes."""
 import logging
 from flask import g, request, jsonify
+from voyagr.utils import request_budget as route_transport
 from voyagr.services.routing.integrity import normalize_requirements, assess_response, FLAGS
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ def capture_hazard_snapshot(hazards):
 
 
 def register_avoidance_integrity(app):
+    app.register_error_handler(route_transport.RoutingDeadlineExceeded, lambda error: route_transport.deadline_response())
     @app.before_request
     def normalize_avoidance_contract():
         if request.path not in PATHS or request.method != 'POST': return None
@@ -43,9 +45,7 @@ def register_avoidance_integrity(app):
     def assess_navigation_response(response):
         budget=getattr(g,'routing_budget',None)
         if budget and budget.remaining()<=0:
-            failure=jsonify(success=False,error='Routing request deadline exceeded; current route retained.',error_code='ROUTING_DEADLINE_EXCEEDED',automatic_selection_allowed=False)
-            failure.status_code=504
-            return failure
+            return route_transport.deadline_response()
         requirements = getattr(g,'route_avoidance_requirements',None)
         if requirements is None or response.status_code>=400 or not response.is_json: return response
         payload = response.get_json(silent=True)
@@ -71,7 +71,8 @@ def register_avoidance_integrity(app):
                 start=validate_coordinates(raw.get('start',''))
                 end=start if raw.get('round_trip') else validate_coordinates(raw.get('end',''))
                 if start and end: endpoints=(start,end)
-            result = assess_response(payload, requirements, hazards, waypoints=visits,endpoints=endpoints)
+            with route_transport.stage('assessment'):
+                result = assess_response(payload, requirements, hazards, waypoints=visits,endpoints=endpoints)
 
         except Exception as error:
             # Verification failure must not replay a cached/provider claim of compliance.
@@ -83,12 +84,16 @@ def register_avoidance_integrity(app):
                           routing_warning='Avoidance verification unavailable; do not automatically select this route.')
             for route in result.get('routes',[]): route['avoidance_assessment']=result['avoidance_assessment']
         if budget and budget.remaining()<=0:
-            failure=jsonify(success=False,error='Routing deadline exceeded during validation.',error_code='ROUTING_DEADLINE_EXCEEDED',automatic_selection_allowed=False)
-            failure.status_code=504
-            return failure
-        response.set_data(app.json.dumps(result))
+            return route_transport.deadline_response()
+        try:
+            with route_transport.stage('serialization'):
+                response.set_data(app.json.dumps(result))
+        except route_transport.RoutingDeadlineExceeded:
+            return route_transport.deadline_response()
         if budget:
             response.headers['Server-Timing']=f'routing;dur={(budget.clock()-budget.started)*1000:.1f}, provider;dur={budget.transport_seconds*1000:.1f}'
+            for name, entry in getattr(budget, 'stages', {}).items():
+                response.headers['Server-Timing'] += f', {name};dur={entry["elapsed_ms"]:.1f}'
             response.headers['X-Routing-HTTP-Calls']=str(budget.calls)
         response.headers['Cache-Control']='no-store'
         return response

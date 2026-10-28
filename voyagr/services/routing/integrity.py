@@ -116,7 +116,7 @@ def assess_route(route, requirements, hazards=None, *, fallback_source='', now=N
     rows = []
     for requirement in requirements:
         row = dict(requirement, status='SATISFIED', coverage='NOT_APPLICABLE', verification='disabled',
-                   engine=engine, engine_capability='not_requested', conflicts=0, uncertain_matches=0)
+                   engine=engine, engine_capability='not_requested', conflicts=0, uncertain_matches=0, unrelated_matches=0, outside_radius=0, unknown_or_stale=0)
         if requirement['enabled']:
             category = requirement['category']; buckets = CATEGORIES[category]
             row.update(status='UNVERIFIED', coverage='UNKNOWN', verification='insufficient_evidence', engine_capability='unsupported' if engine=='OSRM' else 'best_effort')
@@ -127,12 +127,23 @@ def assess_route(route, requirements, hazards=None, *, fallback_source='', now=N
                 for bucket in buckets:
                     for hazard in hazards.get(bucket,[]) or []:
                         if not isinstance(hazard,dict): row['uncertain_matches']+=1; continue
-                        identity = (bucket, str(hazard.get('id')), str(hazard.get('lat')), str(hazard.get('lon')), str(hazard.get('road_id')), str(hazard.get('travel_bearing_deg')))
+                        identity = (bucket,) + tuple(str(hazard.get(field)) for field in ('id','lat','lon','road_id','road_id_namespace','osm_way_id','graph_edge_id','graph_provider','observed_at_ms','valid_until','level','directionality','travel_bearing_deg','source'))
                         if identity in seen: continue
                         seen.add(identity)
                         match = index.match(hazard, category, now)
                         if match=='MATCH': row['conflicts']+=1
-                        elif match=='POSSIBLE': row['uncertain_matches']+=1
+                        elif match=='POSSIBLE':
+                            row['uncertain_matches']+=1
+                            stamp = hazard.get('observed_at_ms')
+                            expiry = hazard.get('valid_until')
+                            stale = not isinstance(stamp,(int,float)) or isinstance(stamp,bool) or not math.isfinite(stamp) or not 0<=now*1000-stamp<=600000
+                            if expiry is not None:
+                                stale = stale or not isinstance(expiry,(int,float)) or not math.isfinite(expiry) or expiry<now
+                            if stale: row['unknown_or_stale']+=1
+                        elif match=='CLEAR':
+                            radius=max(10,30+float(hazard.get('position_uncertainty_m',20)))
+                            near=any(distance<=radius for distance,_ in index.nearby(float(hazard['lat']),float(hazard['lon']),radius))
+                            row['unrelated_matches' if near else 'outside_radius']+=1
                 if row['conflicts']: row.update(status='VIOLATED', verification='matched_available_data')
                 elif row['uncertain_matches']: row.update(status='UNVERIFIED', verification='road_or_direction_unknown')
                 elif coverage=='AVAILABLE': row.update(status='SATISFIED', verification='checked_available_data')
@@ -197,6 +208,8 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
             if limitation: row.update(engine_capability='not_verified', provider_limitation=limitation)
             row['conflicts'] = sum(p['conflicts'] for p in peers)
             row['uncertain_matches'] = sum(p['uncertain_matches'] for p in peers)
+            for field in ('unrelated_matches','outside_radius','unknown_or_stale'):
+                row[field] = sum(p.get(field,0) for p in peers)
             if any(p['coverage']!='AVAILABLE' for p in peers): row['coverage']='UNKNOWN'
         aggregate['status'] = next((status for status in ('VIOLATED','UNSUPPORTED','UNVERIFIED') if any(r['status']==status for r in aggregate['requirements'] if r['enabled'])), 'SATISFIED')
         if aggregate['status']!='SATISFIED': aggregate['claim']='best_effort_or_unverified'
@@ -223,10 +236,43 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
         routes.sort(key=lambda r:not r['avoidance_assessment']['geometry_valid'])
         if routes and not any(r['avoidance_assessment']['geometry_valid'] for r in routes):
             result.update(success=False,error_code='INCOMPLETE_ROUTE',error='Route does not include every requested visit in order.',geometry_complete=False)
-    usable = [r for r in routes if isinstance(r,dict) and r.get('avoidance_assessment',{}).get('automatic_selection_allowed')]
-    # Preserve preference ranking. Only mandatory-compliant alternatives move ahead.
-    if any(r['enabled'] and r['mode']=='mandatory' for r in requirements):
-        routes.sort(key=lambda r:not r.get('avoidance_assessment',{}).get('automatic_selection_allowed',False))
+    from voyagr.services.routing.route_variety import is_graphhopper_optimised
+    mandatory = any(r['enabled'] and r['mode']=='mandatory' for r in requirements)
+    # Product display policy follows independent assessment, never proximity counts.
+    routes.sort(key=lambda r:(
+        not r['avoidance_assessment']['geometry_valid'],
+        mandatory and not r['avoidance_assessment']['automatic_selection_allowed'],
+        not is_graphhopper_optimised(r),
+    ))
+    if routes and is_graphhopper_optimised(routes[0]) and routes[0]['avoidance_assessment']['automatic_selection_allowed']:
+        binding = routes[0]['avoidance_assessment'].get('geometry_binding')
+        routes = [routes[0]] + [r for r in routes[1:] if not (binding and
+            r['avoidance_assessment']['automatic_selection_allowed'] and
+            r['avoidance_assessment'].get('geometry_binding')==binding)]
+    for position, route in enumerate(routes, 1):
+        assessment = route['avoidance_assessment']
+        camera_rows = [row for row in assessment['requirements'] if row['enabled'] and row['category'] in ('speed_cameras','red_light_cameras','other_cameras')]
+        evidence = {
+            'evaluated':bool(camera_rows), 'applicable':sum(row['conflicts'] for row in camera_rows),
+            'possible':sum(row['uncertain_matches'] for row in camera_rows),
+            'unknown_or_stale':sum(row.get('unknown_or_stale',0) for row in camera_rows),
+            'confirmed_unrelated':sum(row.get('unrelated_matches',0) for row in camera_rows),
+            'outside_radius':sum(row.get('outside_radius',0) for row in camera_rows),
+            'coverage':{row['category']:row['coverage'] for row in camera_rows},
+            'scope':assessment.get('scope','route'), 'claim':'association_with_available_evidence_only',
+        }
+        route['camera_evidence'] = evidence
+        route['route_comparison'] = {
+            'display_position':position, 'engine':engine_name(route,result.get('source','')),
+            'duration_minutes':route.get('duration_minutes'), 'distance_km':route.get('distance_km'),
+            'avoidance_status':assessment['status'], 'camera_evidence':evidence,
+            'provider_limitations':route.get('provider_limitations',[]),
+            'geometry_binding':assessment.get('geometry_binding'),
+            'automatic_selection_allowed':assessment['automatic_selection_allowed'],
+            'ranking_reason':'blocked_mandatory_or_geometry' if not assessment['automatic_selection_allowed'] else
+                'graphhopper_primary_policy' if is_graphhopper_optimised(route) else 'fallback_or_alternative',
+        }
+    usable = [r for r in routes if r['avoidance_assessment']['automatic_selection_allowed']]
     result['avoidance_requirements'] = requirements
     result['avoidance_request_fingerprint'] = requirement_fingerprint(requirements)
     result['automatic_selection_allowed'] = bool(usable)
@@ -236,7 +282,7 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
         result['avoidance_assessment']=routes[0]['avoidance_assessment']
         if 'routes' in result:
             primary = routes[0]
-            for field in ('provider_limitations', 'provider_capabilities'):
+            for field in ('provider_limitations', 'provider_capabilities', 'camera_evidence', 'route_comparison'):
                 result.pop(field, None)
                 if field in primary: result[field] = copy.deepcopy(primary[field])
             for key in ('geometry','geometry_precision','maneuvers','fuel_cost','fuel_litres','toll_cost','caz_cost','hazards','hazard_count'):

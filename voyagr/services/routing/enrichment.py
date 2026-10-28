@@ -165,7 +165,7 @@ def merge_graphhopper_optimised_route(
 
         gh_hazard_count = gh_route_entry.get('hazard_count', 0)
         gh_distance_km = gh_route_entry.get('distance_km', 0)
-        if any(
+        if not str(gh_route_entry.get('source', '')).startswith('GraphHopper') and any(
             not routes_are_distinct(gh_route_entry, existing)
             for existing in routes
             if not is_primary_optimised_route(existing)
@@ -184,11 +184,11 @@ def merge_graphhopper_optimised_route(
         gh_baseline = baseline_camera_hazard_count(routes)
         if gh_hazard_count > gh_baseline:
             logger.warning(
-                '[GRAPHHOPPER] Optimised (%s) has %d cameras vs baseline %d — '
-                'keeping as primary option anyway',
+                '[GRAPHHOPPER] Optimised (%s) has %d proximity-counted hazards vs baseline %d; '
+                'provider display preference is independent of compliance',
                 log_label, gh_hazard_count, gh_baseline,
             )
-            gh_route_entry['routing_preferences_limited'] = True
+            gh_route_entry['proximity_comparison_only'] = True
 
         routes = [r for r in routes if not is_primary_optimised_route(r)]
         routes.insert(0, gh_route_entry)

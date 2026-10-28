@@ -57,9 +57,13 @@ def post_valhalla_route(url: str, payload: Dict[str, Any], headers: Dict[str, st
 
     HTTP status handling and JSON parsing stay in the caller.
     """
+    route_transport.check_budget()
     try:
-        resp = route_transport.post(url, json=payload, timeout=timeout, headers=headers)
+        with route_transport.stage('valhalla'):
+            resp = route_transport.post(url, json=payload, timeout=timeout, headers=headers)
         return ValhallaPostOutcome(resp, None, False)
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except requests.exceptions.Timeout:
         return ValhallaPostOutcome(None, None, True)
     except requests.exceptions.RequestException as e:

@@ -82,6 +82,10 @@ def should_append_distinct_valhalla_route_types(
     return distinct < min_distinct
 
 
+def is_graphhopper_optimised(route):
+    return str(route.get('source', '')).startswith('GraphHopper') and is_primary_optimised_route(route)
+
+
 def _drop_optimised_routes_on_the_same_road(
     routes: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -96,7 +100,7 @@ def _drop_optimised_routes_on_the_same_road(
         return routes
     kept: List[Dict[str, Any]] = []
     for route in routes:
-        if is_primary_optimised_route(route) and any(
+        if is_primary_optimised_route(route) and not is_graphhopper_optimised(route) and any(
             not routes_are_distinct(route, other) for other in others
         ):
             continue

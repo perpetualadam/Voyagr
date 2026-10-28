@@ -249,6 +249,8 @@ def route_with_graphhopper(
     Returns:
         Route data dict or None if failed
     """
+    route_transport.check_budget()
+    request_started_at = time.monotonic()
     try:
         from voyagr.services.routing.costing import build_graphhopper_costing_preference_model
         from voyagr.services.hazards import (
@@ -259,7 +261,8 @@ def route_with_graphhopper(
         )
 
         url = f"{GRAPHHOPPER_URL}/route"
-        capabilities = get_graphhopper_capabilities(GRAPHHOPPER_URL, 'car')
+        with route_transport.stage('metadata'):
+            capabilities = get_graphhopper_capabilities(GRAPHHOPPER_URL, 'car')
         if capabilities['state'] == 'verified' and not capabilities['profile_available']:
             logger.warning('[GRAPHHOPPER] Configured profile is not advertised; use another provider')
             return None
@@ -286,75 +289,78 @@ def route_with_graphhopper(
             "details": available_details
         }
 
-        custom_model: Optional[Dict[str, Any]] = None
-        custom_model_applied = False
-        camera_model_included = False
-        cam_model: Optional[Dict[str, Any]] = None
-        if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
-            cam_model = build_graphhopper_combined_camera_model(
-                camera_hazards if camera_hazards and any(camera_hazards.values()) else None,
-                route_bbox=route_bbox,
-                start_lat=start_lat,
-                start_lon=start_lon,
-                end_lat=end_lat,
-                end_lon=end_lon,
+        with route_transport.stage('custom_model'):
+            custom_model: Optional[Dict[str, Any]] = None
+            custom_model_applied = False
+            camera_model_included = False
+            cam_model: Optional[Dict[str, Any]] = None
+            if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+                cam_model = build_graphhopper_combined_camera_model(
+                    camera_hazards if camera_hazards and any(camera_hazards.values()) else None,
+                    route_bbox=route_bbox,
+                    start_lat=start_lat,
+                    start_lon=start_lon,
+                    end_lat=end_lat,
+                    end_lon=end_lon,
+                ) or None
+                if cam_model:
+                    camera_model_included = True
+                    rules = ' '.join(
+                        str(r.get('if', '')) for r in (cam_model.get('priority') or [])
+                    )
+                    has_areas = 'in_camera_area_' in rules
+                    has_scdb = 'in_hazard_' in rules
+                    logger.info(
+                        '[GRAPHHOPPER] Camera model: area_sections=%s scdb_filters=%s',
+                        has_areas, has_scdb,
+                    )
+
+            osm_dynamic: Dict[str, list] = {}
+            if traffic_light_hazards:
+                osm_dynamic['traffic_light'] = traffic_light_hazards
+            if railway_crossing_hazards:
+                osm_dynamic['railway_crossing'] = railway_crossing_hazards
+            if avoid_points:
+                # Congested/closed segments — hard-block like Valhalla exclude_locations.
+                osm_dynamic['avoid_point'] = avoid_points
+            if incident_hazards:
+                for bucket, items in incident_hazards.items():
+                    if items:
+                        osm_dynamic[bucket] = items
+
+            tl_rx_model: Optional[Dict[str, Any]] = None
+            if osm_dynamic:
+                tl_rx_model = gh_build_hazard_model(
+                    osm_dynamic,
+                    route_bbox=route_bbox,
+                    max_hazards=28,
+                ) or None
+
+            caz_model: Optional[Dict[str, Any]] = None
+            if avoid_caz_zones:
+                caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
+
+            costing_model = build_graphhopper_costing_preference_model(
+                avoid_tolls=avoid_tolls,
+                avoid_motorways=avoid_motorways,
+                avoid_ferries=avoid_ferries,
+                avoid_unpaved=avoid_unpaved,
+                prefer_scenic=prefer_scenic,
+                prefer_quiet=prefer_quiet,
+                route_optimization=route_optimization,
+                capabilities=capabilities,
+                limitations=provider_limitations,
             ) or None
-            if cam_model:
-                camera_model_included = True
-                rules = ' '.join(
-                    str(r.get('if', '')) for r in (cam_model.get('priority') or [])
-                )
-                has_areas = 'in_camera_area_' in rules
-                has_scdb = 'in_hazard_' in rules
-                logger.info(
-                    '[GRAPHHOPPER] Camera model: area_sections=%s scdb_filters=%s',
-                    has_areas, has_scdb,
-                )
 
-        osm_dynamic: Dict[str, list] = {}
-        if traffic_light_hazards:
-            osm_dynamic['traffic_light'] = traffic_light_hazards
-        if railway_crossing_hazards:
-            osm_dynamic['railway_crossing'] = railway_crossing_hazards
-        if avoid_points:
-            # Congested/closed segments — hard-block like Valhalla exclude_locations.
-            osm_dynamic['avoid_point'] = avoid_points
-        if incident_hazards:
-            for bucket, items in incident_hazards.items():
-                if items:
-                    osm_dynamic[bucket] = items
+            custom_model = merge_graphhopper_custom_model_parts(
+                cam_model, tl_rx_model, caz_model, costing_model,
+            )
+            if custom_model:
+                payload["custom_model"] = custom_model
+                logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
 
-        tl_rx_model: Optional[Dict[str, Any]] = None
-        if osm_dynamic:
-            tl_rx_model = gh_build_hazard_model(
-                osm_dynamic,
-                route_bbox=route_bbox,
-                max_hazards=28,
-            ) or None
-
-        caz_model: Optional[Dict[str, Any]] = None
-        if avoid_caz_zones:
-            caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
-
-        costing_model = build_graphhopper_costing_preference_model(
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            avoid_unpaved=avoid_unpaved,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            route_optimization=route_optimization,
-            capabilities=capabilities,
-            limitations=provider_limitations,
-        ) or None
-
-        custom_model = merge_graphhopper_custom_model_parts(
-            cam_model, tl_rx_model, caz_model, costing_model,
-        )
-        if custom_model:
-            payload["custom_model"] = custom_model
-            logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
-
+        route_transport.check_budget()
+        request_started_at = time.monotonic()
         logger.info("[GRAPHHOPPER] request_started")
 
         # GraphHopper deployments vary:
@@ -369,13 +375,14 @@ def route_with_graphhopper(
             # some builds, contraction hierarchies stay on, and the custom model
             # never blocks the camera areas.
             payload["ch.disable"] = True
-            response = route_transport.post(
-                url,
-                params={"ch.disable": "true"},
-                json=payload,
-                timeout=GRAPHHOPPER_TIMEOUT,
-                headers=headers,
-            )
+            with route_transport.stage('graphhopper'):
+                response = route_transport.post(
+                    url,
+                    params={"ch.disable": "true"},
+                    json=payload,
+                    timeout=GRAPHHOPPER_TIMEOUT,
+                    headers=headers,
+                )
             if response.status_code == 200:
                 custom_model_applied = True
             else:
@@ -409,7 +416,8 @@ def route_with_graphhopper(
                 "elevation": "false",
                 "details": available_details,
             }
-            response = route_transport.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+            with route_transport.stage('graphhopper'):
+                response = route_transport.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
             if response.status_code != 200:
                 log_graphhopper_error(logger, response, 'get_point')
@@ -420,7 +428,8 @@ def route_with_graphhopper(
                 params_points = dict(params_point)
                 params_points.pop("point", None)
                 params_points["points"] = [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"]
-                response = route_transport.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+                with route_transport.stage('graphhopper'):
+                    response = route_transport.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
                 if response.status_code != 200:
                     log_graphhopper_error(logger, response, 'get_points')
@@ -431,7 +440,8 @@ def route_with_graphhopper(
                 logger.warning(f"[GRAPHHOPPER] GET failed (HTTP {response.status_code}); retrying POST(no custom_model)")
                 payload_no_model = dict(payload)
                 payload_no_model.pop("custom_model", None)
-                response = route_transport.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
+                with route_transport.stage('graphhopper'):
+                    response = route_transport.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
                 if response.status_code != 200:
                     log_graphhopper_error(logger, response, 'post_default')
                     if response.status_code in (400, 422): invalidate_graphhopper_capabilities(GRAPHHOPPER_URL)
@@ -469,8 +479,10 @@ def route_with_graphhopper(
             logger.warning(f"[GRAPHHOPPER] Request failed: {error_msg}")
             return None
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except requests.exceptions.Timeout:
-        logger.warning(f"[GRAPHHOPPER] Request timeout after {GRAPHHOPPER_TIMEOUT}s")
+        logger.warning('[GRAPHHOPPER] provider_timeout elapsed_ms=%.1f configured_timeout_s=%s', (time.monotonic()-request_started_at)*1000, GRAPHHOPPER_TIMEOUT)
         return None
     except Exception as e:
         logger.error(f"[GRAPHHOPPER] Error: {type(e).__name__}")
@@ -550,6 +562,8 @@ def attempt_graphhopper_camera_route(
         else:
             graphhopper_error = "No route found"
             logger.warning("[GRAPHHOPPER] No route found, falling back to Valhalla")
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         graphhopper_error = type(e).__name__
         logger.warning(f"[GRAPHHOPPER] Error: {type(e).__name__}, falling back to Valhalla")
