@@ -529,3 +529,13 @@ Win32 open/suppression/enumeration errors, pointer-sized handles and cleanup ord
 It cannot attest Windows 11 build 26300, CPython 3.13.14, the operator's NTFS driver,
 DACLs, restricted token, security software or real path/handle metadata equivalence.
 The actual root cause remains unknown until the operator runs the protected command.
+
+## Investigate before-read Windows identity mismatches
+
+`EVIDENCE_CHANGED / INVENTORY / BEFORE_READ_IDENTITY_OR_METADATA_MISMATCH` from
+PR #365 does not itself prove evidence mutation. CPython 3.13 path and descriptor
+metadata can use different ctime meanings. See the focused [Windows identity
+investigation and exact non-elevated PowerShell commands](VOYAGR_PHASE12FB_WINDOWS_IDENTITY.md)
+for the native-comparison correction, bounded metadata-only diagnostic, category
+interpretation and remaining operator-specific uncertainty. Existing no-atime,
+permission and acceptance requirements still apply. **PRODUCTION_NO_GO**.

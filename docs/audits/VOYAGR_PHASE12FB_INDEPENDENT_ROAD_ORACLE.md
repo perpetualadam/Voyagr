@@ -656,3 +656,12 @@ Isolated SQL policy: 11 passed on temporary local PostgreSQL. Black per-file
 formatting and `git diff --check` passed. Desktop/custom-router/live-service suites
 and actual Windows/NTFS/token/ACL execution were not run. No private evidence was
 supplied or examined. Hosted PR/main CI outcomes are reported separately.
+
+## Addendum: Windows metadata representation correction
+
+The earlier `EVIDENCE_CHANGED` refusal labels cannot establish actual source
+mutation. The [focused Windows identity analysis](VOYAGR_PHASE12FB_WINDOWS_IDENTITY.md)
+traces CPython 3.13.14's path creation-time versus descriptor change-time semantics,
+replaces Windows cross-API tuple comparisons with exact full native snapshots,
+and specifies an opt-in metadata-only operator diagnostic. No road-oracle,
+routing, provenance-review or acceptance semantics change. **PRODUCTION_NO_GO**.
