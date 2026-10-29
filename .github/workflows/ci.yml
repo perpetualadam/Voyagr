@@ -102,6 +102,7 @@ jobs:
           tests/test_independent_road_oracle.py
           tests/test_private_road_oracle.py
           tests/test_motorcar_investigation.py
+          tests/test_review_package.py
           tests/test_phase11c_acceptance_tools.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py
