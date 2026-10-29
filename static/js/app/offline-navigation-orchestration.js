@@ -276,17 +276,24 @@
 
             document.getElementById(mount.resumeYesId).onclick = () => {
                 resumeBanner.remove();
-                const payload = buildRoutePayloadFromPersisted(saved);
+                let payload;
+                try { payload = buildRoutePayloadFromPersisted(saved); }
+                catch (_) {
+                    rt().call.showStatus('Saved journey verification unavailable; navigation not started. Reload online and recalculate.','warning');
+                    return;
+                }
                 if (!payload) {rt().call.showStatus('Saved route geometry is inconsistent; calculate a new route.','warning');return;}
-                rt().call.showStatus('Saved route loaded; waiting for fresh reliable GPS.','warning');
+                rt().call.showStatus('Saved journey is preview only; recalculate before navigation.','warning');
                 const yesAction = off.buildTryResumeNavigationYesActionPlan({
                     saved,
                     preflight,
                     payload,
                 });
                 if (yesAction.action === 'fullBootstrap' || yesAction.action === 'polylineResume') {
-                    rt().call.startTurnByTurnNavigation(yesAction.payload, yesAction.navStartOpts);
-                    console.log(yesAction.logMessage);
+                    const started = rt().call.startTurnByTurnNavigation(yesAction.payload, yesAction.navStartOpts);
+                    if (started===false && typeof rt().call.showRestoredRoutePreview==='function') {
+                        rt().call.showRestoredRoutePreview(payload);
+                    }
                 } else {
                     rt().call.showStatus(yesAction.statusMessage, yesAction.statusType);
                     console.warn(yesAction.logMessage);

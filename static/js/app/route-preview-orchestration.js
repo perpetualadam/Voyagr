@@ -177,7 +177,7 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
 
     const routeSel = RS();
     if (apply.entryLogMessage) {
-        console.log(apply.entryLogMessage, routeData, 'skipMapDisplay:', skipMapDisplay);
+        console.log(apply.entryLogMessage, routeData && routeData.navigation_resume_requires_fresh_gps ? 'saved preview' : routeData, 'skipMapDisplay:', skipMapDisplay);
     }
     console.log('[Route Preview] Currency:', apply.panelInput.currencySymbol, 'Distance Unit:', rt().call.getDistanceUnit());
 
@@ -203,6 +203,22 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
     rt().call.showStatus(domPlan.statusMessage, 'success');
 }
 
+function showRestoredRoutePreview(payload) {
+    if (!payload || !payload.navigation_resume_requires_fresh_gps || rt().getRouteInProgress()) return false;
+    // Replace the entire preview context, never combine a saved destination with
+    // an unrelated selection. The restored marker remains a navigation refusal.
+    rt().setRouteOptions([payload]);
+    rt().setSelectedRouteIndex(0);
+    window.lastCalculatedRoute = payload;
+    const origin=payload.avoidance_assessment && payload.avoidance_assessment.origin_integrity;
+    const start=document.getElementById('start'), end=document.getElementById('end');
+    if (start) start.value=origin && Array.isArray(origin.requested_origin) ? origin.requested_origin.join(',') : 'Saved origin (unverified)';
+    if (end) end.value=typeof payload.destination==='string' ? payload.destination : 'Saved destination (unverified)';
+    showRoutePreview(payload);
+    rt().call.showStatus('Saved journey is preview only. Recalculate from your actual location and destination before navigation.', 'warning');
+    return true;
+}
+
 /**
  * showRoutePreview function
  * @function showRoutePreview
@@ -211,9 +227,12 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
  * @returns {*} Return value description
  */
 function showRoutePreview(routeData, skipMapDisplay = false) {
-    const integrity = root.VoyagrAvoidanceIntegrity;
+    const restored=!!(routeData && routeData.navigation_resume_requires_fresh_gps);
+    const integrity = restored ? null : root.VoyagrAvoidanceIntegrity;
     const notice = document.getElementById('routeAvoidanceNotice');
-    if (notice && integrity) {
+    if (notice && restored) {
+        notice.textContent='Saved journey is preview only; navigation cannot start. Recalculate from your actual location and destination.';
+    } else if (notice && integrity) {
         const selected=RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex());
         notice.textContent=RS().buildRouteEvidenceText(selected)+'. '+integrity.summary(selected);
     }
@@ -580,6 +599,7 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
         overviewRoute: overviewRoute,
         showAlternativeRoutesInPreview: showAlternativeRoutesInPreview,
         showRoutePreview: showRoutePreview,
+        showRestoredRoutePreview: showRestoredRoutePreview,
         startNavigation: startNavigation,
         startNavigationFromPreview: startNavigationFromPreview,
         updateTripInfo: updateTripInfo,

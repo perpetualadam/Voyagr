@@ -2141,6 +2141,7 @@ function getOfflineNavigationOrchestrationRuntime() {
         call: {
             showStatus,
             startTurnByTurnNavigation,
+            showRestoredRoutePreview: payload => VoyagrRoutePreviewOrchestration.showRestoredRoutePreview(payload),
         },
     };
 }

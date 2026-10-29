@@ -233,13 +233,15 @@
     }
 
     function updateRouteOnMap(newRoute) {
-        var integrity = root.VoyagrAvoidanceIntegrity;
-        if (!integrity && ((newRoute && newRoute.avoidance_assessment && newRoute.avoidance_assessment.origin_integrity_required) || localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
-            rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
-            setRerouteInProgress(false);
-            return {ok:false,scheduleRetry:false,reason:'avoidance_not_established'};
-        }
-        if (integrity && !integrity.gate(newRoute, {storage:localStorage,automatic:true,quiet:true,showStatus:rt().call.showStatus})) {
+        var verified = false;
+        try {
+            var integrity = root.VoyagrAvoidanceIntegrity;
+            verified = !!integrity && typeof integrity.gate==='function' && integrity.gate(newRoute, {
+                storage:localStorage,automatic:true,quiet:true,offline:navigator.onLine===false,showStatus:rt().call.showStatus,
+            })===true;
+        } catch (_) { /* Missing/broken verifier never authorizes replacement. */ }
+        if (!verified) {
+            rt().call.showStatus('Safety verification unavailable or route safety unresolved; current route retained.','warning');
             setRerouteInProgress(false);
             return {ok:false,scheduleRetry:false,reason:'avoidance_not_established'};
         }
