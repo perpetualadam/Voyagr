@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import polyline
 import pytest
@@ -200,16 +201,67 @@ def test_cli_default_has_exactly_five_not_tested_rows():
     assert report == a.unexecuted()
 
 
-def test_private_reader_reuses_no_atime_and_refuses_links(tmp_path):
+def test_private_reader_reuses_no_atime_and_preserves_metadata(tmp_path):
     path = tmp_path / "bundle.json"
     path.write_text(json.dumps(bundle()))
     before = path.stat()
     assert a.load_private(path)["source"] == "SYNTHETIC"
     assert path.stat() == before
+
+
+def _create_symlink_or_skip(link, target):
+    try:
+        link.symlink_to(target)
+    except OSError as error:
+        if sys.platform == "win32" and getattr(error, "winerror", None) == 1314:
+            pytest.skip(
+                "Windows symlink creation privilege unavailable (WinError 1314)"
+            )
+        raise
+
+
+def test_private_reader_refuses_links_when_creation_supported(tmp_path):
+    path = tmp_path / "bundle.json"
+    path.write_text(json.dumps(bundle()))
     link = tmp_path / "link.json"
-    link.symlink_to(path)
+    _create_symlink_or_skip(link, path)
     with pytest.raises(ValueError):
         a.load_private(link)
+
+
+def test_windows_symlink_privilege_denial_skips_only_link_creation(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    error = OSError("synthetic privilege denial")
+    error.winerror = 1314
+    link = Mock()
+    link.symlink_to.side_effect = error
+    with pytest.raises(pytest.skip.Exception, match="WinError 1314"):
+        _create_symlink_or_skip(link, "synthetic-target")
+    link.symlink_to.assert_called_once_with("synthetic-target")
+
+
+@pytest.mark.parametrize(
+    "platform,winerror,error_type",
+    [
+        ("win32", 5, OSError),
+        ("win32", None, OSError),
+        ("linux", 1314, OSError),
+        ("win32", None, RuntimeError),
+    ],
+)
+def test_other_symlink_creation_failures_are_not_skipped(
+    monkeypatch, platform, winerror, error_type
+):
+    monkeypatch.setattr(sys, "platform", platform)
+    error = error_type("synthetic unrelated failure")
+    if winerror is not None:
+        error.winerror = winerror
+    link = Mock()
+    link.symlink_to.side_effect = error
+    with pytest.raises(error_type) as caught:
+        _create_symlink_or_skip(link, "synthetic-target")
+    assert caught.value is error
+    link.symlink_to.assert_called_once_with("synthetic-target")
 
 
 @pytest.mark.parametrize(
