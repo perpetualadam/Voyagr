@@ -393,7 +393,8 @@ external writes and filesystem-driver behaviour are outside this tool's guarante
 
 The scanner inventories regular files recursively; it does not follow references
 inside documents. Known Phase12FB filenames/prefixes identify the export,
-specification, reports, three receipts/manifests and body-hint captures. Supporting
+specification, reports and three receipts/manifests. Body-hint capture selection
+is defined narrowly below; directory membership alone is insufficient. Supporting
 roles use graph-manifest/import-receipt/engine-provenance/profile-config/road-source/
 camera-dataset/offline-replay/application-acceptance/device-acceptance name fragments.
 Unknown names remain inventoried as supporting_unclassified; a missing role can
@@ -539,3 +540,84 @@ investigation and exact non-elevated PowerShell commands](VOYAGR_PHASE12FB_WINDO
 for the native-comparison correction, bounded metadata-only diagnostic, category
 interpretation and remaining operator-specific uncertainty. Existing no-atime,
 permission and acceptance requirements still apply. **PRODUCTION_NO_GO**.
+
+## Capture records versus supporting artifacts
+
+The former rule classified **every JSON file** under `phase12fb-body-hint/` as a
+capture. Supporting metadata could therefore receive spurious CAPTURE_STRUCTURE
+INVALID findings. This is a demonstrated classification defect, not a finding
+that the operator's five private artifacts are necessarily supporting files.
+Those files and their role declarations have not been examined here.
+
+The corrected selection rule is case-insensitive for path names:
+
+| Selection | Role and validation |
+| --- | --- |
+| Below `phase12fb-body-hint/`, basename `fixture-<decimal digits>-record.json` | Capture record, including original fixture-0-record.json through fixture-4-record.json. |
+| Same directory subtree, basename `capture-<decimal digits>.json` | Legacy capture-record naming supported by existing tooling/tests. |
+| Decoded JSON object with exact `kind:RECORDED_GRAPH_HOPPER8_CAPTURE_RECORD` | Explicit capture-record declaration anywhere in inventory. This optional marker is not required on original named records. |
+| Explicit local evidence-index role `capture_record` | Claimed capture record at the referenced inventoried path; malformed declared hashes still produce INVALID_HASH and cannot hide the claimed file from schema validation. No references outside inventory are opened. |
+| Exact `kind:RECORDED_GRAPH_HOPPER8_CAPTURE` or indexed `capture_bundle` role | Bundle; requires a nonempty fixtures list, bounded by the existing 100-entry limit. A bundle is not a replacement for the five individual record artifacts. |
+| Other JSON files in the directory | Supporting/unclassified or another existing filename-selected role; still inventoried, byte-fingerprinted within limits, strictly parsed, and checked for supported references/identity declarations. Directory membership does not assert a capture role. |
+
+Request/response object presence alone does not assign a role. Arbitrarily named
+captures need an explicit kind or an additional, separately prepared evidence
+index; missing identification remains unresolved. **Do not rename or edit original
+evidence** to satisfy selection. Naming/role declarations identify candidates,
+not valid schemas or authentic captures. Selected records still need decoded
+request/response objects, request-point/custom-model checks, canonical and Base64
+wire bindings and transport/hop evidence. Invalid JSON, non-object JSON and
+unavailable parsed bytes retain strict-JSON/schema findings and a capture-structure
+INVALID_OR_UNAVAILABLE finding. Missing request/response objects remain INVALID.
+
+Capture/receipt role collisions and record/bundle collisions are reported as
+ARTIFACT_ROLE CONFLICTING_ROLES. Both claimed capture shapes are examined rather
+than allowing the bundle role to hide a malformed record. An explicit supporting
+role cannot downgrade a named or otherwise declared capture. Conflicting records
+do not count toward FIVE_CAPTURE_RECORDS STRUCTURE_VALID. Extra records, duplicate
+capture pairs, duplicate bytes and duplicate/conflicting singleton roles remain
+findings. Five structurally identified records do not establish correct fixture
+identity, provenance or independent acceptance.
+
+Transport binding checks now distinguish:
+
+| Status | Meaning |
+| --- | --- |
+| UNBOUND_UNREVIEWED | A present transport hash is JSON null and the capture explicitly has reviewed:false, or inherits reviewed:false from its bundle when its own marker is absent. An unresolved placeholder, **not** a hash match or accepted transport attestation. |
+| MISSING | No transport hash field was supplied. |
+| INVALID_HASH | Malformed non-null declaration, or null without the explicit unreviewed marker. |
+| UNAVAILABLE | A well-formed declared hash has no valid counterpart to compare. |
+| MISMATCH | Well-formed non-null hash contradicts the calculated/bound counterpart. |
+| MATCH | The stated binding matches; authenticity and review are still unestablished. |
+
+These statuses apply to the transport-sidecar digest, sidecar-to-capture digests
+and sidecar-to-engine digests. Identical malformed values cannot yield MATCH.
+UNBOUND_UNREVIEWED stays in unresolved-findings.json. This does **not** exempt null
+or malformed top-level/engine identity claims: IDENTITY_CLAIM INVALID_HASH and
+receipt/schema checks remain unchanged. A derived bundle can intentionally leave
+transport binding unbound without concealing contradictory hashes in originals.
+
+Rerun only after obtaining the updated checkout. Use the existing non-elevated
+PowerShell command with a **new, nonexistent** output directory outside Git:
+
+```powershell
+& .\.venv\Scripts\python.exe .\scripts\prepare-phase12fb-review-package.py `
+  --evidence-directory 'C:\PrivateEvidence\Phase12FB' `
+  --output-directory 'C:\PrivateReview\Phase12FB-classification-01' `
+  --diagnose-refusal
+$LASTEXITCODE
+```
+
+Use the already compliant evidence directory and private output parent. Do not
+change original bytes, timestamps, permissions or reviewed markers. Keep old
+packages unchanged. Locally compare the new manifest's selected capture paths
+against the five original records and inspect every remaining finding. Do not
+share private paths, contents or captures with CI/Codex.
+
+Synthetic regression results demonstrate mixed-content selection, malformed named
+and explicitly claimed captures, original record discovery/wire validation,
+duplicates/role conflicts, and null versus contradictory transport hashes. They
+**do not resolve the operator's five CAPTURE_STRUCTURE findings, five transport
+findings or nine invalid identity-claim checks**. Resolution requires rerunning
+on actual evidence and independent examination. All filesystem/no-atime handling,
+private isolation and independent-review requirements remain. **PRODUCTION_NO_GO**.

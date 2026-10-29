@@ -126,7 +126,11 @@ def categories(path):
         roles.append("topology_report")
     if name.startswith("fixture-0-motorcar-investigation-"):
         roles.append("motorcar_report")
-    if path.lower().startswith("phase12fb-body-hint/") and name.endswith(".json"):
+    # Names select a claimed record even when its bytes cannot be decoded.
+    # The containing directory alone never claims a capture role.
+    if path.lower().startswith("phase12fb-body-hint/") and re.fullmatch(
+        r"(?:fixture-[0-9]+-record|capture-[0-9]+)\.json", name
+    ):
         roles.append("capture_record")
     for fragment, role in (
         ("graph-manifest", "graph_manifest"),
@@ -143,6 +147,19 @@ def categories(path):
         if fragment in name:
             roles.append(role)
     return sorted(set(roles)) or ["supporting_unclassified"]
+
+
+def transport_hash_status(expected, actual, *, present, unreviewed):
+    """Placeholder is an unresolved finding, never a successful byte binding."""
+    if not present:
+        return "MISSING"
+    if expected is None and unreviewed:
+        return "UNBOUND_UNREVIEWED"
+    if not isinstance(expected, str) or not HASH.fullmatch(expected):
+        return "INVALID_HASH"
+    if not isinstance(actual, str) or not HASH.fullmatch(actual):
+        return "UNAVAILABLE"
+    return "MATCH" if expected == actual else "MISMATCH"
 
 
 def build(files, blobs):
@@ -200,6 +217,8 @@ def build(files, blobs):
                     check("SOURCE_REVIEW", "UNREVIEWED", path)
                 elif marker is True:
                     check("SOURCE_REVIEW", "CLAIM_PRESENT_UNAUTHENTICATED", path)
+                if value.get("kind") == "RECORDED_GRAPH_HOPPER8_CAPTURE_RECORD":
+                    f["categories"] = sorted(set(f["categories"]) | {"capture_record"})
                 if value.get("kind") == "RECORDED_GRAPH_HOPPER8_CAPTURE":
                     f["categories"] = sorted(set(f["categories"]) | {"capture_bundle"})
                 if value.get("kind") == "PHASE12FB_EVIDENCE_INDEX":
@@ -207,6 +226,7 @@ def build(files, blobs):
 
     # Optional explicit local index: roles and raw-byte references, never approvals.
     references = []
+    declared_roles = defaultdict(set)
     for path, doc in docs.items():
         if not isinstance(doc, dict) or doc.get("kind") != "PHASE12FB_EVIDENCE_INDEX":
             continue
@@ -237,6 +257,13 @@ def build(files, blobs):
             except ValueError:
                 check("ARTIFACT_REFERENCE", "REFERENCE_REJECTED", path)
                 continue
+            # A malformed byte declaration must not hide a claimed capture
+            # from schema validation. Role assignment never authenticates it.
+            if target in by_path:
+                declared_roles[target].add(ref["role"])
+                by_path[target]["categories"] = sorted(
+                    set(by_path[target]["categories"]) | {ref["role"]}
+                )
             expected = ref.get("sha256")
             if not isinstance(expected, str) or not HASH.fullmatch(expected):
                 check("ARTIFACT_REFERENCE", "INVALID_HASH", path)
@@ -254,13 +281,16 @@ def build(files, blobs):
                 )
             claimed[key] = expected
             references.append((path, target, expected, ref["role"]))
-            if target in by_path:
-                by_path[target]["categories"] = sorted(
-                    set(by_path[target]["categories"]) | {ref["role"]}
-                )
 
     groups = defaultdict(list)
+    conflicting_capture_paths = set()
     for f in files:
+        roles = set(f["categories"]) - {"supporting_unclassified"}
+        if roles & {"capture_record", "capture_bundle"} and (
+            len(roles) > 1 or "supporting_unclassified" in declared_roles[f["path"]]
+        ):
+            conflicting_capture_paths.add(f["path"])
+            check("ARTIFACT_ROLE", "CONFLICTING_ROLES", f["path"])
         for role in f["categories"]:
             groups[role].append(f)
 
@@ -285,6 +315,10 @@ def build(files, blobs):
                     "INVALID_OR_UNAVAILABLE",
                     artifact["path"],
                 )
+                if role in ("capture_record", "capture_bundle"):
+                    check(
+                        "CAPTURE_STRUCTURE", "INVALID_OR_UNAVAILABLE", artifact["path"]
+                    )
         valid = [f for f in available if available_file(f, role)]
         status = (
             "STRUCTURE_VALID"
@@ -551,14 +585,14 @@ def build(files, blobs):
     for path, doc in docs.items():
         if not isinstance(doc, dict):
             continue
-        captures = (
-            doc.get("fixtures")
-            if "capture_bundle" in by_path[path]["categories"]
-            else [doc] if "capture_record" in by_path[path]["categories"] else []
-        )
-        if not isinstance(captures, list) or len(captures) > 100:
-            check("CAPTURE_STRUCTURE", "INVALID", path)
-            continue
+        roles = set(by_path[path]["categories"]) - {"supporting_unclassified"}
+        captures = [doc] if "capture_record" in roles else []
+        if "capture_bundle" in roles:
+            fixtures = doc.get("fixtures")
+            if not isinstance(fixtures, list) or not 1 <= len(fixtures) <= 100:
+                check("CAPTURE_STRUCTURE", "INVALID", path)
+            else:
+                captures.extend(fixtures)
         for capture in captures:
             if (
                 not isinstance(capture, dict)
@@ -567,7 +601,11 @@ def build(files, blobs):
             ):
                 check("CAPTURE_STRUCTURE", "INVALID", path)
                 continue
-            if capture is doc and "capture_record" in by_path[path]["categories"]:
+            if (
+                capture is doc
+                and roles == {"capture_record"}
+                and path not in conflicting_capture_paths
+            ):
                 valid_capture_paths.add(path)
             try:
                 from voyagr.utils.graphhopper_acceptance import checked_request
@@ -657,21 +695,24 @@ def build(files, blobs):
                     calculated = hashlib.sha256(encode(sidecar)).hexdigest()
                     check(
                         "TRANSPORT_SIDECAR_BINDING",
-                        (
-                            "MATCH"
-                            if capture.get("transport_sha256") == calculated
-                            else "MISSING_OR_MISMATCH"
+                        transport_hash_status(
+                            capture.get("transport_sha256"),
+                            calculated,
+                            present="transport_sha256" in capture,
+                            unreviewed=capture.get("reviewed", doc.get("reviewed"))
+                            is False,
                         ),
                         path,
                     )
                     for field in ("request_sha256", "response_sha256"):
                         check(
                             "TRANSPORT_CAPTURE_BINDING",
-                            (
-                                "MATCH"
-                                if sidecar.get(field) == capture.get(field)
-                                and field in capture
-                                else "MISSING_OR_MISMATCH"
+                            transport_hash_status(
+                                sidecar.get(field),
+                                capture.get(field),
+                                present=field in sidecar,
+                                unreviewed=capture.get("reviewed", doc.get("reviewed"))
+                                is False,
                             ),
                             path,
                             field,
@@ -682,11 +723,12 @@ def build(files, blobs):
                     for field in ("engine_build_sha256", "graph_sha256"):
                         check(
                             "TRANSPORT_ENGINE_BINDING",
-                            (
-                                "MATCH"
-                                if field in engine
-                                and sidecar.get(field) == engine.get(field)
-                                else "MISSING_OR_MISMATCH"
+                            transport_hash_status(
+                                sidecar.get(field),
+                                engine.get(field),
+                                present=field in sidecar,
+                                unreviewed=capture.get("reviewed", doc.get("reviewed"))
+                                is False,
                             ),
                             path,
                             field,

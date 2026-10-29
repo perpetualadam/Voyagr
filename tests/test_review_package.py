@@ -685,3 +685,280 @@ def test_invalid_deep_export_is_not_reparsed_after_strict_json_refusal(tmp_path)
     assert any(
         c["check"] == "STRICT_JSON" and c["status"] == "INVALID" for c in checks(out)
     )
+
+
+def test_mixed_capture_directory_keeps_supporting_json_fingerprinted(tmp_path):
+    root = seed(tmp_path / "evidence")
+    support = []
+    for i in range(5):
+        original = root / f"phase12fb-body-hint/capture-{i}.json"
+        original.rename(root / f"phase12fb-body-hint/fixture-{i}-record.json")
+        path = f"phase12fb-body-hint/metadata-{i}.json"
+        raw = put(
+            root, path, {"reviewed": False, "note": "synthetic supporting metadata"}
+        )
+        support.append((path, hashlib.sha256(raw).hexdigest()))
+    out = docs(root)
+    assert docs(root) == out
+    manifest = json.loads(out["evidence-manifest.json"])
+    fs = {f["path"]: f for f in manifest["files"]}
+    for path, digest in support:
+        assert fs[path]["categories"] == ["supporting_unclassified"]
+        assert fs[path]["sha256"] == digest
+        assert fs[path]["fingerprint"] == "BYTES_RECOMPUTED"
+        assert not any(
+            c["check"] == "CAPTURE_STRUCTURE" and c.get("artifact") == path
+            for c in checks(out)
+        )
+    assert manifest["availability"]["capture_record"]["present_count"] == 5
+    assert any(
+        c["check"] == "FIVE_CAPTURE_RECORDS" and c["status"] == "STRUCTURE_VALID"
+        for c in checks(out)
+    )
+    assert (
+        sum(
+            c["check"] == "WIRE_CAPTURE_BINDING" and c["status"] == "MATCH"
+            for c in checks(out)
+        )
+        == 10
+    )
+    assert manifest["reviewed"] is manifest["navigation_authorized"] is False
+
+
+@pytest.mark.parametrize("payload", [{}, [], {"request": {}}, b'{"request":'])
+def test_named_malformed_capture_is_not_reclassified_as_support(tmp_path, payload):
+    root = seed(tmp_path / "evidence")
+    path = "phase12fb-body-hint/fixture-0-record.json"
+    (root / "phase12fb-body-hint/capture-0.json").rename(root / path)
+    put(root, path, payload)
+    out = docs(root)
+    assert any(
+        c["check"] == "CAPTURE_STRUCTURE"
+        and c["status"].startswith("INVALID")
+        and c.get("artifact") == path
+        for c in checks(out)
+    )
+    assert any(
+        c["check"] == "FIVE_CAPTURE_RECORDS" and c["status"] == "MISSING_OR_AMBIGUOUS"
+        for c in checks(out)
+    )
+    manifest = json.loads(out["evidence-manifest.json"])
+    assert next(f for f in manifest["files"] if f["path"] == path)["categories"] == [
+        "capture_record"
+    ]
+
+
+def test_record_kind_and_index_claims_receive_validation_even_with_bad_hash(tmp_path):
+    root = seed(tmp_path / "evidence")
+    put(
+        root, "arbitrary-record.json", {"kind": "RECORDED_GRAPH_HOPPER8_CAPTURE_RECORD"}
+    )
+    put(root, "declared-record.json", {})
+    put(
+        root,
+        "index.json",
+        {
+            "kind": "PHASE12FB_EVIDENCE_INDEX",
+            "schema_version": 1,
+            "artifacts": [
+                {
+                    "role": "capture_record",
+                    "path": "declared-record.json",
+                    "sha256": "malformed",
+                }
+            ],
+        },
+    )
+    out = docs(root)
+    for path in ("arbitrary-record.json", "declared-record.json"):
+        assert any(
+            c["check"] == "CAPTURE_STRUCTURE"
+            and c["status"] == "INVALID"
+            and c.get("artifact") == path
+            for c in checks(out)
+        )
+    assert any(
+        c["check"] == "ARTIFACT_REFERENCE" and c["status"] == "INVALID_HASH"
+        for c in checks(out)
+    )
+
+
+def test_extra_capture_duplicate_and_conflicting_roles_remain_findings(tmp_path):
+    root = seed(tmp_path / "evidence")
+    raw = (root / "phase12fb-body-hint/capture-0.json").read_bytes()
+    path = "phase12fb-body-hint/fixture-0-record.json"
+    put(root, path, raw)
+    put(
+        root,
+        "index.json",
+        {
+            "kind": "PHASE12FB_EVIDENCE_INDEX",
+            "schema_version": 1,
+            "artifacts": [
+                {
+                    "role": "engine_provenance",
+                    "path": path,
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                }
+            ],
+        },
+    )
+    out = docs(root)
+    observed = {(c["check"], c["status"]) for c in checks(out)}
+    assert {
+        ("CAPTURE_PAIRS", "DUPLICATE_CAPTURE_PAIR"),
+        ("DUPLICATE_BYTES", "DUPLICATE_ARTIFACT"),
+        ("FIVE_CAPTURE_RECORDS", "MISSING_OR_AMBIGUOUS"),
+        ("ARTIFACT_ROLE", "CONFLICTING_ROLES"),
+    } <= observed
+
+
+def test_bundle_role_cannot_hide_invalid_named_record(tmp_path):
+    root = seed(tmp_path / "evidence")
+    path = "phase12fb-body-hint/capture-0.json"
+    original = json.loads((root / path).read_bytes())
+    put(
+        root,
+        path,
+        {
+            "kind": "RECORDED_GRAPH_HOPPER8_CAPTURE",
+            "reviewed": False,
+            "fixtures": [original],
+        },
+    )
+    out = docs(root)
+    assert any(
+        c["check"] == "ARTIFACT_ROLE" and c["status"] == "CONFLICTING_ROLES"
+        for c in checks(out)
+    )
+    assert any(
+        c["check"] == "CAPTURE_STRUCTURE"
+        and c["status"] == "INVALID"
+        and c.get("artifact") == path
+        for c in checks(out)
+    )
+
+
+@pytest.mark.parametrize(
+    "declared,reviewed,expected",
+    [
+        (None, False, "UNBOUND_UNREVIEWED"),
+        (None, True, "INVALID_HASH"),
+        (None, None, "INVALID_HASH"),
+        ("not-a-hash", False, "INVALID_HASH"),
+        ("f" * 64, False, "MISMATCH"),
+    ],
+)
+def test_transport_placeholder_is_not_conflict_or_acceptance(
+    tmp_path, declared, reviewed, expected
+):
+    root = seed(tmp_path / "evidence")
+    path = "phase12fb-body-hint/capture-0.json"
+    value = json.loads((root / path).read_bytes())
+    value.update(
+        reviewed=reviewed,
+        transport={"method": "POST"},
+        transport_sha256=declared,
+        engine_build_sha256=None,
+    )
+    put(root, path, value)
+    out = docs(root)
+    result = next(
+        c
+        for c in checks(out)
+        if c["check"] == "TRANSPORT_SIDECAR_BINDING" and c.get("artifact") == path
+    )
+    assert result["status"] == expected
+    unresolved = json.loads(out["unresolved-findings.json"])
+    assert result in unresolved["findings"]
+    assert unresolved["reviewed"] is unresolved["navigation_authorized"] is False
+    assert any(
+        c["check"] == "IDENTITY_CLAIM" and c["status"] == "INVALID_HASH"
+        for c in checks(out)
+    )
+
+
+def test_matching_malformed_transport_hashes_cannot_match(tmp_path):
+    root = seed(tmp_path / "evidence")
+    path = "phase12fb-body-hint/capture-0.json"
+    value = json.loads((root / path).read_bytes())
+    value["request_sha256"] = "invalid"
+    value["transport"] = {"request_sha256": "invalid", "engine_build_sha256": "invalid"}
+    value["engine"] = {"engine_build_sha256": "invalid"}
+    value["transport_sha256"] = hashlib.sha256(
+        canonical(value["transport"])
+    ).hexdigest()
+    put(root, path, value)
+    observed = checks(docs(root))
+    assert any(
+        c["check"] == "TRANSPORT_SIDECAR_BINDING" and c["status"] == "MATCH"
+        for c in observed
+    )
+    assert any(
+        c["check"] == "TRANSPORT_CAPTURE_BINDING" and c["status"] == "INVALID_HASH"
+        for c in observed
+    )
+    assert any(
+        c["check"] == "TRANSPORT_ENGINE_BINDING" and c["status"] == "INVALID_HASH"
+        for c in observed
+    )
+
+
+def test_unreviewed_bundle_transport_null_is_still_unbound(tmp_path):
+    root = seed(tmp_path / "evidence")
+    capture = json.loads((root / "phase12fb-body-hint/capture-0.json").read_bytes())
+    del capture["reviewed"]
+    capture.update(transport={}, transport_sha256=None)
+    put(
+        root,
+        "derived-bundle.json",
+        {
+            "kind": "RECORDED_GRAPH_HOPPER8_CAPTURE",
+            "reviewed": False,
+            "fixtures": [capture],
+        },
+    )
+    out = docs(root)
+    assert any(
+        c["check"] == "TRANSPORT_SIDECAR_BINDING"
+        and c["status"] == "UNBOUND_UNREVIEWED"
+        and c.get("artifact") == "derived-bundle.json"
+        for c in checks(out)
+    )
+
+
+def test_index_cannot_downgrade_named_capture_to_supporting(tmp_path):
+    root = seed(tmp_path / "evidence")
+    path = "phase12fb-body-hint/capture-0.json"
+    raw = (root / path).read_bytes()
+    put(
+        root,
+        "index.json",
+        {
+            "kind": "PHASE12FB_EVIDENCE_INDEX",
+            "schema_version": 1,
+            "artifacts": [
+                {
+                    "role": "supporting_unclassified",
+                    "path": path,
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                }
+            ],
+        },
+    )
+    observed = checks(docs(root))
+    assert any(
+        c["check"] == "ARTIFACT_ROLE" and c["status"] == "CONFLICTING_ROLES"
+        for c in observed
+    )
+    assert any(
+        c["check"] == "FIVE_CAPTURE_RECORDS" and c["status"] == "MISSING_OR_AMBIGUOUS"
+        for c in observed
+    )
+    assert (
+        sum(
+            c["check"] == "WIRE_CAPTURE_BINDING" and c["status"] == "MATCH"
+            for c in observed
+        )
+        == 10
+    )
