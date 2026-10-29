@@ -320,3 +320,128 @@ flags stay false/UNVERIFIED and **PRODUCTION_NO_GO**.
 
 No private fixture 0 run is claimed here. A new plausible route cannot waive the
 reported 46.31 m origin displacement or Voyagr's two-metre integrity gate.
+
+## Prepare a private independent-review package
+
+This is metadata-only preparation, not independent approval or replay acceptance.
+Original captures, exports, receipts and reports remain in the existing evidence
+folder. The tool never copies their bodies, modifies reviewed flags, creates an
+accepted oracle reference, uploads evidence or creates a ZIP.
+
+Use a trusted, idle, local evidence directory outside Git. Close editors/capture
+writers and stop concurrent indexing of that evidence. Both the evidence folder
+and output parent must already have private Windows NTFS ACLs; the output inherits
+those ACLs. Do not create the output directory first: it must be new. The output
+must be a sibling/separate directory, never inside the evidence tree.
+
+From the repository root, run this exact PowerShell command:
+
+```powershell
+& ".\.venv\Scripts\python.exe" ".\scripts\prepare-phase12fb-review-package.py" `
+  --evidence-directory "C:\Users\Brian\Documents\Voyagr-Private-Acceptance" `
+  --output-directory "C:\Users\Brian\Documents\Voyagr-Phase12FB-Review-Unreviewed-01"
+```
+
+Choose a fresh output suffix for subsequent runs. Do not delete or overwrite old
+review packages to make a run succeed. The output is five files only:
+
+- `evidence-manifest.json`: safe paths relative to the original evidence root,
+  byte sizes, recomputed SHA-256 fingerprints, categories and availability.
+- `verification-results.json`: byte/JSON/object/binding observations and explicit
+  authenticity/approval limitations.
+- `reviewer-checklist.md`: evidence availability, machine observations,
+  unauthenticated operator assertions, unresolved/missing evidence and independent
+  review still required for each topic.
+- `unresolved-findings.json`: unreviewed/missing/invalid/conflicting/unsupported
+  observations; no automatic restriction resolution.
+- `package-summary.md`: aggregate package scope and PRODUCTION_NO_GO status.
+
+Stdout is only `PRIVATE_REVIEW_PACKAGE_CREATED_UNREVIEWED_PRODUCTION_NO_GO`.
+Refusal is only `PRIVATE_REVIEW_PACKAGE_REFUSED` on stderr, exit 2; argument/errors
+never echo private paths or evidence. Exit 0 means a metadata package was created,
+**not that evidence is complete or accepted**. Inspect all findings privately.
+A failed write can leave a restricted partial output directory; it is incomplete
+and will not be overwritten. No approval or automatic repair command is provided.
+
+### Read-only and filesystem requirements
+
+On Linux, directory enumeration and file hashing use no-follow O_NOATIME handles.
+The evidence owner must have the required no-atime capability; there is no ordinary
+read fallback and no attempt to restore timestamps after reading. Source file and
+directory timestamps/identity/permissions are checked around reads. Symlinks,
+hardlinks, reparse points, special files, cross-device subtrees, nested repositories,
+unsafe/nonportable relative names, case-conflicting paths and overlapping input/output
+are refused. No Git command is executed by the packaging CLI.
+
+On Windows, local drive handles use GENERIC_READ plus FILE_WRITE_ATTRIBUTES solely
+for SetFileTime's documented all-ones **per-handle access-time-update suppression**.
+No actual timestamp is assigned, no data is written and no source ACL is changed.
+Directory entries are enumerated through that same frozen handle. If the source
+policy denies the attribute capability, or access-time preservation cannot be
+provided, the run is refused; do not weaken original evidence permissions merely
+to satisfy it. Actual Windows filesystem/ACL execution has not been tested here.
+A separately authorised forensic snapshot/workstation procedure may be needed.
+
+Windows UNC and mapped remote/unknown drives are refused. Linux requires a known
+local filesystem type from mount metadata; network/FUSE/unknown types are refused.
+Other platforms without the implemented no-atime guarantee are unsupported. This
+checks the software filesystem boundary, not physical storage/driver authenticity.
+Use trusted private parents: concurrent malicious replacement, privileged OS users,
+external writes and filesystem-driver behaviour are outside this tool's guarantee.
+
+### Scope, matching and limits
+
+The scanner inventories regular files recursively; it does not follow references
+inside documents. Known Phase12FB filenames/prefixes identify the export,
+specification, reports, three receipts/manifests and body-hint captures. Supporting
+roles use graph-manifest/import-receipt/engine-provenance/profile-config/road-source/
+camera-dataset/offline-replay/application-acceptance/device-acceptance name fragments.
+Unknown names remain inventoried as supporting_unclassified; a missing role can
+mean **not identified**, rather than proof that the underlying file does not exist.
+An authorised reviewer must resolve naming/schema ambiguity.
+
+An optional additional local JSON index can explicitly identify existing artifacts:
+`kind:PHASE12FB_EVIDENCE_INDEX`, `schema_version:1`, and an `artifacts` array whose
+entries have `role`, `path` (forward-slash relative path) and `sha256` (expected
+raw-byte digest). Allowed roles are those listed in the manifest availability table,
+plus capture_bundle/supporting_unclassified. This index is only a declaration;
+referenced bytes are matched against the inventory, never opened outside it.
+Duplicate/conflicting references are reported. Absolute paths, traversal, URLs and
+unsafe references are rejected as bindings and recorded without copying their
+values. Historical server paths/URLs in unknown receipts are not executed or
+resolved; their meaning still needs human review. Do not edit originals to make
+index or binding checks match.
+
+The tool checks strict JSON (including duplicate/nonfinite rejection), documented
+export/specification/raw-bundle byte bindings, known capture object and embedded
+wire-body hashes/JSON pairing, transport sidecar hashes/claim consistency, literal
+POST/body/query declarations and recording-hop presence. Exact ordered endpoint
+segments are checked against the supplied OSM parser; requested/native snapped
+origins are compared only when a supported receipt declares a matching fixture ID
+and canonical request/response pair. These are equality/structure observations,
+not recording-hop, installed-engine or legal-connectivity attestations. Query-only
+POST requires installed-effect review; HTTP200 never establishes ch.disable.
+
+Unknown receipt schemas, graph hash conventions, installed build/profile/config,
+import history, source date/extraction completeness, camera dataset enforcement,
+vehicle exceptions/conditional barriers, device acceptance and the separately
+accepted oracle reference are not invented. Import/graph identity hashes are not
+assumed to equal a receipt/manifest file hash unless a documented reference supports
+that comparison. Consistent claims remain unauthenticated. Truncated diagnostics
+remain explicitly incomplete. Operator-reported 94-transition connectivity, five
+unresolved relations and approximately 46.31 m displacement are not approved by this
+packager. The two-metre integrity failure is not waived.
+
+Hard traversal limits: 512 files, 128 directories, depth 8, 2,048 entries. Hashing
+limits: 512 MiB/file and 2 GiB total. JSON decoding: 32 MiB/file and 64 MiB total.
+Oversized/unparsed artifacts get unavailable-check states and null fingerprints
+where no hash was computed, never fabricated values. Verification is capped at
+8,192 observations and 200,000 JSON-container visits per artifact. Generated files
+are capped at 16 MiB total. Exceeding hard traversal/check/output bounds refuses the
+run rather than presenting a complete inventory. Source bytes are never copied.
+
+Keep the entire package private: relative filenames and fingerprints can identify
+evidence even without bodies. Deliberately share it and access to unchanged originals
+only with an authorised independent reviewer. Review outcomes belong in a separate,
+scoped review record; this package has no conversion-to-approved mechanism.
+**PRODUCTION_NO_GO** remains mandatory.

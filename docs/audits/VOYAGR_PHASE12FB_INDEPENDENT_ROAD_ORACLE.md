@@ -435,3 +435,112 @@ met. Isolated `scripts/test-dashcam-session-sql.py`: 11 passed on temporary loca
 PostgreSQL, never a production DSN. Black per-file formatting and `git diff --check`
 passed. Desktop/custom-router/live-service tests, actual Windows execution and
 private fixture 0 were not run. Hosted PR/main CI outcomes are reported separately.
+
+## Addendum: independent-review evidence package
+
+The new `prepare-phase12fb-review-package.py` prepares metadata for independent
+review from existing local evidence. It does not inspect a server, fetch evidence,
+run a route, approve a receipt, populate oracle_sha256 or change a source reviewed
+flag. The actual Windows/private evidence named by the operator was unavailable
+here. Reported 94-transition motorcar findings, matching export/spec fingerprints,
+780 report records and the five unresolved relations remain operator assertions
+until an authorised reviewer examines the originals and their provenance.
+
+The deterministic package consists of the five documented JSON/Markdown files.
+Files are inventoried by safe relative name, byte size and independently recomputed
+SHA-256. No source bodies, parsed coordinates, geometry, credentials, HTTP target
+strings or raw source metadata values are copied. Capture wire bytes are decoded
+only in memory for hash/object comparisons. No ZIP/raw-inclusion option exists.
+Runtime has no network client, upload or Git subprocess. Console output is fixed
+success/refusal text with no paths or exception strings. Source/identity hashes
+bind supplied evidence, never approval or authenticity.
+
+A separate IO layer enforces local no-follow/no-atime inventory, portable relative
+references, bounded traversal and new output creation outside Git and outside the
+input hierarchy. Linux O_NOATIME directory/file handles prevent the scanner's reads
+from updating access times; file/directory metadata snapshots detect changes during
+reads. No chmod, utime or timestamp restoration is performed on source evidence.
+Windows uses per-handle all-ones SetFileTime access-time suppression and enumerates
+directories using GetFileInformationByHandleEx on that same handle. Windows requires
+FILE_WRITE_ATTRIBUTES for this suppression even though no stored timestamp/data/ACL
+is changed. Failure to obtain that guarantee refuses the run. Actual Windows
+execution is unverified. Output mode is 0700/0600 where POSIX supports it; Windows
+inherits folder ACLs and requires a pre-secured private parent. No OS-level immutable
+snapshot, hardware write blocker or protection against privileged/concurrent source
+replacement is claimed. Known remote/unknown storage types, links/reparse points,
+hardlinks, cross-device subtrees and special files are refused. Unknown filesystem
+drivers and unsupported platforms fail closed.
+
+Inventory categorisation uses documented Phase12FB names and supporting filename
+patterns, with an optional explicit local index for additional evidence roles.
+Unidentified is distinguished from absence of actual evidence. Index references
+are resolved only against the already inventoried paths/digests, not by opening
+arbitrary paths. Traversal, absolute/Windows/UNC/URL references and unsafe names are
+rejected as references. Unknown receipt schemas and historical references remain
+for review. All regular-file names/hashes stay in the private manifest; document
+reference values and arbitrary JSON key names are not copied into findings.
+
+Checks distinguish BYTES_RECOMPUTED, strict/schema observations, MATCH/MISMATCH,
+missing/unavailable evidence, conflicting/duplicate artifacts, unreviewed declarations
+and independent review required. There is no PASS label. MATCH is only the particular
+byte/object equality, not authenticity. Ordinary report SHA bindings and request/
+response canonical/wire hash conventions reuse existing documented contracts.
+The OSM export is checked with the existing parser and endpoint segment identity
+with the existing projection helper; no connectivity result is inferred. Supported
+receipt request/response hashes plus fixture IDs allow a numeric equality check
+between the exact specification and captured/native endpoints, without emitting
+the coordinates or implying independent approval. Query-only POST stays subject to
+installed-effect review; the packager never toggles reviewed flags to call formal
+acceptance validators. Unsupported import/graph digest conventions are not guessed.
+
+The checklist separates file availability, recomputed fingerprints/matching bindings,
+operator declarations not authenticated, unresolved/missing observations and the
+independent review still required. It covers capture/hop/transport, engine/build/
+profile/config, graph-cache/import/source/date/extraction/camera dataset relationships,
+exact origins/segments, restrictions/exceptions/conditionals/barriers, diagnostic
+scope, displacement, five-case replay and application/device acceptance. Unreviewed
+receipts may support review only after their underlying artifacts and chronology
+are examined; consistency does not make their claims true. Missing replay/application/
+device evidence is not substituted by a provenance receipt. Every output stays
+reviewed:false, navigation_authorized:false, acceptance:UNVERIFIED and
+**PRODUCTION_NO_GO**. No mechanism promotes the package into an approved oracle.
+
+Limits and refusal behaviour are documented in the operator procedure. Unreadable
+or concurrently changed evidence, unsafe filesystem objects and hard traversal/check
+bounds refuse creation; byte/JSON budgets produce explicit unavailable observations
+rather than fabricated hashes. Partial output writes can leave an incomplete private
+directory which will not be overwritten. The package deliberately omits timestamps,
+absolute input/output paths and generated time so repeated unchanged input inventories
+produce byte-identical output regardless of the new destination name. Deterministic
+output is not a signature, chain-of-custody certification or evidence completeness.
+
+Changed-file inventory:
+
+- `voyagr/utils/review_package_io.py`: local no-atime/no-follow inventory and exclusive private output directory/files.
+- `voyagr/utils/review_package.py`: strict structures, file/object/wire binding checks, evidence roles, findings and reviewer checklist.
+- `scripts/prepare-phase12fb-review-package.py`: offline metadata-only CLI with fixed console messages.
+- `tests/test_review_package.py`: synthetic forensic IO, schema/binding, privacy, determinism and acceptance regressions.
+- `.github/workflows/ci.yml`: include package tests in configured backend validation.
+- `docs/audits/VOYAGR_PHASE12FB_CONTABO_OPERATOR.md`: exact PowerShell command, role/index semantics, security/Windows limitations.
+- `docs/audits/VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md`: implementation/forensic assessment and validation.
+
+All authoritative road/motorcar searches, candidate/replay/transport validators,
+production routing eligibility and the two-metre integrity gate are unchanged.
+No VPS access, deployment, Docker change, live routing/OSM request or private capture
+modification occurred. Private artifacts and actual Windows execution were not tested.
+
+Evidence-package validation (2026-10-29, local Linux checkout): configured backend
+selection via `.venv/bin/python -m pytest -q`: **1,438 passed, 68 subtests passed**,
+including **49** new synthetic package cases. Tests verify byte-identical repeat
+packages, unchanged source file/directory access/modification/change times and
+permissions, fixed console output, missing/corrupt/duplicate/nonfinite JSON, byte/
+wire/endpoint mismatches, rejected references/links/special files, collisions,
+unsupported storage and unavailable budgets. Windows path/reference and directory
+record parsing are unit-tested; actual Windows APIs, ACLs and private artifacts
+remain unexecuted. Existing public oracle golden snapshots and provenance/navigation
+regressions pass. No original road/private/motorcar oracle, replay/transport validator
+or routing-service file differs from baseline 9ebd9085. `npm run lint:tests` and
+`npm run test:ci -- --maxWorkers=2`: 100 suites / 1,935 tests with coverage passed.
+Isolated session SQL policy: 11 passed using temporary local PostgreSQL only.
+Black per-file formatting and `git diff --check` passed. Desktop/custom-router/live
+service suites were not run. Hosted PR/main CI outcomes are reported separately.
