@@ -246,3 +246,77 @@ provided separately. Never copy the private report into GitHub, CI logs or publi
 chat. Share only the existing sanitized public diagnostic after review. See the
 [technical audit](VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md) for classifications,
 limits and the compatibility validation.
+
+## Alternative motorcar plausibility investigation
+
+The ordinary potential path can include normally non-motorcar roads as uncertain
+traversals. That is not proof of a passenger-car route. Use the separate offline
+policy below to investigate a stricter subset without changing the authoritative
+oracle. It still needs only the local export and exact-endpoint specification;
+no reviewed provenance or accepted oracle reference is required for investigation.
+Do not access a server or obtain fresh routing/OSM data for this procedure.
+
+From the repository root, with the same secure local private folder/ACL precautions
+as the inspector above, run this PowerShell command:
+
+```powershell
+& ".\.venv\Scripts\python.exe" ".\scripts\investigate-phase12fb-motorcar.py" `
+  --export "C:\Users\Brian\Documents\Voyagr-Private-Acceptance\fixture-0-oracle-export.json" `
+  --specification "C:\Users\Brian\Documents\Voyagr-Private-Acceptance\fixture-0-oracle-spec-unreviewed.json" `
+  --private-output "C:\Users\Brian\Documents\Voyagr-Private-Acceptance\fixture-0-motorcar-investigation-unreviewed-01.json"
+```
+
+Omit `--private-output` for sanitized aggregate JSON only and no report file. With
+that option the same public JSON goes to stdout, and a NEW exclusive private file
+contains the evidence for the policy's representative path. Existing files and
+Git destinations are refused using PR #362's writer. The output folder must exist,
+be outside all Git repositories, and have a private Windows ACL. Choose a fresh
+filename on later runs. No source file/capture/export is modified. No endpoint
+coordinates, virtual fractions, geometry, HTTP bodies or credentials are output.
+
+Interpret `classification` as follows:
+
+| Classification | Meaning |
+| --- | --- |
+| `POTENTIAL_MOTORCAR_PATH_IN_EXPORT` | A non-empty path exists under the explicitly provisional motorcar policy. It is not legally verified or navigation-authorized. Review every remaining condition. |
+| `NO_MOTORCAR_PATH_FOUND_IN_EXPORT` | The policy found no path in the bounded export. Pruning, unknown evidence and extract boundaries can exclude real connections. This is not real-world disconnection. |
+| `SEARCH_INCOMPLETE` | The potential search hit STATES or EDGE_EXAMINATIONS limits; no no-path conclusion follows. |
+| `EVIDENCE_INSUFFICIENT` | Invalid/missing/conflicting endpoint/export evidence, a failed search with known missing-node coverage, or zero-transition evidence cannot answer the question. CLI input/output refusals also exit 2 without exposing details. |
+
+Exit 0 means a diagnostic completed, including a bounded no-path or incomplete-search
+result; inspect the classification, not the exit code alone. Exit 2 is insufficient
+input/output evidence or refusal. `--max-states` retains the existing 1..200000
+bound (default 100000). No limit increase or repeated search guarantees completeness.
+
+The policy permits default plausibility only on the ordinary road-class allowlist.
+Footways, pedestrian streets, steps, paths, cycleways, bridleways, tracks and generic
+`road` require explicit unconditional `motorcar=yes/designated/permissive` applying
+to the direction. Broader motor_vehicle/vehicle permission alone is deliberately
+insufficient for that exception. Construction/proposed/unknown classes remain
+excluded even with a positive access tag. Directional access precedence remains
+access -> vehicle -> motor_vehicle -> motorcar. Private, destination, delivery,
+customer and unknown permissions are excluded unless a more specific supported
+permission overrides them. Conditional access, unsupported access qualifiers,
+ambiguous direction, all barrier tags (including kerb/gate/bollard) and ambiguous
+supported turn handling are excluded. This is conservative investigation policy,
+not a modification of OSM rules or the authoritative oracle.
+
+Dimensional/physical evidence such as `maxheight=default` may remain on a provisional
+path and is explicitly flagged as unsupported clearance/applicability evidence.
+Numeric dimensions are not compared with an invented vehicle specification.
+An explicit motorcar exception on normally non-motorcar infrastructure also leaves
+physical suitability unverified. All unresolved relation guards remain active,
+including relations outside the selected path. Review `remaining_conditions` and
+`representative_uncertainty`; access uncertainty overlaps physical/conditional
+uncertainty in the existing evaluator and is not solely an access-tag verdict.
+
+The new policy does not validate a supplied candidate or use its first edge as a
+start. Run the unchanged ordinary oracle for candidate validation. The private
+report uses `policy_search_report`, not `public_diagnostic`, to prevent confusing
+this filtered graph with the authoritative report. Its root scope remains
+`PRIVATE_PROVISIONAL_TOPOLOGY_ONLY`, and `motorcar_investigation` contains the public
+aggregate summary. Capture binding is NOT_CHECKED; all review/navigation/acceptance
+flags stay false/UNVERIFIED and **PRODUCTION_NO_GO**.
+
+No private fixture 0 run is claimed here. A new plausible route cannot waive the
+reported 46.31 m origin displacement or Voyagr's two-metre integrity gate.

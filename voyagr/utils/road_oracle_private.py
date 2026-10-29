@@ -156,6 +156,11 @@ def inspect(export_raw, specification_raw, *, max_states=100000):
     public, path = oracle._analyse_with_path(
         spec["origin"], spec["target"], spec.get("candidate"), max_states=max_states
     )
+    return _describe_path(oracle, specification_raw, spec, public, path)
+
+
+def _describe_path(oracle, specification_raw, spec, public, path):
+    """Shared private evidence rendering, without performing another search."""
     records, used_bytes, omitted = [], 0, 0
     sources = {}
 
