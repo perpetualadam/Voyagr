@@ -671,3 +671,17 @@ def test_malformed_index_role_is_a_finding_not_an_approval_or_exception(tmp_path
         c["check"] == "ARTIFACT_REFERENCE" and c["status"] == "INVALID"
         for c in checks(docs(root))
     )
+
+
+def test_invalid_deep_export_is_not_reparsed_after_strict_json_refusal(tmp_path):
+    root = tmp_path / "evidence"
+    root.mkdir()
+    raw = b'{"elements":' + b"[" * 2000 + b"0" + b"]" * 2000 + b"}"
+    put(root, "fixture-0-oracle-export.json", raw)
+    out = docs(root)
+    manifest = json.loads(out["evidence-manifest.json"])
+    assert manifest["files"][0]["json_status"] == "INVALID"
+    assert manifest["files"][0]["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert any(
+        c["check"] == "STRICT_JSON" and c["status"] == "INVALID" for c in checks(out)
+    )

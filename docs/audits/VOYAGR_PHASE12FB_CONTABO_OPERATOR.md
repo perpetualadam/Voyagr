@@ -436,7 +436,7 @@ Hard traversal limits: 512 files, 128 directories, depth 8, 2,048 entries. Hashi
 limits: 512 MiB/file and 2 GiB total. JSON decoding: 32 MiB/file and 64 MiB total.
 Oversized/unparsed artifacts get unavailable-check states and null fingerprints
 where no hash was computed, never fabricated values. Verification is capped at
-8,192 observations and 200,000 JSON-container visits per artifact. Generated files
+8,192 observations, JSON nesting depth 64, and 200,000 reference-scan visits per artifact. Generated files
 are capped at 16 MiB total. Exceeding hard traversal/check/output bounds refuses the
 run rather than presenting a complete inventory. Source bytes are never copied.
 

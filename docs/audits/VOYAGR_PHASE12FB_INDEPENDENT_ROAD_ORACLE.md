@@ -530,8 +530,8 @@ No VPS access, deployment, Docker change, live routing/OSM request or private ca
 modification occurred. Private artifacts and actual Windows execution were not tested.
 
 Evidence-package validation (2026-10-29, local Linux checkout): configured backend
-selection via `.venv/bin/python -m pytest -q`: **1,438 passed, 68 subtests passed**,
-including **49** new synthetic package cases. Tests verify byte-identical repeat
+selection via `.venv/bin/python -m pytest -q`: **1,439 passed, 68 subtests passed**,
+including **50** new synthetic package cases. Tests verify byte-identical repeat
 packages, unchanged source file/directory access/modification/change times and
 permissions, fixed console output, missing/corrupt/duplicate/nonfinite JSON, byte/
 wire/endpoint mismatches, rejected references/links/special files, collisions,
@@ -544,3 +544,5 @@ or routing-service file differs from baseline 9ebd9085. `npm run lint:tests` and
 Isolated session SQL policy: 11 passed using temporary local PostgreSQL only.
 Black per-file formatting and `git diff --check` passed. Desktop/custom-router/live
 service suites were not run. Hosted PR/main CI outcomes are reported separately.
+
+Final malformed-export regression also enforces a runtime-independent JSON nesting cap of 64 and avoids reparsing JSON already rejected by the strict decoder. Deep/unsupported JSON is recorded as invalid evidence rather than reaching the OSM parser. No assertion or acceptance protection was weakened.

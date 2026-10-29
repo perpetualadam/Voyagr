@@ -60,6 +60,7 @@ STRUCTURED_ROLES = frozenset(
     )
 )
 MAX_CHECKS = 8192
+MAX_JSON_DEPTH = 64
 
 
 def encode(value):
@@ -86,9 +87,26 @@ def strict_json(raw):
             raise ValueError("nonfinite_json")
         return value
 
-    return json.loads(
+    decoded = json.loads(
         raw, object_pairs_hook=unique, parse_constant=constant, parse_float=number
     )
+    stack = [(decoded, 0)]
+    visits = 0
+    while stack:
+        value, depth = stack.pop()
+        if depth > MAX_JSON_DEPTH:
+            raise ValueError("json_nesting_limit")
+        if isinstance(value, (dict, list)):
+            visits += 1
+            if visits > 200000:
+                raise ValueError("json_container_limit")
+            children = value.values() if isinstance(value, dict) else value
+            stack.extend(
+                (child, depth + 1)
+                for child in children
+                if isinstance(child, (dict, list))
+            )
+    return decoded
 
 
 def categories(path):
@@ -409,7 +427,11 @@ def build(files, blobs):
             )
 
     export_file, endpoint_file = unique("osm_export"), unique("endpoint_specification")
-    if export_file and export_file["path"] in blobs:
+    if (
+        export_file
+        and export_file["path"] in blobs
+        and export_file["json_status"] == "STRICTLY_DECODED"
+    ):
         try:
             from voyagr.utils.road_oracle import RoadOracle
 
