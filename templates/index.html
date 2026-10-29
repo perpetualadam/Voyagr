@@ -901,10 +901,10 @@
                         <label>Avoidance enforcement
                             <select id="avoidanceMode" onchange="localStorage.setItem('pref_avoidance_mode', this.value); window.VoyagrAvoidanceIntegrity.invalidate();">
                                 <option value="preference">Best effort (existing preferences)</option>
-                                <option value="mandatory">Require selected avoidances; review unverified routes</option>
+                                <option value="mandatory">Require selected avoidances; refuse unresolved routes</option>
                             </select>
                         </label>
-                        <p>Available map data cannot guarantee hazard-free travel. Mandatory conflicts require explicit acceptance before navigation.</p>
+                        <p>Available map data cannot guarantee hazard-free travel. Unresolved mandatory requirements prevent navigation. Refused routes remain available as previews for inspection.</p>
                         <script>window.addEventListener('load', function () { document.getElementById('avoidanceMode').value = localStorage.getItem('pref_avoidance_mode') || 'preference'; });</script>
 
                         <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Road types and how routes are calculated</p>

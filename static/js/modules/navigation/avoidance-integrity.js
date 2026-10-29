@@ -70,6 +70,21 @@
         }
         return h.toString(16).padStart(8,'0');
     }
+    // Validate the server's normalized contract, not the user's coarse toggle list.
+    var CATEGORIES = ['speed_cameras','red_light_cameras','other_cameras','traffic_lights',
+        'railway_crossings','other_hazards','avoid_points','tolls','caz','congestion_charging',
+        'motorways','ferries','unpaved'];
+    function validRequirements(rows) {
+        var seen = new Set();
+        return Array.isArray(rows) && rows.length<=CATEGORIES.length && rows.every(function(r) {
+            if (!r || CATEGORIES.indexOf(r.category)<0 || seen.has(r.category) ||
+                typeof r.enabled!=='boolean' || ['mandatory','preference'].indexOf(r.mode)<0 ||
+                (r.scope!==undefined && r.scope!=='route')) return false;
+            seen.add(r.category);
+            return true;
+        });
+    }
+    function enabledMandatory(r) { return r.enabled && r.mode==='mandatory'; }
     function decision(route, options) {
         options = options || {};
         var assessment = route && route.avoidance_assessment;
@@ -89,42 +104,58 @@
             (!Array.isArray(requested) || Math.hypot((requested[0]-actual.lat)*111195,(requested[1]-actual.lon)*111195*Math.cos(actual.lat*Math.PI/180))>2)) {
             return {allowed:false,acceptance:false,message:'Your position changed since route calculation. Recalculate from the actual location.'};
         }
-        var requirements = assessment && assessment.requirements || route && route.avoidance_requirements || [];
-        var mandatory = options.mandatory || requirements.some(function(r) { return r.enabled && r.mode==='mandatory'; });
-        if (assessment && assessment.geometry_binding && assessment.geometry_binding!==geometryBinding(route)) return {allowed:false,acceptance:false,message:'Route geometry changed after assessment; recalculate before navigation.'};
-        if (assessment && assessment.geometry_valid===false) return { allowed:false, acceptance:false, message:'Route geometry is incomplete; calculate a new route.' };
-        if (options.offline && mandatory) return { allowed:false, acceptance:true, message:'Offline: mandatory avoidance cannot be revalidated. Continue with this unverified route?' };
-        if (!assessment) return { allowed:!mandatory, acceptance:!!mandatory, message:'Unverified: this route has no current avoidance assessment.' };
-        var age = Date.now()/1000 - assessment.checked_at;
-        if (mandatory && (!Number.isFinite(age) || age<0 || age>600 || options.preferencesChanged)) {
-            return { allowed:false, acceptance:true, message:'Avoidance assessment is stale or preferences changed. Recalculate, or explicitly accept an unverified route.' };
+        var requirements = assessment.requirements;
+        var expected = options.expectedRequirements || [];
+        var contract = route.avoidance_requirements;
+        var invalid = options.invalidRequirements || !validRequirements(requirements) ||
+            !validRequirements(expected) || (contract!==undefined && !validRequirements(contract));
+        if (invalid || (options.mandatory && !requirements.length)) {
+            return {allowed:false,acceptance:false,message:'Avoidance requirements are missing or malformed. Recalculate; preview only, navigation cannot start.'};
         }
-        var mandatoryRows = requirements.filter(function(r) { return r.enabled && r.mode==='mandatory'; });
-        var mandatoryUnresolved = mandatoryRows.length ? mandatoryRows.some(function(r) { return r.status!=='SATISFIED'; }) : mandatory && assessment.status!=='SATISFIED';
-        if (assessment.requires_acceptance || mandatoryUnresolved) {
+        // A missing, disabled or downgraded assessment row cannot satisfy an enabled
+        // mandatory row in the original server contract or current explicit settings.
+        var expectedRows = expected.concat(contract || []);
+        var mismatch = expectedRows.some(function(wanted) {
+            var actual = requirements.find(function(r) { return r.category===wanted.category; });
+            return (enabledMandatory(wanted) || (actual && enabledMandatory(actual))) &&
+                (!actual || actual.enabled!==wanted.enabled || actual.mode!==wanted.mode);
+        });
+        var mandatoryRows = requirements.filter(enabledMandatory);
+        var mandatory = mandatoryRows.length>0 || expectedRows.some(enabledMandatory);
+        if (assessment.geometry_binding && assessment.geometry_binding!==geometryBinding(route)) return {allowed:false,acceptance:false,message:'Route geometry changed after assessment; recalculate before navigation.'};
+        if (assessment.geometry_valid===false) return { allowed:false, acceptance:false, message:'Route geometry is incomplete; calculate a new route.' };
+        var age = Date.now()/1000 - assessment.checked_at;
+        if (mandatory && (!Number.isFinite(age) || age<0 || age>600 || options.preferencesChanged || mismatch)) {
+            return { allowed:false, acceptance:false, message:'Mandatory avoidance evidence is stale or requirements changed. Recalculate; preview only, navigation cannot start.' };
+        }
+        if (mandatoryRows.some(function(r) { return r.status!=='SATISFIED'; }) || assessment.requires_acceptance) {
             var label = assessment.status==='VIOLATED' ? 'Known conflict' : assessment.status==='UNSUPPORTED' ? 'Unsupported' : 'Unverified';
-            return { allowed:false, acceptance:true, message:label+': mandatory avoidance is not established. Continue with this route despite the limitation?' };
+            return { allowed:false, acceptance:false, message:label+': route safety requirements are not established. Preview only; navigation cannot start.' };
         }
         return { allowed:true, acceptance:false, message:assessment.status==='SATISFIED' ?
             (assessment.claim==='avoidance_disabled' ? '' : 'Verified against available data only; mapped coverage is limited.') :
             'Best effort: avoidance preferences are not guaranteed.' };
     }
+    function currentDecision(route, options, storage) {
+        var mandatory = storage.getItem('pref_avoidance_mode')==='mandatory';
+        var explicit = [], invalid = false;
+        try {
+            explicit = JSON.parse(storage.getItem('pref_avoidance_requirements') || '[]');
+            invalid = !validRequirements(explicit);
+        } catch (_) { invalid = true; }
+        var mode = storage.getItem('pref_avoidance_mode');
+        invalid = invalid || (mode!==null && mode!=='mandatory' && mode!=='preference');
+        return decision(route, Object.assign({}, options, {mandatory:mandatory,
+            expectedRequirements:explicit, invalidRequirements:invalid,
+            preferencesChanged:!route || route.avoidance_preferences_snapshot!==snapshot(storage)}));
+    }
     function gate(route, options) {
         options = options || {};
-        var storage = options.storage || root.localStorage;
-        var mandatory = storage.getItem('pref_avoidance_mode')==='mandatory';
-        try {
-            var explicit = JSON.parse(storage.getItem('pref_avoidance_requirements') || '[]');
-            mandatory = mandatory || explicit.some(function(r) { return r.enabled && r.mode==='mandatory'; });
-        } catch (_) { mandatory = true; }
-
-        var d = decision(route, Object.assign({}, options, {mandatory:mandatory,
-            preferencesChanged:!!(mandatory && (!route || !route.avoidance_preferences_snapshot || route.avoidance_preferences_snapshot!==snapshot(storage)))}));
+        var d = currentDecision(route, options, options.storage || root.localStorage);
         if (d.allowed) {
             if (d.message && !options.quiet && options.showStatus) options.showStatus(d.message,'warning');
             return true;
         }
-        if (!options.automatic && d.acceptance && typeof options.confirm==='function' && options.confirm(d.message)) return true;
         if (options.showStatus) options.showStatus(d.message,'warning');
         return false;
     }
@@ -141,11 +172,14 @@
         var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
         var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
         if (!a || !a.origin_integrity || a.origin_integrity.navigation_allowed!==true) return 'Unverified route start: navigation is unresolved. Recalculate from the actual location.'+limitation;
-        if (a.claim==='avoidance_disabled') return 'Avoidance disabled.'+limitation;
+        var refused=(root.localStorage ? currentDecision(route, {}, root.localStorage) : decision(route)).allowed===false;
+        if (a.claim==='avoidance_disabled' && !refused) return 'Avoidance disabled.'+limitation;
         var labels={SATISFIED:'Verified against available data only',VIOLATED:'Known conflict',UNVERIFIED:'Unverified',UNSUPPORTED:'Unsupported'};
-        var unresolved=(a.requirements || []).filter(function(r) { return r.enabled && r.status!=='SATISFIED'; });
-        return (labels[a.status] || 'Unverified') + (unresolved.length ? ': '+unresolved.map(function(r) { return r.category.replace(/_/g,' '); }).join(', ') : '') +
-            '. Map coverage, road association and data age may be limited.'+limitation;
+        var rows=Array.isArray(a.requirements) ? a.requirements : [];
+        var unresolved=rows.filter(function(r) { return r && r.enabled && r.status!=='SATISFIED'; });
+        return (refused && a.status==='SATISFIED' ? 'Unverified' : labels[a.status] || 'Unverified') + (unresolved.length ? ': '+unresolved.map(function(r) { return String(r.category || 'unknown').replace(/_/g,' '); }).join(', ') : '') +
+            '. Map coverage, road association and data age may be limited.'+
+            (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
         decision:decision,gate:gate,tag:tag,summary:summary,geometryBinding:geometryBinding,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
