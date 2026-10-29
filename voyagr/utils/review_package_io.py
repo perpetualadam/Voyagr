@@ -9,6 +9,12 @@ import struct
 import re
 import sys
 
+from voyagr.utils.review_package_diagnostics import (
+    PolicyRefusal,
+    CapabilityRefusal,
+    operation,
+)
+
 MAX_FILES = 512
 MAX_DIRS = 128
 MAX_DEPTH = 8
@@ -31,7 +37,7 @@ def _filesystem_type(path):
         if path.is_relative_to(Path(mount)):
             candidates.append((len(mount), right.split()[0]))
     if not candidates:
-        raise OSError("storage_type_unavailable")
+        raise CapabilityRefusal("storage_type_unavailable")
     return max(candidates)[1]
 
 
@@ -43,12 +49,12 @@ def _require_local_storage(path):
         function.argtypes = [ctypes.c_wchar_p]
         function.restype = ctypes.c_uint
         if function(path.anchor) not in (2, 3, 6):
-            raise OSError("local_drive_required")
+            raise CapabilityRefusal("local_drive_required")
     elif sys.platform.startswith("linux"):
         if _filesystem_type(path) not in LOCAL_FILESYSTEMS:
-            raise OSError("local_filesystem_required")
+            raise CapabilityRefusal("local_filesystem_required")
     else:
-        raise OSError("unsupported_no_atime_platform")
+        raise CapabilityRefusal("unsupported_no_atime_platform")
 
 
 def relative_path(value):
@@ -63,7 +69,7 @@ def relative_path(value):
         or PureWindowsPath(value).is_absolute()
         or any(part in ("", ".", "..") for part in value.split("/"))
     ):
-        raise ValueError("unsafe_relative_reference")
+        raise PolicyRefusal("unsafe_relative_reference")
     reserved = {
         "CON",
         "PRN",
@@ -78,7 +84,7 @@ def relative_path(value):
         or any(c in part for c in '%?*<>"|')
         for part in value.split("/")
     ):
-        raise ValueError("nonportable_reference")
+        raise PolicyRefusal("nonportable_reference")
     return value
 
 
@@ -91,18 +97,19 @@ def reparse(info):
 def local_path(value):
     text = str(value)
     if "\x00" in text or text.startswith(("\\\\", "//")):
-        raise ValueError("local_path_required")
+        raise PolicyRefusal("local_path_required")
     path = Path(value)
     if not path.is_absolute() or ".." in path.parts:
-        raise ValueError("absolute_path_without_traversal_required")
-    _require_local_storage(path)
+        raise PolicyRefusal("absolute_path_without_traversal_required")
+    with operation("STORAGE_CHECK"):
+        _require_local_storage(path)
     for parent in reversed((path, *path.parents)):
         try:
             info = parent.lstat()
         except FileNotFoundError:
             continue
         if reparse(info):
-            raise ValueError("reparse_path_forbidden")
+            raise PolicyRefusal("reparse_path_forbidden")
     return path
 
 
@@ -132,7 +139,7 @@ def outside_git(path):
     if path.is_relative_to(REPOSITORY) or any(
         git_boundary(p) for p in (path, *path.parents)
     ):
-        raise ValueError("git_destination_forbidden")
+        raise PolicyRefusal("git_destination_forbidden")
 
 
 def stamp(info):
@@ -183,21 +190,34 @@ class _Windows:
     def open(self, path, directory):
         # FILE_WRITE_ATTRIBUTES is required by Windows to disable automatic atime
         # updates on this handle. No file data/timestamp/ACL is written.
-        handle = self.k.CreateFileW(
-            str(path),
-            0x80000000 | 0x100,
-            1,
-            None,
-            3,
-            0x00200000 | (0x02000000 if directory else 0),
-            None,
-        )
+        with operation("WINDOWS_OPEN_DIRECTORY" if directory else "WINDOWS_OPEN_FILE"):
+            handle = self.k.CreateFileW(
+                str(path),
+                0x80000000 | 0x100,
+                1,
+                None,
+                3,
+                0x00200000 | (0x02000000 if directory else 0),
+                None,
+            )
         if handle == self.c.c_void_p(-1).value:
-            raise OSError("windows_read_handle_unavailable")
+            raise CapabilityRefusal(
+                "windows_read_handle_unavailable",
+                operation=(
+                    "WINDOWS_OPEN_DIRECTORY" if directory else "WINDOWS_OPEN_FILE"
+                ),
+                winerror=self.c.get_last_error(),
+            )
         frozen = (self.w.DWORD * 2)(0xFFFFFFFF, 0xFFFFFFFF)
-        if not self.k.SetFileTime(handle, None, self.c.byref(frozen), None):
-            self.k.CloseHandle(handle)
-            raise OSError("windows_no_atime_unavailable")
+        with operation("WINDOWS_FREEZE_ATIME"):
+            if not self.k.SetFileTime(handle, None, self.c.byref(frozen), None):
+                code = self.c.get_last_error()
+                self.k.CloseHandle(handle)
+                raise CapabilityRefusal(
+                    "windows_no_atime_unavailable",
+                    operation="WINDOWS_FREEZE_ATIME",
+                    winerror=code,
+                )
         return handle
 
     @contextmanager
@@ -214,7 +234,8 @@ class _Windows:
 
         handle = self.open(path, False)
         try:
-            fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+            with operation("WINDOWS_WRAP_READ_HANDLE"):
+                fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
         except Exception:
             self.k.CloseHandle(handle)
             raise
@@ -227,15 +248,21 @@ class _Windows:
         buffer = self.c.create_string_buffer(65536)
         first = True
         while True:
-            ok = self.k.GetFileInformationByHandleEx(
-                handle, 11 if first else 10, buffer, len(buffer)
-            )
+            with operation("WINDOWS_ENUMERATE_DIRECTORY"):
+                ok = self.k.GetFileInformationByHandleEx(
+                    handle, 11 if first else 10, buffer, len(buffer)
+                )
             first = False
             if not ok:
                 if self.c.get_last_error() == 18:
                     return
-                raise OSError("windows_directory_read_unavailable")
-            yield from windows_names(buffer.raw)
+                raise CapabilityRefusal(
+                    "windows_directory_read_unavailable",
+                    operation="WINDOWS_ENUMERATE_DIRECTORY",
+                    winerror=self.c.get_last_error(),
+                )
+            with operation("WINDOWS_ENUMERATE_DIRECTORY"):
+                yield from windows_names(buffer.raw)
 
 
 def windows_names(raw):
@@ -243,24 +270,25 @@ def windows_names(raw):
     offset = 0
     while True:
         if offset + 104 > len(raw):
-            raise ValueError("invalid_windows_directory_record")
+            raise PolicyRefusal("invalid_windows_directory_record")
         next_offset = struct.unpack_from("<I", raw, offset)[0]
         size = struct.unpack_from("<I", raw, offset + 60)[0]
         if size % 2 or offset + 104 + size > len(raw):
-            raise ValueError("invalid_windows_directory_name")
+            raise PolicyRefusal("invalid_windows_directory_name")
         name = raw[offset + 104 : offset + 104 + size].decode("utf-16-le")
         if name not in (".", ".."):
             yield name
         if not next_offset:
             break
         if next_offset < 104 + size:
-            raise ValueError("invalid_windows_directory_offset")
+            raise PolicyRefusal("invalid_windows_directory_offset")
         offset += next_offset
 
 
 class Reader:
     def __init__(self):
-        self.win = _Windows() if os.name == "nt" else None
+        with operation("WINDOWS_BACKEND_SETUP"):
+            self.win = _Windows() if os.name == "nt" else None
 
     @contextmanager
     def directory(self, path, *, parent=None, name=None):
@@ -269,12 +297,13 @@ class Reader:
                 yield handle
             return
         if not hasattr(os, "O_NOATIME"):
-            raise OSError("no_atime_not_supported")
-        fd = os.open(
-            name if parent is not None else path,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NOATIME,
-            dir_fd=parent,
-        )
+            raise CapabilityRefusal("no_atime_not_supported")
+        with operation("POSIX_NO_ATIME_OPEN"):
+            fd = os.open(
+                name if parent is not None else path,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NOATIME,
+                dir_fd=parent,
+            )
         try:
             yield fd
         finally:
@@ -286,13 +315,13 @@ class Reader:
             iterator = self.win.names(handle)
             for name in iterator:
                 if len(result) >= limit:
-                    raise ValueError("entry_limit")
+                    raise PolicyRefusal("entry_limit")
                 result.append(name)
         else:
             with os.scandir(handle) as iterator:
                 for entry in iterator:
                     if len(result) >= limit:
-                        raise ValueError("entry_limit")
+                        raise PolicyRefusal("entry_limit")
                     result.append(entry.name)
         return result
 
@@ -303,8 +332,11 @@ class Reader:
                 yield fd
             return
         if not hasattr(os, "O_NOATIME"):
-            raise OSError("no_atime_not_supported")
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NOATIME, dir_fd=parent)
+            raise CapabilityRefusal("no_atime_not_supported")
+        with operation("POSIX_NO_ATIME_OPEN"):
+            fd = os.open(
+                name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NOATIME, dir_fd=parent
+            )
         try:
             yield fd
         finally:
@@ -314,7 +346,7 @@ class Reader:
 def inventory(root):
     root = local_path(root)
     if not root.is_dir():
-        raise ValueError("evidence_directory_required")
+        raise PolicyRefusal("evidence_directory_required")
     outside_git(root)
     reader = Reader()
     files, blobs, seen = [], {}, set()
@@ -325,31 +357,31 @@ def inventory(root):
         nonlocal dirs, entries, total, json_total
         dirs += 1
         if dirs > MAX_DIRS or depth > MAX_DEPTH:
-            raise ValueError("traversal_limit")
+            raise PolicyRefusal("traversal_limit")
         before = path.lstat()
         if reparse(before) or before.st_dev != device:
-            raise ValueError("external_directory_forbidden")
+            raise PolicyRefusal("external_directory_forbidden")
         if git_boundary(path):
-            raise ValueError("nested_git_forbidden")
+            raise PolicyRefusal("nested_git_forbidden")
         with reader.directory(path, parent=parent, name=name) as directory:
             if not reader.win and stamp(os.fstat(directory)) != stamp(before):
-                raise ValueError("directory_changed")
+                raise PolicyRefusal("directory_changed")
             names = reader.names(directory, MAX_ENTRIES - entries)
             entries += len(names)
             if entries > MAX_ENTRIES:
-                raise ValueError("entry_limit")
+                raise PolicyRefusal("entry_limit")
             for child in sorted(names):
                 if child == ".git":
-                    raise ValueError("nested_git_forbidden")
+                    raise PolicyRefusal("nested_git_forbidden")
                 relative_path(child)
                 relative = relative_path(rel + "/" + child if rel else child)
                 if relative.casefold() in seen:
-                    raise ValueError("case_conflicting_paths")
+                    raise PolicyRefusal("case_conflicting_paths")
                 seen.add(relative.casefold())
                 target = path / child
                 info = target.lstat()
                 if reparse(info):
-                    raise ValueError("symlink_or_reparse_forbidden")
+                    raise PolicyRefusal("symlink_or_reparse_forbidden")
                 if stat.S_ISDIR(info.st_mode):
                     walk(target, relative, depth + 1, directory, child)
                     continue
@@ -358,9 +390,9 @@ def inventory(root):
                     or info.st_nlink != 1
                     or info.st_dev != device
                 ):
-                    raise ValueError("external_or_special_file_forbidden")
+                    raise PolicyRefusal("external_or_special_file_forbidden")
                 if len(files) >= MAX_FILES:
-                    raise ValueError("file_limit")
+                    raise PolicyRefusal("file_limit")
                 record = {
                     "path": relative,
                     "size_bytes": info.st_size,
@@ -378,24 +410,25 @@ def inventory(root):
                     )
                     with reader.file(target, directory, child) as fd:
                         if stamp(os.fstat(fd)) != stamp(info):
-                            raise ValueError("file_changed_before_read")
+                            raise PolicyRefusal("file_changed_before_read")
                         h, size, parts = hashlib.sha256(), 0, []
                         while True:
-                            chunk = os.read(
-                                fd, min(1024 * 1024, info.st_size - size + 1)
-                            )
+                            with operation("SOURCE_READ"):
+                                chunk = os.read(
+                                    fd, min(1024 * 1024, info.st_size - size + 1)
+                                )
                             if not chunk:
                                 break
                             size += len(chunk)
                             if size > info.st_size:
-                                raise ValueError("file_changed_during_read")
+                                raise PolicyRefusal("file_changed_during_read")
                             h.update(chunk)
                             if collect:
                                 parts.append(chunk)
                         if size != info.st_size or stamp(os.fstat(fd)) != stamp(info):
-                            raise ValueError("file_changed_during_read")
+                            raise PolicyRefusal("file_changed_during_read")
                     if stamp(target.lstat()) != stamp(info):
-                        raise ValueError("file_changed_after_read")
+                        raise PolicyRefusal("file_changed_after_read")
                     record.update(sha256=h.hexdigest(), fingerprint="BYTES_RECOMPUTED")
                     total += size
                     if collect:
@@ -403,21 +436,23 @@ def inventory(root):
                         json_total += size
                 files.append(record)
         if stamp(path.lstat()) != stamp(before):
-            raise ValueError("directory_metadata_changed")
+            raise PolicyRefusal("directory_metadata_changed")
 
     walk(root, "", 0)
     return sorted(files, key=lambda f: f["path"]), blobs
 
 
 def output_directory(root, output):
-    root, output = local_path(root), local_path(output)
+    with operation("INPUT_PATH_POLICY"):
+        root = local_path(root)
+    output = local_path(output)
     outside_git(output)
     if output.exists() or output.is_symlink():
-        raise ValueError("existing_output_forbidden")
+        raise PolicyRefusal("existing_output_forbidden")
     if output.is_relative_to(root) or root.is_relative_to(output):
-        raise ValueError("input_output_overlap")
+        raise PolicyRefusal("input_output_overlap")
     if not output.parent.is_dir():
-        raise ValueError("output_parent_required")
+        raise PolicyRefusal("output_parent_required")
     return output
 
 
@@ -426,7 +461,7 @@ def write_package(output, documents):
     output = local_path(output)
     outside_git(output)
     if output.exists():
-        raise ValueError("existing_output_forbidden")
+        raise PolicyRefusal("existing_output_forbidden")
     os.mkdir(output, 0o700)
     for name, raw in documents.items():
         if name not in {
@@ -436,7 +471,7 @@ def write_package(output, documents):
             "unresolved-findings.json",
             "package-summary.md",
         }:
-            raise ValueError("unexpected_output")
+            raise PolicyRefusal("unexpected_output")
         fd = os.open(
             output / name,
             os.O_WRONLY

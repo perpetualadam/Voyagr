@@ -445,3 +445,87 @@ evidence even without bodies. Deliberately share it and access to unchanged orig
 only with an authorised independent reviewer. Review outcomes belong in a separate,
 scoped review record; this package has no conversion-to-approved mechanism.
 **PRODUCTION_NO_GO** remains mandatory.
+
+## Diagnose a Windows review-packager refusal
+
+A healthy NTFS volume, non-reparse root folders and a full-control ACL do not locate
+the failing guard. They do not establish that the running process can open every
+source entry with the packager's exact rights, freeze access-time updates, enumerate
+through the protected handle or obtain consistent metadata from path/handle APIs.
+Medium integrity alone is not a failure. An inherited CodexSandboxUsers read/execute
+ACE is not by itself a deny; restricted-token checks, descendant permissions,
+sharing state or filesystem/security filters can still affect effective access.
+None of these is established as the operator's actual cause here.
+
+Use the same standard, **non-elevated** PowerShell context that produced the refusal.
+Do not switch tokens/sandbox policy to get past the guard. Do not change ACLs,
+CodexSandboxUsers permissions, token restrictions, last-access policy or source
+attributes, and do not retry with weaker/no-atime protection. From the repository
+root run this exact command with a NEW output directory:
+
+```powershell
+& ".\.venv\Scripts\python.exe" ".\scripts\prepare-phase12fb-review-package.py" `
+  --evidence-directory "C:\Users\Brian\Documents\Voyagr-Private-Acceptance" `
+  --output-directory "C:\Users\Brian\Documents\Voyagr-Phase12FB-Review-Unreviewed-Diagnostic-01" `
+  --diagnose-refusal
+$LASTEXITCODE
+```
+
+If that output already exists, choose an unused suffix; do not delete/overwrite it.
+This attempts the **same** protected packaging workflow, not a dry run or a separate
+probe. On refusal it exits 2, prints the original PRIVATE_REVIEW_PACKAGE_REFUSED
+line to stderr, then one bounded JSON diagnostic line. With no explicit option,
+the default message/exit behaviour is unchanged. If the attempt succeeds, it creates
+the normal metadata-only package, prints the unchanged success line and exits 0;
+there is no additional scan, refusal JSON or automatic approval.
+
+Illustrative diagnostic only, **not an observed result from the operator's PC**:
+
+```json
+{"diagnostic_schema_version":1,"outcome":"REFUSED","category":"WINDOWS_NO_ATIME_CAPABILITY","operation":"WINDOWS_FREEZE_ATIME","reason":"ACCESS_DENIED","reviewed":false,"navigation_authorized":false,"production":"PRODUCTION_NO_GO"}
+```
+
+Only category/operation/reason enums and safety fields are output. No private paths,
+filenames, entry indices, OSM IDs, coordinates, stack traces, raw OS errors, credentials
+or evidence bodies are emitted. Sharing just this JSON line is sufficient for the
+next diagnosis; do not upload private evidence, raw traces or ACL dumps. The first
+failing operation is reported; later guards may not have been reached.
+
+| Category | Interpretation and safe next step |
+| --- | --- |
+| `ARGUMENTS_INVALID` | Parser rejected arguments; use the exact documented flags/quotes. No source was inspected by argument parsing. |
+| `PATH_POLICY`, `INPUT_UNAVAILABLE` | A local absolute no-traversal path or accessible directory requirement failed. Verify the intended location privately without changing original evidence. A false directory check is not proof of physical absence. |
+| `STORAGE_POLICY`, `NO_ATIME_CAPABILITY` | Local storage/capability validation failed. Do not bypass storage or no-atime requirements. |
+| `REPOSITORY_POLICY` | An input/output/nested location is protected as Git. Use a separately authorised private evidence/output location; never force writing into the repository. |
+| `SOURCE_ACCESS_DENIED` | The actual source open/stat/read operation was denied. `WINDOWS_OPEN_FILE` or `WINDOWS_OPEN_DIRECTORY` requests GENERIC_READ plus FILE_WRITE_ATTRIBUTES; a family denial cannot identify the responsible ACL/token/filter. Do not grant rights/remove restrictions/elevate as a workaround. |
+| `WINDOWS_NO_ATIME_CAPABILITY` | SetFileTime's per-handle last-access suppression failed after opening the handle. The reason distinguishes denial, unsupported operation, invalid parameter or other OS family. Stop; no ordinary-read fallback is permitted. |
+| `SOURCE_BUSY` | Sharing/lock conflict was returned. Do not alter sharing flags or source files; arrange an authorised quiescent review context. |
+| `WINDOWS_SOURCE_OPEN`, `WINDOWS_BACKEND_UNAVAILABLE` | Other Windows handle/backend failure. Treat the operation/reason as implementation/environment evidence, not proof of source corruption. |
+| `WINDOWS_DIRECTORY_ENUMERATION`, `WINDOWS_DIRECTORY_FORMAT` | The protected directory API or returned record/encoding was rejected. Requires implementation/filesystem review; no fallback enumeration is introduced. |
+| `UNSAFE_FILESYSTEM_ENTRY` | Existing guard rejected a reparse/symlink, hardlink/special/cross-device object, nonportable name or case collision. Root-folder checks do not cover all entries/ancestors. Do not remove or rewrite originals to satisfy the guard. |
+| `EVIDENCE_CHANGED` | A path/handle identity, size, permission or timestamp comparison failed before/during/after read. Can indicate concurrent change or a platform metadata-representation issue; it does not establish tampering. Preserve the comparisons for review. |
+| `INVENTORY_LIMIT`, `VERIFICATION_LIMIT`, `OUTPUT_LIMIT` | Existing directory/depth/entry/file, verification/reference or output-size bound stopped the run. Do not silently raise or ignore bounds. Review the supported scope separately. |
+| `OUTPUT_POLICY` | Existing output, overlap, missing/inaccessible parent, unexpected output name or creation race. Choose a genuinely new permitted destination; do not delete prior packages. |
+| `OUTPUT_ACCESS_DENIED`, `OUTPUT_IO` | Output preflight/create/write failed. Do not weaken ACLs; a partial private directory may exist and remains incomplete. |
+| `SOURCE_IO` | Other source IO failed; the reason is a coarse OS family, not a filename or definitive cause. |
+| `RUNTIME_UNAVAILABLE`, `INTERNAL_ERROR` | Dependency/import or otherwise unclassified internal failure. Preserve the safe diagnostic line for focused implementation review; do not request/enable raw exception output. |
+
+An ACCESS_DENIED family does not distinguish ACL, restricted token, integrity policy
+or filtering. UNKNOWN/UNCLASSIFIED_FAILURE is intentional when the tool cannot safely
+classify a failure. No raw exception-string matching is used. Windows last-error is
+captured before cleanup can overwrite it. No diagnostic performs AccessCheck probes,
+extra source opens, retries, permission/time writes or administrator elevation.
+
+**Conflicting evidence is not a new refusal category:** mismatched fingerprints,
+unreviewed receipts, missing required roles, duplicate JSON or unsupported schemas
+normally produce the existing private findings package. Unsafe filesystem entries
+and hard processing bounds can refuse it. Read unavailable byte/JSON budgets as
+unavailable checks, not a successful integrity finding. A completed package with
+conflicts still has PRODUCTION_NO_GO; --diagnose-refusal does not resolve or approve
+those conflicts or change any accepted-oracle/replay/navigation requirements.
+
+CI exercises the existing Linux no-atime/timestamp-preservation tests plus injected
+Win32 open/suppression/enumeration errors, pointer-sized handles and cleanup ordering.
+It cannot attest Windows 11 build 26300, CPython 3.13.14, the operator's NTFS driver,
+DACLs, restricted token, security software or real path/handle metadata equivalence.
+The actual root cause remains unknown until the operator runs the protected command.
