@@ -325,3 +325,113 @@ repository detection and CLI-only output suppression were corrected without
 weakening actual Git-path exclusion. Desktop/custom-router/live-service suites,
 actual Windows execution/ACL enforcement and private fixture 0 were not tested.
 Hosted PR/main CI outcomes are reported separately in the task handoff.
+
+## Addendum: alternative motorcar connectivity investigation
+
+The operator-reported PR #362 path includes footway/pedestrian infrastructure,
+a kerb and `maxheight=default`. These findings were not reproduced here. The ordinary
+oracle intentionally retains uncertain access as possible traversal and returns
+its first bounded potential BFS path, not a passenger-car route or a least-uncertain
+alternative. Its first result therefore cannot answer the motorcar plausibility
+question. That is a scope distinction, not permission to weaken the oracle.
+
+`motorcar_investigation.py` introduces a private diagnostic view of the existing
+parsed graph. The original `RoadOracle` source is unchanged. The view filters
+existing directed edges in their original order, and calls the original transition
+predicate before additional diagnostic exclusions. It invokes the exact same
+`_analyse_with_path()` endpoint splitting, state search, turn handling and bounds.
+No separate search algorithm, connector, downstream start or candidate validation
+is implemented. The original graph instance, global guard and public reports are
+not modified. Candidate input is explicitly not reclassified by this diagnostic.
+
+The single policy is `PROVISIONAL_MOTORCAR_PLAUSIBILITY_V1`, not strict legally
+known-permitted traversal. Its ordinary-road defaults are limited to motorway,
+trunk, primary, secondary, tertiary, unclassified, residential, living_street,
+service and their existing motorway/trunk/primary/secondary/tertiary link classes.
+Missing access on every other class is not permission. Footway, pedestrian, steps,
+path, cycleway, bridleway, track and generic road require directional/unconditional
+motorcar yes/designated/permissive. Other unsupported/construction classes are
+excluded. Effective access follows the original modal/directional precedence.
+Unknown/restricted permissions, conditional access/oneway evidence, unsupported
+access qualifiers, ambiguous direction and barriers are removed from this view.
+Supported turn prohibitions still run first; ambiguous same-way/excessive-rule
+transitions are additionally excluded. Conservative exclusion may miss a valid
+real-world route: it never proves disconnection.
+
+Barrier presence is not opening/clearance evidence, even with motorcar=yes.
+Kerbs are never automatically traversable. Checks retain the original departure-node
+and endpoint-junction semantics: arriving at a junction does not invent an outgoing
+turn or a crossing beyond the endpoint. Known restrictions are not relaxed.
+Vehicle exception/conditional/via-way/incomplete relations remain unresolved and
+continue to impose the global guard in both the ordinary and filtered searches.
+No off-path locality waiver is introduced.
+
+Dimensional/physical rules are deliberately retained as explicit unsupported
+conditions in a provisional path: neither `maxheight=default` nor a numeric value
+certifies clearance for an unspecified vehicle. Explicit motorcar access on normally
+non-motorcar infrastructure likewise leaves physical suitability unverified. The
+summary reports aggregate path uncertainties and booleans for access-evaluator,
+barrier, physical/dimensional, conditional, turn/global-restriction and infrastructure
+suitability limitations. Access-evaluator uncertainty can overlap physical tags;
+it does not mean an otherwise excluded unknown permission was admitted.
+
+Potential-search results map to the four documented classifications. A found
+non-empty path is POTENTIAL_MOTORCAR_PATH_IN_EXPORT, never legal verification.
+Potential-search exhaustion is SEARCH_INCOMPLETE with the original state/examination
+limit reason and counters. A missing-node coverage gap plus unsuccessful search
+is EVIDENCE_INSUFFICIENT. Invalid/conflicting evidence and zero-transition results
+are also insufficient. Other unsuccessful bounded results are
+NO_MOTORCAR_PATH_FOUND_IN_EXPORT. Every result has real_world_disconnection_proven:false.
+Closed-component evidence remains UNVERIFIED regardless of coverage_gap:false.
+
+Public JSON has fixed labels, aggregate counts, uncertainties and safety flags only;
+no source IDs, tags, hashes, coordinates or geometry. Excluded-edge counts refer to
+edges already present in the original potential graph; base access prohibitions
+may already have removed other edges. Excluded examined-transition counts include
+both known-only and potential searches and revisits, so are not unique edge counts.
+The `search` object and result classification describe the potential search. The
+original known-only pass still occurs as part of the shared implementation; no
+independently known/legal result is claimed by this policy.
+
+Optional private evidence uses the existing bounded renderer, refactored into a
+shared description helper without performing another search. It retains PR #362's
+allowlisting/redaction, record/member/byte limits, exclusive creation outside Git,
+POSIX 0600 and Windows folder-ACL requirements. Filtered-search details are labelled
+policy_search_report instead of public_diagnostic. Omitted private records are
+explicit and never change summary counters or routing. No reviewed provenance is
+required for provisional investigation, and no accepted oracle_sha256 is generated.
+The existing public and private CLIs and formal replay/transport contracts remain
+unchanged. The new standalone CLI provides sanitized JSON by default and private
+IDs/tags only with an explicit `--private-output` local destination.
+
+Fixture 0, Windows execution and its private evidence remain unavailable/unexecuted.
+No VPS access, routing/OSM request, deployment, Docker change, capture modification
+or automatic review approval occurred. Passenger-car legality, clearance, exceptions,
+conditional expressions and complete source coverage still require independent
+review. Even a positive result cannot authorize the reported 46.31 m relocation;
+GraphHopper-first eligible ranking, mandatory camera avoidance, Valhalla alternatives
+and the two-metre gate remain unchanged. **PRODUCTION_NO_GO**.
+
+Changed-file inventory for this focused investigation:
+
+- `voyagr/utils/motorcar_investigation.py`: isolated stricter diagnostic view and aggregate classifications.
+- `voyagr/utils/road_oracle_private.py`: share existing evidence rendering without duplicating search.
+- `scripts/investigate-phase12fb-motorcar.py`: local public-summary/optional-private-report CLI.
+- `tests/test_motorcar_investigation.py`: synthetic alternatives, policy, safety, limits and output regressions.
+- `.github/workflows/ci.yml`: include the new regression file in the backend selection.
+- `docs/audits/VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md`: implementation assessment and limitations.
+- `docs/audits/VOYAGR_PHASE12FB_CONTABO_OPERATOR.md`: exact PowerShell procedure and result interpretation.
+
+Motorcar-investigation validation (2026-10-29, local Linux checkout): configured CI
+backend file list using `.venv/bin/python -m pytest -q`: **1,389 passed, 68 subtests
+passed**. Focused investigation/oracle/private-inspector selection: **193 passed**,
+including 53 new motorcar-policy cases. A separate 162-case comparison against
+baseline a7f83806 confirmed complete authoritative public-report equality after
+running investigations. The original road_oracle.py, replay/acceptance validators
+and production routing tree have no diff from baseline. Existing committed public
+snapshot regressions also pass. `npm run lint:tests` and
+`npm run test:ci -- --maxWorkers=2`: 100 suites / 1,935 tests, coverage thresholds
+met. Isolated `scripts/test-dashcam-session-sql.py`: 11 passed on temporary local
+PostgreSQL, never a production DSN. Black per-file formatting and `git diff --check`
+passed. Desktop/custom-router/live-service tests, actual Windows execution and
+private fixture 0 were not run. Hosted PR/main CI outcomes are reported separately.
