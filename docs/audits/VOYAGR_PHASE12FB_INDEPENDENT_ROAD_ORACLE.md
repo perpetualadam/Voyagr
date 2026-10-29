@@ -665,3 +665,23 @@ traces CPython 3.13.14's path creation-time versus descriptor change-time semant
 replaces Windows cross-API tuple comparisons with exact full native snapshots,
 and specifies an opt-in metadata-only operator diagnostic. No road-oracle,
 routing, provenance-review or acceptance semantics change. **PRODUCTION_NO_GO**.
+
+## Addendum: capture-artifact selection correction
+
+`review_package.categories()` previously inferred capture_record for every JSON
+below phase12fb-body-hint/. This overclassified supporting files before their
+schemas were considered. Selection now uses exact documented record-name patterns,
+explicit record kinds or local evidence-index roles; malformed selected records
+are still flagged. Supporting files keep their fingerprints and general checks.
+Duplicate pairs, extra captures, role conflicts and invalid identity claims remain
+unresolved findings. Record and bundle roles are validated independently when
+both are claimed, rather than allowing one role to mask the other.
+
+Transport checks distinguish explicitly null/unreviewed placeholders
+(UNBOUND_UNREVIEWED, still unresolved) from malformed declarations (INVALID_HASH)
+and contradictory non-null hashes (MISMATCH). They do not authenticate a derived
+bundle or approve transport evidence. See the [operator selection and rerun
+procedure](VOYAGR_PHASE12FB_CONTABO_OPERATOR.md#capture-records-versus-supporting-artifacts).
+No private artifacts were examined; the reported five invalid structures, five
+transport-sidecar findings and nine invalid identity claims require an actual
+operator rerun and independent review. **PRODUCTION_NO_GO**.
