@@ -1,0 +1,58 @@
+{
+  "schema": "voyagr-valhalla-plan-v1",
+  "reviewed": false,
+  "navigation_authorized": false,
+  "operational_status": "PRODUCTION_NO_GO",
+  "fixtures": [
+    {
+      "id": 0,
+      "purpose": "Motorway origin and one-way direction",
+      "status": "NOT_TESTED",
+      "original_locations": null,
+      "native_correlation": null,
+      "engine_identity": null,
+      "source_identity": null,
+      "independent_review": null
+    },
+    {
+      "id": 1,
+      "purpose": "Complex urban turns",
+      "status": "NOT_TESTED",
+      "original_locations": null,
+      "native_correlation": null,
+      "engine_identity": null,
+      "source_identity": null,
+      "independent_review": null
+    },
+    {
+      "id": 2,
+      "purpose": "Footway adjacency and motorcar eligibility",
+      "status": "NOT_TESTED",
+      "original_locations": null,
+      "native_correlation": null,
+      "engine_identity": null,
+      "source_identity": null,
+      "independent_review": null
+    },
+    {
+      "id": 3,
+      "purpose": "Mandatory camera-area and exclusion failure",
+      "status": "NOT_TESTED",
+      "original_locations": null,
+      "native_correlation": null,
+      "engine_identity": null,
+      "source_identity": null,
+      "independent_review": null
+    },
+    {
+      "id": 4,
+      "purpose": "Multi-stop continuity and alternatives",
+      "status": "NOT_TESTED",
+      "original_locations": null,
+      "native_correlation": null,
+      "engine_identity": null,
+      "source_identity": null,
+      "independent_review": null
+    }
+  ]
+}

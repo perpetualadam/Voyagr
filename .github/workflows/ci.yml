@@ -83,6 +83,7 @@ jobs:
           tests/test_lane_guidance.py
           tests/test_speed_limit_detector.py
           tests/test_route_request_params.py
+          tests/test_valhalla_acceptance.py
           tests/test_valhalla_payload.py
           tests/test_valhalla_maneuvers.py
           tests/test_valhalla_parsing.py
