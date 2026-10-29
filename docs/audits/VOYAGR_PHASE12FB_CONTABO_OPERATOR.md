@@ -179,3 +179,70 @@ command. All three are required together. Normal replay still needs its independ
 accepted `oracle_sha256`; the standalone diagnostic can prepare evidence before
 that acceptance reference exists and never generates it. Missing reviewed evidence
 is a blocker, never a reason to fabricate a hash or modify an old capture.
+
+## Private provisional topology evidence inspector (PR #361 follow-up)
+
+Use a disposable local checkout with the pinned geometry requirements installed.
+This is a separate operator-only entry point. It needs only the existing export and
+exact-endpoint specification; it does **not** need reviewed capture/provenance or an
+accepted oracle reference. That independence permits inspection, not approval.
+It uses the same bounded BFS and representative path as the public diagnostic.
+
+Before running, confirm the private evidence directory is outside **every Git
+checkout/worktree** and has a private user-only ACL. On Windows the file inherits
+NTFS directory ACLs; POSIX mode 0600 is not a Windows ACL guarantee. Use a trusted
+local directory whose parent directories other users cannot replace. UNC/network
+paths are refused. No report is uploaded or committed by the tool.
+
+From the repository root, run this exact PowerShell command (choose a new output
+filename if it already exists; do not overwrite or delete earlier evidence):
+
+```powershell
+& ".\.venv\Scripts\python.exe" ".\scripts\inspect-phase12fb-road-oracle-private.py" `
+  --export "C:\Users\Brian\Documents\Voyagr-Private-Acceptance\fixture-0-oracle-export.json" `
+  --specification "C:\Users\Brian\Documents\Voyagr-Private-Acceptance\fixture-0-oracle-spec-unreviewed.json" `
+  --output "C:\Users\Brian\Documents\Voyagr-Private-Acceptance\fixture-0-private-topology-inspection-unreviewed-01.json"
+```
+
+The existing specification schema is unchanged: `origin` and `target` each name a
+way, zero-based segment index, ordered node pair and coordinate. Optional candidate
+validation is unchanged. An optional `export_sha256` must equal the exact export
+bytes if present. No coordinate is printed or copied into the report. The tool
+cannot verify association with native captured endpoints without the separate
+formal capture-binding procedure. Preserve the private source files unchanged.
+
+Success prints only `PRIVATE_PROVISIONAL_TOPOLOGY_ONLY_REPORT_CREATED`; refusal
+prints only `PRIVATE_INSPECTION_REFUSED` to stderr and exits 2. Exit 0 means the
+private report was written, not acceptance. The absolute output path is required;
+the parent must already exist. The inspector refuses repository paths, worktrees,
+bare repositories, existing files and existing leaf symlinks. POSIX creation uses
+0600 and exclusive creation; do not place output in a shared/replaced directory.
+A failed write may leave a restricted partial file; it is not a usable report and
+will not be overwritten by another invocation.
+
+Open the report privately. It is labelled `PRIVATE_PROVISIONAL_TOPOLOGY_ONLY` with
+`capture_binding:NOT_CHECKED`, `independent_approval:false`, `reviewed:false`,
+`navigation_authorized:false`, `acceptance:UNVERIFIED`, `PRODUCTION_NO_GO`.
+Review `PATH_TRANSITION` records in `path_index` order. They identify way, segment,
+direction, ordered node pair, real departure/arrival node references or a virtual
+position marker, incoming edge, uncertainty source and applicable supported turns.
+No virtual projection fraction or coordinate is emitted. Compare referenced tags
+with the unchanged export; object hashes use canonical sorted compact JSON, whereas
+export/specification hashes bind exact file bytes. These are evidence references,
+not an accepted `oracle_sha256`.
+
+Review every global unresolved relation as well as local path evidence. A locatable
+via node outside this path does not establish legal irrelevance or remove the global
+guard. Conditional expressions, vehicle exceptions, incomplete members, unsupported
+via-way effects and physical applicability still need independent human review.
+Routing-tag allowlisting and conservative value redaction may withhold free-form,
+credential-like or coordinate-like text. Use object/tag/value hashes to consult
+those originals privately; a redaction is not interpretation or permission.
+
+The report has explicit record/byte/member limits and omission counts. If `truncated`
+is true, missing records are not evidence of absence. If the search is exhausted or
+finds no path, no representative path is invented; endpoint segment evidence is
+provided separately. Never copy the private report into GitHub, CI logs or public
+chat. Share only the existing sanitized public diagnostic after review. See the
+[technical audit](VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md) for classifications,
+limits and the compatibility validation.

@@ -215,3 +215,113 @@ thresholds met). `.venv/bin/python scripts/test-dashcam-session-sql.py`: 11 pass
 on temporary local PostgreSQL. Black formatting and `git diff --check` passed.
 Desktop/custom-router/live-service suites were not run. No real-road result is
 claimed; hosted PR/main CI results are reported in the task handoff.
+
+## Addendum: private evidence inspector
+
+Operational status remains **PRODUCTION_NO_GO**. `inspect-phase12fb-road-oracle-private.py`
+is a separate local operator-only CLI, not a public diagnostic flag. It accepts a
+local bounded OSM export, unreviewed exact-endpoint specification and explicit NEW
+absolute output filename outside Git. It does not accept captures, HTTP responses,
+credentials, receipt approvals or accepted oracle references. Provisional topology
+inspection is intentionally separate from formal provenance acceptance.
+
+`RoadOracle.analyse()` delegates to `_analyse_with_path()` and returns only the
+unchanged public report. The shared internal method returns that report and the
+same representative path already reconstructed by PR #361. No second routing
+algorithm, extra search, altered edge order, traversal predicate, bound, candidate
+rule or navigation decision was added. Private path data is never stored on the
+oracle for later public serialization. A private set of supported relation IDs is
+recorded at the existing parser decision, so evidence reporting cannot accidentally
+classify an unsupported relation as supported merely because another relation has
+the same from/via/to tuple.
+
+Private `PATH_TRANSITION` records describe all representative transitions, including
+known-permitted transitions. They include OSM way/segment/direction, ordered segment
+node IDs, real node references (virtual vertices use a fixed marker), incoming edge,
+source object hashes, routing tags and reasons. Source roles distinguish EDGE,
+DEPARTURE_NODE, TURN_TRANSITION and GLOBAL_UNRESOLVED_RESTRICTION_GUARD. Supported
+applicable turn tuples link to separate original relation records. Direction -1 is
+preserved in node-order terms; implicit motorway direction and uncertain slip-road
+direction continue to come from the existing parser. No straight-line connector,
+projected coordinate/fraction or road geometry is emitted.
+
+Reason categories retain the public meanings. Each local reason has status
+AMBIGUOUS (access, barrier, direction, ambiguous same-way turn) or UNSUPPORTED
+(conditional evaluation, physical applicability, excessive rule complexity).
+Uncertain transitions are UNRESOLVED; a supported export-only transition is not an
+independently approved legal route. Overlapping access/physical/barrier reasons are
+not mutually exclusive. Turn records use SUPPORTED_RULE or UNRESOLVED and identify
+missing role/member/incidence evidence, exceptions, conditions or other unsupported
+forms. Member references are retained even when their source object is missing.
+No condition/exception is silently evaluated.
+
+All restriction relations are described with available member references, routing
+tags and via-node locality. On-path supported applicability is reported separately
+from AT_PATH_NODE, OUTSIDE_PATH_NODES and UNKNOWN locality. Global unresolved
+relations retain `global_guard:true` and `locality_is_relevance_proof:false` even
+outside the path. Other uncertain directed edges and non-departure node evidence
+are separately labelled. When no representative path exists, endpoint segments
+are still identified and access-only results are explicitly not direction/turn
+permission. A bounded search failure does not certify closed-component no-path.
+
+Private tags are allowlisted to routing roots and known key qualifiers. Names,
+addresses, free-form notes, source/user metadata, arbitrary element fields and raw
+request/response objects are not serialized. Common original OSM values and safe
+conditional text are retained verbatim, without evaluation. Unknown/free-form,
+credential-like, coordinate-like, control/non-ASCII or overly long values are
+withheld with a value hash. Original object and complete-tag hashes let an authorised
+reviewer inspect the unchanged source. Redaction is conservative, not a semantic
+parser, secret scanner certification or an assertion that omitted metadata is safe.
+The source export and entire private report remain restricted evidence.
+
+Bounds: existing 32 MiB input limits and graph/search limits; at most 5,000 evidence
+records, 8 MiB compact evidence, 64 members per relation, 64 supported turn tuples
+per transition, and 16 MiB encoded report. Omitted records/members/rules are explicit;
+an oversized final report is refused. Path records have priority, followed by global
+unresolved relations, other supported relations, off-path edge and node evidence.
+Truncation never affects public counters or routing. No path/geometry is printed to
+stdout. Incidental package output and exception/argument text are suppressed by the
+CLI; only fixed success/refusal messages appear. The public CLI does not import the
+private inspector.
+
+Output is exclusively created outside the current repository and other detected
+Git checkouts/worktrees/bare repositories. Existing symlinks/files and symlinked
+paths into repositories are refused. Empty platform `.git` placeholder directories
+without repository state are not treated as actual repositories. POSIX files use
+0600 plus exclusive/no-follow creation. Windows inherits directory ACLs: the operator
+must first secure the local evidence folder. This protects normal local operation,
+not hostile concurrent replacement of ancestor directories or privileged OS users.
+A partial write may leave a restricted incomplete file which will not be overwritten.
+No original input is written. No upload functionality is present.
+
+The private fixture, captures and 58-transition operator report were unavailable
+here and were not tested. Nothing in this work waives the global guard, the recorded
+46.31 m displacement or the two-metre origin-integrity rule. No VPS, deployment,
+Docker change or live routing/OSM request occurred. The exact Windows command is in
+[operator instructions](VOYAGR_PHASE12FB_CONTABO_OPERATOR.md).
+
+Changed-file inventory for this follow-up:
+
+- `voyagr/utils/road_oracle.py`: expose the existing reconstruction internally; track supported relation IDs without changing public outputs.
+- `voyagr/utils/road_oracle_private.py`: private evidence descriptions, conservative tag handling and exclusive output protection.
+- `scripts/inspect-phase12fb-road-oracle-private.py`: separate offline CLI with fixed console messages.
+- `tests/test_private_road_oracle.py`: deterministic synthetic inspection, security, eligibility and baseline public-report regressions.
+- `.github/workflows/ci.yml`: add the new suite to the configured backend selection.
+- `docs/audits/VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md`: technical audit and compatibility limits.
+- `docs/audits/VOYAGR_PHASE12FB_CONTABO_OPERATOR.md`: exact PowerShell procedure and private handling requirements.
+
+Private-inspector validation (2026-10-29, local Linux cloud checkout): configured
+backend file list via `.venv/bin/python -m pytest -q`: **1,336 passed, 68 subtests
+passed**. Focused oracle/inspector selection: **140 passed** (43 new inspector cases).
+Five committed synthetic golden public-report hashes were generated from baseline
+36f170f3; a separate 162-case differential comparison confirmed complete public
+report equality, including the uncertainty summary. Flask-level regression preserves
+Valhalla selection when the GraphHopper origin is displaced. `npm run lint:tests`
+and `npm run test:ci -- --maxWorkers=2`: passed, 100 suites / 1,935 tests with coverage.
+`.venv/bin/python scripts/test-dashcam-session-sql.py`: 11 passed on isolated temporary
+PostgreSQL. Black formatting and `git diff --check`: passed. Initial private-output
+tests found empty platform Git-marker placeholders and incidental import output;
+repository detection and CLI-only output suppression were corrected without
+weakening actual Git-path exclusion. Desktop/custom-router/live-service suites,
+actual Windows execution/ACL enforcement and private fixture 0 were not tested.
+Hosted PR/main CI outcomes are reported separately in the task handoff.

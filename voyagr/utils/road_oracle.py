@@ -155,6 +155,7 @@ class RoadOracle:
                     identifier(member.get("ref"))
             target[i] = e
         self.rules = []
+        self._supported_relation_ids = set()
         self.unresolved = False
         self.restriction_issues = []
         for r in self.relations.values():
@@ -206,6 +207,7 @@ class RoadOracle:
                 self.unresolved = True
                 self.record_restriction_issue(r)
                 continue
+            self._supported_relation_ids.add(r["id"])
             self.rules.append((f, v, to, kind))
         self.turn_rules = defaultdict(list)
         for rule in self.rules:
@@ -483,6 +485,13 @@ class RoadOracle:
         return True, uncertain
 
     def analyse(self, origin, target, candidate=None, *, max_states=100000):
+        report, _ = self._analyse_with_path(
+            origin, target, candidate, max_states=max_states
+        )
+        return report
+
+    def _analyse_with_path(self, origin, target, candidate=None, *, max_states=100000):
+        """Shared search; private path is never attached to the public report."""
         if type(max_states) is not int or not 1 <= max_states <= 200000:
             raise ValueError("search_bound")
         o, od = self.project(origin)
@@ -608,7 +617,7 @@ class RoadOracle:
                 if not endings
                 else "UNVERIFIED" if all(endings) else "KNOWN_PATH_IN_EXPORT"
             )
-        return {
+        report = {
             "schema_version": 1,
             "uncertainty_diagnostics": self.uncertainty_report(
                 search_reports, representative, start
@@ -633,6 +642,8 @@ class RoadOracle:
             },
             "projection_distance_m": {"origin": round(od, 3), "target": round(td, 3)},
         }
+
+        return report, representative
 
     def uncertainty_report(self, searches, path, start):
         export_edges, export_nodes = counters(), counters()
