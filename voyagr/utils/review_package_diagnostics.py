@@ -5,6 +5,16 @@ import errno
 
 # Internal codes are literals at refusal sites, never values from evidence.
 CODES = {
+    "windows_identity_diagnostic_required": (
+        "WINDOWS_METADATA_CAPABILITY",
+        "WINDOWS_REQUIRED",
+    ),
+    "windows_metadata_unavailable": ("WINDOWS_METADATA_CAPABILITY", "OPERATION_FAILED"),
+    "windows_metadata_invalid": (
+        "WINDOWS_METADATA_INCONSISTENT",
+        "INVALID_OR_TORN_SNAPSHOT",
+    ),
+    "windows_delete_pending": ("EVIDENCE_CHANGED", "DELETE_PENDING"),
     "storage_type_unavailable": ("STORAGE_POLICY", "STORAGE_TYPE_UNAVAILABLE"),
     "local_drive_required": ("STORAGE_POLICY", "LOCAL_DRIVE_REQUIRED"),
     "local_filesystem_required": ("STORAGE_POLICY", "LOCAL_FILESYSTEM_REQUIRED"),
@@ -78,6 +88,7 @@ OPERATIONS = frozenset(
         "VERIFY",
         "OUTPUT_WRITE",
         "WINDOWS_BACKEND_SETUP",
+        "WINDOWS_METADATA_QUERY",
         "WINDOWS_OPEN_DIRECTORY",
         "WINDOWS_OPEN_FILE",
         "WINDOWS_FREEZE_ATIME",

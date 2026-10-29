@@ -105,6 +105,7 @@ jobs:
           tests/test_motorcar_investigation.py
           tests/test_review_package.py
           tests/test_review_package_diagnostics.py
+          tests/test_windows_evidence_metadata.py
           tests/test_phase11c_acceptance_tools.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py
@@ -186,3 +187,16 @@ jobs:
         run: python -m pip install pgserver==0.1.4 psycopg2-binary==2.9.13
       - name: Verify session policy on temporary PostgreSQL
         run: python scripts/test-dashcam-session-sql.py
+
+  windows-evidence-metadata:
+    name: Windows evidence metadata (Python 3.13)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install metadata test dependencies
+        run: python -m pip install pytest Flask requests python-dotenv PyJWT
+      - name: Verify native identity and no-atime metadata on disposable files
+        run: python -m pytest -q tests/test_windows_evidence_metadata.py

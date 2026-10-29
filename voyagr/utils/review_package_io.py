@@ -143,6 +143,10 @@ def outside_git(path):
 
 
 def stamp(info):
+    from voyagr.utils.windows_evidence_metadata import WindowsMetadata
+
+    if isinstance(info, WindowsMetadata):
+        return info.fingerprint
     return (
         info.st_dev,
         info.st_ino,
@@ -186,6 +190,9 @@ class _Windows:
         ]
         self.k.GetFileInformationByHandleEx.restype = w.BOOL
         self.k.CloseHandle.argtypes = [w.HANDLE]
+        self.k.CloseHandle.restype = w.BOOL
+        self.k.GetFileType.argtypes = [w.HANDLE]
+        self.k.GetFileType.restype = w.DWORD
 
     def open(self, path, directory):
         # FILE_WRITE_ATTRIBUTES is required by Windows to disable automatic atime
@@ -244,6 +251,32 @@ class _Windows:
         finally:
             os.close(fd)
 
+    def metadata(self, handle):
+        from voyagr.utils.windows_evidence_metadata import decode_metadata
+
+        with operation("WINDOWS_METADATA_QUERY"):
+            if self.k.GetFileType(handle) != 1:  # FILE_TYPE_DISK only
+                raise PolicyRefusal("external_or_special_file_forbidden")
+            records = []
+            # FileBasicInfo, FileStandardInfo, FileIdInfo, FileAttributeTagInfo.
+            # No 64-bit-ID or reduced-metadata fallback when an API is unavailable.
+            for kind, size in ((0, 40), (1, 24), (18, 24), (9, 8)):
+                buffer = self.c.create_string_buffer(size)
+                if not self.k.GetFileInformationByHandleEx(handle, kind, buffer, size):
+                    raise CapabilityRefusal(
+                        "windows_metadata_unavailable",
+                        operation="WINDOWS_METADATA_QUERY",
+                        winerror=self.c.get_last_error(),
+                    )
+                records.append(buffer.raw)
+            return decode_metadata(*records)
+
+    def path_metadata(self, path):
+        # BACKUP_SEMANTICS permits both files and directories. OPEN_REPARSE_POINT
+        # plus native attribute/tag checks refuses reparse handles themselves.
+        with self.directory(path) as handle:
+            return self.metadata(handle)
+
     def names(self, handle):
         buffer = self.c.create_string_buffer(65536)
         first = True
@@ -289,6 +322,19 @@ class Reader:
     def __init__(self):
         with operation("WINDOWS_BACKEND_SETUP"):
             self.win = _Windows() if os.name == "nt" else None
+
+    def path_metadata(self, path):
+        return self.win.path_metadata(path) if self.win else path.lstat()
+
+    def file_metadata(self, fd):
+        if self.win:
+            import msvcrt
+
+            return self.win.metadata(msvcrt.get_osfhandle(fd))
+        return os.fstat(fd)
+
+    def directory_metadata(self, handle):
+        return self.win.metadata(handle) if self.win else os.fstat(handle)
 
     @contextmanager
     def directory(self, path, *, parent=None, name=None):
@@ -351,20 +397,20 @@ def inventory(root):
     reader = Reader()
     files, blobs, seen = [], {}, set()
     dirs, entries, total, json_total = 0, 0, 0, 0
-    device = root.stat().st_dev
+    device = reader.path_metadata(root).st_dev
 
     def walk(path, rel, depth, parent=None, name=None):
         nonlocal dirs, entries, total, json_total
         dirs += 1
         if dirs > MAX_DIRS or depth > MAX_DEPTH:
             raise PolicyRefusal("traversal_limit")
-        before = path.lstat()
+        before = reader.path_metadata(path)
         if reparse(before) or before.st_dev != device:
             raise PolicyRefusal("external_directory_forbidden")
         if git_boundary(path):
             raise PolicyRefusal("nested_git_forbidden")
         with reader.directory(path, parent=parent, name=name) as directory:
-            if not reader.win and stamp(os.fstat(directory)) != stamp(before):
+            if stamp(reader.directory_metadata(directory)) != stamp(before):
                 raise PolicyRefusal("directory_changed")
             names = reader.names(directory, MAX_ENTRIES - entries)
             entries += len(names)
@@ -379,7 +425,7 @@ def inventory(root):
                     raise PolicyRefusal("case_conflicting_paths")
                 seen.add(relative.casefold())
                 target = path / child
-                info = target.lstat()
+                info = reader.path_metadata(target)
                 if reparse(info):
                     raise PolicyRefusal("symlink_or_reparse_forbidden")
                 if stat.S_ISDIR(info.st_mode):
@@ -409,7 +455,7 @@ def inventory(root):
                         and json_total + info.st_size <= MAX_TOTAL_JSON
                     )
                     with reader.file(target, directory, child) as fd:
-                        if stamp(os.fstat(fd)) != stamp(info):
+                        if stamp(reader.file_metadata(fd)) != stamp(info):
                             raise PolicyRefusal("file_changed_before_read")
                         h, size, parts = hashlib.sha256(), 0, []
                         while True:
@@ -425,9 +471,11 @@ def inventory(root):
                             h.update(chunk)
                             if collect:
                                 parts.append(chunk)
-                        if size != info.st_size or stamp(os.fstat(fd)) != stamp(info):
+                        if size != info.st_size or stamp(
+                            reader.file_metadata(fd)
+                        ) != stamp(info):
                             raise PolicyRefusal("file_changed_during_read")
-                    if stamp(target.lstat()) != stamp(info):
+                    if stamp(reader.path_metadata(target)) != stamp(info):
                         raise PolicyRefusal("file_changed_after_read")
                     record.update(sha256=h.hexdigest(), fingerprint="BYTES_RECOMPUTED")
                     total += size
@@ -435,7 +483,7 @@ def inventory(root):
                         blobs[relative] = b"".join(parts)
                         json_total += size
                 files.append(record)
-        if stamp(path.lstat()) != stamp(before):
+        if stamp(reader.path_metadata(path)) != stamp(before):
             raise PolicyRefusal("directory_metadata_changed")
 
     walk(root, "", 0)
