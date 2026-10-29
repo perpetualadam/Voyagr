@@ -546,3 +546,113 @@ Black per-file formatting and `git diff --check` passed. Desktop/custom-router/l
 service suites were not run. Hosted PR/main CI outcomes are reported separately.
 
 Final malformed-export regression also enforces a runtime-independent JSON nesting cap of 64 and avoids reparsing JSON already rejected by the strict decoder. Deep/unsupported JSON is recorded as invalid evidence rather than reaching the OSM parser. No assertion or acceptance protection was weakened.
+
+## Addendum: Windows packager refusal diagnostics
+
+The supplied Windows 11/NTFS/Python 3.13 observations do not identify the first
+failing operation. No private filesystem or effective token was examined here.
+The existing generic refusal can originate at argument/import, input/output
+preflight, no-atime backend/source open, enumeration, metadata comparison,
+verification limits, output limits or output creation. Successful file/root ACL
+inspection is not an effective-access or per-handle no-atime attestation.
+
+`--diagnose-refusal` adds one fixed-vocabulary JSON line on an actual refusal;
+default stderr/exit behaviour remains unchanged. It runs the same workflow exactly
+once and reports the exception already produced, never probes or retries the source.
+Normal success, including packages containing conflicting evidence, is unchanged.
+A controlled renderer failure also falls back to fixed diagnostic text rather than
+exposing the original exception chain. Policy/capability errors retain their original
+ValueError/OSError families. Operation annotations modify only the transient exception,
+never a source object or generated package. All original validation predicates,
+sharing/access flags, no-follow/no-atime calls, source comparisons and limits remain.
+
+Windows source-open denial is distinguished from SetFileTime access-time suppression
+failure, directory enumeration/record failures, source metadata mismatch and output
+policy/IO. Last-error is saved before CloseHandle can replace it. Reason values are
+coarse families (ACCESS_DENIED, SHARING_OR_LOCK_CONFLICT, INVALID_PARAMETER,
+UNSUPPORTED_OPERATION, etc.), not raw exceptions/codes or private data. A denial
+can reflect ACL/token/integrity/filtering; inherited read/execute is not itself a
+deny and medium integrity is not itself a diagnosis. Metadata mismatch can be a
+platform representation issue rather than proven source tampering. No guard is
+removed on either assumption. No source ACL/time change, elevation, alternate
+sharing mode or ordinary-read fallback is suggested or implemented.
+
+### Complete refusal-point inventory
+
+The literal hard refusal vocabulary is maintained in review_package_diagnostics.py
+and covered for completeness by regression tests. Generic Python/OS failures at
+the same sites are handled by their operation and type/coarse error family, with
+unclassified failures intentionally INTERNAL_ERROR. No untrusted error message,
+filename, evidence value, arbitrary exception attribute or stack is serialized.
+The first failing guard is reported; this cannot diagnose later guards or identify
+a specific private file. Operations distinguish input path validation from output
+preflight to avoid blaming an input access denial on output ACLs.
+
+| Stable category | Existing explicit refusal sites (internal identifiers) |
+| --- | --- |
+| `EVIDENCE_CHANGED` | `directory_changed`, `file_changed_before_read`, `file_changed_during_read`, `file_changed_after_read`, `directory_metadata_changed` |
+| `INPUT_UNAVAILABLE` | `evidence_directory_required` |
+| `INVENTORY_LIMIT` | `traversal_limit`, `entry_limit`, `file_limit` |
+| `NO_ATIME_CAPABILITY` | `unsupported_no_atime_platform`, `no_atime_not_supported` |
+| `OUTPUT_LIMIT` | `package_output_limit` |
+| `OUTPUT_POLICY` | `existing_output_forbidden`, `input_output_overlap`, `output_parent_required`, `unexpected_output` |
+| `PATH_POLICY` | `local_path_required`, `absolute_path_without_traversal_required` |
+| `REPOSITORY_POLICY` | `git_destination_forbidden`, `nested_git_forbidden` |
+| `STORAGE_POLICY` | `storage_type_unavailable`, `local_drive_required`, `local_filesystem_required` |
+| `UNSAFE_FILESYSTEM_ENTRY` | `unsafe_relative_reference`, `nonportable_reference`, `reparse_path_forbidden`, `external_directory_forbidden`, `case_conflicting_paths`, `symlink_or_reparse_forbidden`, `external_or_special_file_forbidden` |
+| `VERIFICATION_LIMIT` | `verification_limit`, `json_structure_limit` |
+| `WINDOWS_DIRECTORY_ENUMERATION` | `windows_directory_read_unavailable` |
+| `WINDOWS_DIRECTORY_FORMAT` | `invalid_windows_directory_record`, `invalid_windows_directory_name`, `invalid_windows_directory_offset` |
+| `WINDOWS_NO_ATIME_CAPABILITY` | `windows_no_atime_unavailable` |
+| `WINDOWS_SOURCE_OPEN` | `windows_read_handle_unavailable` |
+
+In addition, ordinary OS exceptions distinguish source/output access denial,
+source sharing/lock conflicts, missing objects, storage/resource/IO failure and
+creation races. Win32 backend setup and imports are distinguished from source IO.
+Windows returned record/encoding failures map to WINDOWS_DIRECTORY_FORMAT. CLI
+argument errors map to ARGUMENTS_INVALID without echoing the supplied arguments.
+Byte/hash/JSON budgets that mark checks unavailable, handled invalid JSON/reference
+values, missing evidence, unreviewed declarations and conflicting claims remain
+private package findings, not newly fatal failures. This distinction preserves the
+baseline readiness semantics and prevents misdiagnosing a cryptographic conflict
+as the cause of a pre-output filesystem refusal.
+
+Windows tests use synthetic mocked APIs on Linux: failed open, failed no-atime freeze,
+enumeration failure/end-of-directory, pointer-sized handles, unchanged access/sharing
+flags, all-ones access-time suppression and last-error-before-cleanup ordering.
+They do not exercise the operator's actual ACL/token/driver or Python 3.13 stat/fstat
+representations. Linux source timestamp/permission preservation and no-atime refusal
+tests still apply. A baseline comparison confirms all five generated package files
+remain byte-identical for both ordinary and conflicting synthetic evidence.
+
+The exact non-elevated PowerShell invocation and category-by-category safe handling
+are in [operator instructions](VOYAGR_PHASE12FB_CONTABO_OPERATOR.md). Do not weaken
+CodexSandboxUsers/source ACLs, token restrictions, time policy or integrity checks
+to make the packager succeed. No production/VPS/private evidence access occurred;
+no approval or accepted oracle_sha256 is generated. **PRODUCTION_NO_GO**.
+
+Changed-file inventory:
+
+- `voyagr/utils/review_package_diagnostics.py`: typed hard-refusal vocabulary, operation annotations and sanitized in-memory renderer.
+- `voyagr/utils/review_package_io.py`: tag existing refusals/OS operations; preserve Windows error before cleanup with unchanged protected IO.
+- `voyagr/utils/review_package.py`: annotate unchanged preparation phases and hard limits.
+- `scripts/prepare-phase12fb-review-package.py`: explicit diagnostic option, unchanged default, bounded safe argument/import/renderer failure output.
+- `tests/test_review_package_diagnostics.py`: simulated Windows, privacy, no-retry, stage/classification and compatibility regressions.
+- `.github/workflows/ci.yml`: include new diagnostic tests in backend selection.
+- `docs/audits/VOYAGR_PHASE12FB_CONTABO_OPERATOR.md`: exact reproduction command and safe interpretation.
+- `docs/audits/VOYAGR_PHASE12FB_INDEPENDENT_ROAD_ORACLE.md`: complete refusal inventory, compatibility assessment and limitations.
+
+Refusal-diagnostic validation (2026-10-29, local Linux checkout): configured backend
+file selection via `.venv/bin/python -m pytest -q`: **1,503 passed, 68 subtests passed**.
+Focused original package plus refusal tests: **114 passed**, including 64 new cases.
+Mocked Win32 error families, saved-last-error cleanup ordering, unchanged handle
+rights/sharing/no-atime sentinel, no retries/probes, safe renderer failure, exception
+metadata injection, argument privacy, input/output denial distinction and complete
+literal refusal-code coverage pass. Existing timestamp/permission and acceptance
+regressions pass. Both ordinary and conflicting synthetic evidence generate all
+five package files byte-identical to baseline 4f8d34b6. `npm run lint:tests` and
+`npm run test:ci -- --maxWorkers=2`: 100 suites / 1,935 tests, coverage passed.
+Isolated SQL policy: 11 passed on temporary local PostgreSQL. Black per-file
+formatting and `git diff --check` passed. Desktop/custom-router/live-service suites
+and actual Windows/NTFS/token/ACL execution were not run. No private evidence was
+supplied or examined. Hosted PR/main CI outcomes are reported separately.

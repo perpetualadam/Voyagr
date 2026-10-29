@@ -9,6 +9,7 @@ import re
 from urllib.parse import urlsplit, parse_qsl
 
 from voyagr.utils import review_package_io as io
+from voyagr.utils.review_package_diagnostics import PolicyRefusal, operation
 
 HASH = re.compile(r"[0-9a-f]{64}\Z")
 SAFETY = {
@@ -154,7 +155,7 @@ def build(files, blobs):
 
     def check(code, status, artifact=None, field=None):
         if len(checks) >= MAX_CHECKS:
-            raise ValueError("verification_limit")
+            raise PolicyRefusal("verification_limit")
         record = {"check": code, "status": status}
         if artifact is not None:
             record["artifact"] = artifact
@@ -332,7 +333,7 @@ def build(files, blobs):
             obj = stack.pop()
             visits += 1
             if visits > 200000:
-                raise ValueError("json_structure_limit")
+                raise PolicyRefusal("json_structure_limit")
             if isinstance(obj, dict):
                 for key, value in obj.items():
                     if isinstance(value, str) and (
@@ -1002,10 +1003,14 @@ authorised reviewer. No package output automatically changes production eligibil
 
 
 def prepare(root, output):
-    destination = io.output_directory(root, output)
-    files, blobs = io.inventory(root)
-    documents = build(files, blobs)
-    if sum(map(len, documents.values())) > 16 * 1024 * 1024:
-        raise ValueError("package_output_limit")
-    io.write_package(destination, documents)
+    with operation("OUTPUT_POLICY"):
+        destination = io.output_directory(root, output)
+    with operation("INVENTORY"):
+        files, blobs = io.inventory(root)
+    with operation("VERIFY"):
+        documents = build(files, blobs)
+        if sum(map(len, documents.values())) > 16 * 1024 * 1024:
+            raise PolicyRefusal("package_output_limit")
+    with operation("OUTPUT_WRITE"):
+        io.write_package(destination, documents)
     return len(files)
