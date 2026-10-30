@@ -34,16 +34,15 @@ function applyRouteUpdateDuringNavigation(routeData) {
         return;
     }
 
-    if (plan.updateRouteOnMap) {
-        const result = rt().call.updateRouteOnMap(plan.activeRoute);
-        if (result && result.ok===false) return;
+    if (!plan.updateRouteOnMap) {
+        rt().call.showStatus('Route geometry is incomplete; current route retained.', 'warning');
+        return false;
     }
-
-    if (plan.patchLastCalculatedRoute) {
-        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-    }
+    const result = rt().call.updateRouteOnMap(plan.activeRoute);
+    if (!result || result.ok!==true) return false;
 
     rt().call.showStatus(plan.statusMessage, plan.statusType);
+    return true;
 }
 
 /**

@@ -860,6 +860,10 @@ function getRerouteMapOrchestrationRuntime() {
         getMapLibreHelpers: () => MapLibreHelpers,
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         setLastCalculatedRoute: (val) => { window.lastCalculatedRoute = val; },
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
+        setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
+        getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
+        setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
         getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
@@ -875,6 +879,12 @@ function getRerouteMapOrchestrationRuntime() {
         setLastSnappedRouteIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastSnappedRouteIndex(val),
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
+        getNextManeuverDistance: () => VoyagrNavigationLifecycleOrchestration.getNextManeuverDistance(),
+        setNextManeuverDistance: (val) => VoyagrNavigationLifecycleOrchestration.setNextManeuverDistance(val),
+        getNavigationArrivalTriggered: () => VoyagrNavigationLifecycleOrchestration.getNavigationArrivalTriggered(),
+        setNavigationArrivalTriggered: (val) => VoyagrNavigationLifecycleOrchestration.setNavigationArrivalTriggered(val),
+        getNavigationArrivalZoneSince: () => VoyagrNavigationLifecycleOrchestration.getNavigationArrivalZoneSince(),
+        setNavigationArrivalZoneSince: (val) => VoyagrNavigationLifecycleOrchestration.setNavigationArrivalZoneSince(val),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
@@ -953,10 +963,6 @@ function applyVoiceAnnouncementStateResetFromPlan(execute) {
 
 function resetVoiceAnnouncementStateForNewRoute() {
     return VoyagrRerouteMapOrchestration.resetVoiceAnnouncementStateForNewRoute();
-}
-
-function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
-    return VoyagrRerouteMapOrchestration.applyRouteMapUpdateStateFromPlan(plan, newRoute);
 }
 
 function updateRouteOnMap(newRoute) {

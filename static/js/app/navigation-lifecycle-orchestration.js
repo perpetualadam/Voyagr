@@ -167,26 +167,13 @@
         }, delayMs);
     }
 
-    function applyNavStartPolylineFromPlan(execute, stateInit) {
+    function applyNavStartPolylineFromPlan(execute, stateInit, assessedPolyline) {
         if (!execute || !execute.shouldInit) return { ok: false };
 
         try {
-            if (execute.usePersistedPolyline && execute.persistedPolyline) {
-                setRoutePolyline(execute.persistedPolyline);
-                console.log(
-                    execute.polylineDecodeLogPrefix,
-                    getRoutePolyline().length,
-                    execute.persistedPolylineLogSuffix
-                );
-            } else {
-                setRoutePolyline(rt().call.decodePolyline(execute.geometry, execute.navPrecision));
-                console.log(
-                    execute.polylineDecodeLogPrefix,
-                    getRoutePolyline().length,
-                    'points',
-                    '(precision ' + execute.navPrecision + ')'
-                );
-            }
+            setRoutePolyline(assessedPolyline);
+            console.log(execute.polylineDecodeLogPrefix, getRoutePolyline().length,
+                'assessed points', '(precision ' + execute.navPrecision + ')');
             console.log(stateInit.maneuversLogPrefix, getCurrentRouteSteps().length, 'steps');
 
             if (execute.persistActiveRoute) rt().call.persistActiveRoute();
@@ -543,7 +530,7 @@
         };
         // No persisted assessment establishes a fresh complete request context.
         // Refuse before selection can replace its geometry, destination or evidence.
-        if ((navStartOpts && navStartOpts.fromPersistedResume) ||
+        if ((navStartOpts && (navStartOpts.fromPersistedResume || navStartOpts.persistedPolyline!==undefined)) ||
             (routeData && (routeData.navigation_resume_requires_fresh_gps ||
                 (routeData.avoidance_assessment && routeData.avoidance_assessment.resume_state)))) {
             return refuse('Saved journey is preview only. Recalculate from your actual location and destination before navigation.');
@@ -551,12 +538,20 @@
         let mergedRoute;
         try {
             const integrity = root.VoyagrAvoidanceIntegrity;
-            if (!integrity || typeof integrity.gate!=='function') {
+            if (!integrity || typeof integrity.gate!=='function' || typeof integrity.prepareNavigationCandidate!=='function') {
                 return refuse('Safety verification unavailable; navigation not started. Reload online and recalculate.');
             }
             mergedRoute = rt().routeSelection().mergeNavigationRouteFromSelected(
                 routeData, rt().getRouteOptions(), rt().getSelectedRouteIndex()
             );
+            if (getRouteInProgress()) {
+                const updater = root.VoyagrRerouteMapOrchestration;
+                if (!updater || typeof updater.updateRouteOnMap!=='function') return refuse('Route replacement unavailable; current route retained.');
+                const result = updater.updateRouteOnMap(mergedRoute);
+                return !!result && result.ok===true;
+            }
+            mergedRoute = integrity.prepareNavigationCandidate(mergedRoute);
+            if (!mergedRoute) return refuse('Route geometry or instructions are incomplete; recalculate before navigation.');
             // The gate contract is synchronous boolean permission, never a truthy
             // object, promise, legacy metadata flag or confirmation substitute.
             if (integrity.gate(mergedRoute, {
@@ -582,7 +577,8 @@
 
         const polylineResult = applyNavStartPolylineFromPlan(
             MC().buildNavStartPolylineInitExecutePlan(stateInit),
-            stateInit
+            stateInit,
+            mergedRoute.polyline
         );
         if (!polylineResult.ok) return;
 

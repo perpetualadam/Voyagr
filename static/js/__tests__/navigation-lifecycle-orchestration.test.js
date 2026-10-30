@@ -15,10 +15,11 @@ require('../maplibre-helpers.js');
 
 function validRoute() {
     const now=Date.now()/1000;
-    return {geometry:'encoded',maneuvers:[{type:1,instruction:'Turn left'}],
+    const r={id:'synthetic',geometry:require('polyline').encode([[51.5,-0.1],[51.6,-0.2]],6),geometry_precision:6,maneuvers:[{type:1,instruction:'Turn left'}],
         avoidance_assessment:{checked_at:now,geometry_valid:true,requires_acceptance:false,requirements:[],
             origin_integrity:{checked_at:now,navigation_allowed:true,transition_verified:false,
                 status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'}}};
+    r.avoidance_assessment.geometry_binding=require('../modules/navigation/avoidance-integrity.js').geometryBinding(r);return r;
 }
 
 describe('navigation-lifecycle-orchestration nav start status', () => {

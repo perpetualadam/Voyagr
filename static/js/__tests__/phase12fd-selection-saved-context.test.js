@@ -8,12 +8,13 @@ const Saving = require('../app/route-saving-orchestration.js');
 const Preview = require('../app/route-preview-orchestration.js');
 const Life = require('../app/navigation-lifecycle-orchestration.js');
 const codec = require('polyline');
+const {bindTransition} = require('./fixtures/navigation-transition.cjs');
 
 function route(id = 'A', end = [53.01, -1], mode = 'mandatory', status = 'SATISFIED') {
     const now = Date.now() / 1000;
     const r = {id, name: id, destination: 'DEST_' + id, destinationName: 'DEST_' + id,
         geometry: codec.encode([[53, -1], end], 6), geometry_precision: 6,
-        polyline: [[53, -1], end], maneuvers: [], distance_km: 1, duration_minutes: 2,
+        polyline: [[53, -1], end], maneuvers: [{type:1,instruction:'Synthetic instruction'}], distance_km: 1, duration_minutes: 2,
         avoidance_preferences_snapshot: AI.snapshot(localStorage),
         avoidance_assessment: {checked_at: now, status, geometry_valid: true,
             requirements: [{category: 'tolls', enabled: true, mode, status}],
@@ -40,6 +41,7 @@ beforeEach(() => {
     Life.setRouteInProgress(false); Life.setRouteStarted(false); Life.setRoutePolyline([[53, -1], [53.02, -1]]);
     Compare.setRouteOptions([]); Compare.setSelectedRouteIndex(0); window.lastCalculatedRoute = null; window.lastRouteApiResponse = null;
     const traffic = () => ({routeTrafficEnabled: true});
+    bindTransition({status,addPolyline:()=>{mapMutation();return {_added:true,remove:jest.fn()};}});
     Compare.bind({routeSelection: () => RS, getMap: () => ({getStyle: () => ({layers: [], sources: {}})}),
         getRouteLayer: () => null, getShowTrafficEnabled: () => false, getTrafficLayer: () => null,
         setRoutePolyline: p => { mapMutation(); Life.setRoutePolyline(p); },
@@ -89,7 +91,7 @@ describe.each(['selectRoute', 'useRoute'])('F2 %s', entry => {
         unchanged(before);
     });
     test('literal synchronous true authorizes active selection', () => {
-        global.VoyagrAvoidanceIntegrity = {gate: () => true};
+        global.VoyagrAvoidanceIntegrity = {...AI,gate: () => true};
         Compare.setRouteOptions([route('OLD'), route('NEW')]); window.lastCalculatedRoute = route('OLD');
         Life.setRouteInProgress(true);
         Compare[entry](1);

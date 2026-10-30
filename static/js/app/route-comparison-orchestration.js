@@ -293,6 +293,7 @@ function applyDoAddRouteLayersPostMountFromPlan(plan) {
  * @param {Object} plan - from buildSingleRouteMapDisplayExecutePlan
  */
 function applySingleRouteMapDisplayFromPlan(plan) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     if (!plan || !plan.shouldExecute) return;
 
@@ -557,16 +558,29 @@ function displayRouteComparison() {
     );
 }
 
-function verifyActiveSelection(route) {
+function allowPreviewMutation() {
+    const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
+    if (lifecycle && typeof lifecycle.getRouteInProgress==='function' && !lifecycle.getRouteInProgress()) return true;
+    rt().call.showStatus('Preview display cannot replace active navigation. Select a verified route instead.', 'warning');
+    return false;
+}
+
+// null means an inactive preview; active selection must use the single route
+// transition operation rather than any of the preview mutation helpers.
+function replaceActiveSelection(route, index) {
     try {
         const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
         if (!lifecycle || typeof lifecycle.getRouteInProgress !== 'function') throw new Error('Lifecycle unavailable');
-        if (!lifecycle.getRouteInProgress()) return true; // Inspection does not authorize navigation.
-        const integrity = root.VoyagrAvoidanceIntegrity;
-        if (integrity && typeof integrity.gate === 'function' && integrity.gate(route, {
-            storage: localStorage, automatic: true, quiet: true, offline: navigator.onLine === false,
-            showStatus: rt().call.showStatus,
-        }) === true) return true;
+        if (!lifecycle.getRouteInProgress()) return null;
+        const updater = root.VoyagrRerouteMapOrchestration;
+        if (updater && typeof updater.updateRouteOnMap==='function') {
+            const result = updater.updateRouteOnMap(route, {selectionIndex:index});
+            if (result && result.ok===true) {
+                try { displayRouteComparison(); }
+                catch (_) { rt().call.showStatus('Route updated; route list could not refresh.', 'warning'); }
+                return true;
+            }
+        }
     } catch (_) { /* Broken modules and nonboolean results never authorize mutation. */ }
     rt().call.showStatus('Route safety verification unavailable or unresolved; current route retained. Recalculate online.', 'warning');
     return false;
@@ -574,7 +588,8 @@ function verifyActiveSelection(route) {
 
 function applySelectRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return false;
-    if (!verifyActiveSelection(apply.selectedRoute || apply.route)) return false;
+    const active = replaceActiveSelection(apply.selectedRoute || apply.route, index);
+    if (active!==null) return active;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
 
@@ -683,6 +698,7 @@ function collectDisplaySingleRouteRuntime() {
 }
 
 function applyDisplaySingleRouteFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
 
     console.log(apply.entryLogMessage);
@@ -703,6 +719,7 @@ function collectDisplaySingleRouteInput(index) {
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
+    if (!allowPreviewMutation()) return false;
     const orch = RS().buildDisplaySingleRouteEntryOrchestrationPlan(
         collectDisplaySingleRouteInput(index)
     );
@@ -728,7 +745,8 @@ function showAllRoutes() {
 
 function applyUseRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return false;
-    if (!verifyActiveSelection(apply.selectedRoute || apply.route)) return false;
+    const active = replaceActiveSelection(apply.selectedRoute || apply.route, index);
+    if (active!==null) return active;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
     if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);

@@ -1,9 +1,10 @@
 const AI=require('../modules/navigation/avoidance-integrity.js');
 const RS=require('../modules/navigation/route-selection.js');
 function route(allowed=true) {
-    return {geometry:[[53,-1],[53.01,-1]],avoidance_assessment:{checked_at:Date.now()/1000,
+    const r={geometry:[[53,-1],[53.01,-1]],avoidance_assessment:{checked_at:Date.now()/1000,
         geometry_valid:true,automatic_selection_allowed:allowed,requires_acceptance:!allowed,
         origin_integrity:{status:allowed?'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE':'UNVERIFIED',navigation_allowed:allowed,checked_at:Date.now()/1000,transition_verified:false},requirements:[]}};
+    r.avoidance_assessment.geometry_binding=AI.geometryBinding(r);return r;
 }
 beforeEach(()=>{localStorage.clear();});
 test('relocation cannot be overridden manually or during automatic reroute',()=>{
