@@ -421,14 +421,16 @@ function applyStartNavigationFromPreviewFromPlan(apply) {
     }
 
     // Lifecycle builds a pure candidate and verifies it before committing state.
-    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return false;
-
-    apply.hideStartNavButtonIds.forEach((id) => {
-        const btn = document.getElementById(id);
-        if (btn) btn.style.display = 'none';
-    });
-
-    if (apply.collapseBottomSheet) rt().call.collapseBottomSheet();
+    const finish = ok => {
+        if (ok !== true) return false;
+        (apply.hideStartNavButtonIds || []).forEach(id => {
+            const btn=document.getElementById(id);if(btn)btn.style.display='none';
+        });
+        if (apply.collapseBottomSheet) rt().call.collapseBottomSheet();
+        return true;
+    };
+    const started=rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute);
+    return started && typeof started.then==='function' ? started.then(finish,()=>false) : finish(started);
 }
 
 /**
@@ -453,14 +455,16 @@ function startNavigation() {
         return;
     }
 
-    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return false;
-
-    (plan.hideStartNavButtonIds || []).forEach(function (id) {
-        const btn = document.getElementById(id);
-        if (btn) btn.style.display = 'none';
-    });
-
-    if (plan.collapseBottomSheet) rt().call.collapseBottomSheet();
+    const finish = ok => {
+        if (ok !== true) return false;
+        (plan.hideStartNavButtonIds || []).forEach(id => {
+            const btn=document.getElementById(id);if(btn)btn.style.display='none';
+        });
+        if (plan.collapseBottomSheet) rt().call.collapseBottomSheet();
+        return true;
+    };
+    const started=rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute);
+    return started && typeof started.then==='function' ? started.then(finish,()=>false) : finish(started);
 }
 
 function applyRoutePreviewPanelDomFromPlan(domPlan) {

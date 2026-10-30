@@ -912,21 +912,7 @@ function getRerouteMapOrchestrationRuntime() {
             clearRouteTrafficLayers: () => VoyagrTrafficOrchestration.clearRouteTrafficLayers(),
             fetchAndDisplayRouteTraffic: () => VoyagrTrafficOrchestration.fetchAndDisplayRouteTraffic(),
             clearAllRouteLayersFromMap,
-            clearAllRouteLayerHandles: () => {
-                const layers = VoyagrRouteComparisonOrchestration.getAllRouteLayers();
-                (layers || []).forEach((layer) => {
-                    if (layer && typeof layer.remove === 'function') {
-                        try { layer.remove(); } catch (_e) { /* ignore */ }
-                    }
-                });
-                // Empty the in-memory handle list via the comparison orchestrator's clearer.
-                if (typeof VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan === 'function') {
-                    VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan({
-                        clearAllRouteLayerHandles: true,
-                        clearRouteLayerHandle: false,
-                    });
-                }
-            },
+            clearAllRouteLayerHandles: () => VoyagrRouteComparisonOrchestration.clearComparisonRouteLayers(),
             resetVehicleMarkerDisplayState,
             applySpeedLimitFetchResetFromPlan,
             primeVehicleMarkerOnRoute,
@@ -2160,8 +2146,8 @@ function cacheSpeedLimit(lat, lon, speedLimit, source) {
 function getCachedSpeedLimit(lat, lon) {
     return VoyagrOfflineNavigationOrchestration.getCachedSpeedLimit(lat, lon);
 }
-function persistActiveRoute() {
-    return VoyagrOfflineNavigationOrchestration.persistActiveRoute();
+function persistActiveRoute(pendingCandidate) {
+    return VoyagrOfflineNavigationOrchestration.persistActiveRoute(pendingCandidate);
 }
 function clearPersistedRoute() {
     return VoyagrOfflineNavigationOrchestration.clearPersistedRoute();
@@ -2698,20 +2684,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
             primeVehicleMarkerOnRoute,
             showStatus,
             clearAllRouteLayersFromMap,
-            clearAllRouteLayerHandles: () => {
-                const layers = VoyagrRouteComparisonOrchestration.getAllRouteLayers();
-                (layers || []).forEach((layer) => {
-                    if (layer && typeof layer.remove === 'function') {
-                        try { layer.remove(); } catch (_e) { /* ignore */ }
-                    }
-                });
-                if (typeof VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan === 'function') {
-                    VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan({
-                        clearAllRouteLayerHandles: true,
-                        clearRouteLayerHandle: false,
-                    });
-                }
-            },
+            clearAllRouteLayerHandles: () => VoyagrRouteComparisonOrchestration.clearComparisonRouteLayers(),
             navActiveRouteColor,
             bringNavRouteAboveTrafficEdges,
             redrawNavigationRouteLayer,

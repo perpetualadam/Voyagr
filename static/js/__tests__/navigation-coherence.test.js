@@ -8,11 +8,12 @@ beforeEach(()=>{
     localStorage.clear();localStorage.setItem('pref_avoidance_mode','mandatory');
     delete global.VoyagrGpsOrchestration;
     old=makeRoute('OLD',[[53,-1],[53.005,-1.01],[53.01,-1]]);next=makeRoute('NEW');
-    Life.setRouteInProgress(true);Life.setCurrentRouteSteps(old.maneuvers);Life.setRoutePolyline(old.polyline);
+    Life.setRouteInProgress(false);Life.setCurrentRouteSteps(old.maneuvers);Life.setRoutePolyline(old.polyline);
     Life.setCurrentStepIndex(2);Life.setLastSnappedRouteIndex(8);Life.setLastTurnDetectRouteVertexIndex(9);
     Life.setNextManeuverDistance(400);Life.setNavigationArrivalTriggered(true);Life.setNavigationArrivalZoneSince(1234);
+    ctx=bindTransition();
     Compare.setRouteOptions([old,next]);Compare.setSelectedRouteIndex(0);window.lastCalculatedRoute=old;
-    window.lastRouteApiResponse={routes:[old,next]};ctx=bindTransition();
+    window.lastRouteApiResponse={routes:[old,next]};Life.setRouteInProgress(true);
     confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
 });
 afterEach(()=>jest.restoreAllMocks());
@@ -28,7 +29,7 @@ describe.each(['selectRoute','useRoute'])('R1 original active %s',entry=>{
         expect(Life.getLastTurnDetectRouteVertexIndex()).toBe(0);expect(Compare.getSelectedRouteIndex()).toBe(1);
         expect(Life.getNextManeuverDistance()).toBe(0);expect(Life.getNavigationArrivalTriggered()).toBe(false);expect(Life.getNavigationArrivalZoneSince()).toBe(0);
         expect(window.lastCalculatedRoute.id).toBe(next.id);expect(window.lastCalculatedRoute.avoidance_assessment).toEqual(next.avoidance_assessment);
-        expect([...ctx.layers]).toEqual(['staged-1']);expect(confirm).not.toHaveBeenCalled();
+        expect([...ctx.layers]).toEqual([ctx.runtime.getRouteLayer().id]);expect(confirm).not.toHaveBeenCalled();
     });
     test('R2 original separately supplied polyline never replaces assessed geometry',()=>{
         next.polyline=old.polyline;refused(entry);
@@ -72,13 +73,13 @@ test('map not ready refuses with old line and all route state intact',()=>{
     ctx=bindTransition({map:{isStyleLoaded:()=>false}});refused('reroute');
 });
 test('failed staged mount rolls back without clearing the old route',()=>{
-    const remove=jest.fn();ctx=bindTransition({addPolyline:jest.fn(()=>({_added:false,remove}))});
+    const remove=jest.fn();ctx=bindTransition({addPolyline:jest.fn(()=>({id:'failed-stage',_added:false,remove}))});
     const before=ctx.snapshot();expect(invoke('reroute')).toBe(false);expect(ctx.snapshot()).toBe(before);expect(remove).toHaveBeenCalledTimes(1);
 });
 test('setter failure restores the complete previous context and removes staged line',()=>{
     const before=ctx.snapshot();const setter=ctx.runtime.setCurrentRouteSteps;let fail=true;
     ctx.runtime.setCurrentRouteSteps=value=>{if(fail){fail=false;throw new Error('STATE_FAILURE');}setter(value);};
-    expect(invoke('reroute')).toBe(false);expect(ctx.snapshot()).toBe(before);expect([...ctx.layers]).toEqual(['old']);
+    expect(invoke('reroute')).toBe(false);expect(ctx.snapshot()).toBe(before);expect([...ctx.layers]).toEqual([ctx.oldLayer.id]);
 });
 test('navigation candidate consumes a fresh decode rather than the supplied polyline object',()=>{
     const prepared=AI.prepareNavigationCandidate(next);
@@ -116,7 +117,7 @@ test('automatic replacement with no supplied destination cannot inherit unrelate
     expect(window.lastCalculatedRoute.destinationName).toBe(window.lastCalculatedRoute.destination);
 });
 test('starting a newly selected route during active navigation uses the same coherent transition',()=>{
-    Compare.setSelectedRouteIndex(1);
+    Life.setRouteInProgress(false);Compare.setSelectedRouteIndex(1);Life.setRouteInProgress(true);
     Life.bind({routeSelection:()=>require('../modules/navigation/route-selection.js'),getRouteOptions:Compare.getRouteOptions,
         getSelectedRouteIndex:Compare.getSelectedRouteIndex,call:{showStatus:ctx.status}});
     expect(Life.startTurnByTurnNavigation(window.lastCalculatedRoute)).toBe(true);

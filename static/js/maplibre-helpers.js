@@ -161,9 +161,14 @@ function addPolyline(mapInstance, coords, options = {}) {
     if (!mapInstance.isStyleLoaded()) {
         // Queue for later when style loads
         const layer = createPendingLayer(mapInstance, id, lngLatCoords, options);
-        mapInstance.once('style.load', () => addLayerToMap(mapInstance, id, lngLatCoords, options));
-        mapInstance.once('load', () => addLayerToMap(mapInstance, id, lngLatCoords, options));
-        setTimeout(() => addLayerToMap(mapInstance, id, lngLatCoords, options), 500);
+        const mountPending = () => {
+            if (layer._removed) return;
+            layer._added = addLayerToMap(mapInstance,id,lngLatCoords,options);
+            layer._pending = !layer._added;
+        };
+        mapInstance.once('style.load',mountPending);
+        mapInstance.once('load',mountPending);
+        setTimeout(mountPending,500);
         return layer;
     }
 
@@ -172,14 +177,12 @@ function addPolyline(mapInstance, coords, options = {}) {
 
     const layer = {
         id: id,
+        _map: mapInstance,
         outlineId: options.outlineColor ? `${id}-outline` : null,
         _coords: lngLatCoords,
         _added: success,
         remove: function() {
-            removeMapLayer(mapInstance, id);
-            if (options.outlineColor) {
-                removeMapLayer(mapInstance, `${id}-outline`);
-            }
+            return removeMapLayer(mapInstance, id);
         },
         getBounds: function() { return computeBounds(lngLatCoords); }
     };
@@ -291,12 +294,17 @@ function createErrorLayer(id) {
 function createPendingLayer(mapInstance, id, lngLatCoords, options = {}) {
     const layer = {
         id: id,
+        _map: mapInstance,
         outlineId: options.outlineColor ? `${id}-outline` : null,
         _coords: lngLatCoords,
         _added: false,
         _pending: true,
+        _removed: false,
         // removeMapLayer already strips the matching `-outline` layer/source.
-        remove: function() { removeMapLayer(mapInstance, id); },
+        remove: function() {
+            this._removed=true;this._pending=false;
+            return removeMapLayer(mapInstance,id);
+        },
         getBounds: function() { return computeBounds(lngLatCoords); }
     };
     activeLayers.set(id, layer);
@@ -318,23 +326,50 @@ function isPolylineLayerMountOk(layer) {
  * @param {maplibregl.Map} map - The map instance
  * @param {string} layerId - ID of the layer to remove
  */
-function removeMapLayer(mapInstance, layerId) {
+function isPolylineLayerRemoved(mapInstance, layer) {
     try {
-        const outlineId = `${layerId}-outline`;
-        if (mapInstance.getLayer(outlineId)) {
-            mapInstance.removeLayer(outlineId);
-        }
-        if (mapInstance.getLayer(layerId)) {
-            mapInstance.removeLayer(layerId);
-        }
-        if (mapInstance.getSource(layerId)) {
-            mapInstance.removeSource(layerId);
-        }
-        activeLayers.delete(layerId);
-        activeLayers.delete(outlineId);
-    } catch (e) {
-        console.warn('[MapLibre] Error removing layer:', layerId, e);
+        return !!(mapInstance && layer && typeof layer.id === 'string' &&
+            !mapInstance.getLayer(layer.id) && !mapInstance.getLayer(`${layer.id}-outline`) &&
+            !mapInstance.getSource(layer.sourceId || layer.id));
+    } catch (_) { return false; }
+}
+
+// Inspect the actual style/source, not the optimistic _added flag. This is a
+// resource/geometry check; safety permission still comes from the route gate.
+function isPolylineLayerMounted(mapInstance, layer, points) {
+    try {
+        if (!layer || layer._added !== true || layer._pending || !Array.isArray(points)) return false;
+        const line = mapInstance.getLayer(layer.id);
+        const source = mapInstance.getStyle().sources[layer.id];
+        const geometry = source && source.data && source.data.geometry;
+        return !!(line && mapInstance.getSource(layer.id) && line.type === 'line' && line.source === layer.id &&
+            (!layer.outlineId || mapInstance.getLayer(layer.outlineId)) && geometry &&
+            geometry.type === 'LineString' && Array.isArray(geometry.coordinates) &&
+            geometry.coordinates.length === points.length && geometry.coordinates.every((p, i) =>
+                p.length === 2 && p[0] === points[i][1] && p[1] === points[i][0]));
+    } catch (_) { return false; }
+}
+
+function reconcilePolylineLayers(mapInstance) {
+    let ok = true;
+    for (const layer of Array.from(activeLayers.values())) {
+        if (layer._map !== mapInstance) continue;
+        if (!removeMapLayer(mapInstance, layer.id)) ok = false;
     }
+    return ok;
+}
+
+function removeMapLayer(mapInstance, layerId) {
+    // Attempt each resource even if another removal throws; then inspect reality.
+    for (const id of [`${layerId}-outline`, layerId]) {
+        try { if (mapInstance.getLayer(id)) mapInstance.removeLayer(id); }
+        catch (e) { console.warn('[MapLibre] Error removing layer:', id, e); }
+    }
+    try { if (mapInstance.getSource(layerId)) mapInstance.removeSource(layerId); }
+    catch (e) { console.warn('[MapLibre] Error removing source:', layerId, e); }
+    const removed = isPolylineLayerRemoved(mapInstance, {id: layerId});
+    if (removed) { activeLayers.delete(layerId); activeLayers.delete(`${layerId}-outline`); }
+    return removed;
 }
 
 // ===== MARKER FUNCTIONS =====
@@ -1183,6 +1218,9 @@ window.MapLibreHelpers = {
     applyTransportationRoadLineWidthScale,
     addPolyline,
     isPolylineLayerMountOk,
+    isPolylineLayerMounted,
+    isPolylineLayerRemoved,
+    reconcilePolylineLayers,
     removeMapLayer,
     createMarker,
     createCircleMarker,

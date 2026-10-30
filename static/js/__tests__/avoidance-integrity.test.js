@@ -83,6 +83,7 @@ test('GPS reroute choice cannot preserve a conflicting previous route name over 
 });
 
 test('all automatic map replacements refuse unverified mandatory routes before touching runtime/map',()=>{
+    global.VoyagrNavigationLifecycleOrchestration=require('../app/navigation-lifecycle-orchestration.js');
     localStorage.setItem('pref_avoidance_mode','mandatory');
     const showStatus=jest.fn();
     RerouteMap.bind({call:{showStatus},rerouteDecision:()=>{throw new Error('Map must not be updated');}});
@@ -296,7 +297,8 @@ test('valid mandatory route reaches real bootstrap, unresolved selected alternat
     Lifecycle.bind({routeSelection:()=>RS,getRouteOptions:()=>[good,bad],getSelectedRouteIndex:()=>selected,
         mapControls,call:{showStatus:jest.fn()}});
     const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
-    expect(()=>Lifecycle.startTurnByTurnNavigation(good)).toThrow('CONTROL_BOOTSTRAP_REACHED');
+    expect(Lifecycle.startTurnByTurnNavigation(good)).toBe(false);
+    expect(Lifecycle.getRouteInProgress()).toBe(false);
     expect(mapControls).toHaveBeenCalledTimes(1);
     selected=1;
     expect(Lifecycle.startTurnByTurnNavigation(good)).toBe(false);

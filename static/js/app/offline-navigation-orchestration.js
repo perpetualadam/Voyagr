@@ -121,20 +121,22 @@
         }
     }
 
-    async function persistActiveRoute() {
+    async function persistActiveRoute(pendingCandidate) {
         const off = OFF();
-        if (!off || !rt().getRouteInProgress() || !rt().getRoutePolyline()) return;
+        const route = pendingCandidate || rt().getLastCalculatedRoute();
+        const polyline = pendingCandidate ? pendingCandidate.polyline : rt().getRoutePolyline();
+        if (!off || (!pendingCandidate && !rt().getRouteInProgress()) || !route || !polyline) return false;
         try {
             await off.persistActiveRouteRecord(indexedDB, off.buildActiveRoutePersistRecord({
-                polyline: rt().getRoutePolyline(),
-                steps: rt().getCurrentRouteSteps(),
-                stepIndex: rt().getCurrentStepIndex(),
-                progressHint:root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
-                destination: rt().getLastCalculatedRoute()?.destination || null,
-                routeData: rt().getLastCalculatedRoute() || null,
+                polyline:polyline, steps:pendingCandidate ? pendingCandidate.maneuvers : rt().getCurrentRouteSteps(),
+                stepIndex:pendingCandidate ? 0 : rt().getCurrentStepIndex(),
+                progressHint:!pendingCandidate && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
+                destination:route.destination || null,routeData:route,
             }));
+            return true;
         } catch (e) {
             console.warn('[OfflineNav] Failed to persist route:', e);
+            return false;
         }
     }
 

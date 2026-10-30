@@ -11,9 +11,15 @@
     var selectedRouteIndex = 0;
 
     function getRouteOptions() { return routeOptions; }
-    function setRouteOptions(val) { routeOptions = val; }
+    function setRouteOptions(val) {
+        if (!allowSelectionWrite()) { allowPreviewMutation(); return false; }
+        routeOptions = val; return true;
+    }
     function getSelectedRouteIndex() { return selectedRouteIndex; }
-    function setSelectedRouteIndex(val) { selectedRouteIndex = val; }
+    function setSelectedRouteIndex(val) {
+        if (!allowSelectionWrite()) { allowPreviewMutation(); return false; }
+        selectedRouteIndex = val; return true;
+    }
 
     function rt() {
         if (!runtime) {
@@ -109,6 +115,7 @@ function applyBringRoutesToTopFromPlan(plan) {
     }, schedule.startup.initialDelayMs);
 }
 function clearAllRouteLayersFromMap() {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     if (!map) return;
 
@@ -148,6 +155,7 @@ function clearAllRouteLayersFromMap() {
  * @param {Object} plan - from buildDisplayAllRoutesMapPreMountPlan
  */
 function clearRouteLayerHandlesFromPlan(plan) {
+    if (!allowPreviewMutation()) return false;
     if (!plan) return;
     if (plan.clearRouteLayerHandle && rt().getRouteLayer() && typeof rt().getRouteLayer().remove === 'function') {
         rt().getRouteLayer().remove();
@@ -170,6 +178,7 @@ function clearRouteLayerHandlesFromPlan(plan) {
  * @returns {boolean}
  */
 function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     opts = opts || {};
     if (!mountPlan || !mountPlan.shouldMount || !map) return false;
@@ -205,6 +214,7 @@ function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
             // the chosen preview route last and it stays painted on top.
             allRouteLayers.push({
                 id: layerId,
+                sourceId: sourceId,
                 remove: () => {
                     if (map.getLayer(layerId)) map.removeLayer(layerId);
                     if (map.getSource(sourceId)) map.removeSource(sourceId);
@@ -251,6 +261,7 @@ function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, addRouteLayers
  * @param {Object} plan - from buildDoAddRouteLayersPostMountExecutePlan
  */
 function applyDoAddRouteLayersPostMountFromPlan(plan) {
+    if (!allowPreviewMutation()) return false;
     if (!plan) return;
     const map = rt().getMap();
 
@@ -370,6 +381,7 @@ function collectDisplayAllRoutesOnMapInput() {
 }
 
 function displayAllRoutesOnMap() {
+    if (!allowPreviewMutation()) return false;
     const input = collectDisplayAllRoutesOnMapInput();
     const entry = RS().buildDisplayAllRoutesMapEntryOrchestrationPlan(
         input.routeOptions,
@@ -379,6 +391,7 @@ function displayAllRoutesOnMap() {
 }
 
 function applyDisplayAllRoutesOnMapFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     if (!apply || !apply.shouldApply) {
         if (apply && apply.noRoutesLogMessage) console.warn(apply.noRoutesLogMessage);
@@ -407,6 +420,7 @@ function applyDisplayAllRoutesOnMapFromPlan(apply) {
 }
 
 function applyDisplayAllRoutesPreMountFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
     clearRouteLayerHandlesFromPlan(apply);
     if (apply.clearMapRouteLayers) {
@@ -426,6 +440,7 @@ function applyDisplayAllRoutesPreMountFromPlan(apply) {
  * @returns {boolean}
  */
 function applyRouteLayerFromMapLibrePlan(applyPlan) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     return applyMapLibreLineLayerFromMountPlan(
         RS().buildRouteLayerMapLibreMountExecutePlan(applyPlan)
@@ -437,6 +452,7 @@ function applyRouteLayerFromMapLibrePlan(applyPlan) {
  * @param {Object} executePlan - from buildDoAddRouteLayersBatchExecutePlan
  */
 function applyDoAddRouteLayersBatchFromPlan(executePlan) {
+    if (!allowPreviewMutation()) return false;
     if (!executePlan) return;
 
     (executePlan.layerSteps || []).forEach((step) => {
@@ -453,6 +469,7 @@ function applyDoAddRouteLayersBatchFromPlan(executePlan) {
 }
 
 function applyDoAddRouteLayersFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
     applyDoAddRouteLayersBatchFromPlan(apply.batchExecute);
     applyDoAddRouteLayersPostMountFromPlan(apply.postMount);
@@ -475,6 +492,7 @@ function collectDoAddRouteLayersInput() {
 }
 
 function doAddRouteLayers() {
+    if (!allowPreviewMutation()) return false;
     applyDoAddRouteLayersFromPlan(
         RS().buildDoAddRouteLayersEntryOrchestrationPlan(
             collectDoAddRouteLayersInput()
@@ -558,11 +576,48 @@ function displayRouteComparison() {
     );
 }
 
+function allowSelectionWrite() {
+    // Only the verifier-backed synchronous transition may write an active
+    // selection. The capability is read-only and scoped inside that operation.
+    const updater = root.VoyagrRerouteMapOrchestration;
+    if (updater && typeof updater.isCommittingVerifiedTransition === 'function' &&
+            updater.isCommittingVerifiedTransition() === true) return true;
+    return !!runtime && knownInactiveLifecycle();
+}
+
+function knownInactiveLifecycle() {
+    try {
+        const lifecycle=root.VoyagrNavigationLifecycleOrchestration;
+        return !!lifecycle && typeof lifecycle.getRouteInProgress==='function' && lifecycle.getRouteInProgress()===false &&
+            typeof lifecycle.getNavigationStarting==='function' && lifecycle.getNavigationStarting()===false &&
+            typeof lifecycle.getNavigationFailure==='function' && lifecycle.getNavigationFailure()===null;
+    } catch (_) { return false; }
+}
+
 function allowPreviewMutation() {
-    const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
-    if (lifecycle && typeof lifecycle.getRouteInProgress==='function' && !lifecycle.getRouteInProgress()) return true;
-    rt().call.showStatus('Preview display cannot replace active navigation. Select a verified route instead.', 'warning');
+    if (runtime && knownInactiveLifecycle()) return true;
+    try { if (runtime && runtime.call && typeof runtime.call.showStatus === 'function') {
+        runtime.call.showStatus('Preview display unavailable during navigation or incomplete startup. Select a verified route instead.', 'warning');
+    } } catch (_) { /* A missing status sink must not enable mutation. */ }
     return false;
+}
+
+// Only comparison handles are eligible; never remove the owned guidance layer.
+// Used by a verified navigation transaction after its new line is mounted.
+function clearComparisonRouteLayers() {
+    if (!runtime) return false;
+    const owned = rt().getRouteLayer();
+    const helpers = rt().getMapLibreHelpers();
+    let ok = true;
+    allRouteLayers = allRouteLayers.filter(layer => {
+        if (!layer || layer === owned || (owned && layer.id && layer.id === owned.id)) return false;
+        try {
+            layer.remove();
+            if (!helpers.isPolylineLayerRemoved(rt().getMap(), layer)) { ok = false; return true; }
+        } catch (_) { ok = false; return true; }
+        return false;
+    });
+    return ok;
 }
 
 // null means an inactive preview; active selection must use the single route
@@ -571,7 +626,9 @@ function replaceActiveSelection(route, index) {
     try {
         const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
         if (!lifecycle || typeof lifecycle.getRouteInProgress !== 'function') throw new Error('Lifecycle unavailable');
-        if (!lifecycle.getRouteInProgress()) return null;
+        const activeState=lifecycle.getRouteInProgress();
+        if (activeState===false && knownInactiveLifecycle()) return null;
+        if (activeState!==true) throw new Error('Lifecycle state unknown');
         const updater = root.VoyagrRerouteMapOrchestration;
         if (updater && typeof updater.updateRouteOnMap==='function') {
             const result = updater.updateRouteOnMap(route, {selectionIndex:index});
@@ -582,7 +639,7 @@ function replaceActiveSelection(route, index) {
             }
         }
     } catch (_) { /* Broken modules and nonboolean results never authorize mutation. */ }
-    rt().call.showStatus('Route safety verification unavailable or unresolved; current route retained. Recalculate online.', 'warning');
+    try { rt().call.showStatus('Route safety verification unavailable or unresolved; current route retained. Recalculate online.', 'warning'); } catch (_) { /* unavailable UI is not permission */ }
     return false;
 }
 
@@ -623,6 +680,7 @@ function collectSelectRouteInput(index) {
  * @param {number} index - Route index to select
  */
 function selectRoute(index) {
+    if (!runtime) return false;
     const orch = RS().buildSelectRouteEntryOrchestrationPlan(
         collectSelectRouteInput(index)
     );
@@ -730,12 +788,14 @@ function displaySingleRoute(index) {
  * Show all routes on the map (called by "Show All Routes" button)
  */
 function applyShowAllRoutesFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
     if (apply.displayAllRoutes) displayAllRoutesOnMap();
     rt().call.showStatus(apply.statusMessage, apply.statusType);
 }
 
 function showAllRoutes() {
+    if (!allowPreviewMutation()) return false;
     applyShowAllRoutesFromPlan(
         RS().buildShowAllRoutesEntryOrchestrationPlan(
             (function () { var ro = getRouteOptions(); return ro ? ro.length : 0; })()
@@ -768,12 +828,14 @@ function applyUseRouteFromPlan(apply, index) {
  * @returns {*} Return value description
  */
 function useRoute(index) {
+    if (!runtime) return false;
     const orch = RS().buildUseRouteEntryOrchestrationPlan(
         collectUseRouteInput(index)
     );
     return applyUseRouteFromPlan(orch.apply, index);
 }
 function syncLastCalculatedRouteFromSelection(index) {
+    if (!allowPreviewMutation()) return false;
     if (!getRouteOptions() || !getRouteOptions()[index]) return;
     window.lastCalculatedRoute = RS().mergeLastCalculatedRouteFromSelection(
         window.lastCalculatedRoute,
@@ -793,6 +855,7 @@ function syncLastCalculatedRouteFromSelection(index) {
         routeColors: routeColors,
         navActiveRouteColor: navActiveRouteColor,
         getAllRouteLayers: getAllRouteLayers,
+        clearComparisonRouteLayers: clearComparisonRouteLayers,
         applyBringRoutesToTopFromPlan: applyBringRoutesToTopFromPlan,
         clearAllRouteLayersFromMap: clearAllRouteLayersFromMap,
         clearRouteLayerHandlesFromPlan: clearRouteLayerHandlesFromPlan,

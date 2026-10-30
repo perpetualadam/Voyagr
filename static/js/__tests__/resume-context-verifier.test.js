@@ -69,9 +69,10 @@ test('restored payload cannot drop resume options and borrow a fresh preview ass
 test('fresh-looking payload cannot bypass the explicit resume entry policy',()=>{
     const route=fresh();bind([route]);refused(route,{fromPersistedResume:true});
 });
-test('explicitly starting a new independently valid selection still reaches real bootstrap',()=>{
+test('independently valid selection reaches bootstrap; failed bootstrap leaves guidance inactive',()=>{
     const old=reconstruct(),valid=fresh('NEW');bind([valid]);
-    expect(()=>Life.startTurnByTurnNavigation(valid)).toThrow('REVIEW_BOOTSTRAP_REACHED');
+    expect(Life.startTurnByTurnNavigation(valid)).toBe(false);
+    expect(Life.getRouteInProgress()).toBe(false);
     expect(bootstrap).toHaveBeenCalledTimes(1);
     expect(old.avoidance_assessment.checked_at).toBe(0);
 });

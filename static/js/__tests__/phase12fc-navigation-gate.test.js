@@ -33,13 +33,14 @@ test('positive metadata control proves browser gate is not unconditionally refus
     // Synthetic metadata control only, not endpoint validation or recorded evidence.
     expect(AI.gate(syntheticRoute(true), {storage: localStorage})).toBe(true);
 });
-test('positive metadata control reaches real navigation bootstrap after the gate', () => {
+test('positive metadata reaches bootstrap; an initialization exception safely refuses', () => {
     const Lifecycle = require('../app/navigation-lifecycle-orchestration.js');
     const RS = require('../modules/navigation/route-selection.js');
     const route = syntheticRoute(true);
     const bootstrap = jest.fn(() => { throw new Error('CONTROL_BOOTSTRAP_REACHED'); });
     Lifecycle.bind({routeSelection: () => RS, getRouteOptions: () => [route],
         getSelectedRouteIndex: () => 0, mapControls: bootstrap, call: {showStatus: jest.fn()}});
-    expect(() => Lifecycle.startTurnByTurnNavigation(route)).toThrow('CONTROL_BOOTSTRAP_REACHED');
+    expect(Lifecycle.startTurnByTurnNavigation(route)).toBe(false);
+    expect(Lifecycle.getRouteInProgress()).toBe(false);
     expect(bootstrap).toHaveBeenCalledTimes(1);
 });
