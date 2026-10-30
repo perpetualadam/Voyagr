@@ -353,7 +353,10 @@
                 // Synchronous setters only: no render/service callbacks or awaits
                 // can observe a half-committed maneuver/geometry/progress context.
                 committingVerifiedTransition = true;
-                try { pairs.forEach(function(pair) { rt()['set'+pair[0]](pair[1]); }); }
+                try {
+                    pairs.forEach(function(pair) { rt()['set'+pair[0]](pair[1]); });
+                    if (!pairs.every(function(pair) { return rt()['get'+pair[0]]() === pair[1]; })) throw new Error('State commitment incomplete');
+                }
                 finally { committingVerifiedTransition = false; }
                 applyDeviationRerouteState(state.deviation);
             } catch (error) {
@@ -434,6 +437,7 @@
                 return inconsistentMap();
             }
             rt().setRouteLayer(staged);
+            if (rt().getRouteLayer() !== staged) throw new Error('Recovery handle commitment failed');
             rt().call.bringNavRouteAboveTrafficEdges();
             if (reason) console.log('[Nav] Route layer redrawn:',reason);
             return true;

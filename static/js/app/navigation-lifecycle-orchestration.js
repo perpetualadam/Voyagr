@@ -535,7 +535,7 @@
                     zoomAndFollowEnabled:rt().getZoomAndFollowEnabled(),mapFollowingActive:rt().getMapFollowingActive(),
                     driverPerspectiveActive:rt().call.shouldUsePitchedDrivingCamera(),wakeLockApiAvailable:'wakeLock' in navigator});
                 applyNavStartServicesFromPlan(services);
-                if (!helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map changed during startup');
+                if (rt().getRouteLayer() !== staged || !helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map changed during startup');
                 if (!root.VoyagrRerouteMapOrchestration.authoriseCurrentRouteRedraw()) throw new Error('Recovery context unavailable');
                 navigationFailure = null; navigationStarting = false; setRouteStarted(true);
                 applyNavStartWakeLockFromPlan(stateInit,'wakeLock' in navigator);

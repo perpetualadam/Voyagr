@@ -235,3 +235,17 @@ test('unbound comparison runtime refuses selection and raw selection writes',()=
     expect(Compare.selectRoute(1)).toBe(false);expect(Compare.useRoute(1)).toBe(false);
     expect(Compare.setRouteOptions([next])).toBe(false);expect(Compare.setSelectedRouteIndex(1)).toBe(false);retained(before);
 });
+
+test('silent setter failure cannot report a successful route commitment',()=>{
+    ctx.runtime.setCurrentRouteSteps=()=>{};const before=ctx.snapshot();
+    expect(Reroute.updateRouteOnMap(next).ok).toBe(false);retained(before);
+});
+test('silent startup layer-handle commitment failure stops guidance',()=>{
+    const runtime=initial({setRouteLayer:()=>{}});
+    expect(Life.startTurnByTurnNavigation(next)).toBe(false);expect(Life.getRouteInProgress()).toBe(false);
+    expect(runtime.call.sendNotification).not.toHaveBeenCalled();
+});
+test('silent recovery layer-handle commitment failure cannot leave active guidance',()=>{
+    ctx.runtime.setRouteLayer=()=>{};
+    expect(Reroute.redrawNavigationRouteLayer('setter')).toMatchObject({ok:false,reason:'inconsistent_map'});stopped();
+});
