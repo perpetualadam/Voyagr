@@ -25,13 +25,13 @@ test.each(['VIOLATED','UNVERIFIED','UNSUPPORTED'])('mandatory %s cannot be autom
     expect(confirm).not.toHaveBeenCalled();
 });
 
-test('known conflict needs explicit acceptance and retains its status',()=>{
+test('known mandatory conflict cannot be explicitly accepted and retains its status',()=>{
     localStorage.setItem('pref_avoidance_mode','mandatory');
     const r=assessed('VIOLATED');
     expect(AI.gate(r,{storage:localStorage,confirm:()=>false})).toBe(false);
     const confirm=jest.fn(()=>true);
-    expect(AI.gate(r,{storage:localStorage,confirm})).toBe(true);
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Known conflict'));
+    expect(AI.gate(r,{storage:localStorage,confirm})).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
     expect(r.avoidance_assessment.status).toBe('VIOLATED');
 });
 
@@ -105,11 +105,11 @@ test('mandatory settings and category overrides survive request augmentation',()
     expect(body.is_reroute).toBe(true);
 });
 
-function bindCalculate(geocode,showStatus) {
+function bindCalculate(geocode,showStatus,inProgress=false) {
     document.body.innerHTML='<input id="start" value="53,-1"><input id="end" value="53.1,-1">';
     Calculate.bind({routingRequest:()=>RR, routeProgress:()=>Progress,
         getIsGeocoding:()=>false,getCurrentRoutingMode:()=> 'auto',getCurrentVehicleType:()=> 'petrol_diesel',
-        getRouteInProgress:()=>false,getIsTrackingActive:()=>false,getTrackingHistory:()=>[],getCurrentLat:()=>null,getCurrentLon:()=>null,
+        getRouteInProgress:()=>inProgress,getIsTrackingActive:()=>false,getTrackingHistory:()=>[],getCurrentLat:()=>null,getCurrentLon:()=>null,
         call:{geocodeLocations:geocode,showStatus,getViaPoints:()=>[],getStops:()=>[],getRouteCostParams:()=>({}),
               isAvoidTollsEnabled:()=>false,getRoutePreferences:()=>({})}});
 }
@@ -170,9 +170,9 @@ test('actual navigation start gates the selected conflicting option before map o
     const mapControls=jest.fn(()=>{throw new Error('Navigation must not start');});
     Lifecycle.bind({routeSelection:()=>RS,getRouteOptions:()=>[good,bad],getSelectedRouteIndex:()=>1,
         mapControls,call:{showStatus}});
-    const confirm=jest.spyOn(global,'confirm').mockReturnValue(false);
+    const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
     Lifecycle.startTurnByTurnNavigation(good);
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Known conflict'));
+    expect(confirm).not.toHaveBeenCalled();
     expect(mapControls).not.toHaveBeenCalled();
 });
 
@@ -212,4 +212,189 @@ test('mandatory automatic replacement fails closed if the new verification modul
     RerouteMap.bind({call:{showStatus},rerouteDecision:()=>{throw new Error('Map must not change');}});
     expect(RerouteMap.updateRouteOnMap({geometry:'legacy'})).toMatchObject({ok:false,reason:'avoidance_not_established'});
     expect(showStatus).toHaveBeenCalledWith(expect.stringContaining('unavailable'),'warning');
+});
+
+// Fresh continuous endpoints isolate mandatory evidence from the separate origin gate.
+test.each(['VIOLATED','UNVERIFIED','UNSUPPORTED',undefined,null,{},'SATISFIED '])(
+    'mandatory assessment %p cannot reach manual confirmation',status=>{
+        const r=assessed(status);r.avoidance_assessment.requirements[0].status=status;
+        r.avoidance_assessment.requires_acceptance=false; // not an override authority
+        const confirm=jest.fn(()=>true);
+        for (const automatic of [false,true]) expect(AI.gate(r,{automatic,confirm})).toBe(false);
+        expect(confirm).not.toHaveBeenCalled();
+    });
+
+test.each([undefined,null,{},[null],[{category:'speed_cameras',enabled:'true',mode:'mandatory'}],
+    [{category:'speed_cameras',enabled:true,mode:'unknown'}]])('malformed normalized requirements %p fail closed',rows=>{
+    const r=assessed();r.avoidance_assessment.requirements=rows;
+    const confirm=jest.fn(()=>true);
+    expect(AI.gate(r,{confirm})).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test.each([0,NaN,Infinity,Date.now()/1000-601,Date.now()/1000+60])('mandatory checked_at %p cannot be accepted',at=>{
+    const r=assessed();r.avoidance_assessment.checked_at=at;
+    const confirm=jest.fn(()=>true);
+    expect(AI.gate(r,{confirm})).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test('mandatory row omitted or downgraded from the original server contract fails closed',()=>{
+    for (const rows of [[],[{category:'speed_cameras',enabled:true,mode:'preference',status:'SATISFIED'}]]) {
+        const r=assessed();
+        r.avoidance_requirements=[{category:'speed_cameras',enabled:true,mode:'mandatory'}];
+        r.avoidance_assessment.requirements=rows;
+        const confirm=jest.fn(()=>true);
+        expect(AI.gate(r,{confirm})).toBe(false);
+        expect(confirm).not.toHaveBeenCalled();
+    }
+});
+
+test('current explicit mandatory category cannot be omitted even with a matching snapshot',()=>{
+    localStorage.setItem('pref_avoidance_requirements',JSON.stringify([
+        {category:'railway_crossings',enabled:true,mode:'mandatory'}]));
+    const r=assessed();
+    const confirm=jest.fn(()=>true);
+    expect(AI.gate(r,{confirm})).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test('mandatory permission requires its original current snapshot, including when settings are now preference',()=>{
+    const r=assessed();
+    const confirm=jest.fn(()=>true);
+    expect(AI.gate(r,{confirm})).toBe(true);
+    localStorage.setItem('pref_avoidance_mode','preference');
+    expect(AI.gate(r,{confirm})).toBe(false);
+    delete r.avoidance_preferences_snapshot;
+    expect(AI.gate(r,{confirm})).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test.each(['null','{}','not json','[null]'])('invalid saved requirement contract %s cannot grant permission',raw=>{
+    localStorage.setItem('pref_avoidance_requirements',raw);
+    const r=assessed();const confirm=jest.fn(()=>true);
+    expect(AI.gate(r,{confirm})).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test('coarse mandatory mode does not promote explicitly normalized preference categories',()=>{
+    localStorage.setItem('pref_avoidance_mode','mandatory');
+    const r=assessed('UNVERIFIED','preference');
+    r.avoidance_assessment.requires_acceptance=false;
+    expect(AI.gate(r)).toBe(true);
+    expect(AI.summary(r)).not.toContain('Preview only');
+});
+
+test('valid mandatory route reaches real bootstrap, unresolved selected alternative never does',()=>{
+    const Lifecycle=require('../app/navigation-lifecycle-orchestration.js');
+    const good=assessed(), bad=assessed('UNVERIFIED');
+    const mapControls=jest.fn(()=>{throw new Error('CONTROL_BOOTSTRAP_REACHED');});
+    let selected=0;
+    Lifecycle.bind({routeSelection:()=>RS,getRouteOptions:()=>[good,bad],getSelectedRouteIndex:()=>selected,
+        mapControls,call:{showStatus:jest.fn()}});
+    const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
+    expect(()=>Lifecycle.startTurnByTurnNavigation(good)).toThrow('CONTROL_BOOTSTRAP_REACHED');
+    expect(mapControls).toHaveBeenCalledTimes(1);
+    selected=1;
+    expect(Lifecycle.startTurnByTurnNavigation(good)).toBe(false);
+    expect(mapControls).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(AI.summary(bad)).toContain('Preview only; navigation cannot start');
+});
+
+test('persisted mandatory route passes real resume handler but cannot restore permission',async()=>{
+    const Offline=require('../modules/navigation/offline-navigation.js');
+    const Resume=require('../app/offline-navigation-orchestration.js');
+    const Lifecycle=require('../app/navigation-lifecycle-orchestration.js');
+    const codec=require('polyline');
+    global.indexedDB=new (require('fake-indexeddb').IDBFactory)();
+    const r=assessed();r.geometry=codec.encode([[53,-1],[53.01,-1]],6);r.geometry_precision=6;
+    await Offline.persistActiveRouteRecord(indexedDB,Offline.buildActiveRoutePersistRecord({
+        polyline:[[53,-1],[53.01,-1]],routeData:r,steps:[],stepIndex:0}));
+    const mapControls=jest.fn();
+    // No preview selection may overwrite the restored route's invalidated assessment.
+    Lifecycle.bind({routeSelection:()=>RS,getRouteOptions:()=>[],getSelectedRouteIndex:()=>0,
+        mapControls,call:{showStatus:jest.fn()}});
+    let result, attempts=0;
+    Resume.bind({offlineNavigation:()=>Offline,routeSelection:()=>RS,
+        polylineCodec:()=>({encodePolyline:codec.encode}),call:{showStatus:jest.fn(),
+            startTurnByTurnNavigation:(...args)=>{attempts++;result=Lifecycle.startTurnByTurnNavigation(...args);}}});
+    const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
+    jest.useFakeTimers();
+    try {
+        await Resume.tryResumeNavigation();
+        const yes=document.getElementById(Offline.RESUME_NAV_YES_ID);
+        expect(yes).not.toBeNull();yes.onclick();
+        expect(attempts).toBe(1);expect(result).toBe(false);
+        expect(mapControls).not.toHaveBeenCalled();expect(confirm).not.toHaveBeenCalled();
+    } finally {
+        jest.clearAllTimers();jest.useRealTimers();
+        await Offline.clearActiveRouteRecord(indexedDB);
+        document.body.innerHTML='';
+    }
+});
+
+test('actual traffic reroute acceptance cannot bypass the real automatic map gate',async()=>{
+    const Traffic=require('../app/traffic-orchestration.js');
+    const TC=require('../modules/navigation/traffic-change.js');
+    const r=assessed('VIOLATED');
+    const bootstrap=jest.fn(()=>{throw new Error('Map must not change');});
+    const notifications=jest.fn();
+    const showStatus=jest.fn();
+    let mapAttempts=0;
+    window.lastCalculatedRoute=assessed();
+    RerouteMap.bind({call:{showStatus},rerouteDecision:bootstrap});
+    Traffic.bind({trafficChange:()=>TC,getCurrentLat:()=>53,getCurrentLon:()=>-1,
+        getRouteInProgress:()=>true,getLastCalculatedRoute:()=>assessed(),
+        getTrackingHistory:()=>[],resolveNavigationDestination:()=> '53.01,-1',
+        buildRouteRequest:()=>({start:'53,-1',end:'53.01,-1'}),
+        updateRouteOnMap:route=>{mapAttempts++;return RerouteMap.updateRouteOnMap(route);},sendNotification:notifications});
+    global.fetch=jest.fn(async()=>({json:async()=>({success:true,routes:[r]})}));
+    const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
+    await Traffic.triggerTrafficBasedReroute('severe',[{lat:53.005,lon:-1}],10);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mapAttempts).toBe(1);
+    expect(showStatus).toHaveBeenCalledWith(expect.stringContaining('navigation cannot start'),'warning');
+    expect(bootstrap).not.toHaveBeenCalled();expect(notifications).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test.each([
+    [{category:'speed_cameras',enabled:true,mode:'mandatory',scope:'leg',status:'SATISFIED'}],
+    [{category:'unknown',enabled:true,mode:'mandatory',status:'SATISFIED'}],
+    [{category:'tolls',enabled:true,mode:'mandatory',status:'SATISFIED'},
+        {category:'tolls',enabled:true,mode:'mandatory',status:'SATISFIED'}],
+])('invalid category/scope/duplicate rows %p cannot grant permission',rows=>{
+    const r=assessed();r.avoidance_assessment.requirements=rows;
+    const confirm=jest.fn(()=>true);
+    expect(AI.gate(r,{confirm})).toBe(false);expect(confirm).not.toHaveBeenCalled();
+});
+
+test('disabled normalized categories do not become mandatory from the coarse selector',()=>{
+    localStorage.setItem('pref_avoidance_mode','mandatory');
+    const r=assessed();r.avoidance_assessment.requirements[0].enabled=false;
+    expect(AI.gate(r)).toBe(true);
+});
+
+test('active recalculation cannot apply an unresolved mandatory result',async()=>{
+    const showStatus=jest.fn();
+    bindCalculate(async()=>({start:'53,-1',end:'53.01,-1'}),showStatus,true);
+    const r=assessed('UNVERIFIED');
+    global.fetch=jest.fn(async()=>({status:200,ok:true,headers:{get:()=> 'application/json'},
+        json:async()=>({success:true,routes:[r]})}));
+    const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
+    await Calculate.calculateRoute();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(showStatus).toHaveBeenCalledWith(expect.stringContaining('navigation cannot start'),'warning');
+    expect(confirm).not.toHaveBeenCalled();
+});
+
+test('preview does not call a stale requirement snapshot verified or offer an override',()=>{
+    const r=assessed();
+    expect(AI.summary(r)).toContain('Verified against available data only');
+    localStorage.setItem('pref_avoidance_requirements',JSON.stringify([
+        {category:'railway_crossings',enabled:true,mode:'mandatory'}]));
+    const notice=AI.summary(r);
+    expect(notice).toContain('Unverified');expect(notice).toContain('Preview only; navigation cannot start');
+    expect(notice).not.toContain('Verified against available data only');
 });

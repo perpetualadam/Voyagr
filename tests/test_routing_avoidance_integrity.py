@@ -405,3 +405,131 @@ def test_multidrop_osrm_does_not_invent_public_non_driving_capability(monkeypatc
     with patch('voyagr.services.routing.multidrop.requests.get') as get:
         assert _osrm_leg({'lat':53.52,'lon':-1.13},{'lat':53.53,'lon':-1.13},costing) is None
         get.assert_not_called()
+
+
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize(
+    "case,status",
+    [
+        ("camera_conflict", "VIOLATED"),
+        ("camera_coverage", "UNVERIFIED"),
+        ("unsupported_tolls", "UNSUPPORTED"),
+        ("relaxed_fallback", "VIOLATED"),
+    ],
+)
+def test_http_mandatory_failure_cannot_reach_browser_confirmation(
+    client, monkeypatch, cached, case, status
+):
+    """Synthetic HTTP -> real JS gate/lifecycle; no routing or private evidence.
+
+    cached=True exercises the common hook with a stale cached payload, not the
+    storage implementation. Existing test_real_route_cache_* covers memory lookup.
+    The relaxed fallback is an already-returned discovery candidate, not a live
+    retry. Its original mandatory contract must survive final assessment.
+    """
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    from voyagr.services import hazards
+
+    node = shutil.which("node")
+    root = Path(__file__).resolve().parents[1]
+    if not node or not (root / "node_modules/jsdom").is_dir():
+        pytest.skip(
+            "Node/jsdom unavailable in Python-only CI; browser matrix runs in Jest"
+        )
+    # Valid synthetic exclusion far from both requested endpoints isolates the
+    # mandatory route-wide failure instead of accidentally testing origin refusal.
+    monkeypatch.setattr(
+        hazards,
+        "CAMERA_AREAS_DATA",
+        {
+            "features": [
+                {
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+                    }
+                }
+            ]
+        },
+    )
+    category = "tolls" if case == "unsupported_tolls" else "speed_cameras"
+    candidate = route(
+        source=(
+            "OSRM (Fallback)"
+            if case in ("unsupported_tolls", "relaxed_fallback")
+            else "Valhalla"
+        )
+    )
+    candidate["avoidance_assessment"] = {
+        "status": "SATISFIED",
+        "automatic_selection_allowed": True,
+        "requires_acceptance": False,
+    }
+    data = dataset(
+        category,
+        items=[] if case == "camera_coverage" else [hazard()],
+        status="UNKNOWN" if case == "camera_coverage" else "AVAILABLE",
+    )
+    app, http = client
+    app.config.update(
+        dataset=data, payload={"success": True, "cached": cached, "routes": [candidate]}
+    )
+    original = {
+        "start": "53.52,-1.13",
+        "end": "53.53,-1.13",
+        "avoid_caz": False,
+        "avoidance_requirements": [
+            {"category": category, "enabled": True, "mode": "mandatory"}
+        ],
+    }
+    body = http.post("/api/route", json=original).get_json()
+    assessment = body["routes"][0]["avoidance_assessment"]
+    assert assessment["origin_integrity"]["navigation_allowed"] is True
+    assert assessment["geometry_valid"] is True
+    assert assessment["status"] == status
+    assert assessment["automatic_selection_allowed"] is False
+    assert body["avoidance_status"] == "NO_COMPLIANT_ROUTE"
+    assert (
+        app.config["payload"]["routes"][0]["avoidance_assessment"]["status"]
+        == "SATISFIED"
+    )
+    # Real normalization, assessment, gate, selection and start. Only browser
+    # services/bootstrap are sentinels; neither safety decision is mocked.
+    script = r"""
+const assert=require('node:assert/strict');
+const {JSDOM}=require('jsdom');
+const dom=new JSDOM('',{url:'https://voyagr.invalid/'});
+global.window=dom.window;global.document=dom.window.document;global.localStorage=dom.window.localStorage;
+Object.defineProperty(global,'navigator',{value:dom.window.navigator,configurable:true});
+Date.now=()=>1800000000000;
+let confirmations=0,bootstraps=0;
+global.confirm=()=>{confirmations++;return true;};
+global.fetch=()=>{throw new Error('No network');};
+const AI=require('./static/js/modules/navigation/avoidance-integrity.js');
+const RS=require('./static/js/modules/navigation/route-selection.js');
+const Lifecycle=require('./static/js/app/navigation-lifecycle-orchestration.js');
+const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+localStorage.setItem('pref_avoidance_requirements',JSON.stringify(input.requirements));
+const body=AI.tag(input.body,AI.begin(localStorage));
+Lifecycle.bind({routeSelection:()=>RS,getRouteOptions:()=>body.routes,getSelectedRouteIndex:()=>0,
+    mapControls:()=>{bootstraps++;throw new Error('Navigation must not start');},call:{showStatus:()=>{}}});
+for(const automatic of [false,true]) assert.equal(AI.gate(body.routes[0],{automatic,confirm:global.confirm}),false);
+assert.equal(Lifecycle.startTurnByTurnNavigation(body),false);
+assert.equal(confirmations,0);assert.equal(bootstraps,0);
+assert.equal(Lifecycle.getRouteInProgress(),false);
+dom.window.close();
+"""
+    completed = subprocess.run(
+        [node, "-e", script],
+        cwd=root,
+        input=json.dumps(
+            {"body": body, "requirements": original["avoidance_requirements"]}
+        ),
+        text=True,
+        capture_output=True,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stderr
