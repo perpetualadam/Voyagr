@@ -623,8 +623,10 @@ function getRouteSavingOrchestrationRuntime() {
     return {
         routeSharing: () => _routeSharing(),
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         call: {
             showStatus,
+            showRestoredRoutePreview: payload => VoyagrRoutePreviewOrchestration.showRestoredRoutePreview(payload),
             switchTab,
             persistActiveProfile,
             convertDistance,

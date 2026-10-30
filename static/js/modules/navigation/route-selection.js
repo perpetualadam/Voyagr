@@ -2456,6 +2456,11 @@
             if (!sel) return routeData;
             var prec = Number.isFinite(sel.geometry_precision) ? sel.geometry_precision : 6;
             return Object.assign({}, routeData, {
+                id: sel.id,
+                destination: sel.destination || routeData.destination,
+                destinationName: sel.destinationName || routeData.destinationName,
+                end_lat: sel.end_lat != null ? sel.end_lat : routeData.end_lat,
+                end_lon: sel.end_lon != null ? sel.end_lon : routeData.end_lon,
                 geometry: sel.geometry || routeData.geometry,
                 geometry_precision: prec,
                 maneuvers: (sel.maneuvers && sel.maneuvers.length > 0)
@@ -2494,6 +2499,11 @@
     function mergeLastCalculatedRouteFromSelection(prev, route) {
         if (!route) return prev || {};
         var p = prev || {};
+        // An inspection context cannot acquire another selection's permission.
+        if (p.navigation_resume_requires_fresh_gps ||
+            (p.avoidance_assessment && p.avoidance_assessment.resume_state)) return p;
+        if (route.navigation_resume_requires_fresh_gps ||
+            (route.avoidance_assessment && route.avoidance_assessment.resume_state)) return route;
         return {
             ...p,
             ...route,
@@ -2507,10 +2517,10 @@
                 ? route.geometry_precision
                 : (p.geometry_precision || 6),
             maneuvers: route.maneuvers || p.maneuvers || [],
-            destination: p.destination || route.destination,
-            destinationName: p.destinationName || route.destinationName,
-            end_lat: p.end_lat != null ? p.end_lat : route.end_lat,
-            end_lon: p.end_lon != null ? p.end_lon : route.end_lon,
+            destination: route.destination || p.destination,
+            destinationName: route.destinationName || p.destinationName,
+            end_lat: route.end_lat != null ? route.end_lat : p.end_lat,
+            end_lon: route.end_lon != null ? route.end_lon : p.end_lon,
         };
     }
 

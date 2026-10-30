@@ -557,17 +557,24 @@ function displayRouteComparison() {
     );
 }
 
+function verifyActiveSelection(route) {
+    try {
+        const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
+        if (!lifecycle || typeof lifecycle.getRouteInProgress !== 'function') throw new Error('Lifecycle unavailable');
+        if (!lifecycle.getRouteInProgress()) return true; // Inspection does not authorize navigation.
+        const integrity = root.VoyagrAvoidanceIntegrity;
+        if (integrity && typeof integrity.gate === 'function' && integrity.gate(route, {
+            storage: localStorage, automatic: true, quiet: true, offline: navigator.onLine === false,
+            showStatus: rt().call.showStatus,
+        }) === true) return true;
+    } catch (_) { /* Broken modules and nonboolean results never authorize mutation. */ }
+    rt().call.showStatus('Route safety verification unavailable or unresolved; current route retained. Recalculate online.', 'warning');
+    return false;
+}
+
 function applySelectRouteFromPlan(apply, index) {
-    if (!apply || !apply.shouldApply) return;
-    const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
-    const integrity = root.VoyagrAvoidanceIntegrity;
-    if (lifecycle && lifecycle.getRouteInProgress() && !integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
-        rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
-        return;
-    }
-    if (lifecycle && lifecycle.getRouteInProgress() && integrity && !integrity.gate(apply.selectedRoute || apply.route, {
-        storage:localStorage,automatic:true,quiet:true,showStatus:rt().call.showStatus,
-    })) return;
+    if (!apply || !apply.shouldApply) return false;
+    if (!verifyActiveSelection(apply.selectedRoute || apply.route)) return false;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
 
@@ -584,6 +591,7 @@ function applySelectRouteFromPlan(apply, index) {
     if (apply.showRoutePreview && apply.preview && apply.preview.shouldPreview) {
         rt().call.showRoutePreview(apply.preview.previewPayload, true);
     }
+    return true;
 }
 
 function collectSelectRouteInput(index) {
@@ -603,7 +611,7 @@ function selectRoute(index) {
     const orch = RS().buildSelectRouteEntryOrchestrationPlan(
         collectSelectRouteInput(index)
     );
-    applySelectRouteFromPlan(orch.apply, index);
+    return applySelectRouteFromPlan(orch.apply, index);
 }
 
 /**
@@ -719,16 +727,8 @@ function showAllRoutes() {
 }
 
 function applyUseRouteFromPlan(apply, index) {
-    if (!apply || !apply.shouldApply) return;
-    const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
-    const integrity = root.VoyagrAvoidanceIntegrity;
-    if (lifecycle && lifecycle.getRouteInProgress() && !integrity && (localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
-        rt().call.showStatus('Avoidance verification unavailable; current route retained.','warning');
-        return;
-    }
-    if (lifecycle && lifecycle.getRouteInProgress() && integrity && !integrity.gate(apply.selectedRoute || apply.route, {
-        storage:localStorage,automatic:true,quiet:true,showStatus:rt().call.showStatus,
-    })) return;
+    if (!apply || !apply.shouldApply) return false;
+    if (!verifyActiveSelection(apply.selectedRoute || apply.route)) return false;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
     if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
@@ -740,6 +740,7 @@ function applyUseRouteFromPlan(apply, index) {
     }
 
     rt().call.showStatus(apply.statusMessage, apply.statusType);
+    return true;
 }
 
 /**
@@ -752,7 +753,7 @@ function useRoute(index) {
     const orch = RS().buildUseRouteEntryOrchestrationPlan(
         collectUseRouteInput(index)
     );
-    applyUseRouteFromPlan(orch.apply, index);
+    return applyUseRouteFromPlan(orch.apply, index);
 }
 function syncLastCalculatedRouteFromSelection(index) {
     if (!getRouteOptions() || !getRouteOptions()[index]) return;

@@ -241,7 +241,7 @@
                     '📏 ' + opts.distanceText + ' ' + opts.distUnit + ' | ⏱️ ' + route.duration_minutes +
                     ' | 💰 ' + opts.currencySymbol + totalCost +
                 '</div>' +
-                '<button onclick="useSavedRoute(' + route.id + ')" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">🚀 Use This Route</button>' +
+                '<button onclick="useSavedRoute(' + route.id + ')" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">View journey</button>' +
             '</div>'
         );
     }
@@ -428,17 +428,21 @@
             startLabel: route.start,
             endLabel: route.end,
             lastCalculatedRoutePatch: {
+                id: route.id,
+                saved_origin_label: route.start,
+                navigation_resume_requires_fresh_gps: true,
                 distance_km: route.distance_km,
                 time: route.duration_minutes,
                 fuel_cost: route.fuel_cost,
                 toll_cost: route.toll_cost,
                 caz_cost: route.caz_cost,
                 geometry: route.geometry,
+                geometry_precision: route.geometry_precision === 5 ? 5 : 6,
                 destination: route.end,
                 destinationName: route.end,
             },
-            successStatusMessage: 'Loaded route: ' + route.name,
-            switchTab: 'navigation',
+            successStatusMessage: 'Saved journey is preview only; recalculate before navigation.',
+            switchTab: 'routePreview',
         };
     }
 

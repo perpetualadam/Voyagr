@@ -78,20 +78,18 @@
     }
 
     function applyUseSavedRouteFromPlan(plan) {
-        if (!plan || !plan.ok) return;
-
-        const startEl = document.getElementById('start');
-        const endEl = document.getElementById('end');
-        if (startEl) startEl.value = plan.startLabel;
-        if (endEl) endEl.value = plan.endLabel;
-        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-        rt().call.showStatus(plan.successStatusMessage, 'success');
-        rt().call.switchTab(plan.switchTab);
+        if (!plan || !plan.ok) return false;
+        if (rt().getRouteInProgress()) {
+            rt().call.showStatus('Stop navigation before inspecting a saved journey. Current route retained.', 'warning');
+            return false;
+        }
+        // Use the same isolated, non-navigable preview as IndexedDB restoration.
+        return rt().call.showRestoredRoutePreview(plan.lastCalculatedRoutePatch);
     }
 
     function useSavedRoute(routeId) {
         const savedRoutes = JSON.parse(localStorage.getItem(RS().SAVED_ROUTES_STORAGE_KEY) || '[]');
-        applyUseSavedRouteFromPlan(
+        return applyUseSavedRouteFromPlan(
             RS().buildUseSavedRouteEntryOrchestrationPlan(routeId, savedRoutes).plan
         );
     }

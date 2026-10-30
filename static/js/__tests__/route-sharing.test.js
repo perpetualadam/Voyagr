@@ -102,6 +102,7 @@ describe('route-sharing module', () => {
         );
         expect(html).toContain('Commute');
         expect(html).toContain('useSavedRoute(1)');
+        expect(html).toContain('View journey');
         expect(RS.computeSavedRouteTotalCost({ fuel_cost: 5, toll_cost: 1, caz_cost: 0.5 })).toBe(6.5);
     });
 
@@ -169,7 +170,8 @@ describe('route-sharing module', () => {
             distance_km: 10, duration_minutes: 20, fuel_cost: 5, toll_cost: 0, caz_cost: 0, geometry: 'abc',
         }]);
         expect(useEntry.plan.ok).toBe(true);
-        expect(useEntry.plan.switchTab).toBe('navigation');
+        expect(useEntry.plan.switchTab).toBe('routePreview');
+        expect(useEntry.plan.lastCalculatedRoutePatch.navigation_resume_requires_fresh_gps).toBe(true);
 
         const deleteEntry = RS.buildDeleteSavedRouteEntryOrchestrationPlan(2, [{ id: 1 }, { id: 2 }]);
         expect(deleteEntry.deletePlan.confirmMessage).toContain('Delete');
