@@ -129,3 +129,9 @@ test('expired or fabricated batch tokens cannot be replaced with the latest gene
     const draw=jest.fn();expect(Compare.applyDisplayAllRoutesStyleLoadScheduleFromPlan({strategy:'immediate'},draw,{map:ctx.map,generation:token.generation+1})).toBe(false);
     expect(draw).not.toHaveBeenCalled();expect(inventory()).toBe(before);
 });
+
+test('queued batch callbacks fail closed if their runtime is unbound before release',()=>{
+    const callbacks=[];ctx.map.isStyleLoaded=()=>false;ctx.map.once=(_event,fn)=>callbacks.push(fn);
+    Compare.displayAllRoutesOnMap();expect(callbacks).toHaveLength(1);const before=inventory();Compare.bind(null);
+    expect(()=>callbacks[0]()).not.toThrow();expect(callbacks[0]()).toBe(false);expect(inventory()).toBe(before);
+});

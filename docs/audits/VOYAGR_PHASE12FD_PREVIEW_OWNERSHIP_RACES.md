@@ -40,20 +40,20 @@ Evidence remains outside Git under `/tmp/voyagr-m3-m4`. Original independent/pri
 | Original independent race suite before edits | 13 passed, **2 failed**, 0 blocked; 15 total |
 | Original two race scenarios after correction | **2 passed**, 0 failed |
 | Entire independent race/cleanup suite after correction | **15 passed**, 0 failed, 0 blocked |
-| New M3/M4 regression suite | **18 passed**, no skips |
+| New M3/M4 regression suite | **19 passed**, no skips |
 | Existing M1/M2 ownership suite | **20 passed**, no skips |
 | Independent cascading/positive matrix, including original three and twelve | **44 passed**, 0 failed, 0 blocked |
 | Independent F2/F3/original-seven/lifecycle/IndexedDB matrix | **183 passed**, 0 failed, 0 blocked |
 | Full lint:tests | Passed |
-| Full JavaScript / coverage floors | **107 suites / 2277 tests passed**, no skips |
+| Full JavaScript / coverage floors | **107 suites / 2278 tests passed**, no skips |
 | Focused Python avoidance/origin/Valhalla safety selection | **174 passed** |
 | Full configured backend CI selection | **1611 passed, 1 skipped, 68 subtests passed** |
 
 The backend skip requires actual Windows handles on disposable CI fixtures. Desktop/Kivy/native/live-service tests outside the configured web selection were not run.
 
-New coverage includes both original failures, reused IDs, layer/source cleanup reentry, invalidation during the first source write and between later writes, three overlapping generations, queued callbacks after reconciliation, failed source/layer removal with stopped startup and successful recovery, valid traffic-on/off previews/navigation, direct release consistency, single-route and post-mount reentry, queued ordering callbacks, and expired/fabricated tokens. No blank map, missing infrastructure or failed bootstrap is counted as a positive navigation control.
+New coverage includes both original failures, reused IDs, layer/source cleanup reentry, invalidation during the first source write and between later writes, three overlapping generations, queued callbacks after reconciliation, failed source/layer removal with stopped startup and successful recovery, valid traffic-on/off previews/navigation, direct release consistency, single-route and post-mount reentry, queued ordering callbacks, and expired/fabricated tokens and a runtime unbound before queued callback release. No blank map, missing infrastructure or failed bootstrap is counted as a positive navigation control.
 
-An intermediate expanded run had two failures: one test reused a shared service spy, and a new queued-ordering test exposed an unforwarded batch token. The service spy was isolated and the token forwarded; all final suites were rerun successfully. No endpoint, avoidance or safety assertion was weakened.
+An intermediate expanded run had two failures: one test reused a shared service spy, and a new queued-ordering test exposed an unforwarded batch token. The service spy was isolated and the token forwarded; A final teardown test also reproduced an unhandled callback when its runtime was unbound; token validation now refuses that state without throwing. All final suites were rerun successfully. No endpoint, avoidance or safety assertion was weakened.
 
 The unchanged four origin/destination endpoint boundary controls still allow 1.999 m and refuse 2.001 m. Mandatory avoidance, strict synchronous verifier decisions, F2/F3, R1–R8, M1/M2, geometry binding and IndexedDB resume safeguards retain their coverage. Routing/provider requests, camera logic and native correlation rules are unchanged.
 

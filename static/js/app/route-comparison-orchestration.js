@@ -132,8 +132,11 @@ function capturePreviewBatch(token) {
 }
 
 function previewBatchCurrent(batch) {
-    return !!batch && previewBatchTokens.has(batch) && batch.map===rt().getMap() &&
-        batch.generation===previewMountGeneration && knownInactiveLifecycle();
+    try {
+        return !!runtime && !!batch && previewBatchTokens.has(batch) &&
+            typeof runtime.getMap==='function' && batch.map===runtime.getMap() &&
+            batch.generation===previewMountGeneration && knownInactiveLifecycle();
+    } catch (_) {return false;}
 }
 
 function resourceOwners(map) {
