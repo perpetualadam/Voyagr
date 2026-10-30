@@ -4,15 +4,19 @@ import base64
 import copy
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import polyline
 import pytest
 
 from voyagr.utils import valhalla_acceptance as a
+from voyagr.utils import review_package_io as io
+from tests import phase12fc_fixture0 as adapter
 from voyagr.utils.origin_replay import offline_guard
 from tests.test_phase12f_origin import app_response, r
 from tests.test_independent_road_oracle import analyse, export, endpoint
@@ -305,3 +309,181 @@ def test_malformed_fixture_does_not_leak_raw_errors():
     ]:
         with pytest.raises(ValueError):
             a.replay(invalid)
+
+
+# Synthetic navigation-gate adapter controls; never recorded fixture-0 evidence.
+
+
+def synthetic_pair(displaced=True):
+    # Public synthetic coordinates, not reconstructed private fixture geometry.
+    request = {
+        "locations": [{"lat": 53, "lon": -1}, {"lat": 53.01, "lon": -1}],
+        "costing": "auto",
+    }
+    response = {
+        "trip": {
+            "status": 0,
+            "units": "kilometers",
+            "summary": {"length": 1, "time": 60},
+            "legs": [
+                {
+                    "shape": polyline.encode(
+                        [(53.000004, -1), (53.01075 if displaced else 53.01, -1)],
+                        precision=6,
+                    ),
+                    "summary": {"length": 1, "time": 60},
+                    "maneuvers": [],
+                }
+            ],
+        }
+    }
+    return request, response
+
+
+def test_synthetic_destination_rejection_exercises_real_http_chain():
+    request, response = synthetic_pair()
+    before = copy.deepcopy((request, response))
+    result = adapter.exercise(request, response, check_browser=False)
+    assert result["http_destination_refused"] is True
+    assert result["browser"] == "NOT_TESTED"
+    assert result["cache_scope"].endswith("NOT_REAL_STORAGE")
+    assert (request, response) == before
+
+
+def test_positive_control_real_gate_allows_synthetic_continuous_endpoints():
+    with offline_guard():
+        route, body = adapter.normalize(*synthetic_pair(False))
+        result = adapter.through_http(body, [route])
+    a = result["routes"][0]["avoidance_assessment"]
+    assert a["origin_integrity"]["navigation_allowed"] is True
+    assert a["automatic_selection_allowed"] is True
+    with pytest.raises(adapter.GateFailure):
+        adapter.assert_rejected(result)
+
+
+def test_ranking_cannot_transfer_eligible_control_permission_to_rejected_option():
+    with offline_guard():
+        bad, body = adapter.normalize(*synthetic_pair())
+        good, _ = adapter.normalize(*synthetic_pair(False))
+        good.update(source="GraphHopper", name="⚡ Optimised")
+        result = adapter.through_http(body, [bad, good])
+    assert result["routes"][0]["source"] == "GraphHopper"
+    bad_assessment = result["routes"][1]["avoidance_assessment"]
+    assert bad_assessment["automatic_selection_allowed"] is False
+    assert (
+        bad_assessment["origin_integrity"]["reason"] == "material_endpoint_relocation"
+    )
+
+
+@pytest.mark.parametrize(
+    "native", [None, {}, "", {"type": "Point", "coordinates": [-1, 53]}]
+)
+def test_malformed_native_fault_injection_does_not_become_verified(native):
+    with offline_guard():
+        route, body = adapter.normalize(*synthetic_pair())
+        route["provider_snapped_waypoints"] = native
+        result = adapter.through_http(body, [route])
+    origin = result["routes"][0]["avoidance_assessment"]["origin_integrity"]
+    assert origin["navigation_allowed"] is False
+    assert origin["reason"] == "malformed_or_zero_length_snapped_waypoints"
+    assert origin["transition_verified"] is False
+
+
+def write_synthetic_pair(root):
+    raw = tuple(json.dumps(value).encode() for value in synthetic_pair())
+    names = ("request.json", "response.json")
+    for name, content in zip(names, raw):
+        (root / name).write_bytes(content)
+    return names, raw, tuple(hashlib.sha256(content).hexdigest() for content in raw)
+
+
+def test_loader_preserves_source_metadata_and_content(tmp_path):
+    names, raw, hashes = write_synthetic_pair(tmp_path)
+    before = {
+        p: io.stamp(p.lstat()) for p in [tmp_path, *(tmp_path / n for n in names)]
+    }
+    assert adapter._load_pair(tmp_path, names, hashes) == synthetic_pair()
+    assert {p: io.stamp(p.lstat()) for p in before} == before
+    # Hash equality above binds the original raw bytes; no writes in the reader.
+    assert all(
+        hashlib.sha256(value).hexdigest() == digest
+        for value, digest in zip(raw, hashes)
+    )
+
+
+@pytest.mark.parametrize("bad_index", [0, 1])
+def test_both_original_hashes_checked_before_either_json_parse(tmp_path, bad_index):
+    names, _, hashes = write_synthetic_pair(tmp_path)
+    expected = list(hashes)
+    expected[bad_index] = "0" * 64
+    with patch(
+        "voyagr.utils.review_package.strict_json",
+        side_effect=AssertionError("parsed before verified"),
+    ) as parse:
+        with pytest.raises(adapter.CaptureHashMismatch):
+            adapter._load_pair(tmp_path, names, expected)
+    parse.assert_not_called()
+
+
+def test_recorded_entrypoint_cannot_accept_synthetic_hashes(tmp_path):
+    names, _, _ = write_synthetic_pair(tmp_path)
+    with pytest.raises(adapter.CaptureHashMismatch):
+        adapter.load_recorded(tmp_path, *names)
+
+
+def test_missing_private_input_is_explicit_and_never_passes(capsys, monkeypatch):
+    monkeypatch.delenv("VOYAGR_PHASE12FC_PRIVATE_DIRECTORY", raising=False)
+    assert adapter.main([]) == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "PRIVATE_CAPTURE_NOT_AVAILABLE"
+    assert report["reviewed"] is report["navigation_authorized"] is False
+    assert report["operational_status"] == "PRODUCTION_NO_GO"
+
+
+def test_invalid_original_hash_has_bounded_private_safe_cli_output(tmp_path, capsys):
+    names, _, _ = write_synthetic_pair(tmp_path)
+    assert (
+        adapter.main(
+            [
+                "--private-directory",
+                str(tmp_path),
+                "--request-file",
+                names[0],
+                "--response-file",
+                names[1],
+            ]
+        )
+        == 2
+    )
+    output = capsys.readouterr().out
+    assert json.loads(output)["status"] == "CAPTURE_HASH_MISMATCH"
+    assert str(tmp_path) not in output and "locations" not in output
+    assert len(output) < 400
+
+
+def test_links_and_repository_locations_are_not_read(tmp_path):
+    names, _, hashes = write_synthetic_pair(tmp_path)
+    if os.name != "nt":
+        link = tmp_path / "link.json"
+        link.symlink_to(tmp_path / names[0])
+        with pytest.raises(ValueError):
+            adapter._load_pair(tmp_path, (link.name, names[1]), hashes)
+    with pytest.raises(ValueError):
+        adapter._load_pair(Path(__file__).parent, names, hashes)
+
+
+def test_unsupported_request_cannot_be_repaired_to_original_endpoints():
+    request, response = synthetic_pair()
+    request["costing"] = "pedestrian"
+    with pytest.raises(ValueError):
+        adapter.normalize(request, response)
+
+
+@pytest.mark.skipif(
+    shutil.which("node") is None
+    or not (adapter.ROOT / "node_modules/jsdom/package.json").is_file(),
+    reason="Node/jsdom unavailable in Python-only environment; browser tests run in frontend CI",
+)
+def test_synthetic_backend_to_browser_bridge_with_installed_node_dependencies():
+    result = adapter.exercise(*synthetic_pair())
+    assert all(value is True for value in result["browser"].values())
