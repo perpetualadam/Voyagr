@@ -13,6 +13,14 @@ global.VoyagrMapTheme = {
 };
 require('../maplibre-helpers.js');
 
+function validRoute() {
+    const now=Date.now()/1000;
+    return {geometry:'encoded',maneuvers:[{type:1,instruction:'Turn left'}],
+        avoidance_assessment:{checked_at:now,geometry_valid:true,requires_acceptance:false,requirements:[],
+            origin_integrity:{checked_at:now,navigation_allowed:true,transition_verified:false,
+                status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'}}};
+}
+
 describe('navigation-lifecycle-orchestration nav start status', () => {
     let NavigationLifecycle;
     let showStatus;
@@ -133,6 +141,8 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
         global.VoyagrServiceWorkerOrchestration = {
             getUpdatePending: () => false,
         };
+        global.VoyagrAvoidanceIntegrity = require('../modules/navigation/avoidance-integrity.js');
+        localStorage.clear();
         NavigationLifecycle = require('../app/navigation-lifecycle-orchestration.js');
         NavigationLifecycle.setRouteInProgress(false);
         window.lastCalculatedRoute = null;
@@ -148,10 +158,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             addPolyline: jest.fn(() => ({ _added: false })),
         });
 
-        NavigationLifecycle.startTurnByTurnNavigation({
-            geometry: 'encoded',
-            maneuvers: [{ type: 1, instruction: 'Turn left' }],
-        });
+        NavigationLifecycle.startTurnByTurnNavigation(validRoute());
 
         expect(showStatus).toHaveBeenCalledWith(
             expect.stringContaining('retry'),
@@ -170,10 +177,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             redrawNavigationRouteLayer,
         });
 
-        NavigationLifecycle.startTurnByTurnNavigation({
-            geometry: 'encoded',
-            maneuvers: [{ type: 1, instruction: 'Turn left' }],
-        });
+        NavigationLifecycle.startTurnByTurnNavigation(validRoute());
 
         expect(showStatus).toHaveBeenCalledWith(
             expect.stringContaining('Turn-by-turn navigation active'),
@@ -193,10 +197,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
             addPolyline: jest.fn(() => ({ _added: true })),
         });
 
-        NavigationLifecycle.startTurnByTurnNavigation({
-            geometry: 'encoded',
-            maneuvers: [{ type: 1, instruction: 'Turn left' }],
-        });
+        NavigationLifecycle.startTurnByTurnNavigation(validRoute());
 
         expect(showStatus).toHaveBeenCalledWith(
             expect.stringContaining('Turn-by-turn navigation active'),
@@ -211,10 +212,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
     test('nav start clears cached lastDistanceToNextTurn from the previous trip', () => {
         bindRuntime();
 
-        NavigationLifecycle.startTurnByTurnNavigation({
-            geometry: 'encoded',
-            maneuvers: [{ type: 1, instruction: 'Turn left' }],
-        });
+        NavigationLifecycle.startTurnByTurnNavigation(validRoute());
 
         expect(clearLastDistanceToNextTurn).toHaveBeenCalled();
     });

@@ -179,7 +179,15 @@ describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
         RerouteMap.setRouteJoinConfirmedForDeviation(false);
     });
 
+    function validAssessment() {
+        const now=Date.now()/1000;
+        return {checked_at:now,geometry_valid:true,requirements:[],requires_acceptance:false,
+            origin_integrity:{checked_at:now,navigation_allowed:true,transition_verified:false,
+                status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'}};
+    }
     function bindUpdateRouteRuntime(overrides) {
+        global.VoyagrAvoidanceIntegrity=require('../modules/navigation/avoidance-integrity.js');
+        localStorage.clear();
         const routeInProgress = overrides.routeInProgress;
         const buildRouteMapUpdateStatePlan = jest.fn((...args) =>
             RD.buildRouteMapUpdateStatePlan(...args)
@@ -276,6 +284,7 @@ describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
         const { buildRouteMapUpdateStatePlan } = bindUpdateRouteRuntime({ routeInProgress: true });
 
         const result = RerouteMap.updateRouteOnMap({
+            avoidance_assessment: validAssessment(),
             geometry: 'encoded',
             distance_km: 10,
             duration_minutes: 20,
@@ -296,6 +305,7 @@ describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
         const { buildRouteMapUpdateStatePlan } = bindUpdateRouteRuntime({ routeInProgress: false });
 
         const result = RerouteMap.updateRouteOnMap({
+            avoidance_assessment: validAssessment(),
             geometry: 'encoded',
             distance_km: 10,
             duration_minutes: 20,

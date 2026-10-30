@@ -537,17 +537,34 @@
 
     function startTurnByTurnNavigation(routeData, navStartOpts) {
         if (navStartOpts === undefined) navStartOpts = null;
-        const mergedRoute = rt().routeSelection().mergeNavigationRouteFromSelected(
-            routeData, rt().getRouteOptions(), rt().getSelectedRouteIndex()
-        );
-        const integrity = root.VoyagrAvoidanceIntegrity;
-        if (integrity && !integrity.gate(mergedRoute, {
-            storage:localStorage, offline:navigator.onLine===false,
-            showStatus:rt().call.showStatus, confirm:message => root.confirm(message),
-        })) return false;
-        if (!integrity && ((mergedRoute && mergedRoute.avoidance_assessment && mergedRoute.avoidance_assessment.origin_integrity_required) || localStorage.getItem('pref_avoidance_mode')==='mandatory' || localStorage.getItem('pref_avoidance_requirements'))) {
-            rt().call.showStatus('Avoidance verification unavailable; navigation not started.', 'warning');
+        const refuse = message => {
+            rt().call.showStatus(message, 'warning');
             return false;
+        };
+        // No persisted assessment establishes a fresh complete request context.
+        // Refuse before selection can replace its geometry, destination or evidence.
+        if ((navStartOpts && navStartOpts.fromPersistedResume) ||
+            (routeData && (routeData.navigation_resume_requires_fresh_gps ||
+                (routeData.avoidance_assessment && routeData.avoidance_assessment.resume_state)))) {
+            return refuse('Saved journey is preview only. Recalculate from your actual location and destination before navigation.');
+        }
+        let mergedRoute;
+        try {
+            const integrity = root.VoyagrAvoidanceIntegrity;
+            if (!integrity || typeof integrity.gate!=='function') {
+                return refuse('Safety verification unavailable; navigation not started. Reload online and recalculate.');
+            }
+            mergedRoute = rt().routeSelection().mergeNavigationRouteFromSelected(
+                routeData, rt().getRouteOptions(), rt().getSelectedRouteIndex()
+            );
+            // The gate contract is synchronous boolean permission, never a truthy
+            // object, promise, legacy metadata flag or confirmation substitute.
+            if (integrity.gate(mergedRoute, {
+                storage:localStorage, offline:navigator.onLine===false,
+                showStatus:rt().call.showStatus,
+            })!==true) return refuse('Route safety is not established; navigation not started. Recalculate with the current requirements.');
+        } catch (_) {
+            return refuse('Safety verification unavailable; navigation not started. Reload online and recalculate.');
         }
         const entry = MC().buildNavStartEntryOrchestrationPlan(mergedRoute, navStartOpts);
         if (!entry.shouldStart) {

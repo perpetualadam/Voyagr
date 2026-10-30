@@ -2445,6 +2445,10 @@
      */
     function mergeNavigationRouteFromSelected(routeData, routeOptions, selectedRouteIndex) {
         if (!routeData || typeof routeData !== 'object') return routeData;
+        // A restored journey is an inspection context, not a carrier for another
+        // preview's geometry/eligibility. A new route needs its own API context.
+        if (routeData.navigation_resume_requires_fresh_gps ||
+            (routeData.avoidance_assessment && routeData.avoidance_assessment.resume_state)) return routeData;
         try {
             if (!routeOptions || routeOptions.length === 0) return routeData;
             var idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1));
@@ -2530,6 +2534,7 @@
             if (base.avoidance_assessment.status==='SATISFIED') base.avoidance_assessment.status='UNVERIFIED';
         }
         base.navigation_resume_requires_fresh_gps=true;
+        base.polyline=saved.polyline.map(function(p) { return [p[0],p[1]]; });
         base.maneuvers = saved.steps || base.maneuvers || [];
         if (!base.geometry || typeof base.geometry !== 'string') {
             base.geometry = encodePolyline(saved.polyline, 6);

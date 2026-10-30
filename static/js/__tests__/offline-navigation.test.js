@@ -21,7 +21,9 @@ describe('offline-navigation module', () => {
 
     test('buildResumeNavigationBannerHtml includes step count and buttons', () => {
         const html = OFF.buildResumeNavigationBannerHtml(12);
-        expect(html).toContain('Resume navigation?');
+        expect(html).toContain('Inspect saved journey?');
+        expect(html).toContain('View journey');
+        expect(html).toContain('Recalculate before navigation');
         expect(html).toContain('12 steps');
         expect(html).toContain('resumeNavYes');
         expect(html).toContain('resumeNavNo');

@@ -63,12 +63,12 @@
     function buildResumeNavigationBannerHtml(stepCount) {
         stepCount = stepCount || 0;
         return (
-            '<div style="font-weight:600;font-size:15px">Resume navigation?</div>' +
-            '<div style="font-size:13px;color:#666">A previous route was found (' + stepCount + ' steps).</div>' +
+            '<div style="font-weight:600;font-size:15px">Inspect saved journey?</div>' +
+            '<div style="font-size:13px;color:#666">A previous route was found (' + stepCount + ' steps). Recalculate before navigation.</div>' +
             '<div style="display:flex;gap:8px">' +
                 '<button id="resumeNavYes" style="flex:1;padding:10px;border:none;border-radius:10px;' +
                     'background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;' +
-                    'font-size:14px;cursor:pointer">Resume</button>' +
+                    'font-size:14px;cursor:pointer">View journey</button>' +
                 '<button id="resumeNavNo" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;' +
                     'background:#fff;color:#333;font-weight:600;font-size:14px;cursor:pointer">Dismiss</button>' +
             '</div>'
