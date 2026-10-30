@@ -210,9 +210,11 @@ function showRestoredRoutePreview(payload) {
     rt().setRouteOptions([payload]);
     rt().setSelectedRouteIndex(0);
     window.lastCalculatedRoute = payload;
+    window.lastRouteApiResponse = null;
     const origin=payload.avoidance_assessment && payload.avoidance_assessment.origin_integrity;
     const start=document.getElementById('start'), end=document.getElementById('end');
-    if (start) start.value=origin && Array.isArray(origin.requested_origin) ? origin.requested_origin.join(',') : 'Saved origin (unverified)';
+    if (start) start.value=typeof payload.saved_origin_label==='string' ? payload.saved_origin_label :
+        origin && Array.isArray(origin.requested_origin) ? origin.requested_origin.join(',') : 'Saved origin (unverified)';
     if (end) end.value=typeof payload.destination==='string' ? payload.destination : 'Saved destination (unverified)';
     showRoutePreview(payload);
     rt().call.showStatus('Saved journey is preview only. Recalculate from your actual location and destination before navigation.', 'warning');
@@ -419,11 +421,8 @@ function applyStartNavigationFromPreviewFromPlan(apply) {
         return;
     }
 
-    if (apply.syncFromSelection) {
-        rt().call.syncLastCalculatedRouteFromSelection(apply.selectedRouteIndex);
-    }
-
-    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return;
+    // Lifecycle builds a pure candidate and verifies it before committing state.
+    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return false;
 
     apply.hideStartNavButtonIds.forEach((id) => {
         const btn = document.getElementById(id);
@@ -444,7 +443,7 @@ function startNavigationFromPreview() {
         input.lastCalculatedRoute,
         input
     );
-    applyStartNavigationFromPreviewFromPlan(orch.apply);
+    return applyStartNavigationFromPreviewFromPlan(orch.apply);
 }
 
 function startNavigation() {
@@ -455,11 +454,7 @@ function startNavigation() {
         return;
     }
 
-    if (plan.syncFromSelection) {
-        rt().call.syncLastCalculatedRouteFromSelection(plan.selectedRouteIndex);
-    }
-
-    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return;
+    if (rt().call.startTurnByTurnNavigation(window.lastCalculatedRoute)===false) return false;
 
     (plan.hideStartNavButtonIds || []).forEach(function (id) {
         const btn = document.getElementById(id);
