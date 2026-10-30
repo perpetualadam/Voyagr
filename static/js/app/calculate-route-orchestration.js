@@ -152,11 +152,15 @@
 
         if (plan.hideRouteProgressBar) hideRouteProgressBar();
         if (plan.updateRouteOnMap) {
-            var mapResult = rt().call.updateRouteOnMap(plan.activeRoute);
-            if (mapResult && mapResult.ok===false) return;
+            // Supply this request's destination before the shared transition;
+            // never patch raw response state over its canonical committed route.
+            var candidate = Object.assign({}, plan.activeRoute, {
+                destination: plan.lastCalculatedRoutePatch.destination,
+                destinationName: plan.lastCalculatedRoutePatch.destinationName,
+            });
+            var mapResult = rt().call.updateRouteOnMap(candidate);
+            if (!mapResult || mapResult.ok!==true) return;
         }
-
-        window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute, plan.lastCalculatedRoutePatch);
 
         if (plan.speakMessage) {
             rt().call.speakMessage(plan.speakMessage, 'high');

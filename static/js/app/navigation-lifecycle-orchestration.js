@@ -7,6 +7,9 @@
 
     var runtime = null;
 
+    var navigationFailure = null;
+    var startEpoch = 0;
+    var navigationStarting = false;
     var routeStarted = false;
     var routeInProgress = false;
     var currentRouteSteps = [];
@@ -62,6 +65,47 @@
         return runtime;
     }
 
+    function getNavigationStarting() { return navigationStarting; }
+    function getNavigationFailure() { return navigationFailure; }
+    function failNavigation(reason) {
+        navigationFailure = reason || 'navigation_initialization_failed';
+        startEpoch++; navigationStarting = false;
+        setRouteInProgress(false); setRouteStarted(false);
+        setCurrentRouteSteps([]); setCurrentStepIndex(0); setNextManeuverDistance(0);
+        resetNavigationArrivalState();
+        const call = runtime && runtime.call;
+        for (const name of ['stopLiveDataRefresh','stopAutoTrafficUpdates','stopRouteTrafficUpdates',
+            'clearInitialETAAnnouncement','clearRerouteFailureRetries','hideTurnInstructionWidget',
+            'hideJourneySummaryBar','updateNavigationFabVisibility','cancelNavigationSpeech','clearPersistedRoute']) {
+            try { if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
+        }
+        try { if (root.VoyagrVoiceAnnouncementsOrchestration) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech(); } catch (_) { /* state already stopped */ }
+        try { if (call && call.showStatus) call.showStatus('Navigation stopped: initialization or map recovery failed. Recover the map and recalculate.', 'error'); } catch (_) { /* unavailable UI */ }
+        return false;
+    }
+
+    function recoverNavigationMap() {
+        if (getRouteInProgress() !== false || navigationStarting || !navigationFailure) return false;
+        try {
+            const map = rt().getMap(), helpers = rt().getMapLibreHelpers();
+            if (!map || !map.isStyleLoaded() || helpers.reconcilePolylineLayers(map) !== true ||
+                    rt().call.clearAllRouteLayerHandles() !== true) return false;
+            const oldLayer = rt().getRouteLayer();
+            if (oldLayer) {
+                oldLayer.remove();
+                if (!helpers.isPolylineLayerRemoved(map,oldLayer)) return false;
+            }
+            rt().setRouteLayer(null);setRoutePolyline(null);setCurrentRouteSteps([]);
+            if (window.lastCalculatedRoute) window.lastCalculatedRoute = Object.assign({},window.lastCalculatedRoute,
+                {navigation_resume_requires_fresh_gps:true});
+            navigationFailure = null;
+            const comparison = root.VoyagrRouteComparisonOrchestration;
+            if (comparison) { comparison.setRouteOptions([]); comparison.setSelectedRouteIndex(0); }
+            rt().call.showStatus('Map recovered. Recalculate from your actual location before starting navigation.', 'warning');
+            return true;
+        } catch (_) { return false; }
+    }
+
     function MC() { return rt().mapControls(); }
 
     function applyNavStartRuntimeFromPlan(apply) {
@@ -94,142 +138,6 @@
 
         if (apply.createEmptyEtaSnapshot) {
             rt().call.resetNavETASnapshot();
-        }
-    }
-
-    function clearPreviewRouteLayersForNavStart() {
-        try {
-            if (typeof rt().call.clearAllRouteLayersFromMap === 'function') {
-                rt().call.clearAllRouteLayersFromMap();
-            }
-            if (typeof rt().call.clearAllRouteLayerHandles === 'function') {
-                rt().call.clearAllRouteLayerHandles();
-            }
-        } catch (e) {
-            console.warn('[Navigation] Failed clearing preview route layers:', e);
-        }
-        if (typeof rt().setRouteLayer === 'function') {
-            const existing = typeof rt().getRouteLayer === 'function' ? rt().getRouteLayer() : null;
-            if (existing && typeof existing.remove === 'function') {
-                try { existing.remove(); } catch (_e) { /* ignore */ }
-            }
-            rt().setRouteLayer(null);
-        }
-    }
-
-    function mountActiveNavRouteLayerFromPolyline(routePolyline, execute) {
-        if (!routePolyline || routePolyline.length < 2) return false;
-        if (!rt().getMap() || typeof rt().getMapLibreHelpers !== 'function') return false;
-
-        const MT = root.VoyagrMapTheme;
-        const mapTheme = MT && typeof MT.readStoredMapTheme === 'function'
-            ? MT.readStoredMapTheme()
-            : ((typeof localStorage !== 'undefined' && localStorage.getItem('mapTheme')) || 'standard');
-        const mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
-            routePolyline: routePolyline,
-            navRouteColor: typeof rt().call.navActiveRouteColor === 'function'
-                ? rt().call.navActiveRouteColor()
-                : undefined,
-            mapTheme: mapTheme,
-        });
-        if (!mount.valid) return false;
-
-        const helpers = rt().getMapLibreHelpers();
-        const layer = helpers.addPolyline(rt().getMap(), mount.polyline, mount.style);
-        if (typeof rt().setRouteLayer === 'function') {
-            rt().setRouteLayer(layer);
-        }
-        if (execute && execute.navRouteMountLogPrefix) {
-            console.log(execute.navRouteMountLogPrefix, routePolyline.length, 'points');
-        }
-        if (execute && execute.bringNavRouteAboveTraffic
-            && typeof rt().call.bringNavRouteAboveTrafficEdges === 'function') {
-            rt().call.bringNavRouteAboveTrafficEdges();
-        }
-        return typeof helpers.isPolylineLayerMountOk === 'function'
-            ? helpers.isPolylineLayerMountOk(layer)
-            : !!(layer && (layer._pending || layer._added !== false));
-    }
-
-    function scheduleNavRouteMountRetry(execute) {
-        if (!execute || execute.routeMountRetryDelayMs == null) return;
-        var delayMs = execute.routeMountRetryDelayMs;
-        var retryReason = execute.routeMountRetryReason || 'nav-start-mount-retry';
-        setTimeout(function () {
-            try {
-                if (!getRouteInProgress()) return;
-                if (typeof rt().call.redrawNavigationRouteLayer === 'function') {
-                    rt().call.redrawNavigationRouteLayer(retryReason);
-                }
-            } catch (e) {
-                console.warn('[Navigation] Route layer mount retry failed:', e);
-            }
-        }, delayMs);
-    }
-
-    function applyNavStartPolylineFromPlan(execute, stateInit) {
-        if (!execute || !execute.shouldInit) return { ok: false };
-
-        try {
-            if (execute.usePersistedPolyline && execute.persistedPolyline) {
-                setRoutePolyline(execute.persistedPolyline);
-                console.log(
-                    execute.polylineDecodeLogPrefix,
-                    getRoutePolyline().length,
-                    execute.persistedPolylineLogSuffix
-                );
-            } else {
-                setRoutePolyline(rt().call.decodePolyline(execute.geometry, execute.navPrecision));
-                console.log(
-                    execute.polylineDecodeLogPrefix,
-                    getRoutePolyline().length,
-                    'points',
-                    '(precision ' + execute.navPrecision + ')'
-                );
-            }
-            console.log(stateInit.maneuversLogPrefix, getCurrentRouteSteps().length, 'steps');
-
-            if (execute.persistActiveRoute) rt().call.persistActiveRoute();
-            if (execute.precacheTiles) rt().call.precacheRouteTiles(getRoutePolyline());
-
-            const activeRoutePolyline = getRoutePolyline();
-            if (!activeRoutePolyline || activeRoutePolyline.length === 0) {
-                console.error(execute.emptyPolylineErrorLog);
-                rt().call.showStatus(execute.invalidGeometryStatusMessage, 'error');
-                return { ok: false };
-            }
-
-            var routeMountFailed = false;
-            // Replace comparison/preview polylines with the single owned nav route layer
-            // that matches the maneuvers / text instructions just loaded into memory.
-            if (execute.clearPreviewRouteLayers) {
-                clearPreviewRouteLayersForNavStart();
-            }
-            if (execute.mountActiveNavRoute) {
-                var routeMounted = mountActiveNavRouteLayerFromPolyline(activeRoutePolyline, execute);
-                if (!routeMounted) {
-                    routeMountFailed = true;
-                    console.warn(execute.routeMountFailedLog || '[Navigation] Active route layer mount failed');
-                    if (execute.routeMountFailedStatusMessage) {
-                        rt().call.showStatus(
-                            execute.routeMountFailedStatusMessage,
-                            execute.routeMountFailedStatusType || 'warning'
-                        );
-                    }
-                    scheduleNavRouteMountRetry(execute);
-                }
-            }
-
-            if (execute.primeVehicleWhenPositionKnown && rt().getCurrentLat() != null && rt().getCurrentLon() != null) {
-                rt().call.primeVehicleMarkerOnRoute(rt().getCurrentLat(), rt().getCurrentLon());
-            } else if (execute.resetSnappedIndexWhenNoPosition) {
-                setLastSnappedRouteIndex(0);
-            }
-            return { ok: true, routeMountFailed: routeMountFailed };
-        } catch (e) {
-            console.error(execute.decodeGeometryErrorLogPrefix, e);
-            rt().call.showStatus(execute.decodeGeometryErrorStatusMessage, 'error');
-            return { ok: false };
         }
     }
 
@@ -320,12 +228,14 @@
         if (!services) return;
         options = options || {};
 
+        const epoch = startEpoch;
         const lifecycle = services.lifecycle || {};
         if (lifecycle.startGpsIfInactive) rt().call.startGPSTracking();
 
         const driverViewSchedule = services.driverViewSchedule;
         if (driverViewSchedule && driverViewSchedule.shouldSchedule) {
             setTimeout(() => {
+                if (!getRouteInProgress() || epoch !== startEpoch) return;
                 const when = driverViewSchedule.applyWhenReady;
                 if (!when.hasMap || !when.hasPosition) return;
                 if (when.zoomAndFollowEnabled && when.mapFollowingActive) {
@@ -390,21 +300,6 @@
             /* ignore */
         }
 
-        const navStartFeedback = services.userFeedback;
-        if (navStartFeedback) {
-            rt().call.sendNotification(
-                navStartFeedback.notificationTitle,
-                navStartFeedback.notificationBody,
-                'success'
-            );
-            if (navStartFeedback.speakMessage) {
-                rt().call.speakMessage(navStartFeedback.speakMessage);
-            }
-            if (!options.routeMountFailed) {
-                rt().call.showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
-            }
-        }
-
         const volumeHintSchedule = rt().deviceEnvironment().buildNavStartVolumeHintSchedulePlan({
             delayMs: services.volumeHintDelayMs,
         });
@@ -412,6 +307,7 @@
             if (volumeHintSchedule.shouldSchedule) {
                 setTimeout(() => {
                     try {
+                        if (!getRouteInProgress() || epoch !== startEpoch) return;
                         rt().call.showVolumeHintForNavigation();
                     } catch (e) {
                         console.warn(volumeHintSchedule.errorLogPrefix, e);
@@ -538,25 +434,34 @@
     function startTurnByTurnNavigation(routeData, navStartOpts) {
         if (navStartOpts === undefined) navStartOpts = null;
         const refuse = message => {
-            rt().call.showStatus(message, 'warning');
+            try { if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus(message, 'warning'); } catch (_) { /* fail closed during partial startup */ }
             return false;
         };
         // No persisted assessment establishes a fresh complete request context.
         // Refuse before selection can replace its geometry, destination or evidence.
-        if ((navStartOpts && navStartOpts.fromPersistedResume) ||
+        if ((navStartOpts && (navStartOpts.fromPersistedResume || navStartOpts.persistedPolyline!==undefined)) ||
             (routeData && (routeData.navigation_resume_requires_fresh_gps ||
                 (routeData.avoidance_assessment && routeData.avoidance_assessment.resume_state)))) {
             return refuse('Saved journey is preview only. Recalculate from your actual location and destination before navigation.');
         }
+        if (navigationFailure) return refuse('Navigation is stopped after an initialization or map failure. Recover the map and recalculate.');
         let mergedRoute;
         try {
             const integrity = root.VoyagrAvoidanceIntegrity;
-            if (!integrity || typeof integrity.gate!=='function') {
+            if (!integrity || typeof integrity.gate!=='function' || typeof integrity.prepareNavigationCandidate!=='function') {
                 return refuse('Safety verification unavailable; navigation not started. Reload online and recalculate.');
             }
             mergedRoute = rt().routeSelection().mergeNavigationRouteFromSelected(
                 routeData, rt().getRouteOptions(), rt().getSelectedRouteIndex()
             );
+            if (getRouteInProgress()) {
+                const updater = root.VoyagrRerouteMapOrchestration;
+                if (!updater || typeof updater.updateRouteOnMap!=='function') return refuse('Route replacement unavailable; current route retained.');
+                const result = updater.updateRouteOnMap(mergedRoute);
+                return !!result && result.ok===true;
+            }
+            mergedRoute = integrity.prepareNavigationCandidate(mergedRoute);
+            if (!mergedRoute) return refuse('Route geometry or instructions are incomplete; recalculate before navigation.');
             // The gate contract is synchronous boolean permission, never a truthy
             // object, promise, legacy metadata flag or confirmation substitute.
             if (integrity.gate(mergedRoute, {
@@ -566,46 +471,115 @@
         } catch (_) {
             return refuse('Safety verification unavailable; navigation not started. Reload online and recalculate.');
         }
-        const entry = MC().buildNavStartEntryOrchestrationPlan(mergedRoute, navStartOpts);
-        if (!entry.shouldStart) {
-            rt().call.showStatus(entry.errorStatusMessage, 'error');
-            return;
-        }
-        routeData = entry.routeData;
-
-        if (entry.mergeLastCalculatedRoute) {
-            window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
-        }
-
-        const stateInit = entry.stateInit;
-        applyNavStartRuntimeFromPlan(MC().buildNavStartRuntimeApplyPlan(stateInit));
-
-        const polylineResult = applyNavStartPolylineFromPlan(
-            MC().buildNavStartPolylineInitExecutePlan(stateInit),
-            stateInit
-        );
-        if (!polylineResult.ok) return;
-
-        applyNavStartWakeLockFromPlan(stateInit, 'wakeLock' in navigator);
-
-        const traffic = rt().call.getTrafficSettingsSnapshot();
-        applyNavStartServicesFromPlan(MC().buildNavStartServicesOrchestrationPlan({
-            stateInit: stateInit,
-            isTrackingActive: rt().getIsTrackingActive(),
-            autoTrafficUpdateEnabled: traffic.autoTrafficUpdateEnabled,
-            routeTrafficEnabled: traffic.routeTrafficEnabled,
-            hasMap: !!rt().getMap(),
-            hasPosition: rt().getCurrentLat() != null && rt().getCurrentLon() != null,
-            zoomAndFollowEnabled: rt().getZoomAndFollowEnabled(),
-            mapFollowingActive: rt().getMapFollowingActive(),
-            driverPerspectiveActive: rt().call.shouldUsePitchedDrivingCamera(),
-            wakeLockApiAvailable: 'wakeLock' in navigator,
-        }), {
-            routeMountFailed: !!polylineResult.routeMountFailed,
-        });
+        if (navigationStarting) return refuse('Navigation initialization is already in progress.');
+        const previous = {last:window.lastCalculatedRoute, polyline:getRoutePolyline(), steps:getCurrentRouteSteps(),
+            step:getCurrentStepIndex(), snap:getLastSnappedRouteIndex(), turn:getLastTurnDetectRouteVertexIndex(),
+            next:getNextManeuverDistance(), started:getRouteStarted(), layer:null};
+        let staged = null, helpers, map, mutated = false, oldRemoved = false, stateInit;
+        const epoch = ++startEpoch;
+        const abortStart = () => {
+            // A cancelled persistence completion owns only its staged resource;
+            // it must never roll an unrelated newer session back to its preview.
+            if (epoch !== startEpoch) {
+                let clean = true;
+                if (staged) {
+                    try { staged.remove(); clean = helpers.isPolylineLayerRemoved(map,staged) === true; }
+                    catch (_) { clean = false; }
+                }
+                if (!clean) failNavigation('inconsistent_map');
+                return refuse('Navigation initialization was cancelled; no new guidance started.');
+            }
+            navigationStarting = false;
+            let clean = true;
+            if (staged) {
+                try { staged.remove(); clean = helpers.isPolylineLayerRemoved(map,staged) === true; }
+                catch (_) { clean = false; }
+            }
+            if (previous.layer && helpers && staged && !helpers.isPolylineLayerMounted(map,previous.layer,previous.polyline)) clean=false;
+            if (mutated) failNavigation('navigation_initialization_failed');
+            if (clean && !oldRemoved && (mutated || staged)) {
+                window.lastCalculatedRoute = previous.last;
+                setRoutePolyline(previous.polyline); setCurrentRouteSteps(previous.steps);
+                setCurrentStepIndex(previous.step); setLastSnappedRouteIndex(previous.snap);
+                setLastTurnDetectRouteVertexIndex(previous.turn); setNextManeuverDistance(previous.next);
+                setRouteStarted(previous.started); setRouteInProgress(false);
+                try { if (runtime && runtime.setRouteLayer) runtime.setRouteLayer(previous.layer); } catch (_) { clean = false; }
+            }
+            if (!clean || oldRemoved) failNavigation('inconsistent_map');
+            return refuse('Navigation start failed; guidance is stopped. Recover the map and recalculate before retrying.');
+        };
+        const completeStart = persisted => {
+            try {
+                if (persisted !== true || epoch !== startEpoch) throw new Error('Persistence or startup cancelled');
+                const integrity = root.VoyagrAvoidanceIntegrity;
+                const selected = rt().routeSelection().mergeNavigationRouteFromSelected(routeData,rt().getRouteOptions(),rt().getSelectedRouteIndex());
+                if (JSON.stringify(integrity.prepareNavigationCandidate(selected)) !== JSON.stringify(mergedRoute) ||
+                    integrity.gate(mergedRoute,{storage:localStorage,offline:navigator.onLine===false,quiet:true}) !== true ||
+                    !helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Startup context changed');
+                mutated = true;
+                window.lastCalculatedRoute = mergedRoute;
+                applyNavStartRuntimeFromPlan(MC().buildNavStartRuntimeApplyPlan(stateInit));
+                setRoutePolyline(mergedRoute.polyline);
+                if (previous.layer) {
+                    previous.layer.remove();
+                    if (!helpers.isPolylineLayerRemoved(map,previous.layer)) throw new Error('Old line cleanup failed');
+                    oldRemoved = true;
+                }
+                rt().setRouteLayer(staged);
+                if (rt().call.clearAllRouteLayerHandles() !== true) throw new Error('Preview cleanup failed');
+                const traffic = rt().call.getTrafficSettingsSnapshot();
+                const services = MC().buildNavStartServicesOrchestrationPlan({stateInit,
+                    isTrackingActive:rt().getIsTrackingActive(),autoTrafficUpdateEnabled:traffic.autoTrafficUpdateEnabled,
+                    routeTrafficEnabled:traffic.routeTrafficEnabled,hasMap:true,
+                    hasPosition:rt().getCurrentLat()!=null && rt().getCurrentLon()!=null,
+                    zoomAndFollowEnabled:rt().getZoomAndFollowEnabled(),mapFollowingActive:rt().getMapFollowingActive(),
+                    driverPerspectiveActive:rt().call.shouldUsePitchedDrivingCamera(),wakeLockApiAvailable:'wakeLock' in navigator});
+                applyNavStartServicesFromPlan(services);
+                if (rt().getRouteLayer() !== staged || !helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map changed during startup');
+                if (!root.VoyagrRerouteMapOrchestration.authoriseCurrentRouteRedraw()) throw new Error('Recovery context unavailable');
+                navigationFailure = null; navigationStarting = false; setRouteStarted(true);
+                applyNavStartWakeLockFromPlan(stateInit,'wakeLock' in navigator);
+                if (services.userFeedback) {
+                    const feedback = services.userFeedback;
+                    rt().call.sendNotification(feedback.notificationTitle,feedback.notificationBody,'success');
+                    if (feedback.speakMessage) rt().call.speakMessage(feedback.speakMessage);
+                    rt().call.showStatus(feedback.statusMessage,feedback.statusType);
+                }
+                return true;
+            } catch (_) { return abortStart(); }
+        };
+        try {
+            const entry = MC().buildNavStartEntryOrchestrationPlan(mergedRoute, navStartOpts);
+            if (!entry.shouldStart) return refuse(entry.errorStatusMessage);
+            stateInit = entry.stateInit;
+            map = rt().getMap(); helpers = rt().getMapLibreHelpers();
+            previous.layer = rt().getRouteLayer();
+            if (!map || !map.isStyleLoaded() || !helpers ||
+                    typeof helpers.isPolylineLayerMounted !== 'function' ||
+                    typeof helpers.isPolylineLayerRemoved !== 'function') throw new Error('Map verification unavailable');
+            const MT = root.VoyagrMapTheme;
+            const mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({routePolyline:mergedRoute.polyline,
+                navRouteColor:rt().call.navActiveRouteColor(),mapTheme:MT && MT.readStoredMapTheme ? MT.readStoredMapTheme() : 'standard'});
+            if (!mount.valid) throw new Error('Invalid mount');
+            if (rt().getMapLibreHelpers().invalidateDeferredPolylineMounts(map) !== true) throw new Error('Deferred map ownership unavailable');
+            staged = helpers.addPolyline(map,mount.polyline,mount.style);
+            if (!helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map mount failed');
+            navigationStarting = true;
+            const persisted = rt().call.persistActiveRoute(mergedRoute);
+            if (persisted && typeof persisted.then === 'function') {
+                // Bounded pending start: flags/guidance/services remain inactive.
+                let timer;
+                const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(false),5000); });
+                return Promise.race([Promise.resolve(persisted).catch(() => false),timeout])
+                    .then(completeStart).finally(() => clearTimeout(timer));
+            }
+            return completeStart(persisted);
+        } catch (_) { return abortStart(); }
     }
 
     function stopTurnByTurnNavigation() {
+        if (navigationStarting) { failNavigation('navigation_start_cancelled'); return false; }
+        startEpoch++;
         const entry = MC().buildNavStopEntryOrchestrationPlan({
             routeInProgress: getRouteInProgress(),
             isTrackingActive: rt().getIsTrackingActive(),
@@ -647,6 +621,10 @@
 
     var api = {
         bind: bind,
+        getNavigationFailure:getNavigationFailure,
+        getNavigationStarting:getNavigationStarting,
+        failNavigation:failNavigation,
+        recoverNavigationMap:recoverNavigationMap,
         startTurnByTurnNavigation: startTurnByTurnNavigation,
         stopTurnByTurnNavigation: stopTurnByTurnNavigation,
         ensureNavWakeLock: ensureNavWakeLock,

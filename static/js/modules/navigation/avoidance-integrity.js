@@ -55,13 +55,24 @@
         }
         return next;
     }
+    function geometryPoints(route) {
+        try {
+            var codec=root.VoyagrPolylineCodec;
+            if (!codec && typeof require==='function') codec=require('./polyline-codec.js');
+            var geometry=route && route.geometry;
+            var precision=route && route.geometry_precision;
+            if (precision!==undefined && precision!==5 && precision!==6) return null;
+            var points=typeof geometry==='string' && codec ? codec.decodePolyline(geometry,precision || 6) : Array.isArray(geometry) ? geometry : [];
+            if (geometry && geometry.type==='LineString') points=geometry.coordinates.map(function(p) {return [p[1],p[0]];});
+            if (points.length<2) return null;
+            if (points.some(function(p) { return !Array.isArray(p) || p.length!==2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) || Math.abs(p[0])>90 || Math.abs(p[1])>180; })) return null;
+            if (points.every(function(p) { return p[0]===points[0][0] && p[1]===points[0][1]; })) return null;
+            return points.map(function(p) { return [p[0],p[1]]; });
+        } catch (_) { return null; }
+    }
     function geometryBinding(route) {
-        var codec=root.VoyagrPolylineCodec;
-        if (!codec && typeof require==='function') codec=require('./polyline-codec.js');
-        var geometry=route && route.geometry;
-        var points=typeof geometry==='string' && codec ? codec.decodePolyline(geometry,route.geometry_precision || 6) : Array.isArray(geometry) ? geometry : [];
-        if (geometry && geometry.type==='LineString') points=geometry.coordinates.map(function(p) {return [p[1],p[0]];});
-        if (points.length<2) return null;
+        var points=geometryPoints(route);
+        if (!points) return null;
         var h=2166136261;
         for (var p of points) {
             if (!Array.isArray(p) || p.length<2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) return null;
@@ -69,6 +80,42 @@
             for (var i=0;i<text.length;i++) h=Math.imul(h^text.charCodeAt(i),16777619)>>>0;
         }
         return h.toString(16).padStart(8,'0');
+    }
+    function boundGeometry(route) {
+        var binding=route && route.avoidance_assessment && route.avoidance_assessment.geometry_binding;
+        var points=geometryPoints(route);
+        if (!points || typeof binding!=='string' || !/^[0-9a-f]{8}$/.test(binding) || binding!==geometryBinding(route)) return null;
+        // Encoded/server geometry is authoritative. A cached decode is only a
+        // consistency check and can never become the navigation geometry.
+        if (route.polyline!==undefined) {
+            var supplied=geometryPoints({geometry:route.polyline});
+            if (!supplied || supplied.length!==points.length || supplied.some(function(p,i) {
+                return Math.round(p[0]*1e6)!==Math.round(points[i][0]*1e6) || Math.round(p[1]*1e6)!==Math.round(points[i][1]*1e6);
+            })) return null;
+        }
+        return points;
+    }
+    function prepareNavigationCandidate(route) {
+        if (!route || route.navigation_resume_requires_fresh_gps ||
+            (route.avoidance_assessment && route.avoidance_assessment.resume_state)) return null;
+        var candidate=JSON.parse(JSON.stringify(route));
+        if (!((typeof candidate.id==='string' && candidate.id.trim()) || (typeof candidate.id==='number' && Number.isFinite(candidate.id)))) return null;
+        var points=boundGeometry(candidate);
+        var assessment=candidate.avoidance_assessment;
+        var age=assessment && Date.now()/1000-assessment.checked_at;
+        if (!assessment || assessment.geometry_valid!==true || !Number.isFinite(age) || age<0 || age>600) return null;
+        var steps=candidate.maneuvers;
+        if (!points || !Array.isArray(steps) || !steps.length || steps.some(function(step) {
+            if (!step || typeof step!=='object' || Array.isArray(step) || typeof step.instruction!=='string' || !step.instruction.trim()) return true;
+            if (step.type!==undefined && (!Number.isInteger(step.type) || step.type<0)) return true;
+            for (var key of ['begin_shape_index','end_shape_index']) {
+                if (step[key]!==undefined && (!Number.isInteger(step[key]) || step[key]<0 || step[key]>=points.length)) return true;
+            }
+            return step.begin_shape_index!==undefined && step.end_shape_index!==undefined && step.end_shape_index<step.begin_shape_index;
+        })) return null;
+        candidate.polyline=points;
+        candidate.geometry_precision=candidate.geometry_precision || 6;
+        return candidate;
     }
     // Validate the server's normalized contract, not the user's coarse toggle list.
     var CATEGORIES = ['speed_cameras','red_light_cameras','other_cameras','traffic_lights',
@@ -122,7 +169,7 @@
         });
         var mandatoryRows = requirements.filter(enabledMandatory);
         var mandatory = mandatoryRows.length>0 || expectedRows.some(enabledMandatory);
-        if (assessment.geometry_binding && assessment.geometry_binding!==geometryBinding(route)) return {allowed:false,acceptance:false,message:'Route geometry changed after assessment; recalculate before navigation.'};
+        if (!boundGeometry(route)) return {allowed:false,acceptance:false,message:'Route geometry binding is missing or inconsistent; recalculate before navigation.'};
         if (assessment.geometry_valid===false) return { allowed:false, acceptance:false, message:'Route geometry is incomplete; calculate a new route.' };
         var age = Date.now()/1000 - assessment.checked_at;
         if (mandatory && (!Number.isFinite(age) || age<0 || age>600 || options.preferencesChanged || mismatch)) {
@@ -182,7 +229,7 @@
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,gate:gate,tag:tag,summary:summary,geometryBinding:geometryBinding,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,gate:gate,tag:tag,summary:summary,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

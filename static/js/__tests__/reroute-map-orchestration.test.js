@@ -119,45 +119,19 @@ describe('reroute-map-orchestration map recovery overlays', () => {
             buildNavOverlayRedrawRetryDelaysMs: () => [100, 200],
         };
 
-        const guardPlan = jest.fn(() => ({ shouldRedraw: true }));
-        const mountPlan = jest.fn(() => ({
-            polyline: [[-0.1, 51.5], [-0.2, 51.6]],
-            style: { color: '#2563EB', weight: 8 },
-        }));
-        const addPolyline = jest.fn(() => ({ remove: jest.fn() }));
-        const bringNavRouteAboveTrafficEdges = jest.fn();
-        let routeLayer = { remove: jest.fn() };
-
-        RerouteMap.bind({
-            getRouteInProgress: () => routeInProgress,
-            getIsTrackingActive: () => false,
-            getMap: () => ({ getBearing: () => 0 }),
-            getCurrentLat: () => 51.5,
-            getCurrentLon: () => -0.1,
-            getCurrentUserMarker: () => currentUserMarker,
-            getRoutePolyline: () => [[51.5, -0.1], [51.6, -0.2]],
-            getLastSnappedRouteIndex: () => 0,
-            getRouteLayer: () => routeLayer,
-            setRouteLayer: (layer) => { routeLayer = layer; },
-            speedGps: () => SG,
-            routeGeometry: () => ({
-                bearing: () => 45,
-                blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
-            }),
-            routeSelection: () => ({
-                buildNavRouteLayerRedrawGuardPlan: guardPlan,
-                buildNavActiveRouteLayerMountPlan: mountPlan,
-                buildNavActiveRoutePolylineStyle: () => ({ color: '#2563EB', weight: 8 }),
-            }),
-            getMapLibreHelpers: () => ({ addPolyline }),
-            call: {
-                resolveGpsRouteSnapForTick: () => null,
-                applyVehicleMarkerFromTickPlan,
-                updateTurnWidgetFromPosition,
-                bringNavRouteAboveTrafficEdges,
-                navActiveRouteColor: () => '#2563EB',
-            },
-        });
+        const {bindTransition,makeRoute}=require('./fixtures/navigation-transition.cjs');
+        const Life=require('../app/navigation-lifecycle-orchestration.js');
+        const Compare=require('../app/route-comparison-orchestration.js');
+        const AI=require('../modules/navigation/avoidance-integrity.js');
+        Life.setRouteInProgress(false);const candidate=makeRoute('recovery');
+        candidate.polyline=AI.prepareNavigationCandidate(candidate).polyline;
+        Compare.setRouteOptions([candidate]);window.lastCalculatedRoute=candidate;
+        Life.setRoutePolyline(candidate.polyline);Life.setCurrentRouteSteps(candidate.maneuvers);Life.setRouteInProgress(true);
+        const context=bindTransition();const addPolyline=context.addPolyline;
+        Object.assign(context.runtime,{getIsTrackingActive:()=>false,getCurrentUserMarker:()=>currentUserMarker,
+            speedGps:()=>SG,routeGeometry:()=>({bearing:()=>45,blendHeadingsCircular:(g,r,b)=>g+(r-g)*b}),
+            call:{...context.runtime.call,resolveGpsRouteSnapForTick:()=>null,applyVehicleMarkerFromTickPlan,updateTurnWidgetFromPosition}});
+        expect(RerouteMap.authoriseCurrentRouteRedraw()).toBe(true);
 
         RerouteMap.redrawNavigationOverlaysAfterMapRecovery('soft style reload');
         expect(addPolyline).toHaveBeenCalledTimes(1);
@@ -179,119 +153,22 @@ describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
         RerouteMap.setRouteJoinConfirmedForDeviation(false);
     });
 
-    function validAssessment() {
-        const now=Date.now()/1000;
-        return {checked_at:now,geometry_valid:true,requirements:[],requires_acceptance:false,
-            origin_integrity:{checked_at:now,navigation_allowed:true,transition_verified:false,
-                status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'}};
-    }
+    const {bindTransition,makeRoute}=require('./fixtures/navigation-transition.cjs');
+    const Life=require('../app/navigation-lifecycle-orchestration.js');
     function bindUpdateRouteRuntime(overrides) {
-        global.VoyagrAvoidanceIntegrity=require('../modules/navigation/avoidance-integrity.js');
-        localStorage.clear();
-        const routeInProgress = overrides.routeInProgress;
-        const buildRouteMapUpdateStatePlan = jest.fn((...args) =>
-            RD.buildRouteMapUpdateStatePlan(...args)
-        );
-        const buildUpdateRouteOnMapExecutePlan = jest.fn((plan) =>
-            RD.buildUpdateRouteOnMapExecutePlan(plan)
-        );
-        const buildInvalidPolylineDecodeApplyPlan = jest.fn(() =>
-            RD.buildInvalidPolylineDecodeApplyPlan()
-        );
-        const buildRouteMapUpdateStateExecutePlan = jest.fn((plan, ctx) =>
-            RD.buildRouteMapUpdateStateExecutePlan(plan, ctx)
-        );
-
-        // Mirrors voyagr-app getRerouteMapOrchestrationRuntime: getRouteInProgress only — no g().
-        const runtime = {
-            getRouteInProgress: () => routeInProgress,
-            getCurrentLat: () => (overrides.hasGps === false ? null : 51.5),
-            getCurrentLon: () => (overrides.hasGps === false ? null : -0.1),
-            getLastCalculatedRoute: () => ({ destination: '51.6,-0.2', source: 'GraphHopper' }),
-            setLastCalculatedRoute: jest.fn(),
-            getRoutePolyline: () => null,
-            setRoutePolyline: jest.fn(),
-            getRouteLayer: () => null,
-            setRouteLayer: jest.fn(),
-            getMap: () => ({}),
-            getMapLibreHelpers: () => ({
-                addPolyline: jest.fn(() => ({ remove: jest.fn() })),
-            }),
-            getCurrentRouteSteps: () => [],
-            setCurrentRouteSteps: jest.fn(),
-            setCurrentStepIndex: jest.fn(),
-            setLastSnappedRouteIndex: jest.fn(),
-            setLastTurnDetectRouteVertexIndex: jest.fn(),
-            getAnnouncedTurnThresholds: () => ({ clear: jest.fn() }),
-            getAnnouncedExitThresholds: () => ({ clear: jest.fn() }),
-            getAnnouncedKeepThresholds: () => ({ clear: jest.fn() }),
-            setLastETAAnnouncementTime: jest.fn(),
-            setLastAnnouncedETA: jest.fn(),
-            setLastDestinationAnnouncementDistance: jest.fn(),
-            setInitialETAMovementRetries: jest.fn(),
-            setVoiceAnnouncedForManeuverIndex: jest.fn(),
-            setVoiceAnnouncedCategory: jest.fn(),
-            rerouteDecision: () => ({
-                buildRouteMapUpdateStatePlan,
-                buildUpdateRouteOnMapExecutePlan,
-                buildInvalidPolylineDecodeApplyPlan,
-                buildRouteMapUpdateStateExecutePlan,
-                buildRouteMapUpdatePostApplyPlan: RD.buildRouteMapUpdatePostApplyPlan,
-            }),
-            routeSelection: () => ({
-                resolvePerRouteGeometryPrecision: () => 5,
-                buildNavActiveRouteLayerMountPlan: () => ({
-                    valid: true,
-                    polyline: [[-0.1, 51.5], [-0.2, 51.6]],
-                    style: { color: '#2563EB', weight: 8 },
-                }),
-            }),
-            voiceAnnouncements: () => ({
-                buildVoiceAnnouncementStateResetExecutePlan: () => ({ shouldReset: false }),
-            }),
-            speedLimitWidget: () => null,
-            call: {
-                convertDistance: (km) => String(km),
-                getDistanceUnit: () => 'km',
-                decodePolyline: () => [[51.5, -0.1], [51.6, -0.2]],
-                navActiveRouteColor: () => '#2563EB',
-                bringNavRouteAboveTrafficEdges: jest.fn(),
-                clearRouteTrafficLayers: jest.fn(),
-                fetchAndDisplayRouteTraffic: jest.fn(),
-                clearAllRouteLayersFromMap: jest.fn(),
-                clearAllRouteLayerHandles: jest.fn(),
-                resetVehicleMarkerDisplayState: jest.fn(),
-                applySpeedLimitFetchResetFromPlan: jest.fn(),
-                primeVehicleMarkerOnRoute: jest.fn(),
-                resetNavigationArrivalState: jest.fn(),
-                resetRoadNameState: jest.fn(),
-                clearRerouteFailureRetries: jest.fn(),
-                updateTurnWidgetFromPosition: jest.fn(),
-                fetchRoadNameThrottled: jest.fn(),
-                updateTripInfo: jest.fn(),
-                clearInitialETAAnnouncement: jest.fn(),
-                setLastLaneVoiceKey: jest.fn(),
-                showStatus: jest.fn(),
-            },
-        };
-
-        expect(runtime.g).toBeUndefined();
-        RerouteMap.bind(runtime);
-        return { buildRouteMapUpdateStatePlan };
+        localStorage.clear();Life.setRouteInProgress(overrides.routeInProgress);
+        const context=bindTransition({gps:overrides.hasGps!==false});
+        const buildRouteMapUpdateStatePlan=jest.fn((...args)=>RD.buildRouteMapUpdateStatePlan(...args));
+        context.runtime.rerouteDecision=()=>({...RD,buildRouteMapUpdateStatePlan});
+        expect(context.runtime.g).toBeUndefined();
+        RerouteMap.bind(context.runtime);
+        return {buildRouteMapUpdateStatePlan};
     }
 
     test('updateRouteOnMap uses getRouteInProgress (no g helper) and seeds join during nav', () => {
         const { buildRouteMapUpdateStatePlan } = bindUpdateRouteRuntime({ routeInProgress: true });
 
-        const result = RerouteMap.updateRouteOnMap({
-            avoidance_assessment: validAssessment(),
-            geometry: 'encoded',
-            distance_km: 10,
-            duration_minutes: 20,
-            source: 'GraphHopper',
-            name: '⚡ Optimised',
-            steps: [],
-        });
+        const result = RerouteMap.updateRouteOnMap(makeRoute('synthetic-gh'));
 
         expect(result).toEqual({ ok: true });
         expect(buildRouteMapUpdateStatePlan).toHaveBeenCalled();
@@ -304,13 +181,7 @@ describe('reroute-map-orchestration updateRouteOnMap runtime accessors', () => {
     test('updateRouteOnMap does not seed join when navigation is inactive', () => {
         const { buildRouteMapUpdateStatePlan } = bindUpdateRouteRuntime({ routeInProgress: false });
 
-        const result = RerouteMap.updateRouteOnMap({
-            avoidance_assessment: validAssessment(),
-            geometry: 'encoded',
-            distance_km: 10,
-            duration_minutes: 20,
-            steps: [],
-        });
+        const result = RerouteMap.updateRouteOnMap(makeRoute('synthetic-idle'));
 
         expect(result).toEqual({ ok: true });
         const opts = buildRouteMapUpdateStatePlan.mock.calls[0][2];

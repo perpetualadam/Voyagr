@@ -7,11 +7,14 @@ const RR=require('../modules/navigation/routing-request.js');
 const RerouteMap=require('../app/reroute-map-orchestration.js');
 
 function assessed(status='SATISFIED',mode='mandatory') {
-    return {geometry:'shape',name:'UK A1',avoidance_assessment:{version:1,status,
+    const route={id:'synthetic',geometry:require('polyline').encode([[53,-1],[53.01,-1]],6),geometry_precision:6,
+        maneuvers:[{type:1,instruction:'Synthetic instruction'}],name:'UK A1',avoidance_assessment:{version:1,status,
         checked_at:Date.now()/1000, origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false}, geometry_valid:true, requires_acceptance:status!=='SATISFIED',
         automatic_selection_allowed:status==='SATISFIED',claim:'checked_available_data_only',
         requirements:[{category:'speed_cameras',enabled:true,mode,status}]},
         avoidance_preferences_snapshot:AI.snapshot(localStorage)};
+    route.avoidance_assessment.geometry_binding=AI.geometryBinding(route);
+    return route;
 }
 
 beforeEach(()=>{localStorage.clear(); AI.invalidate(); global.VoyagrAvoidanceIntegrity=AI;});
@@ -80,6 +83,7 @@ test('GPS reroute choice cannot preserve a conflicting previous route name over 
 });
 
 test('all automatic map replacements refuse unverified mandatory routes before touching runtime/map',()=>{
+    global.VoyagrNavigationLifecycleOrchestration=require('../app/navigation-lifecycle-orchestration.js');
     localStorage.setItem('pref_avoidance_mode','mandatory');
     const showStatus=jest.fn();
     RerouteMap.bind({call:{showStatus},rerouteDecision:()=>{throw new Error('Map must not be updated');}});
@@ -293,7 +297,8 @@ test('valid mandatory route reaches real bootstrap, unresolved selected alternat
     Lifecycle.bind({routeSelection:()=>RS,getRouteOptions:()=>[good,bad],getSelectedRouteIndex:()=>selected,
         mapControls,call:{showStatus:jest.fn()}});
     const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
-    expect(()=>Lifecycle.startTurnByTurnNavigation(good)).toThrow('CONTROL_BOOTSTRAP_REACHED');
+    expect(Lifecycle.startTurnByTurnNavigation(good)).toBe(false);
+    expect(Lifecycle.getRouteInProgress()).toBe(false);
     expect(mapControls).toHaveBeenCalledTimes(1);
     selected=1;
     expect(Lifecycle.startTurnByTurnNavigation(good)).toBe(false);

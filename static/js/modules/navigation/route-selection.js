@@ -2461,11 +2461,10 @@
                 destinationName: sel.destinationName || routeData.destinationName,
                 end_lat: sel.end_lat != null ? sel.end_lat : routeData.end_lat,
                 end_lon: sel.end_lon != null ? sel.end_lon : routeData.end_lon,
-                geometry: sel.geometry || routeData.geometry,
+                geometry: sel.geometry,
+                polyline: sel.polyline,
                 geometry_precision: prec,
-                maneuvers: (sel.maneuvers && sel.maneuvers.length > 0)
-                    ? sel.maneuvers
-                    : (routeData.maneuvers || []),
+                maneuvers: sel.maneuvers,
                 name: sel.name || routeData.name,
                 distance_km: sel.distance_km != null ? sel.distance_km : routeData.distance_km,
                 duration_minutes: sel.duration_minutes != null ? sel.duration_minutes : routeData.duration_minutes,

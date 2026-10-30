@@ -7,13 +7,24 @@
 
     var runtime = null;
     var allRouteLayers = [];
+    var previewMountGeneration = 0;
+    const previewBatchTokens = new WeakSet();
+    const previewHandleTokens = new WeakMap();
+    const previewResourceOwners = new WeakMap();
+    const previewCleanupInProgress = new WeakSet();
     var routeOptions = [];
     var selectedRouteIndex = 0;
 
     function getRouteOptions() { return routeOptions; }
-    function setRouteOptions(val) { routeOptions = val; }
+    function setRouteOptions(val) {
+        if (!allowSelectionWrite()) { allowPreviewMutation(); return false; }
+        routeOptions = val; return true;
+    }
     function getSelectedRouteIndex() { return selectedRouteIndex; }
-    function setSelectedRouteIndex(val) { selectedRouteIndex = val; }
+    function setSelectedRouteIndex(val) {
+        if (!allowSelectionWrite()) { allowPreviewMutation(); return false; }
+        selectedRouteIndex = val; return true;
+    }
 
     function rt() {
         if (!runtime) {
@@ -52,13 +63,16 @@
         return RS().NAV_ACTIVE_ROUTE_COLOR;
     }
 
-function applyBringRoutesToTopFromPlan(plan) {
+function applyBringRoutesToTopFromPlan(plan, batchToken) {
     const map = rt().getMap();
     if (!plan || !plan.shouldExecute || !map) return;
 
+    const batch=batchToken===undefined ? null : capturePreviewBatch(batchToken);
+    const current=()=>batchToken===undefined || previewBatchCurrent(batch);
     const routeSel = RS();
 
     const moveLayersToTop = (retryCount = 0) => {
+        if (!current()) return;
         const presentById = {};
         plan.layerIds.forEach((layerId) => {
             presentById[layerId] = !!map.getLayer(layerId);
@@ -69,6 +83,7 @@ function applyBringRoutesToTopFromPlan(plan) {
 
         try {
             step.layerMoves.forEach((spec) => {
+                if (!current()) return;
                 if (spec.moveLog.found) {
                     map.moveLayer(spec.layerId, plan.beforeId);
                     if (spec.moveLog.movedLogMessage) console.log(spec.moveLog.movedLogMessage);
@@ -77,6 +92,7 @@ function applyBringRoutesToTopFromPlan(plan) {
                 }
             });
 
+            if (!current()) return;
             const outcome = step.outcome;
             if (outcome.action === 'retry') {
                 setTimeout(() => moveLayersToTop(outcome.nextRetryCount), outcome.retryDelayMs);
@@ -98,6 +114,7 @@ function applyBringRoutesToTopFromPlan(plan) {
     if (!schedule.shouldSchedule) return;
 
     setTimeout(() => {
+        if (!current()) return;
         if (schedule.startup.action === 'immediate') {
             moveLayersToTop(0);
         } else if (schedule.startup.action === 'wait_idle') {
@@ -108,59 +125,100 @@ function applyBringRoutesToTopFromPlan(plan) {
         }
     }, schedule.startup.initialDelayMs);
 }
-function clearAllRouteLayersFromMap() {
-    const map = rt().getMap();
-    if (!map) return;
-
-    try {
-        const style = map.getStyle();
-        const plan = RS().buildClearAllRouteLayersFromMapPlan(style);
-        if (!plan.hasArtifacts) return;
-
-        plan.layerIds.forEach((layerId) => {
-            try {
-                if (map.getLayer(layerId)) {
-                    map.removeLayer(layerId);
-                }
-            } catch (e) {
-                console.warn(`${plan.layerErrorLogPrefix}${layerId}:`, e.message);
-            }
-        });
-
-        plan.sourceIds.forEach((sourceId) => {
-            try {
-                if (map.getSource(sourceId)) {
-                    map.removeSource(sourceId);
-                }
-            } catch (e) {
-                console.warn(`${plan.sourceErrorLogPrefix}${sourceId}:`, e.message);
-            }
-        });
-
-        if (plan.successLogMessage) console.log(plan.successLogMessage);
-    } catch (e) {
-        console.error('[Routes] Error clearing route layers:', e);
-    }
+function capturePreviewBatch(token) {
+    if (token !== undefined) return previewBatchTokens.has(token) ? token : null;
+    const batch=Object.freeze({map:rt().getMap(),generation:previewMountGeneration});
+    previewBatchTokens.add(batch);return batch;
 }
 
-/**
- * Clear in-memory route layer handles from a pre-mount plan.
- * @param {Object} plan - from buildDisplayAllRoutesMapPreMountPlan
- */
-function clearRouteLayerHandlesFromPlan(plan) {
-    if (!plan) return;
-    if (plan.clearRouteLayerHandle && rt().getRouteLayer() && typeof rt().getRouteLayer().remove === 'function') {
-        rt().getRouteLayer().remove();
-        rt().setRouteLayer(null);
-    }
-    if (plan.clearAllRouteLayerHandles) {
-        allRouteLayers.forEach((layer) => {
-            if (layer && typeof layer.remove === 'function') {
-                layer.remove();
+function previewBatchCurrent(batch) {
+    try {
+        return !!runtime && !!batch && previewBatchTokens.has(batch) &&
+            typeof runtime.getMap==='function' && batch.map===runtime.getMap() &&
+            batch.generation===previewMountGeneration && knownInactiveLifecycle();
+    } catch (_) {return false;}
+}
+
+function resourceOwners(map) {
+    let owners=previewResourceOwners.get(map);
+    if (!owners) {owners=new Map();previewResourceOwners.set(map,owners);}
+    return owners;
+}
+
+function ownsPreviewResource(handle,kind,id) {
+    const token=previewHandleTokens.get(handle);
+    const owner=resourceOwners(handle._map).get(kind+':'+id);
+    return !!token && !!owner && owner.handle===handle && owner.token===token &&
+        owner.token.generation===handle._generation;
+}
+
+function forgetPreviewHandle(handle) {
+    // Always edit the live list by identity. A renderer callback may have
+    // installed an entirely new list while a removal was running.
+    allRouteLayers=allRouteLayers.filter(layer=>layer!==handle);
+}
+
+function previewResourcesReleased(handle) {
+    return !ownsPreviewResource(handle,'layer',handle.id) && !ownsPreviewResource(handle,'source',handle.sourceId);
+}
+
+function removePreviewResources(handle) {
+    if (previewCleanupInProgress.has(handle)) return false;
+    previewCleanupInProgress.add(handle);
+    try {
+        const map=handle._map;
+        for (const [kind,id] of [['layer',handle.id],['source',handle.sourceId]]) {
+            if (!ownsPreviewResource(handle,kind,id)) continue;
+            const read=kind==='layer' ? ()=>map.getLayer(id) : ()=>map.getSource(id);
+            const remove=kind==='layer' ? ()=>map.removeLayer(id) : ()=>map.removeSource(id);
+            try {
+                const present=read();
+                // Recheck immediately before mutation, not merely before reading
+                // an ID. Reentrant cleanup may have transferred that ID already.
+                if (present && ownsPreviewResource(handle,kind,id)) remove();
+            } catch (_) { /* Actual ownership/resource state is checked below. */ }
+            // A successor owns its own resources. Obsolete cleanup cannot clear
+            // that successor's slot, delete its resource, or declare it orphaned.
+            if (ownsPreviewResource(handle,kind,id)) {
+                try { if (!read() && ownsPreviewResource(handle,kind,id)) resourceOwners(map).delete(kind+':'+id); }
+                catch (_) { /* Retain unresolved ownership. */ }
             }
-        });
-        allRouteLayers = [];
+        }
+        const released=previewResourcesReleased(handle);
+        if (released) {handle._added=false;forgetPreviewHandle(handle);}
+        return released;
+    } finally {previewCleanupInProgress.delete(handle);}
+}
+
+function removeComparisonHandle(handle) {
+    if (previewHandleTokens.has(handle)) return removePreviewResources(handle);
+    handle.remove();
+    return rt().getMapLibreHelpers().isPolylineLayerRemoved(rt().getMap(),handle)===true;
+}
+
+function clearAllRouteLayersFromMap() {
+    // Ownership, not a route-like identifier, grants permission to remove.
+    return clearRouteLayerHandlesFromPlan({clearRouteLayerHandle:true,clearAllRouteLayerHandles:true});
+}
+
+function clearRouteLayerHandlesFromPlan(plan) {
+    if (!allowPreviewMutation()) return false;
+    const generation=++previewMountGeneration;
+    if (!plan) return true;
+    const owned=rt().getRouteLayer();
+    if (plan.clearRouteLayerHandle && owned) {
+        try {
+            owned.remove();
+            if (rt().getMapLibreHelpers().isPolylineLayerRemoved(rt().getMap(),owned) !== true) throw new Error('Resources remain');
+            if (rt().getRouteLayer()===owned) rt().setRouteLayer(null);
+        } catch (_) {
+            try {rt().call.showStatus('Preview map cleanup failed; previous resources retained for recovery.','error');} catch (_) { /* retain ownership */ }
+            return false;
+        }
     }
+    if (generation!==previewMountGeneration) return false;
+    if (plan.clearAllRouteLayerHandles && clearComparisonRouteLayers() !== true) return false;
+    return true;
 }
 
 /**
@@ -170,56 +228,55 @@ function clearRouteLayerHandlesFromPlan(plan) {
  * @returns {boolean}
  */
 function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     opts = opts || {};
     if (!mountPlan || !mountPlan.shouldMount || !map) return false;
 
+    const batch=capturePreviewBatch(opts.batchToken);
+    if (!previewBatchCurrent(batch)) return false;
+    const {layerId,sourceId} = mountPlan;
+    const helpers=rt().getMapLibreHelpers();
+    let handle,cleanupBlocked=false;
     try {
-        const { layerId, sourceId } = mountPlan;
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: mountPlan.geoJsonFeature,
-        });
-
-        const lineWidth = mountPlan.paint.lineWeight != null
-            ? mountPlan.paint.lineWeight
-            : mountPlan.paint.lineWidth;
-
-        map.addLayer({
-            id: layerId,
-            type: 'line',
-            source: sourceId,
-            layout: mountPlan.layerLayout,
-            paint: {
-                'line-color': mountPlan.paint.lineColor,
-                'line-width': rt().getMapLibreHelpers().buildZoomScaledLineWidth(lineWidth),
-                'line-opacity': mountPlan.paint.lineOpacity,
-            },
-        }, mountPlan.beforeId);
-
-        if (mountPlan.registerLayerHandle) {
-            // Append in mount order (selected last) so bringRoutesToTop moves
-            // the chosen preview route last and it stays painted on top.
-            allRouteLayers.push({
-                id: layerId,
-                remove: () => {
-                    if (map.getLayer(layerId)) map.removeLayer(layerId);
-                    if (map.getSource(sourceId)) map.removeSource(sourceId);
-                },
-            });
+        const previous=allRouteLayers.find(layer=>layer && layer._map===map && layer.id===layerId && layer.sourceId===sourceId);
+        if (previous) {
+            if (previous.remove() !== true) {cleanupBlocked=true;throw new Error('Previous preview resources remain');}
+            forgetPreviewHandle(previous);
         }
+        if (!previewBatchCurrent(batch)) throw new Error('Preview batch revoked');
+        // A coincident ID is not authority to remove another owner's resources.
+        if (map.getLayer(layerId) || map.getSource(sourceId)) throw new Error('Map resource ID already owned');
+        if (resourceOwners(map).has('layer:'+layerId) || resourceOwners(map).has('source:'+sourceId)) throw new Error('Unresolved preview owner');
+        handle={id:layerId,sourceId:sourceId,_map:map,_added:false,remove:()=>removePreviewResources(handle)};
+        Object.defineProperty(handle,'_generation',{value:batch.generation,enumerable:true});
+        previewHandleTokens.set(handle,batch);
+        resourceOwners(map).set('layer:'+layerId,{handle,token:batch});
+        resourceOwners(map).set('source:'+sourceId,{handle,token:batch});
+        allRouteLayers.push(handle);
+        const assertOwnership=()=>{
+            if(!previewBatchCurrent(batch) || !allRouteLayers.includes(handle) ||
+                !ownsPreviewResource(handle,'layer',layerId) || !ownsPreviewResource(handle,'source',sourceId))throw new Error('Preview ownership revoked');
+        };
+        assertOwnership();
+        map.addSource(sourceId,{type:'geojson',data:mountPlan.geoJsonFeature});
+        const lineWidth=mountPlan.paint.lineWeight!=null ? mountPlan.paint.lineWeight : mountPlan.paint.lineWidth;
+        assertOwnership();
+        map.addLayer({id:layerId,type:'line',source:sourceId,layout:mountPlan.layerLayout,paint:{
+            'line-color':mountPlan.paint.lineColor,'line-width':helpers.buildZoomScaledLineWidth(lineWidth),
+            'line-opacity':mountPlan.paint.lineOpacity,
+        }},mountPlan.beforeId);
+        assertOwnership();
+        if (!map.getLayer(layerId) || !map.getSource(sourceId)) throw new Error('Preview mount incomplete');
+        handle._added=true;
         return true;
-    } catch (e) {
-        if (mountPlan.errorLogMessage) {
-            console.error(mountPlan.errorLogMessage, e);
-        } else {
-            const prefix = mountPlan.errorLogPrefix || '[Map] Failed to draw line layer ';
-            const suffix = mountPlan.legIndex != null ? mountPlan.legIndex : '';
-            console.warn(`${prefix}${suffix}:`, e);
-        }
+    } catch (_) {
+        const cleaned=handle ? handle.remove() : !cleanupBlocked;
+        if (handle && cleaned)forgetPreviewHandle(handle);
+        if(handle && !cleaned && !allRouteLayers.includes(handle))allRouteLayers.push(handle);
+        // Failed cleanup stays owned so a later start/transition must reconcile it.
+        try { if (!cleaned || previewBatchCurrent(batch)) rt().call.showStatus(cleaned ? 'Preview route could not be displayed; no new route selected.' :
+            'Preview map cleanup failed. Recover the map before starting navigation.',cleaned ? 'warning' : 'error'); } catch (_) { /* status unavailable never drops ownership */ }
         return false;
     }
 }
@@ -229,29 +286,29 @@ function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
  * @param {Object} schedule - from buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan
  * @param {Function} addRouteLayersFn
  */
-function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, addRouteLayersFn) {
-    const map = rt().getMap();
-    if (!schedule || !schedule.shouldApply || schedule.strategy === 'immediate') {
-        addRouteLayersFn();
-        return;
-    }
-
-    if (schedule.waitLogMessage) console.log(schedule.waitLogMessage);
-    map.once('style.load', addRouteLayersFn);
-    setTimeout(() => {
-        if (schedule.runFallbackOnlyIfNoLayers && allRouteLayers.length === 0) {
-            if (schedule.fallbackLogMessage) console.log(schedule.fallbackLogMessage);
-            addRouteLayersFn();
-        }
-    }, schedule.fallbackTimeoutMs);
+function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, addRouteLayersFn, batchToken) {
+    if (!allowPreviewMutation()) return false;
+    const map=rt().getMap(),batch=capturePreviewBatch(batchToken);
+    const mountCurrent=()=>{
+        if (!previewBatchCurrent(batch) || !allowPreviewMutation()) return false;
+        return addRouteLayersFn(batch) !== false;
+    };
+    if (!schedule || !schedule.shouldApply || schedule.strategy==='immediate') return mountCurrent();
+    map.once('style.load',mountCurrent);
+    setTimeout(()=>{
+        if(schedule.runFallbackOnlyIfNoLayers && allRouteLayers.length===0)mountCurrent();
+    },schedule.fallbackTimeoutMs);
 }
 
 /**
  * Apply post-mount side effects after doAddRouteLayers.
  * @param {Object} plan - from buildDoAddRouteLayersPostMountExecutePlan
  */
-function applyDoAddRouteLayersPostMountFromPlan(plan) {
+function applyDoAddRouteLayersPostMountFromPlan(plan, batchToken) {
+    if (!allowPreviewMutation()) return false;
     if (!plan) return;
+    const batch=capturePreviewBatch(batchToken);
+    if (!previewBatchCurrent(batch)) return false;
     const map = rt().getMap();
 
     if (plan.fitBounds) {
@@ -262,20 +319,25 @@ function applyDoAddRouteLayersPostMountFromPlan(plan) {
         );
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.displayAllRouteHazards) {
         rt().call.displayAllRouteHazards();
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.ensureTomTomTrafficLayer) {
         rt().call.addTrafficLayer();
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.bringRoutesToTop) {
-        bringRoutesToTop();
+        bringRoutesToTop(batch);
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.debugInspectRouteLayers) {
         setTimeout(() => {
+            if (!previewBatchCurrent(batch)) return;
             const style = map.getStyle();
             if (style && style.layers) {
                 const routeLayers = style.layers.filter((l) => l.id.startsWith('route-layer-'));
@@ -293,13 +355,15 @@ function applyDoAddRouteLayersPostMountFromPlan(plan) {
  * @param {Object} plan - from buildSingleRouteMapDisplayExecutePlan
  */
 function applySingleRouteMapDisplayFromPlan(plan) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     if (!plan || !plan.shouldExecute) return;
 
     if (plan.clearAllRouteLayers) {
-        clearAllRouteLayersFromMap();
+        if (clearAllRouteLayersFromMap() === false) return false;
     }
 
+    const batch=capturePreviewBatch();
     const polylinePoints = plan.polyline.points || [];
     if (polylinePoints.length > 0) {
         const layer = rt().getMapLibreHelpers().addPolyline(map, polylinePoints, {
@@ -308,25 +372,41 @@ function applySingleRouteMapDisplayFromPlan(plan) {
             opacity: plan.polyline.opacity,
         });
 
+        const helpers=rt().getMapLibreHelpers();
+        if (!previewBatchCurrent(batch) || !helpers.isPolylineLayerMountOk(layer)) {
+            let cleaned=false;
+            try {layer.remove();cleaned=helpers.isPolylineLayerRemoved(map,layer)===true;} catch (_) { /* retain unresolved resources */ }
+            if (!cleaned) {
+                if(!allRouteLayers.includes(layer))allRouteLayers.push(layer);
+                const lifecycle=root.VoyagrNavigationLifecycleOrchestration;
+                if(lifecycle && lifecycle.failNavigation)lifecycle.failNavigation('inconsistent_map');
+            }
+            return false;
+        }
         allRouteLayers.push(layer);
         rt().getMapLibreHelpers().fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.hazards.action === 'show') {
         rt().call.displayHazardMarkers(plan.hazards.list);
     } else {
         rt().call.clearHazardMarkers();
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.ensureTomTomTrafficLayer) {
         rt().call.addTrafficLayer();
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     if (plan.routeTraffic.enabled) {
         rt().setRoutePolyline(plan.routeTraffic.polylinePoints);
+        if (!previewBatchCurrent(batch)) return false;
         rt().call.fetchAndDisplayRouteTraffic();
     }
 
+    if (!previewBatchCurrent(batch)) return false;
     const tl = plan.trafficLights;
     if (tl.polylinePoints.length > 0) {
         const plotRouteTrafficLights =
@@ -344,6 +424,7 @@ function applySingleRouteMapDisplayFromPlan(plan) {
 
         if (tl.action === 'plot' && plotRouteTrafficLights) {
             console.log(plan.plotTrafficLightsLogMessage);
+            if (!previewBatchCurrent(batch)) return false;
             plotRouteTrafficLights(tl.polylinePoints);
         } else if (tl.hasOsmTlsInHazards) {
             console.log(plan.skipDuplicatePlotLogMessage);
@@ -353,6 +434,7 @@ function applySingleRouteMapDisplayFromPlan(plan) {
     }
 
     if (plan.logLine) console.log(plan.logLine);
+    return previewBatchCurrent(batch);
 }
 
 /**
@@ -369,15 +451,17 @@ function collectDisplayAllRoutesOnMapInput() {
 }
 
 function displayAllRoutesOnMap() {
+    if (!allowPreviewMutation()) return false;
     const input = collectDisplayAllRoutesOnMapInput();
     const entry = RS().buildDisplayAllRoutesMapEntryOrchestrationPlan(
         input.routeOptions,
         { isStyleLoaded: input.isStyleLoaded }
     );
-    applyDisplayAllRoutesOnMapFromPlan(entry.apply);
+    return applyDisplayAllRoutesOnMapFromPlan(entry.apply);
 }
 
 function applyDisplayAllRoutesOnMapFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     if (!apply || !apply.shouldApply) {
         if (apply && apply.noRoutesLogMessage) console.warn(apply.noRoutesLogMessage);
@@ -392,24 +476,25 @@ function applyDisplayAllRoutesOnMapFromPlan(apply) {
     console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
 
     const mount = apply.mount;
-    applyDisplayAllRoutesPreMountFromPlan(mount.preMountApply);
+    if (applyDisplayAllRoutesPreMountFromPlan(mount.preMountApply) === false) return false;
 
     if (mount.requireMap && !map) {
         console.error(mount.mapMissingLogMessage);
         return;
     }
 
-    applyDisplayAllRoutesStyleLoadScheduleFromPlan(mount.styleSchedule, () => {
+    return applyDisplayAllRoutesStyleLoadScheduleFromPlan(mount.styleSchedule, batch => {
         if (mount.addLayersLogMessage) console.log(mount.addLayersLogMessage);
-        doAddRouteLayers();
+        return doAddRouteLayers(batch);
     });
 }
 
 function applyDisplayAllRoutesPreMountFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
-    clearRouteLayerHandlesFromPlan(apply);
+    if (clearRouteLayerHandlesFromPlan(apply) === false) return false;
     if (apply.clearMapRouteLayers) {
-        clearAllRouteLayersFromMap();
+        if (clearAllRouteLayersFromMap() === false) return false;
     }
     if (apply.hydratePolylines) {
         RS().hydrateRouteOptionPolylines(getRouteOptions(), rt().call.decodePolyline);
@@ -424,10 +509,11 @@ function applyDisplayAllRoutesPreMountFromPlan(apply) {
  * @param {Object} applyPlan
  * @returns {boolean}
  */
-function applyRouteLayerFromMapLibrePlan(applyPlan) {
+function applyRouteLayerFromMapLibrePlan(applyPlan, batchToken) {
+    if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     return applyMapLibreLineLayerFromMountPlan(
-        RS().buildRouteLayerMapLibreMountExecutePlan(applyPlan)
+        RS().buildRouteLayerMapLibreMountExecutePlan(applyPlan), {batchToken}
     );
 }
 
@@ -435,26 +521,34 @@ function applyRouteLayerFromMapLibrePlan(applyPlan) {
  * Apply a doAddRouteLayers batch execute plan.
  * @param {Object} executePlan - from buildDoAddRouteLayersBatchExecutePlan
  */
-function applyDoAddRouteLayersBatchFromPlan(executePlan) {
-    if (!executePlan) return;
-
-    (executePlan.layerSteps || []).forEach((step) => {
+function applyDoAddRouteLayersBatchFromPlan(executePlan, batchToken) {
+    if (!allowPreviewMutation() || !executePlan) return false;
+    const batch=capturePreviewBatch(batchToken);
+    let complete=true;
+    for (const step of executePlan.layerSteps || []) {
+        if (!previewBatchCurrent(batch)) return false;
         if (step.startLogMessage) console.log(step.startLogMessage);
         if (!step.valid) {
+            complete=false;
             if (step.invalidLogMessage) console.error(step.invalidLogMessage);
-            return;
+            continue;
         }
         if (step.drawLogMessage) console.log(step.drawLogMessage);
-        if (applyRouteLayerFromMapLibrePlan(step.applyPlan) && step.successLogMessage) {
-            console.log(step.successLogMessage);
-        }
-    });
+        const mounted=applyRouteLayerFromMapLibrePlan(step.applyPlan,batch);
+        if (!previewBatchCurrent(batch)) return false;
+        if (!mounted)complete=false;
+        if (mounted && step.successLogMessage) console.log(step.successLogMessage);
+    }
+    return complete;
 }
 
-function applyDoAddRouteLayersFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-    applyDoAddRouteLayersBatchFromPlan(apply.batchExecute);
-    applyDoAddRouteLayersPostMountFromPlan(apply.postMount);
+function applyDoAddRouteLayersFromPlan(apply, batchToken) {
+    if (!allowPreviewMutation() || !apply || !apply.shouldApply) return false;
+    const batch=capturePreviewBatch(batchToken);
+    if (!previewBatchCurrent(batch) || applyDoAddRouteLayersBatchFromPlan(apply.batchExecute,batch)===false) return false;
+    if (!previewBatchCurrent(batch)) return false;
+    applyDoAddRouteLayersPostMountFromPlan(apply.postMount,batch);
+    return previewBatchCurrent(batch);
 }
 
 function collectDoAddRouteLayersInput() {
@@ -473,15 +567,18 @@ function collectDoAddRouteLayersInput() {
     };
 }
 
-function doAddRouteLayers() {
-    applyDoAddRouteLayersFromPlan(
+function doAddRouteLayers(batchToken) {
+    if (!allowPreviewMutation()) return false;
+    const batch=capturePreviewBatch(batchToken);
+    if (!previewBatchCurrent(batch)) return false;
+    return applyDoAddRouteLayersFromPlan(
         RS().buildDoAddRouteLayersEntryOrchestrationPlan(
             collectDoAddRouteLayersInput()
-        ).apply
+        ).apply,batch
     );
 }
 
-function applyBringRoutesToTopEntryFromPlan(apply) {
+function applyBringRoutesToTopEntryFromPlan(apply, batchToken) {
     if (!apply || !apply.shouldApply) return;
     const map = rt().getMap();
     if (apply.entryLogPrefix != null) {
@@ -491,7 +588,7 @@ function applyBringRoutesToTopEntryFromPlan(apply) {
         if (apply.mapMissingLogMessage) console.warn(apply.mapMissingLogMessage);
         return;
     }
-    applyBringRoutesToTopFromPlan(apply.execute);
+    applyBringRoutesToTopFromPlan(apply.execute,batchToken);
 }
 
 function collectBringRoutesToTopInput() {
@@ -511,13 +608,13 @@ function collectBringRoutesToTopInput() {
  * NOTE: Routes are now inserted before symbol layers by default (via beforeId parameter),
  * so this function primarily ensures routes are above traffic/weather layers
  */
-function bringRoutesToTop() {
+function bringRoutesToTop(batchToken) {
     const routeSel = RS();
     const input = collectBringRoutesToTopInput();
     applyBringRoutesToTopEntryFromPlan(
         routeSel.buildBringRoutesToTopEntryApplyPlan(
             routeSel.buildBringRoutesToTopEntryOrchestrationPlan(input)
-        )
+        ),batchToken
     );
 }
 function applyRouteComparisonListDomFromPlan(domPlan) {
@@ -557,24 +654,78 @@ function displayRouteComparison() {
     );
 }
 
-function verifyActiveSelection(route) {
+function allowSelectionWrite() {
+    // Only the verifier-backed synchronous transition may write an active
+    // selection. The capability is read-only and scoped inside that operation.
+    const updater = root.VoyagrRerouteMapOrchestration;
+    if (updater && typeof updater.isCommittingVerifiedTransition === 'function' &&
+            updater.isCommittingVerifiedTransition() === true) return true;
+    return !!runtime && knownInactiveLifecycle();
+}
+
+function knownInactiveLifecycle() {
+    try {
+        const lifecycle=root.VoyagrNavigationLifecycleOrchestration;
+        return !!lifecycle && typeof lifecycle.getRouteInProgress==='function' && lifecycle.getRouteInProgress()===false &&
+            typeof lifecycle.getNavigationStarting==='function' && lifecycle.getNavigationStarting()===false &&
+            typeof lifecycle.getNavigationFailure==='function' && lifecycle.getNavigationFailure()===null;
+    } catch (_) { return false; }
+}
+
+function allowPreviewMutation() {
+    if (runtime && knownInactiveLifecycle()) return true;
+    try { if (runtime && runtime.call && typeof runtime.call.showStatus === 'function') {
+        runtime.call.showStatus('Preview display unavailable during navigation or incomplete startup. Select a verified route instead.', 'warning');
+    } } catch (_) { /* A missing status sink must not enable mutation. */ }
+    return false;
+}
+
+// Only comparison handles are eligible; never remove the owned guidance layer.
+// Used by a verified navigation transaction after its new line is mounted.
+function clearComparisonRouteLayers() {
+    if (!runtime) return false;
+    const generation=++previewMountGeneration;
+    const owned=rt().getRouteLayer();
+    let ok=true;
+    for (const layer of allRouteLayers.slice()) {
+        if (generation!==previewMountGeneration) return false;
+        if (!layer || layer===owned || (owned && layer.id && layer.id===owned.id)) {forgetPreviewHandle(layer);continue;}
+        try {
+            if (removeComparisonHandle(layer)) forgetPreviewHandle(layer);
+            else ok=false;
+        } catch (_) {ok=false;}
+        if (generation!==previewMountGeneration) return false;
+    }
+    return ok;
+}
+
+// null means an inactive preview; active selection must use the single route
+// transition operation rather than any of the preview mutation helpers.
+function replaceActiveSelection(route, index) {
     try {
         const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
         if (!lifecycle || typeof lifecycle.getRouteInProgress !== 'function') throw new Error('Lifecycle unavailable');
-        if (!lifecycle.getRouteInProgress()) return true; // Inspection does not authorize navigation.
-        const integrity = root.VoyagrAvoidanceIntegrity;
-        if (integrity && typeof integrity.gate === 'function' && integrity.gate(route, {
-            storage: localStorage, automatic: true, quiet: true, offline: navigator.onLine === false,
-            showStatus: rt().call.showStatus,
-        }) === true) return true;
+        const activeState=lifecycle.getRouteInProgress();
+        if (activeState===false && knownInactiveLifecycle()) return null;
+        if (activeState!==true) throw new Error('Lifecycle state unknown');
+        const updater = root.VoyagrRerouteMapOrchestration;
+        if (updater && typeof updater.updateRouteOnMap==='function') {
+            const result = updater.updateRouteOnMap(route, {selectionIndex:index});
+            if (result && result.ok===true) {
+                try { displayRouteComparison(); }
+                catch (_) { rt().call.showStatus('Route updated; route list could not refresh.', 'warning'); }
+                return true;
+            }
+        }
     } catch (_) { /* Broken modules and nonboolean results never authorize mutation. */ }
-    rt().call.showStatus('Route safety verification unavailable or unresolved; current route retained. Recalculate online.', 'warning');
+    try { rt().call.showStatus('Route safety verification unavailable or unresolved; current route retained. Recalculate online.', 'warning'); } catch (_) { /* unavailable UI is not permission */ }
     return false;
 }
 
 function applySelectRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return false;
-    if (!verifyActiveSelection(apply.selectedRoute || apply.route)) return false;
+    const active = replaceActiveSelection(apply.selectedRoute || apply.route, index);
+    if (active!==null) return active;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
 
@@ -608,6 +759,7 @@ function collectSelectRouteInput(index) {
  * @param {number} index - Route index to select
  */
 function selectRoute(index) {
+    if (!runtime) return false;
     const orch = RS().buildSelectRouteEntryOrchestrationPlan(
         collectSelectRouteInput(index)
     );
@@ -683,11 +835,12 @@ function collectDisplaySingleRouteRuntime() {
 }
 
 function applyDisplaySingleRouteFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
 
     console.log(apply.entryLogMessage);
-    clearRouteLayerHandlesFromPlan(apply.preClear);
-    applySingleRouteMapDisplayFromPlan(apply.execute);
+    if (clearRouteLayerHandlesFromPlan(apply.preClear) === false) return false;
+    return applySingleRouteMapDisplayFromPlan(apply.execute);
 }
 
 function collectDisplaySingleRouteInput(index) {
@@ -703,23 +856,27 @@ function collectDisplaySingleRouteInput(index) {
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
+    if (!allowPreviewMutation()) return false;
     const orch = RS().buildDisplaySingleRouteEntryOrchestrationPlan(
         collectDisplaySingleRouteInput(index)
     );
-    applyDisplaySingleRouteFromPlan(orch.apply);
+    return applyDisplaySingleRouteFromPlan(orch.apply);
 }
 
 /**
  * Show all routes on the map (called by "Show All Routes" button)
  */
 function applyShowAllRoutesFromPlan(apply) {
+    if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
-    if (apply.displayAllRoutes) displayAllRoutesOnMap();
+    if (apply.displayAllRoutes && displayAllRoutesOnMap() === false) return false;
     rt().call.showStatus(apply.statusMessage, apply.statusType);
+    return true;
 }
 
 function showAllRoutes() {
-    applyShowAllRoutesFromPlan(
+    if (!allowPreviewMutation()) return false;
+    return applyShowAllRoutesFromPlan(
         RS().buildShowAllRoutesEntryOrchestrationPlan(
             (function () { var ro = getRouteOptions(); return ro ? ro.length : 0; })()
         ).apply
@@ -728,7 +885,8 @@ function showAllRoutes() {
 
 function applyUseRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return false;
-    if (!verifyActiveSelection(apply.selectedRoute || apply.route)) return false;
+    const active = replaceActiveSelection(apply.selectedRoute || apply.route, index);
+    if (active!==null) return active;
 
     setSelectedRouteIndex(apply.selectedRouteIndex);
     if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
@@ -750,12 +908,14 @@ function applyUseRouteFromPlan(apply, index) {
  * @returns {*} Return value description
  */
 function useRoute(index) {
+    if (!runtime) return false;
     const orch = RS().buildUseRouteEntryOrchestrationPlan(
         collectUseRouteInput(index)
     );
     return applyUseRouteFromPlan(orch.apply, index);
 }
 function syncLastCalculatedRouteFromSelection(index) {
+    if (!allowPreviewMutation()) return false;
     if (!getRouteOptions() || !getRouteOptions()[index]) return;
     window.lastCalculatedRoute = RS().mergeLastCalculatedRouteFromSelection(
         window.lastCalculatedRoute,
@@ -775,6 +935,7 @@ function syncLastCalculatedRouteFromSelection(index) {
         routeColors: routeColors,
         navActiveRouteColor: navActiveRouteColor,
         getAllRouteLayers: getAllRouteLayers,
+        clearComparisonRouteLayers: clearComparisonRouteLayers,
         applyBringRoutesToTopFromPlan: applyBringRoutesToTopFromPlan,
         clearAllRouteLayersFromMap: clearAllRouteLayersFromMap,
         clearRouteLayerHandlesFromPlan: clearRouteLayerHandlesFromPlan,
