@@ -8,7 +8,7 @@ const codec=require('polyline');
 function fresh(destination='SYNTHETIC_DESTINATION',end=[53.01,-1]) {
     const now=Date.now()/1000;
     const route={id:'synthetic-'+destination,destination,geometry:codec.encode([[53,-1],end],6),
-        geometry_precision:6,maneuvers:[],avoidance_preferences_snapshot:AI.snapshot(localStorage),
+        geometry_precision:6,maneuvers:[{type:1,instruction:'Synthetic instruction'}],avoidance_preferences_snapshot:AI.snapshot(localStorage),
         avoidance_assessment:{checked_at:now,status:'SATISFIED',geometry_valid:true,
             automatic_selection_allowed:true,requires_acceptance:false,origin_integrity_required:true,
             requirements:[{category:'tolls',enabled:true,mode:'mandatory',status:'SATISFIED'}],
@@ -69,9 +69,10 @@ test('restored payload cannot drop resume options and borrow a fresh preview ass
 test('fresh-looking payload cannot bypass the explicit resume entry policy',()=>{
     const route=fresh();bind([route]);refused(route,{fromPersistedResume:true});
 });
-test('explicitly starting a new independently valid selection still reaches real bootstrap',()=>{
+test('independently valid selection reaches bootstrap; failed bootstrap leaves guidance inactive',()=>{
     const old=reconstruct(),valid=fresh('NEW');bind([valid]);
-    expect(()=>Life.startTurnByTurnNavigation(valid)).toThrow('REVIEW_BOOTSTRAP_REACHED');
+    expect(Life.startTurnByTurnNavigation(valid)).toBe(false);
+    expect(Life.getRouteInProgress()).toBe(false);
     expect(bootstrap).toHaveBeenCalledTimes(1);
     expect(old.avoidance_assessment.checked_at).toBe(0);
 });

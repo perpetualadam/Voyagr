@@ -5,8 +5,8 @@ const codec = require('polyline');
 const {IDBFactory} = require('fake-indexeddb');
 function syntheticRoute(allowed) {
     const now = Date.now() / 1000;
-    return {id: 1, source: 'Valhalla', geometry: codec.encode([[53, -1], [53.01075, -1]], 6),
-        geometry_precision: 6, maneuvers: [], avoidance_assessment: {
+    const r={id: 1, source: 'Valhalla', geometry: codec.encode([[53, -1], [53.01075, -1]], 6),
+        geometry_precision: 6, maneuvers: [{type:1,instruction:'Synthetic instruction'}], avoidance_assessment: {
             geometry_valid: true, checked_at: now, requirements: [],
             automatic_selection_allowed: allowed, requires_acceptance: !allowed,
             origin_integrity_required: true,
@@ -14,6 +14,7 @@ function syntheticRoute(allowed) {
                 status: allowed ? 'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE' : 'UNVERIFIED',
                 reason: allowed ? 'no_material_relocation' : 'material_endpoint_relocation',
                 transition_verified: false}}};
+    r.avoidance_assessment.geometry_binding=AI.geometryBinding(r);return r;
 }
 beforeEach(() => {
     window.VoyagrAvoidanceIntegrity = AI;
@@ -32,13 +33,14 @@ test('positive metadata control proves browser gate is not unconditionally refus
     // Synthetic metadata control only, not endpoint validation or recorded evidence.
     expect(AI.gate(syntheticRoute(true), {storage: localStorage})).toBe(true);
 });
-test('positive metadata control reaches real navigation bootstrap after the gate', () => {
+test('positive metadata reaches bootstrap; an initialization exception safely refuses', () => {
     const Lifecycle = require('../app/navigation-lifecycle-orchestration.js');
     const RS = require('../modules/navigation/route-selection.js');
     const route = syntheticRoute(true);
     const bootstrap = jest.fn(() => { throw new Error('CONTROL_BOOTSTRAP_REACHED'); });
     Lifecycle.bind({routeSelection: () => RS, getRouteOptions: () => [route],
         getSelectedRouteIndex: () => 0, mapControls: bootstrap, call: {showStatus: jest.fn()}});
-    expect(() => Lifecycle.startTurnByTurnNavigation(route)).toThrow('CONTROL_BOOTSTRAP_REACHED');
+    expect(Lifecycle.startTurnByTurnNavigation(route)).toBe(false);
+    expect(Lifecycle.getRouteInProgress()).toBe(false);
     expect(bootstrap).toHaveBeenCalledTimes(1);
 });

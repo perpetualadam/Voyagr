@@ -6,6 +6,8 @@
     'use strict';
 
     var runtime = null;
+    var authorisedCurrentRoute = null;
+    var committingVerifiedTransition = false;
     var win = root;
 
     var routeJoinConfirmedForDeviation = false;
@@ -122,7 +124,6 @@
         setLastRerouteTime(dev.lastRerouteTime);
         setLastRerouteAttemptTime(dev.lastRerouteAttemptTime);
         setRerouteInProgress(dev.rerouteInProgress);
-        if (dev.clearFailureRetries) rt().call.clearRerouteFailureRetries();
     }
 
     function applyVoiceAnnouncementStateResetFromPlan(execute) {
@@ -155,19 +156,9 @@
         );
     }
 
-    function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
-        var RD = rt().rerouteDecision();
-        var execute = RD.buildRouteMapUpdateStateExecutePlan(plan, {
-            currentLat: rt().getCurrentLat(),
-            currentLon: rt().getCurrentLon(),
-            newRoute: newRoute,
-        });
-
-        if (execute.maneuvers) {
-            rt().setCurrentRouteSteps(execute.maneuvers.steps);
-            if (execute.maneuvers.logMessage) console.log(execute.maneuvers.logMessage);
-        }
-
+    // Private post-commit effects. Protected route state is committed together
+    // below; no caller can apply a partial state plan as a public mutation API.
+    function applyRouteMapUpdateEffects(execute) {
         if (execute.vehicleMarkerReset) {
             rt().call.resetVehicleMarkerDisplayState();
         }
@@ -193,10 +184,6 @@
         var progress = execute.progress;
         if (progress.action === 'primeVehicleMarker') {
             rt().call.primeVehicleMarkerOnRoute(rt().getCurrentLat(), rt().getCurrentLon());
-        } else if (progress.action === 'resetProgress' && progress.patch) {
-            rt().setCurrentStepIndex(progress.patch.currentStepIndex);
-            rt().setLastSnappedRouteIndex(progress.patch.lastSnappedRouteIndex);
-            rt().setLastTurnDetectRouteVertexIndex(progress.patch.lastTurnDetectRouteVertexIndex);
         }
 
         if (execute.roadNameReset) {
@@ -204,11 +191,6 @@
         }
         if (execute.navigationArrivalReset) {
             rt().call.resetNavigationArrivalState();
-        }
-
-        var dev = execute.deviation;
-        if (dev) {
-            applyDeviationRerouteState(dev);
         }
 
         var post = execute.post;
@@ -226,117 +208,198 @@
                 execute.tripInfo.toll_cost
             );
         }
-        if (post.patchLastCalculatedRoute) {
-            rt().setLastCalculatedRoute(execute.lastCalculatedRoutePatch);
-        }
         if (post.completeLog) console.log(post.completeLog);
     }
 
-    function updateRouteOnMap(newRoute) {
+    function authoriseCurrentRouteRedraw() {
+        try {
+            const integrity = root.VoyagrAvoidanceIntegrity;
+            const candidate = integrity.prepareNavigationCandidate(rt().getLastCalculatedRoute());
+            if (!candidate || integrity.gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true}) !== true ||
+                    JSON.stringify(candidate.polyline) !== JSON.stringify(rt().getRoutePolyline()) ||
+                    JSON.stringify(candidate.maneuvers) !== JSON.stringify(rt().getCurrentRouteSteps())) return false;
+            authorisedCurrentRoute = JSON.parse(JSON.stringify(candidate));
+            return true;
+        } catch (_) { return false; }
+    }
+
+    function mounted(layer, points) {
+        try { return rt().getMapLibreHelpers().isPolylineLayerMounted(rt().getMap(), layer, points) === true; }
+        catch (_) { return false; }
+    }
+    function removeOwnedLayer(layer) {
+        if (!layer) return true;
+        try { layer.remove(); }
+        catch (_) { /* Verify after the attempt, including swallowed renderer errors. */ }
+        try { return rt().getMapLibreHelpers().isPolylineLayerRemoved(rt().getMap(), layer) === true; }
+        catch (_) { return false; }
+    }
+    function inconsistentMap() {
+        const lifecycle = root.VoyagrNavigationLifecycleOrchestration;
+        if (lifecycle && typeof lifecycle.failNavigation === 'function') {
+            lifecycle.failNavigation('inconsistent_map');
+        }
+        setRerouteInProgress(false);
+        try { rt().call.showStatus('Navigation stopped: map resources are inconsistent. Recover the map and recalculate before starting again.', 'error'); } catch (_) { /* guidance already stopped */ }
+        return {ok:false, scheduleRetry:false, reason:'inconsistent_map'};
+    }
+    function restoreTransition(pairs, previous) {
+        committingVerifiedTransition = true;
+        try {
+            pairs.forEach(function(pair) {
+                try { rt()['set'+pair[0]](previous[pair[0]]); } catch (_) { /* inspect state below */ }
+            });
+            return pairs.every(function(pair) { return rt()['get'+pair[0]]() === previous[pair[0]]; });
+        } catch (_) { return false; }
+        finally { committingVerifiedTransition = false; }
+    }
+
+    function updateRouteOnMap(newRoute, options) {
+        options = options || {};
+        var life = root.VoyagrNavigationLifecycleOrchestration;
+        try {
+            if (!life || typeof life.failNavigation!=='function' || typeof life.getNavigationFailure!=='function' ||
+                    typeof life.getRouteInProgress!=='function' || typeof life.getRouteInProgress()!=='boolean') throw new Error('Lifecycle unavailable');
+            if (life.getNavigationFailure()) throw new Error('Recovery required');
+        } catch (_) {
+            try { rt().call.showStatus('Navigation state unavailable or recovery required; route not replaced.', 'warning'); } catch (_) { /* unbound runtime */ }
+            return {ok:false,reason:'navigation_recovery_required',scheduleRetry:false};
+        }
         var verified = false;
+        var candidate;
         try {
             var integrity = root.VoyagrAvoidanceIntegrity;
-            verified = !!integrity && typeof integrity.gate==='function' && integrity.gate(newRoute, {
+            candidate = newRoute && JSON.parse(JSON.stringify(newRoute));
+            verified = !!candidate && !!integrity && typeof integrity.gate==='function' && integrity.gate(candidate, {
                 storage:localStorage,automatic:true,quiet:true,offline:navigator.onLine===false,showStatus:rt().call.showStatus,
             })===true;
+            candidate = verified && typeof integrity.prepareNavigationCandidate==='function'
+                ? integrity.prepareNavigationCandidate(candidate) : null;
+            verified = !!candidate;
         } catch (_) { /* Missing/broken verifier never authorizes replacement. */ }
         if (!verified) {
             rt().call.showStatus('Safety verification unavailable or route safety unresolved; current route retained.','warning');
             setRerouteInProgress(false);
             return {ok:false,scheduleRetry:false,reason:'avoidance_not_established'};
         }
-        var RD = rt().rerouteDecision();
-        var hasCurrentGps = rt().getCurrentLat() != null && rt().getCurrentLon() != null;
-        // During active navigation, automatic/traffic/in-nav recalcs start from GPS.
-        // Seed join so GraphHopper Optimised hard-block snaps cannot leave monitoring
-        // stuck in awaiting-join after a successful map update.
-        var seedRouteJoinConfirmed = !!(rt().getRouteInProgress() && hasCurrentGps);
-        var plan = RD.buildRouteMapUpdateStatePlan(newRoute, rt().getLastCalculatedRoute(), {
-            now: Date.now(),
-            hasCurrentGps: hasCurrentGps,
-            seedRouteJoinConfirmed: seedRouteJoinConfirmed,
-            convertDistance: rt().call.convertDistance,
-            distUnit: rt().call.getDistanceUnit(),
-            polylineDecodePrecision: rt().routeSelection().resolvePerRouteGeometryPrecision(newRoute),
-        });
-        var execute = RD.buildUpdateRouteOnMapExecutePlan(plan);
-
-        if (execute.resetVoiceAnnouncementState) {
-            resetVoiceAnnouncementStateForNewRoute();
-        }
-
-        // Decode first. Clearing before a failed/invisible decode was leaving turn text
-        // on the original route while the map line vanished.
-        var routePolyline = rt().call.decodePolyline(newRoute.geometry, execute.polylineDecodePrecision);
-        var minPoints = execute.minPolylinePoints != null ? execute.minPolylinePoints : 2;
-        if (execute.abortIfDecodeInvalid && (!routePolyline || routePolyline.length < minPoints)) {
-            console.warn(
-                (execute.invalidDecodeLogPrefix || '[Reroute] Invalid polyline (') +
-                (routePolyline ? routePolyline.length : 0) +
-                ' points, precision ' + execute.polylineDecodePrecision + ')'
-            );
-            if (execute.invalidDecodeStatusMessage && typeof rt().call.showStatus === 'function') {
-                rt().call.showStatus(execute.invalidDecodeStatusMessage, 'warning');
-            }
-            var abortApply = RD.buildInvalidPolylineDecodeApplyPlan();
-            if (abortApply.resetRerouteInProgress) {
-                setRerouteInProgress(false);
-            }
-            if (abortApply.logMessage) {
-                console.log(abortApply.logMessage);
-            }
-            return { ok: false, reason: abortApply.reason || 'invalid-decode', scheduleRetry: !!abortApply.scheduleRetry };
-        }
-
-        rt().setRoutePolyline(routePolyline);
-        console.log(execute.polylineLogPrefix + ' ' + routePolyline.length + ' points');
-
-        if (execute.clearAllRouteArtifacts) {
-            try {
-                if (typeof rt().call.clearAllRouteLayersFromMap === 'function') {
-                    rt().call.clearAllRouteLayersFromMap();
-                }
-                if (typeof rt().call.clearAllRouteLayerHandles === 'function') {
-                    rt().call.clearAllRouteLayerHandles();
-                }
-            } catch (e) {
-                console.warn('[Reroute] Failed clearing previous route layers:', e);
-            }
-            rt().setRouteLayer(null);
-        }
-
-        var routeLayer = rt().getRouteLayer();
-        if (execute.removeExistingRouteLayer && routeLayer && typeof routeLayer.remove === 'function') {
-            routeLayer.remove();
-            rt().setRouteLayer(null);
-        }
-
-        if (execute.mountActiveNavRoute) {
-            var mapTheme = storedMapTheme();
-            var mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
-                routePolyline: routePolyline,
-                navRouteColor: rt().call.navActiveRouteColor(),
-                mapTheme: mapTheme,
+        var staged = null;
+        var previous;
+        var previousDeviation;
+        var state;
+        var plan;
+        var nextOptions;
+        var nextIndex;
+        var pairs = [
+            ['RoutePolyline',candidate.polyline], ['CurrentRouteSteps',candidate.maneuvers],
+            ['CurrentStepIndex',0], ['LastSnappedRouteIndex',0], ['LastTurnDetectRouteVertexIndex',0],
+            ['LastCalculatedRoute',candidate], ['RouteOptions',null], ['SelectedRouteIndex',null], ['RouteLayer',null],
+            ['NextManeuverDistance',0], ['NavigationArrivalTriggered',false], ['NavigationArrivalZoneSince',0],
+        ];
+        try {
+            // All dependencies, plans, progress resets and map inputs are checked
+            // before touching the current route. Never inherit old instructions.
+            previousDeviation = {deviationStartTimeCheck:getDeviationStartTimeCheck(),rerouteAttemptCount:getRerouteAttemptCount(),
+                postRerouteGraceUntil:getPostRerouteGraceUntil(),routeJoinConfirmedForDeviation:getRouteJoinConfirmedForDeviation(),
+                deviationOffRouteStreak:getDeviationOffRouteStreak(),lastRerouteTime:getLastRerouteTime(),
+                lastRerouteAttemptTime:getLastRerouteAttemptTime(),rerouteInProgress:getRerouteInProgress()};
+            previous = {};
+            pairs.forEach(function(pair) {
+                if (typeof rt()['get'+pair[0]]!=='function' || typeof rt()['set'+pair[0]]!=='function') throw new Error('Incomplete runtime');
+                previous[pair[0]] = rt()['get'+pair[0]]();
             });
-            if (mount.valid) {
-                rt().setRouteLayer(
-                    rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style)
-                );
-            } else {
-                console.warn('[Reroute] Active nav route mount plan invalid — polyline not drawn');
+            if (previous.RouteLayer && typeof previous.RouteLayer.remove!=='function') throw new Error('Invalid current layer');
+            if (typeof rt().call.clearAllRouteLayerHandles!=='function') throw new Error('Map cleanup unavailable');
+            if (!candidate.destination) candidate.destination = candidate.polyline[candidate.polyline.length-1].join(',');
+            if (!candidate.destinationName) candidate.destinationName = candidate.destination;
+            nextIndex = options.selectionIndex;
+            if (nextIndex!==undefined) {
+                if (!Number.isInteger(nextIndex) || !Array.isArray(previous.RouteOptions) || !previous.RouteOptions[nextIndex] || previous.RouteOptions[nextIndex]!==newRoute) throw new Error('Selection context changed');
+                nextOptions = previous.RouteOptions.slice();
+                nextOptions[nextIndex] = candidate;
+            } else { nextOptions = [candidate]; nextIndex = 0; }
+            pairs[6][1]=nextOptions; pairs[7][1]=nextIndex;
+            var RD = rt().rerouteDecision();
+            var hasCurrentGps = rt().getCurrentLat() != null && rt().getCurrentLon() != null;
+            // During active navigation, automatic/traffic/in-nav recalcs start from GPS.
+            // Seed join so GraphHopper Optimised hard-block snaps cannot leave monitoring
+            // stuck in awaiting-join after a successful map update.
+            var seedRouteJoinConfirmed = !!(rt().getRouteInProgress() && hasCurrentGps);
+            plan = RD.buildRouteMapUpdateStatePlan(candidate, previous.LastCalculatedRoute, {
+                now: Date.now(),
+                hasCurrentGps: hasCurrentGps,
+                seedRouteJoinConfirmed: seedRouteJoinConfirmed,
+                convertDistance: rt().call.convertDistance,
+                distUnit: rt().call.getDistanceUnit(),
+                polylineDecodePrecision: candidate.geometry_precision,
+            });
+            // Use one candidate for identity/endpoints, geometry, evidence and steps.
+            plan.lastCalculatedRoutePatch = candidate;
+            state = RD.buildRouteMapUpdateStateExecutePlan(plan, {currentLat:rt().getCurrentLat(),currentLon:rt().getCurrentLon(),newRoute:candidate});
+            if (!state || !state.deviation) throw new Error('Incomplete state plan');
+            var map = rt().getMap();
+            if (!map || typeof map.isStyleLoaded!=='function' || !map.isStyleLoaded()) throw new Error('Map not ready');
+            var mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
+                    routePolyline: candidate.polyline,
+                    navRouteColor: rt().call.navActiveRouteColor(),
+                    mapTheme: storedMapTheme(),
+                });
+            if (!mount.valid) throw new Error('Invalid mount');
+            if (rt().getMapLibreHelpers().invalidateDeferredPolylineMounts(map) !== true) throw new Error('Deferred map ownership unavailable');
+            // Stage the new owned line while the old line remains available. No
+            // asynchronous/pending mount may authorize an active-route transition.
+            staged = rt().getMapLibreHelpers().addPolyline(map, mount.polyline, mount.style);
+            if (!mounted(staged, candidate.polyline)) throw new Error('Map mount failed');
+            pairs[8][1]=staged;
+            try {
+                // Synchronous setters only: no render/service callbacks or awaits
+                // can observe a half-committed maneuver/geometry/progress context.
+                committingVerifiedTransition = true;
+                try {
+                    pairs.forEach(function(pair) { rt()['set'+pair[0]](pair[1]); });
+                    if (!pairs.every(function(pair) { return rt()['get'+pair[0]]() === pair[1]; })) throw new Error('State commitment incomplete');
+                }
+                finally { committingVerifiedTransition = false; }
+                applyDeviationRerouteState(state.deviation);
+            } catch (error) {
+                if (!restoreTransition(pairs, previous)) {
+                    removeOwnedLayer(staged);
+                    return inconsistentMap();
+                }
+                applyDeviationRerouteState(previousDeviation);
+                throw error;
             }
+        } catch (_) {
+            if (staged && !removeOwnedLayer(staged)) return inconsistentMap();
+            setRerouteInProgress(false);
+            rt().call.showStatus('Route update incomplete; current route retained. Recalculate when the map is ready.', 'warning');
+            return {ok:false,scheduleRetry:false,reason:'route_transition_unavailable'};
         }
-        if (execute.bringNavRouteAboveTraffic) {
+        // Cleanup is part of the transition outcome. If the old verified line
+        // remains intact, bounded rollback can restore the old route. Otherwise
+        // stop guidance; a blank/contradictory map is never successful navigation.
+        if (previous.RouteLayer && previous.RouteLayer !== staged && !removeOwnedLayer(previous.RouteLayer)) {
+            var oldIntact = mounted(previous.RouteLayer, previous.RoutePolyline);
+            var stageRemoved = removeOwnedLayer(staged);
+            if (oldIntact && stageRemoved && restoreTransition(pairs, previous)) {
+                applyDeviationRerouteState(previousDeviation);
+                rt().call.showStatus('Route replacement refused: the previous map line could not be removed. Current route retained.', 'warning');
+                return {ok:false,reason:'route_cleanup_failed',scheduleRetry:false};
+            }
+            return inconsistentMap();
+        }
+        try {
+            if (rt().call.clearAllRouteLayerHandles() !== true || !mounted(staged,candidate.polyline)) return inconsistentMap();
+        } catch (_) { return inconsistentMap(); }
+        authorisedCurrentRoute = JSON.parse(JSON.stringify(candidate));
+        window.lastRouteApiResponse = null;
+        try {
+            if (state.deviation.clearFailureRetries) rt().call.clearRerouteFailureRetries();
+            resetVoiceAnnouncementStateForNewRoute();
+            applyRouteMapUpdateEffects(state);
             rt().call.bringNavRouteAboveTrafficEdges();
-        }
-        if (execute.refreshRouteTraffic) {
             rt().call.clearRouteTrafficLayers();
             rt().call.fetchAndDisplayRouteTraffic();
-        }
-
-        if (execute.applyRouteMapUpdateState) {
-            applyRouteMapUpdateStateFromPlan(plan, newRoute);
-        }
+        } catch (_) { rt().call.showStatus('Route updated; some display services could not refresh.', 'warning'); }
         return { ok: true };
     }
 
@@ -349,33 +412,41 @@
     }
 
     function redrawNavigationRouteLayer(reason) {
-        var RS = rt().routeSelection();
-        var guard = RS.buildNavRouteLayerRedrawGuardPlan({
-            routeInProgress: rt().getRouteInProgress(),
-            map: rt().getMap(),
-            routePolyline: rt().getRoutePolyline(),
-        });
-        if (!guard.shouldRedraw) return;
+        var previous, staged;
         try {
-            var routeLayer = rt().getRouteLayer();
-            if (routeLayer && typeof routeLayer.remove === 'function') {
-                routeLayer.remove();
-            }
-            var mapTheme = storedMapTheme();
-            var mount = RS.buildNavActiveRouteLayerMountPlan({
-                routePolyline: rt().getRoutePolyline(),
-                navRouteColor: rt().call.navActiveRouteColor(),
-                mapTheme: mapTheme,
+            const life = root.VoyagrNavigationLifecycleOrchestration;
+            if (!life || life.getRouteInProgress() !== true || (life.getNavigationFailure && life.getNavigationFailure())) return false;
+            const candidate = authorisedCurrentRoute;
+            // Immutable context recorded only after the real verifier authorises
+            // a complete route. A redraw can outlive assessment freshness and
+            // connectivity, but cannot authorise a different route or assessment.
+            if (!candidate || JSON.stringify(candidate) !== JSON.stringify(rt().getLastCalculatedRoute()) ||
+                    JSON.stringify(candidate.polyline) !== JSON.stringify(rt().getRoutePolyline()) ||
+                    JSON.stringify(candidate.maneuvers) !== JSON.stringify(rt().getCurrentRouteSteps())) return inconsistentMap();
+            previous = rt().getRouteLayer();
+            const map = rt().getMap();
+            if (!map || !map.isStyleLoaded()) return false;
+            const mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({
+                routePolyline:candidate.polyline,navRouteColor:rt().call.navActiveRouteColor(),mapTheme:storedMapTheme(),
             });
-            rt().setRouteLayer(
-                rt().getMapLibreHelpers().addPolyline(rt().getMap(), mount.polyline, mount.style)
-            );
-            rt().call.bringNavRouteAboveTrafficEdges();
-            if (reason) {
-                console.log('[Nav] Route layer redrawn:', reason);
+            if (!mount.valid) return false;
+            staged = rt().getMapLibreHelpers().addPolyline(map,mount.polyline,mount.style);
+            if (!mounted(staged,candidate.polyline)) throw new Error('Recovery mount failed');
+            if (previous && !removeOwnedLayer(previous)) {
+                const intact = mounted(previous,candidate.polyline);
+                if (removeOwnedLayer(staged) && intact) return false;
+                return inconsistentMap();
             }
-        } catch (e) {
-            console.warn('[Nav] Route layer redraw failed:', e);
+            rt().setRouteLayer(staged);
+            if (rt().getRouteLayer() !== staged) throw new Error('Recovery handle commitment failed');
+            rt().call.bringNavRouteAboveTrafficEdges();
+            if (reason) console.log('[Nav] Route layer redrawn:',reason);
+            return true;
+        } catch (_) {
+            const clean = !staged || removeOwnedLayer(staged);
+            if (!clean || !mounted(previous,rt().getRoutePolyline())) return inconsistentMap();
+            try { rt().call.showStatus('Map recovery failed; previous verified route retained.', 'warning'); } catch (_) { /* optional display */ }
+            return false;
         }
     }
 
@@ -436,6 +507,10 @@
     }
 
     function redrawNavigationOverlaysAfterMapRecovery(reason) {
+        const life = root.VoyagrNavigationLifecycleOrchestration;
+        if (life && life.getNavigationFailure && life.getNavigationFailure() && life.recoverNavigationMap) {
+            life.recoverNavigationMap();
+        }
         if (!rt().getRouteInProgress() && !rt().getIsTrackingActive()) return;
         if (rt().getRouteInProgress()) {
             redrawNavigationRouteLayer(reason);
@@ -501,17 +576,19 @@
 
     function bind(nextRuntime) {
         runtime = nextRuntime;
+        authorisedCurrentRoute = null;
         win.__voyagrRedrawNavigationOverlays = redrawNavigationOverlaysAfterMapRecovery;
     }
 
     var api = {
         bind: bind,
+        authoriseCurrentRouteRedraw:authoriseCurrentRouteRedraw,
+        isCommittingVerifiedTransition:function() { return committingVerifiedTransition; },
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         resolveNavigationDestination: resolveNavigationDestination,
         buildRouteRequest: buildRouteRequest,
         applyVoiceAnnouncementStateResetFromPlan: applyVoiceAnnouncementStateResetFromPlan,
         resetVoiceAnnouncementStateForNewRoute: resetVoiceAnnouncementStateForNewRoute,
-        applyRouteMapUpdateStateFromPlan: applyRouteMapUpdateStateFromPlan,
         updateRouteOnMap: updateRouteOnMap,
         getNavActiveRoutePolylineOptions: getNavActiveRoutePolylineOptions,
         redrawNavigationRouteLayer: redrawNavigationRouteLayer,

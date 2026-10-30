@@ -8,12 +8,13 @@ const Saving = require('../app/route-saving-orchestration.js');
 const Preview = require('../app/route-preview-orchestration.js');
 const Life = require('../app/navigation-lifecycle-orchestration.js');
 const codec = require('polyline');
+const {bindTransition,bindStart} = require('./fixtures/navigation-transition.cjs');
 
 function route(id = 'A', end = [53.01, -1], mode = 'mandatory', status = 'SATISFIED') {
     const now = Date.now() / 1000;
     const r = {id, name: id, destination: 'DEST_' + id, destinationName: 'DEST_' + id,
         geometry: codec.encode([[53, -1], end], 6), geometry_precision: 6,
-        polyline: [[53, -1], end], maneuvers: [], distance_km: 1, duration_minutes: 2,
+        polyline: [[53, -1], end], maneuvers: [{type:1,instruction:'Synthetic instruction'}], distance_km: 1, duration_minutes: 2,
         avoidance_preferences_snapshot: AI.snapshot(localStorage),
         avoidance_assessment: {checked_at: now, status, geometry_valid: true,
             requirements: [{category: 'tolls', enabled: true, mode, status}],
@@ -40,6 +41,8 @@ beforeEach(() => {
     Life.setRouteInProgress(false); Life.setRouteStarted(false); Life.setRoutePolyline([[53, -1], [53.02, -1]]);
     Compare.setRouteOptions([]); Compare.setSelectedRouteIndex(0); window.lastCalculatedRoute = null; window.lastRouteApiResponse = null;
     const traffic = () => ({routeTrafficEnabled: true});
+    const transition=bindTransition({status});
+    transition.runtime.getMapLibreHelpers=()=>({...transition.mapHelpers,addPolyline:(...args)=>{mapMutation();return transition.mapHelpers.addPolyline(...args);}});
     Compare.bind({routeSelection: () => RS, getMap: () => ({getStyle: () => ({layers: [], sources: {}})}),
         getRouteLayer: () => null, getShowTrafficEnabled: () => false, getTrafficLayer: () => null,
         setRoutePolyline: p => { mapMutation(); Life.setRoutePolyline(p); },
@@ -89,7 +92,7 @@ describe.each(['selectRoute', 'useRoute'])('F2 %s', entry => {
         unchanged(before);
     });
     test('literal synchronous true authorizes active selection', () => {
-        global.VoyagrAvoidanceIntegrity = {gate: () => true};
+        global.VoyagrAvoidanceIntegrity = {...AI,gate: () => true};
         Compare.setRouteOptions([route('OLD'), route('NEW')]); window.lastCalculatedRoute = route('OLD');
         Life.setRouteInProgress(true);
         Compare[entry](1);
@@ -157,8 +160,12 @@ describe.each(['lifecycle', 'startNavigation', 'startNavigationFromPreview'])('F
         const saved = {id: 'B', start: 'START_B', end: 'DEST_B', geometry: route('B').geometry};
         localStorage.setItem('savedRoutes', JSON.stringify([saved])); Saving.useSavedRoute('B');
         const fresh = route('NEW'); Compare.setRouteOptions([fresh]); window.lastCalculatedRoute = fresh;
-        expect(() => entry === 'lifecycle' ? Life.startTurnByTurnNavigation(fresh) : Preview[entry]()).toThrow('BOOTSTRAP_BOUNDARY');
-        expect(bootstrap).toHaveBeenCalledTimes(1); expect(confirm).not.toHaveBeenCalled();
+        const context=bindTransition({status});bindStart(context);
+        const started=entry === 'lifecycle' ? Life.startTurnByTurnNavigation(fresh) : Preview[entry]();
+        expect(entry === 'lifecycle' ? started : Life.getRouteStarted()).toBe(true);
+        expect(Life.getRouteInProgress()).toBe(true);expect(Life.getCurrentRouteSteps()).toEqual(fresh.maneuvers);
+        expect(context.mapHelpers.isPolylineLayerMounted(context.map,context.runtime.getRouteLayer(),Life.getRoutePolyline())).toBe(true);
+        expect(confirm).not.toHaveBeenCalled();
     });
 });
 test('saved inspection cannot replace an active navigation context', () => {

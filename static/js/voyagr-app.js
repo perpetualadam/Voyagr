@@ -860,6 +860,10 @@ function getRerouteMapOrchestrationRuntime() {
         getMapLibreHelpers: () => MapLibreHelpers,
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         setLastCalculatedRoute: (val) => { window.lastCalculatedRoute = val; },
+        getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
+        setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
+        getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
+        setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
         getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
@@ -875,6 +879,12 @@ function getRerouteMapOrchestrationRuntime() {
         setLastSnappedRouteIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastSnappedRouteIndex(val),
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
+        getNextManeuverDistance: () => VoyagrNavigationLifecycleOrchestration.getNextManeuverDistance(),
+        setNextManeuverDistance: (val) => VoyagrNavigationLifecycleOrchestration.setNextManeuverDistance(val),
+        getNavigationArrivalTriggered: () => VoyagrNavigationLifecycleOrchestration.getNavigationArrivalTriggered(),
+        setNavigationArrivalTriggered: (val) => VoyagrNavigationLifecycleOrchestration.setNavigationArrivalTriggered(val),
+        getNavigationArrivalZoneSince: () => VoyagrNavigationLifecycleOrchestration.getNavigationArrivalZoneSince(),
+        setNavigationArrivalZoneSince: (val) => VoyagrNavigationLifecycleOrchestration.setNavigationArrivalZoneSince(val),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
         getCurrentUserMarker: () => VoyagrGpsOrchestration.getCurrentUserMarker(),
@@ -902,21 +912,7 @@ function getRerouteMapOrchestrationRuntime() {
             clearRouteTrafficLayers: () => VoyagrTrafficOrchestration.clearRouteTrafficLayers(),
             fetchAndDisplayRouteTraffic: () => VoyagrTrafficOrchestration.fetchAndDisplayRouteTraffic(),
             clearAllRouteLayersFromMap,
-            clearAllRouteLayerHandles: () => {
-                const layers = VoyagrRouteComparisonOrchestration.getAllRouteLayers();
-                (layers || []).forEach((layer) => {
-                    if (layer && typeof layer.remove === 'function') {
-                        try { layer.remove(); } catch (_e) { /* ignore */ }
-                    }
-                });
-                // Empty the in-memory handle list via the comparison orchestrator's clearer.
-                if (typeof VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan === 'function') {
-                    VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan({
-                        clearAllRouteLayerHandles: true,
-                        clearRouteLayerHandle: false,
-                    });
-                }
-            },
+            clearAllRouteLayerHandles: () => VoyagrRouteComparisonOrchestration.clearComparisonRouteLayers(),
             resetVehicleMarkerDisplayState,
             applySpeedLimitFetchResetFromPlan,
             primeVehicleMarkerOnRoute,
@@ -953,10 +949,6 @@ function applyVoiceAnnouncementStateResetFromPlan(execute) {
 
 function resetVoiceAnnouncementStateForNewRoute() {
     return VoyagrRerouteMapOrchestration.resetVoiceAnnouncementStateForNewRoute();
-}
-
-function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
-    return VoyagrRerouteMapOrchestration.applyRouteMapUpdateStateFromPlan(plan, newRoute);
 }
 
 function updateRouteOnMap(newRoute) {
@@ -2154,8 +2146,8 @@ function cacheSpeedLimit(lat, lon, speedLimit, source) {
 function getCachedSpeedLimit(lat, lon) {
     return VoyagrOfflineNavigationOrchestration.getCachedSpeedLimit(lat, lon);
 }
-function persistActiveRoute() {
-    return VoyagrOfflineNavigationOrchestration.persistActiveRoute();
+function persistActiveRoute(pendingCandidate) {
+    return VoyagrOfflineNavigationOrchestration.persistActiveRoute(pendingCandidate);
 }
 function clearPersistedRoute() {
     return VoyagrOfflineNavigationOrchestration.clearPersistedRoute();
@@ -2692,20 +2684,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
             primeVehicleMarkerOnRoute,
             showStatus,
             clearAllRouteLayersFromMap,
-            clearAllRouteLayerHandles: () => {
-                const layers = VoyagrRouteComparisonOrchestration.getAllRouteLayers();
-                (layers || []).forEach((layer) => {
-                    if (layer && typeof layer.remove === 'function') {
-                        try { layer.remove(); } catch (_e) { /* ignore */ }
-                    }
-                });
-                if (typeof VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan === 'function') {
-                    VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan({
-                        clearAllRouteLayerHandles: true,
-                        clearRouteLayerHandle: false,
-                    });
-                }
-            },
+            clearAllRouteLayerHandles: () => VoyagrRouteComparisonOrchestration.clearComparisonRouteLayers(),
             navActiveRouteColor,
             bringNavRouteAboveTrafficEdges,
             redrawNavigationRouteLayer,

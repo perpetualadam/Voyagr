@@ -1530,23 +1530,23 @@
             return;
         }
 
-        if (execute.clearFailureRetries) clearRerouteFailureRetries();
         execute.logs.forEach((line) => console.log(line));
-
+        if (execute.updateRouteOnMap) {
+            const candidate = Object.assign({}, execute.newRoute, {destination: destination});
+            const mapResult = rt().call.updateRouteOnMap(candidate);
+            // Invalid Optimised/GraphHopper geometry aborts the map apply and clears
+            // rerouteInProgress inside updateRouteOnMap; retry instead of celebrating.
+            if (!mapResult || mapResult.ok !== true) {
+                if (mapResult && mapResult.scheduleRetry) scheduleAutomaticRerouteRetry();
+                return;
+            }
+        }
+        if (execute.clearFailureRetries) clearRerouteFailureRetries();
         if (execute.showUnavoidableHazards) {
             handleUnavoidableHazards(execute.newRoute, execute.hazardsList, execute.hazardCount);
         }
         if (execute.preferPrimaryRouteOnNextNavUpdate) {
-            rt().s('_preferPrimaryRouteOnNextNavUpdate',  true);
-        }
-        if (execute.updateRouteOnMap) {
-            const mapResult = rt().call.updateRouteOnMap(execute.newRoute);
-            // Invalid Optimised/GraphHopper geometry aborts the map apply and clears
-            // rerouteInProgress inside updateRouteOnMap; retry instead of celebrating.
-            if (mapResult && mapResult.ok === false) {
-                if (mapResult.scheduleRetry) scheduleAutomaticRerouteRetry();
-                return;
-            }
+            rt().s('_preferPrimaryRouteOnNextNavUpdate', true);
         }
         if (execute.logRerouteEvent) {
             logReroutingEvent(startLat, startLon, destination, execute.newRoute, execute.hazardCount);

@@ -15,10 +15,11 @@ require('../maplibre-helpers.js');
 
 function validRoute() {
     const now=Date.now()/1000;
-    return {geometry:'encoded',maneuvers:[{type:1,instruction:'Turn left'}],
+    const r={id:'synthetic',geometry:require('polyline').encode([[51.5,-0.1],[51.6,-0.2]],6),geometry_precision:6,maneuvers:[{type:1,instruction:'Turn left'}],
         avoidance_assessment:{checked_at:now,geometry_valid:true,requires_acceptance:false,requirements:[],
             origin_integrity:{checked_at:now,navigation_allowed:true,transition_verified:false,
                 status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'}}};
+    r.avoidance_assessment.geometry_binding=require('../modules/navigation/avoidance-integrity.js').geometryBinding(r);return r;
 }
 
 describe('navigation-lifecycle-orchestration nav start status', () => {
@@ -27,108 +28,13 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
     let addPolyline;
     let clearLastDistanceToNextTurn;
 
-    function bindRuntime(overrides) {
-        overrides = overrides || {};
-        showStatus = jest.fn();
-        addPolyline = overrides.addPolyline || jest.fn(() => ({ _added: true }));
-        clearLastDistanceToNextTurn = overrides.clearLastDistanceToNextTurn || jest.fn();
-        const redrawNavigationRouteLayer = overrides.redrawNavigationRouteLayer || jest.fn();
-
-        const noop = jest.fn();
-        NavigationLifecycle.bind({
-            mapControls: () => global.VoyagrMapControls,
-            routeSelection: () => global.VoyagrRouteSelection,
-            routeGeometry: () => ({
-                haversineDistanceMeters: jest.fn(() => 100),
-                inferRoadClassFromManeuver: jest.fn(() => 'residential'),
-            }),
-            turnInstructions: () => global.VoyagrTurnInstructions,
-            eta: () => ({}),
-            toggleUI: () => ({ applyToggleButton: noop }),
-            deviceEnvironment: () => global.VoyagrDeviceEnvironment,
-            getRouteOptions: () => [],
-            getSelectedRouteIndex: () => 0,
-            getRouteInProgress: () => NavigationLifecycle.getRouteInProgress(),
-            setRouteInProgress: (val) => NavigationLifecycle.setRouteInProgress(val),
-            getCurrentLat: () => null,
-            getCurrentLon: () => null,
-            getIsTrackingActive: () => true,
-            getZoomAndFollowEnabled: () => true,
-            getMapFollowingActive: () => false,
-            getMap: () => ({
-                easeTo: jest.fn(),
-            }),
-            getMapLibreHelpers: () => ({
-                addPolyline,
-                isPolylineLayerMountOk: window.MapLibreHelpers.isPolylineLayerMountOk,
-            }),
-            getRouteLayer: () => null,
-            setRouteLayer: noop,
-            setMapFollowingActive: noop,
-            setJourneyOverviewActive: noop,
-            setSavedMapState: noop,
-            setLastETAAnnouncementTime: noop,
-            setLastAnnouncedETA: noop,
-            setLastNavTrafficFetchAt: noop,
-            setInitialETAMovementRetries: noop,
-            clearLastDistanceToNextTurn,
-            getDriverPerspectiveEnabled: () => false,
-            getArModeActive: () => false,
-            getUpdatePending: () => false,
-            call: {
-                resetVoiceAnnouncementStateForNewRoute: noop,
-                resetVehicleMarkerDisplayState: noop,
-                resetNavETASnapshot: noop,
-                decodePolyline: jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]),
-                persistActiveRoute: noop,
-                precacheRouteTiles: noop,
-                clearAllRouteLayersFromMap: noop,
-                clearAllRouteLayerHandles: noop,
-                clearPersistedRoute: noop,
-                clearRerouteFailureRetries: noop,
-                navActiveRouteColor: () => '#3388ff',
-                bringNavRouteAboveTrafficEdges: noop,
-                redrawNavigationRouteLayer,
-                showStatus,
-                sendNotification: noop,
-                speakMessage: noop,
-                startGPSTracking: noop,
-                stopGPSTracking: noop,
-                startLiveDataRefresh: noop,
-                stopLiveDataRefresh: noop,
-                updateETACalculation: noop,
-                scheduleInitialETAAnnouncement: noop,
-                clearInitialETAAnnouncement: noop,
-                startAutoTrafficUpdates: noop,
-                stopAutoTrafficUpdates: noop,
-                startRouteTrafficUpdates: noop,
-                stopRouteTrafficUpdates: noop,
-                showTurnInstructionWidget: noop,
-                hideTurnInstructionWidget: noop,
-                updateTurnInstructionDisplay: noop,
-                showJourneySummaryBar: noop,
-                hideJourneySummaryBar: noop,
-                hideRoadNameBar: noop,
-                updateNavigationFabVisibility: noop,
-                voyagrShowMapIconHint: noop,
-                showVolumeHintForNavigation: noop,
-                applyZoomFollowButtonUi: noop,
-                updateRoadReportFabVisibility: noop,
-                updateRecenterButtonVisibility: noop,
-                updateSpeedWidgetVisibility: noop,
-                shouldUsePitchedDrivingCamera: () => false,
-                applyDriverPerspective: noop,
-                buildTraveledJourneyRoute: noop,
-                persistCompletedTrip: noop,
-                showJourneySummary: noop,
-                stopARMode: noop,
-                saveAppState: noop,
-                getTrafficSettingsSnapshot: () => ({
-                    autoTrafficUpdateEnabled: false,
-                    routeTrafficEnabled: false,
-                }),
-            },
-        });
+    function bindRuntime(overrides={}) {
+        const {bindTransition,bindStart}=require('./fixtures/navigation-transition.cjs');
+        const context=bindTransition();showStatus=context.status;
+        if(overrides.addPolyline)context.runtime.getMapLibreHelpers=()=>({...context.mapHelpers,addPolyline:overrides.addPolyline});
+        const runtime=bindStart(context,{call:{redrawNavigationRouteLayer:overrides.redrawNavigationRouteLayer || jest.fn()}});
+        addPolyline=overrides.addPolyline || context.addPolyline;
+        clearLastDistanceToNextTurn=runtime.clearLastDistanceToNextTurn;
     }
 
     beforeEach(() => {
@@ -155,7 +61,7 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
 
     test('route layer mount failure keeps warning status instead of success banner', () => {
         bindRuntime({
-            addPolyline: jest.fn(() => ({ _added: false })),
+            addPolyline: jest.fn(() => ({ id:'failed-stage',_added:false,remove:jest.fn() })),
         });
 
         NavigationLifecycle.startTurnByTurnNavigation(validRoute());
@@ -170,32 +76,28 @@ describe('navigation-lifecycle-orchestration nav start status', () => {
         );
     });
 
-    test('deferred pending route layer mount does not schedule redraw retry', () => {
+    test('deferred pending route layer cannot claim an active navigation start', () => {
         const redrawNavigationRouteLayer = jest.fn();
         bindRuntime({
-            addPolyline: jest.fn(() => ({ _added: false, _pending: true })),
+            addPolyline: jest.fn(() => ({id:'pending-stage',_added:false,_pending:true,remove:jest.fn()})),
             redrawNavigationRouteLayer,
         });
 
         NavigationLifecycle.startTurnByTurnNavigation(validRoute());
 
-        expect(showStatus).toHaveBeenCalledWith(
+        expect(showStatus).not.toHaveBeenCalledWith(
             expect.stringContaining('Turn-by-turn navigation active'),
             'success'
         );
-        expect(showStatus).not.toHaveBeenCalledWith(
-            expect.stringContaining('retry'),
-            'warning'
-        );
+        expect(NavigationLifecycle.getRouteInProgress()).toBe(false);
+        expect(NavigationLifecycle.getRouteStarted()).toBe(false);
 
         jest.advanceTimersByTime(500);
         expect(redrawNavigationRouteLayer).not.toHaveBeenCalled();
     });
 
     test('successful route layer mount still shows navigation active status', () => {
-        bindRuntime({
-            addPolyline: jest.fn(() => ({ _added: true })),
-        });
+        bindRuntime();
 
         NavigationLifecycle.startTurnByTurnNavigation(validRoute());
 
