@@ -7,6 +7,7 @@
 // Track active layers/sources for cleanup
 let layerCounter = 0;
 const activeLayers = new Map();
+const deferredMountGenerations = new WeakMap();
 const activeMarkers = new Map();
 
 /** Base-map road stroke scale (OpenMapTiles `transportation` layers). 3.92 ≈ prior 2.8× + 40%. */
@@ -112,6 +113,25 @@ function buildZoomScaledLineWidth(baseWidth) {
  * @param {Object} options - Style options (color, weight, opacity)
  * @returns {Object} Layer object with id, remove() method
  */
+function deferredMountGeneration(mapInstance) {
+    return deferredMountGenerations.get(mapInstance) || 0;
+}
+
+function invalidateDeferredPolylineMounts(mapInstance) {
+    deferredMountGenerations.set(mapInstance,deferredMountGeneration(mapInstance)+1);
+    let clean=true;
+    for (const layer of Array.from(activeLayers.values())) {
+        if (layer._map !== mapInstance)continue;
+        if (typeof layer.invalidate === 'function') {
+            layer.invalidate();
+            // A formerly pending line may already have mounted. Its old
+            // generation owns neither callbacks nor visible resources now.
+            if (!removeMapLayer(mapInstance,layer.id))clean=false;
+        } else if (layer._cleanupFailed && !removeMapLayer(mapInstance,layer.id))clean=false;
+    }
+    return clean;
+}
+
 function addPolyline(mapInstance, coords, options = {}) {
     const id = `polyline-${++layerCounter}`;
 
@@ -161,14 +181,27 @@ function addPolyline(mapInstance, coords, options = {}) {
     if (!mapInstance.isStyleLoaded()) {
         // Queue for later when style loads
         const layer = createPendingLayer(mapInstance, id, lngLatCoords, options);
+        const ownsMount = () => !layer._removed && activeLayers.get(id) === layer &&
+            layer._generation === deferredMountGeneration(mapInstance);
         const mountPending = () => {
-            if (layer._removed) return;
-            layer._added = addLayerToMap(mapInstance,id,lngLatCoords,options);
+            if (!ownsMount()) return;
+            layer._added = addLayerToMap(mapInstance,id,lngLatCoords,options,ownsMount);
             layer._pending = !layer._added;
+            if (!ownsMount()) {
+                // A synchronous renderer event may invalidate us mid-mount.
+                // Keep failed cleanup registered for reconciliation.
+                layer._cleanupFailed = !removeMapLayer(mapInstance,id);
+                if (layer._cleanupFailed) {
+                    activeLayers.set(id,layer);
+                    const lifecycle=window.VoyagrNavigationLifecycleOrchestration;
+                    if(lifecycle && typeof lifecycle.failNavigation==='function')lifecycle.failNavigation('inconsistent_map');
+                }
+            }
         };
+        layer._mountCallback = mountPending;
         mapInstance.once('style.load',mountPending);
         mapInstance.once('load',mountPending);
-        setTimeout(mountPending,500);
+        layer._mountTimer = setTimeout(mountPending,500);
         return layer;
     }
 
@@ -194,14 +227,14 @@ function addPolyline(mapInstance, coords, options = {}) {
 /**
  * Actually add the layer to MapLibre
  */
-function addLayerToMap(mapInstance, id, lngLatCoords, options) {
+function addLayerToMap(mapInstance, id, lngLatCoords, options, ownsMount) {
     try {
+        if (ownsMount && !ownsMount()) return false;
         // Check if already added
-        if (mapInstance.getSource(id)) {
-            return true;
-        }
+        if (mapInstance.getSource(id) && mapInstance.getLayer(id)) return true;
 
-        mapInstance.addSource(id, {
+        if (ownsMount && !ownsMount()) return false;
+        if (!mapInstance.getSource(id)) mapInstance.addSource(id, {
             type: 'geojson',
             data: {
                 type: 'Feature',
@@ -244,6 +277,7 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             const outlineWidth = options.zoomScaledWidth === false
                 ? outlineBase
                 : buildZoomScaledLineWidth(outlineBase);
+            if (ownsMount && !ownsMount()) return false;
             mapInstance.addLayer({
                 id: outlineId,
                 type: 'line',
@@ -257,6 +291,7 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             }, beforeId);
         }
 
+        if (ownsMount && !ownsMount()) return false;
         mapInstance.addLayer({
             id: id,
             type: 'line',
@@ -300,9 +335,19 @@ function createPendingLayer(mapInstance, id, lngLatCoords, options = {}) {
         _added: false,
         _pending: true,
         _removed: false,
+        _generation: deferredMountGeneration(mapInstance),
+        invalidate: function() {
+            this._removed=true;this._pending=false;
+            // These are best-effort optimisations. Ownership/generation checks
+            // also reject callbacks already queued or detached by the renderer.
+            try { clearTimeout(this._mountTimer); } catch (_) { /* queued is safe */ }
+            for (const event of ['style.load','load']) {
+                try { if (mapInstance.off && this._mountCallback) mapInstance.off(event,this._mountCallback); } catch (_) { /* queued is safe */ }
+            }
+        },
         // removeMapLayer already strips the matching `-outline` layer/source.
         remove: function() {
-            this._removed=true;this._pending=false;
+            this.invalidate();
             return removeMapLayer(mapInstance,id);
         },
         getBounds: function() { return computeBounds(lngLatCoords); }
@@ -351,6 +396,7 @@ function isPolylineLayerMounted(mapInstance, layer, points) {
 }
 
 function reconcilePolylineLayers(mapInstance) {
+    invalidateDeferredPolylineMounts(mapInstance);
     let ok = true;
     for (const layer of Array.from(activeLayers.values())) {
         if (layer._map !== mapInstance) continue;
@@ -360,6 +406,8 @@ function reconcilePolylineLayers(mapInstance) {
 }
 
 function removeMapLayer(mapInstance, layerId) {
+    const owned = activeLayers.get(layerId);
+    if (owned && owned._map === mapInstance && typeof owned.invalidate === 'function') owned.invalidate();
     // Attempt each resource even if another removal throws; then inspect reality.
     for (const id of [`${layerId}-outline`, layerId]) {
         try { if (mapInstance.getLayer(id)) mapInstance.removeLayer(id); }
@@ -1221,6 +1269,7 @@ window.MapLibreHelpers = {
     isPolylineLayerMounted,
     isPolylineLayerRemoved,
     reconcilePolylineLayers,
+    invalidateDeferredPolylineMounts,
     removeMapLayer,
     createMarker,
     createCircleMarker,

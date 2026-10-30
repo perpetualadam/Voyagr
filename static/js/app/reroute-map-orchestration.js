@@ -344,6 +344,7 @@
                     mapTheme: storedMapTheme(),
                 });
             if (!mount.valid) throw new Error('Invalid mount');
+            if (rt().getMapLibreHelpers().invalidateDeferredPolylineMounts(map) !== true) throw new Error('Deferred map ownership unavailable');
             // Stage the new owned line while the old line remains available. No
             // asynchronous/pending mount may authorize an active-route transition.
             staged = rt().getMapLibreHelpers().addPolyline(map, mount.polyline, mount.style);

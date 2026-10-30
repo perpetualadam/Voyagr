@@ -7,6 +7,7 @@
 
     var runtime = null;
     var allRouteLayers = [];
+    var previewMountGeneration = 0;
     var routeOptions = [];
     var selectedRouteIndex = 0;
 
@@ -115,60 +116,27 @@ function applyBringRoutesToTopFromPlan(plan) {
     }, schedule.startup.initialDelayMs);
 }
 function clearAllRouteLayersFromMap() {
-    if (!allowPreviewMutation()) return false;
-    const map = rt().getMap();
-    if (!map) return;
-
-    try {
-        const style = map.getStyle();
-        const plan = RS().buildClearAllRouteLayersFromMapPlan(style);
-        if (!plan.hasArtifacts) return;
-
-        plan.layerIds.forEach((layerId) => {
-            try {
-                if (map.getLayer(layerId)) {
-                    map.removeLayer(layerId);
-                }
-            } catch (e) {
-                console.warn(`${plan.layerErrorLogPrefix}${layerId}:`, e.message);
-            }
-        });
-
-        plan.sourceIds.forEach((sourceId) => {
-            try {
-                if (map.getSource(sourceId)) {
-                    map.removeSource(sourceId);
-                }
-            } catch (e) {
-                console.warn(`${plan.sourceErrorLogPrefix}${sourceId}:`, e.message);
-            }
-        });
-
-        if (plan.successLogMessage) console.log(plan.successLogMessage);
-    } catch (e) {
-        console.error('[Routes] Error clearing route layers:', e);
-    }
+    // Ownership, not a route-like identifier, grants permission to remove.
+    return clearRouteLayerHandlesFromPlan({clearRouteLayerHandle:true,clearAllRouteLayerHandles:true});
 }
 
-/**
- * Clear in-memory route layer handles from a pre-mount plan.
- * @param {Object} plan - from buildDisplayAllRoutesMapPreMountPlan
- */
 function clearRouteLayerHandlesFromPlan(plan) {
     if (!allowPreviewMutation()) return false;
-    if (!plan) return;
-    if (plan.clearRouteLayerHandle && rt().getRouteLayer() && typeof rt().getRouteLayer().remove === 'function') {
-        rt().getRouteLayer().remove();
-        rt().setRouteLayer(null);
+    previewMountGeneration++;
+    if (!plan) return true;
+    const owned=rt().getRouteLayer();
+    if (plan.clearRouteLayerHandle && owned) {
+        try {
+            owned.remove();
+            if (rt().getMapLibreHelpers().isPolylineLayerRemoved(rt().getMap(),owned) !== true) throw new Error('Resources remain');
+            rt().setRouteLayer(null);
+        } catch (_) {
+            try {rt().call.showStatus('Preview map cleanup failed; previous resources retained for recovery.','error');} catch (_) { /* retain ownership */ }
+            return false;
+        }
     }
-    if (plan.clearAllRouteLayerHandles) {
-        allRouteLayers.forEach((layer) => {
-            if (layer && typeof layer.remove === 'function') {
-                layer.remove();
-            }
-        });
-        allRouteLayers = [];
-    }
+    if (plan.clearAllRouteLayerHandles && clearComparisonRouteLayers() !== true) return false;
+    return true;
 }
 
 /**
@@ -183,53 +151,46 @@ function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
     opts = opts || {};
     if (!mountPlan || !mountPlan.shouldMount || !map) return false;
 
+    const {layerId,sourceId} = mountPlan;
+    const helpers=rt().getMapLibreHelpers();
+    let handle,cleanupBlocked=false;
     try {
-        const { layerId, sourceId } = mountPlan;
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: mountPlan.geoJsonFeature,
-        });
-
-        const lineWidth = mountPlan.paint.lineWeight != null
-            ? mountPlan.paint.lineWeight
-            : mountPlan.paint.lineWidth;
-
-        map.addLayer({
-            id: layerId,
-            type: 'line',
-            source: sourceId,
-            layout: mountPlan.layerLayout,
-            paint: {
-                'line-color': mountPlan.paint.lineColor,
-                'line-width': rt().getMapLibreHelpers().buildZoomScaledLineWidth(lineWidth),
-                'line-opacity': mountPlan.paint.lineOpacity,
-            },
-        }, mountPlan.beforeId);
-
-        if (mountPlan.registerLayerHandle) {
-            // Append in mount order (selected last) so bringRoutesToTop moves
-            // the chosen preview route last and it stays painted on top.
-            allRouteLayers.push({
-                id: layerId,
-                sourceId: sourceId,
-                remove: () => {
-                    if (map.getLayer(layerId)) map.removeLayer(layerId);
-                    if (map.getSource(sourceId)) map.removeSource(sourceId);
-                },
-            });
+        const previous=allRouteLayers.find(layer=>layer && layer._map===map && layer.id===layerId && layer.sourceId===sourceId);
+        if (previous) {
+            if (previous.remove() !== true) {cleanupBlocked=true;throw new Error('Previous preview resources remain');}
+            allRouteLayers=allRouteLayers.filter(layer=>layer!==previous);
         }
+        // A coincident ID is not authority to remove another owner's resources.
+        if (map.getLayer(layerId) || map.getSource(sourceId)) throw new Error('Map resource ID already owned');
+        handle={id:layerId,sourceId:sourceId,_map:map,_added:false,_generation:previewMountGeneration,
+            remove:()=>{
+                try { if(map.getLayer(layerId))map.removeLayer(layerId); } catch (_) { /* verify below */ }
+                try { if(map.getSource(sourceId))map.removeSource(sourceId); } catch (_) { /* verify below */ }
+                return helpers.isPolylineLayerRemoved(map,handle) === true;
+            }};
+        allRouteLayers.push(handle);
+        const assertOwnership=()=>{
+            if(handle._generation!==previewMountGeneration || !allRouteLayers.includes(handle) || !knownInactiveLifecycle())throw new Error('Preview ownership revoked');
+        };
+        assertOwnership();
+        map.addSource(sourceId,{type:'geojson',data:mountPlan.geoJsonFeature});
+        const lineWidth=mountPlan.paint.lineWeight!=null ? mountPlan.paint.lineWeight : mountPlan.paint.lineWidth;
+        assertOwnership();
+        map.addLayer({id:layerId,type:'line',source:sourceId,layout:mountPlan.layerLayout,paint:{
+            'line-color':mountPlan.paint.lineColor,'line-width':helpers.buildZoomScaledLineWidth(lineWidth),
+            'line-opacity':mountPlan.paint.lineOpacity,
+        }},mountPlan.beforeId);
+        assertOwnership();
+        if (!map.getLayer(layerId) || !map.getSource(sourceId)) throw new Error('Preview mount incomplete');
+        handle._added=true;
         return true;
-    } catch (e) {
-        if (mountPlan.errorLogMessage) {
-            console.error(mountPlan.errorLogMessage, e);
-        } else {
-            const prefix = mountPlan.errorLogPrefix || '[Map] Failed to draw line layer ';
-            const suffix = mountPlan.legIndex != null ? mountPlan.legIndex : '';
-            console.warn(`${prefix}${suffix}:`, e);
-        }
+    } catch (_) {
+        const cleaned=handle ? handle.remove() : !cleanupBlocked;
+        if (handle && cleaned)allRouteLayers=allRouteLayers.filter(layer=>layer!==handle);
+        if(handle && !cleaned && !allRouteLayers.includes(handle))allRouteLayers.push(handle);
+        // Failed cleanup stays owned so a later start/transition must reconcile it.
+        try { rt().call.showStatus(cleaned ? 'Preview route could not be displayed; no new route selected.' :
+            'Preview map cleanup failed. Recover the map before starting navigation.',cleaned ? 'warning' : 'error'); } catch (_) { /* status unavailable never drops ownership */ }
         return false;
     }
 }
@@ -240,20 +201,17 @@ function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
  * @param {Function} addRouteLayersFn
  */
 function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, addRouteLayersFn) {
-    const map = rt().getMap();
-    if (!schedule || !schedule.shouldApply || schedule.strategy === 'immediate') {
-        addRouteLayersFn();
-        return;
-    }
-
-    if (schedule.waitLogMessage) console.log(schedule.waitLogMessage);
-    map.once('style.load', addRouteLayersFn);
-    setTimeout(() => {
-        if (schedule.runFallbackOnlyIfNoLayers && allRouteLayers.length === 0) {
-            if (schedule.fallbackLogMessage) console.log(schedule.fallbackLogMessage);
-            addRouteLayersFn();
-        }
-    }, schedule.fallbackTimeoutMs);
+    if (!allowPreviewMutation()) return false;
+    const map=rt().getMap(),generation=previewMountGeneration;
+    const mountCurrent=()=>{
+        if (generation!==previewMountGeneration || !allowPreviewMutation()) return false;
+        return addRouteLayersFn() !== false;
+    };
+    if (!schedule || !schedule.shouldApply || schedule.strategy==='immediate') return mountCurrent();
+    map.once('style.load',mountCurrent);
+    setTimeout(()=>{
+        if(schedule.runFallbackOnlyIfNoLayers && allRouteLayers.length===0)mountCurrent();
+    },schedule.fallbackTimeoutMs);
 }
 
 /**
@@ -309,7 +267,7 @@ function applySingleRouteMapDisplayFromPlan(plan) {
     if (!plan || !plan.shouldExecute) return;
 
     if (plan.clearAllRouteLayers) {
-        clearAllRouteLayersFromMap();
+        if (clearAllRouteLayersFromMap() === false) return false;
     }
 
     const polylinePoints = plan.polyline.points || [];
@@ -387,7 +345,7 @@ function displayAllRoutesOnMap() {
         input.routeOptions,
         { isStyleLoaded: input.isStyleLoaded }
     );
-    applyDisplayAllRoutesOnMapFromPlan(entry.apply);
+    return applyDisplayAllRoutesOnMapFromPlan(entry.apply);
 }
 
 function applyDisplayAllRoutesOnMapFromPlan(apply) {
@@ -406,25 +364,25 @@ function applyDisplayAllRoutesOnMapFromPlan(apply) {
     console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
 
     const mount = apply.mount;
-    applyDisplayAllRoutesPreMountFromPlan(mount.preMountApply);
+    if (applyDisplayAllRoutesPreMountFromPlan(mount.preMountApply) === false) return false;
 
     if (mount.requireMap && !map) {
         console.error(mount.mapMissingLogMessage);
         return;
     }
 
-    applyDisplayAllRoutesStyleLoadScheduleFromPlan(mount.styleSchedule, () => {
+    return applyDisplayAllRoutesStyleLoadScheduleFromPlan(mount.styleSchedule, () => {
         if (mount.addLayersLogMessage) console.log(mount.addLayersLogMessage);
-        doAddRouteLayers();
+        return doAddRouteLayers();
     });
 }
 
 function applyDisplayAllRoutesPreMountFromPlan(apply) {
     if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
-    clearRouteLayerHandlesFromPlan(apply);
+    if (clearRouteLayerHandlesFromPlan(apply) === false) return false;
     if (apply.clearMapRouteLayers) {
-        clearAllRouteLayersFromMap();
+        if (clearAllRouteLayersFromMap() === false) return false;
     }
     if (apply.hydratePolylines) {
         RS().hydrateRouteOptionPolylines(getRouteOptions(), rt().call.decodePolyline);
@@ -455,24 +413,28 @@ function applyDoAddRouteLayersBatchFromPlan(executePlan) {
     if (!allowPreviewMutation()) return false;
     if (!executePlan) return;
 
+    let complete=true;
     (executePlan.layerSteps || []).forEach((step) => {
         if (step.startLogMessage) console.log(step.startLogMessage);
         if (!step.valid) {
+            complete=false;
             if (step.invalidLogMessage) console.error(step.invalidLogMessage);
             return;
         }
         if (step.drawLogMessage) console.log(step.drawLogMessage);
-        if (applyRouteLayerFromMapLibrePlan(step.applyPlan) && step.successLogMessage) {
-            console.log(step.successLogMessage);
-        }
+        const mounted=applyRouteLayerFromMapLibrePlan(step.applyPlan);
+        if (!mounted)complete=false;
+        if (mounted && step.successLogMessage) console.log(step.successLogMessage);
     });
+    return complete;
 }
 
 function applyDoAddRouteLayersFromPlan(apply) {
     if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
-    applyDoAddRouteLayersBatchFromPlan(apply.batchExecute);
+    if (applyDoAddRouteLayersBatchFromPlan(apply.batchExecute) === false) return false;
     applyDoAddRouteLayersPostMountFromPlan(apply.postMount);
+    return true;
 }
 
 function collectDoAddRouteLayersInput() {
@@ -493,7 +455,7 @@ function collectDoAddRouteLayersInput() {
 
 function doAddRouteLayers() {
     if (!allowPreviewMutation()) return false;
-    applyDoAddRouteLayersFromPlan(
+    return applyDoAddRouteLayersFromPlan(
         RS().buildDoAddRouteLayersEntryOrchestrationPlan(
             collectDoAddRouteLayersInput()
         ).apply
@@ -606,6 +568,7 @@ function allowPreviewMutation() {
 // Used by a verified navigation transaction after its new line is mounted.
 function clearComparisonRouteLayers() {
     if (!runtime) return false;
+    previewMountGeneration++;
     const owned = rt().getRouteLayer();
     const helpers = rt().getMapLibreHelpers();
     let ok = true;
@@ -760,7 +723,7 @@ function applyDisplaySingleRouteFromPlan(apply) {
     if (!apply || !apply.shouldApply) return;
 
     console.log(apply.entryLogMessage);
-    clearRouteLayerHandlesFromPlan(apply.preClear);
+    if (clearRouteLayerHandlesFromPlan(apply.preClear) === false) return false;
     applySingleRouteMapDisplayFromPlan(apply.execute);
 }
 
@@ -790,13 +753,14 @@ function displaySingleRoute(index) {
 function applyShowAllRoutesFromPlan(apply) {
     if (!allowPreviewMutation()) return false;
     if (!apply || !apply.shouldApply) return;
-    if (apply.displayAllRoutes) displayAllRoutesOnMap();
+    if (apply.displayAllRoutes && displayAllRoutesOnMap() === false) return false;
     rt().call.showStatus(apply.statusMessage, apply.statusType);
+    return true;
 }
 
 function showAllRoutes() {
     if (!allowPreviewMutation()) return false;
-    applyShowAllRoutesFromPlan(
+    return applyShowAllRoutesFromPlan(
         RS().buildShowAllRoutesEntryOrchestrationPlan(
             (function () { var ro = getRouteOptions(); return ro ? ro.length : 0; })()
         ).apply

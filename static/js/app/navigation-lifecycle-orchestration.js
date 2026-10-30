@@ -561,6 +561,7 @@
             const mount = rt().routeSelection().buildNavActiveRouteLayerMountPlan({routePolyline:mergedRoute.polyline,
                 navRouteColor:rt().call.navActiveRouteColor(),mapTheme:MT && MT.readStoredMapTheme ? MT.readStoredMapTheme() : 'standard'});
             if (!mount.valid) throw new Error('Invalid mount');
+            if (rt().getMapLibreHelpers().invalidateDeferredPolylineMounts(map) !== true) throw new Error('Deferred map ownership unavailable');
             staged = helpers.addPolyline(map,mount.polyline,mount.style);
             if (!helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map mount failed');
             navigationStarting = true;
