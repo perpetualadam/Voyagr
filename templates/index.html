@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260811safety1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261031phase12ff" />
     <script>
     (function () {
         try {
@@ -136,7 +136,8 @@
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
     <script defer src="/static/js/modules/ui/pwa-install.js?v=20260906app01"></script>
     <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
-    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261030phase12fdcoherence"></script>
+    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261031phase12ff"></script>
+    <script defer src="/static/js/app/navigation-safety-ux.js?v=20261031phase12ff"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261028phase10a"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
@@ -146,7 +147,7 @@
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260711w"></script>
     <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
-    <script defer src="/static/js/modules/ui/dom-helpers.js?v=20260811safety1"></script>
+    <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261031phase12ff"></script>
     <script defer src="/static/js/modules/navigation/route-prefs.js?v=20260712aaci"></script>
     <script defer src="/static/js/modules/navigation/recent-destinations.js?v=20260711e"></script>
     <script defer src="/static/js/modules/util/html.js?v=20260711e"></script>
@@ -167,7 +168,7 @@
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
     <script defer src="/static/js/app/parking-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261030phase12fdmapownership"></script>
+    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261031phase12ff"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20261027maprec2"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/gps-orchestration.js?v=20261030phase12fdcoherence"></script>
@@ -194,7 +195,7 @@
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20260712ab47"></script>
     <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
-    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261030phase12fdfailure"></script>
+    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261031phase12ff"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
@@ -228,7 +229,7 @@
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/ar-navigation-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712dark4"></script>
-    <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261030phase12fdmapownership"></script>
+    <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261031phase12ff"></script>
     <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261030phase12fdcoherence"></script>
@@ -593,7 +594,8 @@
                 <div id="status" class="status"></div>
 
                 <!-- Go Now / Start Navigation Button -->
-                <button id="startNavBtnSheet" class="btn-calculate" onclick="startNavigation()" style="background: #34A853; margin-top: 10px; display: none;">🧭 Go Now - Start Navigation</button>
+                <p id="navigationStartExplanation" role="status"></p>
+                <button id="startNavBtnSheet" data-navigation-start class="btn-calculate" onclick="startNavigation()" style="background: #34A853; margin-top: 10px; display: none;">🧭 Go Now - Start Navigation</button>
 
                 <!-- Add to Favorites Button (Phase 2) -->
                 <button class="btn-calculate" onclick="addCurrentToFavorites()" style="background: #764ba2; margin-top: 10px;">⭐ Save Location</button>
@@ -1590,7 +1592,7 @@
                 <div id="routePreviewTab" style="display: none;">
                     <div class="preferences-section">
                         <h3>📍 Route Preview</h3>
-                        <p id="routeAvoidanceNotice" role="status">Avoidance verification pending.</p>
+                        <p id="routeAvoidanceNotice" role="status" tabindex="0">Avoidance verification pending.</p>
 
                         <!-- Route Summary -->
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
@@ -1684,7 +1686,7 @@
                             <button onclick="overviewRoute()" style="background: #9C27B0; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 🗺️ Overview Route
                             </button>
-                            <button onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <button data-navigation-start onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 🧭 Start Navigation
                             </button>
                         </div>
@@ -1862,6 +1864,12 @@
             </div>
         </div>
 
+        <aside id="bestEffortWarning" class="best-effort-warning" role="status" aria-live="polite" aria-atomic="true" hidden>
+            <strong>Some hazards could not be avoided</strong>
+            <p>This route may include hazards or restrictions that Voyagr could not avoid or fully verify.</p>
+            <p>Follow road signs and traffic laws. Avoidance is not guaranteed.</p>
+            <button type="button" id="dismissBestEffortWarning" aria-label="Dismiss hazard warning">Dismiss</button>
+        </aside>
         <!-- Notification Container (styles in voyagr.css) -->
         <!-- z-index: 500 in mobile layout hierarchy - always on top of content -->
         <div id="notificationContainer" class="notification-container" aria-live="polite" aria-relevant="additions"></div>
@@ -1871,7 +1879,7 @@
         <div class="nav-control-menu">
             <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed" hidden>
                 <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
-                <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
+                <button id="startNavBtn" data-navigation-start class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
                 <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
                 <button type="button" id="recenterVehicleFab" class="fab fab-recenter" title="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;" aria-label="Recenter on vehicle">
                     <svg class="fab-recenter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

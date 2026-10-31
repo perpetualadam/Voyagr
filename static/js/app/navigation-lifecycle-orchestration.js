@@ -69,6 +69,7 @@
     function getNavigationFailure() { return navigationFailure; }
     function failNavigation(reason) {
         navigationFailure = reason || 'navigation_initialization_failed';
+        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         startEpoch++; navigationStarting = false;
         setRouteInProgress(false); setRouteStarted(false);
         setCurrentRouteSteps([]); setCurrentStepIndex(0); setNextManeuverDistance(0);
@@ -538,6 +539,7 @@
                 if (rt().getRouteLayer() !== staged || !helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map changed during startup');
                 if (!root.VoyagrRerouteMapOrchestration.authoriseCurrentRouteRedraw()) throw new Error('Recovery context unavailable');
                 navigationFailure = null; navigationStarting = false; setRouteStarted(true);
+                try { if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.committed(mergedRoute); } catch (_) { /* Presentation cannot change gate permission. */ }
                 applyNavStartWakeLockFromPlan(stateInit,'wakeLock' in navigator);
                 if (services.userFeedback) {
                     const feedback = services.userFeedback;
@@ -596,6 +598,7 @@
 
         applyNavStopRuntimeFromPlan(MC().buildNavStopRuntimeApplyPlan(entry.stateReset));
         applyNavStopServicesFromPlan(entry.services, entry.wasRouteInProgress);
+        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
     }
 
     function updateTurnGuidance(userLat, userLon) {
