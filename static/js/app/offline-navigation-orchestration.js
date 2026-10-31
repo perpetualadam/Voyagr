@@ -121,60 +121,79 @@
         }
     }
 
+    // Local ownership comes only from an observed commit/load in this session.
+    // An abandonment captures this value; it never reads whichever newer owner
+    // happens to be in IndexedDB when a delayed callback resumes.
+    var committedOwnership=null;
+    function getJourneyOwnership(){const off=OFF();return off&&off.DURABLE_OWNERSHIP_PROTOCOL===1?off.ownershipOf(committedOwnership):null;}
+    function sameOwner(a,b){return a===null?b===null:OFF().matchesOwnership(a,b);}
+    function adoptOwnership(expected,next){
+        if(!sameOwner(committedOwnership,expected))return false;
+        committedOwnership=OFF().ownershipOf(next);return true;
+    }
+    function ownedHandle(handle,expected,options){
+        if(!handle||handle.ownershipMismatch)return handle;
+        var registered=expected;
+        function adopt(next){if(adoptOwnership(registered,next))registered=OFF().ownershipOf(next);}
+        if(options.abandon)adopt(handle.previousOwnership());
+        function action(name){return async function(guard){
+            const ok=await handle[name](guard);
+            if(ok===true){
+                if(name==='rollback')adopt(handle.previousOwnership());
+                else if(name==='finalize'||name==='commit'&&!options.planning&&!options.abandon)adopt(handle.committedOwnership());
+            }
+            return ok;
+        };}
+        return Object.assign({},handle,{commit:action('commit'),finalize:action('finalize'),rollback:action('rollback')});
+    }
     async function persistActiveRoute(pendingCandidate) {
-        const off = OFF();
-        const route = pendingCandidate || rt().getLastCalculatedRoute();
-        const polyline = pendingCandidate ? pendingCandidate.polyline : rt().getRoutePolyline();
-        if (!off || (!pendingCandidate && !rt().getRouteInProgress()) || !route || !polyline) return false;
-        try {
-            const owner=root.VoyagrJourneyModes,token=owner&&owner.captureIntent?owner.captureIntent():null;
+        const off=OFF(),route=pendingCandidate||rt().getLastCalculatedRoute(),polyline=pendingCandidate?pendingCandidate.polyline:rt().getRoutePolyline();
+        if(!off||off.DURABLE_OWNERSHIP_PROTOCOL!==1||(!pendingCandidate&&!rt().getRouteInProgress())||!route||!polyline)return false;
+        try{
+            const owner=root.VoyagrJourneyModes,token=owner&&owner.captureIntent?owner.captureIntent():null,expected=getJourneyOwnership();
             const current=()=>!owner||root.VoyagrJourneyModes===owner&&!!(owner.intentCurrent&&owner.intentCurrent(token));
-            const saved=await off.persistActiveRouteRecord(indexedDB, off.buildActiveRoutePersistRecord({
-                polyline:polyline, steps:pendingCandidate ? pendingCandidate.maneuvers : rt().getCurrentRouteSteps(),
-                stepIndex:pendingCandidate ? 0 : rt().getCurrentStepIndex(),
-                progressHint:!pendingCandidate && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
-                destination:route.destination || null,routeData:route,
-                continuation:!pendingCandidate&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.getContinuation?root.VoyagrJourneyModes.getContinuation(route):null,
-            }),current,owner&&owner.onIntentCancelled?callback=>owner.onIntentCancelled(token,callback):null);
-            return saved!==false;
-        } catch (e) {
-            console.warn('[OfflineNav] Failed to persist route:', e);
-            return false;
-        }
+            const record=off.buildActiveRoutePersistRecord({ownership:pendingCandidate?null:expected,polyline,steps:pendingCandidate?pendingCandidate.maneuvers:rt().getCurrentRouteSteps(),stepIndex:pendingCandidate?0:rt().getCurrentStepIndex(),
+                progressHint:!pendingCandidate&&root.VoyagrGpsOrchestration&&root.VoyagrGpsOrchestration.getNavigationPositionEvidence?root.VoyagrGpsOrchestration.getNavigationPositionEvidence():null,
+                destination:route.destination||null,routeData:route,continuation:!pendingCandidate&&owner&&owner.getContinuation?owner.getContinuation(route):null});
+            const saved=await off.persistActiveRouteRecord(indexedDB,record,current,owner&&owner.onIntentCancelled?callback=>owner.onIntentCancelled(token,callback):null,expected);
+            return saved!==false&&current()&&adoptOwnership(expected,record);
+        }catch(e){console.warn('[OfflineNav] Failed to persist route:',e);return false;}
     }
-
-    async function stageActiveRoute(candidate, options) {
-        const off=OFF();
-        if(!off||!candidate||!candidate.polyline)return null;
-        return off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
-            polyline:candidate.polyline,steps:candidate.maneuvers,stepIndex:0,
-            destination:candidate.destination,routeData:candidate,
-        }),options);
+    async function stageActiveRoute(candidate,options){
+        const off=OFF();if(!off||off.DURABLE_OWNERSHIP_PROTOCOL!==1||!candidate||!candidate.polyline)return null;
+        const expected=getJourneyOwnership();options=Object.assign({},options,{expectedOwnership:expected});
+        const handle=await off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({polyline:candidate.polyline,steps:candidate.maneuvers,stepIndex:0,destination:candidate.destination,routeData:candidate}),options);
+        return ownedHandle(handle,expected,options);
     }
-
     async function persistJourneySnapshot(route,continuation,guard){
-        const off=OFF(),integrity=root.VoyagrAvoidanceIntegrity;
-        const points=integrity&&integrity.geometryPoints(route);if(!off||!points)return false;
-        const saved=await off.persistActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
-            polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,
-            routeData:route,continuation:continuation,
-        }),guard);return saved!==false;
-    }
-    async function stageAbandonJourney(route,continuation,guard,priorIdentity){
         const off=OFF(),integrity=root.VoyagrAvoidanceIntegrity,points=integrity&&integrity.geometryPoints(route);
-        if(!off||off.ABANDONMENT_PROTOCOL!==1||!points)return null;
-        return off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,routeData:route,continuation}),{abandon:true,guard:guard,priorIdentity:priorIdentity});
+        if(!off||off.DURABLE_OWNERSHIP_PROTOCOL!==1||!points)return false;
+        const expected=getJourneyOwnership();
+        if(expected&&(!continuation||continuation.journey_id!==expected.journey_id)&&route.durable_journey_id!==expected.journey_id)return false;
+        const record=off.buildActiveRoutePersistRecord({ownership:expected,polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,routeData:route,continuation:continuation});
+        const saved=await off.persistActiveRouteRecord(indexedDB,record,guard,null,expected);return saved!==false&&adoptOwnership(expected,record);
     }
-    async function clearJourneyPersistence(){await OFF().clearActiveRouteRecord(indexedDB);return true;}
+    async function stageAbandonJourney(route,continuation,guard,expectedOwnership){
+        const off=OFF(),integrity=root.VoyagrAvoidanceIntegrity,points=integrity&&integrity.geometryPoints(route);
+        const expected=off&&off.ownershipOf(expectedOwnership);
+        if(!off||off.DURABLE_OWNERSHIP_PROTOCOL!==1||off.ABANDONMENT_PROTOCOL!==2||!expected||!points)return null;
+        const options={abandon:true,guard:guard,expectedOwnership:expected};
+        const handle=await off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({ownership:expected,polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,routeData:route,continuation:continuation}),options);
+        return ownedHandle(handle,expected,options);
+    }
+    async function clearJourneyPersistence(){return OFF().clearActiveRouteRecord(indexedDB,getJourneyOwnership());}
 
     async function loadPersistedRoute() {
         const off = OFF();
         if (!off) return null;
         try {
-            const result = await off.loadActiveRouteRecord(indexedDB);
+            const state=off.DURABLE_OWNERSHIP_PROTOCOL===1?await off.loadJourneyState(indexedDB):{route:await off.loadActiveRouteRecord(indexedDB),ownership:null};
+            const result=state.route;
+            const observed=state.ownership&&(!result||result.journey_id===state.ownership.journey_id)?state.ownership:null;
+            if(committedOwnership===null&&(!rt().getRouteInProgress||rt().getRouteInProgress()===false))committedOwnership=off.ownershipOf?off.ownershipOf(observed):null;
             if (!result) return null;
             if (off.isPersistedRouteExpired(result.savedAt)) {
-                await clearPersistedRoute();
+                if(observed&&await off.clearActiveRouteRecord(indexedDB,observed)===true)adoptOwnership(observed,null);
                 return null;
             }
             return result;
@@ -188,7 +207,8 @@
         const off = OFF();
         if (!off) return;
         try {
-            await off.clearActiveRouteRecord(indexedDB);
+            const expected=getJourneyOwnership();
+            if(await off.clearActiveRouteRecord(indexedDB,expected)===true)adoptOwnership(expected,null);
         } catch (e) {
             console.warn('[OfflineNav] Failed to clear persisted route:', e);
         }
@@ -354,7 +374,7 @@
         getCachedSpeedLimit: getCachedSpeedLimit,
         persistActiveRoute: persistActiveRoute,
         stageActiveRoute: stageActiveRoute,
-        stageAbandonJourney:stageAbandonJourney,persistJourneySnapshot:persistJourneySnapshot,clearJourneyPersistence:clearJourneyPersistence,
+        DURABLE_OWNERSHIP_PROTOCOL:1,ownershipReady:function(){return !!runtime;},getJourneyOwnership:getJourneyOwnership,stageAbandonJourney:stageAbandonJourney,persistJourneySnapshot:persistJourneySnapshot,clearJourneyPersistence:clearJourneyPersistence,
         loadPersistedRoute: loadPersistedRoute,
         clearPersistedRoute: clearPersistedRoute,
         schedulePersistRoute: schedulePersistRoute,

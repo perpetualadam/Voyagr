@@ -256,6 +256,7 @@
 
     function updateRouteOnMap(newRoute, options) {
         var intentOwner=root.VoyagrJourneyModes;
+        if((intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!root.VoyagrOfflineNavigationOrchestration||root.VoyagrOfflineNavigationOrchestration.DURABLE_OWNERSHIP_PROTOCOL!==1))return {ok:false,scheduleRetry:false,reason:'durable_ownership_modules_incompatible'};
         if((intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!intentOwner||!intentOwner.endpointIntentCompatible||intentOwner.endpointIntentCompatible()!==true||intentOwner.isAbandoning&&intentOwner.isAbandoning()))return {ok:false,scheduleRetry:false,reason:'endpoint_intent_modules_incompatible'};
         if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) {
             return {ok:false,scheduleRetry:false,reason:'simulation_active'};
@@ -591,6 +592,7 @@
     }
 
     var api = {
+        DURABLE_OWNERSHIP_PROTOCOL:1,
         ENDPOINT_INTENT_PROTOCOL:1,
         endpointIntentReady:function(){return !!runtime;},
         INTENT_OWNERSHIP_PROTOCOL: 1,

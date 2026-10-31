@@ -3122,7 +3122,7 @@ if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
     confirmPlanReplacement:text=>window.confirm(text),
     persistPreviousJourney:(route,continuation,guard)=>VoyagrOfflineNavigationOrchestration.persistJourneySnapshot(route,continuation,guard),
     stagePlanningJourney:route=>VoyagrOfflineNavigationOrchestration.stageActiveRoute(route,{planning:true}),
-    stageAbandonJourney:(route,continuation,guard,priorIdentity)=>VoyagrOfflineNavigationOrchestration.stageAbandonJourney(route,continuation,guard,priorIdentity),
+    stageAbandonJourney:(route,continuation,guard,expectedOwnership)=>VoyagrOfflineNavigationOrchestration.stageAbandonJourney(route,continuation,guard,expectedOwnership),
     clearJourneyPersistence:()=>VoyagrOfflineNavigationOrchestration.clearJourneyPersistence(),
     selected:()=>VoyagrRouteSelection.mergeNavigationRouteFromSelected(window.lastCalculatedRoute,
         VoyagrRouteComparisonOrchestration.getRouteOptions(),VoyagrRouteComparisonOrchestration.getSelectedRouteIndex()),

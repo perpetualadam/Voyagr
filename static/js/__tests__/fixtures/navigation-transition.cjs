@@ -19,6 +19,9 @@ function makeRoute(id='A', points=[[53,-1],[53.01,-1]]) {
     r.avoidance_assessment.geometry_binding=AI.geometryBinding(r);return r;
 }
 function bindTransition(options={}) {
+    const persistence=require('../../app/offline-navigation-orchestration.js');
+    global.VoyagrOfflineNavigationOrchestration=persistence;
+    if(!persistence.ownershipReady())persistence.bind({offlineNavigation:()=>require('../../modules/navigation/offline-navigation.js'),call:{showStatus:jest.fn()}});
     // A complete current client loads/binds all production endpoint owners.
     // Tests can subsequently remove, unbind or replace them to exercise refusal.
     for(const name of ['location', 'geocoding', 'calculate-route', 'route-preview', 'auto-gps', 'search-favorites', 'poi-search', 'parking', 'form-clear', 'trip-history', 'route-sharing', 'ml-predictions', 'voice-control', 'waypoints']){

@@ -2486,6 +2486,7 @@
                 route_comparison: sel.route_comparison,
                 avoidance_intent_token: sel.avoidance_intent_token,
                 journey_context: sel.journey_context,
+                durable_journey_id:sel.durable_journey_id,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
                 avoidance_preferences_snapshot: sel.avoidance_preferences_snapshot || routeData.avoidance_preferences_snapshot,
@@ -2551,6 +2552,7 @@
             if (base.avoidance_assessment.status==='SATISFIED') base.avoidance_assessment.status='UNVERIFIED';
         }
         base.navigation_resume_requires_fresh_gps=true;
+        base.durable_journey_id=typeof saved.journey_id==='string'?saved.journey_id:undefined;
         if(saved.continuation)base.journey_continuation=JSON.parse(JSON.stringify(saved.continuation));
         base.polyline=saved.polyline.map(function(p) { return [p[0],p[1]]; });
         base.maneuvers = saved.steps || base.maneuvers || [];

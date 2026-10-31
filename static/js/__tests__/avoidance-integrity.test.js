@@ -334,7 +334,7 @@ test('persisted mandatory route passes real resume handler but cannot restore pe
         expect(mapControls).not.toHaveBeenCalled();expect(confirm).not.toHaveBeenCalled();
     } finally {
         jest.clearAllTimers();jest.useRealTimers();
-        await Offline.clearActiveRouteRecord(indexedDB);
+        await Offline.clearActiveRouteRecord(indexedDB,(await Offline.loadJourneyState(indexedDB)).ownership);
         document.body.innerHTML='';
     }
 });

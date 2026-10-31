@@ -480,6 +480,7 @@
 
     function startTurnByTurnNavigation(routeData, navStartOpts) {
         const intentOwner=root.VoyagrJourneyModes;
+        if((intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!root.VoyagrOfflineNavigationOrchestration||root.VoyagrOfflineNavigationOrchestration.DURABLE_OWNERSHIP_PROTOCOL!==1))return false;
         if(intentOwner&&intentOwner.isAbandoning&&intentOwner.isAbandoning())return false;
         if(!(navStartOpts&&navStartOpts.gpsReplacement===true&&getRouteInProgress())&&
             (intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!intentOwner||!intentOwner.endpointIntentCompatible||intentOwner.endpointIntentCompatible()!==true))return false;
@@ -689,6 +690,7 @@
     }
 
     var api = {
+        DURABLE_OWNERSHIP_PROTOCOL:1,
         ENDPOINT_INTENT_PROTOCOL:1,
         endpointIntentReady:function(){return !!runtime;},
         INTENT_OWNERSHIP_PROTOCOL: 1,

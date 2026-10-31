@@ -120,7 +120,7 @@ test.each([true,false])('real persisted banner with live preview; verifier avail
         const shown=preview.mock.calls[0][0];
         expect(shown.destination).toBe(saved.destination);expect(shown.geometry).toBe(saved.geometry);
         expect(shown.id).toBe(saved.id);expect(shown.avoidance_assessment.checked_at).toBe(0);
-    } finally {jest.clearAllTimers();await Off.clearActiveRouteRecord(indexedDB);document.body.innerHTML='';}
+    } finally {jest.clearAllTimers();await Off.clearActiveRouteRecord(indexedDB,(await Off.loadJourneyState(indexedDB)).ownership);document.body.innerHTML='';}
 });
 
 test('selection function itself cannot mix a saved destination with unrelated geometry',()=>{
@@ -206,5 +206,5 @@ test.each([{}, {geometryBinding:()=>{throw new Error('unavailable');}}])(
             expect(yes).not.toBeNull();expect(()=>yes.onclick()).not.toThrow();
             expect(start).not.toHaveBeenCalled();expect(bootstrap).not.toHaveBeenCalled();
             expect(status).toHaveBeenCalledWith(expect.stringContaining('verification unavailable'),'warning');
-        } finally {jest.clearAllTimers();await Off.clearActiveRouteRecord(indexedDB);document.body.innerHTML='';}
+        } finally {jest.clearAllTimers();await Off.clearActiveRouteRecord(indexedDB,(await Off.loadJourneyState(indexedDB)).ownership);document.body.innerHTML='';}
     });

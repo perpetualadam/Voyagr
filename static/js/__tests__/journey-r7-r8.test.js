@@ -71,12 +71,12 @@ test('R8 successful abandonment is confirmed and idempotent on retry',async()=>{
  rt.confirmPlanReplacement.mockReturnValue(true);expect(await Modes.abandonJourney()).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();expect(Modes.getContinuation(old)).toBeNull();expect(await Modes.abandonJourney()).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();
 });
 test('R8 interrupted abandonment promotion restores the previous journey inspection-only on reload',async()=>{
- await stored();const handle=await OffApp.stageAbandonJourney(old,Modes.getContinuation(old),()=>true);expect(await handle.commit(()=>true)).toBe(true);
+ await stored();const handle=await OffApp.stageAbandonJourney(old,Modes.getContinuation(old),()=>true,OffApp.getJourneyOwnership());expect(await handle.commit(()=>true)).toBe(true);
  const recovered=await Off.loadActiveRouteRecord(idb);expect(pendingNames(recovered)).toEqual(['pending']);const restored=require('../modules/navigation/route-selection.js').buildRoutePayloadFromPersisted(recovered,require('../modules/navigation/polyline-codec.js').encodePolyline);expect(AI.prepareNavigationCandidate(restored)).toBeNull();expect(Modes.getContinuation(restored).intent.stops.map(s=>s.name)).toEqual(['pending']);
  expect(await handle.finalize(()=>true)).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();
 });
 test('R8 an obsolete abandonment cannot overwrite a newer durable journey',async()=>{
- await stored();const original=rt.stageAbandonJourney;rt.stageAbandonJourney=async(...args)=>{const handle=await original(...args),commit=handle.commit;handle.commit=async guard=>{await Off.persistActiveRouteRecord(idb,Off.buildActiveRoutePersistRecord({routeData:next,polyline:next.polyline,steps:next.maneuvers}));return commit(guard);};return handle;};
+ await stored();const original=rt.stageAbandonJourney;rt.stageAbandonJourney=async(...args)=>{const handle=await original(...args),commit=handle.commit;handle.commit=async guard=>{await Off.persistActiveRouteRecord(idb,Off.buildActiveRoutePersistRecord({routeData:next,polyline:next.polyline,steps:next.maneuvers}),null,null,(await Off.loadJourneyState(idb)).ownership);return commit(guard);};return handle;};
  expect(await Modes.abandonJourney()).toBe(false);expect((await Off.loadActiveRouteRecord(idb)).routeData.id).toBe('replacement');expect(Modes.getState()).toBe('RECOVERY_REQUIRED');
 });
 test('R8 endpoint edits during pending promotion cancel rather than adopt the new generation',async()=>{
@@ -100,7 +100,7 @@ test.each(['legacy-helper','legacy-handle','malformed-handle'])('R8 %s journal c
 });
 test('R8 late abandonment stage cannot overwrite a newer journey after timeout',async()=>{
  await stored();const original=rt.stageAbandonJourney;let release;rt.stageAbandonJourney=(...args)=>new Promise(resolve=>{release=()=>original(...args).then(resolve);});jest.useFakeTimers();const pending=Modes.abandonJourney();await flush();jest.advanceTimersByTime(5000);expect(await pending).toBe(false);jest.useRealTimers();
- await Off.persistActiveRouteRecord(idb,Off.buildActiveRoutePersistRecord({routeData:next,polyline:next.polyline,steps:next.maneuvers}));await release();await flush();expect((await Off.loadActiveRouteRecord(idb)).routeData.id).toBe('replacement');
+ await Off.persistActiveRouteRecord(idb,Off.buildActiveRoutePersistRecord({routeData:next,polyline:next.polyline,steps:next.maneuvers}),null,null,(await Off.loadJourneyState(idb)).ownership);await release();await flush();expect((await Off.loadActiveRouteRecord(idb)).routeData.id).toBe('replacement');
 });
 test.each(['poi','parking','form-clear','waypoint'])('R7 %s production selection invalidates a pending GPS generation immediately',async kind=>{
  let release;calls.stageActiveRoute.mockImplementation(()=>new Promise(resolve=>{release=resolve;}));const pending=Modes.navigateFromGPS();await until(()=>release);const token=Modes.captureIntent();
