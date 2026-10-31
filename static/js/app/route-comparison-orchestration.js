@@ -655,6 +655,9 @@ function displayRouteComparison() {
 }
 
 function allowSelectionWrite() {
+    const planner=root.VoyagrJourneyModes;
+    if(planner&&planner.isPublishingPlanningPlan&&planner.isPublishingPlanningPlan()===true)return true;
+    if(planner&&planner.isPlanningCommit&&planner.isPlanningCommit()===true)return false;
     // Only the verifier-backed synchronous transition may write an active
     // selection. The capability is read-only and scoped inside that operation.
     const updater = root.VoyagrRerouteMapOrchestration;
@@ -673,6 +676,8 @@ function knownInactiveLifecycle() {
 }
 
 function allowPreviewMutation() {
+    const planner=root.VoyagrJourneyModes;
+    if(planner&&planner.isPlanningCommit&&planner.isPlanningCommit()&&!(planner.isPublishingPlanningPlan&&planner.isPublishingPlanningPlan()))return false;
     if (runtime && knownInactiveLifecycle()) return true;
     try { if (runtime && runtime.call && typeof runtime.call.showStatus === 'function') {
         runtime.call.showStatus('Preview display unavailable during navigation or incomplete startup. Select a verified route instead.', 'warning');

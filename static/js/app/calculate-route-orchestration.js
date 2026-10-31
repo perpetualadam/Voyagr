@@ -368,7 +368,65 @@
         applyCalculateRouteIdlePreviewPostMapFromPlan(postMap, data, orch.idleUiApplyPlan);
     }
 
-    function applyCalculateRouteIdlePreviewOutcome(data, labels) {
+    function planningOperations(orch,data,candidate,options){
+        var helpers=rt().getMapLibreHelpers(),map=rt().getMap();
+        var snapshot={route:window.lastCalculatedRoute,api:window.lastRouteApiResponse,options:rt().getRouteOptions(),index:rt().getSelectedRouteIndex?rt().getSelectedRouteIndex():0,
+            polyline:rt().getRoutePolyline?rt().getRoutePolyline():null,layer:rt().getRouteLayer(),start:rt().getStartMarker(),end:rt().getEndMarker()};
+        var oldPoints=root.VoyagrAvoidanceIntegrity.geometryPoints(snapshot.route);
+        function markerRemoved(marker){return !marker||!!(marker.getElement&&marker.getElement().isConnected===false);}
+        function cleanup(stage){
+            var ok=true;
+            if(stage.line){try{stage.line.remove();}catch(_){}if(helpers.isPolylineLayerRemoved(map,stage.line)!==true)ok=false;}
+            stage.markers.forEach(function(marker){try{marker.remove();}catch(_){}if(!markerRemoved(marker))ok=false;});return ok;
+        }
+        return {
+            requestCurrent:function(){return root.VoyagrAvoidanceIntegrity.responseCurrent(data,localStorage);},
+            stage:function(current){
+                var staged={line:null,markers:[]};
+                try{
+                    if(!current()||!map||!map.isStyleLoaded())throw Error('Map not ready; current journey retained.');
+                    staged.line=helpers.addPolyline(map,candidate.polyline,{color:'#3388ff',weight:5,opacity:0.85});
+                    if(!current()||helpers.isPolylineLayerMounted(map,staged.line,candidate.polyline)!==true)throw Error('Planned map did not mount');
+                    [orch.execute.startCoords,orch.execute.endCoords].forEach(function(point,index){
+                        var marker=helpers.createCircleMarker(point[0],point[1],{radius:8,fillColor:index?'#ff0000':'#00ff00',color:'#000',weight:2,fillOpacity:0.8});
+                        staged.markers.push(marker);marker.addTo(map);marker.bindPopup(index?'Planned destination':'Planned origin');
+                        if(!current()||markerRemoved(marker))throw Error('Planned marker did not mount');
+                    });
+                    return staged;
+                }catch(error){if(!cleanup(staged))root.VoyagrNavigationLifecycleOrchestration.failNavigation('planning_map_recovery_required');throw error;}
+            },
+            publish:function(staged,current){
+                if(!current())throw Error('Planning intent changed');
+                rt().setRouteOptions(options);if(rt().setSelectedRouteIndex)rt().setSelectedRouteIndex(0);
+                window.lastCalculatedRoute=candidate;window.lastRouteApiResponse=data;
+                rt().setRouteLayer(staged.line);if(rt().setRoutePolyline)rt().setRoutePolyline(candidate.polyline);rt().setStartMarker(staged.markers[0]);rt().setEndMarker(staged.markers[1]);
+            },
+            verify:function(staged){return window.lastCalculatedRoute===candidate&&rt().getRouteOptions()===options&&rt().getRouteLayer()===staged.line&&helpers.isPolylineLayerMounted(map,staged.line,candidate.polyline)===true&&staged.markers.every(function(marker){return !markerRemoved(marker);});},
+            removePrevious:function(staged,current){
+                if(!current())throw Error('Planning intent changed');
+                if(snapshot.layer&&snapshot.layer!==staged.line){snapshot.layer.remove();if(helpers.isPolylineLayerRemoved(map,snapshot.layer)!==true)throw Error('Previous map ownership could not be cleared');}
+                [snapshot.start,snapshot.end].forEach(function(marker){if(marker){marker.remove();if(!markerRemoved(marker))throw Error('Previous marker cleanup failed');}});
+                if(root.VoyagrRouteComparisonOrchestration&&root.VoyagrRouteComparisonOrchestration.clearComparisonRouteLayers()!==true)throw Error('Previous comparison ownership cleanup failed');
+                if(!current())throw Error('Planning intent changed');
+            },
+            restore:function(){
+                window.lastCalculatedRoute=snapshot.route;window.lastRouteApiResponse=snapshot.api;rt().setRouteOptions(snapshot.options);
+                if(rt().setSelectedRouteIndex)rt().setSelectedRouteIndex(snapshot.index);
+                rt().setRouteLayer(snapshot.layer);if(rt().setRoutePolyline)rt().setRoutePolyline(snapshot.polyline);rt().setStartMarker(snapshot.start);rt().setEndMarker(snapshot.end);
+                if(snapshot.layer&&helpers.isPolylineLayerMounted(map,snapshot.layer,oldPoints)!==true)root.VoyagrNavigationLifecycleOrchestration.failNavigation('planning_map_recovery_required');
+            },
+            cleanup:cleanup,
+            present:function(){
+                var post=orch.postMapApply;rt().call.updateTripInfo(post.tripInfo.distance,post.tripInfo.displayTime,post.tripInfo.fuelCost,post.tripInfo.tollCost);
+                if(post.showMultiDropLegs)rt().call.displayMultiDropLegs(data);
+                if(post.displayPrimaryHazards)rt().call.displayHazardMarkers(post.primaryHazards);
+                applyCalculateRouteIdleUiFromPlan(orch.idleUiApplyPlan,data);rt().call.showStatus(post.statusMessage,'success');
+                if(orch.execute.routePath)helpers.fitMapBounds(map,orch.execute.routePath,{padding:50});
+            },
+        };
+    }
+
+    async function applyCalculateRouteIdlePreviewOutcome(data, labels) {
         try {
             var GL = rt().geocodingLocations();
             var orch = rt().routeSelection().buildCalculateRouteIdlePreviewOrchestrationPlan({
@@ -389,6 +447,15 @@
                 },
                 data: data,
             });
+            var modes=root.VoyagrJourneyModes;
+            if(modes){
+                if(!modes.intentCurrent(labels.planningToken)||!orch.execute.shouldExecute)throw Error('New planning request was cancelled or invalid; previous journey retained.');
+                var options=rt().routeSelection().buildRouteOptionsFromApiResponse(data,rt().call.decodePolyline,orch.execute.routePath);
+                var candidate=root.VoyagrAvoidanceIntegrity.prepareNavigationCandidate(Object.assign({},options[0],{destination:labels.geocodedEnd,destinationName:labels.end,avoidance_requirements:data.avoidance_requirements}));
+                if(!candidate)throw Error('New route assessment or candidate preparation failed; previous journey retained.');
+                options[0]=candidate;
+                return await modes.commitPlanning(labels.planningToken,candidate,planningOperations(orch,data,candidate,options));
+            }
             applyCalculateRouteIdlePreviewFromPlan(orch, data);
         } catch (e) {
             var errApply = rt().routeSelection().buildCalculateRouteIdlePreviewParseErrorApplyPlan(e);
@@ -425,7 +492,7 @@
             return;
         }
 
-        applyCalculateRouteIdlePreviewOutcome(data, labels);
+        return applyCalculateRouteIdlePreviewOutcome(data, labels);
     }
 
     function applyCalculateRoutePreflightFromPlan(preflightApply) {
@@ -491,7 +558,7 @@
             costParams: rt().call.getRouteCostParams(rt().getCurrentVehicleType()),
             avoidTolls: rt().call.isAvoidTollsEnabled(),
             routePrefs: rt().call.getRoutePreferences(),
-            routeInProgress: rt().getRouteInProgress(),
+            routeInProgress: root.VoyagrJourneyModes?false:rt().getRouteInProgress(),
             isTrackingActive: rt().getIsTrackingActive(),
             trackingHistory: rt().getTrackingHistory(),
             currentLat: rt().getCurrentLat(),
@@ -507,7 +574,10 @@
     }
 
     async function calculateRoute() {
+        if(root.VoyagrJourneyModes&&(!root.VoyagrJourneyModes.commitPlanning||!root.VoyagrJourneyModes.captureIntent)){rt().call.showStatus('Planning modules differ. Reload online; current journey retained.','warning');return;}
         if (root.VoyagrJourneyModes && !root.VoyagrJourneyModes.beforePlanning()) return;
+        var modes=root.VoyagrJourneyModes;
+        var planningToken=modes&&modes.captureIntent();
         var integrity = root.VoyagrAvoidanceIntegrity;
         var ticket = integrity ? integrity.begin(localStorage) : null;
         var RR = rt().routingRequest();
@@ -566,15 +636,15 @@
                     return;
                 }
                 if (integrity) integrity.tag(data,ticket);
-                if (integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
+                if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
                     storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
                 })) { hideRouteProgressBar(); return; }
-                applyCalculateRouteResponseFromPlan(
+                return applyCalculateRouteResponseFromPlan(
                     RR.buildCalculateRouteResponseApplyPlan(
-                        RR.buildCalculateRouteResponseExecutePlan(data, rt().getRouteInProgress())
+                        RR.buildCalculateRouteResponseExecutePlan(data, modes?false:rt().getRouteInProgress())
                     ),
                     data,
-                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end }
+                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken }
                 );
             })
             .catch(function (error) {

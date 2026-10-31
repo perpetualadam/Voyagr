@@ -7,9 +7,10 @@
 
     var runtime = null;
     var endpointGenerations={start:0,end:0};
-    function invalidateEndpointRequests(field){
+    function invalidateEndpointRequests(field,options){
         if(field==='start'||field==='end')endpointGenerations[field]++;
         else if(field===undefined){endpointGenerations.start++;endpointGenerations.end++;}
+        if(!(options&&options.endpointOnly)&&(field===undefined||field==='start'||field==='end')&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.endpointChanged)root.VoyagrJourneyModes.endpointChanged(field);
     }
     function endpointSnapshot(input){return JSON.stringify([input.value,input.dataset.lat,input.dataset.lon,input.dataset.displayName,input.dataset.journeySource]);}
     if(typeof document!=='undefined')document.addEventListener('input',function(event){

@@ -132,6 +132,7 @@
                 stepIndex:pendingCandidate ? 0 : rt().getCurrentStepIndex(),
                 progressHint:!pendingCandidate && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
                 destination:route.destination || null,routeData:route,
+                continuation:!pendingCandidate&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.getContinuation?root.VoyagrJourneyModes.getContinuation(route):null,
             }));
             return true;
         } catch (e) {
@@ -140,14 +141,24 @@
         }
     }
 
-    async function stageActiveRoute(candidate) {
+    async function stageActiveRoute(candidate, options) {
         const off=OFF();
         if(!off||!candidate||!candidate.polyline)return null;
         return off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
             polyline:candidate.polyline,steps:candidate.maneuvers,stepIndex:0,
             destination:candidate.destination,routeData:candidate,
-        }));
+        }),options);
     }
+
+    async function persistJourneySnapshot(route,continuation,guard){
+        const off=OFF(),integrity=root.VoyagrAvoidanceIntegrity;
+        const points=integrity&&integrity.geometryPoints(route);if(!off||!points)return false;
+        const saved=await off.persistActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
+            polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,
+            routeData:route,continuation:continuation,
+        }),guard);return saved!==false;
+    }
+    async function clearJourneyPersistence(){await OFF().clearActiveRouteRecord(indexedDB);return true;}
 
     async function loadPersistedRoute() {
         const off = OFF();
@@ -336,6 +347,7 @@
         getCachedSpeedLimit: getCachedSpeedLimit,
         persistActiveRoute: persistActiveRoute,
         stageActiveRoute: stageActiveRoute,
+        persistJourneySnapshot:persistJourneySnapshot,clearJourneyPersistence:clearJourneyPersistence,
         loadPersistedRoute: loadPersistedRoute,
         clearPersistedRoute: clearPersistedRoute,
         schedulePersistRoute: schedulePersistRoute,

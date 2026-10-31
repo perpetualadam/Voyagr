@@ -658,6 +658,10 @@ function collectSettingsFormState() {
 
 function getCalculateRouteOrchestrationRuntime() {
     return {
+        getRoutePolyline:()=>VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        setRoutePolyline:value=>VoyagrNavigationLifecycleOrchestration.setRoutePolyline(value),
+        getSelectedRouteIndex:()=>VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
+        setSelectedRouteIndex:x=>VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(x),
         polylineCodec: () => _polylineCodec(),
         geocodingLocations: () => _geocodingLocations(),
         routeSelection: () => _routeSelection(),
@@ -676,6 +680,7 @@ function getCalculateRouteOrchestrationRuntime() {
         getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
         getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
+        setRouteLayer: value => VoyagrCalculateRouteOrchestration.setRouteLayer(value),
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsGeocoding: () => VoyagrGeocodingOrchestration.getIsGeocoding(),
@@ -3113,13 +3118,17 @@ VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 // Explicit mode coordinator; simulation never enters the GPS/navigation runtime.
 if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
     replacementProtocol:1,
+    confirmPlanReplacement:text=>window.confirm(text),
+    persistPreviousJourney:(route,continuation,guard)=>VoyagrOfflineNavigationOrchestration.persistJourneySnapshot(route,continuation,guard),
+    stagePlanningJourney:route=>VoyagrOfflineNavigationOrchestration.stageActiveRoute(route,{planning:true}),
+    clearJourneyPersistence:()=>VoyagrOfflineNavigationOrchestration.clearJourneyPersistence(),
     selected:()=>VoyagrRouteSelection.mergeNavigationRouteFromSelected(window.lastCalculatedRoute,
         VoyagrRouteComparisonOrchestration.getRouteOptions(),VoyagrRouteComparisonOrchestration.getSelectedRouteIndex()),
     options:()=>VoyagrRouteComparisonOrchestration.getRouteOptions(),setOptions:x=>VoyagrRouteComparisonOrchestration.setRouteOptions(x),
     index:()=>VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),setIndex:x=>VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(x),
     map:()=>map,helpers:()=>MapLibreHelpers,showStatus:showStatus,
     isLive:()=>VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),progressIndex:()=>VoyagrNavigationLifecycleOrchestration.getLastSnappedRouteIndex(),activeGeometry:()=>VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
-    stopLive:()=>VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation(),startLive:(r,options)=>VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(r,options),
+    stopLive:options=>VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation(options),startLive:(r,options)=>VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(r,options),
     stopGps:()=>VoyagrGpsOrchestration.stopGPSTracking(),getFix:()=>VoyagrGpsOrchestration.getAcceptedOriginFix(),
     acceptPosition:p=>{
         if(!VoyagrGpsOrchestration.acceptOriginPosition(p))return false;

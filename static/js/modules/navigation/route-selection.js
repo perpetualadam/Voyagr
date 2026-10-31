@@ -1843,6 +1843,7 @@
             provider_capabilities: route.provider_capabilities,
             camera_evidence: route.camera_evidence,
             route_comparison: route.route_comparison,
+            avoidance_intent_token: route.avoidance_intent_token,
             journey_context: route.journey_context,
             avoidance_assessment: route.avoidance_assessment,
             avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
@@ -1888,6 +1889,7 @@
             provider_capabilities:data.provider_capabilities,
             camera_evidence: data.camera_evidence,
             route_comparison: data.route_comparison,
+            avoidance_intent_token:data.avoidance_intent_token,
             journey_context:data.journey_context,
             avoidance_assessment:data.avoidance_assessment,
             avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
@@ -2482,6 +2484,7 @@
                 provider_capabilities: sel.provider_capabilities,
                 camera_evidence: sel.camera_evidence,
                 route_comparison: sel.route_comparison,
+                avoidance_intent_token: sel.avoidance_intent_token,
                 journey_context: sel.journey_context,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
@@ -2513,6 +2516,7 @@
             provider_capabilities: route.provider_capabilities,
             camera_evidence: route.camera_evidence,
             route_comparison: route.route_comparison,
+            avoidance_intent_token: route.avoidance_intent_token,
             journey_context: route.journey_context,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
@@ -2547,6 +2551,7 @@
             if (base.avoidance_assessment.status==='SATISFIED') base.avoidance_assessment.status='UNVERIFIED';
         }
         base.navigation_resume_requires_fresh_gps=true;
+        if(saved.continuation)base.journey_continuation=JSON.parse(JSON.stringify(saved.continuation));
         base.polyline=saved.polyline.map(function(p) { return [p[0],p[1]]; });
         base.maneuvers = saved.steps || base.maneuvers || [];
         if (!base.geometry || typeof base.geometry !== 'string') {

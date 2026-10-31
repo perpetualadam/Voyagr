@@ -2,6 +2,13 @@
 (function(root){
     'use strict';
     var runtime=null,state='PLANNING',epoch=0,ticket=null,pendingCandidate=null,pendingReplacement=null,retainedIntent=null;
+    var intentCancellations=[],planningCommit=null;
+    function captureIntent(){return epoch;}
+    function intentCurrent(token){return Number.isInteger(token)&&token===epoch;}
+    function onIntentCancelled(token,callback){
+        var entry={token:token,callback:callback};intentCancellations.push(entry);
+        return function(){intentCancellations=intentCancellations.filter(function(item){return item!==entry;});};
+    }
     var simulation=null,line=null,marker=null,timer=null,lastTick=0,meters=0,speed=1,selection=null;
     function rt(){if(!runtime)throw Error('Journey modes are unavailable. Reload the application.');return runtime;}
     function plan(){return root.VoyagrJourneyPlan;}
@@ -13,8 +20,8 @@
         var el=document.getElementById('journeyModeStatus');if(el)el.textContent=text;
         if(runtime&&runtime.showStatus)runtime.showStatus(text,type||'info');
     }
-    function setState(next){
-        if(state!==next&&root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+    function setState(next,keepEndpointLeases){
+        if(!keepEndpointLeases&&state!==next&&root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests(undefined,{endpointOnly:true});
         state=next;
         var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=state!=='CHOOSING'&&state!=='LOCATING'&&state!=='RECALCULATING'&&state!=='AUTHORIZING';
         var panel=document.getElementById('simulationControls');if(panel)panel.hidden=!simulating();
@@ -36,12 +43,20 @@
         if(!ok){setState('RECOVERY_REQUIRED');status('Simulation cleanup failed. Reload the map before switching modes.','error');return false;}
         simulation=null;return true;
     }
-    function cancel(){
-        epoch++;
-        if(state==='AUTHORIZING'&&runtime&&(!pendingReplacement||key(rt().selected())!==pendingReplacement.identity))runtime.stopLive();
+    function cancel(keepEndpointLeases){
+        var previous=epoch++;
+        var cancelled=intentCancellations.filter(function(entry){return entry.token===previous;});
+        intentCancellations=intentCancellations.filter(function(entry){return entry.token!==previous;});
+        cancelled.forEach(function(entry){try{entry.callback();}catch(_){/* Owned cancellation cannot block invalidation. */}});
+        var updater=root.VoyagrRerouteMapOrchestration;
+        if(state==='AUTHORIZING'&&!(updater&&updater.isCommittingVerifiedTransition&&updater.isCommittingVerifiedTransition())&&runtime&&(!pendingReplacement||key(rt().selected())!==pendingReplacement.identity))runtime.stopLive();
         pendingCandidate=null;pendingReplacement=null;
-        if(root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+        if(!keepEndpointLeases&&root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests(undefined,{endpointOnly:true});
         if(ticket){if(integrity().isLatest(ticket))integrity().invalidate();integrity().finish(ticket);ticket=null;}
+    }
+    function endpointChanged(){
+        cancel(true);if(integrity()&&integrity().invalidate)integrity().invalidate();
+        if(state==='LOCATING'||state==='RECALCULATING'||state==='AUTHORIZING'){setState(rt().isLive()?'LIVE':'CHOOSING',true);status('Journey destination or endpoints changed. Previous request cancelled; recalculate with the current selection.','warning');}
     }
     function exit(){cancel();if(!cleanSimulation())return false;setState('PLANNING');status('Journey inspection closed. Simulation does not record driven trips.');return true;}
     function retainLiveJourney(){
@@ -49,11 +64,11 @@
         var selected=rt().selected(),identity=key(selected);
         try{
             if(!rt().activeGeometry||JSON.stringify(rt().activeGeometry())!==JSON.stringify(integrity().geometryPoints(selected)))throw Error('Progress context differs');
-            retainedIntent={identity:identity,intent:plan().liveIntent(selected,true,rt().progressIndex())};
+            retainedIntent={identity:identity,intent:plan().liveIntent(selected,true,rt().progressIndex()),progressIndex:rt().progressIndex()};
         }catch(_){retainedIntent={identity:identity,unavailable:true};}
     }
-    function stopLive(){
-        if(rt().isLive()){retainLiveJourney();rt().stopLive();}
+    function stopLive(options){
+        if(rt().isLive()){retainLiveJourney();rt().stopLive(options);}
         if(rt().isLive())throw Error('Live guidance could not stop. Recover navigation before switching modes.');
     }
     function drawSimulation(){
@@ -119,6 +134,7 @@
         pendingCandidate=candidate;pendingReplacement=replacement||null;setState('AUTHORIZING');status('Verifying live navigation and map resources…','loading');
         if(!replacement){rt().setOptions(staged);rt().setIndex(0);}
         try{
+            if(!intentCurrent(token)||!root.VoyagrNavigationLifecycleOrchestration||root.VoyagrNavigationLifecycleOrchestration.INTENT_OWNERSHIP_PROTOCOL!==1||!root.VoyagrRerouteMapOrchestration||root.VoyagrRerouteMapOrchestration.INTENT_OWNERSHIP_PROTOCOL!==1)throw Error('Navigation intent modules differ. Reload online; current journey retained.');
             if(replacement&&(!root.VoyagrNavigationLifecycleOrchestration||root.VoyagrNavigationLifecycleOrchestration.JOURNEY_REPLACEMENT_PROTOCOL!==1||rt().replacementProtocol!==1))throw Error('Journey replacement modules differ. Reload online; current navigation is retained.');
             var ok=await rt().startLive(candidate,replacement?{gpsReplacement:true}:undefined);
             if(ok!==true||token!==epoch)throw Error('Live navigation was refused or cancelled. Inspect the safety explanation and recalculate.');
@@ -131,6 +147,8 @@
     async function startHere(){
         try{
             var route=rt().selected();
+            if(planningCommit)throw Error('Previous planning transaction is finishing. Retry shortly.');
+            getContinuation(route);
             if(rt().isLive()||retainedIntent&&retainedIntent.identity===key(route))throw Error('Use Navigate From My Location to continue the remaining journey; completed visits cannot be restarted silently.');
             var candidate=integrity().prepareNavigationCandidate(route),fix=realFix();
             if(!candidate||!fix||!integrity().gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true}))throw Error('This plan is not authorized for a live start. Recalculate from your location.');
@@ -142,13 +160,15 @@
         var token,ownedTicket=null;
         try{
             if(navigator.onLine===false)throw Error('Live navigation needs an online reassessment. Reconnect and retry; offline plans remain available for inspection.');
+            if(planningCommit)throw Error('Previous planning transaction is finishing. Retry shortly.');
             var selected=rt().selected(),identity=key(selected);
+            if(!rt().isLive())getContinuation(selected);
             selection=identity;
             var active=rt().isLive();
             if(active&&(!rt().activeGeometry||JSON.stringify(rt().activeGeometry())!==JSON.stringify(integrity().geometryPoints(selected))))throw Error('Selected journey differs from active progress. Stop and replan without skipping stops.');
             if(!active&&retainedIntent&&retainedIntent.identity===identity&&retainedIntent.unavailable)throw Error('Remaining visits cannot be established. Inspect and explicitly replan the complete journey before a live start.');
             var intent=active?plan().liveIntent(selected,true,rt().progressIndex()):retainedIntent&&retainedIntent.identity===identity?JSON.parse(JSON.stringify(retainedIntent.intent)):plan().liveIntent(selected,false,0);
-            if(active)retainedIntent={identity:identity,intent:JSON.parse(JSON.stringify(intent))};
+            if(active)retainedIntent={identity:identity,intent:JSON.parse(JSON.stringify(intent)),progressIndex:rt().progressIndex()};
             cancel();if(!cleanSimulation())return false;token=epoch;setState('LOCATING');status('Obtaining a fresh, accurate GPS location…','loading');
             var position=await locate(),fix=fresh(position);
             if(token!==epoch||key(rt().selected())!==identity)return false;
@@ -203,8 +223,83 @@
             return true;
         }catch(error){status(error.message,'warning');return false;}
     }
+    function getContinuation(route){
+        if(runtime&&rt().isLive()&&key(route)===key(rt().selected()))retainLiveJourney();
+        if(retainedIntent&&retainedIntent.identity===key(route))return JSON.parse(JSON.stringify(retainedIntent));
+        var saved=route&&route.journey_continuation;
+        if(!saved)return null;
+        var points=integrity().geometryPoints(route);
+        if(saved.identity!==key(route)||saved.unavailable||!points||!Number.isInteger(saved.progressIndex)||saved.progressIndex<0||saved.progressIndex>=points.length||JSON.stringify(saved.intent)!==JSON.stringify(plan().liveIntent(route,true,saved.progressIndex)))throw Error('Saved continuation is inconsistent. Explicitly replan before navigation.');
+        retainedIntent=JSON.parse(JSON.stringify(saved));return JSON.parse(JSON.stringify(saved));
+    }
+    var publishingPlan=false;
+    async function commitPlanning(token,candidate,operations){
+        if(planningCommit||!intentCurrent(token))return false;
+        var owner={token:token},stage=null,mapStage=null,unsubscribe=function(){},published=false,timer;
+        var previous=rt().selected(),continuation=getContinuation(previous),hadJourney=!!(rt().isLive()||retainedIntent);
+        function current(){return planningCommit===owner&&intentCurrent(token)&&(!operations.requestCurrent||operations.requestCurrent()===true);}
+        function bounded(work){return Promise.race([Promise.resolve(work),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),5000);})]).finally(()=>clearTimeout(timer));}
+        function publish(callback){publishingPlan=true;try{return callback();}finally{publishingPlan=false;}}
+        planningCommit=owner;
+        try{
+            if(!candidate||!integrity().prepareNavigationCandidate(candidate))throw Error('Plan assessment, geometry or maneuvers are incomplete. Current journey retained.');
+            plan().inspection(candidate,integrity());
+            var assessment=candidate.avoidance_assessment,origin=assessment.origin_integrity;
+            if(hadJourney&&!(assessment.automatic_selection_allowed===true&&assessment.requires_acceptance===false&&origin&&origin.navigation_allowed===true&&origin.status==='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'&&origin.transition_verified!==true&&assessment.requirements.every(function(row){return !row.enabled||row.mode!=='mandatory'||row.status==='SATISFIED';})))throw Error('This new plan has unresolved critical checks. Current journey retained; explicitly end it before inspecting another refused plan.');
+            if(hadJourney&&(!rt().persistPreviousJourney||await bounded(rt().persistPreviousJourney(previous,continuation,current))!==true))throw Error('Previous continuation could not be saved. Current journey retained.');
+            if(!current())throw Error('Planning intent changed');
+            mapStage=operations.stage(current);if(!current())throw Error('Planning intent changed');
+            if(hadJourney){
+                if(!rt().confirmPlanReplacement||rt().confirmPlanReplacement('Replace the previous journey with this validated new plan? Existing guidance will end; this does not start live navigation.')!==true)throw Error('New plan cancelled; previous journey retained.');
+                if(!current())throw Error('Planning intent changed');
+                const work=Promise.resolve(rt().stagePlanningJourney(candidate));
+                work.then(value=>{if(!current()&&value&&value.discard)void Promise.resolve().then(()=>value.discard()).catch(()=>{});},()=>{});
+                stage=await bounded(work);
+                if(!stage||!stage.finalize||!stage.rollback||!stage.abort||!current())throw Error('Planning persistence modules unavailable, mismatched or cancelled');
+                unsubscribe=onIntentCancelled(token,function(){if(stage.abort)stage.abort();});
+                if(await bounded(stage.commit(current))!==true||!current())throw Error('Planning persistence interrupted');
+            }
+            if(!current())throw Error('Planning intent changed');
+            if(rt().isLive()&&JSON.stringify(getContinuation(previous))!==JSON.stringify(continuation))throw Error('Journey progress changed while planning. Current remaining visits retained; retry the plan.');
+            if(rt().isLive()){
+                retainLiveJourney();
+                if(root.VoyagrNavigationLifecycleOrchestration.getNavigationStarting())throw Error('Earlier navigation transition is still pending. Retry the plan shortly.');
+                rt().stopLive({preservePersistedJourney:true});
+                if(rt().isLive())throw Error('Previous guidance could not stop');
+            }
+            if(!current())throw Error('Planning intent changed');
+            published=true;publish(function(){operations.publish(mapStage,current);});
+            if(!current()||operations.verify(mapStage)!==true)throw Error('Planned context did not commit');
+            operations.removePrevious(mapStage,current);
+            if(!current())throw Error('Planning intent changed');
+            if(stage&&(await bounded(stage.finalize(current))!==true||!current()))throw Error('Planning finalization failed');
+            retainedIntent=null;setState('PLANNING');if(planningCommit===owner)planningCommit=null;
+            try{operations.present();}catch(_){status('Plan committed. Reopen its details if the display did not refresh.','warning');}
+            return true;
+        }catch(error){
+            if(published){try{publish(function(){operations.restore(mapStage);});}catch(_){/* Recovery below remains fail closed. */}}
+            if(stage&&stage.rollback){try{await bounded(stage.rollback(function(){return planningCommit===owner;}));}catch(_){/* Pending journal still reads as the previous journey. */}}
+            // A driver may complete another visit while staging. Save the newest
+            // canonical continuation before releasing this exclusive planning owner.
+            if(!published&&rt().isLive()&&key(rt().selected())===key(previous)&&rt().persistPreviousJourney){
+                try{await bounded(rt().persistPreviousJourney(previous,getContinuation(previous),function(){return planningCommit===owner;}));}catch(_){/* Active guidance remains authoritative; retry storage before a handover. */}
+            }
+            if(mapStage){try{if(operations.cleanup(mapStage)!==true)throw Error('Owned preview cleanup failed');}catch(_){if(root.VoyagrNavigationLifecycleOrchestration)root.VoyagrNavigationLifecycleOrchestration.failNavigation('planning_map_recovery_required');}}
+            status(error.message,'warning');return false;
+        }finally{
+            unsubscribe();if(stage&&stage.discard){try{await bounded(stage.discard());}catch(_){/* Inert owned staging record only. */}}
+            if(planningCommit===owner)planningCommit=null;
+        }
+    }
+    async function abandonJourney(){
+        if(planningCommit)return false;
+        if(!rt().confirmPlanReplacement||rt().confirmPlanReplacement('End the previous journey and discard its remaining stops? This cannot be triggered by a failed calculation.')!==true)return false;
+        cancel();stopLive({preservePersistedJourney:true});
+        try{if(!rt().clearJourneyPersistence||await rt().clearJourneyPersistence()!==true)throw Error('Journey storage could not be cleared; remaining visits are retained.');retainedIntent=null;setState('PLANNING');status('Previous journey explicitly ended.');return true;}
+        catch(error){status(error.message,'warning');return false;}
+    }
     function beforePlanning(){
-        try{cancel();if(!cleanSimulation())return false;stopLive();retainedIntent=null;setState('PLANNING');return true;}
+        try{if(planningCommit){cancel();status('Previous planning transaction is finishing. Retry shortly.','warning');return false;}cancel();if(!cleanSimulation())return false;if(rt().isLive())retainLiveJourney();setState(rt().isLive()?'LIVE':'PLANNING');return true;}
         catch(error){status(error.message,'warning');return false;}
     }
     function liveStopped(){if(state==='LIVE')setState('PLANNING');}
@@ -213,6 +308,8 @@
         catch(error){status(error.message,'warning');return false;}
     }
     var api={PROTOCOL:1,bind:function(deps){runtime=deps;},getState:function(){return state;},isSimulating:simulating,
+        commitPlanning:commitPlanning,getContinuation:getContinuation,abandonJourney:abandonJourney,isPlanningCommit:function(){return !!planningCommit;},isPublishingPlanningPlan:function(){return publishingPlan;},
+        captureIntent:captureIntent,intentCurrent:intentCurrent,onIntentCancelled:onIntentCancelled,endpointChanged:endpointChanged,
         choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,exit:exit,
         navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,beforePlanning:beforePlanning,retainLiveJourney:retainLiveJourney,liveStopped:liveStopped,addGpsStop:addGpsStop};
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',function(){if(document.hidden&&simulating())pause();});

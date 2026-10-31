@@ -12,7 +12,7 @@
     function cancel(ticket) { finish(ticket); if (ticket && ticket.controller) ticket.controller.abort(); }
     function begin(storage) {
         cancel(activeTicket);
-        activeTicket={id:++sequence,revision:revision,snapshot:snapshot(storage),controller:typeof AbortController!=='undefined' ? new AbortController() : null};
+        activeTicket={id:++sequence,revision:revision,snapshot:snapshot(storage),intentToken:root.VoyagrJourneyModes&&root.VoyagrJourneyModes.captureIntent?root.VoyagrJourneyModes.captureIntent():null,controller:typeof AbortController!=='undefined' ? new AbortController() : null};
         return activeTicket;
     }
     function fetchOptions(ticket) {
@@ -20,7 +20,7 @@
         ticket.timer=setTimeout(function() { ticket.controller.abort(); },35000);
         return {signal:ticket.controller.signal};
     }
-    function current(ticket, storage) { return !!ticket && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage); }
+    function current(ticket, storage) { return !!ticket && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage) && (ticket.intentToken==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(ticket.intentToken))); }
     function invalidate() { revision++; cancel(activeTicket); }
     function augment(body, storage, fix) {
         var next = Object.assign({},body);
@@ -245,10 +245,11 @@
     }
     function tag(data, ticket) {
         if (!data || typeof data!=='object') return data;
+        if(ticket.intentToken!=null)data.avoidance_intent_token=ticket.intentToken;
         data.avoidance_preferences_snapshot=ticket.snapshot;
         data.avoidance_request_sequence=ticket.id;
         data.avoidance_request_revision=ticket.revision;
-        (data.routes || []).forEach(function(route) { route.avoidance_preferences_snapshot=ticket.snapshot; });
+        (data.routes || []).forEach(function(route) { route.avoidance_preferences_snapshot=ticket.snapshot;if(ticket.intentToken!=null)route.avoidance_intent_token=ticket.intentToken; });
         return data;
     }
     function summary(route) {
@@ -266,7 +267,7 @@
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);
