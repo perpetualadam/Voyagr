@@ -392,6 +392,7 @@
         } catch (_) { return inconsistentMap(); }
         authorisedCurrentRoute = JSON.parse(JSON.stringify(candidate));
         window.lastRouteApiResponse = null;
+        try { if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.committed(candidate); } catch (_) { /* Guidance retains its independently verified transaction. */ }
         try {
             if (state.deviation.clearFailureRetries) rt().call.clearRerouteFailureRetries();
             resetVoiceAnnouncementStateForNewRoute();

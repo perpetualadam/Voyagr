@@ -241,6 +241,9 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         collectShowRoutePreviewInput(routeData, skipMapDisplay)
     );
     applyShowRoutePreviewFromPlan(orch.apply, routeData, skipMapDisplay);
+    if (root.VoyagrNavigationSafetyUX) {
+        root.VoyagrNavigationSafetyUX.present(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()));
+    }
 }
 
 function collectShowAlternativeRoutesPreviewInput() {

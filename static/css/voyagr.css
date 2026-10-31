@@ -4472,3 +4472,26 @@ html.dark-mode .safety-notice-privacy ul,
 body.dark-mode .safety-notice-privacy ul {
     color: #cbd5e1;
 }
+
+/* Nonmodal navigation warning: maneuver guidance remains at the top; controls stay operable. */
+.best-effort-warning {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left));
+    bottom: calc(90px + env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 120px));
+    box-sizing: border-box;
+    padding: 12px;
+    border: 2px solid #926100;
+    border-radius: 10px;
+    background: #fff8e1;
+    color: #302300;
+    /* Keep maneuver guidance (250) and map controls (400) above this card. */
+    z-index: 200;
+    pointer-events: none;
+    font-size: 0.875rem;
+}
+.best-effort-warning[hidden] { display: none; }
+.best-effort-warning p { margin: 6px 0; }
+.best-effort-warning button { pointer-events: auto; min-height: 44px; }
+.best-effort-warning button:focus-visible { outline: 3px solid #185abc; outline-offset: 2px; }
+[data-navigation-start]:disabled { opacity: .55; cursor: not-allowed; }

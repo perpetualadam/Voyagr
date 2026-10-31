@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v45';
+const CACHE_VERSION = 'v46';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -35,6 +35,7 @@ const STATIC_ASSETS = [
   '/static/js/voyagr-core.js',
   '/static/js/maplibre-helpers.js',
   '/static/js/voyagr-app.js',
+  '/static/js/app/navigation-safety-ux.js',
   '/static/vendor/picovoice/porcupine-web.iife.js',
   '/static/vendor/picovoice/web-voice-processor.iife.js',
   '/static/vendor/picovoice/porcupine_params.pv',
