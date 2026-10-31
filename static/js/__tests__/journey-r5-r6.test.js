@@ -20,7 +20,7 @@ beforeEach(()=>{
  isLive:Life.getRouteInProgress,activeGeometry:Life.getRoutePolyline,progressIndex:Life.getLastSnappedRouteIndex,options:Compare.getRouteOptions,setOptions:Compare.setRouteOptions,index:Compare.getSelectedRouteIndex,setIndex:Compare.setSelectedRouteIndex,
  stopLive:options=>Life.stopTurnByTurnNavigation(options),startLive:Life.startTurnByTurnNavigation,stopGps:jest.fn(),getFix:()=>fix,acceptPosition:p=>{fix={lat:p.coords.latitude,lon:p.coords.longitude,accuracy:p.coords.accuracy,timestamp:p.timestamp};return true;},
  map:()=>ctx.map,helpers:()=>ctx.mapHelpers,showStatus:ctx.status,buildRequest:()=>({avoid_caz:false}),fetch:jest.fn(async()=>({ok:false})),resolveDestination:jest.fn(),simulationMarker:()=>marker().addTo(),
- confirmPlanReplacement:confirm,persistPreviousJourney:OffApp.persistJourneySnapshot,stagePlanningJourney:route=>OffApp.stageActiveRoute(route,{planning:true}),clearJourneyPersistence:OffApp.clearJourneyPersistence};
+ confirmPlanReplacement:confirm,persistPreviousJourney:OffApp.persistJourneySnapshot,stagePlanningJourney:route=>OffApp.stageActiveRoute(route,{planning:true}),stageAbandonJourney:OffApp.stageAbandonJourney,clearJourneyPersistence:OffApp.clearJourneyPersistence};
  Modes.bind(modeRt);global.VoyagrGpsOrchestration={getAcceptedOriginFix:()=>fix};navigator.geolocation.getCurrentPosition=jest.fn(ok=>ok({timestamp:Date.now(),coords:{latitude:53.0015,longitude:-1,accuracy:5}}));
  ctx.mapHelpers.createCircleMarker=jest.fn(()=>marker());let startMarker=null,endMarker=null;
  calcRt={routingRequest:()=>require('../modules/navigation/routing-request.js'),routeSelection:()=>require('../modules/navigation/route-selection.js'),geocodingLocations:()=>require('../modules/navigation/geocoding-locations.js'),routeSharing:()=>require('../modules/navigation/route-sharing.js'),routeProgress:()=>require('../modules/navigation/route-progress.js'),
@@ -97,9 +97,9 @@ test.each(['stage','promotion','finalization'])('R5 %s failure retains durable c
 });
 test('R5 deliberate abandonment is distinct, confirmed, and clears durable continuation only on success',async()=>{
  await OffApp.persistJourneySnapshot(old,Modes.getContinuation(old));confirm.mockReturnValue(false);expect(await Modes.abandonJourney()).toBe(false);expect(Life.getRouteInProgress()).toBe(true);
- confirm.mockReturnValue(true);const stop=modeRt.stopLive;modeRt.stopLive=jest.fn(stop);const clear=modeRt.clearJourneyPersistence;modeRt.clearJourneyPersistence=async()=>{throw Error('storage unavailable');};expect(await Modes.abandonJourney()).toBe(false);expect(Modes.getContinuation(old).intent.stops.map(s=>s.name)).toEqual(['pending']);
+ confirm.mockReturnValue(true);const stop=modeRt.stopLive;modeRt.stopLive=jest.fn(stop);const clear=modeRt.stageAbandonJourney;modeRt.stageAbandonJourney=async()=>{throw Error('storage unavailable');};expect(await Modes.abandonJourney()).toBe(false);expect(Modes.getContinuation(old).intent.stops.map(s=>s.name)).toEqual(['pending']);
  expect(modeRt.stopLive).toHaveBeenCalledWith({preservePersistedJourney:true});expect((await Off.loadActiveRouteRecord(idb)).continuation.intent.stops.map(s=>s.name)).toEqual(['pending']);
- modeRt.clearJourneyPersistence=clear;expect(await Modes.abandonJourney()).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();expect(Modes.getContinuation(old)).toBeNull();
+ modeRt.stageAbandonJourney=clear;expect(await Modes.abandonJourney()).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();expect(Modes.getContinuation(old)).toBeNull();
 });
 test('R5 progress crossing a stop during pending planning cannot resurrect it in memory or durable continuation',async()=>{
  const original=modeRt.stagePlanningJourney;modeRt.stagePlanningJourney=async route=>{const handle=await original(route);Life.setLastSnappedRouteIndex(2);return handle;};

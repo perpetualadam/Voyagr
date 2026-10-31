@@ -18,6 +18,7 @@
     }
 
     function toggleAutoGpsLocation() {
+        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('start');
         const toggle = document.getElementById('autoGpsToggle');
         autoGpsEnabled = toggle.checked;
 
@@ -121,6 +122,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         toggleAutoGpsLocation: toggleAutoGpsLocation,
         startAutoGpsLocation: startAutoGpsLocation,

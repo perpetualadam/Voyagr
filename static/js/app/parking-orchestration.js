@@ -482,6 +482,8 @@
                 return;
             }
 
+            if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end');
+            delete endInput.dataset.journeyOriginalSource;endInput.dataset.journeySource='searched';
             endInput.value = `${parking.name}`;
             endInput.dataset.lat = parking.lat;
             endInput.dataset.lon = parking.lon;
@@ -502,6 +504,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind,
         collectParkingPreferencesFormState,
         saveParkingPreferences,

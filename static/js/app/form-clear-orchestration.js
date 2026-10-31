@@ -15,6 +15,8 @@
     }
 
     function clearForm() {
+        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+        if(root.VoyagrNavigationLifecycleOrchestration&&root.VoyagrNavigationLifecycleOrchestration.getRouteInProgress()){rt().call.showStatus('End the current journey before clearing its map.','warning');return false;}
         const startEl = document.getElementById('start');
         if (startEl) {
             startEl.value = '';
@@ -58,6 +60,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         clearForm: clearForm,
     };

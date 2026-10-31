@@ -160,6 +160,11 @@
             routeData:route,continuation:continuation,
         }),guard);return saved!==false;
     }
+    async function stageAbandonJourney(route,continuation,guard,priorIdentity){
+        const off=OFF(),integrity=root.VoyagrAvoidanceIntegrity,points=integrity&&integrity.geometryPoints(route);
+        if(!off||off.ABANDONMENT_PROTOCOL!==1||!points)return null;
+        return off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,routeData:route,continuation}),{abandon:true,guard:guard,priorIdentity:priorIdentity});
+    }
     async function clearJourneyPersistence(){await OFF().clearActiveRouteRecord(indexedDB);return true;}
 
     async function loadPersistedRoute() {
@@ -349,7 +354,7 @@
         getCachedSpeedLimit: getCachedSpeedLimit,
         persistActiveRoute: persistActiveRoute,
         stageActiveRoute: stageActiveRoute,
-        persistJourneySnapshot:persistJourneySnapshot,clearJourneyPersistence:clearJourneyPersistence,
+        stageAbandonJourney:stageAbandonJourney,persistJourneySnapshot:persistJourneySnapshot,clearJourneyPersistence:clearJourneyPersistence,
         loadPersistedRoute: loadPersistedRoute,
         clearPersistedRoute: clearPersistedRoute,
         schedulePersistRoute: schedulePersistRoute,

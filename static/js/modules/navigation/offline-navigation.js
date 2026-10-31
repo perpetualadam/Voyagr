@@ -197,6 +197,13 @@
         });
     }
 
+    function visibleJourney(record){
+        var depth=0;while(record&&record.planning_pending&&depth++<8)record=record.previous_journey||null;
+        return record&&(record.planning_pending||record.abandoned)?null:record;
+    }
+    function journeyIdentity(record){
+        var route=record&&record.routeData;return JSON.stringify(route&&[route.id,route.destination,route.geometry,route.maneuvers,route.journey_context]);
+    }
     function stageActiveRouteRecord(idb, record, options) {
         options=options||{};
         if(!root.crypto||typeof root.crypto.getRandomValues!=='function')return Promise.reject(new Error('Staging identity unavailable'));
@@ -205,29 +212,53 @@
         var previous=null,aborted=false,activeTx=null;
         function write(action,guard){
             return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+                if(action==='stage'&&options.abandon&&options.guard&&options.guard()!==true){db.close();resolve(false);return;}
                 if((action==='commit'||action==='finalize')&&(aborted||!guard||guard()!==true)){db.close();resolve(false);return;}
                 var tx=db.transaction(ROUTE_STORE,'readwrite'),store=tx.objectStore(ROUTE_STORE),ok=true;
                 activeTx=tx;
                 if(action==='stage'){
-                    var old=store.get('current');old.onsuccess=function(){previous=old.result||null;};
-                    store.put(Object.assign({},record,{id:id}));
+                    var old=store.get('current');old.onsuccess=function(){
+                        previous=old.result||null;
+                        if(options.abandon){
+                            if(options.guard&&options.guard()!==true){ok=false;return;}
+                            var visible=visibleJourney(previous);
+                            if(visible&&journeyIdentity(visible)!==journeyIdentity(record)&&journeyIdentity(visible)!==options.priorIdentity){ok=false;return;}
+                            if(!previous||!previous.abandoned){
+                                // Checkpoint the canonical remaining stops, including a
+                                // recovered interrupted planning journal, before retiring it.
+                                previous=Object.assign({},record,{id:'current'});store.put(previous);
+                            }
+                        }
+                        store.put(Object.assign({},record,{id:id}));
+                    };
                 }else if(action==='discard')store.delete(id);
                 else if(action==='commit'){
-                    store.put(Object.assign({},record,{id:'current',persistence_owner:id},options.planning?{planning_pending:true,previous_journey:previous}:{}));
-                    store.delete(id);
+                    var promote=function(){
+                        store.put(Object.assign({},record,{id:'current',persistence_owner:id},options.planning||options.abandon?{planning_pending:true,previous_journey:previous}:{}));store.delete(id);
+                    };
+                    if(options.abandon){
+                        var owned=store.get('current');owned.onsuccess=function(){
+                            if(JSON.stringify(owned.result||null)!==JSON.stringify(previous)||guard()!==true){ok=false;return;}promote();
+                        };
+                    }else promote();
                 }else{
                     var current=store.get('current');current.onsuccess=function(){
                         var value=current.result;
-                        if(!value||value.persistence_owner!==id||(guard&&guard()!==true)){ok=false;return;}
+                        if(!value||value.persistence_owner!==id||(guard&&guard()!==true)){
+                            // Failed pre-promotion/aborted writes leave this exact
+                            // checkpoint intact. Never restore over a newer owner.
+                            ok=action==='rollback'&&JSON.stringify(value||null)===JSON.stringify(previous);return;
+                        }
                         if(action==='rollback'){if(previous)store.put(previous);else store.delete('current');}
-                        else store.put(Object.assign({},record,{id:'current',persistence_owner:id}));
+                        else store.put(options.abandon?{id:'current',persistence_owner:id,abandoned:true}:Object.assign({},record,{id:'current',persistence_owner:id}));
                     };
                 }
                 tx.oncomplete=function(){if(activeTx===tx)activeTx=null;db.close();resolve(ok);};
                 tx.onerror=tx.onabort=function(){if(activeTx===tx)activeTx=null;db.close();reject(tx.error||new Error('Persistence aborted'));};
             });});
         }
-        return write('stage').then(function(){return {
+        return write('stage').then(function(ok){return !ok?null:{
+            ABANDONMENT_PROTOCOL:options.abandon?1:undefined,
             commit:function(guard){return write('commit',guard);},
             finalize:function(guard){return write('finalize',guard);},
             rollback:function(guard){return write('rollback',guard);},
@@ -247,9 +278,7 @@
                 var req = tx.objectStore(ROUTE_STORE).get('current');
                 req.onsuccess = function () {
                     db.close();
-                    var record=req.result||null,depth=0;
-                    while(record&&record.planning_pending&&depth++<8)record=record.previous_journey||null;
-                    resolve(record&&record.planning_pending?null:record);
+                    resolve(visibleJourney(req.result||null));
                 };
                 req.onerror = function () {
                     db.close();
@@ -662,6 +691,7 @@
     }
 
     var api = {
+        ABANDONMENT_PROTOCOL:1,
         OFFLINE_BANNER_ID: OFFLINE_BANNER_ID,
         RESUME_NAV_BANNER_ID: RESUME_NAV_BANNER_ID,
         RESUME_NAV_YES_ID: RESUME_NAV_YES_ID,

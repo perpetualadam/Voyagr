@@ -285,7 +285,7 @@
 
         if (plan.endInputId && plan.endValue != null) {
             const endEl = document.getElementById(plan.endInputId);
-            if (endEl) endEl.value = plan.endValue;
+            if (endEl) {if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end');delete endEl.dataset.lat;delete endEl.dataset.lon;delete endEl.dataset.displayName;delete endEl.dataset.journeyOriginalSource;endEl.dataset.journeySource='searched';endEl.value=plan.endValue;}
         }
         if (plan.scheduleCalculateRoute) {
             rt().call.calculateRoute();
@@ -379,6 +379,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         initVoiceRecognition: initVoiceRecognition,
         toggleVoiceInput: toggleVoiceInput,

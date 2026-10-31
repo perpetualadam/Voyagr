@@ -484,7 +484,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
                 } else {
                     div.onclick = () => {
                         const fieldInput = document.getElementById(fieldId);
-                        if (fieldInput) fieldInput.value = item.query || '';
+                        if (fieldInput) {if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(fieldId);delete fieldInput.dataset.lat;delete fieldInput.dataset.lon;delete fieldInput.dataset.displayName;delete fieldInput.dataset.journeyOriginalSource;fieldInput.dataset.journeySource='saved';fieldInput.value=item.query||'';}
                         dropdown.classList.remove('show');
                     };
                 }
@@ -512,6 +512,8 @@ function showSearchHistory() {
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         escapeHtml: escapeHtml,
         initGeocodeCache: initGeocodeCache,

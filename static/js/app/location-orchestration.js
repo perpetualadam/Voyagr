@@ -183,6 +183,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         getCurrentLocation: getCurrentLocation,
         setCurrentLocation: setCurrentLocation,

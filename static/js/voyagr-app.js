@@ -1607,6 +1607,7 @@ function getFormClearOrchestrationRuntime() {
         getZoomAnimationDurationMs: () => VoyagrSmartZoomOrchestration.getZoomAnimationDurationMs(),
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         call: {
+            showStatus,
             clearParkingSelection,
             updateAutoGpsLocation,
         },
@@ -1614,7 +1615,7 @@ function getFormClearOrchestrationRuntime() {
 }
 
 function clearForm() {
-    VoyagrFormClearOrchestration.clearForm();
+    if(VoyagrFormClearOrchestration.clearForm()===false)return false;
     document.getElementById('tripInfo').classList.remove('show');
     const alongRouteBtn = document.getElementById('alongRouteSearch');
     if (alongRouteBtn) alongRouteBtn.style.display = 'none';
@@ -3121,6 +3122,7 @@ if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
     confirmPlanReplacement:text=>window.confirm(text),
     persistPreviousJourney:(route,continuation,guard)=>VoyagrOfflineNavigationOrchestration.persistJourneySnapshot(route,continuation,guard),
     stagePlanningJourney:route=>VoyagrOfflineNavigationOrchestration.stageActiveRoute(route,{planning:true}),
+    stageAbandonJourney:(route,continuation,guard,priorIdentity)=>VoyagrOfflineNavigationOrchestration.stageAbandonJourney(route,continuation,guard,priorIdentity),
     clearJourneyPersistence:()=>VoyagrOfflineNavigationOrchestration.clearJourneyPersistence(),
     selected:()=>VoyagrRouteSelection.mergeNavigationRouteFromSelected(window.lastCalculatedRoute,
         VoyagrRouteComparisonOrchestration.getRouteOptions(),VoyagrRouteComparisonOrchestration.getSelectedRouteIndex()),

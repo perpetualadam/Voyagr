@@ -205,7 +205,7 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
 function showRestoredRoutePreview(payload) {
     if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
     if (!payload || !payload.navigation_resume_requires_fresh_gps || rt().getRouteInProgress()) return false;
-    if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isPlanningCommit&&root.VoyagrJourneyModes.isPlanningCommit()){rt().call.showStatus('Previous planning transaction is finishing. Retry shortly.','warning');return false;}
+    if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isJourneyCommitPending&&root.VoyagrJourneyModes.isJourneyCommitPending()){rt().call.showStatus('Previous planning transaction is finishing. Retry shortly.','warning');return false;}
     // Replace the entire preview context, never combine a saved destination with
     // an unrelated selection. The restored marker remains a navigation refusal.
     rt().setRouteOptions([payload]);
@@ -597,6 +597,8 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         applyAlternativeRoutesPreviewDomFromPlan: applyAlternativeRoutesPreviewDomFromPlan,
         applyRouteComparisonModalFromPlan: applyRouteComparisonModalFromPlan,

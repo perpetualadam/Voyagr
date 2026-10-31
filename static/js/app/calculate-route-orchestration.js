@@ -574,7 +574,7 @@
     }
 
     async function calculateRoute() {
-        if(root.VoyagrJourneyModes&&(!root.VoyagrJourneyModes.commitPlanning||!root.VoyagrJourneyModes.captureIntent)){rt().call.showStatus('Planning modules differ. Reload online; current journey retained.','warning');return;}
+        if(root.VoyagrJourneyModes&&(!root.VoyagrJourneyModes.commitPlanning||!root.VoyagrJourneyModes.captureIntent||!root.VoyagrJourneyModes.endpointIntentCompatible)){rt().call.showStatus('Planning modules differ. Reload online; current journey retained.','warning');return;}
         if (root.VoyagrJourneyModes && !root.VoyagrJourneyModes.beforePlanning()) return;
         var modes=root.VoyagrJourneyModes;
         var planningToken=modes&&modes.captureIntent();
@@ -667,6 +667,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         getRouteLayer: getRouteLayer,
         setRouteLayer: setRouteLayer,

@@ -254,7 +254,10 @@
         if (!dom || !dom.shouldApply) return;
         (dom.inputPatches || []).forEach(({ id, property, value }) => {
             const el = document.getElementById(id);
-            if (el) el[property] = value;
+            if (el) {
+                if(id==='start'||id==='end'){if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(id);delete el.dataset.lat;delete el.dataset.lon;delete el.dataset.displayName;delete el.dataset.journeyOriginalSource;el.dataset.journeySource='saved';}
+                el[property] = value;
+            }
         });
         if (dom.switchTab) rt().call.switchTab(dom.switchTab);
         if (dom.scheduleCalculateRoute) {
@@ -399,6 +402,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         loadTripHistory: loadTripHistory,
         persistCompletedTrip: persistCompletedTrip,

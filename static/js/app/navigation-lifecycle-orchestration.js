@@ -80,7 +80,7 @@
         for (const name of ['stopLiveDataRefresh','stopAutoTrafficUpdates','stopRouteTrafficUpdates',
             'clearInitialETAAnnouncement','clearRerouteFailureRetries','hideTurnInstructionWidget',
             'hideJourneySummaryBar','updateNavigationFabVisibility','cancelNavigationSpeech','clearPersistedRoute']) {
-            try { if(name==='clearPersistedRoute'&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isPlanningCommit&&root.VoyagrJourneyModes.isPlanningCommit())continue; if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
+            try { if(name==='clearPersistedRoute'&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isJourneyCommitPending&&root.VoyagrJourneyModes.isJourneyCommitPending())continue; if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
         }
         try { if (root.VoyagrVoiceAnnouncementsOrchestration) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech(); } catch (_) { /* state already stopped */ }
         try { if (call && call.showStatus) call.showStatus('Navigation stopped: initialization or map recovery failed. Recover the map and recalculate.', 'error'); } catch (_) { /* unavailable UI */ }
@@ -455,7 +455,7 @@
             const work=Promise.resolve(rt().call.stageActiveRoute(candidate));
             work.then(value=>{if(cancelled&&value&&typeof value.discard==='function')void Promise.resolve().then(()=>value.discard()).catch(()=>{});},()=>{});
             stage=await bounded(work);
-            if(!stage||typeof stage.commit!=='function'||typeof stage.discard!=='function'||!eligible())throw Error('Replacement staging cancelled');
+            if(!stage||typeof stage.commit!=='function'||typeof stage.discard!=='function'||!eligible()||!modes.endpointIntentCompatible||modes.endpointIntentCompatible()!==true)throw Error('Replacement staging cancelled');
             unsubscribe=modes.onIntentCancelled?modes.onIntentCancelled(intentToken,()=>{if(stage.abort)stage.abort();}):()=>{};
             // Keep the existing line, progress, arrival state and durable record until
             // the real verifier-backed synchronous replacement transaction succeeds.
@@ -463,8 +463,8 @@
             if(!result||result.ok!==true)throw Error('Replacement refused');
             committed=true;
             const selected=window.lastCalculatedRoute;
-            const durable=await bounded(stage.commit(()=>intentCurrent()&&epoch===startEpoch&&getRouteInProgress()&&window.lastCalculatedRoute===selected));
-            if(durable!==true||!intentCurrent()||epoch!==startEpoch||!getRouteInProgress()||window.lastCalculatedRoute!==selected)throw Error('Replacement persistence interrupted');
+            const durable=await bounded(stage.commit(()=>intentCurrent()&&modes.endpointIntentCompatible()===true&&epoch===startEpoch&&getRouteInProgress()&&window.lastCalculatedRoute===selected));
+            if(durable!==true||!intentCurrent()||modes.endpointIntentCompatible()!==true||epoch!==startEpoch||!getRouteInProgress()||window.lastCalculatedRoute!==selected)throw Error('Replacement persistence interrupted');
             return true;
         } catch (_) {
             // After a successful map transition, persistence failure is a safety stop,
@@ -479,6 +479,10 @@
     }
 
     function startTurnByTurnNavigation(routeData, navStartOpts) {
+        const intentOwner=root.VoyagrJourneyModes;
+        if(intentOwner&&intentOwner.isAbandoning&&intentOwner.isAbandoning())return false;
+        if(!(navStartOpts&&navStartOpts.gpsReplacement===true&&getRouteInProgress())&&
+            (intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!intentOwner||!intentOwner.endpointIntentCompatible||intentOwner.endpointIntentCompatible()!==true))return false;
         if(navStartOpts&&navStartOpts.gpsReplacement===true&&getRouteInProgress())return replaceActiveJourney(routeData);
         if (!getRouteInProgress() && (root.VOYAGR_JOURNEY_PROTOCOL===1 || routeData && routeData.journey_context || root.VoyagrJourneyModes)) {
             var modes=root.VoyagrJourneyModes;
@@ -534,7 +538,7 @@
         const epoch = ++startEpoch;
         const owner=root.VoyagrJourneyModes;
         const intentToken=owner&&owner.captureIntent?owner.captureIntent():null;
-        const intentCurrent=()=>!owner||!!(owner.intentCurrent&&owner.intentCurrent(intentToken));
+        const intentCurrent=()=>!owner||root.VoyagrJourneyModes===owner&&!!(owner.intentCurrent&&owner.intentCurrent(intentToken)&&owner.endpointIntentCompatible&&owner.endpointIntentCompatible()===true);
         const abortStart = () => {
             // A cancelled persistence completion owns only its staged resource;
             // it must never roll an unrelated newer session back to its preview.
@@ -685,8 +689,11 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         INTENT_OWNERSHIP_PROTOCOL: 1,
         JOURNEY_REPLACEMENT_PROTOCOL: 1,
+        PERSISTENCE_TRANSACTION_PROTOCOL:1,
         bind: bind,
         getNavigationFailure:getNavigationFailure,
         getNavigationStarting:getNavigationStarting,
