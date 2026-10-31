@@ -305,8 +305,8 @@ async function addWaypointFromAddress(waypointKind) {
     }
 
     if (dispatch.action === 'add_resolved') {
-        if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name);
-        else addStop(dispatch.lat, dispatch.lon, dispatch.name);
+        if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(input.value)?'coordinates':input.dataset.journeySource||'searched');
+        else addStop(dispatch.lat, dispatch.lon, dispatch.name,15,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(input.value)?'coordinates':input.dataset.journeySource||'searched');
         applyWaypointAddressResolvedDomFromPlan(
             WP.buildWaypointAddressResolvedDomApplyPlan(dispatch),
             input
@@ -322,8 +322,8 @@ async function addWaypointFromAddress(waypointKind) {
         dispatch.query
     );
     if (outcome.shouldAdd) {
-        if (waypointKind === 'via') addViaPoint(outcome.lat, outcome.lon, outcome.name);
-        else addStop(outcome.lat, outcome.lon, outcome.name);
+        if (waypointKind === 'via') addViaPoint(outcome.lat, outcome.lon, outcome.name,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(dispatch.query)?'coordinates':'searched');
+        else addStop(outcome.lat, outcome.lon, outcome.name,15,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(dispatch.query)?'coordinates':'searched');
         if (outcome.clearInput) input.value = '';
     }
     rt().call.showStatus(outcome.statusMessage, outcome.statusType);
@@ -352,7 +352,7 @@ function applyViaPointFromPlan(apply) {
 
 function addViaPoint(lat, lon, name = null, provenance = null) {
     var apply=WP().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply;
-    if(apply && apply.viaPoint)apply.viaPoint.provenance=provenance || (name?'searched':'map');
+    if(apply && apply.viaPoint)apply.viaPoint.provenance=provenance || (root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(name)?'coordinates':name?'searched':'map');
     applyViaPointFromPlan(apply);
 }
 
@@ -379,7 +379,7 @@ function applyStopFromPlan(apply) {
 
 function addStop(lat, lon, name = null, duration = 15, provenance = null) {
     var apply=WP().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply;
-    if(apply && apply.stop)apply.stop.provenance=provenance || (name?'searched':'map');
+    if(apply && apply.stop)apply.stop.provenance=provenance || (root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(name)?'coordinates':name?'searched':'map');
     applyStopFromPlan(apply);
 }
 

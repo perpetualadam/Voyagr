@@ -204,3 +204,9 @@ verifier's evidence, or the user's complete five-alternative capture.
 
 Draft PR only, no auto-merge. Independent review and real-device acceptance are required.
 PRODUCTION_NO_GO.
+
+## Independent review remediation
+
+The original reviewed head and its defects are superseded by the fixes, before/after
+evidence, expanded tests and acceptance limits in [R1–R4 remediation](VOYAGR_PHASE12FG_REMEDIATION_R1_R4.md).
+PRODUCTION_NO_GO pending independent re-review and real-device acceptance.

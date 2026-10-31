@@ -203,6 +203,7 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
 }
 
 function showRestoredRoutePreview(payload) {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
     if (!payload || !payload.navigation_resume_requires_fresh_gps || rt().getRouteInProgress()) return false;
     // Replace the entire preview context, never combine a saved destination with
     // an unrelated selection. The restored marker remains a navigation refusal.
@@ -220,7 +221,8 @@ function showRestoredRoutePreview(payload) {
         if(!input)return;
         var endpoint=payload.journey_context && payload.journey_context[index===0?'origin':'destination'];
         var point=endpoint && root.VoyagrJourneyPlan && root.VoyagrJourneyPlan.coordinate(endpoint.coordinates);
-        input.dataset.journeySource='saved';
+        input.dataset.journeySource=endpoint&&endpoint.kind||'unknown';
+        input.dataset.journeyOriginalSource=endpoint&&endpoint.source_kind||'unknown';
         if(point){input.dataset.lat=String(point[0]);input.dataset.lon=String(point[1]);}
         else{delete input.dataset.lat;delete input.dataset.lon;}
         input.dataset.displayName=input.value;

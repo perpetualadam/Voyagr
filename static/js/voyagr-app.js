@@ -2680,6 +2680,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
             resetNavETASnapshot,
             decodePolyline,
             persistActiveRoute,
+            stageActiveRoute: candidate => VoyagrOfflineNavigationOrchestration.stageActiveRoute(candidate),
             precacheRouteTiles,
             primeVehicleMarkerOnRoute,
             showStatus,
@@ -3111,13 +3112,14 @@ VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 
 // Explicit mode coordinator; simulation never enters the GPS/navigation runtime.
 if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
+    replacementProtocol:1,
     selected:()=>VoyagrRouteSelection.mergeNavigationRouteFromSelected(window.lastCalculatedRoute,
         VoyagrRouteComparisonOrchestration.getRouteOptions(),VoyagrRouteComparisonOrchestration.getSelectedRouteIndex()),
     options:()=>VoyagrRouteComparisonOrchestration.getRouteOptions(),setOptions:x=>VoyagrRouteComparisonOrchestration.setRouteOptions(x),
     index:()=>VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),setIndex:x=>VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(x),
     map:()=>map,helpers:()=>MapLibreHelpers,showStatus:showStatus,
     isLive:()=>VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),progressIndex:()=>VoyagrNavigationLifecycleOrchestration.getLastSnappedRouteIndex(),activeGeometry:()=>VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
-    stopLive:()=>VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation(),startLive:r=>VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(r),
+    stopLive:()=>VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation(),startLive:(r,options)=>VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(r,options),
     stopGps:()=>VoyagrGpsOrchestration.stopGPSTracking(),getFix:()=>VoyagrGpsOrchestration.getAcceptedOriginFix(),
     acceptPosition:p=>{
         if(!VoyagrGpsOrchestration.acceptOriginPosition(p))return false;

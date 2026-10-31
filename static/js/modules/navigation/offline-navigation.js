@@ -189,8 +189,28 @@
                 var tx = db.transaction(ROUTE_STORE, 'readwrite');
                 tx.objectStore(ROUTE_STORE).put(record);
                 tx.oncomplete = function () { db.close(); resolve(); };
-                tx.onerror = function () { db.close(); reject(tx.error); };
+                tx.onerror = tx.onabort = function () { db.close(); reject(tx.error || new Error('Persistence aborted')); };
             });
+        });
+    }
+
+    function stageActiveRouteRecord(idb, record) {
+        if(!root.crypto||typeof root.crypto.getRandomValues!=='function')return Promise.reject(new Error('Staging identity unavailable'));
+        var identity=new Uint32Array(4);root.crypto.getRandomValues(identity);
+        var id='pending-'+Array.from(identity,function(value){return value.toString(16).padStart(8,'0');}).join('');
+        function write(promote,guard){
+            return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+                if(promote&&(!guard||guard()!==true)){db.close();resolve(false);return;}
+                var tx=db.transaction(ROUTE_STORE,'readwrite'),store=tx.objectStore(ROUTE_STORE);
+                if(promote)store.put(Object.assign({},record,{id:'current'}));
+                store.delete(id);
+                tx.oncomplete=function(){db.close();resolve(true);};
+                tx.onerror=tx.onabort=function(){db.close();reject(tx.error||new Error('Persistence aborted'));};
+            });});
+        }
+        // A failed/cancelled candidate must never replace the current durable record.
+        return persistActiveRouteRecord(idb,Object.assign({},record,{id:id})).then(function(){
+            return {commit:function(guard){return write(true,guard);},discard:function(){return write(false);}};
         });
     }
 
@@ -642,6 +662,7 @@
         putSpeedLimitCacheEntry: putSpeedLimitCacheEntry,
         getSpeedLimitCacheEntry: getSpeedLimitCacheEntry,
         persistActiveRouteRecord: persistActiveRouteRecord,
+        stageActiveRouteRecord: stageActiveRouteRecord,
         loadActiveRouteRecord: loadActiveRouteRecord,
         clearActiveRouteRecord: clearActiveRouteRecord,
         parseVectorTileSourcesFromStyle: parseVectorTileSourcesFromStyle,

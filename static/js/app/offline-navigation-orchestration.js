@@ -140,6 +140,15 @@
         }
     }
 
+    async function stageActiveRoute(candidate) {
+        const off=OFF();
+        if(!off||!candidate||!candidate.polyline)return null;
+        return off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
+            polyline:candidate.polyline,steps:candidate.maneuvers,stepIndex:0,
+            destination:candidate.destination,routeData:candidate,
+        }));
+    }
+
     async function loadPersistedRoute() {
         const off = OFF();
         if (!off) return null;
@@ -326,6 +335,7 @@
         cacheSpeedLimit: cacheSpeedLimit,
         getCachedSpeedLimit: getCachedSpeedLimit,
         persistActiveRoute: persistActiveRoute,
+        stageActiveRoute: stageActiveRoute,
         loadPersistedRoute: loadPersistedRoute,
         clearPersistedRoute: clearPersistedRoute,
         schedulePersistRoute: schedulePersistRoute,

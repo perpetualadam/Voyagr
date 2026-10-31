@@ -68,6 +68,7 @@
     function getNavigationStarting() { return navigationStarting; }
     function getNavigationFailure() { return navigationFailure; }
     function failNavigation(reason) {
+        try{if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.retainLiveJourney)root.VoyagrJourneyModes.retainLiveJourney();}catch(_){/* Never delay a safety stop. */}
         navigationFailure = reason || 'navigation_initialization_failed';
         if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         startEpoch++; navigationStarting = false;
@@ -432,7 +433,49 @@
         return false;
     }
 
+    async function replaceActiveJourney(routeData) {
+        const modes=root.VoyagrJourneyModes,integrity=root.VoyagrAvoidanceIntegrity;
+        const refuse=()=>false;
+        if(navigationStarting||navigationFailure||!getRouteInProgress()||!modes||modes.liveStartPermitted(routeData)!==true)return refuse();
+        let stage=null,committed=false,cancelled=false,timer;
+        const epoch=++startEpoch;
+        const current=window.lastCalculatedRoute;
+        const candidate=integrity.prepareNavigationCandidate(routeData);
+        const eligible=()=>root.VoyagrJourneyModes===modes&&root.VoyagrAvoidanceIntegrity===integrity&&epoch===startEpoch&&getRouteInProgress()&&window.lastCalculatedRoute===current&&
+            modes.liveStartPermitted(routeData)===true&&integrity.gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true})===true;
+        function bounded(work){
+            return Promise.race([Promise.resolve(work),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),5000);})]).finally(()=>clearTimeout(timer));
+        }
+        try {
+            if(!candidate||!eligible()||typeof rt().call.stageActiveRoute!=='function')return false;
+            navigationStarting=true;
+            const work=Promise.resolve(rt().call.stageActiveRoute(candidate));
+            work.then(value=>{if(cancelled&&value&&typeof value.discard==='function')void Promise.resolve().then(()=>value.discard()).catch(()=>{});},()=>{});
+            stage=await bounded(work);
+            if(!stage||typeof stage.commit!=='function'||typeof stage.discard!=='function'||!eligible())throw Error('Replacement staging cancelled');
+            // Keep the existing line, progress, arrival state and durable record until
+            // the real verifier-backed synchronous replacement transaction succeeds.
+            const result=root.VoyagrRerouteMapOrchestration.updateRouteOnMap(candidate);
+            if(!result||result.ok!==true)throw Error('Replacement refused');
+            committed=true;
+            const selected=window.lastCalculatedRoute;
+            const durable=await bounded(stage.commit(()=>epoch===startEpoch&&getRouteInProgress()&&window.lastCalculatedRoute===selected));
+            if(durable!==true||epoch!==startEpoch||!getRouteInProgress()||window.lastCalculatedRoute!==selected)throw Error('Replacement persistence interrupted');
+            return true;
+        } catch (_) {
+            // After a successful map transition, persistence failure is a safety stop,
+            // never permission to resurrect the old completed-stop context.
+            if(committed&&epoch===startEpoch)failNavigation('replacement_persistence_failed');
+            return false;
+        } finally {
+            cancelled=true;
+            if(stage&&stage.discard){try{await bounded(stage.discard());}catch(_){/* Pending records cannot authorize resume. */}}
+            if(epoch===startEpoch)navigationStarting=false;
+        }
+    }
+
     function startTurnByTurnNavigation(routeData, navStartOpts) {
+        if(navStartOpts&&navStartOpts.gpsReplacement===true&&getRouteInProgress())return replaceActiveJourney(routeData);
         if (!getRouteInProgress() && (root.VOYAGR_JOURNEY_PROTOCOL===1 || routeData && routeData.journey_context || root.VoyagrJourneyModes)) {
             var modes=root.VoyagrJourneyModes;
             if (!modes || modes.PROTOCOL!==1 || typeof modes.liveStartPermitted!=='function' || modes.liveStartPermitted(routeData)!==true) {
@@ -587,6 +630,7 @@
     }
 
     function stopTurnByTurnNavigation() {
+        try{if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.retainLiveJourney)root.VoyagrJourneyModes.retainLiveJourney();}catch(_){/* Stopping remains unconditional. */}
         if (navigationStarting) { failNavigation('navigation_start_cancelled'); return false; }
         startEpoch++;
         const entry = MC().buildNavStopEntryOrchestrationPlan({
@@ -631,6 +675,7 @@
     }
 
     var api = {
+        JOURNEY_REPLACEMENT_PROTOCOL: 1,
         bind: bind,
         getNavigationFailure:getNavigationFailure,
         getNavigationStarting:getNavigationStarting,

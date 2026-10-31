@@ -163,3 +163,30 @@ def test_untrusted_road_labels_cannot_verify_material_endpoint_connection(unveri
     assert origin['navigation_allowed'] is False
     assert origin['transition_verified'] is False
     assert origin['safe_exit'] == 'NOT_ESTABLISHED'
+
+
+@pytest.mark.parametrize('kind', ['gps', 'searched', 'map', 'saved', 'coordinates', 'unknown'])
+def test_stop_provenance_round_trip_is_metadata_not_permission(kind):
+    stop = {'lat': 53.005, 'lon': -1, 'name': 'Synthetic visit', 'duration': 0,
+            'provenance': kind, 'original_index': 7}
+    if kind == 'saved':
+        stop['source_kind'] = 'gps'
+    body = dict(request_body(kind), stops=[stop])
+    context = context_for_plan(body, [stop])
+    assert context['ordered_stops'][0]['kind'] == kind
+    assert context['ordered_stops'][0]['duration_minutes'] == 0
+    assert context['ordered_stops'][0]['original_index'] == 7
+    if kind == 'saved':
+        assert context['ordered_stops'][0]['source_kind'] == 'gps'
+    # Actual HTTP hook rebinds even cached claims; provenance cannot repair displacement.
+    result = post(body, [candidate(53.0002)])
+    assert result['routes'][0]['journey_context']['ordered_stops'][0]['kind'] == kind
+    assert result['navigation_outcome'] == 'REFUSED'
+
+
+def test_historical_endpoint_source_survives_new_request_without_claiming_gps_authenticity():
+    body = request_body('saved')
+    body['journey_context']['origin']['source_kind'] = 'gps'
+    result = post(body, [candidate(53.0002)])
+    assert result['journey_context']['origin']['source_kind'] == 'gps'
+    assert result['avoidance_assessment']['origin_integrity']['navigation_allowed'] is False

@@ -31,7 +31,8 @@ def context_for_plan(raw, ordered_visits):
         if field == 'destination' and raw.get('round_trip'):
             value = raw.get('start', '')
         return {'kind': _kind(item.get('kind')),
-                'coordinates': _point(validate_coordinates(value))}
+                'coordinates': _point(validate_coordinates(value)),
+                **({'source_kind': _kind(item.get('source_kind'))} if _kind(item.get('source_kind')) != 'unknown' else {})}
 
     requested = list(raw.get('via_points') or []) + list(raw.get('stops') or [])
     stops = []
@@ -45,6 +46,7 @@ def context_for_plan(raw, ordered_visits):
         kind = source.get('provenance') if isinstance(source, dict) else None
         stop = visit if isinstance(visit, dict) else {}
         stops.append({'coordinates': point, 'kind': _kind(kind),
+                      **({'source_kind': _kind(source.get('source_kind'))} if isinstance(source, dict) and _kind(source.get('source_kind')) != 'unknown' else {}),
                       'name': str(stop.get('name') or 'Journey stop')[:120],
                       'duration_minutes': stop.get('duration', stop.get('duration_minutes', 0)),
                       'original_index': stop.get('original_index', index)})

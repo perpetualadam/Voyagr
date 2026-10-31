@@ -1,22 +1,25 @@
 /** Separate inspection clock and fresh-GPS workflow. Live permission stays in the lifecycle. */
 (function(root){
     'use strict';
-    var runtime=null,state='PLANNING',epoch=0,ticket=null,pendingCandidate=null;
+    var runtime=null,state='PLANNING',epoch=0,ticket=null,pendingCandidate=null,pendingReplacement=null,retainedIntent=null;
     var simulation=null,line=null,marker=null,timer=null,lastTick=0,meters=0,speed=1,selection=null;
     function rt(){if(!runtime)throw Error('Journey modes are unavailable. Reload the application.');return runtime;}
     function plan(){return root.VoyagrJourneyPlan;}
     function integrity(){return root.VoyagrAvoidanceIntegrity;}
     function key(route){return JSON.stringify([route&&route.id,route&&route.destination,route&&route.geometry,route&&route.maneuvers,route&&route.journey_context]);}
-    function simulating(){return state==='SIMULATING'||state==='SIMULATION_PAUSED';}
+    function animating(){return state==='SIMULATING'||state==='SIMULATION_PAUSED';}
+    function simulating(){return animating()||state==='RECOVERY_REQUIRED'&&!!(line||marker||simulation);}
     function status(text,type){
         var el=document.getElementById('journeyModeStatus');if(el)el.textContent=text;
         if(runtime&&runtime.showStatus)runtime.showStatus(text,type||'info');
     }
     function setState(next){
+        if(state!==next&&root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
         state=next;
         var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=state!=='CHOOSING'&&state!=='LOCATING'&&state!=='RECALCULATING'&&state!=='AUTHORIZING';
         var panel=document.getElementById('simulationControls');if(panel)panel.hidden=!simulating();
         var indicator=document.getElementById('simulationIndicator');if(indicator)indicator.hidden=!simulating();
+        if(state==='RECOVERY_REQUIRED'){var progress=document.getElementById('simulationProgress');if(progress)progress.textContent='Simulation cleanup is incomplete. No animation or live transition is permitted. Retry Exit simulation to verify removal.';}
         document.querySelectorAll('[data-live-recalculate]').forEach(function(b){b.disabled=['LOCATING','RECALCULATING','AUTHORIZING'].indexOf(state)>=0;});
     }
     function cleanSimulation(){
@@ -35,13 +38,22 @@
     }
     function cancel(){
         epoch++;
-        if(state==='AUTHORIZING'&&runtime)runtime.stopLive();
-        pendingCandidate=null;
+        if(state==='AUTHORIZING'&&runtime&&(!pendingReplacement||key(rt().selected())!==pendingReplacement.identity))runtime.stopLive();
+        pendingCandidate=null;pendingReplacement=null;
+        if(root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
         if(ticket){if(integrity().isLatest(ticket))integrity().invalidate();integrity().finish(ticket);ticket=null;}
     }
     function exit(){cancel();if(!cleanSimulation())return false;setState('PLANNING');status('Journey inspection closed. Simulation does not record driven trips.');return true;}
+    function retainLiveJourney(){
+        if(!runtime||!rt().isLive())return;
+        var selected=rt().selected(),identity=key(selected);
+        try{
+            if(!rt().activeGeometry||JSON.stringify(rt().activeGeometry())!==JSON.stringify(integrity().geometryPoints(selected)))throw Error('Progress context differs');
+            retainedIntent={identity:identity,intent:plan().liveIntent(selected,true,rt().progressIndex())};
+        }catch(_){retainedIntent={identity:identity,unavailable:true};}
+    }
     function stopLive(){
-        if(rt().isLive())rt().stopLive();
+        if(rt().isLive()){retainLiveJourney();rt().stopLive();}
         if(rt().isLive())throw Error('Live guidance could not stop. Recover navigation before switching modes.');
     }
     function drawSimulation(){
@@ -59,12 +71,12 @@
             var now=Date.now();meters=Math.min(simulation.total,meters+Math.min(5,Math.max(0,(now-lastTick)/1000))*simulation.metersPerSecond*speed);lastTick=now;drawSimulation();
         }catch(error){pause();status(error.message,'warning');}
     }
-    function pause(){if(!simulating())return false;clearInterval(timer);timer=null;setState('SIMULATION_PAUSED');return true;}
+    function pause(){if(!animating())return false;clearInterval(timer);timer=null;setState('SIMULATION_PAUSED');return true;}
     function resume(){
         if(state!=='SIMULATION_PAUSED'||!simulation||meters>=simulation.total)return false;
         setState('SIMULATING');lastTick=Date.now();timer=setInterval(tick,100);return true;
     }
-    function restart(){if(!simulation)return false;meters=0;drawSimulation();pause();return resume();}
+    function restart(){if(!simulation||!animating())return false;meters=0;drawSimulation();pause();return resume();}
     function setSpeed(value){value=Number(value);if([0.5,1,2,5,10].indexOf(value)<0)return false;speed=value;return true;}
     function startSimulation(){
         try{
@@ -98,25 +110,29 @@
     function liveStartPermitted(candidate){
         try{
             var fix=realFix(),origin=candidate&&candidate.avoidance_assessment&&candidate.avoidance_assessment.origin_integrity;
-            return state==='AUTHORIZING'&&pendingCandidate===candidate&&!line&&!simulation&&!!fix&&!!origin&&plan().coordinate(origin.requested_origin)!==null&&plan().distance([fix.lat,fix.lon],origin.requested_origin)<=2;
+            var replacementCurrent=!pendingReplacement||(rt().isLive()&&key(rt().selected())===pendingReplacement.identity&&JSON.stringify(plan().liveIntent(rt().selected(),true,rt().progressIndex()).stops)===JSON.stringify(pendingReplacement.intent.stops));
+            return replacementCurrent&&(!ticket||integrity().current(ticket,localStorage))&&state==='AUTHORIZING'&&pendingCandidate===candidate&&!line&&!simulation&&!!fix&&!!origin&&plan().coordinate(origin.requested_origin)!==null&&plan().distance([fix.lat,fix.lon],origin.requested_origin)<=2;
         }catch(_){return false;}
     }
-    async function authorize(candidate,token){
+    async function authorize(candidate,token,replacement){
         var previous={options:rt().options(),index:rt().index()},staged=[candidate];
-        pendingCandidate=candidate;setState('AUTHORIZING');status('Verifying live navigation and map resources…','loading');
-        rt().setOptions(staged);rt().setIndex(0);
+        pendingCandidate=candidate;pendingReplacement=replacement||null;setState('AUTHORIZING');status('Verifying live navigation and map resources…','loading');
+        if(!replacement){rt().setOptions(staged);rt().setIndex(0);}
         try{
-            var ok=await rt().startLive(candidate);
+            if(replacement&&(!root.VoyagrNavigationLifecycleOrchestration||root.VoyagrNavigationLifecycleOrchestration.JOURNEY_REPLACEMENT_PROTOCOL!==1||rt().replacementProtocol!==1))throw Error('Journey replacement modules differ. Reload online; current navigation is retained.');
+            var ok=await rt().startLive(candidate,replacement?{gpsReplacement:true}:undefined);
             if(ok!==true||token!==epoch)throw Error('Live navigation was refused or cancelled. Inspect the safety explanation and recalculate.');
-            setState('LIVE');status('Live GPS navigation started.','success');return true;
+            retainedIntent=null;setState('LIVE');status('Live GPS navigation started.','success');return true;
         }finally{
-            if(pendingCandidate===candidate)pendingCandidate=null;
+            if(pendingCandidate===candidate){pendingCandidate=null;pendingReplacement=null;}
             if(!rt().isLive()&&rt().options()===staged){rt().setOptions(previous.options);rt().setIndex(previous.index);}
         }
     }
     async function startHere(){
         try{
-            var route=rt().selected(),candidate=integrity().prepareNavigationCandidate(route),fix=realFix();
+            var route=rt().selected();
+            if(rt().isLive()||retainedIntent&&retainedIntent.identity===key(route))throw Error('Use Navigate From My Location to continue the remaining journey; completed visits cannot be restarted silently.');
+            var candidate=integrity().prepareNavigationCandidate(route),fix=realFix();
             if(!candidate||!fix||!integrity().gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true}))throw Error('This plan is not authorized for a live start. Recalculate from your location.');
             cancel();if(!cleanSimulation())return false;stopLive();var token=epoch;
             return await authorize(candidate,token);
@@ -130,8 +146,10 @@
             selection=identity;
             var active=rt().isLive();
             if(active&&(!rt().activeGeometry||JSON.stringify(rt().activeGeometry())!==JSON.stringify(integrity().geometryPoints(selected))))throw Error('Selected journey differs from active progress. Stop and replan without skipping stops.');
-            var intent=plan().liveIntent(selected,active,rt().progressIndex());
-            cancel();if(!cleanSimulation())return false;stopLive();token=epoch;setState('LOCATING');status('Obtaining a fresh, accurate GPS location…','loading');
+            if(!active&&retainedIntent&&retainedIntent.identity===identity&&retainedIntent.unavailable)throw Error('Remaining visits cannot be established. Inspect and explicitly replan the complete journey before a live start.');
+            var intent=active?plan().liveIntent(selected,true,rt().progressIndex()):retainedIntent&&retainedIntent.identity===identity?JSON.parse(JSON.stringify(retainedIntent.intent)):plan().liveIntent(selected,false,0);
+            if(active)retainedIntent={identity:identity,intent:JSON.parse(JSON.stringify(intent))};
+            cancel();if(!cleanSimulation())return false;token=epoch;setState('LOCATING');status('Obtaining a fresh, accurate GPS location…','loading');
             var position=await locate(),fix=fresh(position);
             if(token!==epoch||key(rt().selected())!==identity)return false;
             if(!rt().acceptPosition(position))throw Error('GPS observation could not be validated. Retry.');
@@ -158,7 +176,7 @@
             var candidates=data.routes.map(function(r){return Object.assign({},r,{avoidance_requirements:data.avoidance_requirements,destination:dest.join(','),destinationName:intent.destinationName});});
             var candidate=candidates.find(function(r){return integrity().prepareNavigationCandidate(r)&&integrity().gate(r,{storage:localStorage,offline:navigator.onLine===false,quiet:true});});
             if(!candidate)throw Error(integrity().currentDecision(candidates[0],{offline:navigator.onLine===false},localStorage).message);
-            return await authorize(candidate,token);
+            return await authorize(candidate,token,active?{identity:identity,intent:intent}:null);
         }catch(error){
             if(token===undefined||token===epoch){if(state!=='RECOVERY_REQUIRED')setState(rt().isLive()?'LIVE':'CHOOSING');status(error.message,'warning');}
             return false;
@@ -180,13 +198,13 @@
             var d=integrity().currentDecision(selected,{offline:navigator.onLine===false},localStorage);
             status(d.outcome==='REFUSED'?'Live navigation refused for this plan: '+d.message+' You may inspect the geometry or request a new route from GPS.':'Choose simulation or a new journey from your actual GPS location.');
             var direct=document.getElementById('startVerifiedHere');var can=false;
-            try{var fix=realFix(),o=selected.avoidance_assessment.origin_integrity;can=!!fix&&plan().distance([fix.lat,fix.lon],o.requested_origin)<=2&&d.allowed;}catch(_){}
+            try{var fix=realFix(),o=selected.avoidance_assessment.origin_integrity;can=!rt().isLive()&&!(retainedIntent&&retainedIntent.identity===key(selected))&&!!fix&&plan().distance([fix.lat,fix.lon],o.requested_origin)<=2&&d.allowed;}catch(_){}
             if(direct)direct.hidden=!can;
             return true;
         }catch(error){status(error.message,'warning');return false;}
     }
     function beforePlanning(){
-        try{cancel();if(!cleanSimulation())return false;stopLive();setState('PLANNING');return true;}
+        try{cancel();if(!cleanSimulation())return false;stopLive();retainedIntent=null;setState('PLANNING');return true;}
         catch(error){status(error.message,'warning');return false;}
     }
     function liveStopped(){if(state==='LIVE')setState('PLANNING');}
@@ -196,7 +214,7 @@
     }
     var api={PROTOCOL:1,bind:function(deps){runtime=deps;},getState:function(){return state;},isSimulating:simulating,
         choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,exit:exit,
-        navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,beforePlanning:beforePlanning,liveStopped:liveStopped,addGpsStop:addGpsStop};
+        navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,beforePlanning:beforePlanning,retainLiveJourney:retainLiveJourney,liveStopped:liveStopped,addGpsStop:addGpsStop};
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',function(){if(document.hidden&&simulating())pause();});
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyModes=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

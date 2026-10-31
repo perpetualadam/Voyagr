@@ -40,7 +40,10 @@
         if (!apply || !apply.shouldApply) return;
 
         var inputEl = document.getElementById(apply.inputId);
-        if (inputEl) inputEl.value = apply.inputValue;
+        if (inputEl){
+            if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(apply.inputId);
+            inputEl.value = apply.inputValue;
+        }
         if (inputEl) {
             if (apply.inputId==='start' && root.VoyagrAutoGpsOrchestration) {
                 root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);
@@ -49,7 +52,7 @@
                 var toggle=document.getElementById('autoGpsToggle');if(toggle)toggle.checked=false;
             }
             inputEl.dataset.lat=String(apply.lat);inputEl.dataset.lon=String(apply.lon);
-            inputEl.dataset.journeySource='map';
+            inputEl.dataset.journeySource='map';delete inputEl.dataset.journeyOriginalSource;
         }
 
         if (apply.removeExistingMarker) {

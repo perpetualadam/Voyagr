@@ -429,9 +429,10 @@
             return { ok: false };
         }
         var restoredContext=route.journey_context && JSON.parse(JSON.stringify(route.journey_context));
+        if(!restoredContext)restoredContext={version:1,purpose:'planning',origin:{kind:'unknown',coordinates:null},destination:{kind:'unknown',coordinates:null}};
         if(restoredContext){
-            ['origin','destination'].forEach(function(field){if(restoredContext[field])restoredContext[field]=Object.assign({},restoredContext[field],{source_kind:restoredContext[field].kind,kind:'saved'});});
-            if(Array.isArray(restoredContext.ordered_stops))restoredContext.ordered_stops=restoredContext.ordered_stops.map(function(stop){return Object.assign({},stop,{source_kind:stop.kind,kind:'saved'});});
+            ['origin','destination'].forEach(function(field){if(restoredContext[field])restoredContext[field]=Object.assign({},restoredContext[field],{source_kind:restoredContext[field].source_kind&&restoredContext[field].source_kind!=='unknown'?restoredContext[field].source_kind:restoredContext[field].kind,kind:restoredContext[field].kind==='unknown'?'unknown':'saved'});});
+            if(Array.isArray(restoredContext.ordered_stops))restoredContext.ordered_stops=restoredContext.ordered_stops.map(function(stop){return Object.assign({},stop,{source_kind:stop.source_kind&&stop.source_kind!=='unknown'?stop.source_kind:stop.kind,kind:stop.kind==='unknown'?'unknown':'saved'});});
         }
         return {
             ok: true,

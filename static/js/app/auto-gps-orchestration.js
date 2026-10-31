@@ -83,7 +83,8 @@
 
                 const startEl = document.getElementById('start');
                 if (startEl) {
-                    startEl.dataset.journeySource='gps';
+                    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('start');
+                    startEl.dataset.journeySource='gps';delete startEl.dataset.journeyOriginalSource;
                     startEl.value = 'Current Location';
                     startEl.dataset.lat = String(lat);
                     startEl.dataset.lon = String(lon);

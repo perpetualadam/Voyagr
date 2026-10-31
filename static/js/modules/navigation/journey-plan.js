@@ -15,7 +15,7 @@
     function endpoint(input,value){
         var data=input&&input.dataset||{},kind=KINDS.indexOf(data.journeySource)>=0?data.journeySource:coordinate(input&&input.value)?'coordinates':'searched';
         if(kind==='searched'&&coordinate(input&&input.value))kind='coordinates';
-        return {kind:kind,coordinates:coordinate(value)};
+        return Object.assign({kind:kind,coordinates:coordinate(value)},KINDS.indexOf(data.journeyOriginalSource)>=0&&data.journeyOriginalSource!=='unknown'?{source_kind:data.journeyOriginalSource}:{});
     }
     function requestContext(body,startInput,endInput){
         return {version:1,purpose:'planning',origin:endpoint(startInput,body.start),destination:endpoint(endInput,body.end),
@@ -68,8 +68,8 @@
             var point=coordinate(stop.coordinates);
             if(!point)throw Error('A journey stop has no reliable coordinates. Replan without skipping stops.');
             if(active&&route.leg_geometry_ranges[i].end_shape_index<=index)return;
-            preserved.push({lat:point[0],lon:point[1],name:stop.name||'Journey stop',duration:Number(stop.duration_minutes||stop.duration)||0,
-                original_index:stop.original_index===undefined?i:stop.original_index,provenance:KINDS.indexOf(stop.kind)>=0?stop.kind:'unknown'});
+            preserved.push(Object.assign({lat:point[0],lon:point[1],name:stop.name||'Journey stop',duration:Number(stop.duration_minutes||stop.duration)||0,
+                original_index:stop.original_index===undefined?i:stop.original_index,provenance:KINDS.indexOf(stop.kind)>=0?stop.kind:'unknown'},KINDS.indexOf(stop.source_kind)>=0&&stop.source_kind!=='unknown'?{source_kind:stop.source_kind}:{}));
         });
         return {destination:destinationText,destinationName:route.destinationName||destinationText,stops:preserved,
             destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
