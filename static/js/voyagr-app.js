@@ -533,8 +533,8 @@ function toggleAddStop() { VoyagrWaypointsOrchestration.toggleAddStop(); }
 function handleMapClickForWaypoints(e) { VoyagrWaypointsOrchestration.handleMapClickForWaypoints(e); }
 async function addViaPointFromAddress() { return VoyagrWaypointsOrchestration.addViaPointFromAddress(); }
 async function addStopFromAddress() { return VoyagrWaypointsOrchestration.addStopFromAddress(); }
-function addViaPoint(lat, lon, name) { return VoyagrWaypointsOrchestration.addViaPoint(lat, lon, name); }
-function addStop(lat, lon, name, duration) { return VoyagrWaypointsOrchestration.addStop(lat, lon, name, duration); }
+function addViaPoint(lat, lon, name, provenance) { return VoyagrWaypointsOrchestration.addViaPoint(lat, lon, name, provenance); }
+function addStop(lat, lon, name, duration, provenance) { return VoyagrWaypointsOrchestration.addStop(lat, lon, name, duration, provenance); }
 function removeViaPoint(index) { VoyagrWaypointsOrchestration.removeViaPoint(index); }
 function removeStop(index) { VoyagrWaypointsOrchestration.removeStop(index); }
 function clearAllWaypoints() { VoyagrWaypointsOrchestration.clearAllWaypoints(); }
@@ -1039,7 +1039,7 @@ function initializeRoadLabels() {
  * @function startNavigation
  * @returns {*} Return value description
  */
-function startNavigation() { VoyagrRoutePreviewOrchestration.startNavigation(); }
+function startNavigation() { if(window.VoyagrJourneyModes && VoyagrJourneyModes.PROTOCOL===1)return VoyagrJourneyModes.choose();showStatus('Journey controls are unavailable. Reload before starting navigation.','warning');return false; }
 
 // ===== ROUTE PREVIEW ORCHESTRATION =====
 function showRoutePreview(routeData, skipMapDisplay = false) {
@@ -1048,7 +1048,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
 function showAlternativeRoutesInPreview() { VoyagrRoutePreviewOrchestration.showAlternativeRoutesInPreview(); }
 function showRouteComparison() { return VoyagrRoutePreviewOrchestration.showRouteComparison(); }
 function overviewRoute() { VoyagrRoutePreviewOrchestration.overviewRoute(); }
-function startNavigationFromPreview() { VoyagrRoutePreviewOrchestration.startNavigationFromPreview(); }
+function startNavigationFromPreview() { return startNavigation(); }
 function applyRouteUpdateDuringNavigation(routeData) {
     VoyagrRoutePreviewOrchestration.applyRouteUpdateDuringNavigation(routeData);
 }
@@ -2612,7 +2612,7 @@ function getGeocodingOrchestrationRuntime() {
 }
 
 function initGeocodeCache() { VoyagrGeocodingOrchestration.initGeocodeCache(); }
-async function showAutocomplete(fieldId) { return VoyagrGeocodingOrchestration.showAutocomplete(fieldId); }
+async function showAutocomplete(fieldId, userEdit) { return VoyagrGeocodingOrchestration.showAutocomplete(fieldId, userEdit); }
 async function geocodeAddress(address) { return VoyagrGeocodingOrchestration.geocodeAddress(address); }
 async function geocodeLocations(startAddress, endAddress) {
     return VoyagrGeocodingOrchestration.geocodeLocations(startAddress, endAddress);
@@ -3108,3 +3108,25 @@ VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict
+
+// Explicit mode coordinator; simulation never enters the GPS/navigation runtime.
+if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
+    selected:()=>VoyagrRouteSelection.mergeNavigationRouteFromSelected(window.lastCalculatedRoute,
+        VoyagrRouteComparisonOrchestration.getRouteOptions(),VoyagrRouteComparisonOrchestration.getSelectedRouteIndex()),
+    options:()=>VoyagrRouteComparisonOrchestration.getRouteOptions(),setOptions:x=>VoyagrRouteComparisonOrchestration.setRouteOptions(x),
+    index:()=>VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),setIndex:x=>VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(x),
+    map:()=>map,helpers:()=>MapLibreHelpers,showStatus:showStatus,
+    isLive:()=>VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),progressIndex:()=>VoyagrNavigationLifecycleOrchestration.getLastSnappedRouteIndex(),activeGeometry:()=>VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+    stopLive:()=>VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation(),startLive:r=>VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(r),
+    stopGps:()=>VoyagrGpsOrchestration.stopGPSTracking(),getFix:()=>VoyagrGpsOrchestration.getAcceptedOriginFix(),
+    acceptPosition:p=>{
+        if(!VoyagrGpsOrchestration.acceptOriginPosition(p))return false;
+        VoyagrLocationOrchestration.setCurrentLat(p.coords.latitude);VoyagrLocationOrchestration.setCurrentLon(p.coords.longitude);return true;
+    },
+    buildRequest:(fix,destination)=>buildRouteRequest(fix.lat,fix.lon,destination),fetch:(url,options)=>fetch(url,options),
+    resolveDestination:text=>VoyagrGeocodingOrchestration.geocodeAddress(text),addStop:addStop,
+    simulationMarker:point=>{
+        const el=document.createElement('div');el.className='simulation-vehicle';el.textContent='SIM';el.setAttribute('aria-label','Simulated vehicle — not live GPS');
+        return new maplibregl.Marker({element:el}).setLngLat([point[1],point[0]]).addTo(map);
+    }
+});

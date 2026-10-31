@@ -212,9 +212,20 @@ function showRestoredRoutePreview(payload) {
     window.lastRouteApiResponse = null;
     const origin=payload.avoidance_assessment && payload.avoidance_assessment.origin_integrity;
     const start=document.getElementById('start'), end=document.getElementById('end');
+    if(root.VoyagrAutoGpsOrchestration){root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();}
     if (start) start.value=typeof payload.saved_origin_label==='string' ? payload.saved_origin_label :
         origin && Array.isArray(origin.requested_origin) ? origin.requested_origin.join(',') : 'Saved origin (unverified)';
     if (end) end.value=typeof payload.destination==='string' ? payload.destination : 'Saved destination (unverified)';
+    [start,end].forEach(function(input,index){
+        if(!input)return;
+        var endpoint=payload.journey_context && payload.journey_context[index===0?'origin':'destination'];
+        var point=endpoint && root.VoyagrJourneyPlan && root.VoyagrJourneyPlan.coordinate(endpoint.coordinates);
+        input.dataset.journeySource='saved';
+        if(point){input.dataset.lat=String(point[0]);input.dataset.lon=String(point[1]);}
+        else{delete input.dataset.lat;delete input.dataset.lon;}
+        input.dataset.displayName=input.value;
+    });
+    var gpsToggle=document.getElementById('autoGpsToggle');if(gpsToggle)gpsToggle.checked=false;
     showRoutePreview(payload);
     rt().call.showStatus('Saved journey is preview only. Recalculate from your actual location and destination before navigation.', 'warning');
     return true;
@@ -244,6 +255,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     if (root.VoyagrNavigationSafetyUX) {
         root.VoyagrNavigationSafetyUX.present(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()));
     }
+    if (root.VoyagrJourneyModes) root.VoyagrJourneyModes.onPreview();
 }
 
 function collectShowAlternativeRoutesPreviewInput() {

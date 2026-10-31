@@ -327,6 +327,11 @@
                 toll_cost: route.toll_cost,
                 caz_cost: route.caz_cost,
                 geometry: route.geometry,
+                geometry_precision: route.geometry_precision,
+                journey_context: route.journey_context,
+                maneuvers: route.maneuvers,
+                leg_geometry_ranges: route.leg_geometry_ranges,
+                geometry_complete: route.geometry_complete,
                 timestamp: new Date(now).toISOString(),
             },
             storageKey: SAVED_ROUTES_STORAGE_KEY,
@@ -423,6 +428,11 @@
         if (!route) {
             return { ok: false };
         }
+        var restoredContext=route.journey_context && JSON.parse(JSON.stringify(route.journey_context));
+        if(restoredContext){
+            ['origin','destination'].forEach(function(field){if(restoredContext[field])restoredContext[field]=Object.assign({},restoredContext[field],{source_kind:restoredContext[field].kind,kind:'saved'});});
+            if(Array.isArray(restoredContext.ordered_stops))restoredContext.ordered_stops=restoredContext.ordered_stops.map(function(stop){return Object.assign({},stop,{source_kind:stop.kind,kind:'saved'});});
+        }
         return {
             ok: true,
             startLabel: route.start,
@@ -437,8 +447,12 @@
                 toll_cost: route.toll_cost,
                 caz_cost: route.caz_cost,
                 geometry: route.geometry,
+                journey_context: restoredContext,
+                maneuvers: route.maneuvers,
+                leg_geometry_ranges: route.leg_geometry_ranges,
+                geometry_complete: route.geometry_complete,
                 geometry_precision: route.geometry_precision === 5 ? 5 : 6,
-                destination: route.end,
+                destination: route.journey_context && route.journey_context.destination && Array.isArray(route.journey_context.destination.coordinates) ? route.journey_context.destination.coordinates.join(',') : route.end,
                 destinationName: route.end,
             },
             successStatusMessage: 'Saved journey is preview only; recalculate before navigation.',

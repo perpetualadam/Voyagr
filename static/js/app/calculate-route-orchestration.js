@@ -41,6 +41,16 @@
 
         var inputEl = document.getElementById(apply.inputId);
         if (inputEl) inputEl.value = apply.inputValue;
+        if (inputEl) {
+            if (apply.inputId==='start' && root.VoyagrAutoGpsOrchestration) {
+                root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);
+                root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();
+                inputEl.value=apply.inputValue;
+                var toggle=document.getElementById('autoGpsToggle');if(toggle)toggle.checked=false;
+            }
+            inputEl.dataset.lat=String(apply.lat);inputEl.dataset.lon=String(apply.lon);
+            inputEl.dataset.journeySource='map';
+        }
 
         if (apply.removeExistingMarker) {
             var startMarker = rt().getStartMarker();
@@ -494,6 +504,7 @@
     }
 
     async function calculateRoute() {
+        if (root.VoyagrJourneyModes && !root.VoyagrJourneyModes.beforePlanning()) return;
         var integrity = root.VoyagrAvoidanceIntegrity;
         var ticket = integrity ? integrity.begin(localStorage) : null;
         var RR = rt().routingRequest();
@@ -529,6 +540,7 @@
         );
         var routePlan = apiOrch.routePlan;
         var fetchPlan = apiOrch.fetchPlan;
+        if (root.VoyagrJourneyPlan) fetchPlan.body.journey_context=root.VoyagrJourneyPlan.requestContext(fetchPlan.body,startInput,endInput);
         var requestLog = apiOrch.requestLog;
 
         console.log(requestLog.requestLogPrefix);

@@ -433,6 +433,13 @@
     }
 
     function startTurnByTurnNavigation(routeData, navStartOpts) {
+        if (!getRouteInProgress() && (root.VOYAGR_JOURNEY_PROTOCOL===1 || routeData && routeData.journey_context || root.VoyagrJourneyModes)) {
+            var modes=root.VoyagrJourneyModes;
+            if (!modes || modes.PROTOCOL!==1 || typeof modes.liveStartPermitted!=='function' || modes.liveStartPermitted(routeData)!==true) {
+                if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus('Choose Navigate From My Location, or inspect the journey in simulation. Reload if journey controls are unavailable.','warning');
+                return false;
+            }
+        }
         if (navStartOpts === undefined) navStartOpts = null;
         const refuse = message => {
             try { if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus(message, 'warning'); } catch (_) { /* fail closed during partial startup */ }
@@ -599,6 +606,7 @@
         applyNavStopRuntimeFromPlan(MC().buildNavStopRuntimeApplyPlan(entry.stateReset));
         applyNavStopServicesFromPlan(entry.services, entry.wasRouteInProgress);
         if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
+        if (root.VoyagrJourneyModes) root.VoyagrJourneyModes.liveStopped();
     }
 
     function updateTurnGuidance(userLat, userLon) {

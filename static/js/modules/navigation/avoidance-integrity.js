@@ -47,7 +47,11 @@
             var lifecycle=root.VoyagrNavigationLifecycleOrchestration;
             var index=lifecycle && lifecycle.getLastSnappedRouteIndex ? lifecycle.getLastSnappedRouteIndex() : 0;
             // Preserve outstanding visits in their existing optimized order; never reoptimize on deviation.
-            next.stops=ranges.filter(function(r) { return r.stop && r.waypoint && r.end_shape_index>index; }).map(function(r) {
+            if(root.VoyagrJourneyPlan && root.lastCalculatedRoute.journey_context){
+                // Canonical visits include pass-throughs; never drop them on deviation.
+                next.stops=root.VoyagrJourneyPlan.liveIntent(root.lastCalculatedRoute,true,index).stops;
+                next.via_points=[];
+            }else next.stops=ranges.filter(function(r) { return r.stop && r.waypoint && r.end_shape_index>index; }).map(function(r) {
                 return {lat:r.waypoint.lat,lon:r.waypoint.lon,name:r.stop.name,duration:r.stop.duration_minutes || 0,original_index:r.stop.original_index};
             });
             next.optimize_stop_order=false;
@@ -262,7 +266,7 @@
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

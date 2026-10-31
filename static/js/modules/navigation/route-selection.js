@@ -1843,6 +1843,7 @@
             provider_capabilities: route.provider_capabilities,
             camera_evidence: route.camera_evidence,
             route_comparison: route.route_comparison,
+            journey_context: route.journey_context,
             avoidance_assessment: route.avoidance_assessment,
             avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
             avoidance_tradeoff: route.avoidance_tradeoff,
@@ -1887,6 +1888,7 @@
             provider_capabilities:data.provider_capabilities,
             camera_evidence: data.camera_evidence,
             route_comparison: data.route_comparison,
+            journey_context:data.journey_context,
             avoidance_assessment:data.avoidance_assessment,
             avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
         }];
@@ -2480,6 +2482,7 @@
                 provider_capabilities: sel.provider_capabilities,
                 camera_evidence: sel.camera_evidence,
                 route_comparison: sel.route_comparison,
+                journey_context: sel.journey_context,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
                 avoidance_preferences_snapshot: sel.avoidance_preferences_snapshot || routeData.avoidance_preferences_snapshot,
@@ -2510,6 +2513,7 @@
             provider_capabilities: route.provider_capabilities,
             camera_evidence: route.camera_evidence,
             route_comparison: route.route_comparison,
+            journey_context: route.journey_context,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
             geometry_precision: Number.isFinite(route.geometry_precision)

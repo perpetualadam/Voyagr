@@ -71,19 +71,24 @@ function saveGeocodeCache() {
     return document.getElementById(mapping[fieldId] || `autocomplete_${fieldId}`);
 }
 
-async function showAutocomplete(fieldId) {
+async function showAutocomplete(fieldId, userEdit) {
     const mod = SA();
     const input = document.getElementById(fieldId);
     const dropdown = getAutocompleteDropdown(fieldId);
     if (!input || !dropdown) return;
 
     // Live GPS owns the start field; don't run search or wipe dataset coords on focus/input.
+    if (fieldId==='start' && userEdit && root.VoyagrAutoGpsOrchestration) {
+        var typed=input.value;root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();input.value=typed;
+        var toggle=document.getElementById('autoGpsToggle');if(toggle)toggle.checked=false;
+    }
     if (fieldId === 'start' && rt().getAutoGpsEnabled()) {
         dropdown.classList.remove('show');
         return;
     }
 
     const query = input.value.trim();
+    if(userEdit)input.dataset.journeySource='searched';
 
     if (input.dataset.lat || input.dataset.lon) {
         console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
@@ -197,23 +202,25 @@ function displayAutocompleteResults(fieldId, results) {
  * @param {*} name - Parameter description
  * @returns {*} Return value description
  */
-function selectAutocompleteResult(fieldId, lat, lon, name) {
+function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched') {
     const input = document.getElementById(fieldId);
     const dropdown = getAutocompleteDropdown(fieldId);
 
     if (fieldId === 'viaPointAddress') {
-        rt().call.addViaPoint(lat, lon, name);
+        rt().call.addViaPoint(lat, lon, name, source);
         if (input) input.value = '';
         if (dropdown) dropdown.classList.remove('show');
         return;
     }
     if (fieldId === 'stopAddress') {
-        rt().call.addStop(lat, lon, name);
+        rt().call.addStop(lat, lon, name, 15, source);
         if (input) input.value = '';
         if (dropdown) dropdown.classList.remove('show');
         return;
     }
 
+    if(fieldId==='start' && root.VoyagrAutoGpsOrchestration){root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();var toggle=document.getElementById('autoGpsToggle');if(toggle)toggle.checked=false;}
+    input.dataset.journeySource=source;
     input.value = name;
     input.dataset.lat = lat;
     input.dataset.lon = lon;
@@ -455,7 +462,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
             const div = document.createElement('div');
             div.className = 'autocomplete-item';
             div.innerHTML = mod.buildRecentDestinationItemHtml(item, { escapeHtml: rt().call.escapeHtml });
-            div.onclick = () => selectAutocompleteResult(fieldId, item.lat, item.lon, item.label);
+            div.onclick = () => selectAutocompleteResult(fieldId, item.lat, item.lon, item.label, 'saved');
             dropdown.appendChild(div);
         });
     }
@@ -471,7 +478,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
                 div.className = 'autocomplete-item';
                 div.innerHTML = built.html;
                 if (built.hasCoords) {
-                    div.onclick = () => selectAutocompleteResult(fieldId, built.lat, built.lon, item.result_name || item.query);
+                    div.onclick = () => selectAutocompleteResult(fieldId, built.lat, built.lon, item.result_name || item.query, 'saved');
                 } else {
                     div.onclick = () => {
                         const fieldInput = document.getElementById(fieldId);

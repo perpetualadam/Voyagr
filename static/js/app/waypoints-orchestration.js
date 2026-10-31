@@ -350,10 +350,10 @@ function applyViaPointFromPlan(apply) {
     rt().call.showStatus(apply.statusMessage, apply.statusType);
 }
 
-function addViaPoint(lat, lon, name = null) {
-    applyViaPointFromPlan(
-        WP().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply
-    );
+function addViaPoint(lat, lon, name = null, provenance = null) {
+    var apply=WP().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply;
+    if(apply && apply.viaPoint)apply.viaPoint.provenance=provenance || (name?'searched':'map');
+    applyViaPointFromPlan(apply);
 }
 
 /**
@@ -377,10 +377,10 @@ function applyStopFromPlan(apply) {
     rt().call.showStatus(apply.statusMessage, apply.statusType);
 }
 
-function addStop(lat, lon, name = null, duration = 15) {
-    applyStopFromPlan(
-        WP().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply
-    );
+function addStop(lat, lon, name = null, duration = 15, provenance = null) {
+    var apply=WP().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply;
+    if(apply && apply.stop)apply.stop.provenance=provenance || (name?'searched':'map');
+    applyStopFromPlan(apply);
 }
 
 /**

@@ -4495,3 +4495,15 @@ body.dark-mode .safety-notice-privacy ul {
 .best-effort-warning button { pointer-events: auto; min-height: 44px; }
 .best-effort-warning button:focus-visible { outline: 3px solid #185abc; outline-offset: 2px; }
 [data-navigation-start]:disabled { opacity: .55; cursor: not-allowed; }
+
+.journey-mode-panel, .simulation-controls {
+    position: fixed; left: 12px; bottom: calc(80px + env(safe-area-inset-bottom));
+    width: min(420px, calc(100vw - 24px)); max-height: 45dvh; overflow: auto;
+    padding: 12px; box-sizing: border-box; background: #fff; color: #17212b;
+    border: 2px solid #56328a; border-radius: 12px; z-index: 220;
+}
+.journey-mode-panel[hidden], .simulation-controls[hidden] { display: none; }
+.journey-mode-panel button, .simulation-controls button, .simulation-controls select { min-height: 44px; margin: 3px; }
+.simulation-controls { border-width: 3px; background: #f5eaff; }
+.simulation-controls strong { display: block; }
+.simulation-vehicle { border: 3px solid #fff; border-radius: 50%; padding: 8px; background: #692c91; color: #fff; font-weight: bold; }

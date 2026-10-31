@@ -53,7 +53,7 @@ test.each(['VIOLATED','UNVERIFIED','UNSUPPORTED'])('mandatory %s never becomes b
     expect(Life.startTurnByTurnNavigation(r)).toBe(false);
     expect(context.snapshot()).toBe(before);
     expect(UX.present(r)).toMatchObject({allowed:false,outcome:'REFUSED'});
-    expect(document.getElementById('startNavBtn').disabled).toBe(true);
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
     expect(document.getElementById('routeAvoidanceNotice').textContent).toMatch(/safety requirements/);
     expect(confirm).not.toHaveBeenCalled();
 });
@@ -77,9 +77,9 @@ test('offline start refuses and button eligibility follows connectivity and evid
     const r=route();const online=jest.spyOn(navigator,'onLine','get');online.mockReturnValue(false);
     expect(UX.present(r).outcome).toBe('REFUSED');
     online.mockReturnValue(true);window.dispatchEvent(new Event('online'));
-    expect(document.getElementById('startNavBtn').disabled).toBe(false);
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     jest.advanceTimersByTime(601000);
-    expect(document.getElementById('startNavBtn').disabled).toBe(true);
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
     expect(document.getElementById('navigationStartExplanation').textContent).toMatch(/stale/);
 });
 test('warning expires at six seconds, remains in details, and does not repeat on ordinary refresh',()=>{
@@ -127,7 +127,7 @@ test('GPS movement cannot erase active preference details or reauthorize a new s
         UX.refresh();
         expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Some hazards could not be avoided');
         expect(AI.gate(r,{storage:localStorage})).toBe(false);
-        expect(document.getElementById('startNavBtn').disabled).toBe(true);
+        expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
     } finally {global.VoyagrGpsOrchestration=saved;}
 });
 test('verified replacement clears the warning; later changed compliance announces again',()=>{
@@ -148,9 +148,9 @@ test('an incomplete map transaction never publishes a best-effort warning',()=>{
 
 test('clearing the presentation cannot leave start controls enabled without a route',()=>{
     expect(UX.present(route()).allowed).toBe(true);
-    expect(document.getElementById('startNavBtn').disabled).toBe(false);
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     UX.reset();
-    expect(document.getElementById('startNavBtn').disabled).toBe(true);
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
     expect(document.getElementById('navigationStartExplanation').textContent).toContain('navigation cannot start');
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
 });

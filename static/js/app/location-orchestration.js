@@ -75,6 +75,7 @@
                 const lon = position.coords.longitude;
                 const input = document.getElementById(field);
 
+                input.dataset.journeySource='gps';
                 input.value = 'Current Location';
                 input.dataset.lat = lat;
                 input.dataset.lon = lon;
@@ -99,6 +100,9 @@
             return;
         }
 
+        const startSource=startInput.dataset.journeySource||'unknown';
+        startInput.dataset.journeySource=endInput.dataset.journeySource||'unknown';
+        endInput.dataset.journeySource=startSource;
         const startValue = startInput.value;
         const startLat = startInput.dataset.lat;
         const startLon = startInput.dataset.lon;

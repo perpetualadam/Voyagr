@@ -255,6 +255,9 @@
     }
 
     function updateRouteOnMap(newRoute, options) {
+        if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) {
+            return {ok:false,scheduleRetry:false,reason:'simulation_active'};
+        }
         options = options || {};
         var life = root.VoyagrNavigationLifecycleOrchestration;
         try {

@@ -76,12 +76,14 @@
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                if(!autoGpsEnabled)return; // A delayed fix cannot replace a manually selected origin.
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
 
                 const startEl = document.getElementById('start');
                 if (startEl) {
+                    startEl.dataset.journeySource='gps';
                     startEl.value = 'Current Location';
                     startEl.dataset.lat = String(lat);
                     startEl.dataset.lon = String(lon);
