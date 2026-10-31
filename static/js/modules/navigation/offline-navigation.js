@@ -184,14 +184,15 @@
      * @param {Object} record
      * @returns {Promise<void>}
      */
-    function persistActiveRouteRecord(idb, record, guard) {
+    function persistActiveRouteRecord(idb, record, guard, onCancel) {
         return openRouteDB(idb).then(function (db) {
             return new Promise(function (resolve, reject) {
                 if(guard&&guard()!==true){db.close();resolve(false);return;}
                 var tx = db.transaction(ROUTE_STORE, 'readwrite');
+                var unsubscribe=onCancel?onCancel(function(){try{tx.abort();}catch(_){/* Already complete. */}}):function(){};
                 tx.objectStore(ROUTE_STORE).put(record);
-                tx.oncomplete = function () { db.close(); resolve(); };
-                tx.onerror = tx.onabort = function () { db.close(); reject(tx.error || new Error('Persistence aborted')); };
+                tx.oncomplete = function () { unsubscribe();db.close();resolve(guard&&guard()!==true?false:undefined); };
+                tx.onerror = tx.onabort = function () { unsubscribe();db.close();reject(tx.error || new Error('Persistence aborted')); };
             });
         });
     }

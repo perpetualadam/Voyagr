@@ -74,7 +74,9 @@ adopt the latest generation. Cancellation aborts its owned IndexedDB transaction
 discard removes only its random staging record. Native map reentry is checked
 before irreversible old-resource cleanup. Reversible cancellation restores the
 original guidance and progress; cancellation after irreversible removal stops
-safely. Initial live startup also checks after pending persistence and before
+safely. Initial and periodic persistence retain the captured generation across IndexedDB
+opening and abort their own active transaction on cancellation. Initial live
+startup also checks after pending persistence and before
 final lifecycle commitment.
 
 New mode/lifecycle/renderer handovers require matching intent-ownership APIs.
@@ -90,10 +92,10 @@ cannot receive fixes until updated. Real update/browser acceptance is outstandin
 | --- | ---: | ---: | ---: |
 | Baseline unchanged independent re-review (before edits) | 33 | 2 | 0 |
 | Same unchanged independent re-review (after edits) | 35 | 0 | 0 |
-| New focused R5/R6 production-path tests | 35 | 0 | 0 |
+| New focused R5/R6 production-path tests | 36 | 0 | 0 |
 | Original unchanged independent 19-case suite | 18 | 1 obsolete assertion | 0 |
 | Preserved external copy with only the justified R1 expectation changed | 19 | 0 | 0 |
-| Full JavaScript, 111 suites, coverage enabled | 2419 | 0 | 0 |
+| Full JavaScript, 111 suites, coverage enabled | 2420 | 0 | 0 |
 | CI-selected web/backend files | 1657 | 0 | 1 |
 | Backend subtests (additional) | 68 | 0 | 0 |
 | Disposable PostgreSQL session-policy checks | 11 | 0 | 0 |
@@ -150,7 +152,7 @@ the existing PR's body after push.
 - `static/js/modules/navigation/avoidance-integrity.js`: request/response intent capture, existing safety verdicts unchanged.
 - `static/js/modules/navigation/offline-navigation.js`: owned journal finalization/rollback/abort and continuation persistence.
 - `static/js/modules/navigation/route-selection.js`: preserve intent/continuation metadata through real serializers.
-- `static/js/__tests__/journey-r5-r6.test.js`: 35 focused production-path cases.
+- `static/js/__tests__/journey-r5-r6.test.js`: 36 focused production-path cases.
 - `docs/audits/VOYAGR_PHASE12FG_REMEDIATION_R5_R6.md`: this report.
 
 ## Limits and release decision

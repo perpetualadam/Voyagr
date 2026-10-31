@@ -136,3 +136,10 @@ test('R6 rapid edits and overlapping requests cannot let an old response replace
 test('R5 offline failure then online retry preserves only canonical pending visits',async()=>{
  const online=jest.spyOn(navigator,'onLine','get').mockReturnValue(false);expect(await Modes.navigateFromGPS()).toBe(false);expect(modeRt.fetch).not.toHaveBeenCalled();online.mockReturnValue(true);modeRt.fetch.mockResolvedValue({ok:false});expect(await Modes.navigateFromGPS()).toBe(false);expect(stopRequests()).toEqual([['pending']]);expect(Life.getRouteInProgress()).toBe(true);
 });
+test('R6 actual startup persistence cannot adopt a new intent while opening IndexedDB',async()=>{
+ const original=Off.persistActiveRouteRecord;let release;
+ Off.persistActiveRouteRecord=(...args)=>new Promise(resolve=>{release=()=>resolve(original(...args));});
+ const pending=OffApp.persistActiveRoute(next);edit();Off.persistActiveRouteRecord=original;
+ await OffApp.persistJourneySnapshot(old,Modes.getContinuation(old));
+ release();expect(await pending).toBe(false);expect((await Off.loadActiveRouteRecord(idb)).routeData.id).toBe('old');
+});

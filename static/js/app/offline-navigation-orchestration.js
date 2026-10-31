@@ -127,14 +127,16 @@
         const polyline = pendingCandidate ? pendingCandidate.polyline : rt().getRoutePolyline();
         if (!off || (!pendingCandidate && !rt().getRouteInProgress()) || !route || !polyline) return false;
         try {
-            await off.persistActiveRouteRecord(indexedDB, off.buildActiveRoutePersistRecord({
+            const owner=root.VoyagrJourneyModes,token=owner&&owner.captureIntent?owner.captureIntent():null;
+            const current=()=>!owner||root.VoyagrJourneyModes===owner&&!!(owner.intentCurrent&&owner.intentCurrent(token));
+            const saved=await off.persistActiveRouteRecord(indexedDB, off.buildActiveRoutePersistRecord({
                 polyline:polyline, steps:pendingCandidate ? pendingCandidate.maneuvers : rt().getCurrentRouteSteps(),
                 stepIndex:pendingCandidate ? 0 : rt().getCurrentStepIndex(),
                 progressHint:!pendingCandidate && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
                 destination:route.destination || null,routeData:route,
                 continuation:!pendingCandidate&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.getContinuation?root.VoyagrJourneyModes.getContinuation(route):null,
-            }));
-            return true;
+            }),current,owner&&owner.onIntentCancelled?callback=>owner.onIntentCancelled(token,callback):null);
+            return saved!==false;
         } catch (e) {
             console.warn('[OfflineNav] Failed to persist route:', e);
             return false;
