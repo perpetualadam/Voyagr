@@ -105,8 +105,8 @@ of a green button, a synthetic route or a coarse summary warning alone.
 ## Recorded local verification
 
 - `npm run lint:tests`: passed.
-- `npm run test:ci -- --maxWorkers=2`: 108 suites, 2,303 tests passed; coverage thresholds passed.
-- CI-declared Python web file selection plus the new regression file: 1,621 passed,
+- `npm run test:ci -- --maxWorkers=2`: 108 suites, 2,304 tests passed; coverage thresholds passed.
+- CI-declared Python web file selection plus the new regression file: 1,622 passed,
   one skipped, 68 subtests passed across 74 files. The skip requires actual Windows
   handles; its platform-specific test was not claimed as executed on Linux.
 - `scripts/test-dashcam-session-sql.py`: 11 tests passed using disposable local

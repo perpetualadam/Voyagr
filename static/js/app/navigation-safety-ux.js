@@ -81,6 +81,7 @@
     }
     function reset() {
         clearTimeout(refreshTimer); refreshTimer=null; route=null; activeRoute=null; committedDetails=null; warningKey=null; dismiss();
+        refresh();
     }
     if (typeof window!=='undefined') {
         window.addEventListener('online',function() { if (route) refresh(); });

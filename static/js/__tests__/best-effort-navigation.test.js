@@ -145,3 +145,12 @@ test('an incomplete map transaction never publishes a best-effort warning',()=>{
     expect(Life.getRouteInProgress()).toBe(false);
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
 });
+
+test('clearing the presentation cannot leave start controls enabled without a route',()=>{
+    expect(UX.present(route()).allowed).toBe(true);
+    expect(document.getElementById('startNavBtn').disabled).toBe(false);
+    UX.reset();
+    expect(document.getElementById('startNavBtn').disabled).toBe(true);
+    expect(document.getElementById('navigationStartExplanation').textContent).toContain('navigation cannot start');
+    expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
+});

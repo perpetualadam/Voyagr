@@ -109,3 +109,10 @@ def test_all_alternatives_keep_their_own_critical_refusal():
     assert by_id['synthetic']['navigation_outcome'] == 'BEST_EFFORT'
     assert by_id['displaced']['navigation_outcome'] == 'REFUSED'
     assert by_id['displaced']['avoidance_assessment']['requires_acceptance'] is True
+
+
+def test_empty_cached_response_cannot_retain_an_eligible_display_outcome():
+    out = assess_response({'success': True, 'routes': [], 'navigation_outcome': 'BEST_EFFORT'},
+                          normalize_requirements({'avoid_caz': False}), now=NOW)
+    assert out['automatic_selection_allowed'] is False
+    assert out['navigation_outcome'] == 'REFUSED'

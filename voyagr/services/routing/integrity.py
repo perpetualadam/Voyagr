@@ -319,11 +319,11 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
     result['avoidance_requirements'] = requirements
     result['avoidance_request_fingerprint'] = requirement_fingerprint(requirements)
     result['automatic_selection_allowed'] = bool(usable)
+    result['navigation_outcome'] = routes[0]['navigation_outcome'] if routes else 'REFUSED'
     result['avoidance_status'] = 'NO_COMPLIANT_ROUTE' if not usable and routes else (routes[0]['avoidance_assessment']['status'] if routes else 'UNVERIFIED')
     if routes:
         if 'routes' in result: result['routes']=routes
         result['avoidance_assessment']=routes[0]['avoidance_assessment']
-        result['navigation_outcome']=routes[0]['navigation_outcome']
         if 'routes' in result:
             primary = routes[0]
             for field in ('provider_limitations', 'provider_capabilities', 'camera_evidence', 'route_comparison'):
