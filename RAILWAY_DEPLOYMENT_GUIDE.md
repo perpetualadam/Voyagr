@@ -1,3 +1,5 @@
+> **Historical Railway deployment documentation — superseded.** Contabo is the sole intended production provider. Do not follow these Railway deployment instructions. See [current deployment policy](docs/deployment/PRODUCTION_DEPLOYMENT_POLICY.md) and [Contabo operator instructions](CONTABO_UPDATE_COMMANDS.md). Removing repository configuration does not disconnect external Railway integrations.
+
 # 🚀 Railway.app Deployment Guide for Voyagr PWA
 
 > **Deprecated:** Production runs on **Contabo**, not Railway. Use [CONTABO_UPDATE_COMMANDS.md](CONTABO_UPDATE_COMMANDS.md) and [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md). This file is kept for historical reference only.

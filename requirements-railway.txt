@@ -1,2 +1,0 @@
-# Deprecated name: use requirements-web.txt (Contabo, VPS, Docker, Railway, etc.)
--r requirements-web.txt
