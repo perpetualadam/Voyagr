@@ -12,7 +12,7 @@
     function cancel(ticket) { finish(ticket); if (ticket && ticket.controller) ticket.controller.abort(); }
     function begin(storage) {
         cancel(activeTicket);
-        activeTicket={id:++sequence,revision:revision,snapshot:snapshot(storage),controller:typeof AbortController!=='undefined' ? new AbortController() : null};
+        activeTicket={id:++sequence,revision:revision,snapshot:snapshot(storage),intentToken:root.VoyagrJourneyModes&&root.VoyagrJourneyModes.captureIntent?root.VoyagrJourneyModes.captureIntent():null,controller:typeof AbortController!=='undefined' ? new AbortController() : null};
         return activeTicket;
     }
     function fetchOptions(ticket) {
@@ -20,7 +20,7 @@
         ticket.timer=setTimeout(function() { ticket.controller.abort(); },35000);
         return {signal:ticket.controller.signal};
     }
-    function current(ticket, storage) { return !!ticket && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage); }
+    function current(ticket, storage) { return !!ticket && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage) && (ticket.intentToken==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(ticket.intentToken))); }
     function invalidate() { revision++; cancel(activeTicket); }
     function augment(body, storage, fix) {
         var next = Object.assign({},body);
@@ -47,7 +47,11 @@
             var lifecycle=root.VoyagrNavigationLifecycleOrchestration;
             var index=lifecycle && lifecycle.getLastSnappedRouteIndex ? lifecycle.getLastSnappedRouteIndex() : 0;
             // Preserve outstanding visits in their existing optimized order; never reoptimize on deviation.
-            next.stops=ranges.filter(function(r) { return r.stop && r.waypoint && r.end_shape_index>index; }).map(function(r) {
+            if(root.VoyagrJourneyPlan && root.lastCalculatedRoute.journey_context){
+                // Canonical visits include pass-throughs; never drop them on deviation.
+                next.stops=root.VoyagrJourneyPlan.liveIntent(root.lastCalculatedRoute,true,index).stops;
+                next.via_points=[];
+            }else next.stops=ranges.filter(function(r) { return r.stop && r.waypoint && r.end_shape_index>index; }).map(function(r) {
                 return {lat:r.waypoint.lat,lon:r.waypoint.lon,name:r.stop.name,duration:r.stop.duration_minutes || 0,original_index:r.stop.original_index};
             });
             next.optimize_stop_order=false;
@@ -132,13 +136,25 @@
         });
     }
     function enabledMandatory(r) { return r.enabled && r.mode==='mandatory'; }
-    function decision(route, options) {
+    function evidenceDecision(route, options) {
         options = options || {};
+        if (route && (route.navigation_resume_requires_fresh_gps ||
+            (route.avoidance_assessment && route.avoidance_assessment.resume_state))) {
+            return {allowed:false,acceptance:false,message:'Saved journey is preview only. Recalculate from your actual location before navigation.'};
+        }
         var assessment = route && route.avoidance_assessment;
         var origin=assessment && assessment.origin_integrity;
         if (!origin || origin.navigation_allowed!==true || origin.transition_verified===true ||
             origin.status!=='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE') {
-            return {allowed:false,acceptance:false,message:'Route start or stop continuity is unverified. Recalculate from your actual location; navigation cannot start.'};
+            var reasons={
+                material_endpoint_relocation:'The route does not connect to your requested start or destination.',
+                within_gps_uncertainty_connectivity_unknown:'The connection from your current position to the route is unverified.',
+                mandatory_exclusion_geometry_unavailable:'Mandatory exclusion areas could not be verified.',
+                mandatory_endpoint_in_or_on_exclusion:'The start or destination is inside a mandatory exclusion area.',
+                snapped_waypoints_geometry_mismatch:'Provider endpoints and the route geometry disagree.',
+                unverified_leg_endpoint:'A journey stop has an unverified connection to the route.'
+            };
+            return {allowed:false,acceptance:false,message:(origin && reasons[origin.reason] || 'Route start or stop continuity is unverified.')+' Recalculate from your actual location; navigation cannot start.'};
         }
         var originAge=Date.now()/1000-origin.checked_at;
         if (!Number.isFinite(originAge) || originAge<0 || originAge>600 || !Number.isFinite(assessment.checked_at) || assessment.checked_at<=0 || options.offline) {
@@ -170,18 +186,40 @@
         var mandatoryRows = requirements.filter(enabledMandatory);
         var mandatory = mandatoryRows.length>0 || expectedRows.some(enabledMandatory);
         if (!boundGeometry(route)) return {allowed:false,acceptance:false,message:'Route geometry binding is missing or inconsistent; recalculate before navigation.'};
-        if (assessment.geometry_valid===false) return { allowed:false, acceptance:false, message:'Route geometry is incomplete; calculate a new route.' };
+        if (assessment.geometry_valid!==true) return { allowed:false, acceptance:false, message:'Route geometry is incomplete; calculate a new route.' };
         var age = Date.now()/1000 - assessment.checked_at;
+        if (!Number.isFinite(age) || age<0 || age>600) {
+            return {allowed:false,acceptance:false,message:'Route safety assessment is stale. Recalculate online before navigation.'};
+        }
+        if (!mandatory && options.preferencesChanged && route.avoidance_preferences_snapshot!==undefined) {
+            return {allowed:false,acceptance:false,message:'Route settings changed. Recalculate with the current preferences before navigation.'};
+        }
         if (mandatory && (!Number.isFinite(age) || age<0 || age>600 || options.preferencesChanged || mismatch)) {
             return { allowed:false, acceptance:false, message:'Mandatory avoidance evidence is stale or requirements changed. Recalculate; preview only, navigation cannot start.' };
         }
         if (mandatoryRows.some(function(r) { return r.status!=='SATISFIED'; }) || assessment.requires_acceptance) {
             var label = assessment.status==='VIOLATED' ? 'Known conflict' : assessment.status==='UNSUPPORTED' ? 'Unsupported' : 'Unverified';
-            return { allowed:false, acceptance:false, message:label+': route safety requirements are not established. Preview only; navigation cannot start.' };
+            var blocked=mandatoryRows.filter(function(r) {return r.status!=='SATISFIED';}).map(function(r) {return r.category.replace(/_/g,' ');});
+            return { allowed:false, acceptance:false, message:label+': route safety requirements are not established'+(blocked.length ? ' ('+blocked.join(', ')+')' : '')+'. Preview only; navigation cannot start.' };
+        }
+        if (assessment.automatic_selection_allowed===false) {
+            return {allowed:false,acceptance:false,message:'The backend assessment refuses this route. Inspect its safety details and recalculate before navigation.'};
         }
         return { allowed:true, acceptance:false, message:assessment.status==='SATISFIED' ?
             (assessment.claim==='avoidance_disabled' ? '' : 'Verified against available data only; mapped coverage is limited.') :
             'Best effort: avoidance preferences are not guaranteed.' };
+    }
+    // Presentation derived from the existing gate evidence, never a new permission flag.
+    function decision(route, options) {
+        var result = evidenceDecision(route, options);
+        var rows = route && route.avoidance_assessment && route.avoidance_assessment.requirements;
+        var unresolved = (Array.isArray(rows) ? rows : []).filter(function(row) {
+            return row && row.enabled && row.mode==='preference' && row.status!=='SATISFIED';
+        });
+        return Object.assign({},result,{outcome:!result.allowed ? 'REFUSED' : unresolved.length ? 'BEST_EFFORT' : 'VERIFIED',
+            preferenceWarnings:result.allowed ? unresolved.map(function(row) {
+                return {category:row.category,status:row.status};
+            }) : []});
     }
     function currentDecision(route, options, storage) {
         var mandatory = storage.getItem('pref_avoidance_mode')==='mandatory';
@@ -200,7 +238,6 @@
         options = options || {};
         var d = currentDecision(route, options, options.storage || root.localStorage);
         if (d.allowed) {
-            if (d.message && !options.quiet && options.showStatus) options.showStatus(d.message,'warning');
             return true;
         }
         if (options.showStatus) options.showStatus(d.message,'warning');
@@ -208,10 +245,11 @@
     }
     function tag(data, ticket) {
         if (!data || typeof data!=='object') return data;
+        if(ticket.intentToken!=null)data.avoidance_intent_token=ticket.intentToken;
         data.avoidance_preferences_snapshot=ticket.snapshot;
         data.avoidance_request_sequence=ticket.id;
         data.avoidance_request_revision=ticket.revision;
-        (data.routes || []).forEach(function(route) { route.avoidance_preferences_snapshot=ticket.snapshot; });
+        (data.routes || []).forEach(function(route) { route.avoidance_preferences_snapshot=ticket.snapshot;if(ticket.intentToken!=null)route.avoidance_intent_token=ticket.intentToken; });
         return data;
     }
     function summary(route) {
@@ -229,7 +267,7 @@
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,gate:gate,tag:tag,summary:summary,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

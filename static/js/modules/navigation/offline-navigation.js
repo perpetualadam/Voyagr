@@ -98,6 +98,7 @@
         return {
             navigation_schema_version:3,
             progress_hint:snapshot.progressHint || null,
+            continuation:snapshot.continuation ? JSON.parse(JSON.stringify(snapshot.continuation)) : null,
             id: 'current',
             polyline: snapshot.polyline,
             steps: snapshot.steps,
@@ -183,15 +184,56 @@
      * @param {Object} record
      * @returns {Promise<void>}
      */
-    function persistActiveRouteRecord(idb, record) {
+    function persistActiveRouteRecord(idb, record, guard, onCancel) {
         return openRouteDB(idb).then(function (db) {
             return new Promise(function (resolve, reject) {
+                if(guard&&guard()!==true){db.close();resolve(false);return;}
                 var tx = db.transaction(ROUTE_STORE, 'readwrite');
+                var unsubscribe=onCancel?onCancel(function(){try{tx.abort();}catch(_){/* Already complete. */}}):function(){};
                 tx.objectStore(ROUTE_STORE).put(record);
-                tx.oncomplete = function () { db.close(); resolve(); };
-                tx.onerror = function () { db.close(); reject(tx.error); };
+                tx.oncomplete = function () { unsubscribe();db.close();resolve(guard&&guard()!==true?false:undefined); };
+                tx.onerror = tx.onabort = function () { unsubscribe();db.close();reject(tx.error || new Error('Persistence aborted')); };
             });
         });
+    }
+
+    function stageActiveRouteRecord(idb, record, options) {
+        options=options||{};
+        if(!root.crypto||typeof root.crypto.getRandomValues!=='function')return Promise.reject(new Error('Staging identity unavailable'));
+        var identity=new Uint32Array(4);root.crypto.getRandomValues(identity);
+        var id='pending-'+Array.from(identity,function(value){return value.toString(16).padStart(8,'0');}).join('');
+        var previous=null,aborted=false,activeTx=null;
+        function write(action,guard){
+            return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+                if((action==='commit'||action==='finalize')&&(aborted||!guard||guard()!==true)){db.close();resolve(false);return;}
+                var tx=db.transaction(ROUTE_STORE,'readwrite'),store=tx.objectStore(ROUTE_STORE),ok=true;
+                activeTx=tx;
+                if(action==='stage'){
+                    var old=store.get('current');old.onsuccess=function(){previous=old.result||null;};
+                    store.put(Object.assign({},record,{id:id}));
+                }else if(action==='discard')store.delete(id);
+                else if(action==='commit'){
+                    store.put(Object.assign({},record,{id:'current',persistence_owner:id},options.planning?{planning_pending:true,previous_journey:previous}:{}));
+                    store.delete(id);
+                }else{
+                    var current=store.get('current');current.onsuccess=function(){
+                        var value=current.result;
+                        if(!value||value.persistence_owner!==id||(guard&&guard()!==true)){ok=false;return;}
+                        if(action==='rollback'){if(previous)store.put(previous);else store.delete('current');}
+                        else store.put(Object.assign({},record,{id:'current',persistence_owner:id}));
+                    };
+                }
+                tx.oncomplete=function(){if(activeTx===tx)activeTx=null;db.close();resolve(ok);};
+                tx.onerror=tx.onabort=function(){if(activeTx===tx)activeTx=null;db.close();reject(tx.error||new Error('Persistence aborted'));};
+            });});
+        }
+        return write('stage').then(function(){return {
+            commit:function(guard){return write('commit',guard);},
+            finalize:function(guard){return write('finalize',guard);},
+            rollback:function(guard){return write('rollback',guard);},
+            discard:function(){return write('discard');},
+            abort:function(){aborted=true;if(activeTx){try{activeTx.abort();}catch(_){/* Transaction already completed. */}}},
+        };});
     }
 
     /**
@@ -205,7 +247,9 @@
                 var req = tx.objectStore(ROUTE_STORE).get('current');
                 req.onsuccess = function () {
                     db.close();
-                    resolve(req.result || null);
+                    var record=req.result||null,depth=0;
+                    while(record&&record.planning_pending&&depth++<8)record=record.previous_journey||null;
+                    resolve(record&&record.planning_pending?null:record);
                 };
                 req.onerror = function () {
                     db.close();
@@ -642,6 +686,7 @@
         putSpeedLimitCacheEntry: putSpeedLimitCacheEntry,
         getSpeedLimitCacheEntry: getSpeedLimitCacheEntry,
         persistActiveRouteRecord: persistActiveRouteRecord,
+        stageActiveRouteRecord: stageActiveRouteRecord,
         loadActiveRouteRecord: loadActiveRouteRecord,
         clearActiveRouteRecord: clearActiveRouteRecord,
         parseVectorTileSourcesFromStyle: parseVectorTileSourcesFromStyle,

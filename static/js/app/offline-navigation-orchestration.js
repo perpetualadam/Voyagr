@@ -127,18 +127,40 @@
         const polyline = pendingCandidate ? pendingCandidate.polyline : rt().getRoutePolyline();
         if (!off || (!pendingCandidate && !rt().getRouteInProgress()) || !route || !polyline) return false;
         try {
-            await off.persistActiveRouteRecord(indexedDB, off.buildActiveRoutePersistRecord({
+            const owner=root.VoyagrJourneyModes,token=owner&&owner.captureIntent?owner.captureIntent():null;
+            const current=()=>!owner||root.VoyagrJourneyModes===owner&&!!(owner.intentCurrent&&owner.intentCurrent(token));
+            const saved=await off.persistActiveRouteRecord(indexedDB, off.buildActiveRoutePersistRecord({
                 polyline:polyline, steps:pendingCandidate ? pendingCandidate.maneuvers : rt().getCurrentRouteSteps(),
                 stepIndex:pendingCandidate ? 0 : rt().getCurrentStepIndex(),
                 progressHint:!pendingCandidate && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getNavigationPositionEvidence ? root.VoyagrGpsOrchestration.getNavigationPositionEvidence() : null,
                 destination:route.destination || null,routeData:route,
-            }));
-            return true;
+                continuation:!pendingCandidate&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.getContinuation?root.VoyagrJourneyModes.getContinuation(route):null,
+            }),current,owner&&owner.onIntentCancelled?callback=>owner.onIntentCancelled(token,callback):null);
+            return saved!==false;
         } catch (e) {
             console.warn('[OfflineNav] Failed to persist route:', e);
             return false;
         }
     }
+
+    async function stageActiveRoute(candidate, options) {
+        const off=OFF();
+        if(!off||!candidate||!candidate.polyline)return null;
+        return off.stageActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
+            polyline:candidate.polyline,steps:candidate.maneuvers,stepIndex:0,
+            destination:candidate.destination,routeData:candidate,
+        }),options);
+    }
+
+    async function persistJourneySnapshot(route,continuation,guard){
+        const off=OFF(),integrity=root.VoyagrAvoidanceIntegrity;
+        const points=integrity&&integrity.geometryPoints(route);if(!off||!points)return false;
+        const saved=await off.persistActiveRouteRecord(indexedDB,off.buildActiveRoutePersistRecord({
+            polyline:points,steps:route.maneuvers,stepIndex:0,destination:route.destination,
+            routeData:route,continuation:continuation,
+        }),guard);return saved!==false;
+    }
+    async function clearJourneyPersistence(){await OFF().clearActiveRouteRecord(indexedDB);return true;}
 
     async function loadPersistedRoute() {
         const off = OFF();
@@ -326,6 +348,8 @@
         cacheSpeedLimit: cacheSpeedLimit,
         getCachedSpeedLimit: getCachedSpeedLimit,
         persistActiveRoute: persistActiveRoute,
+        stageActiveRoute: stageActiveRoute,
+        persistJourneySnapshot:persistJourneySnapshot,clearJourneyPersistence:clearJourneyPersistence,
         loadPersistedRoute: loadPersistedRoute,
         clearPersistedRoute: clearPersistedRoute,
         schedulePersistRoute: schedulePersistRoute,

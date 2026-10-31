@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = null;
+    var preserveStoppedPersistence=false;
 
     var navigationFailure = null;
     var startEpoch = 0;
@@ -68,7 +69,9 @@
     function getNavigationStarting() { return navigationStarting; }
     function getNavigationFailure() { return navigationFailure; }
     function failNavigation(reason) {
+        try{if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.retainLiveJourney)root.VoyagrJourneyModes.retainLiveJourney();}catch(_){/* Never delay a safety stop. */}
         navigationFailure = reason || 'navigation_initialization_failed';
+        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         startEpoch++; navigationStarting = false;
         setRouteInProgress(false); setRouteStarted(false);
         setCurrentRouteSteps([]); setCurrentStepIndex(0); setNextManeuverDistance(0);
@@ -77,7 +80,7 @@
         for (const name of ['stopLiveDataRefresh','stopAutoTrafficUpdates','stopRouteTrafficUpdates',
             'clearInitialETAAnnouncement','clearRerouteFailureRetries','hideTurnInstructionWidget',
             'hideJourneySummaryBar','updateNavigationFabVisibility','cancelNavigationSpeech','clearPersistedRoute']) {
-            try { if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
+            try { if(name==='clearPersistedRoute'&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isPlanningCommit&&root.VoyagrJourneyModes.isPlanningCommit())continue; if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
         }
         try { if (root.VoyagrVoiceAnnouncementsOrchestration) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech(); } catch (_) { /* state already stopped */ }
         try { if (call && call.showStatus) call.showStatus('Navigation stopped: initialization or map recovery failed. Recover the map and recalculate.', 'error'); } catch (_) { /* unavailable UI */ }
@@ -328,7 +331,7 @@
         setCurrentStepIndex(apply.currentStepIndex);
         if (apply.clearRouteSteps) setCurrentRouteSteps([]);
         if (apply.resetVehicleMarker) rt().call.resetVehicleMarkerDisplayState();
-        if (apply.clearPersistedRoute) rt().call.clearPersistedRoute();
+        if (apply.clearPersistedRoute && !preserveStoppedPersistence) rt().call.clearPersistedRoute();
         rt().setMapFollowingActive(apply.mapFollowingActive);
         rt().setJourneyOverviewActive(apply.journeyOverviewActive);
         rt().setSavedMapState(apply.savedMapState);
@@ -431,7 +434,59 @@
         return false;
     }
 
+    async function replaceActiveJourney(routeData) {
+        const modes=root.VoyagrJourneyModes,integrity=root.VoyagrAvoidanceIntegrity;
+        const refuse=()=>false;
+        if(navigationStarting||navigationFailure||!getRouteInProgress()||!modes||modes.liveStartPermitted(routeData)!==true)return refuse();
+        let stage=null,committed=false,cancelled=false,timer,unsubscribe=()=>{};
+        const epoch=++startEpoch;
+        const intentToken=modes.captureIntent&&modes.captureIntent();
+        const intentCurrent=()=>!!(modes.intentCurrent&&modes.intentCurrent(intentToken));
+        const current=window.lastCalculatedRoute;
+        const candidate=integrity.prepareNavigationCandidate(routeData);
+        const eligible=()=>root.VoyagrJourneyModes===modes&&root.VoyagrAvoidanceIntegrity===integrity&&intentCurrent()&&epoch===startEpoch&&getRouteInProgress()&&window.lastCalculatedRoute===current&&
+            modes.liveStartPermitted(routeData)===true&&integrity.gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true})===true;
+        function bounded(work){
+            return Promise.race([Promise.resolve(work),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),5000);})]).finally(()=>clearTimeout(timer));
+        }
+        try {
+            if(!candidate||!eligible()||typeof rt().call.stageActiveRoute!=='function')return false;
+            navigationStarting=true;
+            const work=Promise.resolve(rt().call.stageActiveRoute(candidate));
+            work.then(value=>{if(cancelled&&value&&typeof value.discard==='function')void Promise.resolve().then(()=>value.discard()).catch(()=>{});},()=>{});
+            stage=await bounded(work);
+            if(!stage||typeof stage.commit!=='function'||typeof stage.discard!=='function'||!eligible())throw Error('Replacement staging cancelled');
+            unsubscribe=modes.onIntentCancelled?modes.onIntentCancelled(intentToken,()=>{if(stage.abort)stage.abort();}):()=>{};
+            // Keep the existing line, progress, arrival state and durable record until
+            // the real verifier-backed synchronous replacement transaction succeeds.
+            const result=root.VoyagrRerouteMapOrchestration.updateRouteOnMap(candidate,{isCurrent:intentCurrent});
+            if(!result||result.ok!==true)throw Error('Replacement refused');
+            committed=true;
+            const selected=window.lastCalculatedRoute;
+            const durable=await bounded(stage.commit(()=>intentCurrent()&&epoch===startEpoch&&getRouteInProgress()&&window.lastCalculatedRoute===selected));
+            if(durable!==true||!intentCurrent()||epoch!==startEpoch||!getRouteInProgress()||window.lastCalculatedRoute!==selected)throw Error('Replacement persistence interrupted');
+            return true;
+        } catch (_) {
+            // After a successful map transition, persistence failure is a safety stop,
+            // never permission to resurrect the old completed-stop context.
+            if(committed&&epoch===startEpoch)failNavigation('replacement_persistence_failed');
+            return false;
+        } finally {
+            cancelled=true;unsubscribe();
+            if(stage&&stage.discard){try{await bounded(stage.discard());}catch(_){/* Pending records cannot authorize resume. */}}
+            if(epoch===startEpoch)navigationStarting=false;
+        }
+    }
+
     function startTurnByTurnNavigation(routeData, navStartOpts) {
+        if(navStartOpts&&navStartOpts.gpsReplacement===true&&getRouteInProgress())return replaceActiveJourney(routeData);
+        if (!getRouteInProgress() && (root.VOYAGR_JOURNEY_PROTOCOL===1 || routeData && routeData.journey_context || root.VoyagrJourneyModes)) {
+            var modes=root.VoyagrJourneyModes;
+            if (!modes || modes.PROTOCOL!==1 || typeof modes.liveStartPermitted!=='function' || modes.liveStartPermitted(routeData)!==true) {
+                if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus('Choose Navigate From My Location, or inspect the journey in simulation. Reload if journey controls are unavailable.','warning');
+                return false;
+            }
+        }
         if (navStartOpts === undefined) navStartOpts = null;
         const refuse = message => {
             try { if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus(message, 'warning'); } catch (_) { /* fail closed during partial startup */ }
@@ -477,6 +532,9 @@
             next:getNextManeuverDistance(), started:getRouteStarted(), layer:null};
         let staged = null, helpers, map, mutated = false, oldRemoved = false, stateInit;
         const epoch = ++startEpoch;
+        const owner=root.VoyagrJourneyModes;
+        const intentToken=owner&&owner.captureIntent?owner.captureIntent():null;
+        const intentCurrent=()=>!owner||!!(owner.intentCurrent&&owner.intentCurrent(intentToken));
         const abortStart = () => {
             // A cancelled persistence completion owns only its staged resource;
             // it must never roll an unrelated newer session back to its preview.
@@ -510,7 +568,7 @@
         };
         const completeStart = persisted => {
             try {
-                if (persisted !== true || epoch !== startEpoch) throw new Error('Persistence or startup cancelled');
+                if (persisted !== true || epoch !== startEpoch || !intentCurrent()) throw new Error('Persistence or startup cancelled');
                 const integrity = root.VoyagrAvoidanceIntegrity;
                 const selected = rt().routeSelection().mergeNavigationRouteFromSelected(routeData,rt().getRouteOptions(),rt().getSelectedRouteIndex());
                 if (JSON.stringify(integrity.prepareNavigationCandidate(selected)) !== JSON.stringify(mergedRoute) ||
@@ -537,7 +595,9 @@
                 applyNavStartServicesFromPlan(services);
                 if (rt().getRouteLayer() !== staged || !helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map changed during startup');
                 if (!root.VoyagrRerouteMapOrchestration.authoriseCurrentRouteRedraw()) throw new Error('Recovery context unavailable');
+                if(!intentCurrent())throw new Error('Journey intent changed during map commitment');
                 navigationFailure = null; navigationStarting = false; setRouteStarted(true);
+                try { if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.committed(mergedRoute); } catch (_) { /* Presentation cannot change gate permission. */ }
                 applyNavStartWakeLockFromPlan(stateInit,'wakeLock' in navigator);
                 if (services.userFeedback) {
                     const feedback = services.userFeedback;
@@ -564,6 +624,7 @@
             if (rt().getMapLibreHelpers().invalidateDeferredPolylineMounts(map) !== true) throw new Error('Deferred map ownership unavailable');
             staged = helpers.addPolyline(map,mount.polyline,mount.style);
             if (!helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Map mount failed');
+            if(!intentCurrent())throw new Error('Journey intent changed before persistence');
             navigationStarting = true;
             const persisted = rt().call.persistActiveRoute(mergedRoute);
             if (persisted && typeof persisted.then === 'function') {
@@ -577,7 +638,8 @@
         } catch (_) { return abortStart(); }
     }
 
-    function stopTurnByTurnNavigation() {
+    function stopTurnByTurnNavigation(options) {
+        try{if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.retainLiveJourney)root.VoyagrJourneyModes.retainLiveJourney();}catch(_){/* Stopping remains unconditional. */}
         if (navigationStarting) { failNavigation('navigation_start_cancelled'); return false; }
         startEpoch++;
         const entry = MC().buildNavStopEntryOrchestrationPlan({
@@ -594,8 +656,11 @@
             return;
         }
 
-        applyNavStopRuntimeFromPlan(MC().buildNavStopRuntimeApplyPlan(entry.stateReset));
+        preserveStoppedPersistence=!!(options&&options.preservePersistedJourney===true);
+        try{applyNavStopRuntimeFromPlan(MC().buildNavStopRuntimeApplyPlan(entry.stateReset));}finally{preserveStoppedPersistence=false;}
         applyNavStopServicesFromPlan(entry.services, entry.wasRouteInProgress);
+        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
+        if (root.VoyagrJourneyModes) root.VoyagrJourneyModes.liveStopped();
     }
 
     function updateTurnGuidance(userLat, userLon) {
@@ -620,6 +685,8 @@
     }
 
     var api = {
+        INTENT_OWNERSHIP_PROTOCOL: 1,
+        JOURNEY_REPLACEMENT_PROTOCOL: 1,
         bind: bind,
         getNavigationFailure:getNavigationFailure,
         getNavigationStarting:getNavigationStarting,

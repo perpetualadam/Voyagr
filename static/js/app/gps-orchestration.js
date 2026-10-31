@@ -796,6 +796,7 @@
     }
 
     function applyGpsTrackingTick(position) {
+        if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) return;
         var roadOwner=root.VoyagrRoadMatchOrchestration;
         var roadMatch=roadOwner ? roadOwner.observe(position,rt().g('routePolyline'),window.lastCalculatedRoute) : null;
         if (rt().g('routeInProgress') && roadMatch && root.VoyagrRoadMatching.shouldPauseNavigation(roadMatch)) {
@@ -972,6 +973,9 @@
      * @returns {*} Return value description
      */
     function startGPSTracking() {
+        if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) {
+            rt().call.showStatus('Exit simulation before enabling live GPS tracking.','warning');return;
+        }
         if (!navigator.geolocation) {
             rt().call.showStatus('Geolocation not supported', 'error');
             return;
@@ -1571,6 +1575,7 @@
      * This enhanced version handles unavoidable hazards gracefully
      */
     async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
+        if(root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating())return;
         const now = Date.now();
         const RD = rdModule();
         const destination = rt().call.resolveNavigationDestination();
@@ -1757,6 +1762,7 @@
 
     // Keep old function for backwards compatibility
     async function triggerAutomaticReroute(currentLat, currentLon) {
+        if(root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating())return;
         return triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
     }
     // Hazard announcement debouncing
@@ -1896,6 +1902,7 @@
      * Route-embedded hazards work offline; nearby API augments when online.
      */
     function processNavigationHazardAlerts(lat, lon) {
+        if(root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating())return;
         const HA = haModule();
         const tick = HA.buildNavigationHazardAlertsTickPlan({
             routeInProgress: rt().g('routeInProgress'),
@@ -1970,6 +1977,12 @@
         saveCameraAlertPreferences: saveCameraAlertPreferences,
         loadCameraAlertPreferences: loadCameraAlertPreferences,
         getAcceptedOriginFix:function(){return lastAcceptedOriginFix && Object.assign({},lastAcceptedOriginFix);},
+        acceptOriginPosition:function(position){
+            var check=sgModule().validateNavigationGpsFix(position,Date.now(),0);
+            if(!check.accepted || lastAcceptedOriginFix && position.timestamp<lastAcceptedOriginFix.timestamp)return false;
+            lastAcceptedOriginFix={lat:position.coords.latitude,lon:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp};
+            return true;
+        },
         getNavigationPositionEvidence:function(){return navigationPositionEvidence;},
         triggerAutomaticRerouteWithHazardHandling: triggerAutomaticRerouteWithHazardHandling,
         triggerAutomaticReroute: triggerAutomaticReroute,

@@ -76,6 +76,11 @@ def register_avoidance_integrity(app):
                 if start and end: endpoints=(start,end)
             with route_transport.stage('assessment'):
                 result = assess_response(payload, requirements, hazards, waypoints=visits,endpoints=endpoints,origin_context=origin_context)
+            from voyagr.services.routing.journey_context import context_for_plan
+            import copy
+            result['journey_context'] = context_for_plan(raw, visits)
+            for route in result.get('routes') or []:
+                route['journey_context'] = copy.deepcopy(result['journey_context'])
 
         except route_transport.RoutingDeadlineExceeded:
             return route_transport.deadline_response()

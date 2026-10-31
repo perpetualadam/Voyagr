@@ -34,7 +34,7 @@ test('progress and arrival use the final destination, not the first stop',()=>{
 
 test('Python/JavaScript geometry checksums agree and changed geometry cannot retain compliance',()=>{
     expect(AI.geometryBinding(fixture)).toBe(fixture.avoidance_assessment.geometry_binding);
-    const assessed={...fixture,avoidance_assessment:{...fixture.avoidance_assessment,origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false}}};
+    const assessed={...fixture,avoidance_assessment:{...fixture.avoidance_assessment,checked_at:Date.now()/1000,origin_integrity:{checked_at:Date.now()/1000,status:'CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE',navigation_allowed:true,transition_verified:false}}};
     expect(AI.decision(assessed).allowed).toBe(true);
     const changed={...assessed,geometry:fixture.legs[0].geometry};
     expect(AI.decision(changed)).toMatchObject({allowed:false,acceptance:false});

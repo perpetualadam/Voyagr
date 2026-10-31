@@ -17,6 +17,7 @@
     function RR() { return rt().roadReport(); }
 
     function openRoadReportModal() {
+        if(root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()){rt().call.showStatus('Community reporting is unavailable during simulation.','warning');return;}
         const execute = RR().buildOpenRoadReportModalExecutePlan();
         if (!execute.shouldOpen) return;
         const m = document.getElementById(execute.modalId);
@@ -34,6 +35,7 @@
     }
 
     async function submitRoadReport() {
+        if(root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()){rt().call.showStatus('Community reporting is unavailable during simulation.','warning');return false;}
         const roadReport = RR();
         const collected = roadReport.buildSubmitRoadReportCollectPlan({
             lat: rt().getCurrentLat(),
