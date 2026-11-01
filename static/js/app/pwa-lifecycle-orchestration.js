@@ -160,13 +160,6 @@
                 hasInstalling: !!registration.installing,
             });
 
-            if (outcome.action === 'activate-waiting') {
-                rt().call.showStatus(outcome.statusMessage, outcome.statusType);
-                if (outcome.saveAppState) saveAppState();
-                registration.waiting.postMessage({ type: outcome.skipWaitingMessageType });
-                return;
-            }
-
             rt().call.showStatus(outcome.statusMessage, outcome.statusType);
         } catch (error) {
             console.error(preflight.errorLogPrefix, error);

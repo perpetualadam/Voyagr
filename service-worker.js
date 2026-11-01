@@ -1,11 +1,12 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v51';
+const CACHE_VERSION = 'v52';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
 const ROUTE_CACHE = `voyagr-routes-${CACHE_VERSION}`;
-const TILE_CACHE = `voyagr-tiles-${CACHE_VERSION}`;
+// Cartography did not change: retain existing public offline tiles through v51 upgrade.
+const TILE_CACHE = 'voyagr-tiles-v51';
 
 // Self-hosted MapLibre tile stack is proxied via /map/ (styles, sprites, glyphs, vector tiles).
 // Treat these like "tile" resources so they don't flood the generic dynamic cache.
@@ -106,49 +107,80 @@ async function trimCache(cacheName, maxSize) {
   }
 }
 
-// Install event - cache static assets
+// Executable releases are immutable and verified independently of CDN/HTTP caches.
+const COHERENT_SHELL = 'voyagr-coherent-shell-v52';
+const REQUIRED_MODULES = ['avoidance-integrity.js','journey-plan.js','journey-modes.js',
+  'calculate-route-orchestration.js','navigation-lifecycle-orchestration.js',
+  'route-selection.js','offline-navigation.js','voyagr-app.js','app.js'];
+function releaseAsset(url) {
+  const m = /^\/_voyagr\/assets\/([a-f0-9]{64})\/([a-f0-9]{64})\/(\d{3}-[A-Za-z0-9_.-]+\.(?:js|css|pv|ppn))$/.exec(url);
+  return m && {release:m[1], sha256:m[2], name:m[3], url:url};
+}
+async function verifiedAsset(asset) {
+  const cache = await caches.open('voyagr-release-v52-' + asset.release);
+  async function valid(response) {
+    if (!response || !response.ok || response.type === 'opaque') return false;
+    const bytes = await response.clone().arrayBuffer();
+    if (bytes.byteLength > 10 * 1024 * 1024 || (asset.bytes!==undefined && bytes.byteLength!==asset.bytes)) return false;
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+      .map(x=>x.toString(16).padStart(2,'0')).join('');
+    return hash === asset.sha256;
+  }
+  const cached = await cache.match(asset.url);
+  if (await valid(cached)) return cached;
+  const response = await fetch(asset.url, {cache:'reload', credentials:'same-origin', redirect:'error'});
+  if (!await valid(response)) throw Error('Asset release digest mismatch');
+  await cache.put(asset.url, response.clone());
+  return response;
+}
+async function stageCoherentShell(response) {
+  if (!response || !response.ok) throw Error('Shell unavailable');
+  const html = await response.clone().text();
+  const found = /<script type="application\/json" id="voyagr-asset-manifest">([\s\S]*?)<\/script>/.exec(html);
+  if (!found) throw Error('Shell release manifest missing');
+  const manifest = JSON.parse(found[1]);
+  if (manifest.schema !== 1 || !/^[a-f0-9]{64}$/.test(manifest.release) ||
+      !Array.isArray(manifest.assets) || !manifest.assets.length || manifest.assets.length > 300)
+    throw Error('Invalid release manifest');
+  const seen = new Set();
+  const assets = manifest.assets.map(entry=>{
+    const asset = releaseAsset(entry.url);
+    if (!asset || asset.release !== manifest.release || asset.sha256 !== entry.sha256 ||
+        asset.name !== entry.name || !Number.isSafeInteger(entry.bytes) || entry.bytes<=0 || entry.bytes>10*1024*1024 || seen.has(asset.url)) throw Error('Invalid release asset');
+    seen.add(asset.url); asset.bytes=entry.bytes; return asset;
+  });
+  if (assets.reduce((sum,a)=>sum+a.bytes,0)>32*1024*1024) throw Error('Release exceeds offline budget');
+  if (!REQUIRED_MODULES.every(name=>assets.some(a=>a.name.slice(4)===name)))
+    throw Error('Incomplete navigation manifest');
+  await Promise.all(assets.map(verifiedAsset));
+  // Commit the offline shell only after every dependency verified. An interrupted
+  // candidate leaves the last coherent shell untouched; partial assets are inert.
+  const shells = await caches.open(COHERENT_SHELL);
+  await shells.put('/', response.clone());
+  return response;
+}
 self.addEventListener('install', event => {
-  console.log(`[Service Worker] Installing ${CACHE_VERSION}...`);
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then(cache => {
-      console.log('[Service Worker] Caching static assets');
-      return Promise.all(
-        STATIC_ASSETS.map(url => {
-          return cache.add(url).catch(err => {
-            console.log('[SW] Failed to cache:', url, err.message);
-          });
-        })
-      );
-    })
-  );
-  self.skipWaiting();
+  event.waitUntil(fetch('/', {cache:'no-cache', credentials:'same-origin'})
+    .then(stageCoherentShell));
+  // No skipWaiting: existing tabs, guidance and transactions keep their controller.
 });
-
-// Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log(`[Service Worker] Activating ${CACHE_VERSION}...`);
-  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, TILE_CACHE, CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (!currentCaches.includes(cacheName)) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      console.log('[SW] Claiming clients');
-      return self.clients.claim();
-    })
-  );
+  // Natural activation after old clients close. No clients.claim, cache deletion,
+  // IndexedDB migration, localStorage reset, or automatic reload.
+  event.waitUntil(Promise.resolve());
 });
 
 // Fetch event - intelligent caching strategy
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
+
+  if (request.method === 'GET' && url.origin === self.location.origin && url.pathname.startsWith('/_voyagr/assets/')) {
+    const asset = releaseAsset(url.pathname);
+    event.respondWith(asset ? verifiedAsset(asset).catch(()=>new Response('Verified release unavailable offline. Reconnect when safe.', {status:503})) : Promise.resolve(new Response('Invalid asset identity', {status:404})));
+    return;
+  }
+
 
   // Private media is network-only for every method, never queued or replayed.
   if (url.pathname.startsWith('/api/dashcam/')) {
@@ -240,7 +272,7 @@ self.addEventListener('fetch', event => {
   // Map styles/sprites/glyphs/fonts - NETWORK FIRST with cache fallback
   if (isMapStyle || isMapSprite || isMapGlyphsOrFonts) {
     event.respondWith(
-      fetch(request)
+      fetch(request, {cache:'no-cache'})
         .then(networkResponse => {
           if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
@@ -279,37 +311,20 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Root HTML page - NETWORK FIRST to always get fresh API keys
-  // This ensures TomTom and other API keys are always current
-  if (url.pathname === '/' || url.pathname === '/index.html') {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          // Cache the fresh response for offline use
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(DYNAMIC_CACHE).then(cache => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then(response => {
-            return response || new Response(OFFLINE_HTML, {
-              headers: { 'Content-Type': 'text/html' }
-            });
-          });
-        })
-    );
+  // A shell and its dependency set form one committed offline release.
+  if (url.origin === self.location.origin && (url.pathname === '/' || url.pathname === '/index.html')) {
+    event.respondWith(fetch(request, {cache:'no-cache'}).then(stageCoherentShell).catch(async()=>{
+      const shells = await caches.open(COHERENT_SHELL);
+      return await shells.match('/') || new Response('Voyagr update is incomplete. Reconnect and reopen when safe; saved data has not been cleared.', {status:503, headers:{'Content-Type':'text/plain'}});
+    }));
     return;
   }
 
   // JS and CSS files — NETWORK FIRST so deploys take effect immediately.
-  // Falls back to cache (including ignoreSearch) for offline use.
+  // Exact-URL fallback only. Executable release paths are handled above.
   if (url.pathname.startsWith('/static/js/') || url.pathname.startsWith('/static/css/')) {
     event.respondWith(
-      fetch(request)
+      fetch(request, {cache:'no-cache'})
         .then(networkResponse => {
           if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
@@ -318,10 +333,9 @@ self.addEventListener('fetch', event => {
           return networkResponse;
         })
         .catch(() => {
-          // Offline: try exact match first, then ignoreSearch to handle cache-buster changes.
+          // Never borrow another query-version revision.
           return caches.match(request)
-            .then(resp => resp || caches.match(request, { ignoreSearch: true }))
-            .then(resp => resp || new Response('Offline', { status: 503 }));
+                        .then(resp => resp || new Response('Offline', { status: 503 }));
         })
     );
     return;
@@ -554,11 +568,13 @@ self.addEventListener('notificationclose', event => {
 self.addEventListener('message', event => {
   console.log('[SW] Message received:', event.data);
 
-  if (event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+  if (event.data && event.data.type === 'SKIP_WAITING' || event.data.type === 'CLEAR_CACHE') {
+    // Legacy tabs may send these messages. Neither is an update barrier.
+    if(event.source && event.source.postMessage)event.source.postMessage({type:'UPDATE_WAITING_FOR_TABS'});
+    return;
   }
 
-  if (event.data.type === 'CACHE_URLS') {
+  if (event.data && event.data.type === 'CACHE_URLS') {
     event.waitUntil(
       caches.open(DYNAMIC_CACHE).then(cache => {
         return cache.addAll(event.data.urls);
@@ -571,7 +587,7 @@ self.addEventListener('message', event => {
   // — including offline — have everything ready.
   // Routed to STATIC_CACHE so it's not evicted by the dynamic cache trimmer.
   // Silently skips URLs that are already cached to keep the warm-up idempotent.
-  if (event.data.type === 'WARM_STATIC_URLS') {
+  if (event.data && event.data.type === 'WARM_STATIC_URLS') {
     const urls = Array.isArray(event.data.urls) ? event.data.urls : [];
     if (urls.length === 0) return;
     event.waitUntil(
@@ -600,17 +616,7 @@ self.addEventListener('message', event => {
     );
   }
 
-  if (event.data.type === 'CLEAR_CACHE') {
-    event.waitUntil(
-      caches.keys().then(cacheNames => {
-        return Promise.all(
-          cacheNames.map(cacheName => caches.delete(cacheName))
-        );
-      })
-    );
-  }
-
-  if (event.data.type === 'GET_CACHE_SIZE') {
+  if (event.data && event.data.type === 'GET_CACHE_SIZE') {
     event.waitUntil(
       (async () => {
         const cacheNames = await caches.keys();

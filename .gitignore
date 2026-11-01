@@ -112,3 +112,6 @@ supabase-selfhost/.env
 supabase-selfhost/generated-keys.txt
 supabase-selfhost/volumes/db/data/
 
+
+# Retained immutable executable releases (runtime/deployment-owned, not user data)
+instance/asset-releases/
