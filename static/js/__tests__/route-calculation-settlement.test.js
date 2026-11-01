@@ -115,3 +115,21 @@ test('older settlement does not clear progress while the newer request is legiti
  const lookup=deferred();geocode=()=>lookup.promise;const next=Calculate.calculateRoute();old.resolve(response());await first;
  expect(visible()).toBe(true);lookup.resolve(null);await next;expect(visible()).toBe(false);expect(window.lastCalculatedRoute).toBeUndefined();
 });
+// P2: post-response settlement must obey the same real ticket ownership as fetches.
+test.each([['reject','success'],['reject','failure'],['false','success'],['false','failure']])('A commit %s cannot retire pending B, which later ends in %s',async(outcome,newOutcome)=>{
+ bind({ready:true});
+ const aCommit=deferred(),bFetch=deferred();jest.spyOn(Modes,'commitPlanning').mockReturnValueOnce(aCommit.promise);
+ const a=Calculate.calculateRoute();await fetched(1);for(let n=0;n<40&&!Modes.commitPlanning.mock.calls.length;n++)await Promise.resolve();expect(Modes.commitPlanning).toHaveBeenCalledTimes(1);
+ global.fetch.mockReturnValueOnce(bFetch.promise);const b=Calculate.calculateRoute();await fetched(2);expect(visible()).toBe(true);const count=statuses.length;
+ outcome==='reject'?aCommit.reject(Error('obsolete commit failed')):aCommit.resolve(false);await a;
+ expect(visible()).toBe(true);expect(statuses.length).toBe(count);expect(window.lastCalculatedRoute).toBeUndefined();
+ bFetch.resolve(newOutcome==='success'?response():response({success:false,error:'current request finished'}));await b;expect(visible()).toBe(false);await jest.advanceTimersByTimeAsync(300);expect(previewCalls).toBe(newOutcome==='success'?1:0);expect(jest.getTimerCount()).toBe(0);
+});
+test.each([['success','reject'],['success','false'],['failure','reject'],['failure','false']])('B %s remains authoritative after A commit %s',async(outcome,oldOutcome)=>{
+ bind({ready:true});const aCommit=deferred(),bFetch=deferred();jest.spyOn(Modes,'commitPlanning').mockReturnValueOnce(aCommit.promise);
+ const a=Calculate.calculateRoute();await fetched(1);for(let n=0;n<40&&!Modes.commitPlanning.mock.calls.length;n++)await Promise.resolve();expect(Modes.commitPlanning).toHaveBeenCalledTimes(1);
+ global.fetch.mockReturnValueOnce(bFetch.promise);const b=Calculate.calculateRoute();await fetched(2);bFetch.resolve(outcome==='success'?response():response({success:false,error:'current request failed'}));await b;
+ const route=window.lastCalculatedRoute,currentOptions=options,statusCount=statuses.length;expect(visible()).toBe(false);
+ oldOutcome==='reject'?aCommit.reject(Error('obsolete commit failed')):aCommit.resolve(false);await a;expect(visible()).toBe(false);expect(window.lastCalculatedRoute).toBe(route);expect(options).toBe(currentOptions);expect(statuses.length).toBe(statusCount);
+ await jest.advanceTimersByTimeAsync(300);expect(previewCalls).toBe(outcome==='success'?1:0);expect(jest.getTimerCount()).toBe(0);
+});

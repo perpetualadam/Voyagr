@@ -163,7 +163,6 @@
             return;
         }
 
-        if (plan.hideRouteProgressBar) hideRouteProgressBar();
         if (plan.updateRouteOnMap) {
             // Supply this request's destination before the shared transition;
             // never patch raw response state over its canonical committed route.
@@ -219,8 +218,6 @@
                 rt().call.updateARButtonVisibility();
             }
         }, delayMs);
-
-        if (plan.hideRouteProgressBar) hideRouteProgressBar();
 
         if (plan.showStartNavButtons) {
             (plan.startNavButtonIds || []).forEach(function (id) {
@@ -306,7 +303,6 @@
     function applyCalculateRouteIdlePreviewErrorFromPlan(postMap) {
         if (!postMap || postMap.shouldApply) return false;
         rt().call.showStatus(postMap.errorStatusMessage, 'error');
-        if (postMap.hideRouteProgressBarOnError) hideRouteProgressBar();
         return true;
     }
 
@@ -459,10 +455,11 @@
             }
             applyCalculateRouteIdlePreviewFromPlan(orch, data);
         } catch (e) {
+            // A late commit rejection must not replace a newer request's UI.
+            if (labels.requestCurrent && !labels.requestCurrent()) return;
             var errApply = rt().routeSelection().buildCalculateRouteIdlePreviewParseErrorApplyPlan(e);
             rt().call.showStatus(errApply.statusMessage, errApply.statusType);
             console.error(errApply.logPrefix, e);
-            if (errApply.hideRouteProgressBar) hideRouteProgressBar();
         }
     }
 
@@ -483,7 +480,6 @@
 
         if (apply.branch === 'error') {
             rt().call.showStatus(apply.statusMessage, apply.statusType);
-            if (apply.hideRouteProgressBar) hideRouteProgressBar();
             return;
         }
 
@@ -571,7 +567,6 @@
         if (!errApply) return;
         rt().call.showStatus(errApply.statusMessage, errApply.statusType);
         console.error(errApply.logPrefix, error);
-        if (errApply.hideRouteProgressBar) hideRouteProgressBar();
     }
 
     async function calculateRoute() {
@@ -632,7 +627,6 @@
                 .then(function (data) {
                     if (integrity && !integrity.current(ticket, localStorage)) {
                         if (integrity.isLatest(ticket)) {
-                            hideRouteProgressBar();
                             rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                         }
                         return;
@@ -640,19 +634,19 @@
                     if (integrity) integrity.tag(data,ticket);
                     if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
                         storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
-                    })) { hideRouteProgressBar(); return; }
+                    })) { return; }
                     return applyCalculateRouteResponseFromPlan(
                         RR.buildCalculateRouteResponseApplyPlan(
                             RR.buildCalculateRouteResponseExecutePlan(data, modes?false:rt().getRouteInProgress())
                         ),
                         data,
-                        { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken }
+                        { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken,
+                            requestCurrent:function(){return !integrity||integrity.current(ticket,localStorage);} }
                     );
                 })
                 .catch(function (error) {
                     if (integrity && !integrity.current(ticket, localStorage)) {
                         if (integrity.isLatest(ticket)) {
-                            hideRouteProgressBar();
                             rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                         }
                         return;

@@ -52,3 +52,45 @@ Interpretation: a stage `style_check_returned:false` followed by stage `threw:ma
 ## Release and acceptance gates
 
 No Contabo/Cloudflare access, production operations, user-data changes, storage clearing, merge or deployment occurred. The already working Nginx correction is not reapplied. This patch does not clear PR #381 or solve every cache/update issue. Before any separately authorized rollout, independently review this exact code and CI, verify the actually loaded changed module, collect the bounded commit-failure trace and perform required browser/device acceptance. Do not force active journeys to reload. Production navigation remains NO-GO pending its separate acceptance requirements.
+
+## Independent-review P2 remediation
+
+Reviewed starting point: HEAD `b2ea7f85e484f4cfaeb3b340e1e872d8ca61d39b`, tree `a96e168da45d7ff87cf5bc470c6a3a4a7f755d7b`. Both findings were reproduced before editing. This follow-up updates the existing PR #383 branch only.
+
+### P2: older commit rejection retired newer progress
+
+The inner idle-preview error catch hid progress and showed its error before the outer owned finally. An older commit rejection could therefore clear a newer pending request's indicator despite the correct finally guard. The independent ownership assertion failed against the reviewed head.
+
+All calculation-internal progress retirement now occurs in the existing ticket-owned finally. Removed early hides from legacy reroute, idle presentation/error, HTTP error and cancellation helpers; those synchronous helpers remain inside the awaited calculation pipeline. A closure over the actual request ticket/settings/intent guards late preview-error presentation as well. It does not change commit-false handling or any journey state. `return await`, timer disposal and the newer-request ownership check remain intact. The public manual hide API remains available but is not invoked by calculation helpers.
+
+Eight added real-ticket orchestration cases cover A's rejected/false commit while B remains pending, and B success/failure followed by A rejection/false settlement. Existing tests cover both fetch orders, stale callbacks, geocoding/preflight exits, renderer exceptions and timers. The exact independent failing assertion now passes. A stale rejection cannot replace B's status or route/options either.
+
+The changed script label advances to `20261101progresssettlement2`. This is a new URL label, not content-addressed coherence; legacy worker/CDN limitations and PR #381 remain separate. No worker or production cache configuration changes are made.
+
+### P2: observer interference / property restoration
+
+Assignment-based instrumentation created an own property over MapLibre's inherited method and restored only its value, leaving a permanent shadow. An unguarded read of a global map accessor could also throw before stage ran. The original Node/JSDOM and Chromium reproductions confirmed these states before remediation.
+
+Instrumentation now locates data methods through descriptors, without invoking method accessors. It preserves exact own descriptors, removes temporary own properties for inherited methods, and skips read-only/non-configurable/accessor/non-extensible or unsupported proxy-backed hooks. Setup/restoration errors do not preempt the original operation. If the root commit hook is unsupported, report.available is false and the original calculation remains callable; attachment does not fabricate an observed result. Restoration checks the installed value and descriptor so it does not overwrite unrelated replacements or descriptor changes.
+
+A throwing global map accessor is not invoked; map observation becomes unavailable and stage still executes. Actual style values are recorded only when the original stage calls the successfully observed method. Promise results, ordinary return values, receiver, arguments and original exception identity are retained. Native-Promise brand checks avoid reading arbitrary returned-object `then` getters. Private errors/status text still map only to fixed enums. This is trusted-laboratory instrumentation, not a sandbox for arbitrary malicious Proxy traps; denied/throwing traps are handled as unavailable observations. No route, raw exception, credentials or storage values are emitted.
+
+### Before/after evidence and reproducible checks
+
+- Original independent late-commit-rejection assertion: **failed before; passed after**.
+- Original actual-MapLibre instance: own method absent before observation, incorrectly present after old probe disposal; corrected probe restores the exact original descriptor/inheritance.
+- Throwing global-map getter: old probe prevented stage execution; corrected probe skips the accessor and executes stage once.
+- Same real-Chromium property matrix against the exact reviewed diagnostic source: **8 passed / 11 failed**; against the corrected diagnostic: **19 passed / zero failed**. This matrix checks the stronger descriptor/unsupported-observation requirements as well as the original defects; eleven failures are not claimed to be eleven separate production defects.
+- Full local validation: **118 JavaScript suites / 2,630 tests**, lint and coverage passed; declared backend **1,658 passed, one Windows-only skip, 68 subtests passed**; isolated SQL policy **11 passed**. Focused suites: **58 passed**.
+
+The shared 19-case matrix includes inherited and own methods, global/method accessors, locked/read-only properties, non-extensibility, throwing/transparent proxies, original throws/Promise fulfillment/false, repeated attach/dispose, unrelated replacements, frozen operations/modules, and a throwing `then` accessor. It checks exact descriptors, original execution count, receiver/arguments, return/Promise/exception identity and bounded private-data exclusion. Jest uses a class double for property semantics. The separate Chromium runner always loads the actual bundled MapLibre prototype; its map/style fixture does not initialize WebGL/GPS or call a routing provider.
+
+Run the browser matrix locally, outside a production profile:
+
+```sh
+CHROMIUM_BINARY=/path/to/chromium node scripts/browser/test-planning-commit-diagnostic.cjs
+```
+
+For the baseline comparison, extract `scripts/browser/planning-commit-diagnostic.cjs` from reviewed commit b2ea7f85e484f4cfaeb3b340e1e872d8ca61d39b into a separate scratch file, then run the same command with `PLANNING_PROBE_SOURCE=/absolute/scratch/before.cjs`. The runner reports the tested source SHA-256, case names and bounded assertions only. It serves loopback fixture HTML, uses disposable contexts, performs no user-storage operations and never attaches to a production browser. Launch errors are reported as test infrastructure failure; no cases are silently skipped.
+
+These real-Chromium results are **local synthetic laboratory tests**, not VPS 2/live-browser acceptance. The default hosted CI runs the new property regressions through Jest; the standalone real-Chromium matrix is run separately where Chromium is available. Exact-head hosted results are recorded in the PR after push. Independent re-review remains required. The reason for the original live commitPlanning=false remains **UNVERIFIED**; neither finding permits guessing map readiness, relaxing navigation safety or authorizing merge/deployment.
