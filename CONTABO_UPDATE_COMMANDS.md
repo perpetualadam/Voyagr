@@ -1,8 +1,10 @@
 # Contabo Production Deployment
 
-**Production host:** Contabo VPS (`/opt/voyagr`)  
-**CI:** GitHub Actions runs tests on every push to `main` — it does **not** deploy to Contabo.  
-**After merge:** SSH to Contabo and pull + restart (below).
+**Sole intended production provider:** Contabo. Application VPS `vmi2887070`, directory `/opt/voyagr`, systemd service `voyagr`, Nginx, domain `vibevoyager.org`.
+**CI:** GitHub Actions runs tests on every push to `main` — it does **not** deploy to Contabo.
+**Deployment requires separate authorization:** a merge alone does not authorize SSH, pull or restart. The commands below are operator reference only. See the [deployment policy](docs/deployment/PRODUCTION_DEPLOYMENT_POLICY.md).
+
+**PRODUCTION_NO_GO.** Do not modify the separate routing/laboratory VPS. External Railway GitHub integration remains unverified; deleting Railway configuration does not disconnect it.
 
 ---
 
