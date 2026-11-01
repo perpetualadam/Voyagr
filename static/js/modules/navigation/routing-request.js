@@ -380,6 +380,7 @@
      * @param {Array<{lat: number, lon: number, name?: string}>} viaPoints
      * @returns {Array<{lat: number, lon: number, name?: string, type: string}>}
      */
+    function provenance(value){return ['gps','searched','map','saved','coordinates','unknown'].indexOf(value)>=0?value:'unknown';}
     function mapViaPointsForApi(viaPoints) {
         return (viaPoints || []).map(function (vp) {
             return {
@@ -387,6 +388,9 @@
                 lon: vp.lon,
                 name: vp.name,
                 type: 'via',
+                provenance: provenance(vp.provenance),
+                ...(provenance(vp.source_kind)!=='unknown'?{source_kind:vp.source_kind}:{}),
+                original_index: vp.original_index,
             };
         });
     }
@@ -403,7 +407,10 @@
                 lon: s.lon,
                 name: s.name,
                 type: 'stop',
-                duration: s.duration || 15,
+                duration: s.duration == null ? 15 : s.duration,
+                provenance: provenance(s.provenance),
+                ...(provenance(s.source_kind)!=='unknown'?{source_kind:s.source_kind}:{}),
+                original_index: s.original_index,
             };
         });
     }
@@ -415,7 +422,7 @@
      */
     function sumStopDurationsMinutes(stops) {
         return (stops || []).reduce(function (sum, s) {
-            return sum + (s.duration || 15);
+            return sum + (s.duration == null ? 15 : s.duration);
         }, 0);
     }
 

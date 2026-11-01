@@ -280,6 +280,16 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
             r['avoidance_assessment'].get('geometry_binding')==binding)]
     for position, route in enumerate(routes, 1):
         assessment = route['avoidance_assessment']
+        # Descriptive UX outcome only. Existing assessment fields remain the authority.
+        origin = assessment.get('origin_integrity', {})
+        critical_pass = (assessment['automatic_selection_allowed'] is True
+                         and assessment['geometry_valid'] is True
+                         and origin.get('navigation_allowed') is True)
+        preference_warnings = [row for row in assessment['requirements']
+                               if row['enabled'] and row['mode'] == 'preference'
+                               and row['status'] != 'SATISFIED']
+        route['navigation_outcome'] = ('REFUSED' if not critical_pass else
+                                       'BEST_EFFORT' if preference_warnings else 'VERIFIED')
         camera_rows = [row for row in assessment['requirements'] if row['enabled'] and row['category'] in ('speed_cameras','red_light_cameras','other_cameras')]
         evidence = {
             'evaluated':bool(camera_rows), 'applicable':sum(row['conflicts'] for row in camera_rows),
@@ -309,6 +319,7 @@ def assess_response(payload, requirements, hazards=None, *, now=None, waypoints=
     result['avoidance_requirements'] = requirements
     result['avoidance_request_fingerprint'] = requirement_fingerprint(requirements)
     result['automatic_selection_allowed'] = bool(usable)
+    result['navigation_outcome'] = routes[0]['navigation_outcome'] if routes else 'REFUSED'
     result['avoidance_status'] = 'NO_COMPLIANT_ROUTE' if not usable and routes else (routes[0]['avoidance_assessment']['status'] if routes else 'UNVERIFIED')
     if routes:
         if 'routes' in result: result['routes']=routes

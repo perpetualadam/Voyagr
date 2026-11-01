@@ -104,6 +104,7 @@ function addRouteDragMarker(lat, lon, routeIndex) {
  */
 async function applyDraggedViaPointFromPlan(apply) {
     if (!apply || !apply.shouldApply) return;
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
 
     viaPoints.push(apply.viaPoint);
 
@@ -305,8 +306,8 @@ async function addWaypointFromAddress(waypointKind) {
     }
 
     if (dispatch.action === 'add_resolved') {
-        if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name);
-        else addStop(dispatch.lat, dispatch.lon, dispatch.name);
+        if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(input.value)?'coordinates':input.dataset.journeySource||'searched');
+        else addStop(dispatch.lat, dispatch.lon, dispatch.name,15,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(input.value)?'coordinates':input.dataset.journeySource||'searched');
         applyWaypointAddressResolvedDomFromPlan(
             WP.buildWaypointAddressResolvedDomApplyPlan(dispatch),
             input
@@ -322,8 +323,8 @@ async function addWaypointFromAddress(waypointKind) {
         dispatch.query
     );
     if (outcome.shouldAdd) {
-        if (waypointKind === 'via') addViaPoint(outcome.lat, outcome.lon, outcome.name);
-        else addStop(outcome.lat, outcome.lon, outcome.name);
+        if (waypointKind === 'via') addViaPoint(outcome.lat, outcome.lon, outcome.name,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(dispatch.query)?'coordinates':'searched');
+        else addStop(outcome.lat, outcome.lon, outcome.name,15,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(dispatch.query)?'coordinates':'searched');
         if (outcome.clearInput) input.value = '';
     }
     rt().call.showStatus(outcome.statusMessage, outcome.statusType);
@@ -334,6 +335,7 @@ async function addWaypointFromAddress(waypointKind) {
  */
 function applyViaPointFromPlan(apply) {
     if (!apply || !apply.shouldApply) return;
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
 
     viaPoints.push(apply.viaPoint);
 
@@ -350,10 +352,11 @@ function applyViaPointFromPlan(apply) {
     rt().call.showStatus(apply.statusMessage, apply.statusType);
 }
 
-function addViaPoint(lat, lon, name = null) {
-    applyViaPointFromPlan(
-        WP().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply
-    );
+function addViaPoint(lat, lon, name = null, provenance = null) {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+    var apply=WP().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply;
+    if(apply && apply.viaPoint)apply.viaPoint.provenance=provenance || (root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(name)?'coordinates':name?'searched':'map');
+    applyViaPointFromPlan(apply);
 }
 
 /**
@@ -377,10 +380,11 @@ function applyStopFromPlan(apply) {
     rt().call.showStatus(apply.statusMessage, apply.statusType);
 }
 
-function addStop(lat, lon, name = null, duration = 15) {
-    applyStopFromPlan(
-        WP().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply
-    );
+function addStop(lat, lon, name = null, duration = 15, provenance = null) {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+    var apply=WP().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply;
+    if(apply && apply.stop)apply.stop.provenance=provenance || (root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(name)?'coordinates':name?'searched':'map');
+    applyStopFromPlan(apply);
 }
 
 /**
@@ -403,6 +407,7 @@ function applyViaPointRemoveFromPlan(apply) {
 }
 
 function removeViaPoint(index) {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
     applyViaPointRemoveFromPlan(
         WP().buildViaPointRemoveEntryOrchestrationPlan(index, viaPoints.length).apply
     );
@@ -429,6 +434,7 @@ function applyStopRemoveFromPlan(apply) {
 }
 
 function removeStop(index) {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
     applyStopRemoveFromPlan(
         WP().buildStopRemoveEntryOrchestrationPlan(index, stops.length).apply
     );
@@ -488,6 +494,7 @@ function applyClearAllWaypointsFromPlan(apply) {
 }
 
 function clearAllWaypoints() {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
     applyClearAllWaypointsFromPlan(
         WP().buildClearAllWaypointsEntryOrchestrationPlan().apply
     );
@@ -553,6 +560,7 @@ function onWaypointDrop(e) {
 
 function applyWaypointReorderFromPlan(reorder) {
     if (!reorder || !reorder.shouldReorder) return;
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
 
     const arr = reorder.type === 'via' ? viaPoints : stops;
     const markerArr = reorder.type === 'via' ? viaPointMarkers : stopMarkers;
@@ -586,6 +594,7 @@ function applyWaypointDropFromPlan(apply) {
 
 function applyWaypointMoveFromPlan(apply) {
     if (!apply || !apply.shouldMove) return;
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
 
     const arr = apply.type === 'via' ? viaPoints : stops;
     const markerArr = apply.type === 'via' ? viaPointMarkers : stopMarkers;
@@ -707,6 +716,8 @@ function clearMultiDropLayers() {
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         getViaPoints: getViaPoints,
         getStops: getStops,

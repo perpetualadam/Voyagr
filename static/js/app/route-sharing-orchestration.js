@@ -65,8 +65,11 @@ function applyLoadSharedRouteFromUrlFromPlan(entry) {
     const execute = entry.execute;
     if (!execute || !execute.shouldApply) return false;
 
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+    if(root.VoyagrNavigationLifecycleOrchestration&&root.VoyagrNavigationLifecycleOrchestration.getRouteInProgress()||root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isJourneyCommitPending&&root.VoyagrJourneyModes.isJourneyCommitPending())return false;
     const startEl = document.getElementById(execute.startInputId);
     const endEl = document.getElementById(execute.endInputId);
+    [startEl,endEl].forEach(input=>{if(input){delete input.dataset.lat;delete input.dataset.lon;delete input.dataset.displayName;delete input.dataset.journeyOriginalSource;input.dataset.journeySource='saved';}});
     if (startEl) startEl.value = execute.startLabel;
     if (endEl) endEl.value = execute.endLabel;
 
@@ -314,6 +317,8 @@ function shareViaEmail() {
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         loadSharedRouteFromUrl: loadSharedRouteFromUrl,
         prepareRouteSharing: prepareRouteSharing,

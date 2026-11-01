@@ -100,7 +100,9 @@
     }
 
     function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
+        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
         closePOIModal();
+        ['start','end'].forEach(id=>{const input=document.getElementById(id);delete input.dataset.lat;delete input.dataset.lon;delete input.dataset.displayName;delete input.dataset.journeyOriginalSource;input.dataset.journeySource='coordinates';});
         document.getElementById('start').value = `${userLat},${userLon}`;
         document.getElementById('end').value = `${poiLat},${poiLon}`;
         rt().call.showStatus(POI().getPoiSelectDestinationStatusMessage(poiName), 'success');
@@ -189,6 +191,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         quickSearch: quickSearch,
         displayPOIResults: displayPOIResults,

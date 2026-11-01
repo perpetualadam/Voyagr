@@ -79,7 +79,7 @@ describe('offline route persistence helpers', () => {
         const loaded = await OFF.loadActiveRouteRecord(indexedDB);
         expect(loaded.destination).toBe('51.6,-0.2');
         expect(loaded.steps).toHaveLength(1);
-        await OFF.clearActiveRouteRecord(indexedDB);
+        await OFF.clearActiveRouteRecord(indexedDB,(await OFF.loadJourneyState(indexedDB)).ownership);
         expect(await OFF.loadActiveRouteRecord(indexedDB)).toBeNull();
     });
 

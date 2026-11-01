@@ -232,12 +232,12 @@ describe('multimodal route bodies', () => {
 describe('multi-drop and initial route helpers', () => {
     test('mapViaPointsForApi adds type via', () => {
         expect(RR.mapViaPointsForApi([{ lat: 1, lon: 2, name: 'A' }]))
-            .toEqual([{ lat: 1, lon: 2, name: 'A', type: 'via' }]);
+            .toEqual([{ lat: 1, lon: 2, name: 'A', type: 'via', provenance: 'unknown' }]);
     });
 
     test('mapStopsForApi defaults duration to 15', () => {
         expect(RR.mapStopsForApi([{ lat: 1, lon: 2, name: 'Stop' }]))
-            .toEqual([{ lat: 1, lon: 2, name: 'Stop', type: 'stop', duration: 15 }]);
+            .toEqual([{ lat: 1, lon: 2, name: 'Stop', type: 'stop', duration: 15, provenance: 'unknown' }]);
     });
 
     test('sumStopDurationsMinutes totals stop durations', () => {

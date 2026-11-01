@@ -93,11 +93,16 @@
      */
     function buildActiveRoutePersistRecord(snapshot) {
         snapshot = snapshot || {};
+        if(snapshot.ownership!=null&&!validOwnership(snapshot.ownership))throw Error('Invalid durable journey ownership');
+        var journeyId=snapshot.ownership?snapshot.ownership.journey_id:newIdentity('journey-');
         var selected=snapshot.routeData ? Object.assign({},snapshot.routeData) : null;
-        if (selected) delete selected.routes; // A persisted selection must not revert to primary alternative.
+        if (selected) {delete selected.routes;delete selected.durable_journey_id;} // Ownership lives on the durable record, never provider/route data.
         return {
+            journey_id:journeyId,
+            persistence_owner:newIdentity('owner-'),
             navigation_schema_version:3,
             progress_hint:snapshot.progressHint || null,
+            continuation:snapshot.continuation ? Object.assign(JSON.parse(JSON.stringify(snapshot.continuation)),{journey_id:journeyId}) : null,
             id: 'current',
             polyline: snapshot.polyline,
             steps: snapshot.steps,
@@ -183,51 +188,124 @@
      * @param {Object} record
      * @returns {Promise<void>}
      */
-    function persistActiveRouteRecord(idb, record) {
-        return openRouteDB(idb).then(function (db) {
-            return new Promise(function (resolve, reject) {
-                var tx = db.transaction(ROUTE_STORE, 'readwrite');
-                tx.objectStore(ROUTE_STORE).put(record);
-                tx.oncomplete = function () { db.close(); resolve(); };
-                tx.onerror = function () { db.close(); reject(tx.error); };
-            });
-        });
+    function newIdentity(prefix){
+        if(!root.crypto||typeof root.crypto.getRandomValues!=='function')throw Error('Durable identity unavailable');
+        var values=new Uint32Array(4);root.crypto.getRandomValues(values);
+        return prefix+Array.from(values,function(value){return value.toString(16).padStart(8,'0');}).join('');
+    }
+    function validOwnership(value){return !!value&&typeof value.journey_id==='string'&&typeof value.persistence_owner==='string'&&/^journey-[0-9a-f]{32}$/.test(value.journey_id)&&/^(owner|pending|checkpoint)-[0-9a-f]{32}$/.test(value.persistence_owner);}
+    function ownershipOf(value){return validOwnership(value)?{journey_id:value.journey_id,persistence_owner:value.persistence_owner}:null;}
+    function matchesOwnership(value,expected){
+        if(expected===null)return value==null;
+        return validOwnership(expected)&&validOwnership(value)&&value.journey_id===expected.journey_id&&value.persistence_owner===expected.persistence_owner;
+    }
+    function persistActiveRouteRecord(idb, record, guard, onCancel, expectedOwnership) {
+        record=Object.assign({},record); // Freeze identity values at invocation.
+        var expected=ownershipOf(expectedOwnership);
+        if(!validOwnership(record)||(expectedOwnership!=null&&!expected))return Promise.resolve(false);
+        return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+            if(guard&&guard()!==true){db.close();resolve(false);return;}
+            var tx=db.transaction(ROUTE_STORE,'readwrite'),store=tx.objectStore(ROUTE_STORE),ok=true;
+            var unsubscribe=onCancel?onCancel(function(){try{tx.abort();}catch(_){/* Already complete. */}}):function(){};
+            tx.oncomplete=function(){unsubscribe();db.close();resolve(ok?undefined:false);};
+            tx.onerror=tx.onabort=function(){unsubscribe();db.close();reject(tx.error||Error('Persistence aborted'));};
+            function put(){if(guard&&guard()!==true){ok=false;return;}store.put(record);}
+            // No expected owner means creation into an empty slot, never an
+            // unguarded overwrite of a known or legacy journey.
+            var read=store.get('current');read.onsuccess=function(){if(!matchesOwnership(read.result,expected)){ok=false;return;}put();};
+        });});
+    }
+    function visibleJourney(record){
+        var depth=0;while(record&&record.planning_pending&&depth++<8)record=record.previous_journey||null;
+        return record&&(record.planning_pending||record.abandoned)?null:record;
+    }
+    function stageActiveRouteRecord(idb, record, options) {
+        options=Object.assign({},options||{});
+        record=Object.assign({},record);
+        var explicit=Object.prototype.hasOwnProperty.call(options,'expectedOwnership');
+        var expected=ownershipOf(options.expectedOwnership); // Captured once, before async work.
+        if(!validOwnership(record)||(explicit&&options.expectedOwnership!=null&&!expected)||(options.abandon&&!expected))return Promise.resolve(null);
+        var id=newIdentity('pending-'),previous=null,previousOwner=null,aborted=false,activeTx=null,ownershipFailure=false;
+        var committedOwner={journey_id:record.journey_id,persistence_owner:id};
+        function write(action,guard){
+            return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+                if(action==='stage'&&options.guard&&options.guard()!==true){db.close();resolve(false);return;}
+                if((action==='commit'||action==='finalize')&&(aborted||!guard||guard()!==true)){db.close();resolve(false);return;}
+                var tx=db.transaction(ROUTE_STORE,'readwrite'),store=tx.objectStore(ROUTE_STORE),ok=true;
+                activeTx=tx;
+                tx.oncomplete=function(){if(activeTx===tx)activeTx=null;db.close();resolve(ok);};
+                tx.onerror=tx.onabort=function(){if(activeTx===tx)activeTx=null;db.close();reject(tx.error||Error('Persistence aborted'));};
+                if(action==='discard'){store.delete(id);return;}
+                var read=store.get('current');read.onsuccess=function(){
+                    try{
+                        var current=read.result||null;
+                        if(action==='stage'){
+                            // Legacy data is inspectable, never ownership evidence.
+                            if(current&&!validOwnership(current)||explicit&&!matchesOwnership(current,expected)){ownershipFailure=true;ok=false;return;}
+                            if(options.guard&&options.guard()!==true){ok=false;return;}
+                            previous=current;previousOwner=ownershipOf(current);
+                            if(options.abandon&&!current.abandoned){
+                                // The caller supplied the exact durable owner before this
+                                // operation began. Never adopt an owner by route equality.
+                                if(record.journey_id!==expected.journey_id){ok=false;return;}
+                                previous=Object.assign({},record,{id:'current',persistence_owner:newIdentity('checkpoint-')});
+                                previousOwner=ownershipOf(previous);store.put(previous);
+                            }
+                            store.put(Object.assign({},record,{id:id}));return;
+                        }
+                        if(action==='commit'){
+                            if(!matchesOwnership(current,previousOwner)||guard()!==true){ok=false;return;}
+                            store.put(Object.assign({},record,committedOwner,{id:'current'},options.planning||options.abandon?{planning_pending:true,previous_journey:previous}:{}));store.delete(id);return;
+                        }
+                        if(guard&&guard()!==true){ok=false;return;}
+                        if(!matchesOwnership(current,committedOwner)){
+                            ok=action==='rollback'&&matchesOwnership(current,previousOwner);return;
+                        }
+                        if(action==='rollback'){if(previous)store.put(previous);else store.delete('current');}
+                        else store.put(options.abandon?Object.assign({id:'current',abandoned:true},committedOwner):Object.assign({},record,committedOwner,{id:'current'}));
+                    }catch(_){try{tx.abort();}catch(__){/* Already complete. */}}
+                };
+            });});
+        }
+        return write('stage').then(function(ok){if(ownershipFailure)return {ownershipMismatch:true,discard:function(){return Promise.resolve(true);}};return !ok?null:{
+            DURABLE_OWNERSHIP_PROTOCOL:1,ABANDONMENT_PROTOCOL:2,
+            previousOwnership:function(){return ownershipOf(previousOwner);},
+            committedOwnership:function(){return ownershipOf(committedOwner);},
+            commit:function(guard){return write('commit',guard);},
+            finalize:function(guard){return write('finalize',guard);},
+            rollback:function(guard){return write('rollback',guard);},
+            discard:function(){return write('discard');},
+            abort:function(){aborted=true;if(activeTx){try{activeTx.abort();}catch(_){/* Transaction already completed. */}}},
+        };});
     }
 
     /**
      * @param {IDBFactory} idb
      * @returns {Promise<Object|null>}
      */
-    function loadActiveRouteRecord(idb) {
-        return openRouteDB(idb).then(function (db) {
-            return new Promise(function (resolve, reject) {
-                var tx = db.transaction(ROUTE_STORE, 'readonly');
-                var req = tx.objectStore(ROUTE_STORE).get('current');
-                req.onsuccess = function () {
-                    db.close();
-                    resolve(req.result || null);
-                };
-                req.onerror = function () {
-                    db.close();
-                    reject(req.error);
-                };
-            });
-        });
+    function loadJourneyState(idb){
+        return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+            var tx=db.transaction(ROUTE_STORE,'readonly'),read=tx.objectStore(ROUTE_STORE).get('current'),state;
+            read.onsuccess=function(){var raw=read.result||null;state={route:visibleJourney(raw),ownership:ownershipOf(raw)};};
+            tx.oncomplete=function(){db.close();resolve(state);};
+            tx.onerror=tx.onabort=function(){db.close();reject(tx.error||Error('Persistence read aborted'));};
+        });});
     }
+    function loadActiveRouteRecord(idb){return loadJourneyState(idb).then(function(state){return state.route;});}
 
     /**
      * @param {IDBFactory} idb
      * @returns {Promise<void>}
      */
-    function clearActiveRouteRecord(idb) {
-        return openRouteDB(idb).then(function (db) {
-            return new Promise(function (resolve, reject) {
-                var tx = db.transaction(ROUTE_STORE, 'readwrite');
-                tx.objectStore(ROUTE_STORE).delete('current');
-                tx.oncomplete = function () { db.close(); resolve(); };
-                tx.onerror = function () { db.close(); reject(tx.error); };
-            });
-        });
+    function clearActiveRouteRecord(idb, expectedOwnership) {
+        var expected=ownershipOf(expectedOwnership);
+        if(!expected)return Promise.resolve(false);
+        return openRouteDB(idb).then(function(db){return new Promise(function(resolve,reject){
+            var tx=db.transaction(ROUTE_STORE,'readwrite'),store=tx.objectStore(ROUTE_STORE),ok=true;
+            var read=store.get('current');read.onsuccess=function(){if(!matchesOwnership(read.result,expected)){ok=false;return;}store.delete('current');};
+            tx.oncomplete=function(){db.close();resolve(ok);};
+            tx.onerror=tx.onabort=function(){db.close();reject(tx.error||Error('Persistence aborted'));};
+        });});
     }
 
     /**
@@ -618,6 +696,10 @@
     }
 
     var api = {
+        ABANDONMENT_PROTOCOL:2,
+        DURABLE_OWNERSHIP_PROTOCOL:1,
+        ownershipOf:ownershipOf,
+        matchesOwnership:matchesOwnership,
         OFFLINE_BANNER_ID: OFFLINE_BANNER_ID,
         RESUME_NAV_BANNER_ID: RESUME_NAV_BANNER_ID,
         RESUME_NAV_YES_ID: RESUME_NAV_YES_ID,
@@ -642,6 +724,8 @@
         putSpeedLimitCacheEntry: putSpeedLimitCacheEntry,
         getSpeedLimitCacheEntry: getSpeedLimitCacheEntry,
         persistActiveRouteRecord: persistActiveRouteRecord,
+        stageActiveRouteRecord: stageActiveRouteRecord,
+        loadJourneyState:loadJourneyState,
         loadActiveRouteRecord: loadActiveRouteRecord,
         clearActiveRouteRecord: clearActiveRouteRecord,
         parseVectorTileSourcesFromStyle: parseVectorTileSourcesFromStyle,
