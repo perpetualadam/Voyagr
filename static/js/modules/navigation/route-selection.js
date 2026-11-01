@@ -2392,9 +2392,9 @@
         error = error || {};
         return {
             shouldApply: true,
-            statusMessage: 'Error parsing coordinates: ' + (error.message || 'unknown'),
+            statusMessage: 'Route preview failed: ' + (error.message || 'unknown'),
             statusType: 'error',
-            logPrefix: 'Coordinate parsing error:',
+            logPrefix: 'Route preview error:',
             hideRouteProgressBar: true,
         };
     }

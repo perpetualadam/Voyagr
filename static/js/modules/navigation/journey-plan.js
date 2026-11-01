@@ -32,9 +32,10 @@
         if(Array.isArray(stops)&&stops.length&&(!ranges||ranges.length!==stops.length+1))throw Error('Complete stop geometry is unavailable. Recalculate without skipping visits.');
         var lengths=[0];for(var i=1;i<points.length;i++)lengths.push(lengths[i-1]+distance(points[i-1],points[i]));
         var steps=Array.isArray(route.maneuvers)?route.maneuvers:[];
-        if(steps.some(function(s){return !s||typeof s.instruction!=='string'||!s.instruction.trim()||['begin_shape_index','end_shape_index'].some(function(k){return s[k]!==undefined&&(!Number.isInteger(s[k])||s[k]<0||s[k]>=points.length);})||(s.begin_shape_index!==undefined&&s.end_shape_index!==undefined&&s.end_shape_index<s.begin_shape_index);}))throw Error('Maneuver geometry is inconsistent. Recalculate before simulating.');
+        function validInstructions(s){return integrity.validManeuverInstructions ? integrity.validManeuverInstructions(s) : !!s&&typeof s.instruction==='string'&&!!s.instruction.trim();}
+        if(steps.some(function(s){return !validInstructions(s)||['begin_shape_index','end_shape_index'].some(function(k){return s[k]!==undefined&&(!Number.isInteger(s[k])||s[k]<0||s[k]>=points.length);})||(s.begin_shape_index!==undefined&&s.end_shape_index!==undefined&&s.end_shape_index<s.begin_shape_index);}))throw Error('Maneuver geometry is inconsistent. Recalculate before simulating.');
         var minutes=Number(route.duration_minutes);
-        return {points:points,lengths:lengths,total:lengths[lengths.length-1],steps:steps.filter(function(s){return Number.isInteger(s.begin_shape_index);}),ranges:ranges||[],
+        return {points:points,lengths:lengths,total:lengths[lengths.length-1],steps:steps.filter(function(s){return Number.isInteger(s.begin_shape_index)&&!(integrity.isEdgeMetadataManeuver&&integrity.isEdgeMetadataManeuver(s));}),ranges:ranges||[],
             metersPerSecond:minutes>0&&Number.isFinite(minutes)?lengths[lengths.length-1]/(minutes*60):13.8889};
     }
     function position(plan,meters){

@@ -190,3 +190,35 @@ def test_historical_endpoint_source_survives_new_request_without_claiming_gps_au
     result = post(body, [candidate(53.0002)])
     assert result['journey_context']['origin']['source_kind'] == 'gps'
     assert result['avoidance_assessment']['origin_integrity']['navigation_allowed'] is False
+
+
+def test_sheffield_doncaster_five_snapped_alternatives_are_independently_refused():
+    """Synthetic reported envelope; no live provider request or production capture."""
+    start = [53.3806626, -1.4702278]
+    end = [53.5227681, -1.1335312]
+    body = {'start': ','.join(map(str, start)), 'end': ','.join(map(str, end)),
+            'avoid_caz': False, 'journey_context': {'purpose': 'planning',
+            'origin': {'kind': 'searched'}, 'destination': {'kind': 'searched'}}}
+    routes = []
+    for i in range(5):
+        route = candidate()
+        route.update(id=f'synthetic-{i}', source='GraphHopper' if i < 3 else 'Valhalla',
+                     geometry=[[start[0] + 23.7 / 111195, start[1]],
+                               [53.45, -1.3 + i * .00001],
+                               [end[0] + (22.8 + i * .2) / 111195, end[1]]])
+        routes.append(route)
+    result = post(body, routes)
+    assert result['navigation_outcome'] == 'REFUSED'
+    assert result['avoidance_status'] == 'NO_COMPLIANT_ROUTE'
+    assert len(result['routes']) == 5
+    assert len({r['avoidance_assessment']['geometry_binding'] for r in result['routes']}) == 5
+    for route in result['routes']:
+        assessment = route['avoidance_assessment']
+        origin = assessment['origin_integrity']
+        assert assessment['geometry_valid'] is True
+        assert assessment['automatic_selection_allowed'] is False
+        assert origin['reason'] == 'material_endpoint_relocation'
+        assert origin['navigation_allowed'] is False
+        assert 23 < origin['origin_displacement_m'] < 24.5
+        assert 22 < origin['destination_displacement_m'] < 24.5
+        assert route['journey_context']['purpose'] == 'planning'
