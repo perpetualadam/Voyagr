@@ -128,7 +128,11 @@ async function verifiedAsset(asset) {
   }
   const cached = await cache.match(asset.url);
   if (await valid(cached)) return cached;
-  const response = await fetch(asset.url, {cache:'reload', credentials:'same-origin', redirect:'error'});
+  // Genuine hash identities may reuse HTTP/edge caches; verify every body.
+  // A stale successful body gets one bypass retry, never an execution fallback.
+  let response = await fetch(asset.url, {cache:'default', credentials:'same-origin', redirect:'error'});
+  if (response.ok && !await valid(response))
+    response = await fetch(asset.url, {cache:'reload', credentials:'same-origin', redirect:'error'});
   if (!await valid(response)) throw Error('Asset release digest mismatch');
   await cache.put(asset.url, response.clone());
   return response;

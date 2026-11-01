@@ -86,3 +86,9 @@ test('an excessive release budget rejects before publication',async()=>{
  b.html='<script type="application/json" id="voyagr-asset-manifest">'+JSON.stringify({schema:1,release:'1'.repeat(64),assets:b.assets})+'</script>';w.network(b);
  await expect(w.install()).rejects.toThrow(/budget/);expect(w.stores.has('voyagr-coherent-shell-v52')).toBe(false);
 });
+
+test('immutable HTTP reuse is verified and a stale successful body gets only one bypass retry',async()=>{
+ const w=worker(),b=bundle(),asset=b.assets[0],attempts=[];
+ w.setFetch(async(q,o)=>{attempts.push(o.cache);return new Reply(o.cache==='reload'?b.bodies.get(key(asset.url)):'stale-http-body');});
+ expect(await (await w.fetch(asset.url)).text()).toBe(b.bodies.get(key(asset.url)));expect(attempts).toEqual(['default','reload']);
+});
