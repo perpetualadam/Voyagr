@@ -1,7 +1,0 @@
-[build]
-# Use Dockerfile for custom build configuration
-builder = "dockerfile"
-
-[deploy]
-startCommand = "python voyagr_web.py"
-

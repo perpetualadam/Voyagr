@@ -1,3 +1,5 @@
+> **Historical Railway deployment documentation — superseded.** Contabo is the sole intended production provider. Do not follow these Railway deployment instructions. See [current deployment policy](docs/deployment/PRODUCTION_DEPLOYMENT_POLICY.md) and [Contabo operator instructions](CONTABO_UPDATE_COMMANDS.md). Removing repository configuration does not disconnect external Railway integrations.
+
 # Railway.app "Unauthorized" Error - FIXED ✅
 
 ## Problem

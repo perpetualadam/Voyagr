@@ -43,7 +43,7 @@ A feature-rich, cost-free satellite navigation application with toll road cost e
 ### Web app (`voyagr_web.py`)
 - **Browser navigation**: Turn-by-turn routing, voice guidance, hazard alerts
 - **GPS speedometer**: Shows current GPS speed only (mph or km/h) — no posted speed limits or over-limit alerts in the app
-- **Production**: Hosted on a **Contabo VPS** — deploy with [CONTABO_UPDATE_COMMANDS.md](CONTABO_UPDATE_COMMANDS.md)
+- **Production target**: **Contabo only** (`vmi2887070`, `vibevoyager.org`). See the [deployment policy](docs/deployment/PRODUCTION_DEPLOYMENT_POLICY.md) and [operator instructions](CONTABO_UPDATE_COMMANDS.md). Deployment requires separate authorization.
 - **Details**: See [README_PWA.md](README_PWA.md)
 
 ### Hands-Free Operation
