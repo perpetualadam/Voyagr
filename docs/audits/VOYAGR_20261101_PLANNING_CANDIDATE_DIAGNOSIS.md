@@ -1,58 +1,50 @@
-# 1 November 2026 route preview rejection investigation
+# 1 November 2026 planning failure: captured-response diagnosis
 
-Scope: source based on main `38e19001313e9d97d47096f2bb26620fc65c7cdc`. No production access, provider calls, deployment, merge or safety-policy change. Reproductions use synthetic geometry and assessment data, not an actual production response capture.
+This report supersedes the initial hypothesis-only diagnosis. Source baseline is main `38e19001313e9d97d47096f2bb26620fc65c7cdc`. PR #380 changes no endpoint-integrity threshold, mandatory avoidance decision, navigation-authorisation gate, request generation or journey ownership protocol. No production access, provider requests, merge or deployment occurred.
 
-## What is established
+## Primary evidence and reproduction
 
-The exact reported inner message is thrown by `applyCalculateRouteIdlePreviewOutcome()` in `static/js/app/calculate-route-orchestration.js` when preparing **option zero** returns null. This happens before `commitPlanning()` and before any new route/map publication. It does not prove coordinate parsing failed.
+The user supplied the actual `/api/route` response in Pasted text.txt (411,724 bytes). The attachment starts with a JSON member rather than an opening object brace. Restoring that opening `{` makes it valid JSON. The fixture `static/js/__tests__/fixtures/sheffield-doncaster-20261101.json` preserves its parsed fields, including all five full geometries, assessments and maneuver arrays; only JSON whitespace/serialization changes. No response values are refreshed or synthesized.
 
-`prepareNavigationCandidate()` in `static/js/modules/navigation/avoidance-integrity.js` checks:
+The first alternative is ID 1, GraphHopper, precision 6, with 66 maneuvers. Its assessment `checked_at` is `1793546749.8781314` (2026-11-01 15:25:49.878131 UTC). The frontend recomputes geometry binding `7b82209c`, matching the response. All five alternatives' bindings match their respective geometries in the replay.
 
-1. A candidate exists and is not a restore-only record.
-2. A nonempty string ID or finite numeric ID exists.
-3. The assessed geometry binding matches the authoritative geometry and any normalized polyline, including explicit precision (5 or 6).
-4. The assessment says geometry is valid, has a finite timestamp, and is between zero and 600 seconds old according to the browser clock.
-5. Maneuvers exist and contain nonempty instructions, supported nonnegative integer types, and valid ordered shape indices.
+The first maneuver failing the old instruction predicate is zero-based index **5**:
 
-It does **not** check `navigation_outcome`, `automatic_selection_allowed`, origin connectivity status, displacement, or planning purpose. A `REFUSED` route with a valid fresh structural contract can pass preparation. `geometry_valid: true` alone is insufficient to prove this contract.
+```json
+{"begin_shape_index":27,"end_shape_index":46,"instruction":"","verbal_pre_transition_instruction":"","distance":0,"time":0,"type":8,"road_class":"primary","speed_limit":30,"street_names":["Brook Hill"]}
+```
 
-The caller's catch uses `buildCalculateRouteIdlePreviewParseErrorApplyPlan()` for every exception in the block, including candidate preparation, map operations and planning commit errors. This mislabels non-coordinate failures as coordinate parsing. The patch labels these as route preview errors and adds a bounded reason code for candidate rejection. It does not log raw coordinates or full response data.
+Backend `voyagr/services/routing/route_entries.py:maneuvers_from_graphhopper_route()` deliberately emits these silent type-8 edge updates when speed limits or road class change inside a spoken maneuver. They are not missing turn instructions. Their shape ranges can overlap their enclosing maneuver and each other.
 
-## Planning, simulation and live authority
+Frontend `avoidance-integrity.js:prepareNavigationCandidate()` previously rejected every empty instruction. It therefore returned null at record 5; `applyCalculateRouteIdlePreviewOutcome()` threw the reported message before committing a plan. `journey-plan.js:inspection()` repeated the same blanket rule, so changing only candidate preparation would expose a second rejection. The broad catch in route selection then mislabeled the failure as coordinate parsing.
 
-`VoyagrJourneyModes.commitPlanning()` separately checks the planning generation and request-current callback, stages map publication, and publishes only while that transaction remains current. A refused candidate can be inspected when no live/retained journey exists. If a journey exists, unresolved critical checks block replacement **before confirmation**, retaining its canonical continuation. Removing this block would change existing product policy and is outside this patch.
+The actual captured fixture failed the two positive captured-response tests before this correction (10 negative/expiry tests passed). With only the frontend correction, all 12 captured-response tests pass. The replay clock is explicitly fixed at assessment time +1 second to isolate the structural failure; that is a test control, **not the observed browser time**.
 
-`VoyagrJourneyPlan.inspection()` permits complete geometry inspection without making a navigation claim. Simulation uses inspection and its own mode/marker; existing tests cover isolation from GPS start and community submission. Live start uses the evidence gate and fresh GPS/routing path. Nothing in this patch grants permission, backfills ownership or replaces missing evidence.
+## Smallest safe correction
 
-The reported ~23.7 m origin and ~22.8–23.7 m destination offsets exceed the unchanged two-metre endpoint threshold. `material_endpoint_relocation`, missing connectivity proof, mandatory unverified avoidance and navigation refusal remain authoritative. The server's HTTP 200 means a successful route response, not navigation authorization. Planning purpose does not waive those checks.
+Recognize only the existing silent edge-metadata shape: type 8; exactly empty instruction and verbal text; exactly zero distance and time; ordered nonnegative integer indices; and a positive numeric speed limit or nonempty road-class field. Existing upper-bound index validation still runs. Candidate preparation still requires at least one meaningful instruction, valid geometry and binding, identity and a fresh assessment. Ordinary missing instructions, wrong types, nonzero distance/time, missing edge metadata, invalid indices and metadata-only guidance remain rejected.
 
-## Binding and request ordering
+Inspection accepts the same narrow metadata contract and excludes those records from simulation's spoken-step selection. The full candidate retains its original maneuvers and edge attributes; no speed metadata is erased and no invented instruction or connectivity proof is added. An older integrity module without the metadata helper remains fail-closed in inspection.
 
-Backend `voyagr/services/routing/journey_geometry.py:geometry_binding()` and frontend `avoidance-integrity.js:geometryBinding()` use FNV-1a over quantized vertices. This is a consistency checksum, not authentication. Geometry precision must match the encoded data. A stale decoded polyline cannot replace authoritative geometry. Candidate preparation does not verify a cryptographic response identity; routing tickets bind the request sequence, preferences revision/snapshot and endpoint intent generation. `calculateRoute()` checks ticket currency after async geocoding/fetch/JSON processing, and planning checks it again during staging/publication.
+The earlier PR diagnostic changes remain: explicit rejection reason codes, `Route preview failed` instead of the blanket coordinate label, and planning-only endpoint/provider warnings.
 
-The normalizer retains each alternative's assessment and geometry rather than granting all alternatives the first one's permission. The added five-alternative fixture checks distinct bindings and independent refusals across GraphHopper/Valhalla labels. It does not silently select another alternative if the primary candidate is malformed.
+## Planning versus navigation
 
-## Smallest supported correction
+The actual captured response is navigation-refused because of endpoint relocation, not malformed route geometry. Origin displacement is 23.651 m and destination displacement is 22.793 m for the first alternative. The two-metre threshold stays unchanged. The captured response has `automatic_selection_allowed: false`, unverified connectivity and `NO_COMPLIANT_ROUTE`.
 
-- Preserve all candidate checks and return semantics; optionally report which check rejected the candidate.
-- Replace the broad coordinate-parsing error label with route-preview error wording.
-- Clarify the existing preview summary: unverified start **or destination** connectivity, planning-only inspection, no navigation start, review avoidance evidence. Existing provider-limitations wording remains appended.
-- Add regressions in the production calculation/mode harness and backend HTTP safety-hook tests. No backend permission, threshold, endpoint-snapping or provider-enforcement changes are made.
+After correction the actual payload reaches idle planning preview with five independently assessed alternatives and unchanged assessments. All five remain refused by the navigation gate. It cannot replace an existing active journey: `commitPlanning()` retains the unresolved-critical-checks guard, confirmation and staged ownership transaction. No live GPS start, implicit navigation activation, avoidance guarantee or provider-enforcement claim is introduced. Simulation remains inspection-only and separate from live authority.
 
-## What remains unknown
+## Hypotheses resolved and limits
 
-The supplied evidence omits the actual first alternative ID, encoded geometry/precision and binding, maneuvers and indices, checked_at and browser clock. Therefore it does not distinguish missing/invalid maneuvers, binding mismatch, assessment clock skew/expiry or another structural rejection. The deployed JS/backend revisions and worker activation state were not inspected. The incident's exact failing predicate cannot honestly be identified from the summary alone.
-
-Capture the first alternative's structural fields and browser time, plus served module revisions, without credentials or personal journey data. The new reason code will narrow a future local reproduction. Do not claim the route-calculation incident is functionally fixed by diagnostics. Any follow-up acceptance change needs evidence and the existing safety invariants.
+- **Empty metadata instructions:** confirmed sufficient cause using the actual record and old predicate.
+- **Overlapping indices:** not itself rejected; cross-maneuver disjointness is not a candidate requirement. Each record must still have valid in-bounds ordered indices.
+- **Binding mismatch:** excluded for this captured response; all five recompute correctly.
+- **Assessment timestamp:** timestamp exists, but browser clock and original failure time are unavailable. Expiry or clock skew could additionally reject a replay at another time. No server/browser time correlation is claimed.
+- **Navigation refusal:** not the candidate-preparation cause. It still prohibits navigation and unresolved replacement of active journeys.
+- **Production served revision/worker activation:** not independently inspected. There are no server logs available in this workspace and no browser/VPS access was assumed. The captured data demonstrates the source-level contract failure, not the exact running worker revision.
 
 ## Validation
 
-Validation passed: npm run lint:tests; npm run test:ci -- --maxWorkers=2 (113 suites, 2,503 tests); the declared 75-file backend selection (1,658 passed, one skipped, 68 subtests passed). The first backend attempt could not collect ten modules because Shapely was absent; installing the repository-declared requirements-geometry.txt resolved collection without source/test changes. Added cases cover the reported five-alternative shape, planning-only acceptance, independent navigation refusals, mandatory avoidance, 5/6 precision, malformed geometry, binding mismatch, expired assessment, missing identity/maneuvers, stale async responses and previous-journey preservation. Existing simulation/GPS tests remain required. Full backend execution uses the 75-file web selection from CI, not desktop/custom-router/live-service suites.
+Local test lint passed. Full JavaScript CI command passed **114 suites / 2,517 tests**, including actual captured-response idle publication and existing-journey preservation, five independent assessments, bindings, ordinary instruction failures, edge-metadata constraints and assessment expiry. Existing regressions cover mandatory avoidance, precision 5/6, malformed geometry, stale asynchronous responses, simulation isolation and ownership/rollback.
 
-No browser or physical-device acceptance was executed. Production navigation remains NO-GO pending separate acceptance and applicable legacy recovery.
-
-## Follow-up hypothesis checks
-
-The available chat contains the response summary but no raw /api/route JSON, console capture, first-alternative maneuver records, browser timestamp or server logs. The only uploaded text attachments describe integration and deployment tasks. No exact production payload or log correlation is claimed.
-
-Additional deterministic tests show that overlapping ranges across distinct maneuvers do not alone reject preparation: validation checks each maneuver individually, not cross-maneuver disjointness. Missing instructions and timestamps ahead of the browser clock are rejected with their respective diagnostics. These tests establish possible rejection conditions, not the incident's actual cause.
+The preceding backend web selection passed 1,658 tests, one skipped and 68 subtests. No backend source changed in this correction; renewed GitHub CI runs the full declared backend selection plus frontend coverage, SQL policy and Windows metadata on the new head. Desktop/custom-router/live-service and real browser/device testing are outside those results. No production-navigation acceptance is claimed.

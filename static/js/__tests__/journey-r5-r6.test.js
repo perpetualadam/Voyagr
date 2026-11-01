@@ -233,3 +233,22 @@ test('overlapping maneuver shape indices alone do not reject a refused planning 
  expect(Compare.getRouteOptions().every(route=>AI.prepareNavigationCandidate(route)&&!AI.decision(route).allowed)).toBe(true);
  expect(Life.getRouteInProgress()).toBe(false);
 });
+function actualReportedResponse(){
+ const payload=JSON.parse(JSON.stringify(require('./fixtures/sheffield-doncaster-20261101.json')));
+ jest.spyOn(Date,'now').mockReturnValue((payload.routes[0].avoidance_assessment.checked_at+1)*1000);
+ calcRt.call.geocodeLocations.mockResolvedValue({start:'53.3806626,-1.4702278',end:'53.5227681,-1.1335312'});
+ global.fetch.mockResolvedValue({ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>payload});
+ return payload;
+}
+test('actual attached five-route response publishes an idle planning preview without live authority',async()=>{
+ Life.setRouteInProgress(false);const payload=actualReportedResponse();
+ expect(await Calc.calculateRoute()).toBe(true);expect(Compare.getRouteOptions()).toHaveLength(5);
+ expect(window.lastCalculatedRoute.id).toBe(1);
+ Compare.getRouteOptions().forEach((r,i)=>{expect(r.avoidance_assessment).toEqual(payload.routes[i].avoidance_assessment);expect(AI.decision(r).allowed).toBe(false);});
+ expect(Life.getRouteInProgress()).toBe(false);expect(Modes.liveStartPermitted(window.lastCalculatedRoute)).toBe(false);
+ expect(modeRt.fetch).not.toHaveBeenCalled();expect(confirm).not.toHaveBeenCalled();
+});
+test('actual attached refused response cannot replace the active journey',async()=>{
+ actualReportedResponse();const before=ctx.snapshot();await Calc.calculateRoute();
+ expect(ctx.snapshot()).toBe(before);expect(confirm).not.toHaveBeenCalled();
+});
