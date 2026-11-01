@@ -193,6 +193,8 @@ test.each([
  ['assessment mismatch',r=>{r.avoidance_assessment.geometry_binding='deadbeef';},'geometry_or_assessment_binding_mismatch'],
  ['expired assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000-601;},'invalid_or_expired_geometry_assessment'],
  ['missing maneuvers',r=>{r.maneuvers=[];},'missing_or_invalid_maneuvers'],
+ ['missing instruction',r=>{delete r.maneuvers[0].instruction;},'missing_or_invalid_maneuvers'],
+ ['future assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000+60;},'invalid_or_expired_geometry_assessment'],
 ])('candidate rejection reports %s and preserves the previous journey',async(_,mutate,reason)=>{
  mutate(next);const before=ctx.snapshot();await Calc.calculateRoute();expect(ctx.snapshot()).toBe(before);
  expect(ctx.status.mock.calls.some(([text])=>text.includes(reason)&&text.startsWith('Route preview failed:'))).toBe(true);
@@ -217,6 +219,17 @@ test.each([5,6])('planning refusal survives explicit polyline precision %i witho
  const codec=require('../modules/navigation/polyline-codec.js');
  routes.forEach(route=>{const points=AI.geometryPoints(route);route.geometry=codec.encodePolyline(points,precision);route.geometry_precision=precision;route.avoidance_assessment.geometry_binding=AI.geometryBinding(route);});
  expect(await Calc.calculateRoute()).toBe(true);
+ expect(Compare.getRouteOptions().every(route=>AI.prepareNavigationCandidate(route)&&!AI.decision(route).allowed)).toBe(true);
+ expect(Life.getRouteInProgress()).toBe(false);
+});
+
+test('overlapping maneuver shape indices alone do not reject a refused planning candidate',async()=>{
+ Life.setRouteInProgress(false);const {routes}=sheffieldDoncaster();
+ routes.forEach(route=>{route.maneuvers=[
+  {instruction:'First synthetic maneuver',begin_shape_index:0,end_shape_index:2},
+  {instruction:'Overlapping synthetic maneuver',begin_shape_index:1,end_shape_index:2}];});
+ expect(await Calc.calculateRoute()).toBe(true);
+ expect(Compare.getRouteOptions()).toHaveLength(5);
  expect(Compare.getRouteOptions().every(route=>AI.prepareNavigationCandidate(route)&&!AI.decision(route).allowed)).toBe(true);
  expect(Life.getRouteInProgress()).toBe(false);
 });

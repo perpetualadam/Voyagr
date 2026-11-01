@@ -47,6 +47,12 @@ Capture the first alternative's structural fields and browser time, plus served 
 
 ## Validation
 
-Validation passed: npm run lint:tests; npm run test:ci -- --maxWorkers=2 (113 suites, 2,500 tests); the declared 75-file backend selection (1,658 passed, one skipped, 68 subtests passed). The first backend attempt could not collect ten modules because Shapely was absent; installing the repository-declared requirements-geometry.txt resolved collection without source/test changes. Added cases cover the reported five-alternative shape, planning-only acceptance, independent navigation refusals, mandatory avoidance, 5/6 precision, malformed geometry, binding mismatch, expired assessment, missing identity/maneuvers, stale async responses and previous-journey preservation. Existing simulation/GPS tests remain required. Full backend execution uses the 75-file web selection from CI, not desktop/custom-router/live-service suites.
+Validation passed: npm run lint:tests; npm run test:ci -- --maxWorkers=2 (113 suites, 2,503 tests); the declared 75-file backend selection (1,658 passed, one skipped, 68 subtests passed). The first backend attempt could not collect ten modules because Shapely was absent; installing the repository-declared requirements-geometry.txt resolved collection without source/test changes. Added cases cover the reported five-alternative shape, planning-only acceptance, independent navigation refusals, mandatory avoidance, 5/6 precision, malformed geometry, binding mismatch, expired assessment, missing identity/maneuvers, stale async responses and previous-journey preservation. Existing simulation/GPS tests remain required. Full backend execution uses the 75-file web selection from CI, not desktop/custom-router/live-service suites.
 
 No browser or physical-device acceptance was executed. Production navigation remains NO-GO pending separate acceptance and applicable legacy recovery.
+
+## Follow-up hypothesis checks
+
+The available chat contains the response summary but no raw /api/route JSON, console capture, first-alternative maneuver records, browser timestamp or server logs. The only uploaded text attachments describe integration and deployment tasks. No exact production payload or log correlation is claimed.
+
+Additional deterministic tests show that overlapping ranges across distinct maneuvers do not alone reject preparation: validation checks each maneuver individually, not cross-maneuver disjointness. Missing instructions and timestamps ahead of the browser clock are rejected with their respective diagnostics. These tests establish possible rejection conditions, not the incident's actual cause.
