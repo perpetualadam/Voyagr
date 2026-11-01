@@ -451,8 +451,9 @@
             if(modes){
                 if(!modes.intentCurrent(labels.planningToken)||!orch.execute.shouldExecute)throw Error('New planning request was cancelled or invalid; previous journey retained.');
                 var options=rt().routeSelection().buildRouteOptionsFromApiResponse(data,rt().call.decodePolyline,orch.execute.routePath);
-                var candidate=root.VoyagrAvoidanceIntegrity.prepareNavigationCandidate(Object.assign({},options[0],{destination:labels.geocodedEnd,destinationName:labels.end,avoidance_requirements:data.avoidance_requirements}));
-                if(!candidate)throw Error('New route assessment or candidate preparation failed; previous journey retained.');
+                var candidateDiagnostics={};
+                var candidate=root.VoyagrAvoidanceIntegrity.prepareNavigationCandidate(Object.assign({},options[0],{destination:labels.geocodedEnd,destinationName:labels.end,avoidance_requirements:data.avoidance_requirements}),candidateDiagnostics);
+                if(!candidate)throw Error('New route candidate rejected ('+(candidateDiagnostics.reason||'candidate_preparation_failed')+'); previous journey retained.');
                 options[0]=candidate;
                 return await modes.commitPlanning(labels.planningToken,candidate,planningOperations(orch,data,candidate,options));
             }

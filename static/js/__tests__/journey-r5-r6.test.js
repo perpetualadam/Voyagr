@@ -143,3 +143,80 @@ test('R6 actual startup persistence cannot adopt a new intent while opening Inde
  await OffApp.persistJourneySnapshot(old,Modes.getContinuation(old));
  release();expect(await pending).toBe(false);expect((await Off.loadActiveRouteRecord(idb)).routeData.id).toBe('old');
 });
+
+// Synthetic reconstruction of the reported envelope, not a production capture.
+function sheffieldDoncaster() {
+ const codec=require('../modules/navigation/polyline-codec.js');
+ const start=[53.3806626,-1.4702278],end=[53.5227681,-1.1335312];
+ calcRt.call.geocodeLocations.mockResolvedValue({start:start.join(','),end:end.join(',')});
+ const routes=Array.from({length:5},(_,i)=>{
+  const points=[[start[0]+23.7/111195,start[1]],[53.45,-1.3+i*.00001],[end[0]+22.8/111195,end[1]]];
+  const route={...JSON.parse(JSON.stringify(next)),id:'reported-'+i,source:i<3?'GraphHopper':'Valhalla',
+   geometry:codec.encodePolyline(points,6),geometry_precision:6,polyline:undefined,
+   navigation_outcome:'REFUSED',automatic_selection_allowed:false,
+   journey_context:{version:1,purpose:'planning',origin:{kind:'searched',coordinates:start},destination:{kind:'searched',coordinates:end},ordered_stops:[]},
+   provider_limitations:[{category:'tolls',reason:'attribute_unavailable'}],
+   maneuvers:[{instruction:'Synthetic northbound road',begin_shape_index:0,end_shape_index:2}]};
+  route.avoidance_assessment={...route.avoidance_assessment,status:'UNVERIFIED',automatic_selection_allowed:false,requires_acceptance:true,
+   origin_integrity:{status:'UNVERIFIED',reason:'material_endpoint_relocation',navigation_allowed:false,transition_verified:false,road_connectivity:'NOT_VERIFIED',origin_displacement_m:23.7,destination_displacement_m:22.8,requested_origin:start,requested_destination:end}};
+  route.avoidance_assessment.geometry_binding=AI.geometryBinding(route);
+  return route;
+ });
+ const payload={success:true,source:'GraphHopper',routes,geometry:routes[0].geometry,geometry_precision:6,
+  avoidance_status:'NO_COMPLIANT_ROUTE',navigation_outcome:'REFUSED',automatic_selection_allowed:false,distance:'25 km',time:'30 minutes'};
+ global.fetch.mockImplementation(async()=>({ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>JSON.parse(JSON.stringify(payload))}));
+ return {payload,routes};
+}
+test('reported five-alternative refusal is inspectable without navigation authority when no journey is active',async()=>{
+ Life.setRouteInProgress(false);const {routes}=sheffieldDoncaster();
+ expect(await Calc.calculateRoute()).toBe(true);
+ expect(Compare.getRouteOptions()).toHaveLength(5);
+ for(const [i,option] of Compare.getRouteOptions().entries()){
+  expect(option.avoidance_assessment).toEqual(routes[i].avoidance_assessment);
+  expect(AI.prepareNavigationCandidate(option)).not.toBeNull();
+  expect(AI.decision(option).allowed).toBe(false);
+  expect(AI.summary(option)).toMatch(/unverified/i);
+  expect(AI.summary(option)).toMatch(/provider/i);
+ }
+ expect(new Set(routes.map(r=>r.avoidance_assessment.geometry_binding)).size).toBe(5);
+ expect(Life.getRouteInProgress()).toBe(false);expect(confirm).not.toHaveBeenCalled();
+ expect(await Modes.startHere()).toBe(false);expect(Life.getRouteInProgress()).toBe(false);
+});
+test('reported refusal cannot replace an existing live journey',async()=>{
+ sheffieldDoncaster();const before=ctx.snapshot();await Calc.calculateRoute();
+ expect(ctx.snapshot()).toBe(before);expect(confirm).not.toHaveBeenCalled();
+ expect(ctx.status.mock.calls.some(([text])=>/unresolved critical checks/.test(text))).toBe(true);
+});
+test.each([
+ ['missing identity',r=>{delete r.id;},'missing_candidate_identity'],
+ ['malformed geometry',r=>{r.geometry='?';},'geometry_or_assessment_binding_mismatch'],
+ ['assessment mismatch',r=>{r.avoidance_assessment.geometry_binding='deadbeef';},'geometry_or_assessment_binding_mismatch'],
+ ['expired assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000-601;},'invalid_or_expired_geometry_assessment'],
+ ['missing maneuvers',r=>{r.maneuvers=[];},'missing_or_invalid_maneuvers'],
+])('candidate rejection reports %s and preserves the previous journey',async(_,mutate,reason)=>{
+ mutate(next);const before=ctx.snapshot();await Calc.calculateRoute();expect(ctx.snapshot()).toBe(before);
+ expect(ctx.status.mock.calls.some(([text])=>text.includes(reason)&&text.startsWith('Route preview failed:'))).toBe(true);
+ expect(ctx.status.mock.calls.some(([text])=>text.includes('Error parsing coordinates'))).toBe(false);
+});
+test('mandatory refusal may be inspected without relaxing the navigation gate',async()=>{
+ Life.setRouteInProgress(false);const {routes}=sheffieldDoncaster();
+ routes.forEach(route=>{route.avoidance_assessment.requirements=[{category:'traffic_lights',enabled:true,mode:'mandatory',status:'UNVERIFIED'}];});
+ expect(await Calc.calculateRoute()).toBe(true);
+ expect(Compare.getRouteOptions().every(route=>AI.decision(route).allowed===false)).toBe(true);
+ expect(Life.getRouteInProgress()).toBe(false);
+});
+test('stale async reported response cannot overwrite the earlier journey',async()=>{
+ const {payload}=sheffieldDoncaster();let release;
+ global.fetch.mockImplementationOnce(()=>new Promise(resolve=>{release=()=>resolve({ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>payload});}));
+ const before=ctx.snapshot(),pending=Calc.calculateRoute();await flush();
+ expect(release).toBeDefined();Modes.endpointChanged('end');release();await pending;
+ expect(ctx.snapshot()).toBe(before);expect(confirm).not.toHaveBeenCalled();
+});
+test.each([5,6])('planning refusal survives explicit polyline precision %i without acquiring authority',async precision=>{
+ Life.setRouteInProgress(false);const {routes}=sheffieldDoncaster();
+ const codec=require('../modules/navigation/polyline-codec.js');
+ routes.forEach(route=>{const points=AI.geometryPoints(route);route.geometry=codec.encodePolyline(points,precision);route.geometry_precision=precision;route.avoidance_assessment.geometry_binding=AI.geometryBinding(route);});
+ expect(await Calc.calculateRoute()).toBe(true);
+ expect(Compare.getRouteOptions().every(route=>AI.prepareNavigationCandidate(route)&&!AI.decision(route).allowed)).toBe(true);
+ expect(Life.getRouteInProgress()).toBe(false);
+});

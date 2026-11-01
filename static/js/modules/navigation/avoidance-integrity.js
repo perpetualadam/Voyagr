@@ -99,24 +99,27 @@
         }
         return points;
     }
-    function prepareNavigationCandidate(route) {
+    function prepareNavigationCandidate(route, diagnostics) {
+        function reject(reason) { if (diagnostics) diagnostics.reason=reason; return null; }
+        if (diagnostics) delete diagnostics.reason;
         if (!route || route.navigation_resume_requires_fresh_gps ||
-            (route.avoidance_assessment && route.avoidance_assessment.resume_state)) return null;
+            (route.avoidance_assessment && route.avoidance_assessment.resume_state)) return reject('missing_or_restore_only_candidate');
         var candidate=JSON.parse(JSON.stringify(route));
-        if (!((typeof candidate.id==='string' && candidate.id.trim()) || (typeof candidate.id==='number' && Number.isFinite(candidate.id)))) return null;
+        if (!((typeof candidate.id==='string' && candidate.id.trim()) || (typeof candidate.id==='number' && Number.isFinite(candidate.id)))) return reject('missing_candidate_identity');
         var points=boundGeometry(candidate);
         var assessment=candidate.avoidance_assessment;
         var age=assessment && Date.now()/1000-assessment.checked_at;
-        if (!assessment || assessment.geometry_valid!==true || !Number.isFinite(age) || age<0 || age>600) return null;
+        if (!assessment || assessment.geometry_valid!==true || !Number.isFinite(age) || age<0 || age>600) return reject('invalid_or_expired_geometry_assessment');
+        if (!points) return reject('geometry_or_assessment_binding_mismatch');
         var steps=candidate.maneuvers;
-        if (!points || !Array.isArray(steps) || !steps.length || steps.some(function(step) {
+        if (!Array.isArray(steps) || !steps.length || steps.some(function(step) {
             if (!step || typeof step!=='object' || Array.isArray(step) || typeof step.instruction!=='string' || !step.instruction.trim()) return true;
             if (step.type!==undefined && (!Number.isInteger(step.type) || step.type<0)) return true;
             for (var key of ['begin_shape_index','end_shape_index']) {
                 if (step[key]!==undefined && (!Number.isInteger(step[key]) || step[key]<0 || step[key]>=points.length)) return true;
             }
             return step.begin_shape_index!==undefined && step.end_shape_index!==undefined && step.end_shape_index<step.begin_shape_index;
-        })) return null;
+        })) return reject('missing_or_invalid_maneuvers');
         candidate.polyline=points;
         candidate.geometry_precision=candidate.geometry_precision || 6;
         return candidate;
@@ -256,7 +259,7 @@
         var a=route && route.avoidance_assessment;
         var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
         var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
-        if (!a || !a.origin_integrity || a.origin_integrity.navigation_allowed!==true) return 'Unverified route start: navigation is unresolved. Recalculate from the actual location.'+limitation;
+        if (!a || !a.origin_integrity || a.origin_integrity.navigation_allowed!==true) return 'Unverified start or destination connectivity. Planning preview only; navigation cannot start. Review avoidance evidence and recalculate from the actual location.'+limitation;
         var refused=(root.localStorage ? currentDecision(route, {}, root.localStorage) : decision(route)).allowed===false;
         if (a.claim==='avoidance_disabled' && !refused) return 'Avoidance disabled.'+limitation;
         var labels={SATISFIED:'Verified against available data only',VIOLATED:'Known conflict',UNVERIFIED:'Unverified',UNSUPPORTED:'Unsupported'};
