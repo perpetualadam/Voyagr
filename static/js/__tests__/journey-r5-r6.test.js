@@ -191,10 +191,10 @@ test.each([
  ['missing identity',r=>{delete r.id;},'missing_candidate_identity'],
  ['malformed geometry',r=>{r.geometry='?';},'geometry_or_assessment_binding_mismatch'],
  ['assessment mismatch',r=>{r.avoidance_assessment.geometry_binding='deadbeef';},'geometry_or_assessment_binding_mismatch'],
- ['expired assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000-601;},'invalid_or_expired_geometry_assessment'],
+ ['expired assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000-601;},'expired_assessment'],
  ['missing maneuvers',r=>{r.maneuvers=[];},'missing_or_invalid_maneuvers'],
  ['missing instruction',r=>{delete r.maneuvers[0].instruction;},'missing_or_invalid_maneuvers'],
- ['future assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000+60;},'invalid_or_expired_geometry_assessment'],
+ ['future assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000+60;},'future_assessment'],
 ])('candidate rejection reports %s and preserves the previous journey',async(_,mutate,reason)=>{
  mutate(next);const before=ctx.snapshot();await Calc.calculateRoute();expect(ctx.snapshot()).toBe(before);
  expect(ctx.status.mock.calls.some(([text])=>text.includes(reason)&&text.startsWith('Route preview failed:'))).toBe(true);

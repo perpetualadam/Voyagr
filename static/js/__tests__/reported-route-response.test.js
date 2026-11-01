@@ -43,5 +43,5 @@ test.each([
 test('captured assessment expiry is a separate rejection, not inferred browser clock evidence',()=>{
  clock.mockReturnValue((captured.routes[0].avoidance_assessment.checked_at+601)*1000);
  const diagnostics={};expect(AI.prepareNavigationCandidate(options()[0],diagnostics)).toBeNull();
- expect(diagnostics.reason).toBe('invalid_or_expired_geometry_assessment');
+ expect(diagnostics.reason).toBe('expired_assessment');
 });

@@ -99,15 +99,35 @@
         }
         return points;
     }
+    // A present instruction channel must be text; null/objects/numbers are malformed.
+    var INSTRUCTION_CHANNELS=['instruction','verbal_pre_transition_instruction',
+        'verbal_transition_alert_instruction','verbal_post_transition_instruction'];
+    function maneuverInstructionState(step) {
+        if (!step || typeof step!=='object' || Array.isArray(step)) return 'invalid';
+        var spoken=false;
+        for (var channel of INSTRUCTION_CHANNELS) {
+            var value=step[channel];
+            if (value===undefined) continue;
+            if (typeof value!=='string') return 'invalid';
+            if (value.trim()) spoken=true;
+        }
+        return spoken ? 'spoken' : 'silent';
+    }
     // Existing GraphHopper adapter emits silent edge updates inside spoken maneuvers.
     // These carry speed/road-class metadata, not a missing turn instruction.
     function isEdgeMetadataManeuver(step) {
-        return !!step && step.type===8 && step.instruction==='' &&
-            step.verbal_pre_transition_instruction==='' && step.distance===0 && step.time===0 &&
+        return maneuverInstructionState(step)==='silent' && step.type===8 &&
+            step.distance===0 && step.time===0 &&
             Number.isInteger(step.begin_shape_index) && Number.isInteger(step.end_shape_index) &&
             step.begin_shape_index>=0 && step.end_shape_index>=step.begin_shape_index &&
             ((Number.isFinite(step.speed_limit) && step.speed_limit>0) ||
              (typeof step.road_class==='string' && !!step.road_class.trim()));
+    }
+    function validManeuverInstructions(step) {
+        var state=maneuverInstructionState(step);
+        if (state==='invalid') return false;
+        return (typeof step.instruction==='string' && !!step.instruction.trim()) ||
+            (state==='silent' && isEdgeMetadataManeuver(step));
     }
     function prepareNavigationCandidate(route, diagnostics) {
         function reject(reason) { if (diagnostics) diagnostics.reason=reason; return null; }
@@ -118,12 +138,17 @@
         if (!((typeof candidate.id==='string' && candidate.id.trim()) || (typeof candidate.id==='number' && Number.isFinite(candidate.id)))) return reject('missing_candidate_identity');
         var points=boundGeometry(candidate);
         var assessment=candidate.avoidance_assessment;
-        var age=assessment && Date.now()/1000-assessment.checked_at;
-        if (!assessment || assessment.geometry_valid!==true || !Number.isFinite(age) || age<0 || age>600) return reject('invalid_or_expired_geometry_assessment');
+        if (assessment==null) return reject('missing_assessment');
+        if (assessment.geometry_valid!==true) return reject('invalid_geometry_validity');
+        if (!Number.isFinite(assessment.checked_at)) return reject('invalid_assessment_timestamp');
+        var age=Date.now()/1000-assessment.checked_at;
+        if (!Number.isFinite(age)) return reject('invalid_assessment_timestamp');
+        if (age<0) return reject('future_assessment');
+        if (age>600) return reject('expired_assessment');
         if (!points) return reject('geometry_or_assessment_binding_mismatch');
         var steps=candidate.maneuvers;
         if (!Array.isArray(steps) || !steps.some(function(step) {return step && typeof step.instruction==='string' && !!step.instruction.trim();}) || steps.some(function(step) {
-            if (!step || typeof step!=='object' || Array.isArray(step) || typeof step.instruction!=='string' || (!step.instruction.trim() && !isEdgeMetadataManeuver(step))) return true;
+            if (!validManeuverInstructions(step)) return true;
             if (step.type!==undefined && (!Number.isInteger(step.type) || step.type<0)) return true;
             for (var key of ['begin_shape_index','end_shape_index']) {
                 if (step[key]!==undefined && (!Number.isInteger(step[key]) || step[key]<0 || step[key]>=points.length)) return true;
@@ -280,7 +305,7 @@
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);
