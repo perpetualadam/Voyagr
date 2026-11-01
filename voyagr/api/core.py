@@ -36,6 +36,11 @@ from voyagr.utils.rate_limiting import RateLimiter, rate_limit_page
 
 core_bp = Blueprint('core', __name__)
 
+# Existing workers never compile executable inputs from a changing checkout.
+from voyagr.asset_release import freeze_project
+from voyagr.index_page_context import project_root
+_PUBLIC_RELEASE_INPUTS = freeze_project(project_root())
+
 # PWA shell is no-store and rendered per request — protect GET / from refresh floods.
 # Defaults are high enough for normal multi-tab use; tighten via env if needed.
 def _env_int(name: str, default: int) -> int:
@@ -55,12 +60,38 @@ page_limiter = RateLimiter(
 )
 
 
+def _asset_release_store():
+    return os.getenv('VOYAGR_ASSET_RELEASE_DIR') or os.path.join(current_app.instance_path, 'asset-releases')
+
+
+@core_bp.route('/_voyagr/assets/<release>/<digest>/<name>')
+def immutable_asset(release, digest, name):
+    from voyagr.asset_release import read_asset
+    raw = read_asset(_asset_release_store(), release, digest, name)
+    if raw is None:
+        return Response('Asset release unavailable', status=404, headers={'Cache-Control': 'no-store'})
+    response = Response(raw, mimetype='application/javascript' if name.endswith('.js') else 'text/css' if name.endswith('.css') else 'application/octet-stream')
+    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
 @core_bp.route('/')
 @rate_limit_page(page_limiter)
 def index():
     """Render the main application page."""
-    html = render_template('index.html', **build_index_template_kwargs())
+    if 'voyagr_release_template' not in current_app.extensions:
+        current_app.extensions['voyagr_release_template'] = current_app.jinja_env.from_string(_PUBLIC_RELEASE_INPUTS['template'])
+    html = current_app.extensions['voyagr_release_template'].render(**build_index_template_kwargs())
+    from voyagr.asset_release import prepare_html
+    from voyagr.index_page_context import project_root
+    try:
+        html, release = prepare_html(html, project_root(), _asset_release_store(), snapshot=_PUBLIC_RELEASE_INPUTS)
+    except (OSError, ValueError, KeyError):
+        current_app.logger.error('Executable release preparation unavailable')
+        return Response('Voyagr update is unavailable. Reconnect and reopen when safe; saved data has not been cleared.', status=503, headers={'Cache-Control': 'no-store'})
     response = make_response(html)
+    response.headers['X-Voyagr-Asset-Release'] = release
     # Shell HTML is server-rendered (wake flags, keys). Do not cache at CDN or browser.
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'

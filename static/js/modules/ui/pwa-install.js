@@ -292,11 +292,10 @@
         }
         if (input.hasWaiting) {
             return {
-                action: 'activate-waiting',
-                saveAppState: true,
-                statusMessage: '📥 New update found! Reloading...',
-                statusType: 'success',
-                skipWaitingMessageType: 'SKIP_WAITING',
+                action: 'waiting-for-tabs',
+                saveAppState: false,
+                statusMessage: 'Update ready. Finish navigation, close all Voyagr tabs, then reopen when safe. Saved data is retained.',
+                statusType: 'info',
             };
         }
         if (input.hasInstalling) {

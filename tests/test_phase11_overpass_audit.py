@@ -148,7 +148,11 @@ def test_corrected_viewport_wait_timeout_leaves_task_alive_without_route_budget(
         finally: finished.set()
         return []
     app=Flask(__name__);audit.register(app)
-    with caplog.at_level(logging.INFO), app.test_request_context('/api/traffic-lights/area'):
+    # The callback's finished event precedes the wrapper's final audit record.
+    # Join the whole owned task so its trace cannot spill into the next test.
+    with ThreadPoolExecutor(max_workers=1) as owned_executor, \
+            patch.object(hazards, '_osm_area_executor', owned_executor), \
+            caplog.at_level(logging.INFO), app.test_request_context('/api/traffic-lights/area'):
         app.preprocess_request();identity=audit.trace()['id']
         g.routing_budget=rb.RoutingBudget(30)
         try:

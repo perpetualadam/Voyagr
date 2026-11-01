@@ -182,18 +182,20 @@
      * @param {Object} [input]
      * @returns {Object}
      */
+    function releaseURL(url){return root.VoyagrAssetRelease ? root.VoyagrAssetRelease.assetURL(url) : url;}
+
     function buildPorcupineStartConfigPlan(input) {
         input = input || {};
         return {
             accessKey: (input.accessKey || '').trim(),
             useCustomKeyword: !!input.useCustomKeyword,
             customKeyword: input.useCustomKeyword ? {
-                publicPath: (input.keywordPath || '').trim(),
+                publicPath: releaseURL((input.keywordPath || '').trim()),
                 label: 'Hey SatNav',
                 sensitivity: 0.55,
             } : null,
             builtInKeyword: 'Porcupine',
-            model: { publicPath: PORCUPINE_MODEL_PATH },
+            model: { publicPath: releaseURL(PORCUPINE_MODEL_PATH) },
             detectionDebounceMs: PORCUPINE_DETECTION_DEBOUNCE_MS,
             builtInFallbackLogPrefix: '[Porcupine] Using built-in keyword «Porcupine» until hey_satnav_wasm.ppn is available at',
             failureStatusMessage: 'Wake word could not start (check Picovoice key and assets)',
@@ -208,6 +210,7 @@
      */
     function buildWarmPicovoiceStaticCachePlan(input) {
         input = input || {};
+        if(root.VoyagrAssetRelease)return {shouldWarm:false}; // Verified release install stages these exact bytes.
         if (!input.hasServiceWorker || !input.online || !input.controllerPresent) {
             return { shouldWarm: false };
         }

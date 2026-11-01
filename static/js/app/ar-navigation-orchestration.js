@@ -73,7 +73,7 @@
         }
 
         try {
-            const mod = await import(entry.moduleImportPath);
+            const mod = root.VoyagrAssetRelease ? await root.VoyagrAssetRelease.loadModule('/static/js/modules/ar-navigation.js') : await import(entry.moduleImportPath);
             const ARNavigator = mod.ARNavigator;
 
             if (!arNavigator) {
