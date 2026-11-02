@@ -386,7 +386,9 @@ describe('route preview helpers', () => {
         });
         expect(plan.ok).toBe(true);
         expect(plan.statusMessage).toContain('Route calculated successfully');
-        expect(plan.notification.message).toContain('Ready to navigate?');
+        expect(plan.notification.title).toBe('Route Preview Ready');
+        expect(plan.notification.message).toContain('Review the preview and choose a journey mode.');
+        expect(plan.notification.message).not.toContain('Ready to navigate?');
         expect(plan.recentDestinations).toHaveLength(2);
         expect(plan.primaryHazards).toHaveLength(1);
         expect(plan.routesCount).toBe(1);

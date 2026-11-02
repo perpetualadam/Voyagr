@@ -244,6 +244,10 @@ test('actual attached five-route response publishes an idle planning preview wit
  Life.setRouteInProgress(false);const payload=actualReportedResponse();
  expect(await Calc.calculateRoute()).toBe(true);expect(Compare.getRouteOptions()).toHaveLength(5);
  expect(window.lastCalculatedRoute.id).toBe(1);
+ expect(calcRt.call.sendNotification).toHaveBeenCalledWith('Route Preview Ready',expect.stringContaining('Review the preview and choose a journey mode.'),'success');
+ expect(calcRt.call.showStatus).toHaveBeenCalledWith(expect.stringContaining('Navigation checks are unresolved'),'warning');
+ expect(calcRt.call.sendNotification.mock.calls.every(call=>!call[1].includes('Ready to navigate?'))).toBe(true);
+
  Compare.getRouteOptions().forEach((r,i)=>{expect(r.avoidance_assessment).toEqual(payload.routes[i].avoidance_assessment);expect(AI.decision(r).allowed).toBe(false);});
  expect(Life.getRouteInProgress()).toBe(false);expect(Modes.liveStartPermitted(window.lastCalculatedRoute)).toBe(false);
  expect(modeRt.fetch).not.toHaveBeenCalled();expect(confirm).not.toHaveBeenCalled();

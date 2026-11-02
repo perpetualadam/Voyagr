@@ -377,8 +377,9 @@ describe('route API error parsing', () => {
         expect(RR.buildRouteApiHttpErrorMessage(418, '')).toContain('418');
     });
 
-    test('getDegradedRoutingStatusMessage warns about offline engines', () => {
-        expect(RR.getDegradedRoutingStatusMessage()).toContain('Valhalla/GraphHopper offline');
+    test('degraded status without engine evidence reports limitations without asserting an outage', () => {
+        expect(RR.getDegradedRoutingStatusMessage()).toContain('routing limitations');
+        expect(RR.getDegradedRoutingStatusMessage()).not.toContain('offline');
     });
 });
 
@@ -543,7 +544,7 @@ describe('buildCalculateRouteDispatchPlan', () => {
         });
         const plan = RR.buildCalculateRouteDispatchPlan(apiPlan, false);
         expect(plan.branch).toBe('idle_preview');
-        expect(plan.degradedStatusMessage).toContain('Basic route only');
+        expect(plan.degradedStatusMessage).toContain('routing limitations');
         expect(plan.degradedLogWarning.warning).toBe('fallback');
     });
 });
@@ -807,5 +808,41 @@ describe('buildRouteRequestCollectPlan', () => {
         expect(body.start).toBe('51.5,-0.1');
         expect(body.end).toBe('52,0');
         expect(collect.opts.vehicleType).toBe('electric');
+    });
+});
+
+
+describe('assessment warnings distinguish planning from engine availability',()=>{
+    test('captured endpoint refusal retains evidence without claiming an engine outage',()=>{
+        const data=JSON.parse(JSON.stringify(require('./fixtures/sheffield-doncaster-20261101.json')));
+        const before=JSON.stringify(data);
+        const apply=RR.buildCalculateRouteResponseApplyPlan(RR.buildCalculateRouteResponseExecutePlan(data,false));
+        expect(apply.branch).toBe('idle_preview');
+        expect(apply.degradedStatusMessage).toContain('Navigation checks are unresolved');
+        expect(apply.degradedStatusMessage).toContain('endpoint connections');
+        expect(apply.degradedStatusMessage).not.toMatch(/offline|engine failed/);
+        expect(apply.degradedLogWarning.warning).toBe(data.routing_warning);
+        expect(apply.degradedLogPrefix).toBe('[Route API] Route limitations:');
+        expect(JSON.stringify(data)).toBe(before);
+    });
+    test('provider preferences get their own message without changing the response branch',()=>{
+        const apply=RR.buildCalculateRouteResponseApplyPlan(RR.buildCalculateRouteResponseExecutePlan({
+            success:true,routing_degraded:true,navigation_outcome:'BEST_EFFORT',automatic_selection_allowed:true,
+            provider_limitations:[{category:'tolls'}],avoidance_status:'UNVERIFIED'
+        },false));
+        expect(apply.degradedStatusMessage).toContain('avoidance limitations');
+        expect(apply.branch).toBe('idle_preview');
+        expect(apply.degradedStatusMessage).not.toContain('offline');
+    });
+    test('reported engine failure remains visible as fallback',()=>{
+        const apply=RR.buildCalculateRouteResponseApplyPlan(RR.buildCalculateRouteResponseExecutePlan({
+            success:true,routing_degraded:true,engines_failed:{Valhalla:'unavailable'}
+        },true));
+        expect(apply.degradedStatusMessage).toContain('routing engine failed');
+        expect(apply.degradedStatusMessage).toContain('fallback');
+        expect(apply.branch).toBe('in_nav_reroute');
+    });
+    test.each([{navigation_outcome:'REFUSED'},{automatic_selection_allowed:false},{avoidance_status:'NO_COMPLIANT_ROUTE'}])('refusal signal %p is presented as unresolved navigation',flags=>{
+        expect(RR.getDegradedRoutingStatusMessage(flags)).toContain('Navigation checks are unresolved');
     });
 });

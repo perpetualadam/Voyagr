@@ -473,6 +473,7 @@
 
         if (apply.degradedLogWarning) {
             console.warn(
+                apply.degradedLogPrefix || '[Route API] Route limitations:',
                 apply.degradedLogWarning.warning,
                 apply.degradedLogWarning.engines
             );
