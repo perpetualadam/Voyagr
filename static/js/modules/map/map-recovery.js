@@ -8,6 +8,14 @@
 (function (root) {
     'use strict';
 
+    // isStyleLoaded() also waits for source tiles. A serialized, non-bootstrap
+    // definition can already accept layers while optional traffic tiles are busy.
+    function hasUsableStyleDefinition(style) {
+        return !!style && style.version === 8 && style.name !== 'voyagr-bootstrap' &&
+            !!style.sources && typeof style.sources === 'object' && !Array.isArray(style.sources) &&
+            Array.isArray(style.layers) && style.layers.length > 0;
+    }
+
     /** Default settle after a force source reload before considering soft style reload. */
     var DEFAULT_SLOW_NETWORK_SETTLE_MS = 12000;
 
@@ -85,6 +93,7 @@
      */
     function shouldRetryForceReloadSources(opts) {
         opts = opts || {};
+        if (opts.styleDefinitionReady === true && !isMapCameraSettledForTileRecovery(opts)) return false;
         if (opts.styleLoaded === false) return true;
         if (opts.areTilesLoaded === false) {
             return isMapCameraSettledForTileRecovery(opts);
@@ -94,8 +103,9 @@
 
     /**
      * Whether to escalate to soft `setStyle` (wipes custom layers).
-     * Only when style is not loaded, or tiles remain unloaded after settle
-     * while the camera is idle (not mid-drive follow).
+     * A usable style definition must never be replaced just because a source
+     * is still loading. Legacy callers without definition evidence retain the
+     * existing broken-style/settle behavior; the core also guards setStyle.
      *
      * @param {Object} [opts]
      * @param {boolean} [opts.styleLoaded]
@@ -110,6 +120,7 @@
      */
     function shouldEscalateSoftStyleReload(opts) {
         opts = opts || {};
+        if (opts.styleDefinitionReady === true) return false;
         if (opts.styleLoaded === false) return true;
 
         var settle = resolveSettleMs(opts);
@@ -178,6 +189,7 @@
     }
 
     var api = {
+        hasUsableStyleDefinition: hasUsableStyleDefinition,
         DEFAULT_SLOW_NETWORK_SETTLE_MS: DEFAULT_SLOW_NETWORK_SETTLE_MS,
         NETWORK_RECOVER_DEBOUNCE_FAST_MS: NETWORK_RECOVER_DEBOUNCE_FAST_MS,
         NETWORK_RECOVER_DEBOUNCE_SLOW_MS: NETWORK_RECOVER_DEBOUNCE_SLOW_MS,

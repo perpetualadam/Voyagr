@@ -269,13 +269,22 @@ function toggleTrafficLayer() {
  *     instead of blindly trying, and re-checks `isStyleLoaded()` inside the
  *     add path so the `style.load` listener cannot fire it in an unsafe state.
  */
+function trafficStyleDefinitionReady(map) {
+    if (!map) return false;
+    const recovery = root.VoyagrMapRecovery;
+    if (recovery && typeof recovery.hasUsableStyleDefinition === 'function' && map.getStyle) {
+        return recovery.hasUsableStyleDefinition(map.getStyle());
+    }
+    return !!(map.isStyleLoaded && map.isStyleLoaded());
+}
+
 function addTrafficLayer() {
     const map = rt().getMap();
     const layerToggles = MLT();
     const orch = layerToggles.buildAddTrafficLayerOrchestrationPlan({
         hasMap: !!map,
         pendingGuardSet: !!window[layerToggles.TRAFFIC_PENDING_GUARD_PROPERTY],
-        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+        isStyleLoaded: trafficStyleDefinitionReady(map),
     });
     if (!orch.shouldProceed) {
         if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
@@ -342,7 +351,7 @@ function addTrafficLayer() {
     };
 
     const addTrafficLayerNow = () => {
-        const isStyleLoaded = !!(map && map.isStyleLoaded && map.isStyleLoaded());
+        const isStyleLoaded = trafficStyleDefinitionReady(map);
         const tilePlan = layerToggles.buildTrafficTileUrlsPlan({
             useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
             origin: window.location.origin,
@@ -421,7 +430,7 @@ function addTrafficLayer() {
         const tick = layerToggles.buildTrafficStylePollTickPlan({
             scheduled,
             hasMap: !!map,
-            isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+            isStyleLoaded: trafficStyleDefinitionReady(map),
             attempts,
             maxAttempts: orch.stylePollMaxAttempts,
             intervalMs: orch.stylePollIntervalMs,
@@ -565,7 +574,7 @@ function addWeatherLayer() {
     const weatherMod = WL();
     const orch = weatherMod.buildAddWeatherLayerOrchestrationPlan({
         hasMap: !!map,
-        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+        isStyleLoaded: trafficStyleDefinitionReady(map),
     });
     if (!orch.shouldProceed) {
         if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
