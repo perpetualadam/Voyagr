@@ -9,6 +9,7 @@
     var vectorStyleListenerRegistered = false;
     var trafficTileErrorStreak = 0;
     var trafficLayerPausedUntil = 0;
+    var trafficLayerRetryTimer = null;
 
     var MLT_INIT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
     var GPC_INIT = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
@@ -279,6 +280,7 @@ function trafficStyleDefinitionReady(map) {
 }
 
 function addTrafficLayer() {
+    if (!getShowTrafficEnabled() || Date.now() < trafficLayerPausedUntil) return;
     const map = rt().getMap();
     const layerToggles = MLT();
     const orch = layerToggles.buildAddTrafficLayerOrchestrationPlan({
@@ -351,6 +353,7 @@ function addTrafficLayer() {
     };
 
     const addTrafficLayerNow = () => {
+        if (!getShowTrafficEnabled() || Date.now() < trafficLayerPausedUntil) return true;
         const isStyleLoaded = trafficStyleDefinitionReady(map);
         const tilePlan = layerToggles.buildTrafficTileUrlsPlan({
             useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
@@ -484,6 +487,7 @@ function removeTrafficLayer() {
  * @param {number} statusCode
  */
 function voyagrOnTrafficTileLoadError(statusCode) {
+    if (Date.now() < trafficLayerPausedUntil) return;
     const backoff = MLT().buildTrafficTileErrorBackoffPlan({
         statusCode,
         errorStreak: trafficTileErrorStreak,
@@ -499,6 +503,11 @@ function voyagrOnTrafficTileLoadError(statusCode) {
     if (backoff.resetStreak) trafficTileErrorStreak = 0;
     if (backoff.removeTrafficLayer) removeTrafficLayer();
     console.warn(backoff.logMessage);
+    clearTimeout(trafficLayerRetryTimer);
+    trafficLayerRetryTimer = setTimeout(() => {
+        trafficLayerRetryTimer = null;
+        if (getShowTrafficEnabled() && Date.now() >= trafficLayerPausedUntil) addTrafficLayer();
+    }, Math.max(0, trafficLayerPausedUntil - Date.now()));
 }
 
 
