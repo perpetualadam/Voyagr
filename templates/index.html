@@ -2029,6 +2029,20 @@
             return result.data && result.data.session;
         }
 
+        function showDashcamSignedOutState() {
+            document.getElementById('dashcamRecordingsList').textContent = 'Sign in to view your private recordings';
+            document.getElementById('dashcamTotalRecordings').textContent = '0';
+            document.getElementById('dashcamTotalSize').textContent = '0 MB';
+            document.getElementById('dashcamOldestRecording').textContent = '-';
+        }
+
+        async function canLoadPrivateDashcamData() {
+            const session = await getDashcamSession();
+            if (session && session.access_token && session.user && session.user.id) return true;
+            showDashcamSignedOutState();
+            return false;
+        }
+
         function dashcamFetch(url, options, expectedOwner) {
             return getDashcamCapture().privateFetch(url, options, {
                 getSession: getDashcamSession,
@@ -2054,10 +2068,7 @@
         window.addEventListener('pagehide', clearDashcamPlayback);
         window.addEventListener('voyagr-auth-changed', event => {
             clearDashcamPlayback();
-            document.getElementById('dashcamRecordingsList').textContent = 'Sign in to view your private recordings';
-            document.getElementById('dashcamTotalRecordings').textContent = '0';
-            document.getElementById('dashcamTotalSize').textContent = '0 MB';
-            document.getElementById('dashcamOldestRecording').textContent = '-';
+            showDashcamSignedOutState();
             if (dashcamState.starting && !dashcamState.localOnly &&
                 dashcamState.ownerUserId !== event.detail.userId) {
                 dashcamState.startCancelled = true;
@@ -2506,7 +2517,9 @@
 
         async function loadDashcamRecordings() {
             try {
+                if (!await canLoadPrivateDashcamData()) return;
                 const response = await dashcamFetch('/api/dashcam/recordings');
+                if (!response.ok) throw new Error('Private recording list unavailable');
                 const data = await response.json();
                 await assertDashcamResponseOwner(response);
 
@@ -2623,25 +2636,27 @@
             }
         }
 
-        function loadDashcamSettings() {
+        async function loadDashcamSettings() {
             try {
-                const response = dashcamFetch('/api/dashcam/settings');
-                response.then(async r => { const data = await r.json(); await assertDashcamResponseOwner(r); return data; }).then(data => {
-                    if (data.success && data.settings) {
-                        document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
-                        document.getElementById('dashcamFps').value = String(data.settings.fps != null ? data.settings.fps : '30');
-                        document.getElementById('dashcamRetention').value = String(data.settings.retention_days != null ? data.settings.retention_days : '14');
+                if (!await canLoadPrivateDashcamData()) return;
+                const response = await dashcamFetch('/api/dashcam/settings');
+                if (!response.ok) throw new Error('Private dashcam settings unavailable');
+                const data = await response.json();
+                await assertDashcamResponseOwner(response);
+                if (data.success && data.settings) {
+                    document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
+                    document.getElementById('dashcamFps').value = String(data.settings.fps != null ? data.settings.fps : '30');
+                    document.getElementById('dashcamRetention').value = String(data.settings.retention_days != null ? data.settings.retention_days : '14');
 
-                        const audioBtn = document.getElementById('dashcamAudio');
-                        if (audioBtn) {
-                            if (data.settings.audio_enabled) {
-                                audioBtn.classList.add('active');
-                            } else {
-                                audioBtn.classList.remove('active');
-                            }
+                    const audioBtn = document.getElementById('dashcamAudio');
+                    if (audioBtn) {
+                        if (data.settings.audio_enabled) {
+                            audioBtn.classList.add('active');
+                        } else {
+                            audioBtn.classList.remove('active');
                         }
                     }
-                }).catch(function (e) { console.error('Dashcam settings load failed:', e); });
+                }
             } catch (error) {
                 console.error('Error loading dashcam settings:', error);
             }
