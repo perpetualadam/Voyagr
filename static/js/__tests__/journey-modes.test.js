@@ -234,3 +234,23 @@ test('unindexed maneuvers do not fabricate timed turn instructions',()=>{
     const r=selected();r.maneuvers=[{instruction:'Turn somewhere without shape evidence'}];
     const inspected=Plan.inspection(r,AI);expect(Plan.position(inspected,0).instruction).toMatch(/instructions unavailable/);
 });
+
+test('journey chooser displays endpoint gaps and preserves the selected planning locations',()=>{
+    const route=selected();
+    Object.assign(route.avoidance_assessment.origin_integrity,{
+        navigation_allowed:false,status:'UNVERIFIED',reason:'material_endpoint_relocation',
+        origin_displacement_m:23.651,destination_displacement_m:22.793
+    });
+    preview(route);
+    const before=JSON.stringify(window.lastCalculatedRoute);
+    expect(Modes.choose()).toBe(true);
+    const message=document.getElementById('journeyModeStatus').textContent;
+    expect(message).toContain('start: about 24 m');
+    expect(message).toContain('destination: about 23 m');
+    expect(message).toContain('road-accessible address or map point');
+    expect(message).toContain('actual GPS location');
+    expect(JSON.stringify(window.lastCalculatedRoute)).toBe(before);
+    expect(Modes.liveStartPermitted(route)).toBe(false);
+    expect(runtime.fetch).not.toHaveBeenCalled();
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+});
