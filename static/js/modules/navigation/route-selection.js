@@ -2193,8 +2193,8 @@
             durationMinutes: resolveInitialRouteDurationMinutes(data),
             displayTime: displayTime,
             notification: {
-                title: 'Route Ready',
-                message: notificationDist + ' ' + (fmt.distUnit || '') + ' in ' + data.time + '. Ready to navigate?',
+                title: 'Route Preview Ready',
+                message: notificationDist + ' ' + (fmt.distUnit || '') + ' in ' + data.time + '. Review the preview and choose a journey mode.',
                 type: 'success',
             },
             recentDestinations: recentDestinations,
@@ -2809,7 +2809,7 @@
             updateArButtonVisibility: !!idleUiPlan.updateArButtonVisibility,
             notification: idleUiPlan.notification || null,
             recentDestinations: idleUiPlan.recentDestinations || [],
-            notificationLogPrefix: '[Route] Route ready notification:',
+            notificationLogPrefix: '[Route] Preview ready notification:',
         };
     }
 
