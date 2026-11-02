@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v51';
+const CACHE_VERSION = 'v52';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -106,11 +106,37 @@ async function trimCache(cacheName, maxSize) {
   }
 }
 
+// Cache storage is optional: browser corruption or stalled disk I/O must not
+// prevent a healthy network response from reaching the map.
+const CACHE_OPERATION_TIMEOUT_MS = 1000;
+function optionalCache(operation) {
+  let timer;
+  return Promise.race([
+    Promise.resolve().then(operation),
+    new Promise(resolve => { timer = setTimeout(resolve, CACHE_OPERATION_TIMEOUT_MS); })
+  ]).catch(() => undefined).finally(() => clearTimeout(timer));
+}
+
+function readMapCache(request) {
+  if (request.cache === 'no-store' || request.cache === 'reload') return Promise.resolve();
+  return optionalCache(async () => (await caches.open(TILE_CACHE)).match(request));
+}
+
+function storeMapResponse(event, request, response) {
+  if (!response.ok || request.cache === 'no-store') return;
+  const copy = response.clone();
+  event.waitUntil(optionalCache(async () => {
+    const cache = await caches.open(TILE_CACHE);
+    await cache.put(request, copy);
+    await trimCache(TILE_CACHE, MAX_TILE_CACHE_SIZE);
+  }));
+}
+
 // Install event - cache static assets
 self.addEventListener('install', event => {
   console.log(`[Service Worker] Installing ${CACHE_VERSION}...`);
   event.waitUntil(
-    caches.open(STATIC_CACHE).then(cache => {
+    optionalCache(() => caches.open(STATIC_CACHE).then(cache => {
       console.log('[Service Worker] Caching static assets');
       return Promise.all(
         STATIC_ASSETS.map(url => {
@@ -119,7 +145,7 @@ self.addEventListener('install', event => {
           });
         })
       );
-    })
+    }))
   );
   self.skipWaiting();
 });
@@ -129,7 +155,7 @@ self.addEventListener('activate', event => {
   console.log(`[Service Worker] Activating ${CACHE_VERSION}...`);
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, TILE_CACHE, CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    optionalCache(() => caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (!currentCaches.includes(cacheName)) {
@@ -138,7 +164,7 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    }).then(() => {
+    })).then(() => {
       console.log('[SW] Claiming clients');
       return self.clients.claim();
     })
@@ -228,54 +254,32 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Map resources
-  // - Vector tiles can be cached cache-first (fast + offline-friendly).
-  // - Styles/sprites/glyphs should NOT be cache-first, otherwise the PWA can get "stuck"
-  //   on an older (or broken) style where labels never appear.
+  // Styles, sprites and glyphs use network first. Include the root aliases
+  // emitted by TileServer, as well as application fallback styles.
   const isMapProxy = url.pathname.startsWith(MAP_PROXY_PATH_PREFIX);
-  const isMapStyle = isMapProxy && url.pathname.startsWith('/map/styles/');
-  const isMapSprite = isMapProxy && url.pathname.includes('/sprites/');
-  const isMapGlyphsOrFonts = isMapProxy && (url.pathname.includes('/glyphs/') || url.pathname.includes('/fonts/'));
-
-  // Map styles/sprites/glyphs/fonts - NETWORK FIRST with cache fallback
-  if (isMapStyle || isMapSprite || isMapGlyphsOrFonts) {
+  const isMapStyle = ['/map/styles/', '/styles/', '/static/map/styles/'].some(prefix => url.pathname.startsWith(prefix));
+  const isMapDecoration = ['/fonts/', '/glyphs/', '/sprites/'].some(prefix => url.pathname.startsWith(prefix)) ||
+    (isMapProxy && /\/(fonts|glyphs|sprites)\//.test(url.pathname));
+  if (isMapStyle || isMapDecoration) {
     event.respondWith(
-      fetch(request)
-        .then(networkResponse => {
-          if (networkResponse && networkResponse.ok) {
-            const responseClone = networkResponse.clone();
-            caches.open(TILE_CACHE).then(async cache => {
-              await cache.put(request, responseClone);
-              await trimCache(TILE_CACHE, MAX_TILE_CACHE_SIZE);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => caches.open(TILE_CACHE).then(cache => cache.match(request)))
-        .then(resp => resp || new Response('Offline', { status: 503 }))
+      fetch(request).then(response => {
+        storeMapResponse(event, request, response);
+        return response;
+      }).catch(async () => (await readMapCache(request)) || new Response('Map resource unavailable', { status: 503 }))
     );
     return;
   }
 
-  // Map tiles - cache first with network update (stale-while-revalidate)
-  // Includes our self-hosted vector tile stack proxied via /map/.
-  if (isMapProxy || url.hostname.includes('tile') || url.pathname.includes('tiles')) {
-    event.respondWith(
-      caches.open(TILE_CACHE).then(cache => cache.match(request)).then(cachedResponse => {
-        const fetchPromise = fetch(request).then(networkResponse => {
-          if (networkResponse.ok) {
-            const responseClone = networkResponse.clone();
-            caches.open(TILE_CACHE).then(async cache => {
-              await cache.put(request, responseClone);
-              await trimCache(TILE_CACHE, MAX_TILE_CACHE_SIZE);
-            });
-          }
-          return networkResponse;
-        }).catch(() => cachedResponse);
-
-        return cachedResponse || fetchPromise;
-      })
-    );
+  // Start the tile network request immediately, independently of cache reads.
+  // A cached tile can still win, and waitUntil keeps its refresh alive.
+  if (isMapProxy || url.pathname.startsWith('/data/') || url.hostname.includes('tile') || url.pathname.includes('tiles')) {
+    const cached = readMapCache(request);
+    const network = fetch(request).then(response => {
+      storeMapResponse(event, request, response);
+      return response;
+    }).catch(async () => (await cached) || new Response('Map tile unavailable', { status: 503 }));
+    event.waitUntil(network.then(() => undefined));
+    event.respondWith(Promise.race([network, cached.then(response => response || network)]));
     return;
   }
 
