@@ -174,6 +174,18 @@
         });
     }
     function enabledMandatory(r) { return r.enabled && r.mode==='mandatory'; }
+    function endpointGapMessage(origin) {
+        var gaps=[];
+        [['origin_displacement_m','start'],['destination_displacement_m','destination']].forEach(function(entry){
+            var meters=origin[entry[0]];
+            if(Number.isFinite(meters)&&meters>2)gaps.push(entry[1]+': about '+Math.round(meters)+' m');
+        });
+        return 'The route is separated from your requested locations'+(gaps.length?' ('+gaps.join('; ')+')':'')+'. '+
+            'The connection to the road is unverified. Your requested locations are unchanged. '+
+            'For planning, choose a road-accessible address or map point and recalculate. '+
+            'For live navigation, recalculate from your actual GPS location and check the destination access point. '+
+            'Navigation cannot start until endpoint connections are verified.';
+    }
     function evidenceDecision(route, options) {
         options = options || {};
         if (route && (route.navigation_resume_requires_fresh_gps ||
@@ -184,8 +196,8 @@
         var origin=assessment && assessment.origin_integrity;
         if (!origin || origin.navigation_allowed!==true || origin.transition_verified===true ||
             origin.status!=='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE') {
+            if(origin && origin.reason==='material_endpoint_relocation')return {allowed:false,acceptance:false,message:endpointGapMessage(origin)};
             var reasons={
-                material_endpoint_relocation:'The route does not connect to your requested start or destination.',
                 within_gps_uncertainty_connectivity_unknown:'The connection from your current position to the route is unverified.',
                 mandatory_exclusion_geometry_unavailable:'Mandatory exclusion areas could not be verified.',
                 mandatory_endpoint_in_or_on_exclusion:'The start or destination is inside a mandatory exclusion area.',

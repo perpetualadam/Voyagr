@@ -45,3 +45,34 @@ test('captured assessment expiry is a separate rejection, not inferred browser c
  const diagnostics={};expect(AI.prepareNavigationCandidate(options()[0],diagnostics)).toBeNull();
  expect(diagnostics.reason).toBe('expired_assessment');
 });
+
+
+test('captured city search gap explains both endpoints without relocating or authorizing them',()=>{
+ const route=options()[0];
+ route.journey_context={origin:{kind:'searched'},destination:{kind:'searched'}};
+ const before=JSON.stringify(route);
+ const result=AI.decision(route);
+ expect(result).toMatchObject({allowed:false,acceptance:false,outcome:'REFUSED'});
+ expect(result.message).toContain('start: about 24 m');
+ expect(result.message).toContain('destination: about 23 m');
+ expect(result.message).toContain('road-accessible address or map point');
+ expect(result.message).toContain('actual GPS location');
+ expect(result.message).toContain('requested locations are unchanged');
+ expect(JSON.stringify(route)).toBe(before);
+});
+test.each([
+ [24,0,'start: about 24 m','destination:'],
+ [0,23,'destination: about 23 m','start:'],
+ [2,2,null,'about'],
+ [undefined,undefined,null,'about'],
+ [NaN,Infinity,null,'about'],
+ [-1,'23',null,'about'],
+])('endpoint refusal reports only finite material gaps (%p, %p)',(start,end,present,absent)=>{
+ const route=options()[0],origin=route.avoidance_assessment.origin_integrity;
+ origin.origin_displacement_m=start;origin.destination_displacement_m=end;
+ const result=AI.decision(route);
+ expect(result.allowed).toBe(false);expect(result.acceptance).toBe(false);
+ if(present)expect(result.message).toContain(present);
+ expect(result.message).not.toContain(absent);
+ expect(result.message).toContain('connection to the road is unverified');
+});
