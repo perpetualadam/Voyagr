@@ -5,6 +5,7 @@ const {chromium}=require('@playwright/test');
 const sourcePath=require.resolve(process.env.PLANNING_PROBE_SOURCE||'./planning-commit-diagnostic.cjs');
 const {install}=require(sourcePath);
 const {CASES,exerciseCase}=require('../../static/js/__tests__/fixtures/planning-probe-properties.cjs');
+const {DISPATCH_CASES,exerciseDispatch}=require('../../static/js/__tests__/fixtures/planning-probe-dispatch.cjs');
 async function main(){
     const server=http.createServer((_request,response)=>{response.setHeader('Content-Type','text/html');response.end('<html><body><div id="status"></div><div id="journeyModeStatus"></div></body></html>');});
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -19,6 +20,22 @@ async function main(){
                 results.push(await page.evaluate(exerciseCase,{name,source:install.toString()}));
             }catch(_){results.push({name,passed:false});} // Never print arbitrary browser exceptions.
             finally{await context.close();}
+        }
+        for(const name of DISPATCH_CASES){
+            const comparison=[];
+            try{
+                for(const enabled of [false,true]){
+                    const context=await browser.newContext();
+                    try{
+                        const page=await context.newPage();await page.goto('http://127.0.0.1:'+server.address().port);
+                        await page.addScriptTag({content:fs.readFileSync(path.resolve(__dirname,'../../static/vendor/maplibre-gl.js'),'utf8')});
+                        comparison.push(await page.evaluate(exerciseDispatch,{name,source:install.toString(),enabled}));
+                    }finally{await context.close();}
+                }
+                const plain={...comparison[0],enabled:false},observed={...comparison[1],enabled:false};
+                if(JSON.stringify(plain)!==JSON.stringify(observed))throw Error('Dispatch comparison differed');
+                results.push({name,passed:true,comparison});
+            }catch(_){results.push({name,passed:false});}
         }
     }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
     console.log(JSON.stringify({source_sha256:require('node:crypto').createHash('sha256').update(fs.readFileSync(sourcePath)).digest('hex'),browser:'Chromium with bundled MapLibre prototype',passed:results.filter(r=>r.passed).length,failed:results.filter(r=>!r.passed).length,results},null,2));

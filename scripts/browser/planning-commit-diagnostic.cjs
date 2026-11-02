@@ -21,14 +21,12 @@ function install() {
     function method(object,name){
         return safely(()=>{
             if(!object||(typeof object!=='object'&&typeof object!=='function'))return null;
-            const own=Object.getOwnPropertyDescriptor(object,name);let owner=object,descriptor;
-            for(let depth=0;owner&&depth<16;depth++,owner=Object.getPrototypeOf(owner)){
-                descriptor=Object.getOwnPropertyDescriptor(owner,name);if(descriptor)break;
-            }
-            // Never invoke accessors, relax locked properties, or extend sealed objects.
+            const descriptor=Object.getOwnPropertyDescriptor(object,name);
+            // An own shadow cannot preserve arbitrary inherited dispatch (including
+            // saved method references). Leave inherited/accessor/locked slots alone.
             if(!descriptor||!Object.hasOwn(descriptor,'value')||typeof descriptor.value!=='function'||
-                descriptor.writable!==true||descriptor.configurable!==true||(!own&&!Object.isExtensible(object)))return null;
-            return {own,descriptor,fn:descriptor.value};
+                descriptor.writable!==true||descriptor.configurable!==true)return null;
+            return {descriptor,fn:descriptor.value};
         },null);
     }
     function patch(object,name,make){
@@ -39,12 +37,11 @@ function install() {
             // Preserve unrelated replacements and descriptor changes made during observation.
             if(!current||current.value!==replacement||current.writable!==installed.writable||
                 current.enumerable!==installed.enumerable||current.configurable!==installed.configurable)return;
-            if(found.own)Object.defineProperty(object,name,found.own);
-            else Reflect.deleteProperty(object,name);
+            Object.defineProperty(object,name,found.descriptor);
         });
         try{
             replacement=make(found.fn);
-            installed=found.own?{...found.own,value:replacement}:{value:replacement,writable:true,enumerable:found.descriptor.enumerable,configurable:true};
+            installed={...found.descriptor,value:replacement};
             if(!Reflect.defineProperty(object,name,installed)){restore();return null;}
             return restore;
         }catch(_){if(installed)restore();return null;}
@@ -106,7 +103,7 @@ function install() {
         return result;
     });
     const api={
-        report(){return {available:!!releaseCommit,attempts:records.map(({started,...row})=>row),limits:{map_check_is_actual_invocation_only:true,unsupported_hooks_are_skipped:true,private_persistence_callbacks_not_instrumented:true,warning_classes_are_diagnostic_evidence_not_authority:true}};},
+        report(){return {available:!!releaseCommit,attempts:records.map(({started,...row})=>row),limits:{map_check_is_actual_invocation_only:true,unsupported_hooks_are_skipped:true,inherited_methods_are_not_shadowed:true,private_persistence_callbacks_not_instrumented:true,warning_classes_are_diagnostic_evidence_not_authority:true}};},
         dispose(){closed=true;if(releaseCommit)releaseCommit();for(const release of releases.reverse())release();safely(()=>{if(window[key]===api)delete window[key];});}
     };
     try{Object.defineProperty(window,key,{value:api,writable:true,configurable:true});}

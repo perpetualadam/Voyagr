@@ -62,7 +62,7 @@ async function exerciseCase({name,source}) {
             check(same(Object.getOwnPropertyDescriptor(backing,'isStyleLoaded'),expectedAfter||before),'map descriptor/inheritance changed');
         }
         check(reads===0,'unsupported accessor/then getter invoked');
-        const unavailable=['global_accessor','method_accessor','readonly_locked','readonly_configurable','nonconfig_writable','nonextensible','proxy_descriptor','proxy_define','frozen_operations','frozen_modes'];
+        const unavailable=['inherited','global_accessor','method_accessor','readonly_locked','readonly_configurable','nonconfig_writable','nonextensible','proxy_descriptor','proxy_define','frozen_operations','frozen_modes'];
         const events=report?.attempts.flatMap(r=>r.events)||[];
         check(!unavailable.includes(name)||!events.some(e=>e.outcome==='style_check_returned'),'fabricated readiness');
         return {name,passed:true,original_stage_calls:calls,descriptor_preserved:true,private_output_excluded:true};

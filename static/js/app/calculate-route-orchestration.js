@@ -569,12 +569,27 @@
         console.error(errApply.logPrefix, error);
     }
 
+    // Missing integrity cannot issue an owned request or validate its result.
+    // Older calculation clients may omit journey modes, never integrity;
+    // existing navigation gates still decide authority.
+    function calculationCapabilities() {
+        try {
+            var integrity=root.VoyagrAvoidanceIntegrity,modes=root.VoyagrJourneyModes,plan=root.VoyagrJourneyPlan;
+            if(!integrity||['begin','current','isLatest','finish','fetchOptions','augment','tag',
+                'prepareNavigationCandidate','geometryPoints','responseCurrent','gate'].some(function(name){return typeof integrity[name]!=='function';}))return null;
+            if(modes&&['beforePlanning','captureIntent','intentCurrent','endpointIntentCompatible','commitPlanning']
+                .some(function(name){return typeof modes[name]!=='function';}))return null;
+            if((modes&&!plan)||(plan&&typeof plan.requestContext!=='function')||(modes&&typeof plan.inspection!=='function'))return null;
+            return {integrity:integrity,modes:modes};
+        } catch (_) { return null; }
+    }
+
     async function calculateRoute() {
-        if(root.VoyagrJourneyModes&&(!root.VoyagrJourneyModes.commitPlanning||!root.VoyagrJourneyModes.captureIntent||!root.VoyagrJourneyModes.endpointIntentCompatible)){rt().call.showStatus('Planning modules differ. Reload online; current journey retained.','warning');return;}
-        if (root.VoyagrJourneyModes && !root.VoyagrJourneyModes.beforePlanning()) return;
-        var modes=root.VoyagrJourneyModes;
+        var capabilities=calculationCapabilities();
+        if(!capabilities){rt().call.showStatus('Route safety modules are unavailable. Reconnect and reload when safe; current journey retained.','warning');return;}
+        var integrity=capabilities.integrity,modes=capabilities.modes;
+        if (modes && !modes.beforePlanning()) return;
         var planningToken=modes&&modes.captureIntent();
-        var integrity = root.VoyagrAvoidanceIntegrity;
         var ticket = integrity ? integrity.begin(localStorage) : null;
         try {
             var RR = rt().routingRequest();
