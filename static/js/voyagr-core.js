@@ -793,6 +793,7 @@ function initializeMap() {
                     const shouldRetry = MR && typeof MR.shouldRetryForceReloadSources === 'function'
                         ? MR.shouldRetryForceReloadSources({
                             styleLoaded: styleOk,
+                            styleDefinitionReady: voyagrMapHasUsableStyleDefinition(),
                             areTilesLoaded: tilesLoaded,
                             mapLoaded: allLoaded,
                             isMapMoving: cameraOpts.isMapMoving,
@@ -820,6 +821,7 @@ function initializeMap() {
                             const shouldEscalate = MR && typeof MR.shouldEscalateSoftStyleReload === 'function'
                                 ? MR.shouldEscalateSoftStyleReload({
                                     styleLoaded: styleOk2,
+                                    styleDefinitionReady: voyagrMapHasUsableStyleDefinition(),
                                     areTilesLoaded: tilesLoaded2,
                                     mapLoaded: allLoaded2,
                                     msSinceForceReload: Date.now() - recoverStartedAt,
@@ -847,11 +849,22 @@ function initializeMap() {
     }
     window.__voyagrMapRecoverAfterNetworkEvent = voyagrMapRecoverAfterNetworkEvent;
 
+    function voyagrMapHasUsableStyleDefinition() {
+        const style = map && map.getStyle && map.getStyle();
+        const MR = window.VoyagrMapRecovery;
+        if (MR && typeof MR.hasUsableStyleDefinition === 'function') return MR.hasUsableStyleDefinition(style);
+        return !!style && style.version === 8 && style.name !== 'voyagr-bootstrap' &&
+            !!style.sources && Array.isArray(style.layers) && style.layers.length > 0;
+    }
+
     const __MAP_STYLE_RELOAD_MIN_GAP_MS = 120000;
     const __MAP_MAX_STYLE_RELOADS = 4;
     function voyagrMapSoftStyleReload(reason) {
         if (!map || typeof map.getStyle !== 'function' || typeof map.setStyle !== 'function') return;
         if (voyagrMapIsBootstrapStyle()) return;
+        // Source loading is not style-definition failure. A full setStyle here
+        // aborts healthy requests and replaces route, traffic and label layers.
+        if (voyagrMapHasUsableStyleDefinition()) return;
         const now = Date.now();
         if (now - (window.__voyagrLastMapStyleReloadTime || 0) < __MAP_STYLE_RELOAD_MIN_GAP_MS) {
             return;
@@ -1072,7 +1085,7 @@ function initializeMap() {
                 window.__voyagrMapContextStuckAt = 0;
             }
 
-            if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) {
+            if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded() && !voyagrMapHasUsableStyleDefinition()) {
                 if (!window.__voyagrMapStyleStuckAt) {
                     window.__voyagrMapStyleStuckAt = Date.now();
                 } else if (Date.now() - window.__voyagrMapStyleStuckAt > 45000) {

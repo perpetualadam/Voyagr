@@ -213,3 +213,15 @@ describe('VoyagrMapRecovery', () => {
         expect(delays[0]).toBeLessThan(delays[1]);
     });
 });
+
+
+test.each([null,{}, {version:8,name:'voyagr-bootstrap',sources:{},layers:[{id:'background'}]}, {version:8,sources:{},layers:[]}])('incomplete or bootstrap style definition is not ready: %p',style=>{
+    expect(MR.hasUsableStyleDefinition(style)).toBe(false);
+});
+test('a valid style definition remains usable while its sources are loading',()=>{
+    const style={version:8,sources:{basemap:{type:'vector'}},layers:[{id:'roads',source:'basemap'}]};
+    expect(MR.hasUsableStyleDefinition(style)).toBe(true);
+    expect(MR.shouldEscalateSoftStyleReload({styleDefinitionReady:true,styleLoaded:false,areTilesLoaded:false,msSinceForceReload:60000})).toBe(false);
+    expect(MR.shouldRetryForceReloadSources({styleDefinitionReady:true,styleLoaded:false,areTilesLoaded:false,isMapMoving:true})).toBe(false);
+    expect(MR.shouldRetryForceReloadSources({styleDefinitionReady:true,styleLoaded:false,areTilesLoaded:false,isMapMoving:false,msSinceLastMapMove:10000})).toBe(true);
+});
