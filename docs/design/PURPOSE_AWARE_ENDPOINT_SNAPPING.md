@@ -177,3 +177,35 @@ internals or the deployed providers' exact feature/version support:
 - [Waze official community entry-point guide](https://www.waze.com/discuss/t/wazes-entry-point-logic/393048)
 - [Valhalla location controls](https://valhalla.github.io/valhalla/api/route/api-reference/)
 - [OSRM routing and map matching](https://project-osrm.org/docs/v26.6.1/http)
+
+## First implementation: planning evidence
+
+The first slice carries bounded autocomplete metadata from origin/destination
+selection through canonical request context to a per-alternative
+`endpoint_resolution` response. Metadata is bound to the requested coordinate;
+edits and saved selections discard stale search evidence. Swapping and restoring
+endpoints preserve the corresponding metadata. TomTom entry points are retained
+as candidates, without moving the requested point or asserting access legality.
+
+Version 1 records retain requested coordinates, routing geometry anchors, native
+provider snaps when supplied, measured offsets, ordered stop identity and the
+assessment's geometry binding. Native snaps consistent with geometry can receive
+`ROAD_SNAPPED` planning presentation when within the existing continuity tolerance,
+or when a searched locality's declared bounds contain both points. Locality
+metadata remains untrusted request metadata. Geometry-only, mismatched or missing
+evidence requires review. Every record has `navigation_authority: NONE` and
+`access_evidence: UNKNOWN`; the existing live gate and mandatory restriction checks
+remain unchanged. No connector is inferred or drawn.
+
+Preview notices display this planning classification and offsets separately from
+navigation warnings. Legacy responses remain supported. Each alternative keeps
+its own record; stale cached records are recomputed server-side. Ordered stops
+receive geometric resolution records, but autocomplete evidence capture for new
+intermediate stops remains future work.
+
+Regression coverage includes the captured Sheffield–Doncaster provider response,
+synthetic locality metadata explicitly separated from captured evidence, the HTTP
+assessment-to-browser candidate preparation path, malformed/spoofed metadata,
+mandatory restrictions, ordered stops and single-route envelopes. Verified arrival
+access, road-edge identity, provider matching and fresh-GPS live authorization
+remain subsequent phases requiring their own acceptance evidence.

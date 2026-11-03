@@ -30,9 +30,15 @@ def context_for_plan(raw, ordered_visits):
         value = raw.get('start' if field == 'origin' else 'end', '')
         if field == 'destination' and raw.get('round_trip'):
             value = raw.get('start', '')
-        return {'kind': _kind(item.get('kind')),
-                'coordinates': _point(validate_coordinates(value)),
-                **({'source_kind': _kind(item.get('source_kind'))} if _kind(item.get('source_kind')) != 'unknown' else {})}
+        result = {'kind': _kind(item.get('kind')),
+                  'coordinates': _point(validate_coordinates(value)),
+                  **({'source_kind': _kind(item.get('source_kind'))} if _kind(item.get('source_kind')) != 'unknown' else {})}
+        from voyagr.services.routing.endpoint_resolution import search_evidence
+        metadata = declared.get('origin', {}) if field == 'destination' and raw.get('round_trip') else item
+        evidence = search_evidence(metadata.get('search_evidence') if isinstance(metadata, dict) else None, result['coordinates'])
+        if evidence:
+            result['search_evidence'] = evidence
+        return result
 
     requested = list(raw.get('via_points') or []) + list(raw.get('stops') or [])
     stops = []
@@ -45,7 +51,10 @@ def context_for_plan(raw, ordered_visits):
         source = indexed[0] if len(indexed) == 1 else matches[0] if len(matches) == 1 else {}
         kind = source.get('provenance') if isinstance(source, dict) else None
         stop = visit if isinstance(visit, dict) else {}
+        from voyagr.services.routing.endpoint_resolution import search_evidence
+        stop_evidence = search_evidence(source.get('search_evidence') if isinstance(source, dict) else None, point)
         stops.append({'coordinates': point, 'kind': _kind(kind),
+                      **({'search_evidence': stop_evidence} if stop_evidence else {}),
                       **({'source_kind': _kind(source.get('source_kind'))} if isinstance(source, dict) and _kind(source.get('source_kind')) != 'unknown' else {}),
                       'name': str(stop.get('name') or 'Journey stop')[:120],
                       'duration_minutes': stop.get('duration', stop.get('duration_minutes', 0)),

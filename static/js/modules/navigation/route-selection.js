@@ -1845,6 +1845,7 @@
             route_comparison: route.route_comparison,
             avoidance_intent_token: route.avoidance_intent_token,
             journey_context: route.journey_context,
+            endpoint_resolution: route.endpoint_resolution,
             avoidance_assessment: route.avoidance_assessment,
             avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
             avoidance_tradeoff: route.avoidance_tradeoff,
@@ -1891,6 +1892,7 @@
             route_comparison: data.route_comparison,
             avoidance_intent_token:data.avoidance_intent_token,
             journey_context:data.journey_context,
+            endpoint_resolution:data.endpoint_resolution,
             avoidance_assessment:data.avoidance_assessment,
             avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
         }];
@@ -2486,6 +2488,7 @@
                 route_comparison: sel.route_comparison,
                 avoidance_intent_token: sel.avoidance_intent_token,
                 journey_context: sel.journey_context,
+                endpoint_resolution: sel.endpoint_resolution,
                 durable_journey_id:sel.durable_journey_id,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
@@ -2519,6 +2522,7 @@
             route_comparison: route.route_comparison,
             avoidance_intent_token: route.avoidance_intent_token,
             journey_context: route.journey_context,
+            endpoint_resolution: route.endpoint_resolution,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
             geometry_precision: Number.isFinite(route.geometry_precision)

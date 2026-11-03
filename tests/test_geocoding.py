@@ -832,3 +832,19 @@ class TestPostcodesIoHelper:
         assert len(results) == 1
         assert results[0]['name'] == 'LS1'
         assert 'Leeds' in results[0]['display_name']
+
+
+def test_tomtom_preserves_bounded_entrances_without_relocating_search_position():
+    from unittest.mock import Mock
+    from voyagr.api.search import _tomtom_geocode
+    entries = [{'position': {'lat': 53.81, 'lon': -1.56}, 'type': 'main'},
+               {'position': {'lat': True, 'lon': -1}}, {'position': {'lat': 100, 'lon': 0}}]
+    response = Mock(status_code=200)
+    response.json.return_value = {'results': [{'id': 'poi-ref', 'type': 'POI',
+        'position': {'lat': 53.8, 'lon': -1.55}, 'poi': {'name': 'Shop'}, 'entryPoints': entries}]}
+    with patch.dict('os.environ', {'TOMTOM_API_KEY': 'test-key'}), patch('voyagr.api.search.requests.get', return_value=response):
+        result = _tomtom_geocode('Shop Leeds', 5)[0]
+    assert result['lat'] == '53.8' and result['lon'] == '-1.55'
+    assert result['id'] == 'poi-ref'
+    assert result['entry_points'] == [{'lat': 53.81, 'lon': -1.56, 'type': 'main'}]
+    assert 'access_verified' not in result

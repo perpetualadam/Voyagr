@@ -302,6 +302,19 @@ def _tomtom_geocode(query: str, limit: int) -> list:
                 'address': address_obj,
                 '_source': 'tomtom',
             }
+            if isinstance(r.get('id'), str) and len(r['id']) <= 128:
+                entry['id'] = r['id']
+            if isinstance(r.get('entryPoints'), list):
+                entry['entry_points'] = []
+                for candidate in r['entryPoints'][:8]:
+                    position = candidate.get('position') if isinstance(candidate, dict) else None
+                    if not isinstance(position, dict):
+                        continue
+                    lat, lon = position.get('lat'), position.get('lon')
+                    if (all(isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) for n in (lat, lon))
+                            and abs(lat) <= 90 and abs(lon) <= 180):
+                        entry['entry_points'].append({'lat': lat, 'lon': lon,
+                            'type': candidate['type'][:40] if isinstance(candidate.get('type'), str) else 'unknown'})
             if rclass:
                 entry['class'] = rclass
             results.append(entry)

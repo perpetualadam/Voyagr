@@ -224,6 +224,8 @@ function showRestoredRoutePreview(payload) {
         var point=endpoint && root.VoyagrJourneyPlan && root.VoyagrJourneyPlan.coordinate(endpoint.coordinates);
         input.dataset.journeySource=endpoint&&endpoint.kind||'unknown';
         input.dataset.journeyOriginalSource=endpoint&&endpoint.source_kind||'unknown';
+        if(endpoint&&endpoint.search_evidence)input.dataset.journeySearchEvidence=JSON.stringify(endpoint.search_evidence);
+        else delete input.dataset.journeySearchEvidence;
         if(point){input.dataset.lat=String(point[0]);input.dataset.lon=String(point[1]);}
         else{delete input.dataset.lat;delete input.dataset.lon;}
         input.dataset.displayName=input.value;
