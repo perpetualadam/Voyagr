@@ -254,3 +254,15 @@ test('journey chooser displays endpoint gaps and preserves the selected planning
     expect(runtime.fetch).not.toHaveBeenCalled();
     expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
 });
+
+test('GPS recalculation carries the explicit arrival and retained city as distinct context',async()=>{
+    const route=selected();
+    route.journey_context.arrival_choice={version:1,target:Plan.coordinate(route.destination),requested_destination:{coordinates:[53.5227681,-1.1335312],kind:'searched',label:'Doncaster'}};
+    preview(route);
+    expect(await Modes.navigateFromGPS()).toBe(true);
+    const body=JSON.parse(runtime.fetch.mock.calls[0][1].body);
+    expect(body.end).toBe(route.destination);
+    expect(body.journey_context.arrival_choice.requested_destination.label).toBe('Doncaster');
+    expect(body.journey_context.arrival_choice.target).toEqual(Plan.coordinate(route.destination));
+    expect(body.journey_context.purpose).toBe('live_gps');
+});

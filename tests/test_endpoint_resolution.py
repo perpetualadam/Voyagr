@@ -332,3 +332,87 @@ process.stdout.write(JSON.stringify(RS.buildRouteOptionsFromApiResponse(payload,
     assert 'An entrance reference aligns' in rows[0]['summary']
     assert all('cannot be corroborated' in row['summary'] for row in rows[1:])
     assert all(not row['allowed'] and row['arrival']['navigation_authority'] == 'NONE' for row in rows)
+
+
+def choice_body():
+    raw = body()
+    raw['end'] = ','.join(map(str, anchor_point()))
+    raw['journey_context']['destination'] = {'kind': 'searched', 'label': 'Car park entrance'}
+    raw['journey_context']['arrival_choice'] = {'version': 1, 'target': anchor_point(),
+        'requested_destination': dict(coordinates=END, kind='searched', label='Doncaster', search_evidence=metadata(END)),
+        'verified': True, 'navigation_authority': 'FULL'}
+    return raw
+
+
+def test_explicit_arrival_retains_original_destination_but_assesses_route_to_chosen_target():
+    result = post(choice_body())
+    context = result['journey_context']
+    assert context['destination']['coordinates'] == anchor_point()
+    assert context['destination']['label'] == 'Car park entrance'
+    choice = context['arrival_choice']
+    assert choice['requested_destination']['coordinates'] == END
+    assert choice['requested_destination']['label'] == 'Doncaster'
+    assert choice['navigation_authority'] == 'NONE' and choice['onward_connection'] == 'NOT_EVALUATED'
+    assert choice['authority'] == 'request_metadata_only' and 'verified' not in choice
+    for route in result['routes']:
+        assert route['journey_context']['arrival_choice'] == choice
+        assert route['endpoint_resolution']['arrival_choice'] == choice
+    # End continuity is evaluated against the chosen arrival, never the city point.
+    assert result['routes'][0]['endpoint_resolution']['destination']['offset_m'] == 0
+    assert result['routes'][0]['avoidance_assessment']['origin_integrity']['destination_displacement_m'] == 0
+    assert result['routes'][0]['avoidance_assessment']['origin_integrity']['navigation_allowed'] is False
+
+
+@pytest.mark.parametrize('change', [{'version': True}, {'version': 2}, {'target': [0, 0]},
+                                   {'requested_destination': {'coordinates': [True, 0]}},
+                                   {'requested_destination': {'coordinates': [91, 0]}}])
+def test_malformed_or_stale_arrival_choices_cannot_be_retained(change):
+    raw = choice_body();raw['journey_context']['arrival_choice'].update(change)
+    result = post(raw)
+    assert 'arrival_choice' not in result['journey_context']
+    assert result['journey_context']['destination']['coordinates'] == anchor_point()
+
+
+def test_round_trip_does_not_reuse_one_way_arrival_choice():
+    raw = choice_body();raw['round_trip'] = True
+    result = post(raw)
+    assert 'arrival_choice' not in result['journey_context']
+    assert result['journey_context']['destination']['coordinates'] == START
+
+
+def test_mandatory_requirements_still_apply_to_explicit_arrival_route():
+    raw = choice_body()
+    raw['avoidance_requirements'] = [{'category': 'speed_cameras', 'mode': 'mandatory', 'enabled': True}]
+    with patch('voyagr.services.hazards.CAMERA_AREAS_DATA', None):
+        result = post(raw)
+    assert 'arrival_choice' in result['journey_context']
+    assert all(not route['avoidance_assessment']['automatic_selection_allowed'] for route in result['routes'])
+
+
+def test_explicit_arrival_http_response_is_visible_in_real_safety_display():
+    import subprocess
+    result = post(choice_body())
+    script = r"""
+const fs=require('fs');
+const elements={routePlanningNotice:{textContent:''},routeAvoidanceNotice:{textContent:''}};
+const button={dataset:{},setAttribute:()=>{}};
+global.document={getElementById:id=>elements[id]||null,querySelectorAll:()=>[button]};
+global.localStorage={getItem:()=>null};global.navigator={onLine:true};
+const AI=require('./static/js/modules/navigation/avoidance-integrity.js');
+const UX=require('./static/js/app/navigation-safety-ux.js');
+const RS=require('./static/js/modules/navigation/route-selection.js');
+const codec=require('./static/js/modules/navigation/polyline-codec.js');
+const payload=JSON.parse(fs.readFileSync(0,'utf8'));
+const route=RS.buildRouteOptionsFromApiResponse(payload,codec.decodePolyline)[0];
+UX.present(route);
+const result={planning:document.getElementById('routePlanningNotice').textContent,
+ safety:document.getElementById('routeAvoidanceNotice').textContent,
+ disabled:button.disabled};UX.reset();
+process.stdout.write(JSON.stringify(result));
+"""
+    row = json.loads(subprocess.run(['node', '-e', script], input=json.dumps(result), text=True,
+                                   capture_output=True, cwd=Path(__file__).resolve().parents[1], check=True).stdout)
+    assert 'chosen arrival point' in row['planning']
+    assert 'original destination is retained' in row['planning']
+    assert 'Navigation cannot start' in row['safety']
+    assert row['disabled']

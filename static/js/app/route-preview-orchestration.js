@@ -230,6 +230,7 @@ function showRestoredRoutePreview(payload) {
         else{delete input.dataset.lat;delete input.dataset.lon;}
         input.dataset.displayName=input.value;
     });
+    if(root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.restoreArrival(payload.journey_context,end,document.getElementById('drivingArrival'));
     var gpsToggle=document.getElementById('autoGpsToggle');if(gpsToggle)gpsToggle.checked=false;
     showRoutePreview(payload);
     rt().call.showStatus('Saved journey is preview only. Recalculate from your actual location and destination before navigation.', 'warning');
@@ -247,6 +248,8 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const restored=!!(routeData && routeData.navigation_resume_requires_fresh_gps);
     const integrity = restored ? null : root.VoyagrAvoidanceIntegrity;
     const notice = document.getElementById('routeAvoidanceNotice');
+    const planningNotice=document.getElementById('routePlanningNotice');
+    if(planningNotice)planningNotice.textContent=integrity?integrity.planningSummary(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex())):'';
     if (notice && restored) {
         notice.textContent='Saved journey is preview only; navigation cannot start. Recalculate from your actual location and destination.';
     } else if (notice && integrity) {

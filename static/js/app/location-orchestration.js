@@ -8,6 +8,7 @@
     var runtime = null;
     var endpointGenerations={start:0,end:0};
     function invalidateEndpointRequests(field,options){
+        if(field==='end'&&!(options&&options.keepArrival)&&root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
         if(field==='start'||field==='end')endpointGenerations[field]++;
         else if(field===undefined){endpointGenerations.start++;endpointGenerations.end++;}
         if(!(options&&options.endpointOnly)&&(field===undefined||field==='start'||field==='end')&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.endpointChanged)root.VoyagrJourneyModes.endpointChanged(field);
@@ -111,6 +112,7 @@
     }
 
     function swapStartAndDestination() {
+        if(root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
         invalidateEndpointRequests();
         const startInput = document.getElementById('start');
         const endInput = document.getElementById('end');

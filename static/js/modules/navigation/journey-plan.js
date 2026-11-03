@@ -42,6 +42,40 @@
         return {version:1,purpose:'planning',origin:endpoint(startInput,body.start),destination:endpoint(endInput,body.end),
             stops:(body.stops||[]).map(function(s){return {kind:KINDS.indexOf(s.provenance)>=0?s.provenance:'unknown',coordinates:[s.lat,s.lon]};})};
     }
+    function destinationKey(input){return JSON.stringify([input&&input.value,input&&input.dataset.lat,input&&input.dataset.lon]);}
+    function clearArrival(){
+        var input=typeof document!=='undefined'&&document.getElementById('drivingArrival');
+        if(input){input.value='';Object.keys(input.dataset).forEach(function(key){delete input.dataset[key];});}
+        var dropdown=typeof document!=='undefined'&&document.getElementById('autocomplete_drivingArrival');
+        if(dropdown)dropdown.classList.remove('show');
+    }
+    function applyDrivingArrival(body,startInput,endInput,arrivalInput){
+        var context=requestContext(body,startInput,endInput);
+        if(!arrivalInput||!arrivalInput.value.trim())return context;
+        if(body.round_trip)throw Error('Clear the driving arrival point for a round trip.');
+        var point=coordinate([Number(arrivalInput.dataset.lat),Number(arrivalInput.dataset.lon)]);
+        if(!point||!arrivalInput.dataset.lat||!arrivalInput.dataset.lon||arrivalInput.dataset.displayName!==arrivalInput.value||
+            arrivalInput.dataset.arrivalFor!==destinationKey(endInput))throw Error('Select the driving arrival point again for the current destination.');
+        var requested=Object.assign({},context.destination,{label:String(endInput.value).slice(0,120)});
+        body.end=point.join(',');
+        context.destination=Object.assign(endpoint(arrivalInput,body.end),{label:arrivalInput.value.slice(0,120)});
+        context.arrival_choice={version:1,target:point,requested_destination:requested};
+        return context;
+    }
+    function restoreArrival(context,endInput,arrivalInput){
+        clearArrival();
+        var choice=context&&context.arrival_choice,original=choice&&choice.requested_destination;
+        var target=context&&context.destination,point=target&&coordinate(target.coordinates),requested=original&&coordinate(original.coordinates);
+        if(!endInput||!arrivalInput||!choice||choice.version!==1||!point||!requested||JSON.stringify(choice.target)!==JSON.stringify(point))return;
+        [[endInput,original,requested],[arrivalInput,target,point]].forEach(function(row){
+            row[0].value=row[1].label||row[2].join(',');row[0].dataset.lat=String(row[2][0]);row[0].dataset.lon=String(row[2][1]);
+            row[0].dataset.displayName=row[0].value;row[0].dataset.journeySource=row[1].kind||'unknown';
+            row[0].dataset.journeyOriginalSource=row[1].source_kind||'unknown';
+            delete row[0].dataset.journeySearchEvidence;
+            if(row[1].search_evidence)row[0].dataset.journeySearchEvidence=JSON.stringify(row[1].search_evidence);
+        });
+        arrivalInput.dataset.arrivalFor=destinationKey(endInput);
+    }
     function inspection(route,integrity){
         var points=integrity.geometryPoints(route);
         if(!points||route.geometry_complete===false)throw Error('Complete route geometry is unavailable. Recalculate before animating this journey.');
@@ -94,8 +128,8 @@
                 original_index:stop.original_index===undefined?i:stop.original_index,provenance:KINDS.indexOf(stop.kind)>=0?stop.kind:'unknown'},KINDS.indexOf(stop.source_kind)>=0&&stop.source_kind!=='unknown'?{source_kind:stop.source_kind}:{}));
         });
         return {destination:destinationText,destinationName:route.destinationName||destinationText,stops:preserved,
-            destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
+            arrivalChoice:context&&context.arrival_choice,destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
     }
-    var api={searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
+    var api={destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyPlan=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -108,3 +108,83 @@ test.each([
     expect(AI.planningSummary(route)).not.toContain('Destination arrival:');
     expect(AI.decision(route).allowed).toBe(false);
 });
+
+function chooseDrivingArrival(){
+    document.body.insertAdjacentHTML('beforeend','<input id="drivingArrival"><div id="autocomplete_drivingArrival"></div>');
+    Geo.selectAutocompleteResult('end',53.5227681,-1.1335312,'Doncaster','searched',{...result(),name:'Doncaster'});
+    Geo.displayAutocompleteResults('drivingArrival',[{lat:'53.52296',lon:'-1.13341',name:'Selected car park entrance',class:'amenity',type:'parking'}]);
+    document.querySelector('#autocomplete_drivingArrival .autocomplete-item').click();
+    return document.getElementById('drivingArrival');
+}
+test('explicit car park selection routes to the choice and retains the original city',()=>{
+    const input=chooseDrivingArrival(),body={start:'53,-1',end:'53.5227681,-1.1335312'};
+    const context=Plan.applyDrivingArrival(body,document.getElementById('start'),document.getElementById('end'),input);
+    expect(body.end).toBe('53.52296,-1.13341');
+    expect(context.destination.coordinates).toEqual([53.52296,-1.13341]);
+    expect(context.arrival_choice.requested_destination).toMatchObject({label:'Doncaster',coordinates:[53.5227681,-1.1335312]});
+    expect(document.getElementById('end').value).toBe('Doncaster');
+    expect(input.value).toBe('Selected car park entrance');
+});
+test('edited, stale or unselected arrival text cannot silently change the route',()=>{
+    const input=chooseDrivingArrival(),end=document.getElementById('end');
+    const body={start:'53,-1',end:'53.5227681,-1.1335312'};
+    end.value='Different destination';
+    expect(()=>Plan.applyDrivingArrival(body,null,end,input)).toThrow(/Select the driving arrival/);
+    expect(body.end).toBe('53.5227681,-1.1335312');
+    end.value='Doncaster';input.value='Unselected typed entrance';
+    expect(()=>Plan.applyDrivingArrival(body,null,end,input)).toThrow(/Select the driving arrival/);
+    expect(()=>Plan.applyDrivingArrival({...body,round_trip:true},null,end,input)).toThrow(/round trip/);
+});
+test('selecting a different destination clears arrival and ordinary destination behavior returns',()=>{
+    const input=chooseDrivingArrival();
+    Geo.selectAutocompleteResult('end',54,-2,'Another place');
+    expect(input.value).toBe('');
+    const body={start:'53,-1',end:'54,-2'};
+    expect(Plan.applyDrivingArrival(body,null,document.getElementById('end'),input).arrival_choice).toBeUndefined();
+    expect(body.end).toBe('54,-2');
+});
+test('saved arrival context restores separate fields and live intent retains the chosen route target',()=>{
+    const input=chooseDrivingArrival(),end=document.getElementById('end');
+    const body={start:'53,-1',end:'53.5227681,-1.1335312'};
+    const context=Plan.applyDrivingArrival(body,null,end,input);context.ordered_stops=[];
+    const intent=Plan.liveIntent({destination:body.end,journey_context:context},false,0);
+    expect(intent.destination).toBe('53.52296,-1.13341');
+    expect(intent.arrivalChoice.requested_destination.coordinates).toEqual([53.5227681,-1.1335312]);
+    Plan.clearArrival();end.value='Unrelated';Plan.restoreArrival(context,end,input);
+    expect(end.value).toBe('Doncaster');expect(input.value).toBe('Selected car park entrance');
+    const next={start:'53,-1',end:'53.5227681,-1.1335312'};
+    expect(Plan.applyDrivingArrival(next,null,end,input).arrival_choice).toEqual(context.arrival_choice);
+});
+test('safety display refresh preserves a separate planning notice without enabling navigation',()=>{
+    jest.useFakeTimers();
+    const UX=require('../app/navigation-safety-ux.js');
+    document.body.innerHTML='<p id="routeAvoidanceNotice"></p><p id="routePlanningNotice"></p><p id="navigationStartExplanation"></p><button data-navigation-start></button>';
+    global.VoyagrAvoidanceIntegrity=AI;
+    const route=attach(JSON.parse(JSON.stringify(capture.routes[0])));
+    route.endpoint_resolution.arrival_choice={version:1,authority:'request_metadata_only',navigation_authority:'NONE'};
+    UX.present(route);jest.advanceTimersByTime(1100);
+    expect(document.getElementById('routePlanningNotice').textContent).toContain('chosen arrival point');
+    expect(document.getElementById('routePlanningNotice').textContent).toContain('onward connection is not included');
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Navigation cannot start');
+    expect(document.querySelector('[data-navigation-start]').disabled).toBe(true);
+    UX.reset();jest.useRealTimers();
+});
+test('deviation rerouting preserves the driving target even when the destination field is the city',()=>{
+    const route=JSON.parse(JSON.stringify(capture.routes[0]));
+    route.destination='53.52296,-1.13341';route.journey_context={destination:{kind:'searched',coordinates:[53.52296,-1.13341]},ordered_stops:[],arrival_choice:{version:1,target:[53.52296,-1.13341],requested_destination:{coordinates:[53.5227681,-1.1335312]}}};
+    global.VoyagrJourneyPlan=Plan;global.lastCalculatedRoute=route;
+    const body=AI.augment({is_reroute:true,start:'53,-1',end:'53.5227681,-1.1335312'},localStorage);
+    expect(body.end).toBe('53.52296,-1.13341');
+    expect(body.journey_context.arrival_choice.requested_destination.coordinates).toEqual([53.5227681,-1.1335312]);
+    delete global.lastCalculatedRoute;
+});
+test('map/GPS destination changes clear the old arrival, while arrival selection retains itself',()=>{
+    const previous=global.VoyagrLocationOrchestration;
+    const Location=require('../app/location-orchestration.js');global.VoyagrLocationOrchestration=Location;
+    try{
+        const input=chooseDrivingArrival();
+        expect(input.value).toBe('Selected car park entrance');
+        Location.invalidateEndpointRequests('end');
+        expect(input.value).toBe('');expect(input.dataset.arrivalFor).toBeUndefined();
+    }finally{global.VoyagrLocationOrchestration=previous;}
+});
