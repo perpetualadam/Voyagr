@@ -256,3 +256,13 @@ test('actual attached refused response cannot replace the active journey',async(
  actualReportedResponse();const before=ctx.snapshot();await Calc.calculateRoute();
  expect(ctx.snapshot()).toBe(before);expect(confirm).not.toHaveBeenCalled();
 });
+
+test('unselected arrival is a handled warning and retains the active journey',async()=>{
+ document.body.insertAdjacentHTML('beforeend','<input id="drivingArrival" value="unselected car park">');
+ const before=ctx.snapshot();
+ await expect(Calc.calculateRoute()).resolves.toBe(false);
+ expect(ctx.snapshot()).toBe(before);expect(fetch).not.toHaveBeenCalled();
+ expect(ctx.status).toHaveBeenLastCalledWith(expect.stringContaining('Select the driving arrival point again'),'warning');
+ expect(ctx.status.mock.calls.at(-1)[0]).toContain('Previous journey retained');
+ expect(confirm).not.toHaveBeenCalled();
+});

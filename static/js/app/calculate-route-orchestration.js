@@ -582,6 +582,7 @@
         var planningToken=modes&&modes.captureIntent();
         var integrity = root.VoyagrAvoidanceIntegrity;
         var ticket = integrity ? integrity.begin(localStorage) : null;
+        try {
         var RR = rt().routingRequest();
         var startInput = document.getElementById('start');
         var endInput = document.getElementById('end');
@@ -626,7 +627,7 @@
         console.log(requestLog.viaPointsLogMessage);
         console.log(requestLog.multiDropLogMessage);
 
-        return fetch(fetchPlan.apiPath, {
+        return await fetch(fetchPlan.apiPath, {
             ...(integrity ? integrity.fetchOptions(ticket) : {}),
             method: fetchPlan.method,
             headers: fetchPlan.headers,
@@ -665,7 +666,14 @@
                     RR.buildCalculateRouteFetchErrorApplyPlan(error),
                     error
                 );
-            }).finally(function() { if (integrity) integrity.finish(ticket); });
+            });
+        } catch(error) {
+            if(!integrity||integrity.current(ticket,localStorage)){
+                hideRouteProgressBar();
+                rt().call.showStatus((error&&error.message?error.message:'Route request could not be prepared.')+' Previous journey retained.','warning');
+            }
+            return false;
+        } finally { if(integrity)integrity.finish(ticket); }
     }
 
     function bind(nextRuntime) {

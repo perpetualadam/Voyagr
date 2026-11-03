@@ -182,13 +182,21 @@ def _nominatim_search(params: dict, headers: dict) -> tuple:
     """Run Nominatim /search; returns (results, http_ok)."""
     url = f"{NOMINATIM_BASE_URL}/search"
     _nominatim_email_params(params)
-    resp = requests.get(url, params=params, headers=headers, timeout=10)
-    if resp.status_code != 200:
-        logger.warning(f"[Geocode] Nominatim HTTP {resp.status_code} params={list(params.keys())}")
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            logger.warning('[Geocode] Nominatim HTTP %s', resp.status_code)
+            return [], False
+        raw = resp.json()
+    except (requests.RequestException, ValueError) as error:
+        # Expected upstream failures must still allow the existing fallback chain.
+        # Do not expose provider URLs, query text or exception details to clients.
+        logger.warning('[Geocode] Nominatim unavailable (%s)', type(error).__name__)
         return [], False
-    raw = resp.json()
-    data = raw if isinstance(raw, list) else []
-    return data, True
+    if not isinstance(raw, list) or any(not isinstance(item, dict) for item in raw):
+        logger.warning('[Geocode] Nominatim returned an invalid result list')
+        return [], False
+    return raw, True
 
 
 def _tomtom_category_class(categories: list) -> tuple:

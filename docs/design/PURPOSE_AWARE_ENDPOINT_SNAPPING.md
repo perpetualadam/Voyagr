@@ -270,3 +270,21 @@ arrival fields separately. GPS recalculation and deviation rerouting retain the
 arrival target and original place, with existing cancellation and ownership rules.
 A separate planning notice prevents the periodically refreshed navigation-safety
 warning from overwriting endpoint/arrival information.
+
+### Arrival search resilience
+
+Route preparation failures, including an unselected arrival, now produce an
+on-screen warning and release their request ticket on all exit paths. They do
+not send a route request, replace the active journey or change safety authority.
+Autocomplete aborts superseded requests and rejects stale responses by generation
+and input identity. Provider failures show retry guidance, separately from valid
+empty results. Nominatim transport, JSON and result-list errors are classified as
+provider unavailability so existing retries/fallbacks can run; provider exception
+content is not returned for those expected errors.
+
+For generic car-park/parking searches in the arrival field, returned candidates
+are ordered by straight-line proximity to the currently selected destination.
+Distances are labeled explicitly; they are not driving or walking distances.
+Specific-name searches retain provider ordering. The candidate set still comes
+from the existing search service: this is no exhaustive nearby parking search,
+entrance verification, availability check or automatic selection.
