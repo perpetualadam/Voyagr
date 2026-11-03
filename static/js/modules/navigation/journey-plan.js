@@ -12,10 +12,31 @@
         var h=Math.sin(dy/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dx/2)**2;
         return 12742000*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
     }
+    function searchEvidence(result,lat,lon){
+        var point=coordinate([lat,lon]);
+        if(!result||typeof result!=='object'||!point)return null;
+        var type=String(result.addresstype||result.type||'').toLowerCase().replace(/\s/g,''),category=String(result.class||'');
+        var semantic=['city','town','village','hamlet','municipality','county','state','country','administrative','suburb'].indexOf(type)>=0?'locality':
+            ['address','pointaddress','addressrange','house','building'].indexOf(type)>=0?'address':
+            ['road','residential','motorway','primary','secondary','tertiary'].indexOf(type)>=0?'road':
+            type==='poi'||['amenity','shop','office','tourism','leisure'].indexOf(category)>=0?'poi':'unknown';
+        var provider=result._source==='tomtom'?'tomtom':result._source==='nominatim'||result.osm_type||result.place_id?'nominatim':'unknown';
+        var value={version:1,coordinates:point,semantic_class:semantic,provider:provider};
+        var ref=result.osm_id!==undefined?String(result.osm_type||'')+':'+String(result.osm_id):result.id!==undefined?String(result.id):result.place_id!==undefined?String(result.place_id):null;
+        if(ref&&ref.length<=128)value.provider_ref=ref;
+        var box=result.boundingbox;
+        if(Array.isArray(box)&&box.length===4&&box.every(function(x){return (typeof x==='number'||typeof x==='string'&&x.trim()!=='')&&Number.isFinite(Number(x));})){
+            var b=box.map(Number);if(b[0]>=-90&&b[1]<=90&&b[0]<=b[1]&&b[2]>=-180&&b[3]<=180&&b[2]<=b[3])value.bounds=[b[0],b[2],b[1],b[3]];
+        }
+        if(Array.isArray(result.entry_points))value.entry_points=result.entry_points.slice(0,8).filter(function(e){return e&&coordinate([e.lat,e.lon]);}).map(function(e){return {coordinates:[e.lat,e.lon],type:typeof e.type==='string'?e.type.slice(0,40):'unknown'};});
+        return value;
+    }
     function endpoint(input,value){
         var data=input&&input.dataset||{},kind=KINDS.indexOf(data.journeySource)>=0?data.journeySource:coordinate(input&&input.value)?'coordinates':'searched';
         if(kind==='searched'&&coordinate(input&&input.value))kind='coordinates';
-        return Object.assign({kind:kind,coordinates:coordinate(value)},KINDS.indexOf(data.journeyOriginalSource)>=0&&data.journeyOriginalSource!=='unknown'?{source_kind:data.journeyOriginalSource}:{});
+        var result=Object.assign({kind:kind,coordinates:coordinate(value)},KINDS.indexOf(data.journeyOriginalSource)>=0&&data.journeyOriginalSource!=='unknown'?{source_kind:data.journeyOriginalSource}:{});
+        try{var evidence=JSON.parse(data.journeySearchEvidence||'null');if(kind==='searched'&&evidence&&evidence.version===1&&JSON.stringify(evidence.coordinates)===JSON.stringify(result.coordinates))result.search_evidence=evidence;}catch(_){}
+        return result;
     }
     function requestContext(body,startInput,endInput){
         return {version:1,purpose:'planning',origin:endpoint(startInput,body.start),destination:endpoint(endInput,body.end),
@@ -75,6 +96,6 @@
         return {destination:destinationText,destinationName:route.destinationName||destinationText,stops:preserved,
             destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
     }
-    var api={coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
+    var api={searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyPlan=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -79,8 +79,15 @@ def register_avoidance_integrity(app):
             from voyagr.services.routing.journey_context import context_for_plan
             import copy
             result['journey_context'] = context_for_plan(raw, visits)
-            for route in result.get('routes') or []:
+            from voyagr.services.routing.endpoint_resolution import resolve_endpoints
+            result.pop('endpoint_resolution', None)
+            endpoint_routes = result.get('routes') if isinstance(result.get('routes'), list) else [result] if result.get('geometry') else []
+            for route in endpoint_routes:
                 route['journey_context'] = copy.deepcopy(result['journey_context'])
+                with route_transport.stage('origin_validation'):
+                    route['endpoint_resolution'] = resolve_endpoints(route, result['journey_context'])
+            if endpoint_routes and endpoint_routes[0] is not result:
+                result['endpoint_resolution'] = copy.deepcopy(endpoint_routes[0]['endpoint_resolution'])
 
         except route_transport.RoutingDeadlineExceeded:
             return route_transport.deadline_response()
@@ -93,8 +100,11 @@ def register_avoidance_integrity(app):
                                                 'automatic_selection_allowed':False,'geometry_valid':False,'requirements':requirements,
                                                 'origin_integrity_required':True, 'origin_integrity':{'navigation_allowed':False,'status':'UNVERIFIED'}},
                           routing_warning='Avoidance verification unavailable; do not automatically select this route.')
+            result.pop('endpoint_resolution', None)
             for route in result.get('routes') or []:
-                if isinstance(route,dict): route['avoidance_assessment']=result['avoidance_assessment']
+                if isinstance(route,dict):
+                    route.pop('endpoint_resolution', None)
+                    route['avoidance_assessment']=result['avoidance_assessment']
         logged_routes=result.get('routes') if isinstance(result.get('routes'),list) else []
         for route in [r for r in logged_routes if isinstance(r,dict)][:8]:
             a=route.get('avoidance_assessment',{}); o=a.get('origin_integrity',{})

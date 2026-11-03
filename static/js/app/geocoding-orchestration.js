@@ -89,7 +89,7 @@ async function showAutocomplete(fieldId, userEdit) {
     }
 
     const query = input.value.trim();
-    if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;}
+    if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;delete input.dataset.journeySearchEvidence;}
 
     if (input.dataset.lat || input.dataset.lon) {
         console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
@@ -189,7 +189,7 @@ function displayAutocompleteResults(fieldId, results) {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
         item.innerHTML = mod.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
-        item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name);
+        item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name, 'searched', result);
 
         dropdown.appendChild(item);
     });
@@ -203,7 +203,7 @@ function displayAutocompleteResults(fieldId, results) {
  * @param {*} name - Parameter description
  * @returns {*} Return value description
  */
-function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched') {
+function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched', searchResult = null) {
     if((fieldId==='start'||fieldId==='end')&&root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(fieldId);
     const input = document.getElementById(fieldId);
     const dropdown = getAutocompleteDropdown(fieldId);
@@ -223,6 +223,11 @@ function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched') 
 
     if(fieldId==='start' && root.VoyagrAutoGpsOrchestration){root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();var toggle=document.getElementById('autoGpsToggle');if(toggle)toggle.checked=false;}
     input.dataset.journeySource=source;delete input.dataset.journeyOriginalSource;
+    delete input.dataset.journeySearchEvidence;
+    if(source==='searched'&&searchResult&&root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.searchEvidence){
+        var evidence=root.VoyagrJourneyPlan.searchEvidence(searchResult,lat,lon);
+        if(evidence)input.dataset.journeySearchEvidence=JSON.stringify(evidence);
+    }
     input.value = name;
     input.dataset.lat = lat;
     input.dataset.lon = lon;

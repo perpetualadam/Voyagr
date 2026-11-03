@@ -302,7 +302,7 @@
         (data.routes || []).forEach(function(route) { route.avoidance_preferences_snapshot=ticket.snapshot;if(ticket.intentToken!=null)route.avoidance_intent_token=ticket.intentToken; });
         return data;
     }
-    function summary(route) {
+    function navigationSummary(route) {
         var a=route && route.avoidance_assessment;
         var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
         var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
@@ -316,8 +316,22 @@
             '. Map coverage, road association and data age may be limited.'+
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
+    function planningSummary(route) {
+        var record=route&&route.endpoint_resolution,assessment=route&&route.avoidance_assessment;
+        if(!record||record.version!==1||record.authority!=='planning_evidence_only'||record.navigation_authority!=='NONE'||
+            !assessment||!assessment.geometry_binding||record.geometry_binding!==assessment.geometry_binding||
+            !record.origin||!record.destination)return '';
+        var gaps=[];
+        [['origin','Start'],['destination','Destination']].forEach(function(pair){
+            var meters=record[pair[0]].offset_m;
+            if(Number.isFinite(meters)&&meters>=0)gaps.push(pair[1]+' offset: about '+Math.round(meters)+' m');
+        });
+        return (record.planning_disposition==='ROAD_SNAPPED'?'Road-snapped planning endpoints. ':'Planning endpoint access needs review. ')+
+            (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. ';
+    }
+    function summary(route) { return planningSummary(route)+navigationSummary(route); }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,planningSummary:planningSummary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);
