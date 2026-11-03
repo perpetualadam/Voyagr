@@ -316,6 +316,21 @@
             '. Map coverage, road association and data age may be limited.'+
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
+    function arrivalSummary(endpoint, label) {
+        var arrival=endpoint&&endpoint.arrival_access;
+        if(!arrival||arrival.version!==1||arrival.policy!=='arrival-reference-correspondence-v1'||
+            arrival.authority!=='planning_evidence_only'||arrival.navigation_authority!=='NONE'||
+            arrival.selection!=='NONE'||arrival.vehicle_access!=='UNKNOWN'||arrival.connector!=='NOT_EVALUATED')return '';
+        var messages={
+            NO_REFERENCE:'No entrance reference is available.',
+            AMBIGUOUS_REFERENCES:'Multiple entrance references need review; none is selected.',
+            REFERENCE_OUTSIDE_DECLARED_BOUNDS:'The entrance reference is outside the declared place boundary; review the arrival point.',
+            UNCORROBORATED_ANCHOR:'Entrance correspondence cannot be corroborated with native route-snap evidence.',
+            ANCHOR_ALIGNED_REFERENCE:'An entrance reference aligns with the routed endpoint; vehicle access remains unverified.',
+            DIFFERENT_ROUTING_ANCHOR:'The entrance reference differs from the routed endpoint; a route to that point has not been checked.'
+        };
+        return Object.prototype.hasOwnProperty.call(messages,arrival.status)?label+': '+messages[arrival.status]+' ':'';
+    }
     function planningSummary(route) {
         var record=route&&route.endpoint_resolution,assessment=route&&route.avoidance_assessment;
         if(!record||record.version!==1||record.authority!=='planning_evidence_only'||record.navigation_authority!=='NONE'||
@@ -327,7 +342,9 @@
             if(Number.isFinite(meters)&&meters>=0)gaps.push(pair[1]+' offset: about '+Math.round(meters)+' m');
         });
         return (record.planning_disposition==='ROAD_SNAPPED'?'Road-snapped planning endpoints. ':'Planning endpoint access needs review. ')+
-            (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. ';
+            (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. '+
+            arrivalSummary(record.destination,'Destination arrival')+
+            (Array.isArray(record.stops)?record.stops.map(function(stop,index){return arrivalSummary(stop,'Stop '+(index+1)+' arrival');}).join(''):'');
     }
     function summary(route) { return planningSummary(route)+navigationSummary(route); }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },

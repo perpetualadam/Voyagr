@@ -1,7 +1,8 @@
 # Purpose-aware endpoint snapping: evidence inventory and implementation design
 
-Status: proposed design, 3 November 2026. Source baseline: main `fd4f3df2`.
-This document changes no runtime behavior, limits, navigation gates or deployment.
+Status: phased implementation, 3 November 2026. Original design baseline: main
+`fd4f3df2`. Implementation notes below distinguish shipped evidence contracts from
+future arrival-selection and live-authorization work. No deployment is implied.
 
 ## Problem and evidence
 
@@ -209,3 +210,39 @@ assessment-to-browser candidate preparation path, malformed/spoofed metadata,
 mandatory restrictions, ordered stops and single-route envelopes. Verified arrival
 access, road-edge identity, provider matching and fresh-GPS live authorization
 remain subsequent phases requiring their own acceptance evidence.
+
+## Arrival-reference correspondence policy, version 1
+
+The next implementation adds `arrival_access` evidence to destination and ordered
+stop records, scoped to the enclosing alternative's geometry binding. It compares
+sanitized geocoder entry references with that alternative's routing anchor. It
+never selects an entrance, relocates a request or calls an additional paid API.
+
+| Evidence | Result |
+| --- | --- |
+| No valid reference | `NO_REFERENCE` |
+| Multiple distinct reference coordinates | `AMBIGUOUS_REFERENCES` |
+| Single reference outside supplied place bounds | `REFERENCE_OUTSIDE_DECLARED_BOUNDS` |
+| Missing, geometry-only or mismatched native snap evidence | `UNCORROBORATED_ANCHOR` |
+| Single reference agrees with native-consistent anchor within the existing encoding tolerance | `ANCHOR_ALIGNED_REFERENCE` |
+| Otherwise | `DIFFERENT_ROUTING_ANCHOR` |
+
+The rules run in table order. Duplicate coordinates do not constitute competing
+entrances. Missing bounds stay unknown; they are not treated as positive coverage.
+Straight-line distances to requested and routed points are measurements only,
+never connector lengths. Provider name/reference and entrance type retain their
+`request_metadata_only` provenance. No status establishes road identity, vehicle
+profile compatibility, barrier absence, legal access or mandatory-connector
+compliance. Every result has selection `NONE`, vehicle access `UNKNOWN`, connector
+`NOT_EVALUATED` and navigation authority `NONE`.
+
+Preview notices explain correspondence or the reason review is needed, with fixed
+text rather than rendering supplied entrance labels. Unsupported policy versions
+or authority claims are not presented. Existing route and navigation gates remain
+unchanged. Regression tests cover alternatives, ordered visits, duplicate/invalid
+references, conflicting authority claims, mandatory refusals, and the HTTP response
+through the shipped browser route normalization and preview summary.
+
+Explicit arrival-point selection and rerouting, trusted access provenance and
+vehicle/connector validation remain future work. Coordinate alignment is not an
+implementation of those checks and must not be promoted into permission.

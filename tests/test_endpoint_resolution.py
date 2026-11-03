@@ -202,3 +202,133 @@ def test_mandatory_unknown_evidence_still_blocks_a_road_snapped_plan():
     assert result['endpoint_resolution']['planning_disposition'] == 'ROAD_SNAPPED'
     assert not result['automatic_selection_allowed']
     assert all(not route['avoidance_assessment']['automatic_selection_allowed'] for route in result['routes'])
+
+
+def arrival_body(entries, bounds=None):
+    raw = body()
+    evidence = raw['journey_context']['destination']['search_evidence']
+    evidence.update(provider='tomtom', semantic_class='poi', entry_points=entries)
+    if bounds is not None:
+        evidence['bounds'] = bounds
+    return raw
+
+
+def anchor_point():
+    return list(decode_geometry(CAPTURE['routes'][0]['geometry'], 6)[-1])
+
+
+def test_aligned_arrival_reference_is_correspondence_only_and_does_not_move_the_place():
+    point = anchor_point()
+    raw = arrival_body([{'coordinates': point, 'type': 'main', 'verified': True}])
+    before = copy.deepcopy(raw)
+    result = post(raw)
+    endpoint = result['routes'][0]['endpoint_resolution']['destination']
+    arrival = endpoint['arrival_access']
+    assert raw == before
+    assert arrival['status'] == 'ANCHOR_ALIGNED_REFERENCE'
+    assert arrival['version'] == 1
+    assert arrival['selection'] == 'NONE'
+    assert arrival['navigation_authority'] == 'NONE'
+    assert arrival['vehicle_access'] == 'UNKNOWN'
+    assert arrival['connector'] == 'NOT_EVALUATED'
+    assert endpoint['requested']['coordinates'] == END
+    assert endpoint['routing_anchor']['coordinates'] == point
+    assert endpoint['access_evidence'] == 'UNKNOWN'
+    assert arrival['candidates'][0]['distance_to_routing_anchor_m'] == 0
+    assert arrival['candidates'][0]['distance_to_requested_m'] == 22.793
+    assert arrival['candidates'][0]['source_authority'] == 'request_metadata_only'
+    assert 'verified' not in arrival['candidates'][0]
+    assert result['routes'][0]['geometry'] == CAPTURE['routes'][0]['geometry']
+    assert result['routes'][0]['navigation_outcome'] == 'REFUSED'
+    # Other alternatives must evaluate their own anchors and evidence.
+    assert all(r['endpoint_resolution']['destination']['arrival_access']['status'] == 'UNCORROBORATED_ANCHOR'
+               for r in result['routes'][1:])
+
+
+@pytest.mark.parametrize('entries,bounds,status', [
+    ([], None, 'NO_REFERENCE'),
+    ([{'coordinates': END}], None, 'DIFFERENT_ROUTING_ANCHOR'),
+    ([{'coordinates': [53.5, -1.1]}], [53.52, -1.14, 53.53, -1.13], 'REFERENCE_OUTSIDE_DECLARED_BOUNDS'),
+    ([{'coordinates': END}, {'coordinates': [53.5, -1.1]}], None, 'AMBIGUOUS_REFERENCES'),
+    ([{'coordinates': [True, -1]}, {'coordinates': [91, 0]}, {'coordinates': 'bad'}], None, 'NO_REFERENCE'),
+])
+def test_arrival_policy_does_not_select_or_invent_a_connector(entries, bounds, status):
+    result = post(arrival_body(entries, bounds))
+    arrival = result['endpoint_resolution']['destination']['arrival_access']
+    assert arrival['status'] == status
+    assert arrival['selection'] == 'NONE'
+    assert arrival['vehicle_access'] == 'UNKNOWN'
+    assert arrival['connector'] == 'NOT_EVALUATED'
+    assert result['endpoint_resolution']['navigation_authority'] == 'NONE'
+    assert all(not r['avoidance_assessment']['origin_integrity']['navigation_allowed'] for r in result['routes'])
+
+
+def test_duplicate_references_are_not_false_ambiguity_and_unknown_bounds_remain_unknown():
+    raw = arrival_body([{'coordinates': anchor_point(), 'type': 'main'}]*8)
+    raw['journey_context']['destination']['search_evidence'].pop('bounds')
+    arrival = post(raw)['endpoint_resolution']['destination']['arrival_access']
+    assert len(arrival['candidates']) == 1
+    assert arrival['status'] == 'ANCHOR_ALIGNED_REFERENCE'
+    assert arrival['candidates'][0]['within_declared_bounds'] is None
+    assert arrival['vehicle_access'] == 'UNKNOWN'
+
+
+def test_client_and_cached_arrival_authority_cannot_survive_reassessment():
+    payload = copy.deepcopy(CAPTURE)
+    fake = {'status': 'VERIFIED_CONNECTOR', 'selection': 'ACCEPTED', 'navigation_authority': 'FULL'}
+    for route in payload['routes']:
+        route['endpoint_resolution'] = {'destination': {'arrival_access': fake}}
+    raw = arrival_body([{'coordinates': anchor_point()}])
+    raw['journey_context']['destination']['arrival_access'] = fake
+    arrival = post(raw, payload)['endpoint_resolution']['destination']['arrival_access']
+    assert arrival['status'] == 'ANCHOR_ALIGNED_REFERENCE'
+    assert arrival['selection'] == 'NONE' and arrival['navigation_authority'] == 'NONE'
+
+
+def test_arrival_access_is_computed_for_ordered_visits_without_inventing_missing_anchors():
+    points = [[53, -1], [53.01, -1], [53.02, -1]]
+    context = {'origin': {'coordinates': points[0]}, 'destination': {'coordinates': points[-1]},
+               'ordered_stops': [{'coordinates': points[1], 'original_index': 7,
+                   'search_evidence': dict(metadata(points[1]), entry_points=[{'coordinates': points[1]}])}]}
+    route = {'source': 'GraphHopper', 'geometry': points, 'provider_snapped_waypoints': polyline.encode(points, 5),
+             'avoidance_assessment': {'geometry_valid': True},
+             'leg_geometry_ranges': [{'begin_shape_index': 0, 'end_shape_index': 1}, {'begin_shape_index': 1, 'end_shape_index': 2}]}
+    stop = resolve_endpoints(route, context)['stops'][0]
+    assert stop['original_index'] == 7
+    assert stop['arrival_access']['status'] == 'ANCHOR_ALIGNED_REFERENCE'
+    del route['leg_geometry_ranges']
+    stop = resolve_endpoints(route, context)['stops'][0]
+    assert stop['arrival_access']['status'] == 'UNCORROBORATED_ANCHOR'
+    assert stop['arrival_access']['candidates'][0]['distance_to_routing_anchor_m'] is None
+
+
+def test_arrival_reference_cannot_override_mandatory_unknown_hazards():
+    raw = arrival_body([{'coordinates': anchor_point()}])
+    raw['avoidance_requirements'] = [{'category': 'speed_cameras', 'mode': 'mandatory', 'enabled': True}]
+    with patch('voyagr.services.hazards.CAMERA_AREAS_DATA', None):
+        result = post(raw)
+    assert result['endpoint_resolution']['destination']['arrival_access']['status'] == 'ANCHOR_ALIGNED_REFERENCE'
+    assert not result['automatic_selection_allowed']
+    assert all(not r['avoidance_assessment']['automatic_selection_allowed'] for r in result['routes'])
+
+
+def test_http_arrival_evidence_reaches_browser_preview_without_changing_permission():
+    import subprocess
+    result = post(arrival_body([{'coordinates': anchor_point(), 'type': 'main'}]))
+    script = r"""
+const fs=require('fs');
+const AI=require('./static/js/modules/navigation/avoidance-integrity.js');
+const RS=require('./static/js/modules/navigation/route-selection.js');
+const codec=require('./static/js/modules/navigation/polyline-codec.js');
+const payload=JSON.parse(fs.readFileSync(0,'utf8'));
+process.stdout.write(JSON.stringify(RS.buildRouteOptionsFromApiResponse(payload,codec.decodePolyline).map(route=>({
+ summary:AI.summary(route),allowed:AI.decision(route).allowed,
+ arrival:route.endpoint_resolution.destination.arrival_access
+}))));
+"""
+    rows = json.loads(subprocess.run(['node', '-e', script], input=json.dumps(result), text=True,
+                                    capture_output=True, cwd=Path(__file__).resolve().parents[1], check=True).stdout)
+    assert len(rows) == 5
+    assert 'An entrance reference aligns' in rows[0]['summary']
+    assert all('cannot be corroborated' in row['summary'] for row in rows[1:])
+    assert all(not row['allowed'] and row['arrival']['navigation_authority'] == 'NONE' for row in rows)
