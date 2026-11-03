@@ -11,6 +11,7 @@
     var NOMINATIM_API = '/api/geocode';
     var autocompleteTimeout = null;
     var autocompleteCache = {};
+    var autocompleteGeneration=0,autocompleteController=null;
     var mapPickerMode = null;
     var isGeocoding = false;
 
@@ -72,6 +73,9 @@ function saveGeocodeCache() {
 }
 
 async function showAutocomplete(fieldId, userEdit) {
+    const generation=++autocompleteGeneration;
+    if(autocompleteController)autocompleteController.abort();
+    autocompleteController=null;
     if(userEdit&&root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(fieldId);
     if(userEdit&&fieldId==='end'&&root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
     if(userEdit&&fieldId==='drivingArrival'&&root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true});
@@ -91,6 +95,7 @@ async function showAutocomplete(fieldId, userEdit) {
     }
 
     const query = input.value.trim();
+    const ownsSearch=()=>generation===autocompleteGeneration&&document.getElementById(fieldId)===input&&input.value.trim()===query;
     if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;delete input.dataset.journeySearchEvidence;}
 
     if ((fieldId!=='drivingArrival'||userEdit)&&(input.dataset.lat || input.dataset.lon)) {
@@ -130,15 +135,18 @@ async function showAutocomplete(fieldId, userEdit) {
     dropdown.classList.add('show');
 
     autocompleteTimeout = setTimeout(async () => {
+        if(!ownsSearch())return;
         try {
             if (autocompleteCache[query]) {
                 displayAutocompleteResults(fieldId, autocompleteCache[query]);
                 return;
             }
 
+            const controller=new AbortController();autocompleteController=controller;
             const response = await fetch(
                 `${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
                 {
+                    signal:controller.signal,
                     headers: {
                         'User-Agent': 'Voyagr-PWA/1.0'
                     }
@@ -150,13 +158,16 @@ async function showAutocomplete(fieldId, userEdit) {
             }
 
             const results = await response.json();
+            if(!ownsSearch())return;
+            if(!Array.isArray(results))throw new Error('Invalid search response');
 
             autocompleteCache[query] = results;
 
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
-            console.error('[Autocomplete] Error:', error);
-            dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml(mod.AUTOCOMPLETE_SEARCH_FAILED_MESSAGE);
+            if(!ownsSearch()||error.name==='AbortError')return;
+            console.warn('[Autocomplete] Search unavailable:', error.message);
+            dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml('Search temporarily unavailable. Try again or search a named car park.');
         }
     }, 300); // 300ms debounce
 }
@@ -178,7 +189,16 @@ function displayAutocompleteResults(fieldId, results) {
     }
 
     dropdown.innerHTML = '';
-
+    const input=document.getElementById(fieldId),end=document.getElementById('end'),plan=root.VoyagrJourneyPlan;
+    const near=fieldId==='drivingArrival'&&plan&&end&&end.dataset.lat&&end.dataset.lon&&end.dataset.displayName===end.value?
+        plan.coordinate([Number(end.dataset.lat),Number(end.dataset.lon)]):null;
+    const pointOf=result=>plan&&plan.coordinate([parseFloat(result.lat),parseFloat(result.lon)]);
+    if(near&&/^\s*(?:car\s*parks?|parking)(?:\s|$)/i.test(input&&input.value||'')){
+        results=results.slice().sort((a,b)=>{
+            const pa=pointOf(a),pb=pointOf(b);
+            return (pa?plan.distance(near,pa):Infinity)-(pb?plan.distance(near,pb):Infinity);
+        });
+    }
     results.forEach((result) => {
         const icon = mod.getLocationIcon(result);
         const name = mod.resolveGeocodeResultDisplayName(result);
@@ -191,6 +211,11 @@ function displayAutocompleteResults(fieldId, results) {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
         item.innerHTML = mod.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
+        if(near&&pointOf(result)){
+            const distance=document.createElement('small');
+            distance.textContent='About '+(plan.distance(near,pointOf(result))/1000).toFixed(1)+' km from destination (straight line)';
+            item.appendChild(distance);
+        }
         item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name, 'searched', result);
 
         dropdown.appendChild(item);

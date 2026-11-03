@@ -188,3 +188,44 @@ test('map/GPS destination changes clear the old arrival, while arrival selection
         expect(input.value).toBe('');expect(input.dataset.arrivalFor).toBeUndefined();
     }finally{global.VoyagrLocationOrchestration=previous;}
 });
+
+test('generic arrival parking results favor proximity without selecting or mutating them',()=>{
+    const input=chooseDrivingArrival();input.value='car park doncaster';
+    const results=[{lat:'53.5026045',lon:'-1.0434077',name:'Old car park',type:'parking'},
+        {lat:'53.5198586',lon:'-1.1346897',name:'Civic Quarter Car Park',type:'parking'}];
+    const before=JSON.stringify(results);
+    Geo.displayAutocompleteResults('drivingArrival',results);
+    const items=[...document.querySelectorAll('#autocomplete_drivingArrival .autocomplete-item')];
+    expect(items[0].textContent).toContain('Civic Quarter');
+    expect(items[0].textContent).toContain('straight line');
+    expect(items[1].textContent).toContain('Old car park');
+    expect(input.value).toBe('car park doncaster');expect(JSON.stringify(results)).toBe(before);
+    input.value='Old car park';Geo.displayAutocompleteResults('drivingArrival',results);
+    expect(document.querySelector('#autocomplete_drivingArrival .autocomplete-item').textContent).toContain('Old car park');
+});
+test('older autocomplete responses cannot replace a newer arrival search',async()=>{
+    jest.useFakeTimers();
+    const input=chooseDrivingArrival();let release;
+    const oldFetch=global.fetch;
+    global.fetch=jest.fn().mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}))
+        .mockResolvedValueOnce({ok:true,json:async()=>[{lat:'53.52',lon:'-1.13',name:'New search result'}]});
+    try{
+        input.value='old query';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        input.value='new query';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        release({ok:true,json:async()=>[{lat:'54',lon:'-2',name:'Stale search result'}]});
+        await Promise.resolve();await Promise.resolve();
+        const dropdown=document.getElementById('autocomplete_drivingArrival');
+        expect(dropdown.textContent).toContain('New search result');expect(dropdown.textContent).not.toContain('Stale search result');
+        expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(true);
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test('search provider failure has visible retry guidance instead of a misleading empty result',async()=>{
+    jest.useFakeTimers();const input=chooseDrivingArrival(),oldFetch=global.fetch;
+    global.fetch=jest.fn().mockResolvedValue({ok:false,status:502});
+    try{
+        input.value='unavailable query';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        const text=document.getElementById('autocomplete_drivingArrival').textContent;
+        expect(text).toContain('temporarily unavailable');expect(text).toContain('Try again');expect(text).not.toContain('No results');
+        expect(input.dataset.lat).toBeUndefined();
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
