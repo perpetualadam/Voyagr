@@ -3,6 +3,7 @@ import math
 
 from voyagr.services.routing.journey_geometry import decode_geometry, distance, IncompleteJourney
 from voyagr.services.routing.origin_integrity import coordinate, CONTINUITY_M
+from voyagr.services.routing.arrival_access import assess_arrival
 
 SEMANTIC_CLASSES = {'locality', 'address', 'poi', 'road', 'unknown'}
 PROVIDERS = {'nominatim', 'tomtom', 'unknown'}
@@ -117,6 +118,8 @@ def resolve_endpoints(route, context):
         entry = _endpoint(stop, anchor, stop_native, stop_malformed, provider)
         entry['original_index'] = stop.get('original_index', i)
         out['stops'].append(entry)
+    for arrival in [*out['stops'], out['destination']]:
+        arrival['arrival_access'] = assess_arrival(arrival)
     records = [out['origin'], *out['stops'], out['destination']]
     out['planning_disposition'] = ('ROAD_SNAPPED' if all(e['planning_disposition'] == 'ROAD_SNAPPED' for e in records)
                                    else 'REVIEW_REQUIRED')

@@ -68,3 +68,43 @@ test('stale bindings and unknown record versions cannot present planning evidenc
     route.endpoint_resolution.geometry_binding=route.avoidance_assessment.geometry_binding;
     route.endpoint_resolution.version=2;expect(AI.planningSummary(route)).toBe('');
 });
+
+function arrival(status){return {version:1,policy:'arrival-reference-correspondence-v1',authority:'planning_evidence_only',navigation_authority:'NONE',selection:'NONE',vehicle_access:'UNKNOWN',connector:'NOT_EVALUATED',status};}
+test.each([
+    ['NO_REFERENCE','No entrance reference is available'],
+    ['AMBIGUOUS_REFERENCES','Multiple entrance references need review'],
+    ['REFERENCE_OUTSIDE_DECLARED_BOUNDS','outside the declared place boundary'],
+    ['UNCORROBORATED_ANCHOR','cannot be corroborated'],
+    ['ANCHOR_ALIGNED_REFERENCE','vehicle access remains unverified'],
+    ['DIFFERENT_ROUTING_ANCHOR','a route to that point has not been checked']
+])('arrival status %s appears separately from live-navigation authority',(status,message)=>{
+    const route=attach(JSON.parse(JSON.stringify(capture.routes[0])));
+    route.endpoint_resolution.destination.arrival_access=arrival(status);
+    const before=JSON.stringify(route);
+    expect(AI.planningSummary(route)).toContain('Destination arrival:');
+    expect(AI.planningSummary(route)).toContain(message);
+    expect(AI.decision(route).allowed).toBe(false);
+    expect(JSON.stringify(route)).toBe(before);
+});
+test('arrival records follow selected alternatives and ordered visits',()=>{
+    const payload=JSON.parse(JSON.stringify(capture));
+    payload.routes.forEach((route,i)=>{
+        attach(route);
+        route.endpoint_resolution.destination.arrival_access=arrival(i?'UNCORROBORATED_ANCHOR':'ANCHOR_ALIGNED_REFERENCE');
+        route.endpoint_resolution.stops=[{original_index:7,arrival_access:arrival('AMBIGUOUS_REFERENCES')}];
+    });
+    const options=RS.buildRouteOptionsFromApiResponse(payload,codec.decodePolyline);
+    const selected=RS.mergeNavigationRouteFromSelected(options[0],options,1);
+    expect(AI.planningSummary(selected)).toContain('cannot be corroborated');
+    expect(AI.planningSummary(selected)).toContain('Stop 1 arrival: Multiple entrance');
+});
+test.each([
+    {version:2},{policy:'unknown'},{authority:'verified'},
+    {navigation_authority:'FULL'},{selection:'ACCEPTED'},{vehicle_access:'VERIFIED'},
+    {connector:'VERIFIED'},{status:'<img src=x onerror=alert(1)>'}
+])('unsupported arrival claims %p are not presented as evidence',change=>{
+    const route=attach(JSON.parse(JSON.stringify(capture.routes[0])));
+    route.endpoint_resolution.destination.arrival_access={...arrival('ANCHOR_ALIGNED_REFERENCE'),...change};
+    expect(AI.planningSummary(route)).not.toContain('Destination arrival:');
+    expect(AI.decision(route).allowed).toBe(false);
+});
