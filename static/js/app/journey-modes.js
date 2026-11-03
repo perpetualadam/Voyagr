@@ -215,6 +215,7 @@
             body.start=fix.lat+','+fix.lon;body.end=dest.join(',');body.is_reroute=false;body.force_refresh=true;
             body.stops=intent.stops;body.via_points=[];body.optimize_stop_order=false;body.preserve_stop_order=true;body.round_trip=false;
             body.journey_context={version:1,purpose:'live_gps',origin:{kind:'gps'},destination:intent.destinationProvenance};
+            if(intent.arrivalChoice)body.journey_context.arrival_choice=intent.arrivalChoice;
             ownedTicket=integrity().begin(localStorage);ticket=ownedTicket;body=integrity().augment(body,localStorage,fix);
             setState('RECALCULATING');status('Calculating and independently checking a new journey from your GPS position…','loading');
             var response=await rt().fetch('/api/route',Object.assign({},integrity().fetchOptions(ownedTicket),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));

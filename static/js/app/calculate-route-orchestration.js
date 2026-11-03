@@ -615,7 +615,11 @@
         );
         var routePlan = apiOrch.routePlan;
         var fetchPlan = apiOrch.fetchPlan;
-        if (root.VoyagrJourneyPlan) fetchPlan.body.journey_context=root.VoyagrJourneyPlan.requestContext(fetchPlan.body,startInput,endInput);
+        if (root.VoyagrJourneyPlan) {
+            fetchPlan.body.journey_context=root.VoyagrJourneyPlan.applyDrivingArrival(fetchPlan.body,startInput,endInput,document.getElementById('drivingArrival'));
+            geocodedEnd=fetchPlan.body.end;
+            if(fetchPlan.body.journey_context.arrival_choice)end=fetchPlan.body.journey_context.destination.label;
+        }
         var requestLog = apiOrch.requestLog;
 
         console.log(requestLog.requestLogPrefix);

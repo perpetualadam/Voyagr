@@ -94,6 +94,8 @@ def resolve_endpoints(route, context):
         return out
     if route.get('geometry_complete') is False or assessment.get('geometry_valid') is not True:
         return out
+    if context.get('arrival_choice'):
+        out['arrival_choice'] = context['arrival_choice']
     provider = str(route.get('source') or 'Unknown')[:40]
     native, malformed = _native(route)
     out['origin'] = _endpoint(context['origin'], points[0], native[0] if native else None, malformed, provider)

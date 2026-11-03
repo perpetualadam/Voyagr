@@ -59,6 +59,28 @@ def context_for_plan(raw, ordered_visits):
                       'name': str(stop.get('name') or 'Journey stop')[:120],
                       'duration_minutes': stop.get('duration', stop.get('duration_minutes', 0)),
                       'original_index': stop.get('original_index', index)})
-    return {'version': 1, 'purpose': 'live_gps' if declared.get('purpose') == 'live_gps' else 'planning',
-            'authority': 'request_metadata_only', 'origin': endpoint('origin'),
-            'destination': endpoint('destination'), 'ordered_stops': copy.deepcopy(stops)}
+    result = {'version': 1, 'purpose': 'live_gps' if declared.get('purpose') == 'live_gps' else 'planning',
+              'authority': 'request_metadata_only', 'origin': endpoint('origin'),
+              'destination': endpoint('destination'), 'ordered_stops': copy.deepcopy(stops)}
+    choice = declared.get('arrival_choice')
+    if (not raw.get('round_trip') and isinstance(choice, dict) and type(choice.get('version')) is int
+            and choice['version'] == 1 and result['destination']['coordinates'] is not None
+            and _point(choice.get('target')) == result['destination']['coordinates']):
+        original = choice.get('requested_destination')
+        point = _point(original.get('coordinates')) if isinstance(original, dict) else None
+        if point:
+            from voyagr.services.routing.endpoint_resolution import search_evidence
+            requested = {'coordinates': point, 'kind': _kind(original.get('kind'))}
+            evidence = search_evidence(original.get('search_evidence'), point)
+            if evidence:
+                requested['search_evidence'] = evidence
+            if isinstance(original.get('label'), str):
+                requested['label'] = original['label'][:120]
+            target = declared.get('destination')
+            if isinstance(target, dict) and isinstance(target.get('label'), str):
+                result['destination']['label'] = target['label'][:120]
+            result['arrival_choice'] = {'version': 1, 'authority': 'request_metadata_only',
+                                        'target': result['destination']['coordinates'][:],
+                                        'requested_destination': requested,
+                                        'onward_connection': 'NOT_EVALUATED', 'navigation_authority': 'NONE'}
+    return result

@@ -246,3 +246,27 @@ through the shipped browser route normalization and preview summary.
 Explicit arrival-point selection and rerouting, trusted access provenance and
 vehicle/connector validation remain future work. Coordinate alignment is not an
 implementation of those checks and must not be promoted into permission.
+
+## Explicit driving arrival selection
+
+An optional Driving arrival point field uses the existing search service. Users
+can select a named car park, entrance or roadside address, then calculate again.
+There is no automatic nearest-car-park selection, parking availability promise,
+entrance legality claim or walking-route calculation. A selected parking POI may
+still represent its centre rather than a vehicle entrance; users must check this.
+
+The routing request uses the explicit choice as `end`. Canonical journey context
+retains the original place under a versioned `arrival_choice.requested_destination`
+and binds the choice target to the actual routed destination. Context remains
+request metadata, with navigation authority NONE and onward connection unchecked.
+Existing geometry, endpoint continuity, vehicle restrictions and mandatory
+avoidance gates evaluate the route to the chosen point, never an invented connector
+to the original place. This does not relax GPS start requirements.
+
+Changing the destination selection or swapping endpoints clears the arrival field;
+stale or edited arrival text cannot publish a new request. Round trips require
+clearing the one-way arrival choice. Saved previews restore the original place and
+arrival fields separately. GPS recalculation and deviation rerouting retain the
+arrival target and original place, with existing cancellation and ownership rules.
+A separate planning notice prevents the periodically refreshed navigation-safety
+warning from overwriting endpoint/arrival information.

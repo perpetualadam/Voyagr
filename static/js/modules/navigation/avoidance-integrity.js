@@ -57,6 +57,12 @@
             next.optimize_stop_order=false;
             next.preserve_stop_order=true;
         }
+        if(next.is_reroute&&root.VoyagrJourneyPlan&&root.lastCalculatedRoute&&root.lastCalculatedRoute.journey_context&&root.lastCalculatedRoute.journey_context.arrival_choice){
+            var progress=root.VoyagrNavigationLifecycleOrchestration;
+            var intent=root.VoyagrJourneyPlan.liveIntent(root.lastCalculatedRoute,true,progress&&progress.getLastSnappedRouteIndex?progress.getLastSnappedRouteIndex():0);
+            next.end=intent.destination;
+            next.journey_context=Object.assign({},next.journey_context,{purpose:'live_gps',destination:intent.destinationProvenance,arrival_choice:intent.arrivalChoice});
+        }
         return next;
     }
     function geometryPoints(route) {
@@ -343,6 +349,8 @@
         });
         return (record.planning_disposition==='ROAD_SNAPPED'?'Road-snapped planning endpoints. ':'Planning endpoint access needs review. ')+
             (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. '+
+            (record.arrival_choice&&record.arrival_choice.version===1&&record.arrival_choice.authority==='request_metadata_only'&&record.arrival_choice.navigation_authority==='NONE'?
+                'Driving guidance is planned to end at your chosen arrival point. Your original destination is retained; the onward connection is not included or verified. ':'')+
             arrivalSummary(record.destination,'Destination arrival')+
             (Array.isArray(record.stops)?record.stops.map(function(stop,index){return arrivalSummary(stop,'Stop '+(index+1)+' arrival');}).join(''):'');
     }

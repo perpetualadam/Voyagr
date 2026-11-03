@@ -73,6 +73,8 @@ function saveGeocodeCache() {
 
 async function showAutocomplete(fieldId, userEdit) {
     if(userEdit&&root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(fieldId);
+    if(userEdit&&fieldId==='end'&&root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
+    if(userEdit&&fieldId==='drivingArrival'&&root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true});
     const mod = SA();
     const input = document.getElementById(fieldId);
     const dropdown = getAutocompleteDropdown(fieldId);
@@ -91,7 +93,7 @@ async function showAutocomplete(fieldId, userEdit) {
     const query = input.value.trim();
     if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;delete input.dataset.journeySearchEvidence;}
 
-    if (input.dataset.lat || input.dataset.lon) {
+    if ((fieldId!=='drivingArrival'||userEdit)&&(input.dataset.lat || input.dataset.lon)) {
         console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
         delete input.dataset.lat;
         delete input.dataset.lon;
@@ -222,6 +224,11 @@ function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched', 
     }
 
     if(fieldId==='start' && root.VoyagrAutoGpsOrchestration){root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();var toggle=document.getElementById('autoGpsToggle');if(toggle)toggle.checked=false;}
+    if(fieldId==='end'&&root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
+    if(fieldId==='drivingArrival'&&root.VoyagrJourneyPlan){
+        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true});
+        input.dataset.arrivalFor=root.VoyagrJourneyPlan.destinationKey(document.getElementById('end'));
+    }
     input.dataset.journeySource=source;delete input.dataset.journeyOriginalSource;
     delete input.dataset.journeySearchEvidence;
     if(source==='searched'&&searchResult&&root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.searchEvidence){
