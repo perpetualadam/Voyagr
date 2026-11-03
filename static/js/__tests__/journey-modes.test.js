@@ -247,7 +247,7 @@ test('journey chooser displays endpoint gaps and preserves the selected planning
     const message=document.getElementById('journeyModeStatus').textContent;
     expect(message).toContain('start: about 24 m');
     expect(message).toContain('destination: about 23 m');
-    expect(message).toContain('road-accessible address or map point');
+    expect(message).toContain('separate driving arrival point');
     expect(message).toContain('actual GPS location');
     expect(JSON.stringify(window.lastCalculatedRoute)).toBe(before);
     expect(Modes.liveStartPermitted(route)).toBe(false);

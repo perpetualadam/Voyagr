@@ -55,8 +55,11 @@ test('captured city search gap explains both endpoints without relocating or aut
  expect(result).toMatchObject({allowed:false,acceptance:false,outcome:'REFUSED'});
  expect(result.message).toContain('start: about 24 m');
  expect(result.message).toContain('destination: about 23 m');
- expect(result.message).toContain('road-accessible address or map point');
+ expect(result.message).toContain('separate driving arrival point');
  expect(result.message).toContain('actual GPS location');
+ expect(result.message).toContain('does not yet verify legal access');
+ expect(result.message).toContain('passing the distance check does not verify access');
+ expect(result.message).not.toContain('until endpoint connections are verified');
  expect(result.message).toContain('requested locations are unchanged');
  expect(JSON.stringify(route)).toBe(before);
 });
@@ -74,5 +77,5 @@ test.each([
  expect(result.allowed).toBe(false);expect(result.acceptance).toBe(false);
  if(present)expect(result.message).toContain(present);
  expect(result.message).not.toContain(absent);
- expect(result.message).toContain('connection to the road is unverified');
+ expect(result.message).toContain('distance alone does not establish vehicle access');
 });

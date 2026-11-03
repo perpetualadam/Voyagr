@@ -186,11 +186,12 @@
             var meters=origin[entry[0]];
             if(Number.isFinite(meters)&&meters>2)gaps.push(entry[1]+': about '+Math.round(meters)+' m');
         });
-        return 'The route is separated from your requested locations'+(gaps.length?' ('+gaps.join('; ')+')':'')+'. '+
-            'The connection to the road is unverified. Your requested locations are unchanged. '+
-            'For planning, choose a road-accessible address or map point and recalculate. '+
-            'For live navigation, recalculate from your actual GPS location and check the destination access point. '+
-            'Navigation cannot start until endpoint connections are verified.';
+        return 'Requested locations and routed road endpoints differ'+(gaps.length?' ('+gaps.join('; ')+')':'')+'. '+
+            'Search locations may be snapped to nearby roads. The distance alone does not establish vehicle access. Your requested locations are unchanged. '+
+            'For planning, inspect the route or select a separate driving arrival point, such as a car park entrance, and recalculate. '+
+            'For live navigation, request a new route from your actual GPS location. '+
+            'Voyagr does not yet verify legal access across endpoint gaps or reliably match GPS to the correct road. '+
+            'Choosing a road point or passing the distance check does not verify access. Navigation cannot start on this route.';
     }
     function evidenceDecision(route, options) {
         options = options || {};
