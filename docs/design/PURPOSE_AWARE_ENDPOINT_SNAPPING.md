@@ -288,3 +288,36 @@ Distances are labeled explicitly; they are not driving or walking distances.
 Specific-name searches retain provider ordering. The candidate set still comes
 from the existing search service: this is no exhaustive nearby parking search,
 entrance verification, availability check or automatic selection.
+
+## Destination-context parking search: bounded objective
+
+Typing only `car park`, `car parks`, `carpark`, `carparks` or `parking` in the
+optional arrival field now uses the selected destination coordinate as search
+context. The map centre and current GPS position are never substituted. Missing
+or unresolved destinations prompt a selection rather than guessing a location.
+Named/explicit-location queries keep the existing geocoder path and provider order.
+
+A dedicated candidate endpoint uses the existing configured Overpass client to
+retrieve parking nodes, ways and relations in a fixed 2 km radius. It supports
+feature centres for candidate selection, not verified vehicle entrances. The query
+is capped at 200 features and the response at 10 distance-ranked candidates; this
+is not an exhaustive inventory or a guarantee that every nearby car park appears.
+The 2 km radius is a search boundary, never a permitted navigation-snap distance.
+Acquisition respects a 12-second budget and any tighter parent budget. Provider
+failure is a retryable failure, distinct from a valid empty search.
+
+The UI states the destination and radius, labels straight-line distances, shows
+reported access tags as unverified, and requires explicit user selection. Cache
+keys and pending-response ownership include the destination label, coordinates
+and selected search metadata. Destination edits clear the selected arrival;
+late responses cannot populate the new destination's results. Focusing a selected
+endpoint preserves its coordinate. Preview labels name the selected arrival and
+retain the original destination independently for each route alternative.
+
+Acceptance coverage includes the actual HTTP boundary with mocked acquisition,
+retrieval before top-result truncation, invalid coordinates, malformed/duplicate
+features, provider/deadline failures, parent-budget preservation, Overpass
+provenance, contextual browser requests/cache ownership, literal named queries,
+stale responses and preview labels. These are synthetic/provider-mocked checks;
+production provider coverage, opening/access legality and physical GPS navigation
+remain unverified. Navigation gates and mandatory restrictions are unchanged.

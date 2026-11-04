@@ -229,3 +229,112 @@ test('search provider failure has visible retry guidance instead of a misleading
         expect(input.dataset.lat).toBeUndefined();
     }finally{global.fetch=oldFetch;jest.useRealTimers();}
 });
+
+function scopeFixture(label='Doncaster',lat=53.5227681,lon=-1.1335312){
+    const input=chooseDrivingArrival();
+    Geo.selectAutocompleteResult('end',lat,lon,label,'searched',{name:label,type:'city'});
+    document.body.insertAdjacentHTML('beforeend','<small id="arrivalSearchContext"></small>');
+    return input;
+}
+function nearbyPayload(point,name='Nearby parking'){
+    return {success:true,search_context:{version:1,coordinates:point,radius_m:2000,source:'overpass'},
+        results:[{lat:String(point[0]),lon:String(point[1]),name,type:'parking',class:'amenity',_source:'overpass',osm_type:'way',osm_id:42}]};
+}
+test('bare parking search retrieves a category set around the destination, never map centre',async()=>{
+    jest.useFakeTimers();const input=scopeFixture(),oldFetch=global.fetch;
+    global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>nearbyPayload([53.5227681,-1.1335312])});
+    try{
+        input.value='car park';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        const [url,options]=global.fetch.mock.calls[0];
+        expect(url).toBe('/api/arrival-parking-search');expect(options.method).toBe('POST');
+        expect(JSON.parse(options.body)).toEqual({lat:53.5227681,lon:-1.1335312});
+        expect(document.getElementById('arrivalSearchContext').textContent).toContain('within 2 km of Doncaster');
+        expect(document.getElementById('autocomplete_drivingArrival').textContent).toContain('Nearby parking');
+        expect(input.value).toBe('car park');expect(input.dataset.lat).toBeUndefined();
+        document.querySelector('#autocomplete_drivingArrival .autocomplete-item').click();
+        expect(JSON.parse(input.dataset.journeySearchEvidence).provider).toBe('overpass');
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test.each(['Frenchgate car park','parking Sheffield'])('explicit search %s retains the literal query and provider ordering',async(query)=>{
+    jest.useFakeTimers();const input=scopeFixture('Explicit context'),oldFetch=global.fetch;
+    global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>[
+        {lat:'53.38',lon:'-1.47',name:'Explicit named result'},
+        {lat:'53.52276',lon:'-1.13353',name:'Closer but less relevant result'}]});
+    try{
+        input.value=query;await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        expect(global.fetch.mock.calls[0][0]).toBe('/api/geocode?q='+encodeURIComponent(query)+'&limit=8');
+        expect(document.querySelector('#autocomplete_drivingArrival .autocomplete-item').textContent).toContain('Explicit named result');
+        expect(document.getElementById('arrivalSearchContext').textContent).toBe('');
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test('identical parking text has separate caches and requests for different destinations',async()=>{
+    jest.useFakeTimers();const input=scopeFixture('First cache destination',53,-1),oldFetch=global.fetch;
+    global.fetch=jest.fn().mockResolvedValueOnce({ok:true,json:async()=>nearbyPayload([53,-1],'First city parking')})
+        .mockResolvedValueOnce({ok:true,json:async()=>nearbyPayload([54,-2],'Second city parking')});
+    try{
+        input.value='parking';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        await Geo.showAutocomplete('drivingArrival',false);await jest.advanceTimersByTimeAsync(301);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        Geo.selectAutocompleteResult('end',54,-2,'Second cache destination');
+        expect(document.getElementById('arrivalSearchContext').textContent).toBe('');
+        input.value='parking';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({lat:54,lon:-2});
+        expect(document.getElementById('autocomplete_drivingArrival').textContent).toContain('Second city parking');
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test('changing destination rejects a late parking response even when query text is identical',async()=>{
+    jest.useFakeTimers();const input=scopeFixture('Old race destination',53,-1),oldFetch=global.fetch;let release;
+    global.fetch=jest.fn().mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}))
+        .mockResolvedValueOnce({ok:true,json:async()=>nearbyPayload([54,-2],'Current city parking')});
+    try{
+        input.value='car parks';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        Geo.selectAutocompleteResult('end',54,-2,'New race destination');input.value='car parks';
+        await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        release({ok:true,json:async()=>nearbyPayload([53,-1],'Stale city parking')});
+        await Promise.resolve();await Promise.resolve();
+        const text=document.getElementById('autocomplete_drivingArrival').textContent;
+        expect(text).toContain('Current city parking');expect(text).not.toContain('Stale city parking');
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test('bare parking requires a resolved destination and never guesses from map or GPS',async()=>{
+    jest.useFakeTimers();const input=scopeFixture(),oldFetch=global.fetch;
+    const end=document.getElementById('end');end.value='Unselected town';delete end.dataset.lat;delete end.dataset.lon;
+    global.fetch=jest.fn();
+    try{
+        input.value='parking';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        expect(global.fetch).not.toHaveBeenCalled();
+        expect(document.getElementById('arrivalSearchContext').textContent).toContain('Select a destination first');
+        expect(document.getElementById('autocomplete_drivingArrival').textContent).toContain('Select a destination');
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test('parking provider failure retains retry guidance and offers no invalid candidates',async()=>{
+    jest.useFakeTimers();const input=scopeFixture('Failed provider destination'),oldFetch=global.fetch;
+    global.fetch=jest.fn().mockResolvedValue({ok:false,status:503});
+    try{
+        input.value='carpark';await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        expect(document.getElementById('autocomplete_drivingArrival').textContent).toContain('temporarily unavailable');
+        expect(document.querySelector('#autocomplete_drivingArrival .autocomplete-item')).toBeNull();
+        expect(input.dataset.lat).toBeUndefined();
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+test('focusing the destination keeps its selected coordinate and parking search context',async()=>{
+    jest.useFakeTimers();scopeFixture('Focus destination');const end=document.getElementById('end');
+    try{
+        await Geo.showAutocomplete('end',false);
+        expect(end.dataset.lat).toBe('53.5227681');expect(end.dataset.lon).toBe('-1.1335312');
+    }finally{jest.clearAllTimers();jest.useRealTimers();}
+});
+test('preview names the selected arrival and retained destination independently for each alternative',()=>{
+    const payload=JSON.parse(JSON.stringify(capture));
+    const context=(label,point)=>({destination:{label,coordinates:point},arrival_choice:{version:1,authority:'request_metadata_only',navigation_authority:'NONE',target:point,
+        requested_destination:{label:'Doncaster',coordinates:[53.5227681,-1.1335312]}}});
+    payload.routes[0].journey_context=context('Civic Quarter Car Park',[53.5198586,-1.1346897]);
+    payload.routes[1].journey_context=context('Other chosen arrival',[53.52,-1.14]);
+    const make=index=>RS.buildRoutePreviewPanelApplyPlan({routeData:payload,selectedRouteIndex:index,startLabel:'Sheffield',endLabel:'Doncaster'});
+    expect(make(0).routeLabel).toBe('Sheffield → Civic Quarter Car Park (driving arrival for Doncaster)');
+    expect(make(1).routeLabel).toContain('Other chosen arrival');
+    payload.routes[0].journey_context.arrival_choice.target=[0,0];
+    expect(make(0).routeLabel).toBe('Sheffield → Doncaster');
+    expect(AI.decision(payload.routes[0]).allowed).toBe(false);
+});
