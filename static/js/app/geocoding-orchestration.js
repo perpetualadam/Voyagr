@@ -230,7 +230,7 @@ function displayAutocompleteResults(fieldId, results) {
     }
     results.forEach((result) => {
         const icon = mod.getLocationIcon(result);
-        const name = mod.resolveGeocodeResultDisplayName(result);
+        const name = fieldId==='drivingArrival'&&typeof result.location_label==='string'&&result.location_label?result.location_label:mod.resolveGeocodeResultDisplayName(result);
         const shortAddress = mod.resolveGeocodeResultShortAddress(result);
         const lat = parseFloat(result.lat);
         const lon = parseFloat(result.lon);
@@ -239,8 +239,15 @@ function displayAutocompleteResults(fieldId, results) {
 
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
-        item.innerHTML = mod.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
+        const iconNode=document.createElement('div');iconNode.className='autocomplete-item-icon';iconNode.textContent=icon;
+        const textNode=document.createElement('div');textNode.className='autocomplete-item-text';
+        const nameNode=document.createElement('div');nameNode.className='autocomplete-item-name';nameNode.textContent=name;
+        const addressNode=document.createElement('div');addressNode.className='autocomplete-item-address';addressNode.textContent=shortAddress;
+        textNode.append(nameNode,addressNode);item.append(iconNode,textNode);
+        const details=document.createElement('div');details.className='autocomplete-arrival-details';
         if(fieldId==='drivingArrival'){
+            item.classList.add('autocomplete-item--arrival');
+            textNode.appendChild(details);
             const access=document.createElement('small');
             const reported=result.reported_access,category=result.access_category;
             const labels={general:'Reported general vehicle access — not verified.',
@@ -257,12 +264,12 @@ function displayAutocompleteResults(fieldId, results) {
             if(result.has_conflicting_access)access.textContent+=' Conflicting access reports need review.';
             if(result.has_conditional_access)access.textContent+=' Conditional restrictions reported; not evaluated.';
             if(typeof result.opening_hours==='string'&&result.opening_hours)access.textContent+=' Reported hours: '+result.opening_hours+'; current opening is not checked.';
-            item.appendChild(access);
+            details.appendChild(access);
         }
         if(near&&pointOf(result)){
             const distance=document.createElement('small');
             distance.textContent='About '+(plan.distance(near,pointOf(result))/1000).toFixed(1)+' km from destination (straight line)';
-            item.appendChild(distance);
+            details.appendChild(distance);
         }
         item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name, 'searched', result);
 

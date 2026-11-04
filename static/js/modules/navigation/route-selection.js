@@ -2671,23 +2671,26 @@
      */
     function getHazardPreviewPanelState(o) {
         o = o || {};
-        if (o.preferencesApplied && o.camerasNearRoute != null) {
+        var assessment=o.assessment&&typeof o.assessment==='object'?o.assessment:null,limitations=Array.isArray(o.providerLimitations)&&o.providerLimitations.length>0;
+        var needsReview=assessment&&(assessment.status!=='SATISFIED'||(Array.isArray(assessment.requirements)?assessment.requirements:[]).some(function(row){return row&&row.enabled&&row.status!=='SATISFIED';}));
+        var title=limitations?'⚠ Provider preferences limited':needsReview?'⚠ Route preferences need review':assessment?'Route preference assessment':'Route preference assessment unavailable';
+        if ((o.preferencesApplied && o.camerasNearRoute != null)||limitations||needsReview) {
             return {
                 visible: true,
-                title: '✓ Route preferences applied',
-                countLabel: 'Route score:',
-                count: String(o.camerasNearRoute),
+                title: title,
+                countLabel: 'Nearby observations:',
+                count: Number.isFinite(o.camerasNearRoute)&&o.camerasNearRoute>=0?String(o.camerasNearRoute):'Not available',
                 showPenalty: o.hazardPenaltySeconds > 0,
                 penaltyMinutes: o.hazardPenaltySeconds > 0 ? Math.round(o.hazardPenaltySeconds / 60) : 0,
-                background: o.camerasNearRoute === 0 ? '#E8F5E9' : '#FFF3E0',
-                borderLeftColor: o.camerasNearRoute === 0 ? '#4CAF50' : '#FF9800',
+                background: '#FFF3E0',
+                borderLeftColor: '#FF9800',
             };
         }
         if (o.hazardCount > 0 && o.hazardPenaltySeconds > 0) {
             return {
                 visible: true,
                 title: '⚠️ Route alerts',
-                countLabel: 'Route score:',
+                countLabel: 'Reported hazards:',
                 count: String(o.hazardCount),
                 showPenalty: true,
                 penaltyMinutes: Math.round(o.hazardPenaltySeconds / 60),
@@ -2890,6 +2893,8 @@
             : (routeData.hazard_penalty_seconds || 0);
         var hazardPlan = buildHazardPreviewPanelApplyPlan(getHazardPreviewPanelState({
             preferencesApplied: !!o.preferencesApplied,
+            assessment: previewRoute.avoidance_assessment,
+            providerLimitations: previewRoute.provider_limitations,
             camerasNearRoute: camerasNearRoute,
             hazardCount: hazardCount,
             hazardPenaltySeconds: hazardPenaltySeconds,
@@ -2908,6 +2913,7 @@
                 var validPoint=function(point){return Array.isArray(point)&&point.length===2&&point.every(Number.isFinite)&&Math.abs(point[0])<=90&&Math.abs(point[1])<=180;};
                 if(!validPoint(target.coordinates)||!validPoint(choice.requested_destination.coordinates))return String(o.endLabel||'');
                 var label=typeof target.label==='string'&&target.label||target.coordinates.join(',');
+                if(/^(?:unnamed parking|unnamed car park|parking|car park|carpark)$/i.test(label.trim()))label+=' — map point '+target.coordinates.map(function(n){return n.toFixed(6);}).join(', ');
                 var requested=choice.requested_destination;
                 var original=typeof requested.label==='string'&&requested.label||requested.coordinates.join(',');
                 return label&&original?label+' (driving arrival for '+original+')':String(o.endLabel||'');

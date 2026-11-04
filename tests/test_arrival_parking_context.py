@@ -150,3 +150,19 @@ def test_unnamed_general_parking_precedes_unknown_and_restricted_named_parking()
         rows = client().post('/api/arrival-parking-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1]}).get_json()['results']
     assert [row['osm_id'] for row in rows] == [3, 4, 2, 1]
     assert not rows[0]['has_name'] and not rows[1]['has_name']
+
+
+def test_unnamed_locations_have_source_based_identifiers_without_invented_streets():
+    elements = [parking(1, name=''), parking(2, lat=53.5230, name=''),
+                parking(3, name='', **{'addr:street': 'Reported Road'}),
+                parking(4, name='Chappell Drive')]
+    with patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': elements}):
+        rows = client().post('/api/arrival-parking-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1]}).get_json()['results']
+    by_id = {row['osm_id']: row for row in rows}
+    assert by_id[1]['name'] == 'Unnamed parking'
+    assert by_id[1]['location_label'] == 'Unnamed parking — map point 53.519859, -1.134690'
+    assert by_id[2]['location_label'] != by_id[1]['location_label']
+    assert 'Reported Road' in by_id[3]['location_label']
+    assert 'Reported Road' not in by_id[1]['location_label']
+    assert by_id[4]['location_label'] == 'Chappell Drive'
+    assert all(row['access_verified'] is False for row in rows)

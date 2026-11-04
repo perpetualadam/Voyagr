@@ -364,3 +364,23 @@ Any eventual validated status must say which evidence was checked and which
 limitations remain. It would cover the chosen driving arrival, not an uncomputed
 onward walk to the original place. Fresh-GPS origin validation and live journey
 ownership remain separate requirements even after arrival validation succeeds.
+
+## Arrival and preference presentation
+
+Unnamed/generically named parking candidates now carry a presentation label made
+from their reported street address, when present, and mapped coordinates. The
+source name and exact candidate coordinate remain separate and unchanged. No
+street name, entrance location or access guarantee is inferred. The chosen label
+is retained by normal arrival selection/context and appears in the preview;
+legacy generic arrival labels also get a mapped-coordinate suffix in the preview.
+Access and distance notes are grouped below the result name with wrapping on
+narrow displays. Live geocoder row labels/addresses are rendered as text nodes,
+not parsed provider HTML.
+
+The preview preference heading previously used a local preference toggle to claim
+“Route preferences applied”. It now uses the selected alternative's assessment
+and provider limitations for neutral/cautionary wording, without an applied/success
+checkmark. Zero nearby observations does not produce green success styling.
+The nearby-count label describes observations, and the penalty is labelled as a
+preference-scoring value; routing enrichment uses that value to order routes.
+Assessment, scoring, route costs/durations and navigation gates are unchanged.
