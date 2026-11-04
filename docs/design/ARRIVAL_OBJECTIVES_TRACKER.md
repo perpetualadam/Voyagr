@@ -9,7 +9,7 @@ complete merely because a related PR merged or a synthetic test passed.
 | 2 | Resolve vehicle arrival points | Partial. Explicit arrival selection, original destination retention and source-based labels implemented and operator-tested. Versioned planning intent is implemented; roadside/entrance modes remain preview-only. | Implement and accept roadside/entrance intent policy with genuine evidence; resolve ambiguous/missing entrances without silently relocating the vehicle. |
 | 3 | Validate driven connections | Not complete. Coordinate correspondence is not connector validation. | Real directed connection geometry, barriers/levels/turn/access checks, mandatory restriction evaluation and negative cases. |
 | 4 | Implement live GPS road matching | Not complete. Existing fresh-fix checks remain; no new match authority granted. | Reviewed road-source coverage, trace-based ambiguity/freshness/heading tests, versioned acceptance policy and transactional integration. |
-| 5 | Complete provider/search integration | Partial. Destination-scoped parking retrieval, ranking and bounded provenance implemented. | Confirm deployed provider entrance/edge/matching support; intermediate-stop metadata capture; source age/revision and failure coverage. |
+| 5 | Complete provider/search integration | Partial. Destination-scoped parking retrieval, ranking and bounded provenance implemented. On-demand mapped entrance/barrier/road evidence endpoint implemented; live acquisition pending. | Confirm deployed provider entrance/edge/matching support; intermediate-stop metadata capture; source age/revision and failure coverage. |
 | 6 | Correct/simplify interface | Partial. Arrival labels, scope/radius, access warnings and qualified preference headings implemented; latest layout visual acceptance pending. | Show requested/arrival/road endpoints distinctly, explain selected intent and exact blockers, simplify repeated warnings and complete accessibility/mobile checks. |
 | 7 | Test complete journey | Partial. Web regression suites and recorded stationary planning checks exist. | Arrival-intent negative cases, provider integration, device/GPS/road acceptance, offline/deviation/saved/multi-stop coverage. |
 | 8 | Release and verify | Partial. User deployment logs show completed increments through fc551769. | Verify latest deployed version/assets and UI, then accept each completed capability with rollback/monitoring evidence. Overall system acceptance is outstanding. |
@@ -127,3 +127,45 @@ road evidence and negative fixtures; source availability must be established bef
 coding success paths. Keep the two-metre numerical check unchanged until a reviewed
 replacement policy has adequate evidence and acceptance tests. Objective 1 and the
 other seven objectives remain partial/open as recorded above.
+
+
+## Next evidence acquisition increment
+
+`POST /api/arrival-access-evidence` accepts only a numeric arrival target (`lat`,
+`lon`) and retrieves mapped entrance/barrier nodes and highway ways within 150 m.
+It is a separate, on-demand evidence endpoint: route calculation and all live
+eligibility decisions remain unchanged. No additional provider request is made
+while calculating or selecting routes.
+
+Returned observations retain OSM identities, element version/timestamp when
+reported, selected restriction tags, ordered way node IDs and geometry. Exact
+shared node IDs are reported as map topology only. They do not establish a
+vehicle entrance, membership of the selected parking place, lawful approach,
+barrier passage, stopping legality or a driven connector. Multiple observations
+are retained without automatic selection or distance-based association. The query
+scope is target-bound, not a route geometry binding.
+
+Coverage remains PARTIAL and dataset coverage UNVERIFIED even for an empty result.
+Source revision, dataset timestamp and retrieval time are preserved when available;
+missing fields remain null. Retrieval time (including cached records) is not a
+freshness verdict. Malformed, truncated/oversized or unavailable responses return
+503 rather than an empty success. The query has fixed scope, size and time budgets,
+uses the existing Overpass endpoint/cache policy and makes no custom-host requests.
+
+Example operator acquisition for the captured unnamed parking (run only against
+the intended app instance):
+
+```sh
+curl -sS --max-time 20 -H 'Content-Type: application/json' \
+  -d '{"lat":53.5237353,"lon":-1.1307239}' \
+  http://127.0.0.1:5000/api/arrival-access-evidence
+```
+
+Preserve that response alongside the selected route assessment and deployed commit.
+It is not automatically imported into route request evidence or used to relocate
+any endpoint. Live Overpass/production verification could not run in the managed
+environment because those destinations are outside its allowed network policy.
+Tests exercise controlled provider payloads; they are not captured Doncaster map
+observations. Original objectives 2, 3, 4 and 5 remain incomplete. Next inspect the
+real source response and provider profile/edge identity before implementing a
+validated connector or positive live arrival policy.
