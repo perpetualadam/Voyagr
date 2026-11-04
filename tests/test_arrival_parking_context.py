@@ -256,3 +256,90 @@ def test_arrival_evidence_provider_failure_is_unavailable(error):
     with patch('overpass_helper.query_overpass', side_effect=error):
         response = client().post('/api/arrival-access-evidence', json={'lat': 53, 'lon': -1})
     assert response.status_code == 503
+
+
+def mapped_parking():
+    return {'type': 'way', 'id': 42, 'version': 2, 'timestamp': '2025-01-01T00:00:00Z',
+            'nodes': [7, 20, 21, 7],
+            'geometry': [{'lat': 53.5237, 'lon': -1.1307}, {'lat': 53.5238, 'lon': -1.1307},
+                         {'lat': 53.5238, 'lon': -1.1308}, {'lat': 53.5237, 'lon': -1.1307}],
+            'tags': {'amenity': 'parking', 'access': 'yes'}}
+
+
+def test_exact_parking_boundary_and_road_junctions_are_observations_not_an_entrance():
+    road2 = mapped_way();road2['id'] = 10
+    with patch('overpass_helper.query_overpass', return_value=map_payload([mapped_parking(), mapped_way(), road2])) as provider:
+        response = client().post('/api/arrival-access-evidence', json={'lat': 53.5237353, 'lon': -1.1307239, 'parking_way_id': 42})
+    assert response.status_code == 200
+    record = response.get_json()['evidence'];boundary = record['parking_boundary']
+    assert boundary['requested_osm_way_id'] == 42 and boundary['observation']['osm_id'] == 42
+    assert boundary['status'] == 'CLOSED_WAY_REPORTED' and boundary['association'] == 'REQUESTED_ID_ONLY'
+    assert boundary['entrance'] == 'NOT_ESTABLISHED' and boundary['polygon_validity'] == 'NOT_EVALUATED'
+    assert boundary['road_junctions'] == [{'node_id': 7, 'way_ids': [8, 10]}, {'node_id': 9, 'way_ids': [8, 10]}]
+    assert record['observations'][1]['parking_boundary_shared_node_ids'] == [7]
+    assert record['target_association'] == 'NOT_ESTABLISHED' and record['navigation_authority'] == 'NONE'
+    assert 'way(42)["amenity"="parking"](around:150,53.5237353,-1.1307239);' in provider.call_args.args[0]
+
+
+def test_missing_boundary_is_not_substituted_with_a_nearby_road_or_other_parking():
+    # A way with the requested ID now tagged as a road is not a parking boundary.
+    with patch('overpass_helper.query_overpass', return_value=map_payload([mapped_way()])):
+        record = client().post('/api/arrival-access-evidence', json={'lat': 53, 'lon': -1, 'parking_way_id': 8}).get_json()['evidence']
+    assert record['parking_boundary']['status'] == 'NOT_RETURNED'
+    assert record['parking_boundary']['observation'] is None
+    assert record['observations'][0]['parking_boundary_shared_node_ids'] == []
+
+
+def test_open_parking_way_is_not_reported_as_a_closed_boundary():
+    parking = mapped_parking();parking['nodes'] = parking['nodes'][:-1];parking['geometry'] = parking['geometry'][:-1]
+    with patch('overpass_helper.query_overpass', return_value=map_payload([parking])):
+        record = client().post('/api/arrival-access-evidence', json={'lat': 53, 'lon': -1, 'parking_way_id': 42}).get_json()['evidence']
+    assert record['parking_boundary']['status'] == 'OPEN_OR_DEGENERATE_WAY'
+
+
+@pytest.mark.parametrize('identity', [True, -1, 0, 2**63, '42', '42);out;', [], {}])
+def test_invalid_parking_identity_is_rejected_before_acquisition(identity):
+    with patch('overpass_helper.query_overpass') as provider:
+        response = client().post('/api/arrival-access-evidence', json={'lat': 53, 'lon': -1, 'parking_way_id': identity})
+    assert response.status_code == 400
+    provider.assert_not_called()
+
+
+def test_captured_live_source_age_and_road_connections_are_not_freshness_or_access_acceptance():
+    import json
+    from pathlib import Path
+    from voyagr.services.arrival_map_evidence import boundary_topology, timestamp_diagnostics
+    captured = json.loads((Path(__file__).parent / 'fixtures/arrival-map-evidence-20261104.json').read_text())['evidence']
+    diagnostics = timestamp_diagnostics(captured)
+    assert diagnostics['dataset_timestamp_status'] == 'REPORTED'
+    assert diagnostics['dataset_age_at_retrieval_seconds'] == pytest.approx(26359594.581, abs=.001)
+    assert diagnostics['source_revision_status'] == 'UNKNOWN' and diagnostics['freshness_acceptance'] == 'NOT_EVALUATED'
+    assert diagnostics['source_endpoint_class'] == 'UNKNOWN'  # not reported by the old API
+    boundary = boundary_topology(captured['observations'], 1462440103)
+    assert boundary['status'] == 'NOT_RETURNED'  # this capture did not query the parking boundary
+    junction = next(n for n in boundary['road_junctions'] if n['node_id'] == 2750929456)
+    assert junction['way_ids'] == [68405280, 269993102]
+    assert all(o['access_verified'] is False for o in captured['observations'])
+    assert captured['vehicle_access'] == 'UNKNOWN' and boundary['entrance'] == 'NOT_ESTABLISHED'
+
+
+@pytest.mark.parametrize('stamp,status,age', [(None, 'MISSING', None), ('nonsense', 'INVALID', None),
+    ('2026-01-03T21:21:20', 'INVALID', None), ('2026-11-05T00:00:00Z', 'FUTURE_DATASET_TIMESTAMP', -1925.419)])
+def test_missing_invalid_and_future_source_dates_do_not_become_fresh(stamp, status, age):
+    from voyagr.services.arrival_map_evidence import timestamp_diagnostics
+    diagnostics = timestamp_diagnostics({'dataset_timestamp': stamp, 'retrieved_at': 1793834874.581,
+                                         'endpoint_class': 'LOCAL', 'source_version': 'reported-revision'})
+    assert diagnostics['dataset_timestamp_status'] == status
+    assert diagnostics['dataset_age_at_retrieval_seconds'] == age
+    assert diagnostics['source_endpoint_class'] == 'LOCAL'
+    assert diagnostics['source_revision_status'] == 'REPORTED'
+    assert diagnostics['freshness_acceptance'] == 'NOT_EVALUATED'
+
+
+def test_road_touching_boundary_coordinates_without_shared_ids_is_not_a_topological_connection():
+    road = mapped_way();road['nodes'] = [100, 101]
+    with patch('overpass_helper.query_overpass', return_value=map_payload([mapped_parking(), road])):
+        record = client().post('/api/arrival-access-evidence', json={'lat': 53.5237, 'lon': -1.1307, 'parking_way_id': 42}).get_json()['evidence']
+    assert record['observations'][1]['geometry'][0] == record['parking_boundary']['observation']['geometry'][0]
+    assert record['observations'][1]['parking_boundary_shared_node_ids'] == []
+    assert record['parking_boundary']['entrance'] == 'NOT_ESTABLISHED'

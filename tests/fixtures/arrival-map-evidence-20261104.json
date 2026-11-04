@@ -1,0 +1,1742 @@
+{
+  "evidence": {
+    "cached": false,
+    "connector": "NOT_EVALUATED",
+    "coverage": "PARTIAL",
+    "dataset_coverage": "UNVERIFIED",
+    "dataset_timestamp": "2026-01-03T21:21:20Z",
+    "freshness": "NOT_EVALUATED",
+    "navigation_authority": "NONE",
+    "observations": [
+      {
+        "access_verified": false,
+        "coordinates": [
+          53.5247389,
+          -1.131965
+        ],
+        "osm_id": 9333213707,
+        "osm_timestamp": "2025-07-17T23:55:50Z",
+        "osm_type": "node",
+        "osm_version": 2,
+        "tags": {
+          "barrier": "bollard"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5227298,
+            -1.1323088
+          ],
+          [
+            53.5233795,
+            -1.1316138
+          ],
+          [
+            53.5235108,
+            -1.1315018
+          ],
+          [
+            53.5236038,
+            -1.1314487
+          ],
+          [
+            53.5241337,
+            -1.1312369
+          ],
+          [
+            53.5244235,
+            -1.1312016
+          ],
+          [
+            53.5246249,
+            -1.1310744
+          ]
+        ],
+        "node_ids": [
+          173778529,
+          5097720335,
+          6297956796,
+          310461772,
+          5101050909,
+          10266346996,
+          5101050874
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 28270863,
+        "osm_timestamp": "2024-07-31T17:13:13Z",
+        "osm_type": "way",
+        "osm_version": 16,
+        "tags": {
+          "access": "no",
+          "foot": "yes",
+          "highway": "pedestrian",
+          "motor_vehicle:conditional": "yes@tbc"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5246249,
+            -1.1310744
+          ],
+          [
+            53.524631,
+            -1.1312862
+          ]
+        ],
+        "node_ids": [
+          5101050874,
+          310461781
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 28270872,
+        "osm_timestamp": "2024-07-31T17:16:25Z",
+        "osm_type": "way",
+        "osm_version": 8,
+        "tags": {
+          "highway": "unclassified",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5246249,
+            -1.1310744
+          ],
+          [
+            53.5245222,
+            -1.1308574
+          ],
+          [
+            53.5240634,
+            -1.1300395
+          ],
+          [
+            53.5238798,
+            -1.1297406
+          ],
+          [
+            53.5237797,
+            -1.1295799
+          ],
+          [
+            53.5234914,
+            -1.1291581
+          ],
+          [
+            53.5233345,
+            -1.1289148
+          ],
+          [
+            53.5232733,
+            -1.1288041
+          ],
+          [
+            53.5232112,
+            -1.1286375
+          ],
+          [
+            53.5231708,
+            -1.1283665
+          ]
+        ],
+        "node_ids": [
+          5101050874,
+          5101052221,
+          823222218,
+          715245679,
+          310461804,
+          5101478705,
+          2553434176,
+          4369841275,
+          2553434179,
+          4369841276
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 28270876,
+        "osm_timestamp": "2024-07-31T17:36:02Z",
+        "osm_type": "way",
+        "osm_version": 15,
+        "tags": {
+          "highway": "unclassified"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.524631,
+            -1.1312862
+          ],
+          [
+            53.5246359,
+            -1.1317606
+          ],
+          [
+            53.5246322,
+            -1.1318354
+          ],
+          [
+            53.5246259,
+            -1.1318722
+          ],
+          [
+            53.5246184,
+            -1.1318975
+          ]
+        ],
+        "node_ids": [
+          310461781,
+          310461799,
+          2249170892,
+          2249170891,
+          5097720379
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 28603618,
+        "osm_timestamp": "2024-07-31T17:16:28Z",
+        "osm_type": "way",
+        "osm_version": 12,
+        "tags": {
+          "highway": "unclassified",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5240163,
+            -1.132594
+          ],
+          [
+            53.5240103,
+            -1.1326241
+          ],
+          [
+            53.5240025,
+            -1.1326456
+          ],
+          [
+            53.5239922,
+            -1.1326686
+          ],
+          [
+            53.5239811,
+            -1.1326873
+          ],
+          [
+            53.5231006,
+            -1.1337838
+          ]
+        ],
+        "node_ids": [
+          658044774,
+          2249170845,
+          2249170842,
+          2249170839,
+          2249170838,
+          5097794146
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 28603686,
+        "osm_timestamp": "2024-07-31T17:40:22Z",
+        "osm_type": "way",
+        "osm_version": 11,
+        "tags": {
+          "highway": "unclassified",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5246249,
+            -1.1310744
+          ],
+          [
+            53.5247114,
+            -1.1310816
+          ],
+          [
+            53.5248562,
+            -1.1310921
+          ],
+          [
+            53.5252334,
+            -1.1311195
+          ],
+          [
+            53.5254519,
+            -1.1311353
+          ],
+          [
+            53.5256135,
+            -1.1311443
+          ],
+          [
+            53.5260331,
+            -1.1311954
+          ],
+          [
+            53.526113,
+            -1.1312128
+          ],
+          [
+            53.5261605,
+            -1.1312368
+          ],
+          [
+            53.5263069,
+            -1.1313446
+          ],
+          [
+            53.52639,
+            -1.1313747
+          ],
+          [
+            53.5264856,
+            -1.1313919
+          ]
+        ],
+        "node_ids": [
+          5101050874,
+          310461773,
+          5101050894,
+          6490152366,
+          310461775,
+          710557031,
+          2879478980,
+          369553669,
+          2561804092,
+          658044778,
+          2561804094,
+          369553672
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 32041944,
+        "osm_timestamp": "2024-07-31T17:20:12Z",
+        "osm_type": "way",
+        "osm_version": 14,
+        "tags": {
+          "highway": "unclassified"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5227298,
+            -1.1323088
+          ],
+          [
+            53.5223841,
+            -1.1302411
+          ],
+          [
+            53.5223655,
+            -1.1301227
+          ],
+          [
+            53.5223485,
+            -1.1300115
+          ],
+          [
+            53.5223268,
+            -1.1296451
+          ],
+          [
+            53.5222581,
+            -1.12921
+          ]
+        ],
+        "node_ids": [
+          173778529,
+          5101058190,
+          6058461788,
+          5505946415,
+          10580330723,
+          129992559
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 48580096,
+        "osm_timestamp": "2024-07-31T16:30:38Z",
+        "osm_type": "way",
+        "osm_version": 11,
+        "tags": {
+          "highway": "unclassified",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5264392,
+            -1.1271157
+          ],
+          [
+            53.5259761,
+            -1.1280102
+          ],
+          [
+            53.5257154,
+            -1.1285062
+          ],
+          [
+            53.525534,
+            -1.1289605
+          ],
+          [
+            53.5250793,
+            -1.130099
+          ],
+          [
+            53.5250336,
+            -1.1302134
+          ],
+          [
+            53.5247114,
+            -1.1310816
+          ]
+        ],
+        "node_ids": [
+          710557152,
+          715245896,
+          694829262,
+          6969802908,
+          5272360432,
+          617025614,
+          310461773
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 51492574,
+        "osm_timestamp": "2024-07-31T17:15:49Z",
+        "osm_type": "way",
+        "osm_version": 9,
+        "tags": {
+          "highway": "unclassified"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5238798,
+            -1.1297406
+          ],
+          [
+            53.5241524,
+            -1.1292263
+          ],
+          [
+            53.5241701,
+            -1.1291728
+          ]
+        ],
+        "node_ids": [
+          715245679,
+          2709636737,
+          2709636731
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 57690196,
+        "osm_timestamp": "2017-12-08T18:16:19Z",
+        "osm_type": "way",
+        "osm_version": 5,
+        "tags": {
+          "highway": "unclassified"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5241701,
+            -1.1291728
+          ],
+          [
+            53.5245334,
+            -1.1296639
+          ],
+          [
+            53.5246281,
+            -1.1297918
+          ],
+          [
+            53.5250336,
+            -1.1302134
+          ]
+        ],
+        "node_ids": [
+          2709636731,
+          6969760618,
+          710557137,
+          617025614
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 57690199,
+        "osm_timestamp": "2019-11-12T17:43:30Z",
+        "osm_type": "way",
+        "osm_version": 8,
+        "tags": {
+          "highway": "unclassified"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5237504,
+            -1.1286179
+          ],
+          [
+            53.5237504,
+            -1.1285723
+          ],
+          [
+            53.5241364,
+            -1.1277245
+          ],
+          [
+            53.5241725,
+            -1.127605
+          ],
+          [
+            53.5242096,
+            -1.1274865
+          ],
+          [
+            53.5244851,
+            -1.1269228
+          ]
+        ],
+        "node_ids": [
+          710557124,
+          2561804033,
+          2561804107,
+          710557122,
+          2561804145,
+          2561804173
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 57690203,
+        "osm_timestamp": "2017-12-08T18:16:20Z",
+        "osm_type": "way",
+        "osm_version": 4,
+        "tags": {
+          "highway": "residential",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5246281,
+            -1.1297918
+          ],
+          [
+            53.5248122,
+            -1.1293844
+          ],
+          [
+            53.5248304,
+            -1.1293441
+          ],
+          [
+            53.5249365,
+            -1.1291093
+          ],
+          [
+            53.5252122,
+            -1.128499
+          ],
+          [
+            53.5253881,
+            -1.1281097
+          ]
+        ],
+        "node_ids": [
+          710557137,
+          6969760627,
+          6969760623,
+          6969760620,
+          6969760628,
+          710557140
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 57690207,
+        "osm_timestamp": "2019-11-12T17:43:30Z",
+        "osm_type": "way",
+        "osm_version": 2,
+        "tags": {
+          "highway": "residential"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234538,
+            -1.1308146
+          ],
+          [
+            53.5234744,
+            -1.1307891
+          ],
+          [
+            53.5235549,
+            -1.1306895
+          ],
+          [
+            53.5239353,
+            -1.1302281
+          ],
+          [
+            53.5240634,
+            -1.1300395
+          ]
+        ],
+        "node_ids": [
+          823222216,
+          2750929457,
+          2750929456,
+          5272358667,
+          823222218
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 68405280,
+        "osm_timestamp": "2017-12-08T18:20:10Z",
+        "osm_type": "way",
+        "osm_version": 4,
+        "tags": {
+          "highway": "unclassified"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5237797,
+            -1.1295799
+          ],
+          [
+            53.5234559,
+            -1.1300188
+          ]
+        ],
+        "node_ids": [
+          310461804,
+          823222849
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 68405365,
+        "osm_timestamp": "2013-05-29T09:20:02Z",
+        "osm_type": "way",
+        "osm_version": 3,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5240163,
+            -1.132594
+          ],
+          [
+            53.5240354,
+            -1.1326393
+          ],
+          [
+            53.5245757,
+            -1.1339223
+          ]
+        ],
+        "node_ids": [
+          658044774,
+          2249170853,
+          310461641
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 150719715,
+        "osm_timestamp": "2024-07-19T17:09:08Z",
+        "osm_type": "way",
+        "osm_version": 5,
+        "tags": {
+          "highway": "service",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5241701,
+            -1.1291728
+          ],
+          [
+            53.5237615,
+            -1.1286581
+          ],
+          [
+            53.5237504,
+            -1.1286179
+          ]
+        ],
+        "node_ids": [
+          2709636731,
+          5272360437,
+          710557124
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 150720341,
+        "osm_timestamp": "2017-12-08T18:16:21Z",
+        "osm_type": "way",
+        "osm_version": 4,
+        "tags": {
+          "highway": "unclassified",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5249406,
+            -1.1275167
+          ],
+          [
+            53.5248244,
+            -1.1278008
+          ],
+          [
+            53.5247829,
+            -1.1278334
+          ],
+          [
+            53.5241846,
+            -1.1291265
+          ],
+          [
+            53.5241701,
+            -1.1291728
+          ]
+        ],
+        "node_ids": [
+          710557441,
+          5272360433,
+          5272360424,
+          5272360436,
+          2709636731
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 265297232,
+        "osm_timestamp": "2017-12-08T18:16:20Z",
+        "osm_type": "way",
+        "osm_version": 3,
+        "tags": {
+          "highway": "residential",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234559,
+            -1.1300188
+          ],
+          [
+            53.5234174,
+            -1.1300663
+          ],
+          [
+            53.5233704,
+            -1.1299966
+          ],
+          [
+            53.5229239,
+            -1.130537
+          ],
+          [
+            53.5230148,
+            -1.1307328
+          ],
+          [
+            53.5233768,
+            -1.1302809
+          ],
+          [
+            53.5234493,
+            -1.1301803
+          ]
+        ],
+        "node_ids": [
+          823222849,
+          2750929449,
+          2750929450,
+          2750929451,
+          2750929452,
+          2750929453,
+          2750929454
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 269993100,
+        "osm_timestamp": "2017-10-15T12:28:47Z",
+        "osm_type": "way",
+        "osm_version": 2,
+        "tags": {
+          "highway": "service",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234493,
+            -1.1301803
+          ],
+          [
+            53.5234174,
+            -1.1300663
+          ]
+        ],
+        "node_ids": [
+          2750929454,
+          2750929449
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 269993101,
+        "osm_timestamp": "2014-03-28T23:17:39Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5233768,
+            -1.1302809
+          ],
+          [
+            53.5235549,
+            -1.1306895
+          ]
+        ],
+        "node_ids": [
+          2750929453,
+          2750929456
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 269993102,
+        "osm_timestamp": "2014-03-28T23:17:39Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234744,
+            -1.1307891
+          ],
+          [
+            53.5233672,
+            -1.1305357
+          ]
+        ],
+        "node_ids": [
+          2750929457,
+          2750929458
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 269993103,
+        "osm_timestamp": "2014-03-28T23:17:39Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234538,
+            -1.1308146
+          ],
+          [
+            53.5235187,
+            -1.1310064
+          ]
+        ],
+        "node_ids": [
+          823222216,
+          2750929459
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 269993104,
+        "osm_timestamp": "2014-03-28T23:17:39Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234538,
+            -1.1308146
+          ],
+          [
+            53.5233895,
+            -1.1308803
+          ],
+          [
+            53.5232699,
+            -1.1307556
+          ],
+          [
+            53.5231129,
+            -1.1309353
+          ]
+        ],
+        "node_ids": [
+          823222216,
+          2750929460,
+          2750929461,
+          2750929462
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 269993105,
+        "osm_timestamp": "2014-03-28T23:17:39Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5237716,
+            -1.1320845
+          ],
+          [
+            53.5238956,
+            -1.1320277
+          ],
+          [
+            53.5240072,
+            -1.1319995
+          ],
+          [
+            53.5240862,
+            -1.1319673
+          ],
+          [
+            53.5243644,
+            -1.1319137
+          ],
+          [
+            53.5246184,
+            -1.1318975
+          ]
+        ],
+        "node_ids": [
+          5097720329,
+          5097720327,
+          5097720343,
+          5097720397,
+          5097720369,
+          5097720379
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523693327,
+        "osm_timestamp": "2024-07-31T17:37:05Z",
+        "osm_type": "way",
+        "osm_version": 2,
+        "tags": {
+          "highway": "footway"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5233795,
+            -1.1316138
+          ],
+          [
+            53.5234404,
+            -1.131734
+          ],
+          [
+            53.5235768,
+            -1.1319163
+          ],
+          [
+            53.5236844,
+            -1.1320602
+          ],
+          [
+            53.5236892,
+            -1.1320666
+          ],
+          [
+            53.5237242,
+            -1.1320692
+          ],
+          [
+            53.5237625,
+            -1.1320639
+          ],
+          [
+            53.5237716,
+            -1.1320845
+          ]
+        ],
+        "node_ids": [
+          5097720335,
+          5097720362,
+          5097720120,
+          5097720395,
+          5097720366,
+          5097720419,
+          5097720328,
+          5097720329
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523693335,
+        "osm_timestamp": "2025-03-31T16:19:14Z",
+        "osm_type": "way",
+        "osm_version": 3,
+        "tags": {
+          "highway": "footway"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5233402,
+            -1.1321598
+          ],
+          [
+            53.5234242,
+            -1.1323245
+          ],
+          [
+            53.5234739,
+            -1.132422
+          ],
+          [
+            53.5234976,
+            -1.1324689
+          ],
+          [
+            53.5235233,
+            -1.1325199
+          ],
+          [
+            53.5235544,
+            -1.1325614
+          ],
+          [
+            53.5236054,
+            -1.1324971
+          ],
+          [
+            53.5238154,
+            -1.1322201
+          ],
+          [
+            53.5238291,
+            -1.1322145
+          ]
+        ],
+        "node_ids": [
+          5097794351,
+          5097794197,
+          5097720411,
+          5097794144,
+          5097720370,
+          5097720383,
+          5097720324,
+          5097720368,
+          5097720361
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523693336,
+        "osm_timestamp": "2024-07-31T17:38:23Z",
+        "osm_type": "way",
+        "osm_version": 5,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5235768,
+            -1.1319163
+          ],
+          [
+            53.5235122,
+            -1.1319968
+          ],
+          [
+            53.5235967,
+            -1.1321765
+          ],
+          [
+            53.5236844,
+            -1.1320602
+          ]
+        ],
+        "node_ids": [
+          5097720120,
+          5097720422,
+          5097720350,
+          5097720395
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523693337,
+        "osm_timestamp": "2025-03-31T16:19:10Z",
+        "osm_type": "way",
+        "osm_version": 2,
+        "tags": {
+          "highway": "footway"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5231917,
+            -1.1325869
+          ],
+          [
+            53.5234242,
+            -1.1323245
+          ]
+        ],
+        "node_ids": [
+          5097794172,
+          5097794197
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523702958,
+        "osm_timestamp": "2017-09-11T11:38:35Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "service": "parking_aisle"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5232876,
+            -1.1327311
+          ],
+          [
+            53.5234976,
+            -1.1324689
+          ]
+        ],
+        "node_ids": [
+          5097794185,
+          5097794144
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523702966,
+        "osm_timestamp": "2017-09-11T11:38:35Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "service": "parking_aisle"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5246184,
+            -1.1318975
+          ],
+          [
+            53.5246041,
+            -1.1319214
+          ],
+          [
+            53.5245927,
+            -1.1319467
+          ],
+          [
+            53.5245799,
+            -1.1319697
+          ],
+          [
+            53.5245616,
+            -1.1319936
+          ],
+          [
+            53.5245402,
+            -1.1320104
+          ],
+          [
+            53.5244333,
+            -1.1320488
+          ],
+          [
+            53.5240151,
+            -1.1321062
+          ],
+          [
+            53.5239931,
+            -1.1321187
+          ],
+          [
+            53.5239735,
+            -1.1321372
+          ],
+          [
+            53.5239543,
+            -1.1321633
+          ],
+          [
+            53.5239406,
+            -1.1321955
+          ],
+          [
+            53.5239387,
+            -1.1322104
+          ],
+          [
+            53.5239356,
+            -1.1322347
+          ],
+          [
+            53.5239351,
+            -1.1322823
+          ],
+          [
+            53.5239397,
+            -1.1323199
+          ],
+          [
+            53.5239453,
+            -1.1323469
+          ],
+          [
+            53.524008,
+            -1.132505
+          ],
+          [
+            53.5240142,
+            -1.1325277
+          ],
+          [
+            53.5240167,
+            -1.1325488
+          ],
+          [
+            53.5240178,
+            -1.1325749
+          ],
+          [
+            53.5240163,
+            -1.132594
+          ]
+        ],
+        "node_ids": [
+          5097720379,
+          2249170889,
+          2249170886,
+          2249170883,
+          2249170882,
+          2249170877,
+          2249170866,
+          314291418,
+          2249170840,
+          2249170835,
+          2249170831,
+          2249170830,
+          5097720378,
+          2249170828,
+          2249170827,
+          2249170829,
+          310461667,
+          2249170843,
+          2249170847,
+          2249170849,
+          2249170850,
+          658044774
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 523710775,
+        "osm_timestamp": "2024-07-31T17:37:31Z",
+        "osm_type": "way",
+        "osm_version": 3,
+        "tags": {
+          "highway": "unclassified",
+          "oneway": "yes"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234914,
+            -1.1291581
+          ],
+          [
+            53.5233551,
+            -1.1292939
+          ]
+        ],
+        "node_ids": [
+          5101478705,
+          5101058189
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 524132182,
+        "osm_timestamp": "2018-03-26T15:00:26Z",
+        "osm_type": "way",
+        "osm_version": 3,
+        "tags": {
+          "highway": "footway"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5224674,
+            -1.1302095
+          ],
+          [
+            53.5223841,
+            -1.1302411
+          ]
+        ],
+        "node_ids": [
+          5101058191,
+          5101058190
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 524132183,
+        "osm_timestamp": "2024-07-31T16:29:57Z",
+        "osm_type": "way",
+        "osm_version": 3,
+        "tags": {
+          "highway": "footway"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5233551,
+            -1.1292939
+          ],
+          [
+            53.5225829,
+            -1.1301638
+          ],
+          [
+            53.5224674,
+            -1.1302095
+          ]
+        ],
+        "node_ids": [
+          5101058189,
+          5101058188,
+          5101058191
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 524178475,
+        "osm_timestamp": "2024-07-31T16:29:54Z",
+        "osm_type": "way",
+        "osm_version": 4,
+        "tags": {
+          "highway": "footway",
+          "tunnel": "building_passage"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5237716,
+            -1.1320845
+          ],
+          [
+            53.5238291,
+            -1.1322145
+          ],
+          [
+            53.5240103,
+            -1.1326241
+          ]
+        ],
+        "node_ids": [
+          5097720329,
+          5097720361,
+          2249170845
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 524483231,
+        "osm_timestamp": "2024-07-31T17:38:27Z",
+        "osm_type": "way",
+        "osm_version": 2,
+        "tags": {
+          "highway": "footway"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5234493,
+            -1.1301803
+          ],
+          [
+            53.5235403,
+            -1.1300724
+          ]
+        ],
+        "node_ids": [
+          2750929454,
+          2750929455
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 532708181,
+        "osm_timestamp": "2017-10-15T12:28:47Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5249503,
+            -1.1299635
+          ],
+          [
+            53.5250226,
+            -1.1300398
+          ]
+        ],
+        "node_ids": [
+          5272360440,
+          5272360435
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 545526979,
+        "osm_timestamp": "2017-12-08T18:16:19Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "tunnel": "building_passage"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5248169,
+            -1.1298252
+          ],
+          [
+            53.5249503,
+            -1.1299635
+          ]
+        ],
+        "node_ids": [
+          5272360423,
+          5272360440
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 545526985,
+        "osm_timestamp": "2017-12-08T18:16:19Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5245334,
+            -1.1296639
+          ],
+          [
+            53.5246386,
+            -1.1294407
+          ]
+        ],
+        "node_ids": [
+          6969760618,
+          6969760617
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 744697134,
+        "osm_timestamp": "2019-11-12T17:43:30Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "service": "parking_aisle"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5248304,
+            -1.1293441
+          ],
+          [
+            53.5247168,
+            -1.1291926
+          ],
+          [
+            53.5248156,
+            -1.1289646
+          ]
+        ],
+        "node_ids": [
+          6969760623,
+          6969760622,
+          6969760621
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 744697136,
+        "osm_timestamp": "2019-11-12T17:43:30Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "service": "parking_aisle"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5248122,
+            -1.1293844
+          ],
+          [
+            53.5249368,
+            -1.1295238
+          ],
+          [
+            53.5249846,
+            -1.1294018
+          ],
+          [
+            53.5249121,
+            -1.1293146
+          ]
+        ],
+        "node_ids": [
+          6969760627,
+          6969760626,
+          6969760625,
+          6969760624
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 744697137,
+        "osm_timestamp": "2019-11-12T17:43:30Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "service": "parking_aisle"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5233345,
+            -1.1289148
+          ],
+          [
+            53.5231387,
+            -1.1291332
+          ]
+        ],
+        "node_ids": [
+          2553434176,
+          7180451097
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 769202089,
+        "osm_timestamp": "2020-02-03T05:45:13Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5231387,
+            -1.1291332
+          ],
+          [
+            53.5229429,
+            -1.1293516
+          ]
+        ],
+        "node_ids": [
+          7180451097,
+          7180451096
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 769202090,
+        "osm_timestamp": "2020-02-03T05:45:13Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service",
+          "service": "parking_aisle"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5246184,
+            -1.1318975
+          ],
+          [
+            53.5246263,
+            -1.1319071
+          ],
+          [
+            53.5246298,
+            -1.1319101
+          ],
+          [
+            53.5247389,
+            -1.131965
+          ],
+          [
+            53.5248418,
+            -1.1320535
+          ],
+          [
+            53.5249717,
+            -1.1322453
+          ],
+          [
+            53.5251535,
+            -1.1326741
+          ]
+        ],
+        "node_ids": [
+          5097720379,
+          9333213705,
+          9333213706,
+          9333213707,
+          9333213708,
+          9333213709,
+          9333213710
+        ],
+        "observed_shared_node_ids": [
+          9333213707
+        ],
+        "osm_id": 1011576174,
+        "osm_timestamp": "2021-12-13T02:56:52Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "pedestrian"
+        }
+      },
+      {
+        "access_verified": false,
+        "geometry": [
+          [
+            53.5238291,
+            -1.1322145
+          ],
+          [
+            53.5238773,
+            -1.132198
+          ],
+          [
+            53.5239387,
+            -1.1322104
+          ]
+        ],
+        "node_ids": [
+          5097720361,
+          5097720348,
+          5097720378
+        ],
+        "observed_shared_node_ids": [],
+        "osm_id": 1304891715,
+        "osm_timestamp": "2024-07-31T17:38:20Z",
+        "osm_type": "way",
+        "osm_version": 1,
+        "tags": {
+          "highway": "service"
+        }
+      }
+    ],
+    "radius_m": 150,
+    "retrieved_at": 1793834874.5814698,
+    "selection": "NONE",
+    "source": "overpass",
+    "source_version": "unknown",
+    "status": "OBSERVATIONS_ONLY",
+    "stopping": "NOT_EVALUATED",
+    "target": [
+      53.5237353,
+      -1.1307239
+    ],
+    "target_association": "NOT_ESTABLISHED",
+    "vehicle_access": "UNKNOWN",
+    "version": 1
+  },
+  "success": true
+}
