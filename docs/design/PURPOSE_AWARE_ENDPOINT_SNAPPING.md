@@ -321,3 +321,46 @@ provenance, contextual browser requests/cache ownership, literal named queries,
 stale responses and preview labels. These are synthetic/provider-mocked checks;
 production provider coverage, opening/access legality and physical GPS navigation
 remain unverified. Navigation gates and mandatory restrictions are unchanged.
+
+## Reported-access shortlist policy, version 1
+
+Nearby parking is ranked across the retrieved candidate set before the top-ten
+response limit: named reported-general access, named customer-only access,
+unnamed reported-general access, unnamed customer-only access, named unknown,
+unnamed unknown, named restricted/private, then unnamed restricted/private.
+Distance and stable source identity break ties within a tier. Blank and generic
+names such as “Parking” do not count as meaningful names. Restricted candidates
+are retained farther down; absence from the top ten is not a claim of absence.
+The browser preserves this server order for bare nearby-parking searches.
+
+Reported access uses motorcar, motor_vehicle, vehicle and access tags in that
+specificity order. More-specific prohibitions cannot be hidden by general `yes`.
+Conditional rules and conflicting positive/restricted reports are classified as
+unknown pending review. All relevant reported values remain visible, with explicit
+customer eligibility, restriction, unknown-access and unparsed-opening warnings.
+None establishes current opening, availability, entrance reachability or permission.
+Every candidate still has `access_verified: false`; selection passes only bounded
+request metadata and cannot change navigation authority.
+
+### Proposed access-validation acceptance criteria — future work
+
+A validated driving arrival would require a versioned policy and evidence that:
+
+1. The chosen facility and actual vehicle entrance are identified separately from
+   its mapped centre and original requested destination.
+2. The entrance is connected to the selected route's directed road graph, with
+   approach direction, one-way/turn restrictions, barriers and levels resolved.
+3. Complete applicable vehicle, ownership/permission, customer/permit and timed
+   access rules have been evaluated for the selected vehicle and arrival time.
+   A user declaration cannot override an explicit prohibition or missing evidence.
+4. Any required driven connector has actual traversable geometry and passes all
+   mandatory restrictions; no straight-line connector is invented.
+5. The result carries source/revision, verification time and binding to the selected
+   entrance, route geometry, vehicle profile and time context. Relevant changes,
+   stale/missing sources or conflicting evidence invalidate it.
+
+These are acceptance criteria, not implemented checks or guaranteed legal truth.
+Any eventual validated status must say which evidence was checked and which
+limitations remain. It would cover the chosen driving arrival, not an uncomputed
+onward walk to the original place. Fresh-GPS origin validation and live journey
+ownership remain separate requirements even after arrival validation succeeds.

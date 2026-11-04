@@ -8,6 +8,41 @@ from voyagr.services.routing.journey_geometry import distance as geodesic_distan
 RADIUS_M = 2000
 
 
+
+ACCESS_KEYS = ('access', 'vehicle', 'motor_vehicle', 'motorcar')
+GENERAL_ACCESS = {'yes', 'public', 'permissive', 'designated'}
+RESTRICTED_ACCESS = {'no', 'private', 'permit', 'permit_holder', 'permit_holders',
+                     'destination', 'delivery', 'agricultural', 'forestry'}
+
+
+def reported_access(tags):
+    """Presentation categories from reported tags, never validated vehicle permission."""
+    reported = {key: value.strip()[:160] for key in
+                (*ACCESS_KEYS, *(key + ':conditional' for key in ACCESS_KEYS))
+                if isinstance((value := tags.get(key)), str) and value.strip()}
+    basis = next((key for key in reversed(ACCESS_KEYS) if reported.get(key)), None)
+    value = reported.get(basis, '').lower()
+    category = ('general' if value in GENERAL_ACCESS else 'customers' if value == 'customers'
+                else 'restricted' if value in RESTRICTED_ACCESS else 'unknown')
+    conditional = any(reported.get(key + ':conditional') for key in ACCESS_KEYS)
+    conflict = category in ('general', 'customers') and any(
+        reported.get(key, '').lower() in RESTRICTED_ACCESS for key in ACCESS_KEYS if key != basis)
+    if (conditional or conflict) and category != 'restricted':
+        category = 'unknown'
+    return {'reported_access': reported, 'access_basis': basis, 'access_category': category,
+            'has_conditional_access': conditional, 'has_conflicting_access': conflict}
+
+
+def shortlist_key(item):
+    category = item['access_category']
+    # Named general/customer candidates first; restrictions remain visible further down.
+    tier = ({'general': 0, 'customers': 1} if item['has_name'] else
+            {'general': 2, 'customers': 3}).get(category)
+    if tier is None:
+        tier = (4 if item['has_name'] else 5) if category == 'unknown' else (6 if item['has_name'] else 7)
+    return tier, item['distance_m'], item['osm_type'], item['osm_id']
+
+
 def search_near_destination(lat, lon):
     """Retrieve a local category set before ranking, using existing provider policy."""
     from overpass_helper import query_overpass
@@ -53,12 +88,14 @@ def search_near_destination(lat, lon):
         def text(key, default='', limit=160):
             value = tags.get(key)
             return value[:limit] if isinstance(value, str) else default
-        name = text('name', 'Unnamed parking')
+        raw_name = text('name').strip()
+        name = raw_name or 'Unnamed parking'
+        has_name = bool(raw_name) and raw_name.casefold() not in {'parking', 'car park', 'carpark', 'unnamed parking', 'unnamed car park'}
         road = text('addr:street')
         candidates.append({'name': name, 'display_name': ', '.join(x for x in (name, road) if x),
                            'lat': str(point[0]), 'lon': str(point[1]), 'type': 'parking', 'class': 'amenity',
                            'osm_type': element['type'], 'osm_id': element['id'], '_source': 'overpass',
                            'address': {'road': road}, 'distance_m': round(distance, 1),
                            'access': text('access', limit=64), 'opening_hours': text('opening_hours'),
-                           'access_verified': False})
-    return sorted(candidates, key=lambda item: (item['distance_m'], item['osm_type'], item['osm_id']))
+                           'has_name': has_name, **reported_access(tags), 'access_verified': False})
+    return sorted(candidates, key=shortlist_key)

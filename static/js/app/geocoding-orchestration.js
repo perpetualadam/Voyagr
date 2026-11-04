@@ -220,7 +220,9 @@ function displayAutocompleteResults(fieldId, results) {
     const normalizedQuery=String(input&&input.value||'').toLowerCase().trim().replace(/\s+/g,' ');
     const destinationLabel=String(end&&end.value||'').toLowerCase().trim().replace(/\s+/g,' ');
     const contextualParking=['car park','car parks','carpark','carparks','parking'].some(term=>normalizedQuery===term||normalizedQuery===term+' '+destinationLabel);
-    if(near&&contextualParking){
+    const bareParking=['car park','car parks','carpark','carparks','parking'].includes(normalizedQuery);
+    // The nearby endpoint already ranks reported access/name before distance.
+    if(near&&contextualParking&&!bareParking){
         results=results.slice().sort((a,b)=>{
             const pa=pointOf(a),pb=pointOf(b);
             return (pa?plan.distance(near,pa):Infinity)-(pb?plan.distance(near,pb):Infinity);
@@ -238,8 +240,24 @@ function displayAutocompleteResults(fieldId, results) {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
         item.innerHTML = mod.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
-        if(fieldId==='drivingArrival'&&typeof result.access==='string'&&result.access){
-            const access=document.createElement('small');access.textContent='Reported access: '+result.access+' (not verified)';item.appendChild(access);
+        if(fieldId==='drivingArrival'){
+            const access=document.createElement('small');
+            const reported=result.reported_access,category=result.access_category;
+            const labels={general:'Reported general vehicle access — not verified.',
+                customers:'Customers only — check eligibility; access is not verified.',
+                restricted:'Reported restricted/private access — check permission; access is not verified.',
+                unknown:'Vehicle access unknown — check restrictions; access is not verified.'};
+            access.textContent=Object.prototype.hasOwnProperty.call(labels,category)?labels[category]:
+                typeof result.access==='string'&&result.access?'Reported access: '+result.access+' (not verified)':'Vehicle access unknown — check restrictions; access is not verified.';
+            if(reported){
+                ['access','vehicle','motor_vehicle','motorcar','access:conditional','vehicle:conditional','motor_vehicle:conditional','motorcar:conditional'].forEach(key=>{
+                    if(typeof reported[key]==='string'&&reported[key])access.textContent+=' '+key+': '+reported[key]+'.';
+                });
+            }
+            if(result.has_conflicting_access)access.textContent+=' Conflicting access reports need review.';
+            if(result.has_conditional_access)access.textContent+=' Conditional restrictions reported; not evaluated.';
+            if(typeof result.opening_hours==='string'&&result.opening_hours)access.textContent+=' Reported hours: '+result.opening_hours+'; current opening is not checked.';
+            item.appendChild(access);
         }
         if(near&&pointOf(result)){
             const distance=document.createElement('small');
