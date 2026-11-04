@@ -166,3 +166,93 @@ def test_unnamed_locations_have_source_based_identifiers_without_invented_street
     assert 'Reported Road' not in by_id[1]['location_label']
     assert by_id[4]['location_label'] == 'Chappell Drive'
     assert all(row['access_verified'] is False for row in rows)
+
+
+def map_payload(elements):
+    return {'success': True, 'response_state': 'VALID_WITH_DATA' if elements else 'VALID_EMPTY',
+            'elements': elements, 'retrieved_at': 1793836800, 'cached': True,
+            'dataset_timestamp': '2026-11-04T00:00:00Z', 'source_version': 'test-revision'}
+
+
+def mapped_entrance():
+    return {'type': 'node', 'id': 7, 'lat': 53.5237, 'lon': -1.1307,
+            'version': 3, 'timestamp': '2026-10-01T00:00:00Z',
+            'tags': {'entrance': 'yes', 'barrier': 'gate', 'access': 'private',
+                     'motor_vehicle:conditional': 'yes @ (Mo-Fr 08:00-17:00)', 'name': 'not needed'}}
+
+
+def mapped_way():
+    return {'type': 'way', 'id': 8, 'nodes': [7, 9],
+            'geometry': [{'lat': 53.5237, 'lon': -1.1307}, {'lat': 53.5238, 'lon': -1.1308}],
+            'tags': {'highway': 'service', 'oneway': 'yes', 'layer': '1'}}
+
+
+def test_arrival_map_observations_preserve_topology_and_restrictions_without_access_claims():
+    with patch('overpass_helper.query_overpass', return_value=map_payload([mapped_entrance(), mapped_way()])) as provider:
+        response = client().post('/api/arrival-access-evidence', json={'lat': DESTINATION[0], 'lon': DESTINATION[1],
+                                                                    'access_verified': True})
+    assert response.status_code == 200 and response.headers['Cache-Control'] == 'no-store'
+    record = response.get_json()['evidence']
+    assert record['target'] == DESTINATION and record['radius_m'] == 150
+    assert record['source_version'] == 'test-revision' and record['cached'] is True
+    assert record['retrieved_at'] == 1793836800
+    assert record['dataset_timestamp'] == '2026-11-04T00:00:00Z'
+    assert record['coverage'] == 'PARTIAL' and record['dataset_coverage'] == 'UNVERIFIED'
+    assert record['navigation_authority'] == 'NONE' and record['selection'] == 'NONE'
+    assert record['target_association'] == 'NOT_ESTABLISHED'
+    assert record['vehicle_access'] == 'UNKNOWN' and record['connector'] == 'NOT_EVALUATED'
+    entrance, road = record['observations']
+    assert entrance['tags']['access'] == 'private'
+    assert entrance['tags']['motor_vehicle:conditional'] == 'yes @ (Mo-Fr 08:00-17:00)'
+    assert 'name' not in entrance['tags'] and entrance['osm_version'] == 3
+    assert entrance['osm_timestamp'] == '2026-10-01T00:00:00Z'
+    assert entrance['access_verified'] is False and road['access_verified'] is False
+    assert road['observed_shared_node_ids'] == [7]
+    assert road['geometry'] == [[53.5237, -1.1307], [53.5238, -1.1308]]
+    query = provider.call_args.args[0]
+    assert f'around:150,{DESTINATION[0]},{DESTINATION[1]}' in query
+    assert 'out meta geom 201' in query and 'node["entrance"]' in query and 'node["barrier"]' in query
+    assert 'way["highway"]' in query and provider.call_args.kwargs['cache_ttl'] == 300
+
+
+def test_nearby_road_is_not_associated_by_distance_and_empty_is_not_clear_access():
+    road = mapped_way();road['nodes'] = [10, 11]
+    for elements in ([mapped_entrance(), road], []):
+        with patch('overpass_helper.query_overpass', return_value=map_payload(elements)):
+            record = client().post('/api/arrival-access-evidence', json={'lat': 53.52, 'lon': -1.13}).get_json()['evidence']
+        assert record['vehicle_access'] == 'UNKNOWN' and record['target_association'] == 'NOT_ESTABLISHED'
+        if elements:
+            assert record['observations'][1]['observed_shared_node_ids'] == []
+        else:
+            assert record['status'] == 'NO_MAPPED_OBSERVATIONS' and record['coverage'] == 'PARTIAL'
+
+
+@pytest.mark.parametrize('body', [None, [], {}, {'lat': True, 'lon': -1}, {'lat': 91, 'lon': 0},
+                                      {'lat': '53', 'lon': -1}, {'lat': 10**400, 'lon': 0}])
+def test_arrival_evidence_invalid_target_does_not_call_provider(body):
+    with patch('overpass_helper.query_overpass') as provider:
+        response = client().post('/api/arrival-access-evidence', json=body)
+    assert response.status_code == 400 and response.headers['Cache-Control'] == 'no-store'
+    provider.assert_not_called()
+
+
+@pytest.mark.parametrize('payload', [None, {'success': False}, map_payload([mapped_entrance()] * 201),
+    map_payload([mapped_entrance(), mapped_entrance()]), map_payload([{'type': 'way', 'id': 8, 'tags': {'highway': 'service'}}]),
+    map_payload([{**mapped_way(), 'geometry': [None, None]}]),
+    map_payload([{**mapped_entrance(), 'lat': True}]),
+    map_payload([{**mapped_entrance(), 'id': True}]),
+    map_payload([{**mapped_entrance(), 'tags': {'entrance': 'yes', 'access:conditional': 'x' * 501}}]),
+    {'success': True, 'response_state': 'VALID_EMPTY', 'elements': [mapped_entrance()]},
+    {'success': True, 'response_state': 'PARTIAL', 'elements': []}])
+def test_unavailable_truncated_or_malformed_evidence_never_becomes_empty_success(payload):
+    with patch('overpass_helper.query_overpass', return_value=payload):
+        response = client().post('/api/arrival-access-evidence', json={'lat': 53, 'lon': -1})
+    assert response.status_code == 503 and response.get_json()['success'] is False
+    assert response.headers['Cache-Control'] == 'no-store'
+
+
+@pytest.mark.parametrize('error', [requests.Timeout('timeout'), request_budget.RoutingDeadlineExceeded('deadline')])
+def test_arrival_evidence_provider_failure_is_unavailable(error):
+    with patch('overpass_helper.query_overpass', side_effect=error):
+        response = client().post('/api/arrival-access-evidence', json={'lat': 53, 'lon': -1})
+    assert response.status_code == 503

@@ -560,6 +560,26 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
         return jsonify({'success': False, 'error': str(e)})
 
 
+@search_bp.route('/arrival-access-evidence', methods=['POST'])
+def arrival_access_evidence():
+    """On-demand nearby map observations; isolated from route selection/live gates."""
+    from voyagr.services.arrival_map_evidence import point, collect
+    data = request.get_json(silent=True)
+    target = point([data.get('lat'), data.get('lon')]) if isinstance(data, dict) else None
+    if target is None:
+        response = jsonify(success=False, error='A valid arrival target coordinate is required')
+        response.status_code = 400
+    else:
+        evidence = collect(target)
+        if evidence is None:
+            response = jsonify(success=False, error='Arrival map evidence is unavailable or incomplete')
+            response.status_code = 503
+        else:
+            response = jsonify(success=True, evidence=evidence)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @search_bp.route('/arrival-parking-search', methods=['POST'])
 def arrival_parking_search():
     """Parking candidates around an explicit destination, never map/current GPS centre."""
