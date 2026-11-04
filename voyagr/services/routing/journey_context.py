@@ -83,4 +83,6 @@ def context_for_plan(raw, ordered_visits):
                                         'target': result['destination']['coordinates'][:],
                                         'requested_destination': requested,
                                         'onward_connection': 'NOT_EVALUATED', 'navigation_authority': 'NONE'}
+    from voyagr.services.routing.arrival_intent import normalize_intent
+    result['arrival_intent'] = normalize_intent(declared.get('arrival_intent'), result['destination']['coordinates'], bool(raw.get('round_trip')))
     return result

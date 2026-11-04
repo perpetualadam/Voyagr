@@ -642,6 +642,12 @@
                     }
                     return;
                 }
+                if (window.VoyagrJourneyPlan && !window.VoyagrJourneyPlan.responseArrivalIntentMatches(
+                    fetchPlan.body.journey_context && fetchPlan.body.journey_context.arrival_intent, data)) {
+                    hideRouteProgressBar();
+                    rt().call.showStatus('Arrival-intent modules differ. Reload online and recalculate; previous journey retained.', 'warning');
+                    return false;
+                }
                 if (integrity) integrity.tag(data,ticket);
                 if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
                     storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,

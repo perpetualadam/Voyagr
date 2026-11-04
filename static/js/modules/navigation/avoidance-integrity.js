@@ -61,7 +61,7 @@
             var progress=root.VoyagrNavigationLifecycleOrchestration;
             var intent=root.VoyagrJourneyPlan.liveIntent(root.lastCalculatedRoute,true,progress&&progress.getLastSnappedRouteIndex?progress.getLastSnappedRouteIndex():0);
             next.end=intent.destination;
-            next.journey_context=Object.assign({},next.journey_context,{purpose:'live_gps',destination:intent.destinationProvenance,arrival_choice:intent.arrivalChoice});
+            next.journey_context=Object.assign({},next.journey_context,{purpose:'live_gps',destination:intent.destinationProvenance,arrival_choice:intent.arrivalChoice,arrival_intent:intent.arrivalIntent});
         }
         return next;
     }
@@ -199,6 +199,9 @@
             (route.avoidance_assessment && route.avoidance_assessment.resume_state))) {
             return {allowed:false,acceptance:false,message:'Saved journey is preview only. Recalculate from your actual location before navigation.'};
         }
+        var intent=route&&route.journey_context&&route.journey_context.arrival_intent;
+        if(intent&&(intent.version!==1||intent.mode!=='place'||intent.status==='UNSUPPORTED'||intent.status==='TARGET_MISMATCH'))return {
+            allowed:false,acceptance:false,message:'This arrival intent is preview only. Roadside suitability and vehicle-entrance validation are not implemented; choose the default intent to use the existing GPS checks.'};
         var assessment = route && route.avoidance_assessment;
         var origin=assessment && assessment.origin_integrity;
         if (!origin || origin.navigation_allowed!==true || origin.transition_verified===true ||
@@ -338,6 +341,17 @@
         };
         return Object.prototype.hasOwnProperty.call(messages,arrival.status)?label+': '+messages[arrival.status]+' ':'';
     }
+    function intentSummary(record){
+        var policy=record.arrival_policy;
+        if(!policy||policy.version!==1||policy.policy!=='planning-arrival-intent-v1'||policy.authority!=='planning_evidence_only'||
+            policy.navigation_authority!=='NONE'||policy.geometry_binding!==record.geometry_binding||
+            JSON.stringify(policy.target)!==JSON.stringify(record.destination.requested&&record.destination.requested.coordinates))return '';
+        var messages={place:'Place/parking-point intent: property access remains unresolved.',
+            roadside:'Roadside arrival intent: the returned road endpoint is shown for planning; suitable/legal stopping and approach are not verified.',
+            vehicle_entrance:'Vehicle-entrance intent: a vehicle entrance and its approach must still be established.',
+            unknown:'Arrival intent needs review; choose a supported intent and recalculate.'};
+        return Object.prototype.hasOwnProperty.call(messages,policy.mode)?messages[policy.mode]+' ':'';
+    }
     function planningSummary(route) {
         var record=route&&route.endpoint_resolution,assessment=route&&route.avoidance_assessment;
         if(!record||record.version!==1||record.authority!=='planning_evidence_only'||record.navigation_authority!=='NONE'||
@@ -351,8 +365,8 @@
         return (record.planning_disposition==='ROAD_SNAPPED'?'Road-snapped planning endpoints. ':'Planning endpoint access needs review. ')+
             (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. '+
             (record.arrival_choice&&record.arrival_choice.version===1&&record.arrival_choice.authority==='request_metadata_only'&&record.arrival_choice.navigation_authority==='NONE'?
-                'Driving guidance is planned to end at your chosen arrival point. Your original destination is retained; the onward connection is not included or verified. ':'')+
-            arrivalSummary(record.destination,'Destination arrival')+
+                'Your chosen arrival point is retained; the returned road endpoint is shown separately. Your original destination is retained; the onward connection is not included or verified. ':'')+
+            intentSummary(record)+(record.arrival_policy&&record.arrival_policy.mode==='roadside'?'':arrivalSummary(record.destination,'Destination arrival'))+
             (Array.isArray(record.stops)?record.stops.map(function(stop,index){return arrivalSummary(stop,'Stop '+(index+1)+' arrival');}).join(''):'');
     }
     function summary(route) { return planningSummary(route)+navigationSummary(route); }

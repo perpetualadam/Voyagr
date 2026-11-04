@@ -38,8 +38,16 @@
         try{var evidence=JSON.parse(data.journeySearchEvidence||'null');if(kind==='searched'&&evidence&&evidence.version===1&&JSON.stringify(evidence.coordinates)===JSON.stringify(result.coordinates))result.search_evidence=evidence;}catch(_){}
         return result;
     }
+    var ARRIVAL_MODES=['place','roadside','vehicle_entrance'];
+    function requestedArrivalIntent(body){
+        var select=typeof document!=='undefined'&&document.getElementById('arrivalIntent');
+        var mode=select?select.value:'place';
+        if(ARRIVAL_MODES.indexOf(mode)<0)throw Error('Choose a supported arrival intent before recalculating.');
+        if(body.round_trip&&mode!=='place')throw Error('Use the default arrival intent for a round trip.');
+        return {version:1,mode:mode,target:coordinate(body.round_trip?body.start:body.end)};
+    }
     function requestContext(body,startInput,endInput){
-        return {version:1,purpose:'planning',origin:endpoint(startInput,body.start),destination:endpoint(endInput,body.end),
+        return {version:1,purpose:'planning',origin:endpoint(startInput,body.start),destination:endpoint(endInput,body.end),arrival_intent:requestedArrivalIntent(body),
             stops:(body.stops||[]).map(function(s){return {kind:KINDS.indexOf(s.provenance)>=0?s.provenance:'unknown',coordinates:[s.lat,s.lon]};})};
     }
     function destinationKey(input){return JSON.stringify([input&&input.value,input&&input.dataset.lat,input&&input.dataset.lon]);}
@@ -47,6 +55,7 @@
         var input=typeof document!=='undefined'&&document.getElementById('drivingArrival');
         var context=typeof document!=='undefined'&&document.getElementById('arrivalSearchContext');
         if(context)context.textContent='';
+        var intent=typeof document!=='undefined'&&document.getElementById('arrivalIntent');if(intent)intent.value='place';
         if(input){input.value='';Object.keys(input.dataset).forEach(function(key){delete input.dataset[key];});}
         var dropdown=typeof document!=='undefined'&&document.getElementById('autocomplete_drivingArrival');
         if(dropdown)dropdown.classList.remove('show');
@@ -61,11 +70,20 @@
         var requested=Object.assign({},context.destination,{label:String(endInput.value).slice(0,120)});
         body.end=point.join(',');
         context.destination=Object.assign(endpoint(arrivalInput,body.end),{label:arrivalInput.value.slice(0,120)});
+        context.arrival_intent.target=point.slice();
         context.arrival_choice={version:1,target:point,requested_destination:requested};
         return context;
     }
     function restoreArrival(context,endInput,arrivalInput){
         clearArrival();
+        var intentSelect=typeof document!=='undefined'&&document.getElementById('arrivalIntent'),intent=context&&context.arrival_intent;
+        if(intentSelect&&intent){
+            if(intent.version===1&&ARRIVAL_MODES.indexOf(intent.mode)>=0)intentSelect.value=intent.mode;
+            else{
+                if(!intentSelect.querySelector('option[value=unsupported]')){var option=document.createElement('option');option.value='unsupported';option.textContent='Unsupported saved intent — choose again';intentSelect.appendChild(option);}
+                intentSelect.value='unsupported';
+            }
+        }
         var choice=context&&context.arrival_choice,original=choice&&choice.requested_destination;
         var target=context&&context.destination,point=target&&coordinate(target.coordinates),requested=original&&coordinate(original.coordinates);
         if(!endInput||!arrivalInput||!choice||choice.version!==1||!point||!requested||JSON.stringify(choice.target)!==JSON.stringify(point))return;
@@ -104,10 +122,23 @@
             instruction:(plan.steps.filter(function(s){return (s.begin_shape_index||0)<=index;}).slice(-1)[0]||{}).instruction||'Maneuver instructions unavailable — geometry inspection only',
             completedStops:plan.ranges.slice(0,-1).filter(function(r){return plan.lengths[r.end_shape_index]<=d;}).length};
     }
+    function responseArrivalIntentMatches(requested,data){
+        if(!requested)return true;
+        var records=[data].concat(Array.isArray(data&&data.routes)?data.routes:[]);
+        return records.every(function(record){
+            var actual=record&&record.journey_context&&record.journey_context.arrival_intent;
+            if(!actual)return requested.version===1&&requested.mode==='place';
+            return actual.version===1&&actual.mode===requested.mode&&
+                JSON.stringify(actual.target)===JSON.stringify(requested.target)&&
+                (actual.status==='DEFAULT'||actual.status==='DECLARED');
+        });
+    }
     function liveIntent(route,active,index){
         if(!route)throw Error('Select a planned journey first.');
         if(active&&(!Number.isInteger(index)||index<0))throw Error('Current journey progress is unavailable. Stop and replan before live navigation.');
         var context=route.journey_context;
+        var intent=context&&context.arrival_intent;
+        if(intent&&(intent.version!==1||intent.mode!=='place'||intent.status==='UNSUPPORTED'||intent.status==='TARGET_MISMATCH'))throw Error('This arrival intent is preview only until its live validation is implemented.');
         if(route.navigation_resume_requires_fresh_gps&&(!context||!Array.isArray(context.ordered_stops)||!context.destination||!coordinate(context.destination.coordinates)))throw Error('This saved journey lacks endpoint and stop context. Replan it before live navigation.');
         var destination=context&&context.destination&&coordinate(context.destination.coordinates)||coordinate(route.destination);
         var destinationText=destination?destination.join(','):route.destination;
@@ -130,8 +161,8 @@
                 original_index:stop.original_index===undefined?i:stop.original_index,provenance:KINDS.indexOf(stop.kind)>=0?stop.kind:'unknown'},KINDS.indexOf(stop.source_kind)>=0&&stop.source_kind!=='unknown'?{source_kind:stop.source_kind}:{}));
         });
         return {destination:destinationText,destinationName:route.destinationName||destinationText,stops:preserved,
-            arrivalChoice:context&&context.arrival_choice,destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
+            arrivalIntent:context&&context.arrival_intent,arrivalChoice:context&&context.arrival_choice,destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
     }
-    var api={destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
+    var api={responseArrivalIntentMatches:responseArrivalIntentMatches,destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyPlan=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

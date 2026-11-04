@@ -6,7 +6,7 @@ complete merely because a related PR merged or a synthetic test passed.
 | # | Original objective | Current evidence/status | Remaining completion evidence |
 |---|---|---|---|
 | 1 | Establish the remaining blockers | Partial. A structured selected unnamed-parking assessment is now captured; endpoint refusal and preference limitations are separated below. | Obtain complete geometry/profile/source-version evidence and independent entrance/road-access data; assess other alternatives and fresh-GPS behavior. Do not generalize this one route to all journeys. Original transient geocoding 500 exception remains uncaptured. |
-| 2 | Resolve vehicle arrival points | Partial. Explicit arrival selection, original destination retention and source-based labels implemented and operator-tested. | Implement and accept roadside/entrance intent policy with genuine evidence; resolve ambiguous/missing entrances without silently relocating the vehicle. |
+| 2 | Resolve vehicle arrival points | Partial. Explicit arrival selection, original destination retention and source-based labels implemented and operator-tested. Versioned planning intent is implemented; roadside/entrance modes remain preview-only. | Implement and accept roadside/entrance intent policy with genuine evidence; resolve ambiguous/missing entrances without silently relocating the vehicle. |
 | 3 | Validate driven connections | Not complete. Coordinate correspondence is not connector validation. | Real directed connection geometry, barriers/levels/turn/access checks, mandatory restriction evaluation and negative cases. |
 | 4 | Implement live GPS road matching | Not complete. Existing fresh-fix checks remain; no new match authority granted. | Reviewed road-source coverage, trace-based ambiguity/freshness/heading tests, versioned acceptance policy and transactional integration. |
 | 5 | Complete provider/search integration | Partial. Destination-scoped parking retrieval, ranking and bounded provenance implemented. | Confirm deployed provider entrance/edge/matching support; intermediate-stop metadata capture; source age/revision and failure coverage. |
@@ -17,8 +17,7 @@ complete merely because a related PR merged or a synthetic test passed.
 ## Current bounded objective
 
 The selected unnamed-parking assessment now establishes the immediate numerical
-endpoint blocker. Next map provider road/entrance/profile fields and obtain missing
-access evidence before finalizing objective 2's acceptance contract. Entrance, connector and GPS authority
+endpoint blocker. The version-1 planning declaration now distinguishes place, roadside and vehicle-entrance intent. Next obtain provider road/entrance/profile and access evidence before implementing any positive live acceptance. Entrance, connector and GPS authority
 must not be implemented by guessing from the screenshots or widening the existing
 two-metre numerical consistency tolerance.
 
