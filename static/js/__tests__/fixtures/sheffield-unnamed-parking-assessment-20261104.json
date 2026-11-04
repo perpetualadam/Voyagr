@@ -1,0 +1,430 @@
+{
+  "source": "GraphHopper",
+  "journey_context": {
+    "arrival_choice": {
+      "authority": "request_metadata_only",
+      "navigation_authority": "NONE",
+      "onward_connection": "NOT_EVALUATED",
+      "requested_destination": {
+        "coordinates": [
+          53.5227681,
+          -1.1335312
+        ],
+        "kind": "saved",
+        "label": "Doncaster"
+      },
+      "target": [
+        53.5237353,
+        -1.1307239
+      ],
+      "version": 1
+    },
+    "authority": "request_metadata_only",
+    "destination": {
+      "coordinates": [
+        53.5237353,
+        -1.1307239
+      ],
+      "kind": "searched",
+      "label": "Unnamed parking — map point 53.523735, -1.130724",
+      "search_evidence": {
+        "authority": "request_metadata_only",
+        "coordinates": [
+          53.5237353,
+          -1.1307239
+        ],
+        "provider": "overpass",
+        "provider_ref": "way:1462440103",
+        "semantic_class": "poi",
+        "version": 1
+      }
+    },
+    "ordered_stops": [],
+    "origin": {
+      "coordinates": [
+        53.3806626,
+        -1.4702278
+      ],
+      "kind": "saved"
+    },
+    "purpose": "planning",
+    "version": 1
+  },
+  "endpoint_resolution": {
+    "arrival_choice": {
+      "authority": "request_metadata_only",
+      "navigation_authority": "NONE",
+      "onward_connection": "NOT_EVALUATED",
+      "requested_destination": {
+        "coordinates": [
+          53.5227681,
+          -1.1335312
+        ],
+        "kind": "saved",
+        "label": "Doncaster"
+      },
+      "target": [
+        53.5237353,
+        -1.1307239
+      ],
+      "version": 1
+    },
+    "authority": "planning_evidence_only",
+    "checked_at": 1793832084.4573715,
+    "destination": {
+      "access_evidence": "UNKNOWN",
+      "anchor_evidence": "NATIVE_SNAP_CONSISTENT",
+      "arrival_access": {
+        "authority": "planning_evidence_only",
+        "candidates": [],
+        "connector": "NOT_EVALUATED",
+        "navigation_authority": "NONE",
+        "policy": "arrival-reference-correspondence-v1",
+        "selection": "NONE",
+        "status": "NO_REFERENCE",
+        "vehicle_access": "UNKNOWN",
+        "version": 1
+      },
+      "offset_m": 13.693,
+      "planning_disposition": "REVIEW_REQUIRED",
+      "requested": {
+        "coordinates": [
+          53.5237353,
+          -1.1307239
+        ],
+        "kind": "searched",
+        "search_evidence": {
+          "authority": "request_metadata_only",
+          "coordinates": [
+            53.5237353,
+            -1.1307239
+          ],
+          "provider": "overpass",
+          "provider_ref": "way:1462440103",
+          "semantic_class": "poi",
+          "version": 1
+        }
+      },
+      "routing_anchor": {
+        "coordinates": [
+          53.52366,
+          -1.13056
+        ],
+        "native_coordinates": [
+          53.52366,
+          -1.13056
+        ],
+        "provider": "GraphHopper"
+      }
+    },
+    "geometry_binding": "f4fb9b32",
+    "navigation_authority": "NONE",
+    "origin": {
+      "access_evidence": "UNKNOWN",
+      "anchor_evidence": "NATIVE_SNAP_CONSISTENT",
+      "offset_m": 23.651,
+      "planning_disposition": "REVIEW_REQUIRED",
+      "requested": {
+        "coordinates": [
+          53.3806626,
+          -1.4702278
+        ],
+        "kind": "saved"
+      },
+      "routing_anchor": {
+        "coordinates": [
+          53.3808,
+          -1.4705
+        ],
+        "native_coordinates": [
+          53.3808,
+          -1.4705
+        ],
+        "provider": "GraphHopper"
+      }
+    },
+    "planning_disposition": "REVIEW_REQUIRED",
+    "stops": [],
+    "version": 1
+  },
+  "avoidance_assessment": {
+    "automatic_selection_allowed": false,
+    "checked_at": 1793832084.4573715,
+    "claim": "origin_connectivity_unverified",
+    "engine_capabilities": {
+      "penalties": "requested",
+      "point_exclusions": "via_areas",
+      "polygons": "custom_model_requested",
+      "verified_installation": false
+    },
+    "geometry_binding": "f4fb9b32",
+    "geometry_valid": true,
+    "origin_integrity": {
+      "checked_at": 1793832084.5256243,
+      "destination_area_relation": "NOT_REQUESTED",
+      "destination_displacement_m": 13.693,
+      "gps_accuracy_m": null,
+      "hazard_evidence": "NOT_REQUESTED",
+      "navigation_allowed": false,
+      "origin_displacement_m": 23.651,
+      "reason": "material_endpoint_relocation",
+      "requested_area_relation": "NOT_REQUESTED",
+      "requested_origin": [
+        53.3806626,
+        -1.4702278
+      ],
+      "road_connectivity": "NOT_VERIFIED",
+      "route_origin": [
+        53.3808,
+        -1.4705
+      ],
+      "safe_exit": "NOT_ESTABLISHED",
+      "snap_evidence": "PROVIDER_AND_GEOMETRY",
+      "status": "UNVERIFIED",
+      "transition_verified": false,
+      "version": 1
+    },
+    "origin_integrity_required": true,
+    "request_fingerprint": "b9691bf6490805a6a04f1e1b",
+    "requirements": [
+      {
+        "category": "speed_cameras",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 105,
+        "scope": "route",
+        "sources": [
+          "unknown"
+        ],
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "red_light_cameras",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 23,
+        "scope": "route",
+        "sources": [
+          "unknown"
+        ],
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "other_cameras",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "sources": [
+          "unknown"
+        ],
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "traffic_lights",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "sources": [
+          "unknown"
+        ],
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "railway_crossings",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "sources": [
+          "unknown"
+        ],
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "other_hazards",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "sources": [
+          "unknown"
+        ],
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "avoid_points",
+        "conflicts": 0,
+        "coverage": "NOT_APPLICABLE",
+        "enabled": false,
+        "engine": "GraphHopper",
+        "engine_capability": "not_requested",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "status": "SATISFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "disabled"
+      },
+      {
+        "category": "tolls",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "not_verified",
+        "mode": "preference",
+        "outside_radius": 0,
+        "provider_limitation": "attribute_not_verified",
+        "scope": "route",
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "caz",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "congestion_charging",
+        "conflicts": 0,
+        "coverage": "UNKNOWN",
+        "enabled": true,
+        "engine": "GraphHopper",
+        "engine_capability": "best_effort",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "status": "UNVERIFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "insufficient_evidence"
+      },
+      {
+        "category": "motorways",
+        "conflicts": 0,
+        "coverage": "NOT_APPLICABLE",
+        "enabled": false,
+        "engine": "GraphHopper",
+        "engine_capability": "not_requested",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "status": "SATISFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "disabled"
+      },
+      {
+        "category": "ferries",
+        "conflicts": 0,
+        "coverage": "NOT_APPLICABLE",
+        "enabled": false,
+        "engine": "GraphHopper",
+        "engine_capability": "not_requested",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "status": "SATISFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "disabled"
+      },
+      {
+        "category": "unpaved",
+        "conflicts": 0,
+        "coverage": "NOT_APPLICABLE",
+        "enabled": false,
+        "engine": "GraphHopper",
+        "engine_capability": "not_requested",
+        "mode": "preference",
+        "outside_radius": 0,
+        "scope": "route",
+        "status": "SATISFIED",
+        "uncertain_matches": 0,
+        "unknown_or_stale": 0,
+        "unrelated_matches": 0,
+        "verification": "disabled"
+      }
+    ],
+    "requires_acceptance": true,
+    "status": "UNVERIFIED",
+    "version": 1
+  },
+  "provider_limitations": [
+    {
+      "category": "tolls",
+      "engine": "GraphHopper",
+      "reason": "attribute_not_verified",
+      "status": "UNVERIFIED"
+    }
+  ]
+}
