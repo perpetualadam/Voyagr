@@ -4,6 +4,8 @@ Status: phased implementation, 3 November 2026. Original design baseline: main
 `fd4f3df2`. Implementation notes below distinguish shipped evidence contracts from
 future arrival-selection and live-authorization work. No deployment is implied.
 
+Master checklist: [Original eight objectives](ARRIVAL_OBJECTIVES_TRACKER.md).
+
 ## Problem and evidence
 
 A searched place coordinate is not necessarily a drivable arrival point. A raw
