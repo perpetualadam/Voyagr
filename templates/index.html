@@ -137,10 +137,10 @@
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
     <script defer src="/static/js/modules/ui/pwa-install.js?v=20260906app01"></script>
     <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
-    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261103endpointguidance2"></script>
+    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
-    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261104destinationparking1"></script>
-    <script defer src="/static/js/app/journey-modes.js?v=20261103drivingarrival1"></script>
+    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261104arrivalintent1"></script>
+    <script defer src="/static/js/app/journey-modes.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
@@ -235,7 +235,7 @@
     <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261031phase12fgr9"></script>
     <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
-    <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261104searchresilience1"></script>
+    <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/voyagr-app.js?v=20261031phase12fgr9"></script>
@@ -445,6 +445,13 @@
                         <input type="text" id="drivingArrival" placeholder="Search parking near your destination, or a named entrance" aria-describedby="drivingArrivalHelp arrivalSearchContext" oninput="showAutocomplete('drivingArrival',true)" onfocus="showAutocomplete('drivingArrival')">
                         <div class="autocomplete-dropdown" id="autocomplete_drivingArrival"></div>
                     </div>
+                    <label for="arrivalIntent">Planning arrival intent</label>
+                    <select id="arrivalIntent" aria-describedby="arrivalIntentHelp" onchange="VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true})">
+                        <option value="place">Place or parking point (default)</option>
+                        <option value="roadside">Roadside arrival — preview only</option>
+                        <option value="vehicle_entrance">Vehicle entrance — preview only</option>
+                    </select>
+                    <small id="arrivalIntentHelp">This records the intended arrival. It does not verify stopping, property access or an entrance. Roadside and entrance intents cannot start live navigation yet.</small>
                     <small id="arrivalSearchContext" role="status"></small>
                     <small id="drivingArrivalHelp">Keep your destination above. Choose where driving guidance should end, then calculate again. Check the vehicle entrance and opening restrictions. The onward connection is not included.</small>
                     <button type="button" class="btn" onclick="VoyagrJourneyPlan.clearArrival();VoyagrLocationOrchestration.invalidateEndpointRequests('end')">Clear arrival point</button>

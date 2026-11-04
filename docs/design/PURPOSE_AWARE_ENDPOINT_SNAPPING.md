@@ -386,3 +386,35 @@ checkmark. Zero nearby observations does not produce green success styling.
 The nearby-count label describes observations, and the penalty is labelled as a
 preference-scoring value; routing enrichment uses that value to order routes.
 Assessment, scoring, route costs/durations and navigation gates are unchanged.
+
+
+## Version-1 planning arrival intent
+
+`journey_context.arrival_intent` carries `version: 1`, `mode` (`place`,
+`roadside`, `vehicle_entrance`) and the actual routed `target` coordinates.
+A separate driving arrival choice updates this target while retaining the original
+destination. Legacy requests default to place. Unsupported versions/modes, stale
+targets and non-default round-trip intent require review. Saved plans restore the
+selection; unsupported saved declarations require reselection.
+
+The server emits `endpoint_resolution.arrival_policy`, bound to the geometry and
+requested target. It records the returned road endpoint separately. States are
+`PLACE_ACCESS_UNRESOLVED`, `ROADSIDE_SUITABILITY_UNVERIFIED`,
+`ENTRANCE_REFERENCE_MISSING`, `ENTRANCE_ACCESS_UNVERIFIED` and
+`INTENT_REQUIRES_REVIEW`. All have navigation authority `NONE`, unknown vehicle
+access and unevaluated stopping/connector checks. An aligned entrance reference
+is insufficient to establish lawful vehicle access.
+
+Roadside and vehicle-entrance selections are explicitly preview-only on server
+and browser, including saved-plan resume and deviation paths. They cannot inherit
+legacy numerical eligibility. Custom-intent responses missing or changing the
+contract are rejected before replacing the current journey. Default place requests
+retain legacy response compatibility and existing live checks. No numerical
+threshold, GPS matching policy or mandatory restriction check is relaxed.
+
+Repository inspection finds provider-snapped waypoints and limited GraphHopper
+edge details; the parking search retrieves mapped parking centres. These do not
+supply verified entrances or driven connectors. Deployed provider capabilities,
+road direction/access/barriers, source revision/freshness and stopping legality
+remain to be established. No production provider coverage or physical entrance
+acceptance is claimed by this change. Objectives 2–5 remain incomplete.

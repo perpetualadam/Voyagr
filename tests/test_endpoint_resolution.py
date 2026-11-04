@@ -416,3 +416,101 @@ process.stdout.write(JSON.stringify(result));
     assert 'original destination is retained' in row['planning']
     assert 'Navigation cannot start' in row['safety']
     assert row['disabled']
+
+
+@pytest.mark.parametrize('mode,status', [('place', 'PLACE_ACCESS_UNRESOLVED'),
+    ('roadside', 'ROADSIDE_SUITABILITY_UNVERIFIED'), ('vehicle_entrance', 'ENTRANCE_REFERENCE_MISSING')])
+def test_arrival_intent_is_bound_to_request_and_never_authorizes_access(mode, status):
+    raw = body()
+    raw['journey_context']['arrival_intent'] = {'version': 1, 'mode': mode, 'target': END,
+        'status': 'VERIFIED', 'navigation_authority': 'FULL', 'connector': 'VERIFIED'}
+    result = post(raw)
+    intent = result['journey_context']['arrival_intent']
+    assert intent == {'version': 1, 'mode': mode, 'target': END, 'status': 'DECLARED',
+                      'authority': 'request_metadata_only', 'navigation_authority': 'NONE'}
+    for route in result['routes']:
+        policy = route['endpoint_resolution']['arrival_policy']
+        assert policy['mode'] == mode and policy['status'] == status
+        assert policy['geometry_binding'] == route['avoidance_assessment']['geometry_binding']
+        assert policy['target'] == END
+        assert policy['route_endpoint'] == list(decode_geometry(route['geometry'], 6)[-1])
+        assert policy['stopping'] == policy['connector'] == 'NOT_EVALUATED'
+        assert policy['vehicle_access'] == 'UNKNOWN' and policy['navigation_authority'] == 'NONE'
+        assert not route['avoidance_assessment']['origin_integrity']['navigation_allowed']
+
+
+@pytest.mark.parametrize('value,status', [
+    ({'version': 2, 'mode': 'roadside', 'target': END}, 'UNSUPPORTED'),
+    ({'version': True, 'mode': 'roadside', 'target': END}, 'UNSUPPORTED'),
+    ({'version': 1, 'mode': 'teleport', 'target': END}, 'UNSUPPORTED'),
+    ({'version': 1, 'mode': [], 'target': END}, 'UNSUPPORTED'),
+    ({'version': 1, 'mode': 'roadside', 'target': [0, 0]}, 'TARGET_MISMATCH'),
+    ({'version': 1, 'mode': 'roadside', 'target': [True, 0]}, 'TARGET_MISMATCH'),
+    ({'version': 1, 'mode': 'roadside', 'target': [10**400, 0]}, 'TARGET_MISMATCH'),
+])
+def test_unsupported_or_stale_intent_is_not_silently_accepted(value, status):
+    raw = body();raw['journey_context']['arrival_intent'] = value
+    result = post(raw)
+    assert result['journey_context']['arrival_intent']['mode'] == 'unknown'
+    assert result['journey_context']['arrival_intent']['status'] == status
+    assert result['endpoint_resolution']['arrival_policy']['status'] == 'INTENT_REQUIRES_REVIEW'
+
+
+def test_legacy_default_and_round_trip_intent_are_conservative():
+    result = post(body())
+    assert result['journey_context']['arrival_intent']['mode'] == 'place'
+    assert result['journey_context']['arrival_intent']['status'] == 'DEFAULT'
+    raw = body();raw['round_trip'] = True
+    raw['journey_context']['arrival_intent'] = {'version': 1, 'mode': 'roadside', 'target': START}
+    result = post(raw)
+    assert result['journey_context']['arrival_intent']['status'] == 'UNSUPPORTED'
+    assert result['journey_context']['arrival_intent']['target'] == START
+
+
+def test_even_aligned_entrance_reference_has_no_vehicle_access_authority():
+    raw = arrival_body([{'coordinates': anchor_point()}])
+    raw['journey_context']['arrival_intent'] = {'version': 1, 'mode': 'vehicle_entrance', 'target': END}
+    result = post(raw)
+    policy = result['endpoint_resolution']['arrival_policy']
+    assert policy['reference_status'] == 'ANCHOR_ALIGNED_REFERENCE'
+    assert policy['status'] == 'ENTRANCE_ACCESS_UNVERIFIED'
+    assert policy['navigation_authority'] == 'NONE'
+
+
+def test_captured_parking_record_supports_preview_intent_but_no_invented_connector():
+    from voyagr.services.routing.arrival_intent import normalize_intent, planning_policy
+    path = Path(__file__).parent.parent / 'static/js/__tests__/fixtures/sheffield-unnamed-parking-assessment-20261104.json'
+    captured = json.loads(path.read_text())
+    target = captured['journey_context']['destination']['coordinates']
+    intent = normalize_intent({'version': 1, 'mode': 'roadside', 'target': target}, target)
+    record = captured['endpoint_resolution']
+    policy = planning_policy(intent, record['destination'], record['geometry_binding'], record['checked_at'])
+    assert policy['route_endpoint'] == [53.52366, -1.13056]
+    assert policy['target'] == [53.5237353, -1.1307239]
+    assert policy['status'] == 'ROADSIDE_SUITABILITY_UNVERIFIED'
+    assert policy['connector'] == 'NOT_EVALUATED' and policy['navigation_authority'] == 'NONE'
+
+
+def test_preview_intent_cannot_inherit_server_eligibility_from_a_numerically_continuous_route():
+    route = CAPTURE['routes'][0]
+    points = decode_geometry(route['geometry'], 6)
+    raw = body()
+    raw['start'] = ','.join(map(str, points[0]));raw['end'] = ','.join(map(str, points[-1]))
+    baseline = post(raw)
+    original = baseline['routes'][0]['avoidance_assessment']
+    assert original['origin_integrity']['navigation_allowed'] is True
+    assert original['automatic_selection_allowed'] is True
+    for mode in ('roadside', 'vehicle_entrance'):
+        raw['journey_context']['arrival_intent'] = {'version': 1, 'mode': mode, 'target': list(points[-1])}
+        result = post(raw)
+        assert result['navigation_outcome'] == 'REFUSED' and result['automatic_selection_allowed'] is False
+        assessed = result['routes'][0]['avoidance_assessment']
+        actual_origin = copy.deepcopy(assessed['origin_integrity'])
+        expected_origin = copy.deepcopy(original['origin_integrity'])
+        actual_origin.pop('checked_at', None);expected_origin.pop('checked_at', None)
+        assert actual_origin == expected_origin
+        assert assessed['automatic_selection_allowed'] is False
+        assert assessed['arrival_intent_navigation_allowed'] is False
+        assert assessed['requirements'] == original['requirements']
+        assert result['routes'][0]['geometry'] == route['geometry']
+        assert result['routes'][0]['maneuvers'] == route['maneuvers']

@@ -86,6 +86,8 @@ def register_avoidance_integrity(app):
                 route['journey_context'] = copy.deepcopy(result['journey_context'])
                 with route_transport.stage('origin_validation'):
                     route['endpoint_resolution'] = resolve_endpoints(route, result['journey_context'])
+            from voyagr.services.routing.arrival_intent import restrict_preview_only
+            restrict_preview_only(result, result['journey_context']['arrival_intent'])
             if endpoint_routes and endpoint_routes[0] is not result:
                 result['endpoint_resolution'] = copy.deepcopy(endpoint_routes[0]['endpoint_resolution'])
 

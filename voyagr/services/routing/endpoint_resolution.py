@@ -122,6 +122,9 @@ def resolve_endpoints(route, context):
         out['stops'].append(entry)
     for arrival in [*out['stops'], out['destination']]:
         arrival['arrival_access'] = assess_arrival(arrival)
+    from voyagr.services.routing.arrival_intent import normalize_intent, planning_policy
+    intent = normalize_intent(context.get('arrival_intent'), context['destination']['coordinates'])
+    out['arrival_policy'] = planning_policy(intent, out['destination'], out['geometry_binding'], out['checked_at'])
     records = [out['origin'], *out['stops'], out['destination']]
     out['planning_disposition'] = ('ROAD_SNAPPED' if all(e['planning_disposition'] == 'ROAD_SNAPPED' for e in records)
                                    else 'REVIEW_REQUIRED')

@@ -266,3 +266,18 @@ test('GPS recalculation carries the explicit arrival and retained city as distin
     expect(body.journey_context.arrival_choice.target).toEqual(Plan.coordinate(route.destination));
     expect(body.journey_context.purpose).toBe('live_gps');
 });
+
+test.each(['roadside','vehicle_entrance'])('preview-only %s intent does not start GPS acquisition or replace the journey',async mode=>{
+    const route=selected();route.journey_context.arrival_intent={version:1,mode,target:Plan.coordinate(route.destination)};preview(route);
+    expect(await Modes.navigateFromGPS()).toBe(false);
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+    expect(runtime.fetch).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();
+    expect(context.status.mock.calls.at(-1)[0]).toContain('preview only');
+});
+test('default versioned intent survives the existing fresh-GPS recalculation protocol',async()=>{
+    const route=selected();route.journey_context.arrival_intent={version:1,mode:'place',status:'DECLARED',target:Plan.coordinate(route.destination)};preview(route);
+    expect(await Modes.navigateFromGPS()).toBe(true);
+    const body=JSON.parse(runtime.fetch.mock.calls[0][1].body);
+    expect(body.journey_context.arrival_intent).toEqual(route.journey_context.arrival_intent);
+    expect(Life.getRouteInProgress()).toBe(true);
+});

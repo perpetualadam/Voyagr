@@ -409,3 +409,57 @@ test('preference panel uses the selected assessment and provider limitations wit
     expect(neutral.title).toBe('Route preference assessment');expect(neutral.title).not.toMatch(/✓|applied/);
     expect(neutral.background).toBe('#FFF3E0');
 });
+
+function intentControl(mode='place'){
+    const select=document.createElement('select');select.id='arrivalIntent';
+    for(const value of ['place','roadside','vehicle_entrance']){const option=document.createElement('option');option.value=value;option.textContent=value;select.appendChild(option);}
+    select.value=mode;document.body.appendChild(select);return select;
+}
+test.each(['roadside','vehicle_entrance'])('arrival intent %s targets the actual choice and restores with the saved plan',mode=>{
+    const input=chooseDrivingArrival(),end=document.getElementById('end'),select=intentControl(mode);
+    const body={start:'53,-1',end:'53.5227681,-1.1335312'};
+    const context=Plan.applyDrivingArrival(body,null,end,input);
+    expect(context.arrival_intent).toEqual({version:1,mode,target:[53.52296,-1.13341]});
+    Plan.restoreArrival(context,end,input);expect(select.value).toBe(mode);
+    expect(end.value).toBe('Doncaster');expect(input.value).toBe('Selected car park entrance');
+    expect(()=>Plan.liveIntent({journey_context:{...context,ordered_stops:[]}},false,0)).toThrow(/preview only/);
+});
+test('arrival intent without a separate choice binds to the original routed target',()=>{
+    intentControl('roadside');
+    const body={start:'53,-1',end:'54,-2'};
+    expect(Plan.applyDrivingArrival(body,null,document.getElementById('end'),null).arrival_intent.target).toEqual([54,-2]);
+    expect(()=>Plan.applyDrivingArrival({...body,round_trip:true},null,document.getElementById('end'),null)).toThrow(/round trip/);
+    Plan.clearArrival();expect(document.getElementById('arrivalIntent').value).toBe('place');
+});
+test('unsupported saved intent requires a fresh explicit selection',()=>{
+    const select=intentControl();
+    Plan.restoreArrival({arrival_intent:{version:2,mode:'future_mode'}},null,null);
+    expect(select.value).toBe('unsupported');
+    expect(()=>Plan.requestContext({start:'53,-1',end:'54,-2'},null,null)).toThrow(/supported arrival intent/);
+});
+test.each(['roadside','vehicle_entrance'])('a declared %s intent can be inspected but cannot bypass the live gate',mode=>{
+    const route=attach(JSON.parse(JSON.stringify(capture.routes[0])));
+    route.journey_context={arrival_intent:{version:1,mode,target:[53.52,-1.13]}};
+    route.endpoint_resolution.destination.requested={coordinates:[53.52,-1.13]};
+    route.endpoint_resolution.arrival_policy={version:1,policy:'planning-arrival-intent-v1',mode,target:[53.52,-1.13],
+        geometry_binding:route.avoidance_assessment.geometry_binding,authority:'planning_evidence_only',navigation_authority:'NONE'};
+    expect(AI.planningSummary(route)).toContain(mode==='roadside'?'Roadside arrival intent':'Vehicle-entrance intent');
+    expect(AI.decision(route)).toMatchObject({allowed:false,acceptance:false});
+    expect(AI.decision(route).message).toContain('preview only');
+    expect(Plan.inspection(route,AI).points.length).toBeGreaterThan(0);
+    route.endpoint_resolution.arrival_policy.navigation_authority='FULL';
+    expect(AI.planningSummary(route)).not.toContain(mode==='roadside'?'Roadside arrival intent:':'Vehicle-entrance intent:');
+    expect(AI.decision(route).allowed).toBe(false);
+});
+
+test('arrival intent response compatibility rejects silent custom-intent downgrades per alternative',()=>{
+    const intent={version:1,mode:'roadside',target:[54,-2]};
+    const record=()=>({journey_context:{arrival_intent:{...intent,status:'DECLARED'}}});
+    expect(Plan.responseArrivalIntentMatches(intent,{})).toBe(false);
+    expect(Plan.responseArrivalIntentMatches(intent,{...record(),routes:[record()]})).toBe(true);
+    expect(Plan.responseArrivalIntentMatches(intent,{...record(),routes:[{}]})).toBe(false);
+    const stale=record();stale.journey_context.arrival_intent.target=[55,-2];
+    expect(Plan.responseArrivalIntentMatches(intent,stale)).toBe(false);
+    expect(Plan.responseArrivalIntentMatches({...intent,mode:'place'},{})).toBe(true);
+    expect(Plan.responseArrivalIntentMatches(undefined,{})).toBe(true);
+});
