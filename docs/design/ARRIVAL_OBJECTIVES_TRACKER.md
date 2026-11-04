@@ -5,7 +5,7 @@ complete merely because a related PR merged or a synthetic test passed.
 
 | # | Original objective | Current evidence/status | Remaining completion evidence |
 |---|---|---|---|
-| 1 | Establish the remaining blockers | Partial. Legacy Sheffield–Doncaster fixture has native snap/geometry evidence; user recordings show later offsets. | Capture the current selected parking route assessment, original/arrival/route endpoints and every refusal reason. Separate provider limitations from mandatory and endpoint failures. Original transient geocoding 500 exception remains uncaptured. |
+| 1 | Establish the remaining blockers | Partial. A structured selected unnamed-parking assessment is now captured; endpoint refusal and preference limitations are separated below. | Obtain complete geometry/profile/source-version evidence and independent entrance/road-access data; assess other alternatives and fresh-GPS behavior. Do not generalize this one route to all journeys. Original transient geocoding 500 exception remains uncaptured. |
 | 2 | Resolve vehicle arrival points | Partial. Explicit arrival selection, original destination retention and source-based labels implemented and operator-tested. | Implement and accept roadside/entrance intent policy with genuine evidence; resolve ambiguous/missing entrances without silently relocating the vehicle. |
 | 3 | Validate driven connections | Not complete. Coordinate correspondence is not connector validation. | Real directed connection geometry, barriers/levels/turn/access checks, mandatory restriction evaluation and negative cases. |
 | 4 | Implement live GPS road matching | Not complete. Existing fresh-fix checks remain; no new match authority granted. | Reviewed road-source coverage, trace-based ambiguity/freshness/heading tests, versioned acceptance policy and transactional integration. |
@@ -16,8 +16,9 @@ complete merely because a related PR merged or a synthetic test passed.
 
 ## Current bounded objective
 
-First obtain objective 1's current route evidence. Then finalize the objective 2
-policy table below and its regression cases. Entrance, connector and GPS authority
+The selected unnamed-parking assessment now establishes the immediate numerical
+endpoint blocker. Next map provider road/entrance/profile fields and obtain missing
+access evidence before finalizing objective 2's acceptance contract. Entrance, connector and GPS authority
 must not be implemented by guessing from the screenshots or widening the existing
 two-metre numerical consistency tolerance.
 
@@ -87,3 +88,43 @@ live/device evidence distinctly. Review source capabilities before using them.
 Track discovered non-blocking issues here instead of expanding the current PR.
 Implementation, tests, CI, merge, deployment and live acceptance are distinct
 milestones. Production deployments remain user-managed.
+
+## Captured selected assessment: unnamed parking
+
+Source: user-supplied structured browser state, preserved in
+[assessment capture](../../static/js/__tests__/fixtures/sheffield-unnamed-parking-assessment-20261104.json).
+This is not a complete engine response or a geometry replay fixture. It contains
+no route geometry, maneuvers, selected-index, deployed-commit or asset-version
+snapshot. It must not be combined with the legacy route geometry or relabelled as
+Chappell Drive/Civic Quarter. Inspection of policy code confirms the captured
+reason matches the current endpoint continuity gate; no permission is inferred.
+
+| Question | Captured evidence | Meaning / limitation |
+|---|---|---|
+| Original goal | Saved Doncaster point 53.5227681, -1.1335312 | Retained separately from the parking arrival. |
+| Driving target | Overpass way:1462440103 at 53.5237353, -1.1307239 | Parking mapped point, not an identified vehicle entrance. |
+| Origin | Saved Sheffield point 53.3806626, -1.4702278 | No accepted physical GPS position established; accuracy is null. |
+| Road anchors | Origin 53.3808, -1.4705; arrival 53.52366, -1.13056 | Native GraphHopper snaps equal the reported geometry-derived anchors. |
+| Gaps | 23.651 m origin; 13.693 m arrival | The captured refusal is material_endpoint_relocation under the current numerical gate. |
+| Geometry | geometry_valid=true, binding f4fb9b32 | Server-reported validity/binding; omitted geometry cannot be independently replayed. |
+| Arrival access | NO_REFERENCE, candidates=[], vehicle_access=UNKNOWN, connector=NOT_EVALUATED | No entrance/access/connector validation exists in this capture. |
+| Requirements | All 13 rows mode=preference; enabled rows UNVERIFIED, conflicts=0, coverage=UNKNOWN | No mandatory requirement blocker established; zero conflicts does not prove hazard absence. Disabled SATISFIED rows are not successful avoidance checks. |
+| Provider limitation | Tolls: attribute_not_verified | Toll avoidance is unverified, not evidence that it was definitely ignored. |
+| Engine installation | verified_installation=false | Installation capabilities have not been independently verified; this does not prove an engine fault. |
+| Scope | purpose=planning; navigation_allowed=false; transition_verified=false | Preview evidence grants no live/navigation authority. |
+
+### Objective 2 field mapping and implementation boundary
+
+The current record provides requested endpoints, explicit arrival choice, native
+anchor correspondence, measured offsets, route binding and request provenance.
+It does not provide arrival intent (roadside versus entrance), suitable/legal
+stopping evidence, directed entrance/edge identity, connector geometry, evaluated
+access conditions, accepted GPS match, or verified source revision/profile binding.
+
+Next define an additive versioned arrival-intent contract and its lifecycle across
+planning, saved journeys, GPS recalculation and rerouting. A planning declaration
+must remain request metadata. A live acceptance rule needs the missing provider/
+road evidence and negative fixtures; source availability must be established before
+coding success paths. Keep the two-metre numerical check unchanged until a reviewed
+replacement policy has adequate evidence and acceptance tests. Objective 1 and the
+other seven objectives remain partial/open as recorded above.
