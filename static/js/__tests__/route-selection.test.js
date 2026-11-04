@@ -296,7 +296,7 @@ describe('route preview helpers', () => {
         expect(caz.html).toContain('CAZ Exempt');
     });
 
-    test('getHazardPreviewPanelState prefers preferences-applied branch', () => {
+    test('getHazardPreviewPanelState does not imply success from local preferences', () => {
         const state = RS.getHazardPreviewPanelState({
             preferencesApplied: true,
             camerasNearRoute: 0,
@@ -304,7 +304,8 @@ describe('route preview helpers', () => {
             hazardPenaltySeconds: 0,
         });
         expect(state.visible).toBe(true);
-        expect(state.background).toBe('#E8F5E9');
+        expect(state.background).toBe('#FFF3E0');
+        expect(state.title).toBe('Route preference assessment unavailable');
     });
 
     test('buildHazardPreviewPanelApplyPlan maps state to DOM apply plan', () => {

@@ -91,8 +91,9 @@ def search_near_destination(lat, lon):
         raw_name = text('name').strip()
         name = raw_name or 'Unnamed parking'
         has_name = bool(raw_name) and raw_name.casefold() not in {'parking', 'car park', 'carpark', 'unnamed parking', 'unnamed car park'}
-        road = text('addr:street')
-        candidates.append({'name': name, 'display_name': ', '.join(x for x in (name, road) if x),
+        road = text('addr:street').strip()
+        location_label = name if has_name else f"{name} — {road[:50] + '; ' if road else ''}map point {point[0]:.6f}, {point[1]:.6f}"
+        candidates.append({'name': name, 'location_label': location_label, 'display_name': ', '.join(x for x in (name, road) if x),
                            'lat': str(point[0]), 'lon': str(point[1]), 'type': 'parking', 'class': 'amenity',
                            'osm_type': element['type'], 'osm_id': element['id'], '_source': 'overpass',
                            'address': {'road': road}, 'distance_m': round(distance, 1),

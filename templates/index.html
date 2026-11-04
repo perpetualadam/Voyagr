@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261031phase12fg" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261104arrivalpresentation1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -108,7 +108,7 @@
     <script defer src="/static/js/modules/navigation/trip-history.js?v=20260712aacg"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027phase5a"></script>
-    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261104destinationparking1"></script>
+    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261104arrivalpresentation1"></script>
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261031phase12fgremediation"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20260711zb"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
@@ -178,7 +178,7 @@
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
-    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261104parkingpriority1"></script>
+    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261104arrivalpresentation1"></script>
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
@@ -1659,11 +1659,11 @@
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">Route preferences</h4>
                             <div style="font-size: 13px; line-height: 1.6;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;" data-hazard-count-label>Route score:</span>
+                                    <span style="color: #666;" data-hazard-count-label>Nearby observations:</span>
                                     <strong id="previewHazardCount">0</strong>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #666;">Time Penalty:</span>
+                                    <span style="color: #666;">Preference scoring penalty:</span>
                                     <strong id="previewHazardPenalty">0 min</strong>
                                 </div>
                             </div>

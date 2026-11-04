@@ -369,3 +369,43 @@ test('customer, unknown, vehicle, conditional and opening restrictions stay expl
     expect(text[4]).toContain('Conflicting access reports need review');
     expect(text.every(row=>row.includes('not verified'))).toBe(true);
 });
+
+test('unnamed mapped-point label survives selection, request context and preview',()=>{
+    const input=scopeFixture(),end=document.getElementById('end');
+    const label='Unnamed parking — map point 53.521983, -1.131094';
+    Geo.displayAutocompleteResults('drivingArrival',[{name:'Unnamed parking',location_label:label,lat:'53.5219825',lon:'-1.1310942',type:'parking',_source:'overpass',osm_type:'way',osm_id:9}]);
+    const item=document.querySelector('#autocomplete_drivingArrival .autocomplete-item');
+    expect(item.querySelector('.autocomplete-item-name').textContent).toBe(label);
+    expect(item.querySelector('.autocomplete-item-text .autocomplete-arrival-details')).not.toBeNull();
+    item.click();expect(input.value).toBe(label);
+    const body={start:'53,-1',end:'53.5227681,-1.1335312'};
+    const context=Plan.applyDrivingArrival(body,null,end,input);
+    context.arrival_choice.authority='request_metadata_only';context.arrival_choice.navigation_authority='NONE';
+    const route={journey_context:context};
+    const panel=RS.buildRoutePreviewPanelApplyPlan({routeData:route,startLabel:'Sheffield',endLabel:'Doncaster'});
+    expect(panel.routeLabel).toContain(label);expect(panel.routeLabel).toContain('driving arrival for Doncaster');
+    expect(context.destination.coordinates).toEqual([53.5219825,-1.1310942]);
+    expect(context.arrival_choice.requested_destination.coordinates).toEqual([53.5227681,-1.1335312]);
+});
+test('provider labels and addresses render as text rather than injected HTML',()=>{
+    scopeFixture();
+    const malicious='<img src=x onerror=alert(1)>';
+    Geo.displayAutocompleteResults('drivingArrival',[{name:malicious,location_label:malicious,display_name:malicious,lat:'53.52',lon:'-1.13',type:'parking'}]);
+    const item=document.querySelector('#autocomplete_drivingArrival .autocomplete-item');
+    expect(item.textContent).toContain(malicious);expect(item.querySelector('img')).toBeNull();
+});
+test('preference panel uses the selected assessment and provider limitations without claiming application',()=>{
+    const payload=JSON.parse(JSON.stringify(capture));
+    payload.routes[0].provider_limitations=[{category:'tolls'}];
+    payload.routes[1].provider_limitations=[];
+    payload.routes[1].avoidance_assessment={status:'UNVERIFIED',requirements:[]};
+    const make=index=>RS.buildRoutePreviewPanelApplyPlan({routeData:payload,selectedRouteIndex:index,preferencesApplied:true});
+    expect(make(0).hazardPlan.title).toBe('⚠ Provider preferences limited');
+    expect(make(1).hazardPlan.title).toBe('⚠ Route preferences need review');
+    expect(make(0).hazardPlan.title).not.toContain('applied');
+    expect(make(0).hazardPlan.countLabel).toBe('Nearby observations:');
+    expect(AI.decision(payload.routes[0]).allowed).toBe(false);
+    const neutral=RS.getHazardPreviewPanelState({preferencesApplied:true,camerasNearRoute:0,assessment:{status:'SATISFIED'}});
+    expect(neutral.title).toBe('Route preference assessment');expect(neutral.title).not.toMatch(/✓|applied/);
+    expect(neutral.background).toBe('#FFF3E0');
+});
