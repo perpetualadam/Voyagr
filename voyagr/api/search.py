@@ -579,7 +579,7 @@ def arrival_parking_search():
     else:
         response = jsonify(success=True, results=candidates[:10], search_context={
             'version': 1, 'coordinates': list(point), 'radius_m': RADIUS_M,
-            'coverage': 'CANDIDATES_ONLY', 'source': 'overpass'})
+            'coverage': 'CANDIDATES_ONLY', 'source': 'overpass', 'ranking_policy': 'reported_access_name_distance_v1'})
     response.headers['Cache-Control'] = 'no-store'
     return response
 

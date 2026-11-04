@@ -338,3 +338,34 @@ test('preview names the selected arrival and retained destination independently 
     expect(make(0).routeLabel).toBe('Sheffield → Doncaster');
     expect(AI.decision(payload.routes[0]).allowed).toBe(false);
 });
+
+test('browser preserves server shortlist ranking instead of re-sorting private parking by distance',()=>{
+    const input=scopeFixture('Doncaster shortlist');input.value='parking';
+    const rows=[
+        {lat:'53.5198586',lon:'-1.1346897',name:'Named public parking',access_category:'general',reported_access:{access:'yes'}},
+        {lat:'53.52276',lon:'-1.13353',name:'Closer private parking',access_category:'restricted',reported_access:{access:'private'}}];
+    Geo.displayAutocompleteResults('drivingArrival',rows);
+    const items=[...document.querySelectorAll('#autocomplete_drivingArrival .autocomplete-item')];
+    expect(items[0].textContent).toContain('Named public parking');
+    expect(items[1].textContent).toContain('Closer private parking');
+    expect(items[0].textContent).toContain('not verified');
+    expect(items[1].textContent).toContain('check permission');
+    expect(input.value).toBe('parking');
+});
+test('customer, unknown, vehicle, conditional and opening restrictions stay explicit and unverified',()=>{
+    scopeFixture('Restriction labels');
+    const base={lat:'53.52',lon:'-1.13'};
+    Geo.displayAutocompleteResults('drivingArrival',[
+        {...base,name:'Customer parking',access_category:'customers',reported_access:{access:'customers'},opening_hours:'Mo-Sa 08:00-17:00'},
+        {...base,name:'Unknown parking',access_category:'unknown'},
+        {...base,name:'Restricted parking',access_category:'restricted',reported_access:{access:'yes',motor_vehicle:'no'}},
+        {...base,name:'Conditional parking',access_category:'unknown',has_conditional_access:true,reported_access:{'access:conditional':'no @ (Mo-Fr)'}},
+        {...base,name:'Conflicting parking',access_category:'unknown',has_conflicting_access:true,reported_access:{access:'private',motorcar:'yes'}}]);
+    const text=[...document.querySelectorAll('#autocomplete_drivingArrival .autocomplete-item')].map(item=>item.textContent);
+    expect(text[0]).toContain('Customers only');expect(text[0]).toContain('check eligibility');
+    expect(text[0]).toContain('current opening is not checked');
+    expect(text[1]).toContain('Vehicle access unknown');expect(text[2]).toContain('motor_vehicle: no');
+    expect(text[3]).toContain('Conditional restrictions reported; not evaluated');
+    expect(text[4]).toContain('Conflicting access reports need review');
+    expect(text.every(row=>row.includes('not verified'))).toBe(true);
+});
