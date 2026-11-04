@@ -566,11 +566,13 @@ def arrival_access_evidence():
     from voyagr.services.arrival_map_evidence import point, collect
     data = request.get_json(silent=True)
     target = point([data.get('lat'), data.get('lon')]) if isinstance(data, dict) else None
-    if target is None:
-        response = jsonify(success=False, error='A valid arrival target coordinate is required')
+    parking_way_id = data.get('parking_way_id') if isinstance(data, dict) else None
+    valid_identity = parking_way_id is None or type(parking_way_id) is int and 0 < parking_way_id <= 2**63 - 1
+    if target is None or not valid_identity:
+        response = jsonify(success=False, error='Valid arrival coordinates and an optional positive parking_way_id are required')
         response.status_code = 400
     else:
-        evidence = collect(target)
+        evidence = collect(target, parking_way_id)
         if evidence is None:
             response = jsonify(success=False, error='Arrival map evidence is unavailable or incomplete')
             response.status_code = 503
