@@ -560,6 +560,30 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
         return jsonify({'success': False, 'error': str(e)})
 
 
+@search_bp.route('/arrival-parking-search', methods=['POST'])
+def arrival_parking_search():
+    """Parking candidates around an explicit destination, never map/current GPS centre."""
+    from voyagr.services.routing.origin_integrity import coordinate
+    from voyagr.services.arrival_parking import RADIUS_M, search_near_destination
+    data = request.get_json(silent=True)
+    values = [data.get('lat'), data.get('lon')] if isinstance(data, dict) else []
+    valid = len(values) == 2 and all(isinstance(n, (int, float)) and not isinstance(n, bool)
+        and -bound <= n <= bound for n, bound in zip(values, (90, 180)))
+    point = coordinate(values) if valid else None
+    if point is None:
+        return jsonify(success=False, error='A valid destination coordinate is required'), 400
+    candidates = search_near_destination(*point)
+    if candidates is None:
+        response = jsonify(success=False, error='Nearby parking search is temporarily unavailable')
+        response.status_code = 503
+    else:
+        response = jsonify(success=True, results=candidates[:10], search_context={
+            'version': 1, 'coordinates': list(point), 'radius_m': RADIUS_M,
+            'coverage': 'CANDIDATES_ONLY', 'source': 'overpass'})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @search_bp.route('/parking-search', methods=['POST'])
 def search_parking():
     """Search for parking near a destination using Overpass API (OSM)."""

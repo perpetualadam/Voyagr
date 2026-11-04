@@ -20,7 +20,7 @@
             ['address','pointaddress','addressrange','house','building'].indexOf(type)>=0?'address':
             ['road','residential','motorway','primary','secondary','tertiary'].indexOf(type)>=0?'road':
             type==='poi'||['amenity','shop','office','tourism','leisure'].indexOf(category)>=0?'poi':'unknown';
-        var provider=result._source==='tomtom'?'tomtom':result._source==='nominatim'||result.osm_type||result.place_id?'nominatim':'unknown';
+        var provider=result._source==='overpass'?'overpass':result._source==='tomtom'?'tomtom':result._source==='nominatim'||result.osm_type||result.place_id?'nominatim':'unknown';
         var value={version:1,coordinates:point,semantic_class:semantic,provider:provider};
         var ref=result.osm_id!==undefined?String(result.osm_type||'')+':'+String(result.osm_id):result.id!==undefined?String(result.id):result.place_id!==undefined?String(result.place_id):null;
         if(ref&&ref.length<=128)value.provider_ref=ref;
@@ -45,6 +45,8 @@
     function destinationKey(input){return JSON.stringify([input&&input.value,input&&input.dataset.lat,input&&input.dataset.lon]);}
     function clearArrival(){
         var input=typeof document!=='undefined'&&document.getElementById('drivingArrival');
+        var context=typeof document!=='undefined'&&document.getElementById('arrivalSearchContext');
+        if(context)context.textContent='';
         if(input){input.value='';Object.keys(input.dataset).forEach(function(key){delete input.dataset[key];});}
         var dropdown=typeof document!=='undefined'&&document.getElementById('autocomplete_drivingArrival');
         if(dropdown)dropdown.classList.remove('show');

@@ -2901,7 +2901,17 @@
             distanceKm: distanceKm,
             distanceText: o.distanceText,
             durationText: String(previewCosts.durationMinutes != null ? previewCosts.durationMinutes : 0) + ' min',
-            routeLabel: String(o.startLabel || '') + ' → ' + String(o.endLabel || ''),
+            routeLabel: String(o.startLabel || '') + ' → ' + (function(){
+                var context=previewRoute.journey_context,choice=context&&context.arrival_choice,target=context&&context.destination;
+                if(!choice||choice.version!==1||choice.authority!=='request_metadata_only'||choice.navigation_authority!=='NONE'||
+                    !target||!choice.requested_destination||JSON.stringify(choice.target)!==JSON.stringify(target.coordinates))return String(o.endLabel||'');
+                var validPoint=function(point){return Array.isArray(point)&&point.length===2&&point.every(Number.isFinite)&&Math.abs(point[0])<=90&&Math.abs(point[1])<=180;};
+                if(!validPoint(target.coordinates)||!validPoint(choice.requested_destination.coordinates))return String(o.endLabel||'');
+                var label=typeof target.label==='string'&&target.label||target.coordinates.join(',');
+                var requested=choice.requested_destination;
+                var original=typeof requested.label==='string'&&requested.label||requested.coordinates.join(',');
+                return label&&original?label+' (driving arrival for '+original+')':String(o.endLabel||'');
+            })(),
             fuelCostText: symbol + previewCosts.fuelCost.toFixed(2),
             tollCostText: symbol + previewCosts.tollCost.toFixed(2),
             cazCostText: symbol + previewCosts.cazCost.toFixed(2),

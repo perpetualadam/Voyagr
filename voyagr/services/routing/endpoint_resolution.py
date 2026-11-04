@@ -6,7 +6,7 @@ from voyagr.services.routing.origin_integrity import coordinate, CONTINUITY_M
 from voyagr.services.routing.arrival_access import assess_arrival
 
 SEMANTIC_CLASSES = {'locality', 'address', 'poi', 'road', 'unknown'}
-PROVIDERS = {'nominatim', 'tomtom', 'unknown'}
+PROVIDERS = {'nominatim', 'tomtom', 'overpass', 'unknown'}
 
 
 def search_evidence(value, requested):

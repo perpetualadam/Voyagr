@@ -72,6 +72,16 @@ function saveGeocodeCache() {
     return document.getElementById(mapping[fieldId] || `autocomplete_${fieldId}`);
 }
 
+function arrivalDestinationBinding(){
+    const end=document.getElementById('end');
+    return end?JSON.stringify([end.value,end.dataset.lat,end.dataset.lon,end.dataset.journeySearchEvidence]):'';
+}
+function arrivalDestinationPoint(){
+    const end=document.getElementById('end'),plan=root.VoyagrJourneyPlan;
+    if(!end||!plan)return null;
+    if(end.dataset.lat&&end.dataset.lon&&end.dataset.displayName===end.value)return plan.coordinate([Number(end.dataset.lat),Number(end.dataset.lon)]);
+    return plan.coordinate(end.value);
+}
 async function showAutocomplete(fieldId, userEdit) {
     const generation=++autocompleteGeneration;
     if(autocompleteController)autocompleteController.abort();
@@ -95,10 +105,18 @@ async function showAutocomplete(fieldId, userEdit) {
     }
 
     const query = input.value.trim();
-    const ownsSearch=()=>generation===autocompleteGeneration&&document.getElementById(fieldId)===input&&input.value.trim()===query;
+    const destinationBinding=fieldId==='drivingArrival'?arrivalDestinationBinding():'';
+    const localParking=fieldId==='drivingArrival'&&/^(?:car\s*parks?|parking)$/i.test(query);
+    const destinationPoint=localParking?arrivalDestinationPoint():null;
+    const ownsSearch=()=>generation===autocompleteGeneration&&document.getElementById(fieldId)===input&&input.value.trim()===query&&
+        (fieldId!=='drivingArrival'||arrivalDestinationBinding()===destinationBinding);
+    const cacheKey=JSON.stringify([query,destinationBinding]);
+    const searchContext=document.getElementById('arrivalSearchContext');
+    if(searchContext&&fieldId==='drivingArrival')searchContext.textContent=localParking?
+        destinationPoint?'Searching for car parks within 2 km of '+document.getElementById('end').value+'.':'Select a destination first to search for nearby parking.':'';
     if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;delete input.dataset.journeySearchEvidence;}
 
-    if ((fieldId!=='drivingArrival'||userEdit)&&(input.dataset.lat || input.dataset.lon)) {
+    if (userEdit&&(input.dataset.lat || input.dataset.lon)) {
         console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
         delete input.dataset.lat;
         delete input.dataset.lon;
@@ -131,37 +149,43 @@ async function showAutocomplete(fieldId, userEdit) {
         return;
     }
 
+    if(localParking&&!destinationPoint){
+        dropdown.innerHTML=mod.buildAutocompleteNoResultsHtml('Select a destination, then search for parking.');
+        dropdown.classList.add('show');return;
+    }
     dropdown.innerHTML = mod.buildAutocompleteLoadingHtml(mod.AUTOCOMPLETE_SEARCHING_TEXT);
     dropdown.classList.add('show');
 
     autocompleteTimeout = setTimeout(async () => {
         if(!ownsSearch())return;
         try {
-            if (autocompleteCache[query]) {
-                displayAutocompleteResults(fieldId, autocompleteCache[query]);
+            if (autocompleteCache[cacheKey]) {
+                if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. Vehicle access is not verified.';
+                displayAutocompleteResults(fieldId, autocompleteCache[cacheKey]);
                 return;
             }
 
             const controller=new AbortController();autocompleteController=controller;
             const response = await fetch(
-                `${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
-                {
-                    signal:controller.signal,
-                    headers: {
-                        'User-Agent': 'Voyagr-PWA/1.0'
-                    }
-                }
+                localParking?'/api/arrival-parking-search':`${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
+                localParking?{signal:controller.signal,method:'POST',headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({lat:destinationPoint[0],lon:destinationPoint[1]})}:
+                    {signal:controller.signal,headers:{'User-Agent':'Voyagr-PWA/1.0'}}
             );
 
             if (!response.ok) {
                 throw new Error(`API error: ${response.status}`);
             }
 
-            const results = await response.json();
+            const payload = await response.json();
             if(!ownsSearch())return;
+            if(localParking&&(!payload||payload.success!==true||!payload.search_context||payload.search_context.version!==1||
+                JSON.stringify(payload.search_context.coordinates)!==JSON.stringify(destinationPoint)))throw new Error('Parking search context mismatch');
+            const results=localParking?payload.results:payload;
             if(!Array.isArray(results))throw new Error('Invalid search response');
 
-            autocompleteCache[query] = results;
+            autocompleteCache[cacheKey] = results;
+            if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. Vehicle access is not verified.';
 
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
@@ -193,7 +217,10 @@ function displayAutocompleteResults(fieldId, results) {
     const near=fieldId==='drivingArrival'&&plan&&end&&end.dataset.lat&&end.dataset.lon&&end.dataset.displayName===end.value?
         plan.coordinate([Number(end.dataset.lat),Number(end.dataset.lon)]):null;
     const pointOf=result=>plan&&plan.coordinate([parseFloat(result.lat),parseFloat(result.lon)]);
-    if(near&&/^\s*(?:car\s*parks?|parking)(?:\s|$)/i.test(input&&input.value||'')){
+    const normalizedQuery=String(input&&input.value||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const destinationLabel=String(end&&end.value||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const contextualParking=['car park','car parks','carpark','carparks','parking'].some(term=>normalizedQuery===term||normalizedQuery===term+' '+destinationLabel);
+    if(near&&contextualParking){
         results=results.slice().sort((a,b)=>{
             const pa=pointOf(a),pb=pointOf(b);
             return (pa?plan.distance(near,pa):Infinity)-(pb?plan.distance(near,pb):Infinity);
@@ -211,6 +238,9 @@ function displayAutocompleteResults(fieldId, results) {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
         item.innerHTML = mod.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
+        if(fieldId==='drivingArrival'&&typeof result.access==='string'&&result.access){
+            const access=document.createElement('small');access.textContent='Reported access: '+result.access+' (not verified)';item.appendChild(access);
+        }
         if(near&&pointOf(result)){
             const distance=document.createElement('small');
             distance.textContent='About '+(plan.distance(near,pointOf(result))/1000).toFixed(1)+' km from destination (straight line)';
