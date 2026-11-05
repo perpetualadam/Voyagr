@@ -194,11 +194,12 @@
     <script defer src="/static/js/app/mobile-pwa-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/hazard-preferences-orchestration.js?v=20260712aaer"></script>
     <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
-    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20261102trafficcooldown1"></script>
     <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
-    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261103drivingarrival1"></script>
+    <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
+    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
@@ -1614,6 +1615,7 @@
                 <div id="routePreviewTab" style="display: none;">
                     <div class="preferences-section">
                         <h3>📍 Route Preview</h3>
+                        <section id="arrivalEndpointPreview" aria-label="Arrival endpoints" hidden style="border:1px solid #b87916;border-radius:8px;padding:12px;margin-bottom:12px;"></section>
                         <p id="routePlanningNotice" role="status"></p>
                         <p id="routeAvoidanceNotice" role="status" tabindex="0">Avoidance verification pending.</p>
 

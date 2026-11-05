@@ -263,6 +263,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     if (root.VoyagrNavigationSafetyUX) {
         root.VoyagrNavigationSafetyUX.present(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()));
     }
+    if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.render(restored?null:RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()),rt().getMap());
     if (root.VoyagrJourneyModes) root.VoyagrJourneyModes.onPreview();
 }
 

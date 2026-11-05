@@ -10,7 +10,7 @@ complete merely because a related PR merged or a synthetic test passed.
 | 3 | Validate driven connections | Not complete. Coordinate correspondence is not connector validation. | Real directed connection geometry, barriers/levels/turn/access checks, mandatory restriction evaluation and negative cases. |
 | 4 | Implement live GPS road matching | Not complete. Existing fresh-fix checks remain; no new match authority granted. | Reviewed road-source coverage, trace-based ambiguity/freshness/heading tests, versioned acceptance policy and transactional integration. |
 | 5 | Complete provider/search integration | Partial. Destination-scoped parking retrieval, ranking and bounded provenance implemented. On-demand mapped entrance/barrier/road evidence endpoint implemented; live acquisition pending. | Confirm deployed provider entrance/edge/matching support; intermediate-stop metadata capture; source age/revision and failure coverage. |
-| 6 | Correct/simplify interface | Partial. Arrival labels, scope/radius, access warnings and qualified preference headings implemented; latest layout visual acceptance pending. | Show requested/arrival/road endpoints distinctly, explain selected intent and exact blockers, simplify repeated warnings and complete accessibility/mobile checks. |
+| 6 | Correct/simplify interface | Partial. Arrival labels, scope/radius, access warnings and qualified preference headings implemented. Selected-route arrival/road-end markers and a straight-line gap panel are implemented; device visual acceptance pending. | Show requested/arrival/road endpoints distinctly, explain selected intent and exact blockers, simplify repeated warnings and complete accessibility/mobile checks. |
 | 7 | Test complete journey | Partial. Web regression suites and recorded stationary planning checks exist. | Arrival-intent negative cases, provider integration, device/GPS/road acceptance, offline/deviation/saved/multi-stop coverage. |
 | 8 | Release and verify | Partial. User deployment logs show completed increments through b2392922; the arrival evidence endpoint returned HTTP 200. | Verify latest deployed version/assets and UI, then accept each completed capability with rollback/monitoring evidence. Overall system acceptance is outstanding. |
 
@@ -224,3 +224,25 @@ engine/profile/edge identity, and check the installed provider's read-only
 import/replication records. This increment does not restart/update the provider,
 switch sources, add a public fallback, infer an entrance or alter live gates.
 Objectives 2, 3, 4 and 5 remain incomplete.
+
+
+## Arrival preview display increment
+
+The selected alternative now has distinct A (chosen arrival) and R (returned road
+endpoint) map markers, plus an arrival panel retaining the original destination
+when a separate driving arrival was selected. The panel explicitly calls the gap
+a straight-line distance, not a driving/walking distance. No line is drawn across
+it and neither marker establishes an entrance or lawful stopping point.
+
+This display requires the selected alternative's endpoint record and assessment
+to match the actual complete geometry binding, target context and geometry end.
+Missing, stale or restored-unverified records hide the display. Alternative changes
+replace owned markers; route cleanup releases them; live navigation does not
+mount preview markers. Coincident endpoints use a combined A/R marker while
+retaining the access warning. All coordinates remain unchanged. Tests use full
+route fixtures and controlled endpoint context; the partial parking assessment
+alone cannot supply a drawable route or establish a connector.
+
+Browser/device visual acceptance remains pending. No provider, route geometry,
+GPS, connector or navigation eligibility change is included. Objective 6 advances;
+objectives 2 and 3 remain incomplete.
