@@ -71,6 +71,43 @@ test('simulation pause/resume/speed/restart and owned cleanup leave live resourc
     expect(Modes.exit()).toBe(true);expect(context.layers.size).toBe(initial);expect(markerEl.isConnected).toBe(false);expect(Modes.getState()).toBe('PLANNING');
 });
 
+test('compact player exposes named icon actions and transfers keyboard focus between play and pause',()=>{
+    const pause=document.getElementById('simulationPause'),resume=document.getElementById('simulationResume');
+    expect(Modes.startSimulation()).toBe(true);
+    expect(pause.hidden).toBe(false);expect(resume.hidden).toBe(true);
+    for(const id of ['simulationPause','simulationResume','simulationRestart','simulationExit']){
+        const button=document.getElementById(id);
+        expect(button.getAttribute('aria-label')).toMatch(/route preview/);
+        expect(button.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
+    }
+    pause.focus();Modes.pause();
+    expect(pause.hidden).toBe(true);expect(resume.hidden).toBe(false);
+    expect(document.activeElement).toBe(resume);
+    expect(document.getElementById('simulationState').textContent).toBe('Paused');
+    Modes.resume();expect(document.activeElement).toBe(pause);
+    expect(document.getElementById('simulationState').textContent).toBe('Playing');
+    Modes.seek(100);
+    expect(resume.disabled).toBe(true);
+    expect(document.activeElement).toBe(document.getElementById('simulationRestart'));
+    expect(document.getElementById('simulationState').textContent).toBe('Preview complete');
+    Modes.restart();expect(pause.hidden).toBe(false);expect(pause.disabled).toBe(false);
+    expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(calls.persistCompletedTrip).not.toHaveBeenCalled();
+});
+
+test('compact player keeps recovery feedback outside collapsed details and disables playback until exit succeeds',()=>{
+    Modes.startSimulation();context.mapHelpers.isPolylineLayerRemoved=()=>false;
+    expect(Modes.exit()).toBe(false);
+    const recovery=document.getElementById('simulationRecovery');
+    expect(recovery.hidden).toBe(false);expect(recovery.closest('details')).toBeNull();
+    expect(document.getElementById('simulationIndicator').hidden).toBe(false);
+    expect(document.getElementById('simulationState').textContent).toBe('Recovery required');
+    for(const id of ['simulationPause','simulationResume','simulationRestart','simulationSpeed','simulationPosition','simulationFollow'])expect(document.getElementById(id).disabled).toBe(true);
+    expect(document.getElementById('simulationExit').disabled).toBe(false);
+    context.mapHelpers.isPolylineLayerRemoved=()=>true;
+    expect(Modes.exit()).toBe(true);expect(document.getElementById('simulationControls').hidden).toBe(true);
+    expect(runtime.acceptPosition).not.toHaveBeenCalled();
+});
+
 test('route preview follows synthetic positions, supports seeking and restores the captured camera',()=>{
     const view={center:[-1.4,53.2],zoom:11,bearing:20,pitch:0};
     runtime.captureSimulationView=jest.fn(()=>view);
