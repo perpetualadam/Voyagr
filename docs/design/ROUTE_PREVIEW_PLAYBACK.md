@@ -16,7 +16,10 @@ restarting allows another inspection. Backgrounding pauses rather than jumping
 ahead when the page becomes visible again.
 
 The map camera captures its pre-preview center, zoom, bearing and pitch. Initial
-follow uses a close tilted view, then preserves user zoom/pitch. Turning follow
+follow uses a close tilted view, then preserves user zoom/pitch. It frames
+the vehicle above overlapping phone controls using a camera offset rather
+than changing shared map padding. Camera updates ease between preview frames.
+Turning follow
 off allows map inspection while the marker continues; exit or route invalidation
 removes the owned preview layer/marker and attempts to restore the captured view.
 Layer-removal verification and recovery behaviour are unchanged. Preview-camera

@@ -74,7 +74,7 @@ test('simulation pause/resume/speed/restart and owned cleanup leave live resourc
 test('route preview follows synthetic positions, supports seeking and restores the captured camera',()=>{
     const view={center:[-1.4,53.2],zoom:11,bearing:20,pitch:0};
     runtime.captureSimulationView=jest.fn(()=>view);
-    runtime.moveSimulationCamera=jest.fn();runtime.restoreSimulationView=jest.fn();runtime.showSimulationMap=jest.fn();
+    runtime.moveSimulationCamera=jest.fn();runtime.restoreSimulationView=jest.fn();runtime.showSimulationMap=jest.fn();runtime.stopSimulationCamera=jest.fn();
     expect(Modes.startSimulation()).toBe(true);
     expect(runtime.moveSimulationCamera).toHaveBeenCalledWith(expect.objectContaining({lat:53,lon:-1,heading_deg:expect.any(Number)}),true);
     expect(runtime.showSimulationMap).toHaveBeenCalledTimes(1);
@@ -84,6 +84,7 @@ test('route preview follows synthetic positions, supports seeking and restores t
     expect(document.getElementById('simulationPercent').textContent).toBe('50%');
     expect(document.getElementById('simulationTiming').textContent).toContain('100×');
     Modes.setFollow(false);runtime.moveSimulationCamera.mockClear();
+    expect(runtime.stopSimulationCamera).toHaveBeenCalledTimes(1);
     Modes.pause();Modes.seek(25);jest.advanceTimersByTime(1000);
     expect(runtime.moveSimulationCamera).not.toHaveBeenCalled();
     expect(document.getElementById('simulationPercent').textContent).toBe('25%');
@@ -95,6 +96,7 @@ test('route preview follows synthetic positions, supports seeking and restores t
     Modes.seek(50);expect(document.getElementById('simulationResume').disabled).toBe(false);
     expect(Modes.seek(-1)).toBe(false);expect(Modes.seek(Infinity)).toBe(false);expect(Modes.seek(101)).toBe(false);
     expect(Modes.exit()).toBe(true);expect(runtime.restoreSimulationView).toHaveBeenCalledWith(view);
+    expect(runtime.stopSimulationCamera).toHaveBeenCalledTimes(2);
     expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
     expect(calls.persistCompletedTrip).not.toHaveBeenCalled();
 });
@@ -138,6 +140,19 @@ test('playback computes route-relative headings, upcoming maneuvers and the fina
     expect(start.next_maneuver_m).toBeGreaterThan(100);
     expect(afterTurn.heading_deg).toBeCloseTo(90,1);expect(afterTurn.next_instruction).toBe('Arrive');
     expect(end).toMatchObject({lat:53.001,lon:-.999,complete:true,progress:1,instruction:'Arrive',next_instruction:null});
+});
+
+test('phone preview framing keeps the vehicle above playback controls without changing map padding',()=>{
+    const position={lat:53,lon:-1,heading_deg:90};
+    for(const height of [360,700]){
+        const frame={top:0,left:0,width:360,height},panel={left:12,right:348,top:height-80-height*.45};
+        const camera=Plan.previewCamera(position,true,frame,panel);
+        expect(height/2+camera.offset[1]+20).toBeLessThan(panel.top);
+        expect(camera).toMatchObject({center:[-1,53],bearing:90,zoom:16,pitch:45});
+        expect(camera.padding).toBeUndefined();
+    }
+    const desktop=Plan.previewCamera(position,false,{top:0,left:0,width:1200,height:700},{left:12,right:432,top:300});
+    expect(desktop.offset).toEqual([0,0]);expect(desktop.zoom).toBeUndefined();expect(desktop.pitch).toBeUndefined();
 });
 test('unconfirmed map cleanup blocks live mode and obtains no GPS fix',async()=>{
     Modes.startSimulation();context.mapHelpers.isPolylineLayerRemoved=()=>false;

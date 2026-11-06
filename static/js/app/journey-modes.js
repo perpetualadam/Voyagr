@@ -60,6 +60,7 @@
     }
     function cleanSimulation(){
         clearInterval(timer);timer=null;
+        if(cameraView&&runtime&&runtime.stopSimulationCamera){try{runtime.stopSimulationCamera();}catch(_){/* Owned resource verification still follows. */}}
         var ok=true;
         if(line){
             try{line.remove();}catch(_){/* Verify the actual owned resource below. */}
@@ -146,7 +147,7 @@
     }
     function restart(){if(!simulation||!animating())return false;meters=0;if(!redrawSimulation())return false;pause();return resume();}
     function setSpeed(value){value=Number(value);if([0.5,1,2,5,10,20,50,100].indexOf(value)<0)return false;if(simulation&&state==='SIMULATING')tick();speed=value;var el=document.getElementById('simulationSpeed');if(el)el.value=String(value);return simulation&&animating()?redrawSimulation():true;}
-    function setFollow(value){follow=value===true;var el=document.getElementById('simulationFollow');if(el)el.checked=follow;if(simulation&&animating())redrawSimulation();return follow;}
+    function setFollow(value){follow=value===true;var el=document.getElementById('simulationFollow');if(el)el.checked=follow;if(!follow&&cameraView&&runtime&&runtime.stopSimulationCamera){try{runtime.stopSimulationCamera();}catch(_){/* Next frame stays in free-map mode. */}}if(simulation&&animating())redrawSimulation();return follow;}
     function seek(value){value=Number(value);if(!animating()||!simulation||!Number.isFinite(value)||value<0||value>100)return false;meters=simulation.total*value/100;lastTick=Date.now();return redrawSimulation();}
     function startSimulation(){
         try{

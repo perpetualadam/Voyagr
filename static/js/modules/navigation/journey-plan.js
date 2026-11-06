@@ -129,6 +129,17 @@
             instruction:(plan.steps.filter(function(s){return (s.begin_shape_index||0)<=(d>=plan.total?plan.points.length-1:index);}).slice(-1)[0]||{}).instruction||'Maneuver instructions unavailable — geometry inspection only',
             completedStops:plan.ranges.slice(0,-1).filter(function(r){return plan.lengths[r.end_shape_index]<=d;}).length};
     }
+    function previewCamera(position,initial,frame,panel){
+        var offset=0;
+        if(frame&&panel&&[frame.top,frame.left,frame.height,frame.width,panel.top,panel.left,panel.right].every(Number.isFinite)&&frame.height>0&&frame.width>0){
+            var centerX=frame.left+frame.width/2;
+            if(panel.left<centerX+24&&panel.right>centerX-24){
+                var target=Math.max(24,Math.min(frame.height/2,panel.top-frame.top-48));
+                offset=target-frame.height/2;
+            }
+        }
+        return Object.assign({center:[position.lon,position.lat],bearing:position.heading_deg,duration:100,offset:[0,offset]},initial?{zoom:16,pitch:45}:{});
+    }
     function responseArrivalIntentMatches(requested,data){
         if(!requested)return true;
         var records=[data].concat(Array.isArray(data&&data.routes)?data.routes:[]);
@@ -170,6 +181,6 @@
         return {destination:destinationText,destinationName:route.destinationName||destinationText,stops:preserved,
             arrivalIntent:context&&context.arrival_intent,arrivalChoice:context&&context.arrival_choice,destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
     }
-    var api={responseArrivalIntentMatches:responseArrivalIntentMatches,destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,liveIntent:liveIntent};
+    var api={responseArrivalIntentMatches:responseArrivalIntentMatches,destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,previewCamera:previewCamera,liveIntent:liveIntent};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyPlan=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
