@@ -110,16 +110,23 @@
         function validInstructions(s){return integrity.validManeuverInstructions ? integrity.validManeuverInstructions(s) : !!s&&typeof s.instruction==='string'&&!!s.instruction.trim();}
         if(steps.some(function(s){return !validInstructions(s)||['begin_shape_index','end_shape_index'].some(function(k){return s[k]!==undefined&&(!Number.isInteger(s[k])||s[k]<0||s[k]>=points.length);})||(s.begin_shape_index!==undefined&&s.end_shape_index!==undefined&&s.end_shape_index<s.begin_shape_index);}))throw Error('Maneuver geometry is inconsistent. Recalculate before simulating.');
         var minutes=Number(route.duration_minutes);
-        return {points:points,lengths:lengths,total:lengths[lengths.length-1],steps:steps.filter(function(s){return Number.isInteger(s.begin_shape_index)&&!(integrity.isEdgeMetadataManeuver&&integrity.isEdgeMetadataManeuver(s));}),ranges:ranges||[],
+        return {points:points,lengths:lengths,total:lengths[lengths.length-1],steps:steps.filter(function(s){return Number.isInteger(s.begin_shape_index)&&!(integrity.isEdgeMetadataManeuver&&integrity.isEdgeMetadataManeuver(s));}).sort(function(a,b){return a.begin_shape_index-b.begin_shape_index;}),ranges:ranges||[],
             metersPerSecond:minutes>0&&Number.isFinite(minutes)?lengths[lengths.length-1]/(minutes*60):13.8889};
     }
     function position(plan,meters){
-        var d=Math.max(0,Math.min(plan.total,meters)),index=0;
-        while(index<plan.points.length-2&&plan.lengths[index+1]<=d)index++;
+        var d=Math.max(0,Math.min(plan.total,meters)),low=0,high=plan.points.length-1;
+        while(low+1<high){var middle=Math.floor((low+high)/2);if(plan.lengths[middle]<=d)low=middle;else high=middle;}
+        var index=Math.min(low,plan.points.length-2);
         var part=plan.lengths[index+1]-plan.lengths[index],t=part?Math.min(1,(d-plan.lengths[index])/part):0;
         var a=plan.points[index],b=plan.points[index+1];
+        var headingIndex=index;while(headingIndex>0&&distance(plan.points[headingIndex],b)<.01)headingIndex--;
+        var headingStart=plan.points[headingIndex],rad=Math.PI/180,dl=(b[1]-headingStart[1])*rad;
+        var heading=(Math.atan2(Math.sin(dl)*Math.cos(b[0]*rad),Math.cos(headingStart[0]*rad)*Math.sin(b[0]*rad)-Math.sin(headingStart[0]*rad)*Math.cos(b[0]*rad)*Math.cos(dl))/rad+360)%360;
+        var next=plan.steps.find(function(s){return plan.lengths[s.begin_shape_index]>d;});
         return {lat:a[0]+(b[0]-a[0])*t,lon:a[1]+(b[1]-a[1])*t,index:index,remaining_m:Math.max(0,plan.total-d),
-            instruction:(plan.steps.filter(function(s){return (s.begin_shape_index||0)<=index;}).slice(-1)[0]||{}).instruction||'Maneuver instructions unavailable — geometry inspection only',
+            heading_deg:heading,progress:plan.total>0?d/plan.total:1,complete:d>=plan.total,
+            next_instruction:next?next.instruction:null,next_maneuver_m:next?Math.max(0,plan.lengths[next.begin_shape_index]-d):null,
+            instruction:(plan.steps.filter(function(s){return (s.begin_shape_index||0)<=(d>=plan.total?plan.points.length-1:index);}).slice(-1)[0]||{}).instruction||'Maneuver instructions unavailable — geometry inspection only',
             completedStops:plan.ranges.slice(0,-1).filter(function(r){return plan.lengths[r.end_shape_index]<=d;}).length};
     }
     function responseArrivalIntentMatches(requested,data){

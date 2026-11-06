@@ -3138,8 +3138,12 @@ if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
     },
     buildRequest:(fix,destination)=>buildRouteRequest(fix.lat,fix.lon,destination),fetch:(url,options)=>fetch(url,options),
     resolveDestination:text=>VoyagrGeocodingOrchestration.geocodeAddress(text),addStop:addStop,
+    captureSimulationView:()=>({center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()}),
+    moveSimulationCamera:(position,initial)=>map.jumpTo({...(initial?{zoom:16,pitch:45}:{}),center:[position.lon,position.lat],bearing:position.heading_deg}),
+    restoreSimulationView:view=>map.jumpTo(view),
+    showSimulationMap:()=>collapseBottomSheet(),
     simulationMarker:point=>{
-        const el=document.createElement('div');el.className='simulation-vehicle';el.textContent='SIM';el.setAttribute('aria-label','Simulated vehicle — not live GPS');
-        return new maplibregl.Marker({element:el}).setLngLat([point[1],point[0]]).addTo(map);
+        const el=document.createElement('div');el.className='simulation-vehicle';el.textContent='▲';el.setAttribute('aria-label','Preview vehicle — not live GPS');
+        return new maplibregl.Marker({element:el,rotationAlignment:'map'}).setLngLat([point[1],point[0]]).addTo(map);
     }
 });

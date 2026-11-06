@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261106lanespec1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261106playback1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -140,8 +140,8 @@
     <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
     <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
-    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261104arrivalintent1"></script>
-    <script defer src="/static/js/app/journey-modes.js?v=20261104arrivalintent1"></script>
+    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261106playback1"></script>
+    <script defer src="/static/js/app/journey-modes.js?v=20261106playback1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
@@ -240,7 +240,7 @@
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20261031phase12fgr9"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20261106playback1"></script>
     <script defer src="/static/js/app.js?v=20260717ffsheet1"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -1623,6 +1623,7 @@
                 <div id="routePreviewTab" style="display: none;">
                     <div class="preferences-section">
                         <h3>📍 Route Preview</h3>
+                        <button type="button" class="route-playback-button" onclick="VoyagrJourneyModes.startSimulation()">▶ Play route preview</button>
                         <section id="arrivalEndpointPreview" aria-label="Arrival endpoints" hidden style="border:1px solid #b87916;border-radius:8px;padding:12px;margin-bottom:12px;"></section>
                         <p id="routePlanningNotice" role="status"></p>
                         <p id="routeAvoidanceNotice" role="status" tabindex="0">Avoidance verification pending.</p>
@@ -1902,19 +1903,25 @@
             <h2 id="journeyModeTitle">Choose how to use this journey</h2>
             <p>Plan anywhere. Simulation inspects the planned geometry. Live navigation requires your actual location and a fresh safety assessment.</p>
             <button type="button" onclick="VoyagrJourneyModes.abandonJourney()">End previous journey</button>
-            <button type="button" onclick="VoyagrJourneyModes.startSimulation()">Simulate Journey</button>
+            <button type="button" onclick="VoyagrJourneyModes.startSimulation()">▶ Play route preview</button>
             <button type="button" data-live-recalculate onclick="VoyagrJourneyModes.navigateFromGPS()">Navigate From My Location</button>
             <button type="button" id="startVerifiedHere" data-navigation-start hidden onclick="VoyagrJourneyModes.startHere()">Start verified live navigation here</button>
             <p id="journeyModeStatus" role="status" aria-live="polite"></p>
             <button type="button" onclick="VoyagrJourneyModes.exit();document.getElementById('journeyModeChooser').hidden=true">Close journey controls</button>
         </section>
         <section id="simulationControls" class="simulation-controls" hidden aria-label="Journey simulation controls">
-            <strong id="simulationIndicator" hidden>SIMULATION — NOT LIVE GPS — NOT APPROVED FOR DRIVING</strong>
+            <strong id="simulationIndicator" hidden>ROUTE PREVIEW · SIMULATION — NOT LIVE GPS</strong>
             <p id="simulationProgress" aria-live="off"></p>
-            <button type="button" onclick="VoyagrJourneyModes.pause()">Pause</button>
-            <button type="button" onclick="VoyagrJourneyModes.resume()">Resume</button>
+            <p id="simulationNextTurn" aria-live="off"></p>
+            <p id="simulationTiming" aria-live="off"></p>
+            <small>1× follows the planned duration when available. This is a route walkthrough.</small>
+            <label for="simulationPosition">Route position <output id="simulationPercent">0%</output></label>
+            <input id="simulationPosition" type="range" min="0" max="100" step="0.1" value="0" oninput="VoyagrJourneyModes.seek(this.value)" />
+            <button type="button" id="simulationPause" onclick="VoyagrJourneyModes.pause()">Pause</button>
+            <button type="button" id="simulationResume" onclick="VoyagrJourneyModes.resume()">Resume</button>
             <button type="button" onclick="VoyagrJourneyModes.restart()">Restart</button>
-            <label>Simulation speed <select onchange="VoyagrJourneyModes.setSpeed(this.value)"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option></select></label>
+            <label>Playback speed <select id="simulationSpeed" onchange="VoyagrJourneyModes.setSpeed(this.value)"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="20">20×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+            <label><input id="simulationFollow" type="checkbox" checked onchange="VoyagrJourneyModes.setFollow(this.checked)" /> Follow vehicle</label>
             <button type="button" onclick="VoyagrJourneyModes.exit()">Exit simulation</button>
         </section>
         <aside id="bestEffortWarning" class="best-effort-warning" role="status" aria-live="polite" aria-atomic="true" hidden>

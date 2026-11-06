@@ -4528,4 +4528,7 @@ body.dark-mode .safety-notice-privacy ul {
 .journey-mode-panel button, .simulation-controls button, .simulation-controls select { min-height: 44px; margin: 3px; }
 .simulation-controls { border-width: 3px; background: #f5eaff; }
 .simulation-controls strong { display: block; }
+.simulation-controls #simulationPosition { width: 100%; min-height: 32px; }
+.simulation-controls label { display: inline-block; margin: 4px; }
+.route-playback-button { min-height: 44px; width: 100%; margin-bottom: 12px; border-radius: 8px; border: 1px solid #56328a; background: #f5eaff; color: #35204e; font-weight: 600; }
 .simulation-vehicle { border: 3px solid #fff; border-radius: 50%; padding: 8px; background: #692c91; color: #fff; font-weight: bold; }

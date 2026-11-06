@@ -32,7 +32,7 @@
         var entry={token:token,callback:callback};intentCancellations.push(entry);
         return function(){intentCancellations=intentCancellations.filter(function(item){return item!==entry;});};
     }
-    var simulation=null,line=null,marker=null,timer=null,lastTick=0,meters=0,speed=1,selection=null;
+    var simulation=null,line=null,marker=null,timer=null,lastTick=0,meters=0,speed=1,selection=null,cameraView=null,follow=true,cameraInitial=true;
     function rt(){if(!runtime)throw Error('Journey modes are unavailable. Reload the application.');return runtime;}
     function plan(){return root.VoyagrJourneyPlan;}
     function integrity(){return root.VoyagrAvoidanceIntegrity;}
@@ -49,8 +49,14 @@
         var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=state!=='CHOOSING'&&state!=='LOCATING'&&state!=='RECALCULATING'&&state!=='AUTHORIZING';
         var panel=document.getElementById('simulationControls');if(panel)panel.hidden=!simulating();
         var indicator=document.getElementById('simulationIndicator');if(indicator)indicator.hidden=!simulating();
+        playbackControls();
         if(state==='RECOVERY_REQUIRED'){var progress=document.getElementById('simulationProgress');if(progress)progress.textContent='Simulation cleanup is incomplete. No animation or live transition is permitted. Retry Exit simulation to verify removal.';}
         document.querySelectorAll('[data-live-recalculate]').forEach(function(b){b.disabled=['LOCATING','RECALCULATING','AUTHORIZING'].indexOf(state)>=0;});
+    }
+    function playbackControls(){
+        var pauseControl=document.getElementById('simulationPause'),resumeControl=document.getElementById('simulationResume');
+        if(pauseControl)pauseControl.disabled=state!=='SIMULATING';
+        if(resumeControl)resumeControl.disabled=state!=='SIMULATION_PAUSED'||!simulation||meters>=simulation.total;
     }
     function cleanSimulation(){
         clearInterval(timer);timer=null;
@@ -64,7 +70,9 @@
             try{marker.remove();if(marker.getElement().isConnected)ok=false;else marker=null;}catch(_){ok=false;}
         }
         if(!ok){setState('RECOVERY_REQUIRED');status('Simulation cleanup failed. Reload the map before switching modes.','error');return false;}
-        simulation=null;return true;
+        simulation=null;
+        if(cameraView){try{if(rt().restoreSimulationView)rt().restoreSimulationView(cameraView);}catch(_){/* Camera restoration cannot grant or block GPS permission. */}cameraView=null;}
+        return true;
     }
     function cancel(keepEndpointLeases){
         var previous=epoch++;
@@ -101,12 +109,28 @@
         if(rt().isLive())throw Error('Live guidance could not stop. Recover navigation before switching modes.');
     }
     function drawSimulation(){
-        if(!simulation)return;
+        if(!simulation||!animating())return;
         var p=plan().position(simulation,meters);
         marker.setLngLat([p.lon,p.lat]);
+        if(marker.setRotation)marker.setRotation(p.heading_deg);
+        if(follow&&cameraView&&rt().moveSimulationCamera){rt().moveSimulationCamera(p,cameraInitial);cameraInitial=false;}
         var el=document.getElementById('simulationProgress');
-        if(el)el.textContent=p.instruction+' — '+(p.remaining_m/1000).toFixed(2)+' km remaining; simulated ETA '+Math.ceil(p.remaining_m/simulation.metersPerSecond/60)+' min; '+p.completedStops+' intermediate stops passed.';
+        var remainingSeconds=simulation.metersPerSecond>0?p.remaining_m/simulation.metersPerSecond:0;
+        if(el)el.textContent=p.instruction+' — '+(p.remaining_m/1000).toFixed(2)+' km remaining; simulated ETA '+Math.ceil(remainingSeconds/60)+' min; '+p.completedStops+' intermediate stops passed.';
+        var timing=document.getElementById('simulationTiming');if(timing)timing.textContent=speed+'× playback · '+Math.ceil(remainingSeconds/speed)+' seconds of preview remaining';
+        var next=document.getElementById('simulationNextTurn');
+        if(next)next.textContent=p.complete?'Route preview complete. Restart or choose another journey.':p.next_instruction?'Next: '+p.next_instruction+' in '+Math.round(p.next_maneuver_m)+' m':'Continue to the end of the planned route.';
+        var seekControl=document.getElementById('simulationPosition');if(seekControl)seekControl.value=String(p.progress*100);
+        var percent=document.getElementById('simulationPercent');if(percent)percent.textContent=Math.round(p.progress*100)+'%';
         if(meters>=simulation.total)pause();
+        playbackControls();
+    }
+    function redrawSimulation(){
+        try{
+            if(!simulation||!animating())return false;
+            if(!rt().helpers().isPolylineLayerMounted(rt().map(),line,simulation.points))throw Error('The simulation map layer changed. Exit and recalculate before animating again.');
+            drawSimulation();return true;
+        }catch(error){pause();status(error.message,'warning');return false;}
     }
     function tick(){
         if(state!=='SIMULATING')return;
@@ -120,18 +144,24 @@
         if(state!=='SIMULATION_PAUSED'||!simulation||meters>=simulation.total)return false;
         setState('SIMULATING');lastTick=Date.now();timer=setInterval(tick,100);return true;
     }
-    function restart(){if(!simulation||!animating())return false;meters=0;drawSimulation();pause();return resume();}
-    function setSpeed(value){value=Number(value);if([0.5,1,2,5,10].indexOf(value)<0)return false;speed=value;return true;}
+    function restart(){if(!simulation||!animating())return false;meters=0;if(!redrawSimulation())return false;pause();return resume();}
+    function setSpeed(value){value=Number(value);if([0.5,1,2,5,10,20,50,100].indexOf(value)<0)return false;if(simulation&&state==='SIMULATING')tick();speed=value;var el=document.getElementById('simulationSpeed');if(el)el.value=String(value);return simulation&&animating()?redrawSimulation():true;}
+    function setFollow(value){follow=value===true;var el=document.getElementById('simulationFollow');if(el)el.checked=follow;if(simulation&&animating())redrawSimulation();return follow;}
+    function seek(value){value=Number(value);if(!animating()||!simulation||!Number.isFinite(value)||value<0||value>100)return false;meters=simulation.total*value/100;lastTick=Date.now();return redrawSimulation();}
     function startSimulation(){
         try{
             var candidate=JSON.parse(JSON.stringify(rt().selected()));var inspected=plan().inspection(candidate,integrity());
             if(commitPending())throw Error('Journey transaction is pending. Retry shortly.');
             cancel();if(!cleanSimulation())return false;stopLive();rt().stopGps();
             var map=rt().map(),helpers=rt().helpers();if(!map||!map.isStyleLoaded())throw Error('Map not ready. Retry simulation once the style loads.');
+            cameraView=rt().captureSimulationView?rt().captureSimulationView():null;cameraInitial=true;follow=true;
+            var followControl=document.getElementById('simulationFollow');if(followControl)followControl.checked=true;
+            var speedControl=document.getElementById('simulationSpeed');speed=1;if(speedControl)setSpeed(speedControl.value);
             // Unique owned resources; no live route layer, GPS marker or route state is replaced.
             line=helpers.addPolyline(map,inspected.points,{color:'#8e44ad',weight:5,opacity:0.7,dashArray:'6, 6'});
             if(!helpers.isPolylineLayerMounted(map,line,inspected.points))throw Error('Simulation geometry did not mount. No animation started.');
             marker=rt().simulationMarker(inspected.points[0]);simulation=inspected;meters=0;selection=key(candidate);
+            if(rt().showSimulationMap)rt().showSimulationMap();
             setState('SIMULATION_PAUSED');drawSimulation();resume();
             status('SIMULATION — NOT LIVE GPS. Geometry inspection only; this route is not approved for live navigation. No road legality or safe endpoint connection is established.','warning');
             return true;
@@ -383,7 +413,7 @@
     var api={PROTOCOL:1,bind:function(deps){runtime=deps;},getState:function(){return state;},isSimulating:simulating,
         endpointIntentCompatible:endpointIntentCompatible,isJourneyCommitPending:commitPending,isAbandoning:function(){return !!abandonCommit;},commitPlanning:commitPlanning,getContinuation:getContinuation,abandonJourney:abandonJourney,isPlanningCommit:function(){return !!planningCommit;},isPublishingPlanningPlan:function(){return publishingPlan;},
         captureIntent:captureIntent,intentCurrent:intentCurrent,onIntentCancelled:onIntentCancelled,endpointChanged:endpointChanged,
-        choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,exit:exit,
+        choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,setFollow:setFollow,seek:seek,exit:exit,
         navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,beforePlanning:beforePlanning,retainLiveJourney:retainLiveJourney,liveStopped:liveStopped,addGpsStop:addGpsStop};
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',function(){if(document.hidden&&simulating())pause();});
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyModes=api;
