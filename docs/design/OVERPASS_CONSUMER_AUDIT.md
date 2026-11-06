@@ -97,6 +97,15 @@ prove this physical acceptance. Web lane lookup remains a separate next item.
 
 ## Separate code and non-consumers
 
+### Lane badge correction (6 November 2026)
+
+An actionable `EXPLICIT` lane bundle from `matched_directional_source` previously
+fell through the badge source checks and displayed **Estimated**. It now displays
+**Mapped**. The source name alone cannot relabel unknown/inferred evidence.
+This corrects presentation only; acquisition, road/direction matching, provider
+selection, visibility and spoken guidance rules are unchanged. The browser lane
+lookup integration gap described in item 5 remains a separate next increment.
+
 `lane_guidance.py` and `hazard_parser.py` contain direct public Overpass requests,
 but traced imports are in desktop `satnav.py`, not the web lane API. Do not confuse
 passing desktop tests with web-path acceptance or silently change these utilities
