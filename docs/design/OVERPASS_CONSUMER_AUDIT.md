@@ -97,6 +97,18 @@ prove this physical acceptance. Web lane lookup remains a separate next item.
 
 ## Separate code and non-consumers
 
+### GraphHopper and positive OSM lane connectivity (6 November 2026)
+
+[GraphHopper lane matching](GRAPHHOPPER_LANE_CONNECTIVITY.md) distinguishes stock
+GraphHopper 8 lane counts from native turn-lane recommendations. The selected
+GraphHopper path now has an optional bounded same-snapshot Overpass relation
+enrichment and a dedicated positive from/via/to matcher. Simple direct lane
+connections can produce `MAPPED_CONNECTIVITY` recommendations after both approach
+and outgoing-road checks. Missing, ambiguous, conditional, conflicting and
+unsupported cases retain neutral layout. This is mapped evidence, not native
+GraphHopper lane output, generic complete coverage or occupied-lane recognition.
+Live acceptance is pending deployment on a junction with an explicit relation.
+
 ### Specification-based provider lane integration (6 November 2026)
 
 [Lane protocol research and acceptance](LANE_SPEC_INTEGRATION.md) records the

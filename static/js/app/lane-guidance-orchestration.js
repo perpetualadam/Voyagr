@@ -216,6 +216,8 @@
             var target=(rt().getCurrentRouteSteps() || [])[targetIndex];
             if(!provider && root.VoyagrRoadMatchOrchestration.matchesProviderLaneApproach &&
                 root.VoyagrRoadMatchOrchestration.matchesProviderLaneApproach(target)) provider=getRoutingManeuverLanes(targetIndex);
+            if(!provider && !LG().isActionableLaneGuidance(evidence) && root.VoyagrRoadMatchOrchestration.getGraphHopperLaneGuidance)
+                evidence=root.VoyagrRoadMatchOrchestration.getGraphHopperLaneGuidance(target);
             var hybrid=LG().buildHybridLaneGuidance({routingManeuverLanes:provider,apiData:evidence,
                 maneuver:maneuver,distanceToManeuver:LG().computeDistanceToManeuverMeters(lat,lon,rt().getCurrentRouteSteps(),guidanceStepIndex!=null?guidanceStepIndex:rt().getCurrentStepIndex(),rt().getRoutePolyline(),rt().call.calculateDistanceMeters),roundaboutExitCount:roundaboutExitCount});
             if(provider && target)hybrid.lane_scope=String(targetIndex)+':'+String(target.begin_shape_index);
