@@ -6,6 +6,8 @@
     'use strict';
 
     var runtime = null;
+    var quickSearchGeneration=0;
+    var quickSearchController=null;
 
     function rt() {
         if (!runtime) {
@@ -17,6 +19,11 @@
     function POI() { return rt().poiSearch(); }
 
     function quickSearch(type) {
+        const generation=++quickSearchGeneration;
+        if(quickSearchController)quickSearchController.abort();
+        quickSearchController=null;
+        const price=type==='parking'?(document.getElementById('poiParkingPrice')?.value||document.getElementById('parkingPricePreference')?.value||'any'):'any';
+        if(type==='parking')closePOIModal();
         if (!navigator.geolocation) {
             rt().call.showStatus('Geolocation not supported', 'error');
             return;
@@ -26,9 +33,12 @@
         rt().call.showStatus(`🔍 Searching for ${type}...`, 'info');
 
         const searchWithPosition = async (lat, lon) => {
+            if(generation!==quickSearchGeneration)return;
+            const controller=new AbortController();quickSearchController=controller;
             console.log(`[QuickSearch] Searching at position: ${lat}, ${lon}`);
             try {
                 const response = await fetch('/api/poi-search', {
+                    signal:controller.signal,
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -36,21 +46,29 @@
                         lon: lon,
                         type: type,
                         radius: 3000,
+                        ...(type==='parking'?{price_pref:price}:{}),
                     }),
                 });
 
+                if(response.ok===false)throw Error('Search temporarily unavailable');
                 const data = await response.json();
+                if(generation!==quickSearchGeneration)return;
+                if(!data||data.success!==true)throw Error('Search temporarily unavailable');
+                if(type==='parking'&&price!=='any'&&(!data.search_context||data.search_context.price_pref!==price||
+                    !Array.isArray(data.results)||data.results.some(row=>row.fee_category!==(price==='free_street'?'free':price)||price==='free_street'&&!['street_side','lane','on_street'].includes(row.parking_type))))throw Error('Parking fee-filter response mismatch');
                 console.log('[QuickSearch] Response:', data);
 
                 if (!data.success || !data.results || data.results.length === 0) {
+                    if(type==='parking')displayPOIResults([],type,lat,lon,price);
                     rt().call.showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
                     return;
                 }
 
                 console.log(`[QuickSearch] Displaying ${data.results.length} results`);
-                displayPOIResults(data.results, type, lat, lon);
+                displayPOIResults(data.results, type, lat, lon,price);
                 rt().call.showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
             } catch (error) {
+                if(generation!==quickSearchGeneration||error.name==='AbortError')return;
                 console.error('[QuickSearch] Error:', error);
                 rt().call.showStatus('Error searching for ' + type + ': ' + error.message, 'error');
             }
@@ -58,12 +76,12 @@
 
         if (rt().getCurrentLat() && rt().getCurrentLon()) {
             console.log('[QuickSearch] Using cached position');
-            searchWithPosition(rt().getCurrentLat(), rt().getCurrentLon());
-            return;
+            return searchWithPosition(rt().getCurrentLat(), rt().getCurrentLon());
         }
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                if(generation!==quickSearchGeneration)return;
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
                 rt().s('currentLat', lat);
@@ -71,6 +89,7 @@
                 searchWithPosition(lat, lon);
             },
             (error) => {
+                if(generation!==quickSearchGeneration)return;
                 console.error('[QuickSearch] GPS Error:', error);
                 rt().call.showStatus('Error getting location: ' + error.message, 'error');
             },
@@ -78,17 +97,17 @@
         );
     }
 
-    function displayPOIResults(results, type, userLat, userLon) {
+    function displayPOIResults(results, type, userLat, userLon,price='any') {
         const poi = POI();
         closePOIModal();
         document.body.insertAdjacentHTML('beforeend', poi.buildPoiResultsModalHtml(results, type,
-            poi.buildPoiResultsModalDisplayOpts(
+            {...poi.buildPoiResultsModalDisplayOpts(
                 results,
                 type,
                 userLat,
                 userLon,
                 (distanceM) => rt().call.formatPoiDistance(distanceM)
-            )
+            ),parkingPricePreference:price}
         ));
     }
 

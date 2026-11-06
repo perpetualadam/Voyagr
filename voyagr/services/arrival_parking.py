@@ -69,7 +69,7 @@ def shortlist_key(item):
     return tier, item['distance_m'], item['osm_type'], item['osm_id']
 
 
-def search_near_destination(lat, lon, radius=RADIUS_M):
+def search_near_destination(lat, lon, radius=RADIUS_M, metadata=None):
     """Retrieve a local category set before ranking, using existing provider policy."""
     from overpass_helper import query_overpass
     query = f'''[out:json][timeout:7][maxsize:2097152];
@@ -85,6 +85,11 @@ def search_near_destination(lat, lon, radius=RADIUS_M):
         return None
     if not isinstance(result, dict) or result.get('success') is not True or not isinstance(result.get('elements'), list):
         return None
+    if metadata is not None:
+        metadata.update({'source_endpoint_class': result.get('endpoint_class') if result.get('endpoint_class') in ('LOCAL', 'PUBLIC') else 'UNKNOWN',
+                         'dataset_timestamp': result.get('dataset_timestamp') if isinstance(result.get('dataset_timestamp'), str) else None,
+                         'source_version': result.get('source_version') if isinstance(result.get('source_version'), str) else 'unknown',
+                         'cached': result.get('cached') is True})
     candidates = []
     seen = set()
     for element in result['elements'][:200]:

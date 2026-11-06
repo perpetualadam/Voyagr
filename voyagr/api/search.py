@@ -735,8 +735,31 @@ def search_poi():
         radius = int(data.get('radius', 2000))
         if not 1<=radius<=5000: return jsonify(success=False,error='Radius must be between 1 and 5000 metres'),400
 
-        if lat == 0 or lon == 0:
+        if poi_type != 'parking' and (lat == 0 or lon == 0):
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
+
+        if poi_type == 'parking':
+            # Parking POI uses the same mapped fee/access evidence as arrival search.
+            from voyagr.services.arrival_map_evidence import point
+            from voyagr.services.arrival_parking import search_near_destination, filter_candidates, PRICE_PREFS
+            target = point([data.get('lat'), data.get('lon')])
+            price = data.get('price_pref', 'any')
+            if target is None or type(data.get('radius', 2000)) is not int or not isinstance(price, str) or price not in PRICE_PREFS:
+                return jsonify(success=False, error='Invalid parking coordinates, radius or price filter'), 400
+            metadata = {}
+            candidates = search_near_destination(*target, radius=radius, metadata=metadata)
+            if candidates is None:
+                response = jsonify(success=False, error='Parking map search temporarily unavailable', source='Overpass')
+                response.status_code = 503
+            else:
+                rows = filter_candidates(candidates, price)[:15]
+                results = [{**row, 'lat': float(row['lat']), 'lon': float(row['lon']),
+                            'address': row['address']['road']} for row in rows]
+                response = jsonify(success=True, results=results, type='parking', source='Overpass',
+                                   search_context={'coordinates': target, 'radius_m': radius, 'price_pref': price,
+                                                   'coverage': 'CANDIDATES_ONLY', **metadata})
+            response.headers['Cache-Control'] = 'no-store'
+            return response
 
         # Try TomTom first (faster, richer data)
         tomtom_results = _tomtom_poi_search(lat, lon, poi_type, radius)
