@@ -197,7 +197,7 @@ def get_road_context():
         import os
         if not os.environ.get('VOYAGR_ROAD_EVIDENCE_FILE'):
             from voyagr.services.overpass_road_context import live_context
-            context=live_context(*coordinates)
+            context=live_context(*coordinates,**({'with_connectivity':True} if data.get('lane_connectivity') is True else {}))
     response=jsonify(success=True,context=context,evidence_status='AVAILABLE' if context else 'UNMATCHED')
     response.headers['Cache-Control']='no-store'
     return response

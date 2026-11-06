@@ -164,6 +164,49 @@ def speed_context_response():
                     geometry=[{'lat':53.52,'lon':-1.13},{'lat':53.53,'lon':-1.13}])])
 
 
+def connectivity_response():
+    return dict(success=True,response_state='VALID_WITH_DATA',retrieved_at=1800000000,
+                dataset_timestamp='2027-01-14T08:00:00Z',elements=[dict(type='relation',id=99,
+                    tags={'type':'connectivity','connectivity':'2:1'},members=[
+                        {'type':'way','ref':10,'role':'from'}, {'type':'node','ref':2,'role':'via'},
+                        {'type':'way','ref':20,'role':'to'}])])
+
+
+def test_connectivity_is_separate_bounded_same_snapshot_source_data():
+    from voyagr.services.overpass_road_context import live_context
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),connectivity_response()]) as query:
+        context=live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)
+    assert context['coverage']=='PARTIAL'
+    relation=context['lane_connectivity']['relations'][0]
+    assert relation['from_way']=='10' and relation['via_node']=='2' and relation['to_way']=='20'
+    assert relation['unsupported'] is False
+    assert '["type"="connectivity"]' in query.call_args_list[1].args[0]
+    assert '["type"="restriction"]' in query.call_args_list[1].args[0]
+
+
+@pytest.mark.parametrize('change',[
+    {'success':False}, {'dataset_timestamp':'2027-01-15T07:00:00Z'}, {'retrieved_at':1799999900},
+    {'retrieved_at':1800000001}, {'elements':connectivity_response()['elements']*257},
+    {'elements':[dict(connectivity_response()['elements'][0],tags={'type':'connectivity','connectivity':'2:1','note':'x'*524288})]},
+])
+def test_unusable_connectivity_does_not_remove_speed_or_layout_context(change):
+    from voyagr.services.overpass_road_context import live_context
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),dict(connectivity_response(),**change)]):
+        context=live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)
+    assert context['roads'][0]['osm_way_id']=='10' and context['lane_connectivity'] is None
+
+
+def test_connectivity_timeout_keeps_base_context_and_via_way_stays_unsupported():
+    from voyagr.services.overpass_road_context import live_context
+    import requests
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),requests.exceptions.Timeout()]):
+        assert live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)['roads']
+    data=connectivity_response();data['elements'][0]['members'][1]['type']='way'
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),data]):
+        relation=live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)['lane_connectivity']['relations'][0]
+    assert relation['unsupported'] is True and relation['from_ways']==['10']
+
+
 def test_live_speed_context_uses_shared_overpass_and_retains_two_source_clocks():
     from voyagr.services.overpass_road_context import live_context
     data=speed_context_response()
@@ -227,6 +270,9 @@ def test_speed_only_http_fallback_is_explicit_and_preserves_operator_file_priori
         live.reset_mock()
         assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'lane_observations':True}).json['context'] is not None
         live.assert_called_once_with(53.524,-1.13)
+        live.reset_mock()
+        assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'lane_observations':True,'lane_connectivity':True}).json['context'] is not None
+        live.assert_called_once_with(53.524,-1.13,with_connectivity=True)
         live.reset_mock()
         monkeypatch.setenv('VOYAGR_ROAD_EVIDENCE_FILE','/operator-selected-source')
         assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'speed_observations':True}).json['context'] is None

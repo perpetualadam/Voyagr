@@ -325,13 +325,13 @@
         var base = null;
 
         if (routing) base=Object.assign({},routing);
-        else if (opts.apiData && opts.apiData.evidence_state==='EXPLICIT' && isActionableLaneGuidance(opts.apiData)) base=Object.assign({confidence:95,source:'osm_turn_lanes'},opts.apiData);
+        else if (opts.apiData && ['EXPLICIT','MAPPED_CONNECTIVITY'].includes(opts.apiData.evidence_state) && isActionableLaneGuidance(opts.apiData)) base=Object.assign({confidence:95,source:'osm_turn_lanes'},opts.apiData);
         if (!base) return {success:true,total_lanes:0,recommended_lanes:[],recommended_lane:null,
             confidence:0,source:'unverified',evidence_state:'UNKNOWN',show_lane_guidance:false,
             urgency:'none',guidance_text:'Follow ordinary turn guidance; lane assignment unknown',lane_arrows:[]};
         var permitted=getRecommendedLaneNumbers(base).slice();
         base=applyConfidenceLaneSelection(base);
-        if (base.evidence_state==='EXPLICIT' || base.evidence_state==='PROVIDER') base.recommended_lanes=permitted;
+        if (['EXPLICIT','PROVIDER','MAPPED_CONNECTIVITY'].includes(base.evidence_state)) base.recommended_lanes=permitted;
 
         var valuable = isLaneGuidanceValuableManeuver({
             totalLanes: base.total_lanes,
@@ -357,7 +357,7 @@
         }
         base.next_maneuver = maneuver;
         base.roundabout_exit_count = exitCount;
-        if (base.evidence_state === 'PROVIDER') {
+        if (['PROVIDER','MAPPED_CONNECTIVITY'].includes(base.evidence_state)) {
             var choices = permitted.map(function(n){return laneNameFor(n,base.total_lanes);}).join(' or ');
             base.guidance_text = 'Use the ' + choices;
             base.urgency_text = (base.urgency === 'ahead' ? 'Ahead, use the ' : 'Use the ') + choices;
@@ -615,7 +615,7 @@
      *   roads, when no maneuver is approaching, or after the maneuver is complete.
      */
     function isActionableLaneGuidance(data) {
-        return !!data && ['EXPLICIT','PROVIDER'].indexOf(data.evidence_state)>=0 &&
+        return !!data && ['EXPLICIT','PROVIDER','MAPPED_CONNECTIVITY'].indexOf(data.evidence_state)>=0 &&
             getRecommendedLaneNumbers(data).length>0 && getRecommendedLaneNumbers(data).every(function(n){return Number.isInteger(n) && n>=1 && n<=data.total_lanes;}) &&
             (data.recommended_lane==null || getRecommendedLaneNumbers(data).indexOf(data.recommended_lane)>=0) && data.show_lane_guidance!==false;
     }
@@ -634,6 +634,7 @@
      * @returns {{ text: string, visible: boolean }}
      */
     function badge(data) {
+        if(data && data.evidence_state==='MAPPED_CONNECTIVITY' && isActionableLaneGuidance(data))return {text:'Mapped',visible:true};
         if (data && data.source === 'matched_directional_source' &&
             data.evidence_state === 'EXPLICIT' && isActionableLaneGuidance(data)) {
             return { text: 'Mapped', visible: true };
@@ -1103,8 +1104,8 @@
             } else {
                 laneMsg = data.urgency_text || ('Move to the ' + lanePos + ' lane');
             }
-        } else if (data.urgency === 'ahead' && (data.lane_change_needed || data.evidence_state === 'PROVIDER')) {
-            laneMsg = data.evidence_state === 'PROVIDER' ? data.urgency_text : 'Ahead, you\'ll need the ' + lanePos + ' lane';
+        } else if (data.urgency === 'ahead' && (data.lane_change_needed || ['PROVIDER','MAPPED_CONNECTIVITY'].includes(data.evidence_state))) {
+            laneMsg = ['PROVIDER','MAPPED_CONNECTIVITY'].includes(data.evidence_state) ? data.urgency_text : 'Ahead, you\'ll need the ' + lanePos + ' lane';
         } else {
             return null;
         }

@@ -9,7 +9,7 @@ from voyagr.utils.road_matching import RoadIndex
 from voyagr.utils.request_budget import WorkBudget, use_budget
 
 
-def live_context(lat, lon, now=None):
+def live_context(lat, lon, now=None, *, with_connectivity=False):
     from overpass_helper import query_overpass
 
     live_clock = now is None
@@ -58,13 +58,23 @@ def live_context(lat, lon, now=None):
                 return None
             roads.append(dict(osm_way_id=str(item['id']), node_ids=item['nodes'],
                               geometry=geometry, tags=item['tags']))
-        raw = json.dumps(roads, sort_keys=True, allow_nan=False)
+        relations = None
+        if with_connectivity:
+            from voyagr.services.lane_connectivity import fetch_relations
+            relations = fetch_relations(bounds, timestamp, now=None if live_clock else now)
+        raw = json.dumps([roads, relations], sort_keys=True, allow_nan=False)
         context = dict(schema_version=1, source='Overpass', source_kind='OSM_EXTRACT',
                        attribution='© OpenStreetMap contributors', licence='ODbL-1.0',
                        revision=hashlib.sha256((raw + str(acquired)).encode()).hexdigest(),
                        acquired_at_ms=acquired, source_data_at_ms=source_time,
                        bounds=bounds, roads=roads, restrictions=[], coverage='PARTIAL',
                        speed_observations_only=True, lane_observations_only=True, served_at_ms=now)
+        if with_connectivity:
+            context['lane_connectivity'] = relations
+        if len(json.dumps(context)) > 2 * 1024 * 1024 and relations is not None:
+            context['lane_connectivity'] = None
+            raw = json.dumps([roads, None], sort_keys=True, allow_nan=False)
+            context['revision'] = hashlib.sha256((raw + str(acquired)).encode()).hexdigest()
         if RoadIndex(context).invalid or len(json.dumps(context)) > 2 * 1024 * 1024:
             return None
         return context
