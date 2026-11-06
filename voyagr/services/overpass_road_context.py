@@ -1,4 +1,4 @@
-"""Bounded nearby map observations, never legal/lane/navigation authority."""
+"""Bounded map observations, never legal, lane-choice or navigation authority."""
 import datetime
 import hashlib
 import json
@@ -64,7 +64,7 @@ def live_context(lat, lon, now=None):
                        revision=hashlib.sha256((raw + str(acquired)).encode()).hexdigest(),
                        acquired_at_ms=acquired, source_data_at_ms=source_time,
                        bounds=bounds, roads=roads, restrictions=[], coverage='PARTIAL',
-                       speed_observations_only=True, served_at_ms=now)
+                       speed_observations_only=True, lane_observations_only=True, served_at_ms=now)
         if RoadIndex(context).invalid or len(json.dumps(context)) > 2 * 1024 * 1024:
             return None
         return context

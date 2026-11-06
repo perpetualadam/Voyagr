@@ -97,14 +97,46 @@ prove this physical acceptance. Web lane lookup remains a separate next item.
 
 ## Separate code and non-consumers
 
+### Web lane layout connection (6 November 2026)
+
+The road owner now explicitly requests lane observations alongside speed
+observations through `/api/road-context`. Both use the same bounded shared
+Overpass response, preserving all nearby highway competitors. No additional
+lane query or public-provider bypass is introduced. Operator-file priority,
+source timestamps, PARTIAL coverage and acquisition limits remain unchanged.
+
+`lane_observations_only` permits a **current-road layout**, not lane-choice
+authority. A stable moving GPS/direction match must also be compatible with the
+active route geometry or typed road binding. Explicit directional counts and
+turn tokens must agree; generic tags apply only to explicitly one-way roads.
+Conditional, bus/access/change-lane restrictions, unsupported tokens, conflicting
+counts, ambiguity, unsupported vehicles and expired evidence hide the layout.
+GPS fixes, retrieval and daily snapshots retain their separate 15-second,
+60-second and 72-hour observation limits.
+
+The web overlay shows **Current road lanes / Mapped** with neutral arrows and
+“Mapped lane layout — follow road signs”. It never highlights a recommended lane,
+identifies the occupied lane, speaks a lane-choice instruction or enables
+navigation/rerouting authority. Existing actionable guidance takes priority.
+The legacy `/api/lane-guidance` remains non-authoritative; its first nearby way
+cannot establish a junction/route association. Full live Overpass lane-choice
+recommendations remain gated on stronger route/junction applicability evidence.
+
+Controlled API, matcher, owner and actual DOM tests cover this flow and its
+failure states. After deployment, live acceptance must check a known directionally
+mapped multi-lane approach, opposite direction, parallel roads, missing tags,
+lost/stale GPS and unchanged ordinary navigation. No physical-device or live VPS
+acceptance is claimed by the controlled tests.
+
 ### Lane badge correction (6 November 2026)
 
 An actionable `EXPLICIT` lane bundle from `matched_directional_source` previously
 fell through the badge source checks and displayed **Estimated**. It now displays
 **Mapped**. The source name alone cannot relabel unknown/inferred evidence.
 This corrects presentation only; acquisition, road/direction matching, provider
-selection, visibility and spoken guidance rules are unchanged. The browser lane
-lookup integration gap described in item 5 remains a separate next increment.
+selection, visibility and spoken guidance rules were unchanged by that correction.
+The current-road layout increment above connects bounded observations separately;
+actionable junction lane-choice recommendations still require stronger evidence.
 
 `lane_guidance.py` and `hazard_parser.py` contain direct public Overpass requests,
 but traced imports are in desktop `satnav.py`, not the web lane API. Do not confuse

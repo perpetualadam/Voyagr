@@ -191,9 +191,9 @@ def get_road_context():
     if not coordinates:return jsonify(success=False,error='Valid coordinates required'),400
     vehicle=data.get('vehicle_type','unknown')
     context=local_context(*coordinates,vehicle=vehicle)
-    # The live fallback supplies labelled speed observations only. It cannot
-    # grant the complete-coverage authority required by lanes/navigation.
-    if context is None and data.get('speed_observations') is True:
+    # The live fallback supplies labelled map observations. It cannot grant
+    # complete-coverage authority for lane recommendations or navigation.
+    if context is None and (data.get('speed_observations') is True or data.get('lane_observations') is True):
         import os
         if not os.environ.get('VOYAGR_ROAD_EVIDENCE_FILE'):
             from voyagr.services.overpass_road_context import live_context

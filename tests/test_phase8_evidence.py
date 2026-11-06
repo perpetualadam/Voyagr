@@ -171,6 +171,7 @@ def test_live_speed_context_uses_shared_overpass_and_retains_two_source_clocks()
         context=live_context(53.524,-1.13,now=1800000000000)
     assert context is not None
     assert context['coverage']=='PARTIAL' and context['speed_observations_only'] is True
+    assert context['lane_observations_only'] is True
     assert context['acquired_at_ms']==1800000000000
     assert context['source_data_at_ms']<context['acquired_at_ms']
     assert 'attribute_bundles' not in context['roads'][0]
@@ -222,6 +223,9 @@ def test_speed_only_http_fallback_is_explicit_and_preserves_operator_file_priori
         response=client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'speed_observations':True})
         assert response.status_code==200 and response.headers['Cache-Control']=='no-store'
         assert response.json['context']['speed_observations_only'] is True
+        live.assert_called_once_with(53.524,-1.13)
+        live.reset_mock()
+        assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'lane_observations':True}).json['context'] is not None
         live.assert_called_once_with(53.524,-1.13)
         live.reset_mock()
         monkeypatch.setenv('VOYAGR_ROAD_EVIDENCE_FILE','/operator-selected-source')

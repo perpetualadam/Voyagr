@@ -16,7 +16,7 @@
             var seq=++requestSeq,gen=generation;inFlight=true;lastFetch=now;
             var controller=typeof AbortController!=='undefined'?new AbortController():null;
             var timer=controller?setTimeout(function(){controller.abort();},4000):null;
-            fetch('/api/road-context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p[0],lon:p[1],vehicle_type:vehicle,speed_observations:true}),signal:controller?controller.signal:undefined})
+            fetch('/api/road-context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p[0],lon:p[1],vehicle_type:vehicle,speed_observations:true,lane_observations:true}),signal:controller?controller.signal:undefined})
                 .then(function(r){if(!r.ok)throw new Error('Road context unavailable');return r.json();})
                 .then(function(data){if(seq!==requestSeq||gen!==generation)return;context=data&&data.context||null;index=context?api.createIndex(context):null;previous=null;})
                 .catch(function(){/* Retain a still-fresh bounded context; never invent a replacement. */})
@@ -38,9 +38,10 @@
     }
     function getAttributes(){return moduleApi().attributes(getSnapshot(),context,vehicle,Date.now());}
     function getSpeedObservation(){return moduleApi().speedObservation(getSnapshot(),context,vehicle,Date.now());}
+    function getLaneObservation(){return moduleApi().laneObservation(getSnapshot(),context,vehicle,Date.now());}
     function classifyHazard(h){return moduleApi().hazardAssociation(getSnapshot(),h,Date.now());}
     function invalidate(reason){snapshot=Object.assign({},snapshot||{},{evidence_status:'UNMATCHED',osm_way_id:null,graph_edge_id:null,segment_id:null,attributes_allowed:false,reason:reason});previous=null;}
-    var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,getSpeedObservation:getSpeedObservation,classifyHazard:classifyHazard};
+    var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,getSpeedObservation:getSpeedObservation,getLaneObservation:getLaneObservation,classifyHazard:classifyHazard};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     root.VoyagrRoadMatchOrchestration=api;
 })(typeof window!=='undefined'?window:globalThis);
