@@ -54,9 +54,20 @@
         document.querySelectorAll('[data-live-recalculate]').forEach(function(b){b.disabled=['LOCATING','RECALCULATING','AUTHORIZING'].indexOf(state)>=0;});
     }
     function playbackControls(){
-        var pauseControl=document.getElementById('simulationPause'),resumeControl=document.getElementById('simulationResume');
-        if(pauseControl)pauseControl.disabled=state!=='SIMULATING';
-        if(resumeControl)resumeControl.disabled=state!=='SIMULATION_PAUSED'||!simulation||meters>=simulation.total;
+        var pauseControl=document.getElementById('simulationPause'),resumeControl=document.getElementById('simulationResume'),restartControl=document.getElementById('simulationRestart');
+        var active=document.activeElement,complete=!!simulation&&meters>=simulation.total;
+        if(pauseControl){pauseControl.disabled=state!=='SIMULATING';pauseControl.hidden=state!=='SIMULATING';}
+        if(resumeControl){resumeControl.disabled=state!=='SIMULATION_PAUSED'||!simulation||complete;resumeControl.hidden=state==='SIMULATING';}
+        if(restartControl)restartControl.disabled=!animating();
+        ['simulationSpeed','simulationPosition','simulationFollow'].forEach(function(id){var control=document.getElementById(id);if(control)control.disabled=!animating();});
+        var label=state==='RECOVERY_REQUIRED'?'Recovery required':complete?'Preview complete':state==='SIMULATING'?'Playing':'Paused';
+        var stateLabel=document.getElementById('simulationState');if(stateLabel&&stateLabel.textContent!==label)stateLabel.textContent=label;
+        var recovery=document.getElementById('simulationRecovery');if(recovery)recovery.hidden=state!=='RECOVERY_REQUIRED';
+        // Keep keyboard focus on the equivalent action when play/pause changes.
+        if(animating()&&(active===pauseControl||active===resumeControl)&&active.hidden){
+            var next=complete?restartControl:state==='SIMULATING'?pauseControl:resumeControl;
+            if(next&&!next.disabled)next.focus();
+        }
     }
     function cleanSimulation(){
         clearInterval(timer);timer=null;
