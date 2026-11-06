@@ -614,10 +614,14 @@
     }
 
     /**
-     * The "Estimated" badge state for non-OSM (fallback) guidance.
+     * Label matched directional map evidence separately from fallback estimates.
      * @returns {{ text: string, visible: boolean }}
      */
     function badge(data) {
+        if (data && data.source === 'matched_directional_source' &&
+            data.evidence_state === 'EXPLICIT' && isActionableLaneGuidance(data)) {
+            return { text: 'Mapped', visible: true };
+        }
         if (data && (data.has_osm_data || data.has_routing_lanes || data.source === 'routing' || data.source === 'osm_turn_lanes')) {
             return { text: '', visible: false };
         }
