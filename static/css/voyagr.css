@@ -4540,7 +4540,7 @@ body.dark-mode .safety-notice-privacy ul {
 .simulation-position-label { display: flex; justify-content: space-between; color: var(--player-muted); font-size: 12px; }
 .simulation-controls label { margin: 0; }
 .simulation-controls #simulationPosition { width: 100%; min-height: 32px; margin: 0; accent-color: var(--player-accent); }
-.simulation-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.simulation-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .simulation-controls .simulation-icon-button {
     display: inline-flex; align-items: center; justify-content: center; flex: 0 0 48px;
     width: 48px; min-width: 48px; height: 48px; min-height: 48px; padding: 0; margin: 0;

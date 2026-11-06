@@ -1919,9 +1919,6 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>
                 </button>
             </div>
-            <p id="simulationNextTurn" aria-live="off"></p>
-            <div class="simulation-position-label"><label for="simulationPosition">Route position</label><output id="simulationPercent" for="simulationPosition">0%</output></div>
-            <input id="simulationPosition" type="range" min="0" max="100" step="0.1" value="0" oninput="VoyagrJourneyModes.seek(this.value)" />
             <div class="simulation-toolbar" role="group" aria-label="Playback controls">
                 <button type="button" class="simulation-icon-button" id="simulationRestart" onclick="VoyagrJourneyModes.restart()" aria-label="Restart route preview" title="Restart route preview">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6" /></svg>
@@ -1935,6 +1932,9 @@
                 <label class="simulation-speed-label"><span>Speed</span><select id="simulationSpeed" aria-label="Playback speed" onchange="VoyagrJourneyModes.setSpeed(this.value)"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="20">20×</option><option value="50">50×</option><option value="100">100×</option></select></label>
                 <label class="simulation-follow-label"><input id="simulationFollow" type="checkbox" aria-label="Follow vehicle" checked onchange="VoyagrJourneyModes.setFollow(this.checked)" /> Follow</label>
             </div>
+            <p id="simulationNextTurn" aria-live="off"></p>
+            <div class="simulation-position-label"><label for="simulationPosition">Route position</label><output id="simulationPercent" for="simulationPosition">0%</output></div>
+            <input id="simulationPosition" type="range" min="0" max="100" step="0.1" value="0" oninput="VoyagrJourneyModes.seek(this.value)" />
             <p id="simulationRecovery" role="alert" hidden>Preview cleanup is incomplete. Use Exit route preview again to retry.</p>
             <details class="simulation-details">
                 <summary>Preview details</summary>

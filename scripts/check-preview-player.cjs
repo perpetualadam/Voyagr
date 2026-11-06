@@ -46,6 +46,7 @@ const css = fs.readFileSync(path.join(root, 'static/css/voyagr.css'), 'utf8');
                 for (const selector of ['#simulationPause', '#simulationRestart', '#simulationExit', '#simulationSpeed', '.simulation-follow-label']) {
                     const size = await page.locator(selector).boundingBox();
                     assert(size.width >= 48 && size.height >= 48, `${selector}: small target`);
+                    assert(size.y >= bounds.top && size.y + size.height <= bounds.bottom, `${width}px ${theme}: ${selector} requires scrolling on initial display`);
                 }
                 if (process.env.PLAYER_SCREENSHOT_DIR) {
                     fs.mkdirSync(process.env.PLAYER_SCREENSHOT_DIR, {recursive: true});
