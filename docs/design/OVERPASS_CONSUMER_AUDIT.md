@@ -59,6 +59,42 @@ is possible; neither free availability nor public access is guaranteed.
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
 
+## Speed widget integration (6 November 2026)
+
+The browser previously always selected the road-matching owner, but its
+`/api/road-context` source was an operator-provided file only. Configuring
+`OVERPASS_API_URL` therefore did not supply browser road observations.
+
+The browser now explicitly requests a speed-only Overpass fallback when no
+operator evidence file is configured. An explicitly configured file keeps
+priority, including when it is invalid or unavailable. The fallback uses the
+shared helper and its configured endpoint policy, cache and concurrency limits,
+with a cooperative 2.5-second acquisition budget, 2 MiB response/output limits,
+1,000 ways and 20,000 geometry points. Small stable tiles request **all** highway
+ways, including roads without speed tags, to retain competing road hypotheses.
+
+This source remains PARTIAL. It grants no legal, lane, hazard, route-progress or
+rerouting authority. A separate display-only result requires a unique stable
+GPS/heading match, linked OSM identity, an inset tile position, a car/motorcycle
+profile and an explicit directional or general numeric maxspeed. Conditional,
+vehicle-specific, inferred/NSL, inaccessible, ambiguous and missing values remain
+unknown. Existing reviewed-evidence legal/lane rules are unchanged.
+
+The clocks are separate: GPS fixes expire after 15 seconds, original Overpass
+retrieval after 60 seconds, and daily dataset snapshots after 72 hours. Cached
+retrievals retain their original time; fetching an old dataset does not renew its
+snapshot age. These bounds permit labelled map observations, not surveyed signs
+or verified legal applicability. The widget shows a grey circle and **Mapped**,
+and leaves the legal limit used by alerts empty. Unknown evidence clears it.
+
+Controlled tests cover acquisition, clocks, operator-file priority, matching,
+ambiguity, stale/unsupported data, actual owner lifecycle and widget behaviour.
+Live acceptance still requires deployment and a real GPS journey: confirm the
+endpoint returns PARTIAL speed-only context and original timestamps; check a
+known signed numeric road after two stable moving fixes, a parallel-road case,
+loss of GPS/network and expiry. Static planning previews and mocked tests do not
+prove this physical acceptance. Web lane lookup remains a separate next item.
+
 ## Separate code and non-consumers
 
 `lane_guidance.py` and `hazard_parser.py` contain direct public Overpass requests,
