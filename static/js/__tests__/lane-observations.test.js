@@ -29,7 +29,7 @@ test('directional layout uses actual matching without creating lane recommendati
 test.each([
     {'turn:lanes:forward':undefined}, {'lanes:forward':undefined}, {'lanes:forward':'3'},
     {'turn:lanes:forward':'left|bogus'}, {'turn:lanes:forward':'left|through;through'},
-    {'turn:lanes:forward':'left|'}, {'turn:lanes:forward':'<img src=x>|through'},
+    {'turn:lanes:forward':'left|;through'}, {'turn:lanes:forward':'<img src=x>|through'},
     {'turn:lanes:forward':'left|through;right;slight_right;reverse'},
     {'lanes:forward':'1'}, {'lanes:forward':'13'}, {lanes:'1'},
     {'bus:lanes:forward':'designated|no'}, {'access:lanes':'no|yes'},
@@ -44,6 +44,67 @@ test('general turn tags apply only to one-way travel',()=>{
     c.roads[0].tags.oneway='yes';
     expect(RM.laneObservation(matched(c),c,'car',NOW+1000).lane_arrows.map(l=>l.arrow)).toEqual(['·','↑']);
     expect(RM.laneObservation(matched(c,{heading:180}),c,'car',NOW+1000)).toBeNull();
+});
+
+test('OSM blank indications are unmarked, with directional destination text preserved',()=>{
+    const c=context();c.roads[0].tags['turn:lanes:forward']='|through';
+    c.roads[0].tags['destination:lanes:forward']='City Centre|Airport';
+    c.roads[0].tags['destination:ref:lanes:forward']='A1|A2';
+    const layout=RM.laneObservation(matched(c),c,'car',NOW+1000);
+    expect(layout.lane_arrows.map(l=>l.arrow)).toEqual(['·','↑']);
+    expect(layout.recommended_lanes).toEqual([]);
+    expect(layout.destinations).toEqual(['City Centre · A1','Airport · A2']);
+    c.roads[0].tags['destination:lanes:forward']='Wrong lane count';
+    expect(RM.laneObservation(matched(c),c,'car',NOW+1000)).toBeNull();
+});
+
+function providerStep() {
+    return {lane_source:'Valhalla',type:10,begin_shape_index:1,lanes:[
+        {active:false,valid:true,directions:['through','right'],valid_indications:['right'],active_indications:[],evidence_state:'PROVIDER'},
+        {active:true,valid:true,directions:['right'],valid_indications:['right'],active_indications:['right'],evidence_state:'PROVIDER'}]};
+}
+function approach() {
+    const c=context();c.roads[0].geometry[1]=[53.526,-1.13];
+    const m=matched(c);
+    return {c,m,line:c.roads[0].geometry,step:providerStep()};
+}
+test('native provider recommendations bind to this approach endpoint, independently of map lane permissions',()=>{
+    const {c,m,line,step}=approach();
+    expect(m.attributes_allowed).toBe(false);
+    expect(RM.providerLaneApproach(m,c,'car',NOW+1000,line,step)).toBe(true);
+    const result=LG.buildHybridLaneGuidance({routingManeuverLanes:step.lanes,maneuver:'right',distanceToManeuver:150});
+    expect(result.recommended_lanes).toEqual([2]);
+    expect(result.valid_lanes).toEqual([1,2]);
+    expect(result.preferred_lanes).toEqual([2]);
+    expect(result.lane_arrows.map(l=>l.arrow)).toEqual(['↑→','→']);
+    expect(result.next_maneuver).toBe('right');
+    expect(result.lane_change_needed).toBe(false);
+    const multiple=LG.buildHybridLaneGuidance({routingManeuverLanes:[
+        {...step.lanes[1],directions:['left']},step.lanes[0],{...step.lanes[1],directions:['left']}],
+        maneuver:'left',distanceToManeuver:100});
+    expect(multiple.recommended_lanes).toEqual([1,3]);
+    expect(LG.displayText(multiple)).toBe('Use the left lane or right lane');
+    expect(LG.buildLaneVoiceAnnouncementPlan(multiple,'').message).toBe('Use the left lane or right lane');
+    const scoped={...multiple,lane_scope:'1:10'};
+    const voice=LG.buildLaneVoiceAnnouncementPlan(scoped,'');
+    expect(LG.buildLaneVoiceAnnouncementPlan(scoped,voice.announceKey)).toBeNull();
+    expect(LG.buildLaneVoiceAnnouncementPlan({...scoped,lane_scope:'2:20'},voice.announceKey)).not.toBeNull();
+});
+test('provider approach rejects stale, unrelated, inferred, distant and past-junction scopes',()=>{
+    const {c,m,line,step}=approach();
+    const check=(match=m,context=c,path=line,target=step,now=NOW+1000)=>RM.providerLaneApproach(match,context,'car',now,path,target);
+    expect(check({...m,evidence_status:'AMBIGUOUS'})).toBe(false);
+    expect(check(m,c,line,step,NOW+17000)).toBe(false);
+    expect(check({...m,route_relation:'DIFFERENT'})).toBe(false);
+    expect(check(m,c,line,{...step,begin_shape_index:0})).toBe(false);
+    expect(check(m,c,line,{...step,lane_source:undefined})).toBe(false);
+    expect(check(m,c,line,{...step,lanes:step.lanes.map(l=>({...l,evidence_state:'INFERRED'}))})).toBe(false);
+    expect(check(m,c,[line[0],[53.527,-1.13]],step)).toBe(false);
+    const detour=[[53.524,-1.13],[53.525,-1.129],line[1]];
+    expect(check(m,c,detour,{...step,begin_shape_index:2})).toBe(false);
+    const reversal=[[53.524,-1.13],[53.525,-1.13],[53.5245,-1.13],line[1]];
+    expect(check(m,c,reversal,{...step,begin_shape_index:3})).toBe(false);
+    expect(check(m,c,[line[0],null])).toBe(false);
 });
 test('ambiguous roads, stale clocks, wrong vehicle and unbound route suppress layouts',()=>{
     const c=context(),m=matched(c);
@@ -60,7 +121,8 @@ test('ambiguous roads, stale clocks, wrong vehicle and unbound route suppress la
 
 test('actual lane UI shows neutral mapped layout, never highlights or speaks it, and clears uncertainty',()=>{
     const owner=require('../app/lane-guidance-orchestration.js');
-    const c=context();let observation=RM.laneObservation(matched(c),c,'car',NOW+1000);
+    const c=context();c.roads[0].tags['destination:lanes:forward']='City Centre|<img src=x onerror=alert(1)>';
+    let observation=RM.laneObservation(matched(c),c,'car',NOW+1000);
     const speak=jest.fn();let state='RELIABLE',attributes=null;
     document.body.innerHTML='<div id="laneGuidanceDisplay"><span class="lane-guidance-title"></span><span id="laneGuidanceBadge"></span><div id="laneVisual"></div><div id="laneGuidanceText"></div></div>';
     window.VoyagrRoadMatchOrchestration={getAttributes:()=>attributes,getSnapshot:()=>({attributes_allowed:false}),getLaneObservation:()=>observation};
@@ -75,6 +137,8 @@ test('actual lane UI shows neutral mapped layout, never highlights or speaks it,
         expect(document.getElementById('laneGuidanceBadge').textContent).toBe('Mapped');
         expect(Array.from(document.querySelectorAll('.lane-arrow')).map(n=>n.textContent)).toEqual(['←','↑→']);
         expect(document.querySelectorAll('.recommended')).toHaveLength(0);
+        expect(document.querySelectorAll('.lane-destination')[1].textContent).toBe('<img src=x onerror=alert(1)>');
+        expect(document.querySelector('#laneVisual img')).toBeNull();
         expect(speak).not.toHaveBeenCalled();
         attributes={lanes:{right:{source:'matched_directional_source',evidence_state:'EXPLICIT',
             total_lanes:2,recommended_lanes:[2],recommended_lane:2,show_lane_guidance:true,has_turn_lanes:true}}};
@@ -117,5 +181,43 @@ test('actual road owner shares a single bounded context for speed and lane obser
     } finally {
         clock.mockRestore();global.fetch=oldFetch;
         delete window.VoyagrRoadMatchOrchestration;delete window.VoyagrRoadMatching;
+    }
+});
+
+test('native route lanes reach the actual overlay through a live-context approach match',async()=>{
+    const clock=jest.spyOn(Date,'now').mockReturnValue(NOW),oldFetch=global.fetch;
+    const {c,line,step}=approach();
+    const path=line.concat([[53.526,-1.128]]),route={};
+    document.body.innerHTML='<select id="vehicleType"><option value="petrol_diesel">Car</option></select><div id="laneGuidanceDisplay"><span class="lane-guidance-title"></span><span id="laneGuidanceBadge"></span><div id="laneVisual"></div><div id="laneGuidanceText"></div></div>';
+    window.VoyagrRoadMatching=RM;
+    window.VoyagrGpsOrchestration={getNavigationPositionEvidence:()=>({state:'RELIABLE'}),getLastGpsFixAgeMs:()=>1000};
+    jest.resetModules();const owner=require('../app/road-match-orchestration.js');
+    const overlay=require('../app/lane-guidance-orchestration.js');
+    const speak=jest.fn();
+    overlay.bind({laneGuidance:()=>LG,getCurrentRouteSteps:()=>[{begin_shape_index:0},step],getCurrentStepIndex:()=>0,
+        getRoutePolyline:()=>path,getVoiceAnnouncementsEnabled:()=>false,
+        call:{calculateDistanceMeters:()=>200,speakMessage:speak}});
+    global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({context:c})});
+    const fix=t=>({timestamp:NOW+t,coords:{latitude:53.524,longitude:-1.13,accuracy:5,heading:0,speed:10}});
+    try {
+        owner.observe(fix(0),path,route);await new Promise(resolve=>setTimeout(resolve,0));
+        clock.mockReturnValue(NOW+1000);owner.observe(fix(1000),path,route);
+        expect(owner.matchesProviderLaneApproach(step)).toBe(false);
+        clock.mockReturnValue(NOW+2000);owner.observe(fix(2000),path,route);
+        expect(owner.matchesProviderLaneApproach(step)).toBe(true);
+        overlay.updateLaneGuidance(53.524,-1.13,0,'right',0,1);
+        expect(document.querySelectorAll('.recommended')).toHaveLength(1);
+        expect(Array.from(document.querySelectorAll('.lane-arrow')).map(n=>n.textContent)).toEqual(['↑→','→']);
+        expect(document.querySelectorAll('.valid-route-lane')).toHaveLength(1);
+        expect(document.querySelector('.recommended').getAttribute('aria-label')).toContain('Preferred route lane');
+        expect(document.querySelector('.lane-guidance-title').textContent).toContain('Lane Guidance');
+        owner.invalidate('GPS lost');
+        expect(owner.matchesProviderLaneApproach(step)).toBe(false);
+        overlay.updateLaneGuidance(53.524,-1.13,0,'right',0,1);
+        expect(document.getElementById('laneGuidanceDisplay').classList.contains('show')).toBe(false);
+        expect(speak).not.toHaveBeenCalled();
+    } finally {
+        clock.mockRestore();global.fetch=oldFetch;
+        delete window.VoyagrRoadMatchOrchestration;delete window.VoyagrRoadMatching;delete window.VoyagrGpsOrchestration;
     }
 });

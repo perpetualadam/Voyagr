@@ -221,6 +221,17 @@ def build_osrm_maneuvers(
                 maneuver['roundabout_exit_source']='OSRM'
 
             maneuver['maneuver_kind']=m_type
+            # Only the intersection at this maneuver belongs to its lane scope.
+            intersections = step.get('intersections')
+            if isinstance(intersections, list) and intersections and isinstance(intersections[0], dict):
+                first = intersections[0]
+                if first.get('location') == loc:
+                    from voyagr.utils.provider_lanes import normalize_provider_lanes
+                    lanes = normalize_provider_lanes(first.get('lanes'), 'OSRM')
+                    if lanes:
+                        maneuver['lanes'] = lanes
+                        if any(lane['active_indications'] for lane in lanes):
+                            maneuver['lane_source'] = 'OSRM'
             if m_type=='off ramp' and not modifier: maneuver['direction_override']='exit'
             road_class = infer_road_class_from_names(ref, street_names)
             if road_class:

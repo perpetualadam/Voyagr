@@ -2,6 +2,49 @@
 
 import unittest
 
+from voyagr.utils.provider_lanes import normalize_provider_lanes
+
+
+class TestProviderLaneProtocols(unittest.TestCase):
+    def test_valhalla_documented_masks_preserve_valid_and_preferred(self):
+        lanes = normalize_provider_lanes([{'directions':8,'active':8}, {'directions':10,'valid':8}], 'Valhalla')
+        self.assertEqual(lanes[0]['directions'], ['left'])
+        self.assertTrue(lanes[0]['active'])
+        self.assertEqual(lanes[1]['directions'], ['through','left'])
+        self.assertEqual(lanes[1]['valid_indications'], ['left'])
+        self.assertTrue(lanes[1]['valid'])
+        self.assertFalse(lanes[1]['active'])
+
+    def test_masks_reject_unknown_bits_booleans_and_conflicting_subsets(self):
+        for lane in ({'directions':2048}, {'directions':8,'active':True},
+                     {'directions':8,'active':64}, {'directions':10,'active':8,'valid':2},
+                     {'directions':-1}, {'directions':8.0}):
+            with self.subTest(lane=lane):
+                self.assertIsNone(normalize_provider_lanes([lane, {'directions':2}], 'Valhalla'))
+
+    def test_osrm_valid_is_not_an_invented_preferred_lane(self):
+        lanes = normalize_provider_lanes([{'indications':['left'],'valid':True},
+                                          {'indications':['straight','right'],'valid':False}], 'OSRM')
+        self.assertTrue(lanes[0]['active'])
+        self.assertFalse(lanes[0]['preferred'])
+        self.assertEqual(lanes[1]['directions'], ['through','right'])
+        self.assertFalse(lanes[1]['active'])
+
+    def test_provider_flags_are_not_coerced_or_inferred(self):
+        for lanes in ([{'indications':['left'],'valid':'true'}, {}],
+                      [{'directions':[], 'active':True, 'evidence_state':'INFERRED'}, {}],
+                      [{'indications':['invented'],'valid':True}, {}], [{}]*13):
+            self.assertIsNone(normalize_provider_lanes(lanes,'OSRM'))
+
+    def test_full_indications_survive_separate_selected_direction(self):
+        lanes=normalize_provider_lanes([
+            {'directions':['left','through'],'valid_indications':['left'],'active':True},
+            {'directions':['through'],'active':False}], 'GraphHopper')
+        self.assertEqual(lanes[0]['directions'],['left','through'])
+        self.assertEqual(lanes[0]['active_indications'],['left'])
+        self.assertIsNone(normalize_provider_lanes([
+            {'indications':['left'],'valid':True,'valid_indication':'right'},{}],'OSRM'))
+
 from voyagr.utils.lane_maneuvers import (
     attach_lanes_to_graphhopper_maneuver,
     build_lanes_for_maneuver,

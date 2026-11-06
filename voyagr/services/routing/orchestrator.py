@@ -191,6 +191,8 @@ def apply_valhalla_mode_costing_options(
     log_auto: bool = False,
 ) -> None:
     """Attach mode-specific costing_options. Bicycle omits unknown keys (they 400 some builds)."""
+    if valhalla_costing in ('auto', 'auto_shorter', 'motorcycle'):
+        payload['turn_lanes'] = True
     if valhalla_costing == 'pedestrian':
         payload['costing_options'] = {
             'pedestrian': {'walking_speed': 5.1, 'use_ferry': not avoid_ferries}
@@ -469,6 +471,7 @@ def build_valhalla_discovery_payload(
         "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
         "costing": "auto",
         "exclude_locations": exclude_locations,
+        "turn_lanes": True,
         "directions_options": {"generalize": 0},
     }
 

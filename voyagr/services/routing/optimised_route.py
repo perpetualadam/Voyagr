@@ -201,6 +201,7 @@ def fetch_valhalla_auto_json(
     base_payload: Dict[str, Any] = {
         'locations': locations,
         'costing': 'auto',
+        'turn_lanes': True,
         'units': 'kilometers',
         'language': 'en-GB',
         'directions_options': {'generalize': 0},
@@ -264,6 +265,7 @@ def fetch_valhalla_auto_costing_preference_json(
     payload: Dict[str, Any] = {
         'locations': locations,
         'costing': 'auto',
+        'turn_lanes': True,
         'units': 'kilometers',
         'language': 'en-GB',
         'directions_options': {'generalize': 0},
@@ -495,6 +497,7 @@ def fetch_valhalla_auto_shorter_json(
     base_payload: Dict[str, Any] = {
         'locations': locations,
         'costing': 'auto_shorter',
+        'turn_lanes': True,
         'units': 'kilometers',
         'language': 'en-GB',
         'directions_options': {'generalize': 0},

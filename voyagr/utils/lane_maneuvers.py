@@ -430,7 +430,12 @@ def attach_lanes_to_graphhopper_maneuver(
     explicit=instr.get('lanes')
     if isinstance(explicit,list) and explicit and isinstance(explicit[-1],list): explicit=explicit[-1]
     if isinstance(explicit,list) and 1<len(explicit)<=12 and all(isinstance(l,dict) for l in explicit) and any(l.get('active') is True for l in explicit):
-        maneuver['lanes']=[dict(l,evidence_state='PROVIDER') for l in explicit]
+        from voyagr.utils.provider_lanes import normalize_provider_lanes
+        normalized = normalize_provider_lanes(explicit, 'GraphHopper')
+        if normalized:
+            maneuver['lanes'] = normalized
+            if any(lane['active_indications'] for lane in normalized):
+                maneuver['lane_source'] = 'GraphHopper'
         return
     road_class = maneuver.get('road_class')
     if not road_class and path_details:

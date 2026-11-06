@@ -24,6 +24,12 @@ def test_turn_tokens_cannot_establish_roundabout_exit_or_merge_lane(maneuver):
     assert not r['show_lane_guidance']
 
 
+@pytest.mark.parametrize('maneuver,token',[('sharp_left','sharp_left'),('sharp_right','sharp_right'),('uturn','reverse')])
+def test_exact_sharp_and_reverse_markings_are_supported_without_roundabout_guesses(maneuver,token):
+    r=lane_evidence({'oneway':'yes','lanes':'2','turn:lanes':token+'|through'},road_matched=True,direction='forward',maneuver=maneuver)
+    assert r['recommended_lanes']==[1] and r['evidence_state']=='EXPLICIT'
+
+
 @pytest.mark.parametrize('jurisdiction',['England','Scotland','Wales','Northern Ireland'])
 def test_fresh_matched_directional_mapped_limit(jurisdiction):
     r=legal_speed_evidence({'maxspeed':'40 mph','maxspeed:forward':'20 mph'},road_matched=True,direction='forward',vehicle='car',jurisdiction=jurisdiction,observed_at=NOW,now=NOW)
