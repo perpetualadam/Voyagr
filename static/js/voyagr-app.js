@@ -3139,7 +3139,11 @@ if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
     buildRequest:(fix,destination)=>buildRouteRequest(fix.lat,fix.lon,destination),fetch:(url,options)=>fetch(url,options),
     resolveDestination:text=>VoyagrGeocodingOrchestration.geocodeAddress(text),addStop:addStop,
     captureSimulationView:()=>({center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()}),
-    moveSimulationCamera:(position,initial)=>map.jumpTo({...(initial?{zoom:16,pitch:45}:{}),center:[position.lon,position.lat],bearing:position.heading_deg}),
+    moveSimulationCamera:(position,initial)=>{
+        const panel=document.getElementById('simulationControls');
+        map.easeTo(VoyagrJourneyPlan.previewCamera(position,initial,map.getContainer().getBoundingClientRect(),panel&&panel.getBoundingClientRect()));
+    },
+    stopSimulationCamera:()=>map.stop(),
     restoreSimulationView:view=>map.jumpTo(view),
     showSimulationMap:()=>collapseBottomSheet(),
     simulationMarker:point=>{
