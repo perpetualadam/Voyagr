@@ -246,3 +246,33 @@ alone cannot supply a drawable route or establish a connector.
 Browser/device visual acceptance remains pending. No provider, route geometry,
 GPS, connector or navigation eligibility change is included. Objective 6 advances;
 objectives 2 and 3 remain incomplete.
+
+
+## Reported free parking increment (6 November 2026)
+
+The optional driving-arrival search has any/reported-free/reported-paid filters,
+and accepts bare “free parking” or “free car park” with destination context. Named
+place queries remain literal geocoding searches and explicitly state that their
+results are not fee-filtered. Request ownership, response fee context and cache
+keys include the nearby fee filter, so stale paid results cannot appear as a free
+shortlist. Filter changes start a new nearby search and clear stale coordinates.
+
+Both arrival search and the existing parking-preferences search classify mapped
+fee evidence consistently. Only explicit fee=no without conditional fee/charge
+rules or contradictory charge data is reported free. fee=yes is reported paid;
+conditional rules are not evaluated and missing/donation/unsupported fee data is
+unknown. Customer/private access, opening hours and maximum stays remain separate
+restrictions. No tariff, eligibility, current opening, availability or vehicle
+access is verified. No parking is renamed NCP from the screenshot alone.
+
+The existing nearby-parking path now retrieves the bounded candidate pool before
+price/type filtering and the ten-result limit, supports relations, uses geodesic
+distance and returns acquisition failures as unavailable rather than an empty
+success. Existing reported-access/name ranking is retained. The mapped pool is
+bounded and incomplete; road-tag-only on-street parking is not comprehensively
+covered. Free-street filtering applies to mapped amenity=parking street types.
+
+This is a user-requested search enhancement under provider/search and UI work;
+it does not complete entrance, connector, GPS or live-navigation objectives.
+Live Doncaster fee availability and browser/device acceptance remain to be checked
+after a separately authorized deployment. Tests use controlled map tags.

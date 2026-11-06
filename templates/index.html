@@ -112,7 +112,7 @@
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261031phase12fgremediation"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20260711zb"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
-    <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20260712aacn"></script>
+    <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20261106parkingfees1"></script>
     <script defer src="/static/js/modules/navigation/offline-navigation.js?v=20261031phase12fgr9"></script>
     <script defer src="/static/js/modules/navigation/ml-predictions.js?v=20260711zzzf"></script>
     <script defer src="/static/js/modules/navigation/search-autocomplete.js?v=20260711s"></script>
@@ -178,7 +178,7 @@
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
-    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261104arrivalpresentation1"></script>
+    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261106parkingfees1"></script>
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261027phase7a"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
@@ -453,6 +453,13 @@
                         <option value="vehicle_entrance">Vehicle entrance — preview only</option>
                     </select>
                     <small id="arrivalIntentHelp">This records the intended arrival. It does not verify stopping, property access or an entrance. Roadside and entrance intents cannot start live navigation yet.</small>
+                    <label for="arrivalParkingPrice">Nearby parking price</label>
+                    <select id="arrivalParkingPrice" onchange="VoyagrGeocodingOrchestration.searchArrivalParking()">
+                        <option value="any">Any price</option>
+                        <option value="free">Reported free only</option>
+                        <option value="paid">Reported paid only</option>
+                    </select>
+                    <small>Based on mapped fee tags. Check signs, time limits and customer restrictions. Missing fee data is not free.</small>
                     <small id="arrivalSearchContext" role="status"></small>
                     <small id="drivingArrivalHelp">Keep your destination above. Choose where driving guidance should end, then calculate again. Check the vehicle entrance and opening restrictions. The onward connection is not included.</small>
                     <button type="button" class="btn" onclick="VoyagrJourneyPlan.clearArrival();VoyagrLocationOrchestration.invalidateEndpointRequests('end')">Clear arrival point</button>
@@ -1202,9 +1209,9 @@
                             <span class="preference-label">Price Preference</span>
                             <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="any" selected>Any Price</option>
-                                <option value="free">Free Only (Any Type)</option>
-                                <option value="free_street">🆓 Free Street Parking</option>
-                                <option value="paid">Paid Parking</option>
+                                <option value="free">Reported Free Only (Any Type)</option>
+                                <option value="free_street">Reported Free Street Parking</option>
+                                <option value="paid">Reported Paid Parking</option>
                             </select>
                         </div>
                     </div>
