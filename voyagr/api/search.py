@@ -586,7 +586,7 @@ def arrival_access_evidence():
 def arrival_parking_search():
     """Parking candidates around an explicit destination, never map/current GPS centre."""
     from voyagr.services.routing.origin_integrity import coordinate
-    from voyagr.services.arrival_parking import RADIUS_M, search_near_destination
+    from voyagr.services.arrival_parking import RADIUS_M, search_near_destination, filter_candidates, PRICE_PREFS
     data = request.get_json(silent=True)
     values = [data.get('lat'), data.get('lon')] if isinstance(data, dict) else []
     valid = len(values) == 2 and all(isinstance(n, (int, float)) and not isinstance(n, bool)
@@ -594,14 +594,22 @@ def arrival_parking_search():
     point = coordinate(values) if valid else None
     if point is None:
         return jsonify(success=False, error='A valid destination coordinate is required'), 400
+    price = data.get('price_pref', 'any')
+    if not isinstance(price, str) or price not in PRICE_PREFS:
+        return jsonify(success=False, error='Unsupported parking price filter'), 400
     candidates = search_near_destination(*point)
+    if candidates is not None:
+        candidates = filter_candidates(candidates, price)
     if candidates is None:
         response = jsonify(success=False, error='Nearby parking search is temporarily unavailable')
         response.status_code = 503
     else:
-        response = jsonify(success=True, results=candidates[:10], search_context={
+        context = {
             'version': 1, 'coordinates': list(point), 'radius_m': RADIUS_M,
-            'coverage': 'CANDIDATES_ONLY', 'source': 'overpass', 'ranking_policy': 'reported_access_name_distance_v1'})
+            'coverage': 'CANDIDATES_ONLY', 'source': 'overpass', 'ranking_policy': 'reported_access_name_distance_v1'}
+        if 'price_pref' in data:
+            context['price_pref'] = price
+        response = jsonify(success=True, results=candidates[:10], search_context=context)
     response.headers['Cache-Control'] = 'no-store'
     return response
 
@@ -609,112 +617,30 @@ def arrival_parking_search():
 @search_bp.route('/parking-search', methods=['POST'])
 def search_parking():
     """Search for parking near a destination using Overpass API (OSM)."""
-    try:
-        data = request.json
-        lat = float(data.get('lat', 0))
-        lon = float(data.get('lon', 0))
-        radius = int(data.get('radius', 800))
-        if not 1<=radius<=5000: return jsonify(success=False,error='Radius must be between 1 and 5000 metres'),400
-        parking_type = data.get('type', 'any')
-        price_pref = data.get('price', 'any')
-
-        if lat == 0 or lon == 0:
-            return jsonify({'success': False, 'error': 'Invalid coordinates'})
-
-        overpass_query = f"""
-        [out:json][timeout:25][maxsize:2097152];
-        (
-          node["amenity"="parking"](around:{radius},{lat},{lon});
-          way["amenity"="parking"](around:{radius},{lat},{lon});
-        );
-        out center tags {min(20, max(1, radius // 50))};
-        """
-
-        logger.info("[Parking] OSM parking acquisition")
-
-        from overpass_helper import query_overpass
-        result = query_overpass(overpass_query, cache_ttl=300)
-        elements = result.get('elements', []) if result.get('success') else []
-
-        if not elements:
-            return jsonify({'success': True, 'parking': []})
-
-        parking_list = []
-        for element in elements:
-            try:
-                tags = element.get('tags', {})
-                if element.get('type') == 'node':
-                    p_lat = float(element.get('lat', 0))
-                    p_lon = float(element.get('lon', 0))
-                elif element.get('type') == 'way' and 'center' in element:
-                    p_lat = float(element['center'].get('lat', 0))
-                    p_lon = float(element['center'].get('lon', 0))
-                else:
-                    continue
-
-                distance_m = math.sqrt((p_lat - lat)**2 + (p_lon - lon)**2) * 111000
-                if distance_m > radius:
-                    continue
-
-                # Filter by parking type if specified
-                if parking_type != 'any':
-                    parking_subtype = tags.get('parking', '').lower()
-                    if parking_type == 'garage' and parking_subtype not in ['multi-storey', 'underground']:
-                        continue
-                    elif parking_type == 'street' and parking_subtype not in ['street_side', 'lane', 'on_street']:
-                        continue
-                    elif parking_type == 'lot' and parking_subtype not in ['surface', 'lot']:
-                        continue
-
-                # Filter by price preference
-                if price_pref != 'any':
-                    fee_tag = tags.get('fee', '').lower()
-                    parking_subtype = tags.get('parking', '').lower()
-                    if price_pref == 'free' and fee_tag != 'no':
-                        continue
-                    elif price_pref == 'paid' and fee_tag != 'yes':
-                        continue
-                    elif price_pref == 'free_street' and (
-                        fee_tag != 'no'
-                        or parking_subtype not in ['street_side', 'lane', 'on_street']
-                    ):
-                        continue
-
-                name = tags.get('name', 'Parking')
-                fee_tag = tags.get('fee', '')
-                suffix_parts = []
-                if fee_tag == 'no':
-                    suffix_parts.append('Free')
-                elif fee_tag == 'yes':
-                    suffix_parts.append('Paid')
-                if suffix_parts:
-                    name += ' (' + ', '.join(suffix_parts) + ')'
-
-                parking_list.append({
-                    'name': name,
-                    'lat': p_lat,
-                    'lon': p_lon,
-                    'distance_m': distance_m,
-                    'address': tags.get('addr:street', '') or tags.get('operator', '') or 'Unknown',
-                    'type': 'parking',
-                    'fee': fee_tag,
-                    'parking_type': tags.get('parking', 'unknown'),
-                    'access': tags.get('access', ''),
-                    'capacity': tags.get('capacity', '')
-                })
-            except (ValueError, KeyError) as e:
-                logger.debug(f"[Parking] Error processing element: {e}")
-                continue
-
-        parking_list.sort(key=lambda x: x['distance_m'])
-        logger.info(f"[Parking] Found {len(parking_list)} parking options")
-        return jsonify({'success': True, 'parking': parking_list[:10]})
-
-    except route_transport.RoutingDeadlineExceeded:
-        raise
-    except Exception as e:
-        logger.error(f"[Parking] Error: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
+    from voyagr.services.arrival_parking import search_near_destination, filter_candidates, PRICE_PREFS, PARKING_TYPES
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(success=False, error='Invalid parking search'), 400
+    values = [data.get('lat'), data.get('lon')]
+    from voyagr.services.arrival_map_evidence import point
+    target = point(values)
+    radius = data.get('radius', 800)
+    price, kind = data.get('price_pref', 'any'), data.get('type', 'any')
+    if (target is None or type(radius) is not int or not 1 <= radius <= 5000 or
+            not isinstance(price, str) or price not in PRICE_PREFS or
+            not isinstance(kind, str) or kind not in PARKING_TYPES):
+        return jsonify(success=False, error='Invalid parking coordinates, radius or filters'), 400
+    candidates = search_near_destination(*target, radius=radius)
+    if candidates is None:
+        response = jsonify(success=False, error='Parking search temporarily unavailable')
+        response.status_code = 503
+    else:
+        rows = filter_candidates(candidates, price, kind)[:10]
+        parking = [{**row, 'lat': float(row['lat']), 'lon': float(row['lon']),
+                    'address': row['address']['road'] or 'Unknown'} for row in rows]
+        response = jsonify(success=True, parking=parking)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> Any:

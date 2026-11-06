@@ -33,6 +33,32 @@ def reported_access(tags):
             'has_conditional_access': conditional, 'has_conflicting_access': conflict}
 
 
+PRICE_PREFS = {'any', 'free', 'paid', 'free_street'}
+PARKING_TYPES = {'any', 'garage', 'street', 'lot'}
+
+
+def reported_fee(tags):
+    reported = {k: v.strip()[:500] for k in ('fee', 'fee:conditional', 'charge', 'charge:conditional', 'maxstay')
+                if isinstance((v := tags.get(k)), str) and v.strip()}
+    fee = reported.get('fee', '').lower()
+    conditional = bool(reported.get('fee:conditional') or reported.get('charge:conditional'))
+    category = ('conditional' if conditional else 'free' if fee == 'no' and not reported.get('charge')
+                else 'paid' if fee == 'yes' else 'unknown')
+    labels = {'free': 'Reported free — check signs and eligibility', 'paid': 'Reported paid — check current tariff',
+              'conditional': 'Conditional fee — check rules', 'unknown': 'Fee unknown — check signs'}
+    return {'fee': reported.get('fee', ''), 'fee_category': category, 'fee_label': labels[category],
+            'reported_fee': reported, 'fee_verified': False}
+
+
+def filter_candidates(candidates, price='any', parking_type='any'):
+    types = {'garage': {'multi-storey', 'underground'}, 'street': {'street_side', 'lane', 'on_street'},
+             'lot': {'surface', 'lot'}}
+    return [item for item in candidates
+            if (parking_type == 'any' or item['parking_type'] in types.get(parking_type, set()))
+            and (price == 'any' or price == item['fee_category'] or
+                 price == 'free_street' and item['fee_category'] == 'free' and item['parking_type'] in types['street'])]
+
+
 def shortlist_key(item):
     category = item['access_category']
     # Named general/customer candidates first; restrictions remain visible further down.
@@ -43,11 +69,11 @@ def shortlist_key(item):
     return tier, item['distance_m'], item['osm_type'], item['osm_id']
 
 
-def search_near_destination(lat, lon):
+def search_near_destination(lat, lon, radius=RADIUS_M):
     """Retrieve a local category set before ranking, using existing provider policy."""
     from overpass_helper import query_overpass
     query = f'''[out:json][timeout:7][maxsize:2097152];
-      nwr["amenity"="parking"](around:{RADIUS_M},{lat},{lon});
+      nwr["amenity"="parking"](around:{radius},{lat},{lon});
       out center tags 200;'''
     try:
         budget = request_budget.WorkBudget(12, parent=request_budget.current_budget())
@@ -82,7 +108,7 @@ def search_near_destination(lat, lon):
         identity = element.get('type'), element.get('id')
         if element.get('type') not in ('node', 'way', 'relation') or type(element.get('id')) is not int:
             continue
-        if distance > RADIUS_M or identity in seen:
+        if distance > radius or identity in seen:
             continue
         seen.add(identity)
         def text(key, default='', limit=160):
@@ -98,5 +124,6 @@ def search_near_destination(lat, lon):
                            'osm_type': element['type'], 'osm_id': element['id'], '_source': 'overpass',
                            'address': {'road': road}, 'distance_m': round(distance, 1),
                            'access': text('access', limit=64), 'opening_hours': text('opening_hours'),
-                           'has_name': has_name, **reported_access(tags), 'access_verified': False})
+                           'has_name': has_name, 'parking_type': text('parking', 'unknown'),
+                           'capacity': text('capacity'), **reported_fee(tags), **reported_access(tags), 'access_verified': False})
     return sorted(candidates, key=shortlist_key)

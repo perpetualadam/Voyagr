@@ -463,3 +463,47 @@ test('arrival intent response compatibility rejects silent custom-intent downgra
     expect(Plan.responseArrivalIntentMatches({...intent,mode:'place'},{})).toBe(true);
     expect(Plan.responseArrivalIntentMatches(undefined,{})).toBe(true);
 });
+
+test('reported fee categories and restrictions render as text in arrival results',()=>{
+    scopeFixture();Geo.displayAutocompleteResults('drivingArrival',[
+        {name:'Reported free',lat:'53.52',lon:'-1.13',fee_category:'free',reported_fee:{maxstay:'2 hours',fee:'no'},access_category:'customers'},
+        {name:'No fee data',lat:'53.52',lon:'-1.13'},
+        {name:'Conditional',lat:'53.52',lon:'-1.13',fee_category:'conditional',reported_fee:{'fee:conditional':'<img src=x onerror=alert(1)>'}}
+    ]);
+    const items=document.querySelectorAll('.autocomplete-item');
+    expect(items[0].textContent).toContain('Reported free — check signs and eligibility');
+    expect(items[0].textContent).toContain('Customers only');expect(items[0].textContent).toContain('2 hours');
+    expect(items[1].textContent).toContain('Fee unknown');expect(items[2].textContent).toContain('Conditional fee');
+    expect(items[2].querySelector('img')).toBeNull();
+});
+test('changing free filter changes request/cache ownership and rejects downgraded fee responses',async()=>{
+    jest.useFakeTimers();const input=scopeFixture('Fee filter destination'),oldFetch=global.fetch;
+    document.body.insertAdjacentHTML('beforeend','<select id="arrivalParkingPrice"><option value="any">Any</option><option value="free">Free</option><option value="paid">Paid</option></select>');
+    const select=document.getElementById('arrivalParkingPrice');
+    global.fetch=jest.fn(async(_url,options)=>{
+        const body=JSON.parse(options.body),payload=nearbyPayload([53.5227681,-1.1335312]);
+        payload.search_context.price_pref=body.price_pref;
+        payload.results[0].fee_category=body.price_pref==='free'?'free':'paid';return {ok:true,json:async()=>payload};
+    });
+    try{
+        select.value='free';await Geo.searchArrivalParking();await jest.advanceTimersByTimeAsync(301);
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body).price_pref).toBe('free');
+        expect(document.querySelector('.autocomplete-item').textContent).toContain('Reported free');
+        select.value='paid';await Geo.searchArrivalParking();await jest.advanceTimersByTimeAsync(301);
+        expect(global.fetch).toHaveBeenCalledTimes(2);expect(document.querySelector('.autocomplete-item').textContent).toContain('Reported paid');
+        select.value='free';input.value='free parking';
+        global.fetch.mockResolvedValueOnce({ok:true,json:async()=>nearbyPayload([53.5227681,-1.1335312])});
+        await Geo.showAutocomplete('drivingArrival',true);await jest.advanceTimersByTimeAsync(301);
+        expect(document.querySelector('.autocomplete-item')).toBeNull();
+        expect(document.getElementById('autocomplete_drivingArrival').textContent).toContain('temporarily unavailable');
+    }finally{global.fetch=oldFetch;jest.useRealTimers();}
+});
+
+test('parking list reports fees and customer limits without injecting provider markup',()=>{
+    const Parking=require('../modules/navigation/multimodal-parking.js');
+    const html=Parking.buildParkingOptionItemHtml({name:'<img src=x onerror=alert(1)>',distance_m:100,
+        fee_label:'Reported free — check signs and eligibility',access_category:'customers',reported_fee:{maxstay:'2 hours'}},0,{distanceText:'100',distUnit:'m'});
+    const panel=document.createElement('div');panel.innerHTML=html;
+    expect(panel.querySelector('img')).toBeNull();expect(panel.textContent).toContain('Reported free');
+    expect(panel.textContent).toContain('Customers only');expect(panel.textContent).toContain('2 hours');
+});

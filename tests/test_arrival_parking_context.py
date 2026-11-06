@@ -343,3 +343,62 @@ def test_road_touching_boundary_coordinates_without_shared_ids_is_not_a_topologi
     assert record['observations'][1]['geometry'][0] == record['parking_boundary']['observation']['geometry'][0]
     assert record['observations'][1]['parking_boundary_shared_node_ids'] == []
     assert record['parking_boundary']['entrance'] == 'NOT_ESTABLISHED'
+
+
+@pytest.mark.parametrize('tags,category', [({'fee': 'no'}, 'free'), ({'fee': 'yes'}, 'paid'), ({}, 'unknown'),
+    ({'fee': 'no', 'fee:conditional': 'yes @ (Mo-Fr)'}, 'conditional'),
+    ({'fee': 'yes', 'fee:conditional': 'no @ (Su)'}, 'conditional'),
+    ({'fee': 'no', 'charge': '2 GBP/hour'}, 'unknown'),
+    ({'charge:conditional': '0 @ (Su)'}, 'conditional'), ({'fee': 'donation'}, 'unknown')])
+def test_fee_classification_never_infers_free_from_unknown_or_conditional(tags, category):
+    from voyagr.services.arrival_parking import reported_fee
+    record = reported_fee(tags)
+    assert record['fee_category'] == category and record['fee_verified'] is False
+    assert 'Reported free' in record['fee_label'] if category == 'free' else 'Reported free' not in record['fee_label']
+
+
+@pytest.mark.parametrize('endpoint,key', [('/api/arrival-parking-search', 'results'), ('/api/parking-search', 'parking')])
+def test_free_filter_precedes_limit_and_preserves_customer_and_maxstay_restrictions(endpoint, key):
+    elements = [parking(i+1, name='Paid '+str(i), fee='yes', access='yes') for i in range(25)]
+    elements += [parking(99, name='Customer free', fee='no', access='customers', maxstay='2 hours')]
+    elements += [parking(100, name='Unknown'), parking(101, fee='no', **{'fee:conditional': 'yes @ (Mo-Fr)'})]
+    with patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': elements}):
+        response = client().post(endpoint, json={'lat': DESTINATION[0], 'lon': DESTINATION[1], 'price_pref': 'free'})
+    assert response.status_code == 200
+    rows = response.get_json()[key]
+    assert [r['osm_id'] for r in rows] == [99]
+    assert rows[0]['reported_fee']['maxstay'] == '2 hours'
+    assert rows[0]['access_category'] == 'customers' and rows[0]['access_verified'] is False
+    assert rows[0]['fee_verified'] is False
+
+
+def test_paid_unknown_and_relations_are_returned_with_independent_price_metadata():
+    elements = [parking(1, fee='yes'), parking(2, kind='relation', fee='no'), parking(3)]
+    with patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': elements}):
+        all_rows = client().post('/api/parking-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1]}).get_json()['parking']
+        paid = client().post('/api/parking-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1], 'price_pref': 'paid'}).get_json()['parking']
+    assert {r['fee_category'] for r in all_rows} == {'free', 'paid', 'unknown'}
+    assert [r['osm_id'] for r in paid] == [1]
+
+
+def test_free_street_filter_requires_both_reported_no_fee_and_street_type():
+    elements = [parking(1, fee='no', parking='surface'), parking(2, fee='no', parking='street_side'),
+                parking(3, parking='street_side')]
+    with patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': elements}):
+        rows = client().post('/api/parking-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1], 'price_pref': 'free_street'}).get_json()['parking']
+    assert [r['osm_id'] for r in rows] == [2]
+
+
+@pytest.mark.parametrize('endpoint', ['/api/arrival-parking-search', '/api/parking-search'])
+def test_filtered_provider_failure_is_not_empty_free_parking_success(endpoint):
+    with patch('overpass_helper.query_overpass', return_value={'success': False, 'elements': []}):
+        response = client().post(endpoint, json={'lat': 53, 'lon': -1, 'price_pref': 'free'})
+    assert response.status_code == 503 and response.get_json()['success'] is False
+
+
+@pytest.mark.parametrize('value', ['cheapest', [], True])
+def test_invalid_price_filter_is_rejected_without_provider_call(value):
+    with patch('overpass_helper.query_overpass') as provider:
+        response = client().post('/api/arrival-parking-search', json={'lat': 53, 'lon': -1, 'price_pref': value})
+    assert response.status_code == 400
+    provider.assert_not_called()

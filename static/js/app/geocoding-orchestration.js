@@ -82,6 +82,10 @@ function arrivalDestinationPoint(){
     if(end.dataset.lat&&end.dataset.lon&&end.dataset.displayName===end.value)return plan.coordinate([Number(end.dataset.lat),Number(end.dataset.lon)]);
     return plan.coordinate(end.value);
 }
+function searchArrivalParking(){
+    const input=document.getElementById('drivingArrival');
+    if(input){input.value='car park';return showAutocomplete('drivingArrival',true);}
+}
 async function showAutocomplete(fieldId, userEdit) {
     const generation=++autocompleteGeneration;
     if(autocompleteController)autocompleteController.abort();
@@ -106,14 +110,17 @@ async function showAutocomplete(fieldId, userEdit) {
 
     const query = input.value.trim();
     const destinationBinding=fieldId==='drivingArrival'?arrivalDestinationBinding():'';
-    const localParking=fieldId==='drivingArrival'&&/^(?:car\s*parks?|parking)$/i.test(query);
+    const localParking=fieldId==='drivingArrival'&&/^(?:free\s+)?(?:car\s*parks?|parking)$/i.test(query);
+    const priceControlValue=document.getElementById('arrivalParkingPrice')?.value||'any';
+    const price=localParking&&/^free\s/i.test(query)?'free':priceControlValue;
     const destinationPoint=localParking?arrivalDestinationPoint():null;
     const ownsSearch=()=>generation===autocompleteGeneration&&document.getElementById(fieldId)===input&&input.value.trim()===query&&
-        (fieldId!=='drivingArrival'||arrivalDestinationBinding()===destinationBinding);
-    const cacheKey=JSON.stringify([query,destinationBinding]);
+        (fieldId!=='drivingArrival'||arrivalDestinationBinding()===destinationBinding&&
+            (document.getElementById('arrivalParkingPrice')?.value||'any')===priceControlValue);
+    const cacheKey=JSON.stringify([query,destinationBinding,localParking?price:null]);
     const searchContext=document.getElementById('arrivalSearchContext');
     if(searchContext&&fieldId==='drivingArrival')searchContext.textContent=localParking?
-        destinationPoint?'Searching for car parks within 2 km of '+document.getElementById('end').value+'.':'Select a destination first to search for nearby parking.':'';
+        destinationPoint?'Searching for car parks within 2 km of '+document.getElementById('end').value+'.':'Select a destination first to search for nearby parking.':priceControlValue!=='any'?'The price filter applies to nearby car park searches; named-place results are not fee-filtered.':'';
     if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;delete input.dataset.journeySearchEvidence;}
 
     if (userEdit&&(input.dataset.lat || input.dataset.lon)) {
@@ -160,7 +167,7 @@ async function showAutocomplete(fieldId, userEdit) {
         if(!ownsSearch())return;
         try {
             if (autocompleteCache[cacheKey]) {
-                if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. Vehicle access is not verified.';
+                if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. '+(price==='free'?'Reported free only. ':price==='paid'?'Reported paid only. ':'')+'Fees and vehicle access are not verified.';
                 displayAutocompleteResults(fieldId, autocompleteCache[cacheKey]);
                 return;
             }
@@ -169,7 +176,7 @@ async function showAutocomplete(fieldId, userEdit) {
             const response = await fetch(
                 localParking?'/api/arrival-parking-search':`${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
                 localParking?{signal:controller.signal,method:'POST',headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({lat:destinationPoint[0],lon:destinationPoint[1]})}:
+                    body:JSON.stringify({lat:destinationPoint[0],lon:destinationPoint[1],...(price!=='any'||document.getElementById('arrivalParkingPrice')?{price_pref:price}:{})})}:
                     {signal:controller.signal,headers:{'User-Agent':'Voyagr-PWA/1.0'}}
             );
 
@@ -183,9 +190,11 @@ async function showAutocomplete(fieldId, userEdit) {
                 JSON.stringify(payload.search_context.coordinates)!==JSON.stringify(destinationPoint)))throw new Error('Parking search context mismatch');
             const results=localParking?payload.results:payload;
             if(!Array.isArray(results))throw new Error('Invalid search response');
+            if(localParking&&price!=='any'&&(payload.search_context.price_pref!==price||
+                results.some(row=>row.fee_category!==price)))throw new Error('Parking fee filter response mismatch');
 
             autocompleteCache[cacheKey] = results;
-            if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. Vehicle access is not verified.';
+            if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. '+(price==='free'?'Reported free only. ':price==='paid'?'Reported paid only. ':'')+'Fees and vehicle access are not verified.';
 
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
@@ -208,7 +217,7 @@ function displayAutocompleteResults(fieldId, results) {
     if (!dropdown) return;
 
     if (!results || results.length === 0) {
-        dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml('No results found');
+        dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml(fieldId==='drivingArrival'?'No matching mapped parking found; fee data may be incomplete.':'No results found');
         return;
     }
 
@@ -264,7 +273,11 @@ function displayAutocompleteResults(fieldId, results) {
             if(result.has_conflicting_access)access.textContent+=' Conflicting access reports need review.';
             if(result.has_conditional_access)access.textContent+=' Conditional restrictions reported; not evaluated.';
             if(typeof result.opening_hours==='string'&&result.opening_hours)access.textContent+=' Reported hours: '+result.opening_hours+'; current opening is not checked.';
-            details.appendChild(access);
+            const fee=document.createElement('small');
+            const fees={free:'Reported free — check signs and eligibility.',paid:'Reported paid — check current tariff.',conditional:'Conditional fee — check rules.',unknown:'Fee unknown — check signs.'};
+            fee.textContent=fees[result.fee_category]||fees.unknown;
+            if(result.reported_fee)Object.keys(result.reported_fee).forEach(key=>{fee.textContent+=' '+key+': '+result.reported_fee[key]+'.';});
+            details.append(fee,access);
         }
         if(near&&pointOf(result)){
             const distance=document.createElement('small');
@@ -603,7 +616,7 @@ function showSearchHistory() {
         runtime = nextRuntime;
     }
 
-    var api = {
+    var api = {searchArrivalParking:searchArrivalParking,
         ENDPOINT_INTENT_PROTOCOL:1,
         endpointIntentReady:function(){return !!runtime;},
         bind: bind,
