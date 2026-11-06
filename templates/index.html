@@ -95,8 +95,8 @@
     <script defer src="/static/js/modules/navigation/speech-synthesis.js?v=20260712voice1"></script>
     <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20261027phase6a"></script>
-    <script defer src="/static/js/modules/navigation/road-matching.js?v=20261027phase8a"></script>
-    <script defer src="/static/js/app/road-match-orchestration.js?v=20261027phase8a"></script>
+    <script defer src="/static/js/modules/navigation/road-matching.js?v=20261106speedobservations1"></script>
+    <script defer src="/static/js/app/road-match-orchestration.js?v=20261106speedobservations1"></script>
     <script defer src="/static/js/modules/navigation/route-geometry.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/units.js?v=20260711zzzd"></script>
     <script defer src="/static/js/modules/navigation/traffic-change.js?v=20260715opt1"></script>
@@ -179,7 +179,7 @@
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
     <script defer src="/static/js/app/geocoding-orchestration.js?v=20261106parkingfees1"></script>
-    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261027phase7a"></script>
+    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261106speedobservations1"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
@@ -1892,6 +1892,7 @@
                 <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                     <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">…</div>
                     <div id="speedLimitUnit" style="font-size: 8px; color: #666;">km/h</div>
+                    <div id="speedLimitMappedLabel" hidden title="OpenStreetMap observation; check road signs. Legal applicability is unverified." style="font-size: 8px; color: #666;">Mapped</div>
                 </div>
             </div>
         </div>

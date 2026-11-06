@@ -10,11 +10,13 @@
         if(polyline!==line || route!==activeRoute || v!==vehicle){line=polyline;activeRoute=route;generation++;requestSeq++;previous=null;snapshot=null;context=null;index=null;inFlight=false;lastFetch=0;vehicle=v;}
         var p=[position.coords.latitude,position.coords.longitude],api=moduleApi();
         if(!api)return null;
-        if(!inFlight && now-lastFetch>=30000 && (!inside(context,p)||now-(context&&context.served_at_ms||0)>60000)){
+        var refresh=context&&context.speed_observations_only===true
+            ? now-context.acquired_at_ms>=30000 : now-(context&&context.served_at_ms||0)>60000;
+        if(!inFlight && now-lastFetch>=30000 && (!inside(context,p)||refresh)){
             var seq=++requestSeq,gen=generation;inFlight=true;lastFetch=now;
             var controller=typeof AbortController!=='undefined'?new AbortController():null;
             var timer=controller?setTimeout(function(){controller.abort();},4000):null;
-            fetch('/api/road-context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p[0],lon:p[1],vehicle_type:vehicle}),signal:controller?controller.signal:undefined})
+            fetch('/api/road-context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p[0],lon:p[1],vehicle_type:vehicle,speed_observations:true}),signal:controller?controller.signal:undefined})
                 .then(function(r){if(!r.ok)throw new Error('Road context unavailable');return r.json();})
                 .then(function(data){if(seq!==requestSeq||gen!==generation)return;context=data&&data.context||null;index=context?api.createIndex(context):null;previous=null;})
                 .catch(function(){/* Retain a still-fresh bounded context; never invent a replacement. */})
@@ -23,7 +25,8 @@
         var active=route&&route.id!=null?String(route.id):null;
         snapshot=api.matchPosition(position,index||api.createIndex({}),{now:now,previous:previous,route_generation:generation,active_route_id:active,vehicle:vehicle});
         snapshot=api.bindRoute(snapshot,polyline,route&&route.road_segments||[],index);
-        snapshot.context_available=!!context;
+        // A speed-only observation must not change route progress/deviation gates.
+        snapshot.context_available=!!context && context.speed_observations_only!==true;
         if(snapshot.evidence_status==='PROBABLE')previous=snapshot;else previous=null;
         return snapshot;
     }
@@ -34,9 +37,10 @@
         return snapshot;
     }
     function getAttributes(){return moduleApi().attributes(getSnapshot(),context,vehicle,Date.now());}
+    function getSpeedObservation(){return moduleApi().speedObservation(getSnapshot(),context,vehicle,Date.now());}
     function classifyHazard(h){return moduleApi().hazardAssociation(getSnapshot(),h,Date.now());}
     function invalidate(reason){snapshot=Object.assign({},snapshot||{},{evidence_status:'UNMATCHED',osm_way_id:null,graph_edge_id:null,segment_id:null,attributes_allowed:false,reason:reason});previous=null;}
-    var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,classifyHazard:classifyHazard};
+    var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,getSpeedObservation:getSpeedObservation,classifyHazard:classifyHazard};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     root.VoyagrRoadMatchOrchestration=api;
 })(typeof window!=='undefined'?window:globalThis);
