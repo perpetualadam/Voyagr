@@ -402,3 +402,45 @@ def test_invalid_price_filter_is_rejected_without_provider_call(value):
         response = client().post('/api/arrival-parking-search', json={'lat': 53, 'lon': -1, 'price_pref': value})
     assert response.status_code == 400
     provider.assert_not_called()
+
+
+def test_parking_poi_button_uses_overpass_even_when_tomtom_would_return_empty():
+    elements = [parking(1, kind='way', fee='no', access='yes'), parking(2, kind='relation', fee='yes')]
+    with patch('voyagr.api.search._tomtom_poi_search', return_value=[] ) as tomtom, \
+         patch('voyagr.api.search._nominatim_poi_fallback') as nominatim, \
+         patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': elements, 'endpoint_class': 'LOCAL', 'dataset_timestamp': '2026-11-04T21:20:21Z'}) as provider:
+        response = client().post('/api/poi-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1], 'type': 'parking', 'radius': 3000})
+    assert response.status_code == 200 and response.get_json()['source'] == 'Overpass'
+    assert {r['osm_type'] for r in response.get_json()['results']} == {'way', 'relation'}
+    assert response.get_json()['search_context']['source_endpoint_class'] == 'LOCAL'
+    assert response.get_json()['search_context']['dataset_timestamp'] == '2026-11-04T21:20:21Z'
+    assert 'nwr["amenity"="parking"]' in provider.call_args.args[0]
+    tomtom.assert_not_called();nominatim.assert_not_called()
+
+
+def test_parking_poi_free_filter_and_unavailable_never_silently_fall_back():
+    elements = [parking(1, fee='yes'), parking(2, fee='no', access='customers', maxstay='2 hours'), parking(3)]
+    with patch('voyagr.api.search._tomtom_poi_search') as tomtom, \
+         patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': elements}):
+        payload = client().post('/api/poi-search', json={'lat': DESTINATION[0], 'lon': DESTINATION[1], 'type': 'parking', 'price_pref': 'free'}).get_json()
+    assert [r['osm_id'] for r in payload['results']] == [2]
+    assert payload['search_context']['price_pref'] == 'free'
+    assert payload['results'][0]['reported_fee']['maxstay'] == '2 hours'
+    assert payload['results'][0]['access_verified'] is False and payload['results'][0]['fee_verified'] is False
+    tomtom.assert_not_called()
+    with patch('overpass_helper.query_overpass', return_value={'success': False}), \
+         patch('voyagr.api.search._tomtom_poi_search') as tomtom:
+        response = client().post('/api/poi-search', json={'lat': 53, 'lon': -1, 'type': 'parking'})
+    assert response.status_code == 503 and response.get_json()['success'] is False
+    tomtom.assert_not_called()
+
+
+def test_parking_poi_valid_empty_is_distinct_from_failure_and_other_poi_provider_is_unchanged():
+    with patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': []}):
+        payload = client().post('/api/poi-search', json={'lat': 53, 'lon': -1, 'type': 'parking'}).get_json()
+    assert payload['success'] is True and payload['results'] == [] and payload['source'] == 'Overpass'
+    with patch('voyagr.api.search._tomtom_poi_search', return_value=[{'name': 'Fuel result'}]) as tomtom, \
+         patch('overpass_helper.query_overpass') as provider:
+        payload = client().post('/api/poi-search', json={'lat': 53, 'lon': -1, 'type': 'fuel'}).get_json()
+    assert payload['source'] == 'TomTom' and payload['results'][0]['name'] == 'Fuel result'
+    provider.assert_not_called();tomtom.assert_called_once()

@@ -276,3 +276,12 @@ This is a user-requested search enhancement under provider/search and UI work;
 it does not complete entrance, connector, GPS or live-navigation objectives.
 Live Doncaster fee availability and browser/device acceptance remain to be checked
 after a separately authorized deployment. Tests use controlled map tags.
+
+## Sequential Overpass consumer audit
+
+See [OVERPASS_CONSUMER_AUDIT.md](OVERPASS_CONSUMER_AUDIT.md) for the runtime source
+inventory, separate desktop/offline paths and per-feature acceptance queue.
+The first bounded fix is the Parking POI button: it now uses the shared Overpass
+parking source rather than being suppressed by TomTom empty results. Remaining
+consumers are tracked separately; updating Overpass is not blanket verification
+of traffic signals, crossings, speed/lane applicability or camera database refresh.
