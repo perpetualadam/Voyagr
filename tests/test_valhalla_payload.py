@@ -43,6 +43,7 @@ class TestBuildValhallaRoutePayload(unittest.TestCase):
         self.assertEqual(p['units'], 'kilometers')
         self.assertEqual(p['language'], 'en-GB')
         self.assertEqual(p['generalize'], 0)
+        self.assertIs(p['turn_lanes'], True)
         self.assertNotIn('directions_options', p)
         self.assertEqual(p['locations'], [{'lat': 53.5, 'lon': -1.4}, {'lat': 53.4, 'lon': -1.1}])
         self.assertEqual(p['date_time'], {'type': 1, 'value': '2026-01-01T12:00'})

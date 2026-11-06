@@ -9,6 +9,15 @@ from voyagr.services.routing.maneuvers import (
 
 
 class ValhallaManeuverDictTest(unittest.TestCase):
+    def test_native_lane_masks_are_normalized_and_source_scoped(self):
+        m=valhalla_maneuver_dict({'type':15,'begin_shape_index':7,'lanes':[
+            {'directions':8,'active':8},{'directions':10,'valid':8}]})
+        self.assertEqual(m['lane_source'],'Valhalla')
+        self.assertEqual(m['begin_shape_index'],7)
+        self.assertTrue(m['lanes'][0]['active'])
+        self.assertFalse(m['lanes'][1]['active'])
+        self.assertTrue(m['lanes'][1]['valid'])
+
     def test_basic_fields_and_km_length(self):
         m = valhalla_maneuver_dict({
             'instruction': 'Turn left',

@@ -18,7 +18,7 @@
 (function (root) {
     'use strict';
 
-    var ARROW = { left: '←', slight_left: '↖', through: '↑', slight_right: '↗', right: '→' };
+    var ARROW = { left: '←', slight_left: '↖', sharp_left: '↙', through: '↑', slight_right: '↗', right: '→', sharp_right: '↘', reverse: '↶', none: '·', merge_to_left: '↖', merge_to_right: '↗' };
 
     var LANE_DEFAULTS = {
         motorway: 3, trunk: 3, primary: 2, secondary: 2,
@@ -69,15 +69,22 @@
      * @returns {Object|null}
      */
     function extractRoutingLaneGuidance(maneuverLanes) {
-        if (!Array.isArray(maneuverLanes) || maneuverLanes.length <= 1) return null;
+        if (!Array.isArray(maneuverLanes) || maneuverLanes.length <= 1 || maneuverLanes.length > 12) return null;
 
         if (maneuverLanes.some(function(l) {return l && l.evidence_state==='INFERRED';})) return null;
-        var active=[];
+        var active=[],valid=[],preferred=[],arrows=[];
         maneuverLanes.forEach(function(l,i) {
-            if (l && l.active===true && l.access!=='no' && l.access!=='private' && l.vehicle_allowed!==false && !l.bus_only) active.push(i+1);
+            var permitted=l && l.access!=='no' && l.access!=='private' && l.vehicle_allowed!==false && !l.bus_only;
+            if (permitted && l.active===true) active.push(i+1);
+            if (permitted && l.active===true && l.preferred!==false) preferred.push(i+1);
+            if (permitted && (l.valid===true || l.active===true)) valid.push(i+1);
+            var directions=l && (l.directions || l.valid_indications) || [];
+            if(!Array.isArray(directions))directions=[];
+            arrows.push({arrow:directions.map(function(d){return Object.prototype.hasOwnProperty.call(ARROW,d)?ARROW[d]:'·';}).join('') || '·',directions:directions});
         });
         if (!active.length) return null;
         return {total_lanes:maneuverLanes.length,recommended_lanes:active,recommended_lane:active[0],
+            valid_lanes:valid,preferred_lanes:preferred,lane_arrows:arrows,
             confidence:active.length===1 ? 97 : 88,source:'routing',evidence_state:'PROVIDER',
             has_routing_lanes:true,has_turn_lanes:true,has_osm_data:false,estimated:false};
     }
@@ -324,7 +331,7 @@
             urgency:'none',guidance_text:'Follow ordinary turn guidance; lane assignment unknown',lane_arrows:[]};
         var permitted=getRecommendedLaneNumbers(base).slice();
         base=applyConfidenceLaneSelection(base);
-        if (base.evidence_state==='EXPLICIT') base.recommended_lanes=permitted;
+        if (base.evidence_state==='EXPLICIT' || base.evidence_state==='PROVIDER') base.recommended_lanes=permitted;
 
         var valuable = isLaneGuidanceValuableManeuver({
             totalLanes: base.total_lanes,
@@ -347,6 +354,15 @@
         var urgencyFields = laneUrgencyFields(dist, lanePos, maneuver, exitCount);
         for (var k in urgencyFields) {
             if (Object.prototype.hasOwnProperty.call(urgencyFields, k)) base[k] = urgencyFields[k];
+        }
+        base.next_maneuver = maneuver;
+        base.roundabout_exit_count = exitCount;
+        if (base.evidence_state === 'PROVIDER') {
+            var choices = permitted.map(function(n){return laneNameFor(n,base.total_lanes);}).join(' or ');
+            base.guidance_text = 'Use the ' + choices;
+            base.urgency_text = (base.urgency === 'ahead' ? 'Ahead, use the ' : 'Use the ') + choices;
+            // A route lane recommendation does not identify the occupied lane.
+            base.lane_change_needed = false;
         }
         return base;
     }
@@ -978,13 +994,16 @@
             return { action: 'hide' };
         }
 
-        var indicators = (uiPlan.indicators || []).map(function (ind) {
+        var indicators = (uiPlan.indicators || []).map(function (ind, index) {
             var cls = 'lane-indicator';
             if (ind.recommended) cls += ' recommended';
+            var valid=(data.valid_lanes || []).indexOf(index+1)>=0;
+            if (valid && !ind.recommended) cls += ' valid-route-lane';
             if (ind.hasDirection) cls += ' has-direction';
             return {
                 className: cls,
                 innerHtml: buildLaneIndicatorHtml(ind.arrow),
+                label: 'Lane '+(index+1)+': '+((data.preferred_lanes || []).indexOf(index+1)>=0?'Preferred route lane':valid?'Route-compatible lane':'Lane markings'),
             };
         });
 
@@ -1054,6 +1073,7 @@
         if (lanes.length === 0 || data.total_lanes <= 1) return null;
         if ((data.confidence || 0) < LANE_CONFIDENCE_DISPLAY_MIN) return null;
         var announceKey = 'lane_' + data.next_maneuver + '_' + lanes.join('-') + '_' + data.urgency;
+        if (data.lane_scope) announceKey += '_' + data.lane_scope;
         if (announceKey === lastAnnounceKey) return null;
 
         var lanePos;
@@ -1083,8 +1103,8 @@
             } else {
                 laneMsg = data.urgency_text || ('Move to the ' + lanePos + ' lane');
             }
-        } else if (data.urgency === 'ahead' && data.lane_change_needed) {
-            laneMsg = 'Ahead, you\'ll need the ' + lanePos + ' lane';
+        } else if (data.urgency === 'ahead' && (data.lane_change_needed || data.evidence_state === 'PROVIDER')) {
+            laneMsg = data.evidence_state === 'PROVIDER' ? data.urgency_text : 'Ahead, you\'ll need the ' + lanePos + ' lane';
         } else {
             return null;
         }

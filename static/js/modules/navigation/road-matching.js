@@ -113,7 +113,7 @@
     }
     function observationRoad(match,context,vehicle,now){
         // A separate display-only policy: never relax usable()/attributes().
-        if(!match||!context||context.speed_observations_only!==true||context.coverage!=='PARTIAL'||context.revision!==match.source_revision||
+        if(!finite(now)||!match||!context||context.speed_observations_only!==true||context.coverage!=='PARTIAL'||context.revision!==match.source_revision||
             match.evidence_status!=='PROBABLE'||match.confidence!=='HIGH'||match.source_link_verified!==true||
             !['car','motorcycle'].includes(vehicle)||!['forward','backward'].includes(match.direction)||
             !finite(match.match_timestamp_ms)||now-match.match_timestamp_ms<0||now-match.match_timestamp_ms>FIX_TTL_MS||
@@ -147,7 +147,9 @@
         var road=observationRoad(match,context,vehicle,now);
         if(!road||context.lane_observations_only!==true||!['MATCHED','GEOMETRY_COMPATIBLE'].includes(match.route_relation))return null;
         var tags=road.tags||{},direction=match.direction,oneway=['yes','1','true','-1'].includes(tags.oneway),
-            allowed=['lanes','lanes:forward','lanes:backward','turn:lanes','turn:lanes:forward','turn:lanes:backward'];
+            allowed=['lanes','lanes:forward','lanes:backward','turn:lanes','turn:lanes:forward','turn:lanes:backward',
+                'destination:lanes','destination:lanes:forward','destination:lanes:backward',
+                'destination:ref:lanes','destination:ref:lanes:forward','destination:ref:lanes:backward'];
         // Do not interpret bus/access/change/conditional lane restrictions.
         if(Object.keys(tags).some(function(k){return k.includes('lanes')&&!allowed.includes(k);}))return null;
         var count=tags['lanes:'+direction]||(oneway?tags.lanes:null),
@@ -155,13 +157,54 @@
         if(typeof count!=='string'||!/^\d+$/.test(count)||Number(count)<2||Number(count)>12||typeof raw!=='string'||raw.length>512)return null;
         if(tags.lanes && (!/^\d+$/.test(tags.lanes)||Number(tags.lanes)<Number(count)||Number(tags.lanes)>24))return null;
         if(tags.lanes && tags['lanes:forward'] && tags['lanes:backward'] && Number(tags['lanes:forward'])+Number(tags['lanes:backward'])!==Number(tags.lanes))return null;
-        var lanes=raw.split('|').map(function(l){return l.split(';').map(function(t){return t.trim();});});
+        var lanes=raw.split('|').map(function(l){return l.trim()===''?['none']:l.split(';').map(function(t){return t.trim();});});
         var arrows={left:'←',slight_left:'↖',sharp_left:'↙',through:'↑',right:'→',slight_right:'↗',sharp_right:'↘',reverse:'↶',none:'·',merge_to_left:'↖',merge_to_right:'↗'};
         if(lanes.length!==Number(count)||lanes.some(function(tokens){return !tokens.length||tokens.length>3||new Set(tokens).size!==tokens.length||tokens.some(function(t){return !Object.prototype.hasOwnProperty.call(arrows,t);});}))return null;
+        var destinations=lanes.map(function(){return [];});
+        for(var labelKey of ['destination:lanes','destination:ref:lanes']){
+            var labels=tags[labelKey+':'+direction]||(oneway?tags[labelKey]:null);
+            if(labels!=null){
+                if(labels.length>1024)return null;
+                var parts=labels.split('|');
+                if(parts.length!==lanes.length||parts.some(function(p){return p.length>120;}))return null;
+                parts.forEach(function(p,i){if(p.trim())destinations[i].push(p.trim());});
+            }
+        }
         return {evidence_state:'MAPPED_LANE_OBSERVATION',source:'OpenStreetMap',total_lanes:Number(count),
             lane_arrows:lanes.map(function(tokens){return {arrow:tokens.map(function(t){return arrows[t];}).join(''),directions:tokens};}),
+            destinations:destinations.map(function(parts){return parts.join(' · ');}),
             osm_way_id:road.osm_way_id,direction:direction,source_data_at_ms:context.source_data_at_ms,
             recommended_lanes:[],recommended_lane:null,current_lane:null,show_lane_guidance:false};
+    }
+    function providerLaneApproach(match,context,vehicle,now,line,step){
+        var road=observationRoad(match,context,vehicle,now);
+        if(!road || !step || !['Valhalla','OSRM','GraphHopper'].includes(step.lane_source) ||
+            !Array.isArray(step.lanes) || !step.lanes.some(function(l){return l && l.evidence_state==='PROVIDER' && l.active===true && Array.isArray(l.active_indications) && l.active_indications.length;}) ||
+            !['MATCHED','GEOMETRY_COMPATIBLE'].includes(match.route_relation) || !Array.isArray(line))return false;
+        var from=match.route_segment_index,to=step.begin_shape_index,g=road.geometry;
+        if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<=from||to>=line.length||to-from>80||g.length>1000||
+            !Array.isArray(line[to])||line[to].length!==2||!line[to].every(finite))return false;
+        var end=match.direction==='forward'?g[g.length-1]:g[0];
+        if(distance(line[to],end)>8)return false;
+        var segments=[],total=0;
+        for(var i=0;i<g.length-1;i++){
+            segments.push({a:g[i],b:g[i+1],along:total,length:distance(g[i],g[i+1])});
+            total+=segments[i].length;
+        }
+        var points=[match.matched_coordinate].concat(line.slice(from+1,to+1)),travel=0,previous=match.along_road_m;
+        for(var p=1;p<points.length;p++){
+            if(!Array.isArray(points[p])||points[p].length!==2||!points[p].every(finite))return false;
+            travel+=distance(points[p-1],points[p]);
+            if(travel>400)return false;
+            var samples=[[(points[p-1][0]+points[p][0])/2,(points[p-1][1]+points[p][1])/2],points[p]];
+            for(var j=0;j<samples.length;j++){
+                var best=null;
+                segments.forEach(function(s){var q=project(samples[j],s.a,s.b);if(!best||q.distance<best.distance)best={distance:q.distance,along:s.along+q.t*s.length};});
+                if(!best||best.distance>6||(best.along-previous)*(match.direction==='forward'?1:-1)<-3)return false;
+                previous=best.along;
+            }
+        }
+        return travel>=15;
     }
     function hazardAssociation(match,hazard,now){
         var stamp=hazard.observed_at_ms,u=hazard.position_uncertainty_m==null?20:hazard.position_uncertainty_m;
@@ -175,7 +218,7 @@
         if(['forward','backward'].includes(hazard.direction)&&['forward','backward'].includes(match.direction)&&hazard.direction!==match.direction)return 'UNRELATED';
         return hazard.direction==='both'||hazard.direction===match.direction?'APPLICABLE':'POSSIBLE';
     }
-    var api={createIndex:createIndex,nearby:nearby,matchPosition:matchPosition,attributes:attributes,speedObservation:speedObservation,laneObservation:laneObservation,hazardAssociation:hazardAssociation,usable:usable,sameRoad:sameRoad,bindRoute:bindRoute,shouldPauseNavigation:shouldPauseNavigation,supportsDeviation:supportsDeviation};
+    var api={createIndex:createIndex,nearby:nearby,matchPosition:matchPosition,attributes:attributes,speedObservation:speedObservation,laneObservation:laneObservation,providerLaneApproach:providerLaneApproach,hazardAssociation:hazardAssociation,usable:usable,sameRoad:sameRoad,bindRoute:bindRoute,shouldPauseNavigation:shouldPauseNavigation,supportsDeviation:supportsDeviation};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     root.VoyagrRoadMatching=api;
 })(typeof window!=='undefined'?window:globalThis);

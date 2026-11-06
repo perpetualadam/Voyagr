@@ -1671,6 +1671,11 @@ h1 {
     transform: scale(1.08);
 }
 
+.lane-indicator.valid-route-lane {
+    border-color: #8ab4f8;
+    border-style: dashed;
+}
+
 .lane-indicator.recommended .lane-arrow {
     opacity: 1;
     font-size: 24px;

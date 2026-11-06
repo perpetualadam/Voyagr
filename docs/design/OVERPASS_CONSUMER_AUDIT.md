@@ -97,6 +97,17 @@ prove this physical acceptance. Web lane lookup remains a separate next item.
 
 ## Separate code and non-consumers
 
+### Specification-based provider lane integration (6 November 2026)
+
+[Lane protocol research and acceptance](LANE_SPEC_INTEGRATION.md) records the
+primary online sources and the implemented gaps: native Valhalla masks and lane
+requests, scoped OSRM intersection lanes, preserved valid/preferred choices and
+arrows, blank OSM markings, and directional destination labels. A separate
+bounded junction-approach check can now authorize native provider recommendations
+without granting complete-coverage authority to raw Overpass lane observations.
+Raw markings alone still cannot establish complex junction connectivity or the
+vehicle's occupied lane. Live provider-version and device acceptance is pending.
+
 ### Web lane layout connection (6 November 2026)
 
 The road owner now explicitly requests lane observations alongside speed

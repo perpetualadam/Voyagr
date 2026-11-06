@@ -142,6 +142,7 @@
             const lane = document.createElement('div');
             lane.className = ind.className;
             lane.innerHTML = ind.innerHtml;
+            if (ind.label) { lane.title = ind.label; lane.setAttribute('aria-label', ind.label); }
             visual.appendChild(lane);
         });
 
@@ -174,13 +175,23 @@
         }
         // Factual current-road layout only: no green recommendation or voice.
         visual.innerHTML = '';
-        observation.lane_arrows.forEach(function (entry) {
+        observation.lane_arrows.forEach(function (entry, index) {
             const lane = document.createElement('div');
             lane.className = 'lane-indicator';
             const arrow = document.createElement('span');
             arrow.className = 'lane-arrow';
             arrow.textContent = entry.arrow;
             lane.appendChild(arrow);
+            const destination = observation.destinations && observation.destinations[index];
+            if (typeof destination === 'string' && destination) {
+                lane.style.flexDirection = 'column';
+                const label = document.createElement('span');
+                label.className = 'lane-destination';
+                label.textContent = destination;
+                label.title = destination;
+                label.style.cssText = 'font-size:9px;max-width:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+                lane.appendChild(label);
+            }
             visual.appendChild(lane);
         });
         const title = display.querySelector('.lane-guidance-title');
@@ -201,8 +212,13 @@
             // Native provider lanes require a typed match to their active route road.
             var match=root.VoyagrRoadMatchOrchestration.getSnapshot();
             var provider=match && match.attributes_allowed && match.route_relation==='MATCHED' ? getRoutingManeuverLanes(guidanceStepIndex) : null;
+            var targetIndex=guidanceStepIndex!=null?guidanceStepIndex:rt().getCurrentStepIndex();
+            var target=(rt().getCurrentRouteSteps() || [])[targetIndex];
+            if(!provider && root.VoyagrRoadMatchOrchestration.matchesProviderLaneApproach &&
+                root.VoyagrRoadMatchOrchestration.matchesProviderLaneApproach(target)) provider=getRoutingManeuverLanes(targetIndex);
             var hybrid=LG().buildHybridLaneGuidance({routingManeuverLanes:provider,apiData:evidence,
                 maneuver:maneuver,distanceToManeuver:LG().computeDistanceToManeuverMeters(lat,lon,rt().getCurrentRouteSteps(),guidanceStepIndex!=null?guidanceStepIndex:rt().getCurrentStepIndex(),rt().getRoutePolyline(),rt().call.calculateDistanceMeters),roundaboutExitCount:roundaboutExitCount});
+            if(provider && target)hybrid.lane_scope=String(targetIndex)+':'+String(target.begin_shape_index);
             clearLockedLaneGuidance();
             if (!LG().isActionableLaneGuidance(hybrid) && root.VoyagrRoadMatchOrchestration.getLaneObservation) {
                 renderMappedLaneLayout(root.VoyagrRoadMatchOrchestration.getLaneObservation());
