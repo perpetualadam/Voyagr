@@ -13,10 +13,10 @@ function route(category='speed_cameras',status='VIOLATED',mode='preference') {
 }
 const template=require('fs').readFileSync(require('path').join(__dirname,'../../../templates/index.html'),'utf8');
 function dom() {
-    const warning=template.match(/<aside id="bestEffortWarning"[\s\S]*?<\/aside>/)[0];
+    const hud=template.split('<!-- Turn-by-Turn Navigation Display Widget -->')[1].split('<section id="journeyModeChooser"')[0];
     const notices=['routeAvoidanceNotice','navigationStartExplanation'].map(id=>template.match(new RegExp('<p id="'+id+'"[^>]*>[\\s\\S]*?<\\/p>'))[0]).join('');
     const buttons=template.match(/<button[^>]*data-navigation-start[^>]*>[\s\S]*?<\/button>/g).join('');
-    document.body.innerHTML='<div id="map"><canvas tabindex="0"></canvas></div>'+notices+buttons+warning;
+    document.body.innerHTML='<div id="map"><canvas tabindex="0"></canvas></div>'+notices+buttons+hud;
 }
 beforeEach(()=>{
     localStorage.clear();jest.useFakeTimers();dom();
@@ -26,6 +26,15 @@ beforeEach(()=>{
     window.lastCalculatedRoute=null;window.lastRouteApiResponse=null;
 });
 afterEach(()=>{UX.reset();jest.useRealTimers();jest.restoreAllMocks();});
+
+test('grouped HUD retains unique source fields and accessible scroll regions without concealing limitations',()=>{
+    for(const id of ['turnInstructionWidget','laneGuidanceDisplay','speedWidget','speedLimitValue','speedLimitMappedLabel','bestEffortWarning','dismissBestEffortWarning','roadNameBar'])expect(document.querySelectorAll('#'+id)).toHaveLength(1);
+    const warning=document.getElementById('bestEffortWarning');
+    expect(warning.closest('#navigationOverlayLayout')).not.toBeNull();expect(warning.closest('details')).toBeNull();
+    for(const id of ['turnInstructionWidget','speedWidget','bestEffortWarning'])expect(document.getElementById(id).tabIndex).toBe(0);
+    expect(document.getElementById('turnInstructionWidget').contains(document.getElementById('laneGuidanceDisplay'))).toBe(true);
+    expect(document.getElementById('speedLimitMappedLabel').hidden).toBe(true);
+});
 
 test.each([
     ['speed_cameras','VIOLATED'],['traffic_lights','VIOLATED'],['railway_crossings','VIOLATED'],

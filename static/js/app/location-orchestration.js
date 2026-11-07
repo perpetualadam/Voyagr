@@ -8,6 +8,7 @@
     var runtime = null;
     var endpointGenerations={start:0,end:0};
     function invalidateEndpointRequests(field,options){
+        if(field==='end'&&!(options&&options.keepArrival)&&root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
         if(field==='start'||field==='end')endpointGenerations[field]++;
         else if(field===undefined){endpointGenerations.start++;endpointGenerations.end++;}
         if(!(options&&options.endpointOnly)&&(field===undefined||field==='start'||field==='end')&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.endpointChanged)root.VoyagrJourneyModes.endpointChanged(field);
@@ -111,6 +112,7 @@
     }
 
     function swapStartAndDestination() {
+        if(root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
         invalidateEndpointRequests();
         const startInput = document.getElementById('start');
         const endInput = document.getElementById('end');
@@ -122,6 +124,11 @@
 
         const startOriginal=startInput.dataset.journeyOriginalSource||'unknown';
         startInput.dataset.journeyOriginalSource=endInput.dataset.journeyOriginalSource||'unknown';endInput.dataset.journeyOriginalSource=startOriginal;
+        const startSearch=startInput.dataset.journeySearchEvidence;
+        if(endInput.dataset.journeySearchEvidence)startInput.dataset.journeySearchEvidence=endInput.dataset.journeySearchEvidence;
+        else delete startInput.dataset.journeySearchEvidence;
+        if(startSearch)endInput.dataset.journeySearchEvidence=startSearch;
+        else delete endInput.dataset.journeySearchEvidence;
         const startSource=startInput.dataset.journeySource||'unknown';
         startInput.dataset.journeySource=endInput.dataset.journeySource||'unknown';
         endInput.dataset.journeySource=startSource;

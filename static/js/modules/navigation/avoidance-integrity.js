@@ -57,6 +57,12 @@
             next.optimize_stop_order=false;
             next.preserve_stop_order=true;
         }
+        if(next.is_reroute&&root.VoyagrJourneyPlan&&root.lastCalculatedRoute&&root.lastCalculatedRoute.journey_context&&root.lastCalculatedRoute.journey_context.arrival_choice){
+            var progress=root.VoyagrNavigationLifecycleOrchestration;
+            var intent=root.VoyagrJourneyPlan.liveIntent(root.lastCalculatedRoute,true,progress&&progress.getLastSnappedRouteIndex?progress.getLastSnappedRouteIndex():0);
+            next.end=intent.destination;
+            next.journey_context=Object.assign({},next.journey_context,{purpose:'live_gps',destination:intent.destinationProvenance,arrival_choice:intent.arrivalChoice,arrival_intent:intent.arrivalIntent});
+        }
         return next;
     }
     function geometryPoints(route) {
@@ -174,18 +180,34 @@
         });
     }
     function enabledMandatory(r) { return r.enabled && r.mode==='mandatory'; }
+    function endpointGapMessage(origin) {
+        var gaps=[];
+        [['origin_displacement_m','start'],['destination_displacement_m','destination']].forEach(function(entry){
+            var meters=origin[entry[0]];
+            if(Number.isFinite(meters)&&meters>2)gaps.push(entry[1]+': about '+Math.round(meters)+' m');
+        });
+        return 'Requested locations and routed road endpoints differ'+(gaps.length?' ('+gaps.join('; ')+')':'')+'. '+
+            'Search locations may be snapped to nearby roads. The distance alone does not establish vehicle access. Your requested locations are unchanged. '+
+            'For planning, inspect the route or select a separate driving arrival point, such as a car park entrance, and recalculate. '+
+            'For live navigation, request a new route from your actual GPS location. '+
+            'Voyagr does not yet verify legal access across endpoint gaps or reliably match GPS to the correct road. '+
+            'Choosing a road point or passing the distance check does not verify access. Navigation cannot start on this route.';
+    }
     function evidenceDecision(route, options) {
         options = options || {};
         if (route && (route.navigation_resume_requires_fresh_gps ||
             (route.avoidance_assessment && route.avoidance_assessment.resume_state))) {
             return {allowed:false,acceptance:false,message:'Saved journey is preview only. Recalculate from your actual location before navigation.'};
         }
+        var intent=route&&route.journey_context&&route.journey_context.arrival_intent;
+        if(intent&&(intent.version!==1||intent.mode!=='place'||intent.status==='UNSUPPORTED'||intent.status==='TARGET_MISMATCH'))return {
+            allowed:false,acceptance:false,message:'This arrival intent is preview only. Roadside suitability and vehicle-entrance validation are not implemented; choose the default intent to use the existing GPS checks.'};
         var assessment = route && route.avoidance_assessment;
         var origin=assessment && assessment.origin_integrity;
         if (!origin || origin.navigation_allowed!==true || origin.transition_verified===true ||
             origin.status!=='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE') {
+            if(origin && origin.reason==='material_endpoint_relocation')return {allowed:false,acceptance:false,message:endpointGapMessage(origin)};
             var reasons={
-                material_endpoint_relocation:'The route does not connect to your requested start or destination.',
                 within_gps_uncertainty_connectivity_unknown:'The connection from your current position to the route is unverified.',
                 mandatory_exclusion_geometry_unavailable:'Mandatory exclusion areas could not be verified.',
                 mandatory_endpoint_in_or_on_exclusion:'The start or destination is inside a mandatory exclusion area.',
@@ -290,7 +312,7 @@
         (data.routes || []).forEach(function(route) { route.avoidance_preferences_snapshot=ticket.snapshot;if(ticket.intentToken!=null)route.avoidance_intent_token=ticket.intentToken; });
         return data;
     }
-    function summary(route) {
+    function navigationSummary(route) {
         var a=route && route.avoidance_assessment;
         var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
         var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
@@ -304,8 +326,52 @@
             '. Map coverage, road association and data age may be limited.'+
             (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
     }
+    function arrivalSummary(endpoint, label) {
+        var arrival=endpoint&&endpoint.arrival_access;
+        if(!arrival||arrival.version!==1||arrival.policy!=='arrival-reference-correspondence-v1'||
+            arrival.authority!=='planning_evidence_only'||arrival.navigation_authority!=='NONE'||
+            arrival.selection!=='NONE'||arrival.vehicle_access!=='UNKNOWN'||arrival.connector!=='NOT_EVALUATED')return '';
+        var messages={
+            NO_REFERENCE:'No entrance reference is available.',
+            AMBIGUOUS_REFERENCES:'Multiple entrance references need review; none is selected.',
+            REFERENCE_OUTSIDE_DECLARED_BOUNDS:'The entrance reference is outside the declared place boundary; review the arrival point.',
+            UNCORROBORATED_ANCHOR:'Entrance correspondence cannot be corroborated with native route-snap evidence.',
+            ANCHOR_ALIGNED_REFERENCE:'An entrance reference aligns with the routed endpoint; vehicle access remains unverified.',
+            DIFFERENT_ROUTING_ANCHOR:'The entrance reference differs from the routed endpoint; a route to that point has not been checked.'
+        };
+        return Object.prototype.hasOwnProperty.call(messages,arrival.status)?label+': '+messages[arrival.status]+' ':'';
+    }
+    function intentSummary(record){
+        var policy=record.arrival_policy;
+        if(!policy||policy.version!==1||policy.policy!=='planning-arrival-intent-v1'||policy.authority!=='planning_evidence_only'||
+            policy.navigation_authority!=='NONE'||policy.geometry_binding!==record.geometry_binding||
+            JSON.stringify(policy.target)!==JSON.stringify(record.destination.requested&&record.destination.requested.coordinates))return '';
+        var messages={place:'Place/parking-point intent: property access remains unresolved.',
+            roadside:'Roadside arrival intent: the returned road endpoint is shown for planning; suitable/legal stopping and approach are not verified.',
+            vehicle_entrance:'Vehicle-entrance intent: a vehicle entrance and its approach must still be established.',
+            unknown:'Arrival intent needs review; choose a supported intent and recalculate.'};
+        return Object.prototype.hasOwnProperty.call(messages,policy.mode)?messages[policy.mode]+' ':'';
+    }
+    function planningSummary(route) {
+        var record=route&&route.endpoint_resolution,assessment=route&&route.avoidance_assessment;
+        if(!record||record.version!==1||record.authority!=='planning_evidence_only'||record.navigation_authority!=='NONE'||
+            !assessment||!assessment.geometry_binding||record.geometry_binding!==assessment.geometry_binding||
+            !record.origin||!record.destination)return '';
+        var gaps=[];
+        [['origin','Start'],['destination','Destination']].forEach(function(pair){
+            var meters=record[pair[0]].offset_m;
+            if(Number.isFinite(meters)&&meters>=0)gaps.push(pair[1]+' offset: about '+Math.round(meters)+' m');
+        });
+        return (record.planning_disposition==='ROAD_SNAPPED'?'Road-snapped planning endpoints. ':'Planning endpoint access needs review. ')+
+            (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. '+
+            (record.arrival_choice&&record.arrival_choice.version===1&&record.arrival_choice.authority==='request_metadata_only'&&record.arrival_choice.navigation_authority==='NONE'?
+                'Your chosen arrival point is retained; the returned road endpoint is shown separately. Your original destination is retained; the onward connection is not included or verified. ':'')+
+            intentSummary(record)+(record.arrival_policy&&record.arrival_policy.mode==='roadside'?'':arrivalSummary(record.destination,'Destination arrival'))+
+            (Array.isArray(record.stops)?record.stops.map(function(stop,index){return arrivalSummary(stop,'Stop '+(index+1)+' arrival');}).join(''):'');
+    }
+    function summary(route) { return planningSummary(route)+navigationSummary(route); }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,planningSummary:planningSummary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

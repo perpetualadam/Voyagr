@@ -45,3 +45,58 @@ test('captured assessment expiry is a separate rejection, not inferred browser c
  const diagnostics={};expect(AI.prepareNavigationCandidate(options()[0],diagnostics)).toBeNull();
  expect(diagnostics.reason).toBe('expired_assessment');
 });
+
+
+test('captured city search gap explains both endpoints without relocating or authorizing them',()=>{
+ const route=options()[0];
+ route.journey_context={origin:{kind:'searched'},destination:{kind:'searched'}};
+ const before=JSON.stringify(route);
+ const result=AI.decision(route);
+ expect(result).toMatchObject({allowed:false,acceptance:false,outcome:'REFUSED'});
+ expect(result.message).toContain('start: about 24 m');
+ expect(result.message).toContain('destination: about 23 m');
+ expect(result.message).toContain('separate driving arrival point');
+ expect(result.message).toContain('actual GPS location');
+ expect(result.message).toContain('does not yet verify legal access');
+ expect(result.message).toContain('passing the distance check does not verify access');
+ expect(result.message).not.toContain('until endpoint connections are verified');
+ expect(result.message).toContain('requested locations are unchanged');
+ expect(JSON.stringify(route)).toBe(before);
+});
+test.each([
+ [24,0,'start: about 24 m','destination:'],
+ [0,23,'destination: about 23 m','start:'],
+ [2,2,null,'about'],
+ [undefined,undefined,null,'about'],
+ [NaN,Infinity,null,'about'],
+ [-1,'23',null,'about'],
+])('endpoint refusal reports only finite material gaps (%p, %p)',(start,end,present,absent)=>{
+ const route=options()[0],origin=route.avoidance_assessment.origin_integrity;
+ origin.origin_displacement_m=start;origin.destination_displacement_m=end;
+ const result=AI.decision(route);
+ expect(result.allowed).toBe(false);expect(result.acceptance).toBe(false);
+ if(present)expect(result.message).toContain(present);
+ expect(result.message).not.toContain(absent);
+ expect(result.message).toContain('distance alone does not establish vehicle access');
+});
+
+const parkingAssessment=require('./fixtures/sheffield-unnamed-parking-assessment-20261104.json');
+test('captured unnamed-parking assessment refuses endpoint relocation despite preference-only requirements',()=>{
+ const route=JSON.parse(JSON.stringify(parkingAssessment)),before=JSON.stringify(route);
+ const result=AI.decision(route);
+ expect(result).toMatchObject({allowed:false,acceptance:false,outcome:'REFUSED'});
+ expect(result.message).toContain('start: about 24 m');expect(result.message).toContain('destination: about 14 m');
+ expect(route.avoidance_assessment.requirements.some(row=>row.enabled&&row.mode==='mandatory')).toBe(false);
+ expect(AI.planningSummary(route)).toContain('No entrance reference is available');
+ expect(JSON.stringify(route)).toBe(before);
+ // The supplied capture omits geometry: this is not a complete route replay.
+ expect(route.geometry).toBeUndefined();
+});
+test('captured parking context keeps the intended driving target separate from the original city',()=>{
+ const route=JSON.parse(JSON.stringify(parkingAssessment));
+ const intent=Plan.liveIntent(route,false,0);
+ expect(intent.destination).toBe('53.5237353,-1.1307239');
+ expect(intent.arrivalChoice.requested_destination.coordinates).toEqual([53.5227681,-1.1335312]);
+ expect(intent.arrivalChoice.navigation_authority).toBe('NONE');
+ expect(AI.decision(route).allowed).toBe(false);
+});

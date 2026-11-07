@@ -45,6 +45,8 @@
         if (details.outcome==='BEST_EFFORT') {
             text += ' Unresolved preferences: '+details.preferenceWarnings.map(function(row) {return row.category.replace(/_/g,' ');}).join(', ')+'.';
         }
+        var planning=document.getElementById('routePlanningNotice');
+        if(planning)planning.textContent=root.VoyagrAvoidanceIntegrity&&root.VoyagrAvoidanceIntegrity.planningSummary?root.VoyagrAvoidanceIntegrity.planningSummary(route):'';
         ['routeAvoidanceNotice','navigationStartExplanation'].forEach(function(id) {
             var el=document.getElementById(id);
             if (el && el.textContent!==text) el.textContent=text;

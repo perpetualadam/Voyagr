@@ -36,7 +36,8 @@
         var plan = rt().mapControls().buildJourneyOverviewButtonUiExecutePlan(overviewActive);
         if (!btn || !plan.shouldApply) return;
         btn.style.background = plan.background;
-        btn.innerHTML = plan.innerHtml;
+        if(!btn.querySelector('[data-map-action-icon]'))btn.innerHTML = plan.innerHtml;
+        if(btn.hasAttribute('aria-pressed'))btn.setAttribute('aria-pressed',String(!!overviewActive));
         btn.title = plan.title;
     }
 

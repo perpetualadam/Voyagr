@@ -222,3 +222,31 @@ def test_sheffield_doncaster_five_snapped_alternatives_are_independently_refused
         assert 23 < origin['origin_displacement_m'] < 24.5
         assert 22 < origin['destination_displacement_m'] < 24.5
         assert route['journey_context']['purpose'] == 'planning'
+
+
+def test_planning_page_bypasses_pre_fix_immutable_asset_urls():
+    """The page must not reuse the cache keys observed serving old inspection code."""
+    import re
+    from pathlib import Path
+    from flask import render_template
+
+    root = Path(__file__).resolve().parents[1]
+    app = Flask(__name__, template_folder=str(root / 'templates'))
+    with app.test_request_context('/'):
+        html = render_template(
+            'index.html', tomtom_api_key='', tomtom_traffic_proxy=False,
+            picovoice_access_key='', picovoice_keyword_public_path='',
+            picovoice_web_assets_ok=False, wake_backend_default='none',
+            show_firefox_browser_hint=False)
+    urls = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
+    previous = {
+        'modules/navigation/journey-plan.js': '20261031phase12fgremediation',
+        'modules/navigation/avoidance-integrity.js': '20261031phase12fgr5r6',
+        'modules/navigation/route-selection.js': '20261031phase12fgr9',
+        'app/calculate-route-orchestration.js': '20261031phase12fgr7r8',
+    }
+    for asset, stale_version in previous.items():
+        matches = [u for u in urls if u.startswith('/static/js/' + asset + '?v=')]
+        assert len(matches) == 1, asset
+        version = matches[0].split('?v=', 1)[1]
+        assert version and version != stale_version, asset

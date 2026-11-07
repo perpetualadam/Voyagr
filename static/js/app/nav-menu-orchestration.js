@@ -18,6 +18,20 @@
         return navMenu.resolveNavMenuOpenFromAriaExpanded(toggle.getAttribute('aria-expanded'));
     }
 
+    function syncMapActionPressedStates() {
+        [
+            ['showCamerasFab','VoyagrMapOverlayOrchestration','getShowCamerasEnabled'],
+            ['zoomFollowToggle','VoyagrMapRecenterOrchestration','getZoomAndFollowEnabled'],
+            ['journeyOverviewBtn','VoyagrJourneyOverviewOrchestration','getJourneyOverviewActive'],
+            ['voiceFab','VoyagrVoiceControlOrchestration','getIsListening'],
+        ].forEach(function(entry){
+            var button=document.getElementById(entry[0]),owner=root[entry[1]];
+            if(!button||!owner||typeof owner[entry[2]]!=='function')return;
+            var enabled=owner[entry[2]]();
+            if(typeof enabled==='boolean')button.setAttribute('aria-pressed',String(enabled));
+        });
+    }
+
     function applyNavMenuStateFromPlan(execute) {
         if (!execute || !execute.shouldApply) return;
 
@@ -42,8 +56,12 @@
         }
 
         toggle.setAttribute('aria-expanded', execute.ariaExpanded);
+        if(execute.open)syncMapActionPressedStates();
         toggle.classList.toggle('nav-menu-toggle--open', !!execute.open);
-        if (execute.toggleIcon != null) {
+        toggle.setAttribute('aria-label', execute.open ? 'Close map actions' : 'Open map actions');
+        var label=toggle.querySelector('[data-nav-menu-label]');
+        if(label)label.textContent=execute.open?'Close':'Map';
+        if (execute.toggleIcon != null && !toggle.querySelector('[data-nav-menu-icons]')) {
             toggle.textContent = execute.toggleIcon;
         }
     }
@@ -88,6 +106,13 @@
                 event.stopPropagation();
             }
             toggleNavMenu();
+            // Native keyboard activation enters the revealed group; pointer taps
+            // keep their existing focus and duplicate-event suppression behaviour.
+            if(event&&event.type==='click'&&event.detail===0&&readNavMenuOpen(toggle)){
+                var panel=document.getElementById(navMenu.NAV_CONTROL_BUTTONS_ID);
+                var first=panel&&Array.prototype.find.call(panel.querySelectorAll('button'),function(button){return !button.disabled&&!button.hidden&&window.getComputedStyle(button).display!=='none';});
+                if(first)first.focus();
+            }
         }
 
         function handleEarlyToggle(event) {
@@ -122,6 +147,12 @@
                 return;
             }
             runToggle(event);
+        });
+        var menu=toggle.closest('.nav-control-menu');
+        if(menu)menu.addEventListener('keydown',function(event){
+            if(event.key==='Escape'&&readNavMenuOpen(toggle)){
+                event.preventDefault();event.stopPropagation();collapseNavMenu();toggle.focus();
+            }
         });
     }
 

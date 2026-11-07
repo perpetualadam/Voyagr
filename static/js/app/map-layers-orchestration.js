@@ -9,6 +9,7 @@
     var vectorStyleListenerRegistered = false;
     var trafficTileErrorStreak = 0;
     var trafficLayerPausedUntil = 0;
+    var trafficLayerRetryTimer = null;
 
     var MLT_INIT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
     var GPC_INIT = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
@@ -269,13 +270,23 @@ function toggleTrafficLayer() {
  *     instead of blindly trying, and re-checks `isStyleLoaded()` inside the
  *     add path so the `style.load` listener cannot fire it in an unsafe state.
  */
+function trafficStyleDefinitionReady(map) {
+    if (!map) return false;
+    const recovery = root.VoyagrMapRecovery;
+    if (recovery && typeof recovery.hasUsableStyleDefinition === 'function' && map.getStyle) {
+        return recovery.hasUsableStyleDefinition(map.getStyle());
+    }
+    return !!(map.isStyleLoaded && map.isStyleLoaded());
+}
+
 function addTrafficLayer() {
+    if (!getShowTrafficEnabled() || Date.now() < trafficLayerPausedUntil) return;
     const map = rt().getMap();
     const layerToggles = MLT();
     const orch = layerToggles.buildAddTrafficLayerOrchestrationPlan({
         hasMap: !!map,
         pendingGuardSet: !!window[layerToggles.TRAFFIC_PENDING_GUARD_PROPERTY],
-        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+        isStyleLoaded: trafficStyleDefinitionReady(map),
     });
     if (!orch.shouldProceed) {
         if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
@@ -342,7 +353,8 @@ function addTrafficLayer() {
     };
 
     const addTrafficLayerNow = () => {
-        const isStyleLoaded = !!(map && map.isStyleLoaded && map.isStyleLoaded());
+        if (!getShowTrafficEnabled() || Date.now() < trafficLayerPausedUntil) return true;
+        const isStyleLoaded = trafficStyleDefinitionReady(map);
         const tilePlan = layerToggles.buildTrafficTileUrlsPlan({
             useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
             origin: window.location.origin,
@@ -421,7 +433,7 @@ function addTrafficLayer() {
         const tick = layerToggles.buildTrafficStylePollTickPlan({
             scheduled,
             hasMap: !!map,
-            isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+            isStyleLoaded: trafficStyleDefinitionReady(map),
             attempts,
             maxAttempts: orch.stylePollMaxAttempts,
             intervalMs: orch.stylePollIntervalMs,
@@ -475,6 +487,7 @@ function removeTrafficLayer() {
  * @param {number} statusCode
  */
 function voyagrOnTrafficTileLoadError(statusCode) {
+    if (Date.now() < trafficLayerPausedUntil) return;
     const backoff = MLT().buildTrafficTileErrorBackoffPlan({
         statusCode,
         errorStreak: trafficTileErrorStreak,
@@ -490,6 +503,11 @@ function voyagrOnTrafficTileLoadError(statusCode) {
     if (backoff.resetStreak) trafficTileErrorStreak = 0;
     if (backoff.removeTrafficLayer) removeTrafficLayer();
     console.warn(backoff.logMessage);
+    clearTimeout(trafficLayerRetryTimer);
+    trafficLayerRetryTimer = setTimeout(() => {
+        trafficLayerRetryTimer = null;
+        if (getShowTrafficEnabled() && Date.now() >= trafficLayerPausedUntil) addTrafficLayer();
+    }, Math.max(0, trafficLayerPausedUntil - Date.now()));
 }
 
 
@@ -565,7 +583,7 @@ function addWeatherLayer() {
     const weatherMod = WL();
     const orch = weatherMod.buildAddWeatherLayerOrchestrationPlan({
         hasMap: !!map,
-        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+        isStyleLoaded: trafficStyleDefinitionReady(map),
     });
     if (!orch.shouldProceed) {
         if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);

@@ -473,6 +473,7 @@
 
         if (apply.degradedLogWarning) {
             console.warn(
+                apply.degradedLogPrefix || '[Route API] Route limitations:',
                 apply.degradedLogWarning.warning,
                 apply.degradedLogWarning.engines
             );
@@ -581,6 +582,7 @@
         var planningToken=modes&&modes.captureIntent();
         var integrity = root.VoyagrAvoidanceIntegrity;
         var ticket = integrity ? integrity.begin(localStorage) : null;
+        try {
         var RR = rt().routingRequest();
         var startInput = document.getElementById('start');
         var endInput = document.getElementById('end');
@@ -614,14 +616,18 @@
         );
         var routePlan = apiOrch.routePlan;
         var fetchPlan = apiOrch.fetchPlan;
-        if (root.VoyagrJourneyPlan) fetchPlan.body.journey_context=root.VoyagrJourneyPlan.requestContext(fetchPlan.body,startInput,endInput);
+        if (root.VoyagrJourneyPlan) {
+            fetchPlan.body.journey_context=root.VoyagrJourneyPlan.applyDrivingArrival(fetchPlan.body,startInput,endInput,document.getElementById('drivingArrival'));
+            geocodedEnd=fetchPlan.body.end;
+            if(fetchPlan.body.journey_context.arrival_choice)end=fetchPlan.body.journey_context.destination.label;
+        }
         var requestLog = apiOrch.requestLog;
 
         console.log(requestLog.requestLogPrefix);
         console.log(requestLog.viaPointsLogMessage);
         console.log(requestLog.multiDropLogMessage);
 
-        return fetch(fetchPlan.apiPath, {
+        return await fetch(fetchPlan.apiPath, {
             ...(integrity ? integrity.fetchOptions(ticket) : {}),
             method: fetchPlan.method,
             headers: fetchPlan.headers,
@@ -635,6 +641,12 @@
                         rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                     }
                     return;
+                }
+                if (window.VoyagrJourneyPlan && !window.VoyagrJourneyPlan.responseArrivalIntentMatches(
+                    fetchPlan.body.journey_context && fetchPlan.body.journey_context.arrival_intent, data)) {
+                    hideRouteProgressBar();
+                    rt().call.showStatus('Arrival-intent modules differ. Reload online and recalculate; previous journey retained.', 'warning');
+                    return false;
                 }
                 if (integrity) integrity.tag(data,ticket);
                 if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
@@ -660,7 +672,14 @@
                     RR.buildCalculateRouteFetchErrorApplyPlan(error),
                     error
                 );
-            }).finally(function() { if (integrity) integrity.finish(ticket); });
+            });
+        } catch(error) {
+            if(!integrity||integrity.current(ticket,localStorage)){
+                hideRouteProgressBar();
+                rt().call.showStatus((error&&error.message?error.message:'Route request could not be prepared.')+' Previous journey retained.','warning');
+            }
+            return false;
+        } finally { if(integrity)integrity.finish(ticket); }
     }
 
     function bind(nextRuntime) {

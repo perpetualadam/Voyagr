@@ -1,7 +1,7 @@
 """Tests for geocoding query parsing and result ranking."""
 
 import json
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -832,3 +832,57 @@ class TestPostcodesIoHelper:
         assert len(results) == 1
         assert results[0]['name'] == 'LS1'
         assert 'Leeds' in results[0]['display_name']
+
+
+def test_tomtom_preserves_bounded_entrances_without_relocating_search_position():
+    from unittest.mock import Mock
+    from voyagr.api.search import _tomtom_geocode
+    entries = [{'position': {'lat': 53.81, 'lon': -1.56}, 'type': 'main'},
+               {'position': {'lat': True, 'lon': -1}}, {'position': {'lat': 100, 'lon': 0}}]
+    response = Mock(status_code=200)
+    response.json.return_value = {'results': [{'id': 'poi-ref', 'type': 'POI',
+        'position': {'lat': 53.8, 'lon': -1.55}, 'poi': {'name': 'Shop'}, 'entryPoints': entries}]}
+    with patch.dict('os.environ', {'TOMTOM_API_KEY': 'test-key'}), patch('voyagr.api.search.requests.get', return_value=response):
+        result = _tomtom_geocode('Shop Leeds', 5)[0]
+    assert result['lat'] == '53.8' and result['lon'] == '-1.55'
+    assert result['id'] == 'poi-ref'
+    assert result['entry_points'] == [{'lat': 53.81, 'lon': -1.56, 'type': 'main'}]
+    assert 'access_verified' not in result
+
+
+@pytest.mark.parametrize('failure', ['timeout', 'connection', 'bad_json', 'bad_list', 'bad_object'])
+def test_nominatim_expected_failures_remain_provider_unavailable(failure):
+    import requests
+    from voyagr.api.search import _nominatim_search
+    response = Mock(status_code=200)
+    if failure == 'bad_json':
+        response.json.side_effect = ValueError('private upstream content')
+    else:
+        response.json.return_value = [None] if failure == 'bad_list' else {'error': 'provider error'}
+    error = requests.Timeout('private-host/query') if failure == 'timeout' else requests.ConnectionError('private-host/query')
+    with patch('voyagr.api.search.requests.get', side_effect=error if failure in ('timeout', 'connection') else None,
+               return_value=response):
+        assert _nominatim_search({'q': 'car park doncaster'}, {}) == ([], False)
+
+
+def test_upstream_timeout_returns_retryable_failure_not_internal_exception(client):
+    import requests
+    with patch.dict('os.environ', {'TOMTOM_API_KEY': ''}), \
+         patch('voyagr.api.search._postcodes_io_geocode', return_value=[]), \
+         patch('voyagr.api.search.requests.get', side_effect=requests.Timeout('private-provider/query')):
+        response = client.get('/api/geocode?q=car+park+doncaster&limit=8')
+    assert response.status_code == 502
+    assert 'unavailable' in response.get_json()['error']
+    assert 'private-provider' not in response.get_data(as_text=True)
+
+
+def test_nominatim_timeout_still_allows_configured_fallback(client):
+    import requests
+    fallback = [{'lat': '53.5198586', 'lon': '-1.1346897', 'name': 'Civic Quarter Car Park', 'type': 'poi'}]
+    with patch.dict('os.environ', {'TOMTOM_API_KEY': 'test-only'}), \
+         patch('voyagr.api.search._postcodes_io_geocode', return_value=[]), \
+         patch('voyagr.api.search.requests.get', side_effect=requests.Timeout()), \
+         patch('voyagr.api.search._tomtom_geocode', return_value=fallback):
+        response = client.get('/api/geocode?q=car+park+doncaster&limit=8')
+    assert response.status_code == 200
+    assert response.get_json()[0]['name'] == 'Civic Quarter Car Park'

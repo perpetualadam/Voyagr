@@ -148,11 +148,13 @@ def test_corrected_viewport_wait_timeout_leaves_task_alive_without_route_budget(
         finally: finished.set()
         return []
     app=Flask(__name__);audit.register(app)
-    # The callback's finished event precedes the wrapper's final audit record.
-    # Join the whole owned task so its trace cannot spill into the next test.
-    with ThreadPoolExecutor(max_workers=1) as owned_executor, \
-            patch.object(hazards, '_osm_area_executor', owned_executor), \
-            caplog.at_level(logging.INFO), app.test_request_context('/api/traffic-lights/area'):
+    submitted=[]
+    submit=hazards._osm_area_executor.submit
+    def track_submit(*args, **kwargs):
+        future=submit(*args, **kwargs)
+        submitted.append(future)
+        return future
+    with caplog.at_level(logging.INFO), patch.object(hazards._osm_area_executor,'submit',side_effect=track_submit), app.test_request_context('/api/traffic-lights/area'):
         app.preprocess_request();identity=audit.trace()['id']
         g.routing_budget=rb.RoutingBudget(30)
         try:
@@ -161,7 +163,12 @@ def test_corrected_viewport_wait_timeout_leaves_task_alive_without_route_budget(
             assert started.is_set() and not finished.is_set()
             assert len(observed)==1 and isinstance(observed[0][0],rb.WorkBudget)
             assert observed[0][1]==identity and observed[0][0].cancel_event.is_set()
-        finally: release.set();assert finished.wait(2)
+        finally:
+            release.set();assert finished.wait(2)
+            # The fetch callback can finish before its worker's audit finally block.
+            # Await the owned future too, so its logs cannot leak into another test.
+            assert len(submitted)==1
+            assert isinstance(submitted[0].exception(timeout=2),rb.RoutingDeadlineExceeded)
     assert 'area_wait_timeout' in caplog.text
 
 

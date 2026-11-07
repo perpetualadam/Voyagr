@@ -17,9 +17,9 @@ function worker(){
  function cache(name){if(!stores.has(name))stores.set(name,new Map());const data=stores.get(name);return {put:async(q,r)=>data.set(key(q),r.clone()),match:async q=>data.get(key(q))?.clone(),keys:async()=>[...data.keys()].map(url=>({url})),delete:async q=>data.delete(key(q))};}
  const caches={open:async n=>cache(n),keys:async()=>[...stores.keys()],delete:async n=>{deleted.push(n);return stores.delete(n);},match:async q=>{for(const n of stores.keys()){const found=await cache(n).match(q);if(found)return found;}}};
  const self={location:{origin},addEventListener:(n,f)=>listeners[n]=f,skipWaiting:boundaries.skipWaiting,clients:{claim:boundaries.claim}};
- vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../../../service-worker.js'),'utf8'),{self,caches,crypto:nodeCrypto.webcrypto,Response:Reply,URL,Uint8Array,console:{log:()=>{}},fetch:(q,o)=>fetchImpl(q,o),indexedDB:{open:()=>{throw Error('User storage must not be touched');}}});
+ vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../../../service-worker.js'),'utf8'),{self,caches,crypto:nodeCrypto.webcrypto,Response:Reply,URL,Uint8Array,setTimeout,clearTimeout,console:{log:()=>{}},fetch:(q,o)=>fetchImpl(q,o),indexedDB:{open:()=>{throw Error('User storage must not be touched');}}});
  return {cache,stores,deleted,boundaries,setFetch:f=>fetchImpl=f,network:b=>fetchImpl=async q=>key(q)===key('/')?new Reply(b.html):b.bodies.has(key(q))?new Reply(b.bodies.get(key(q))):new Reply('missing',{status:404}),
- install:async()=>{let p;listeners.install({waitUntil:x=>p=x});await p;},message:data=>listeners.message({data,source:{postMessage:()=>{}},waitUntil:()=>{throw Error('Legacy reset must not run');}}),activate:async()=>{let p;listeners.activate({waitUntil:x=>p=x});await p;},fetch:async url=>{let p;listeners.fetch({request:{url:key(url),method:'GET',headers:{has:()=>false}},respondWith:x=>p=x});return p;}};
+ install:async()=>{let p;listeners.install({waitUntil:x=>p=x});await p;},message:data=>listeners.message({data,source:{postMessage:()=>{}},waitUntil:()=>{throw Error('Legacy reset must not run');}}),activate:async()=>{let p;listeners.activate({waitUntil:x=>p=x});await p;},fetch:async url=>{let p;const tasks=[];listeners.fetch({waitUntil:x=>tasks.push(x),request:{url:key(url),method:'GET',headers:{has:()=>false}},respondWith:x=>p=x});const result=await p;await Promise.all(tasks);return result;}};
 }
 test('fresh install commits one verified offline release and never forces control',async()=>{
  const w=worker(),b=bundle();w.network(b);await w.install();expect(w.boundaries.skipWaiting).not.toHaveBeenCalled();
@@ -91,4 +91,17 @@ test('immutable HTTP reuse is verified and a stale successful body gets only one
  const w=worker(),b=bundle(),asset=b.assets[0],attempts=[];
  w.setFetch(async(q,o)=>{attempts.push(o.cache);return new Reply(o.cache==='reload'?b.bodies.get(key(asset.url)):'stale-http-body');});
  expect(await (await w.fetch(asset.url)).text()).toBe(b.bodies.get(key(asset.url)));expect(attempts).toEqual(['default','reload']);
+});
+
+test.each(['v51','v52'])('map data cached by %s survives a verified release upgrade offline',async version=>{
+ const w=worker(),b=bundle();const url='/map/data/gb/11/1016/662.pbf';
+ await w.cache('voyagr-tiles-'+version).put(url,new Reply('retained '+version));
+ w.network(b);await w.install();await w.activate();w.setFetch(async()=>{throw Error('offline');});
+ expect(await (await w.fetch(url)).text()).toBe('retained '+version);
+ expect(w.deleted).toEqual([]);expect(w.boundaries.claim).not.toHaveBeenCalled();
+});
+
+test('empty worker messages cannot throw or force activation/reset',()=>{
+ const w=worker();expect(()=>w.message(null)).not.toThrow();expect(()=>w.message(undefined)).not.toThrow();
+ expect(w.boundaries.skipWaiting).not.toHaveBeenCalled();expect(w.boundaries.claim).not.toHaveBeenCalled();expect(w.deleted).toEqual([]);
 });

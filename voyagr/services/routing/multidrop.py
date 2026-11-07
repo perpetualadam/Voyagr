@@ -694,6 +694,7 @@ def _valhalla_leg(
                 {"lat": to_loc["lat"], "lon": to_loc["lon"]},
             ],
             "costing": costing,
+            "turn_lanes": costing in ('auto', 'auto_shorter', 'motorcycle'),
             "alternates": 0,
             "directions_options": {"generalize": 0},
         }

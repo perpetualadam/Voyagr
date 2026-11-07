@@ -115,6 +115,8 @@
         const text = document.getElementById('laneGuidanceText');
 
         if (!display || !visual || !text) return;
+        const title = display.querySelector('.lane-guidance-title');
+        if (title) title.textContent = '🛣️ Lane Guidance';
         const gps=root.VoyagrGpsOrchestration;
         const gpsEvidence=gps && gps.getNavigationPositionEvidence ? gps.getNavigationPositionEvidence() : null;
         if ((gps && gps.getNavigationPositionEvidence && (!gpsEvidence || gpsEvidence.state!=='RELIABLE')) || (gps && gps.getLastGpsFixAgeMs && gps.getLastGpsFixAgeMs()>15000) || !LG().isActionableLaneGuidance(data)) {display.classList.remove('show');lastLaneVoiceKey=null;return;}
@@ -140,6 +142,7 @@
             const lane = document.createElement('div');
             lane.className = ind.className;
             lane.innerHTML = ind.innerHtml;
+            if (ind.label) { lane.title = ind.label; lane.setAttribute('aria-label', ind.label); }
             visual.appendChild(lane);
         });
 
@@ -153,6 +156,52 @@
         }
     }
 
+    function renderMappedLaneLayout(observation) {
+        const display = document.getElementById('laneGuidanceDisplay');
+        const visual = document.getElementById('laneVisual');
+        const text = document.getElementById('laneGuidanceText');
+        if (!display || !visual || !text) return;
+        const gps = root.VoyagrGpsOrchestration;
+        const position = gps && gps.getNavigationPositionEvidence && gps.getNavigationPositionEvidence();
+        lastLaneVoiceKey = '';
+        if (!observation || observation.evidence_state !== 'MAPPED_LANE_OBSERVATION'
+            || !position || position.state !== 'RELIABLE'
+            || (gps.getLastGpsFixAgeMs && gps.getLastGpsFixAgeMs() > 15000)
+            || !Number.isInteger(observation.total_lanes) || observation.total_lanes < 2 || observation.total_lanes > 12
+            || !Array.isArray(observation.lane_arrows) || observation.lane_arrows.length !== observation.total_lanes
+            || observation.lane_arrows.some(function (entry) { return !entry || typeof entry.arrow !== 'string' || entry.arrow.length > 8; })) {
+            display.classList.remove('show');
+            return;
+        }
+        // Factual current-road layout only: no green recommendation or voice.
+        visual.innerHTML = '';
+        observation.lane_arrows.forEach(function (entry, index) {
+            const lane = document.createElement('div');
+            lane.className = 'lane-indicator';
+            const arrow = document.createElement('span');
+            arrow.className = 'lane-arrow';
+            arrow.textContent = entry.arrow;
+            lane.appendChild(arrow);
+            const destination = observation.destinations && observation.destinations[index];
+            if (typeof destination === 'string' && destination) {
+                lane.style.flexDirection = 'column';
+                const label = document.createElement('span');
+                label.className = 'lane-destination';
+                label.textContent = destination;
+                label.title = destination;
+                label.style.cssText = 'font-size:9px;max-width:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+                lane.appendChild(label);
+            }
+            visual.appendChild(lane);
+        });
+        const title = display.querySelector('.lane-guidance-title');
+        if (title) title.textContent = '🛣️ Current road lanes';
+        const badge = document.getElementById('laneGuidanceBadge');
+        if (badge) { badge.textContent = 'Mapped'; badge.style.display = 'inline-block'; }
+        text.textContent = 'Mapped lane layout — follow road signs';
+        display.className = 'lane-guidance-display show';
+    }
+
     function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount, guidanceStepIndex) {
         if (roundaboutExitCount === undefined) roundaboutExitCount = 0;
         if (guidanceStepIndex === undefined) guidanceStepIndex = null;
@@ -163,9 +212,20 @@
             // Native provider lanes require a typed match to their active route road.
             var match=root.VoyagrRoadMatchOrchestration.getSnapshot();
             var provider=match && match.attributes_allowed && match.route_relation==='MATCHED' ? getRoutingManeuverLanes(guidanceStepIndex) : null;
+            var targetIndex=guidanceStepIndex!=null?guidanceStepIndex:rt().getCurrentStepIndex();
+            var target=(rt().getCurrentRouteSteps() || [])[targetIndex];
+            if(!provider && root.VoyagrRoadMatchOrchestration.matchesProviderLaneApproach &&
+                root.VoyagrRoadMatchOrchestration.matchesProviderLaneApproach(target)) provider=getRoutingManeuverLanes(targetIndex);
+            if(!provider && !LG().isActionableLaneGuidance(evidence) && root.VoyagrRoadMatchOrchestration.getGraphHopperLaneGuidance)
+                evidence=root.VoyagrRoadMatchOrchestration.getGraphHopperLaneGuidance(target);
             var hybrid=LG().buildHybridLaneGuidance({routingManeuverLanes:provider,apiData:evidence,
                 maneuver:maneuver,distanceToManeuver:LG().computeDistanceToManeuverMeters(lat,lon,rt().getCurrentRouteSteps(),guidanceStepIndex!=null?guidanceStepIndex:rt().getCurrentStepIndex(),rt().getRoutePolyline(),rt().call.calculateDistanceMeters),roundaboutExitCount:roundaboutExitCount});
+            if(provider && target)hybrid.lane_scope=String(targetIndex)+':'+String(target.begin_shape_index);
             clearLockedLaneGuidance();
+            if (!LG().isActionableLaneGuidance(hybrid) && root.VoyagrRoadMatchOrchestration.getLaneObservation) {
+                renderMappedLaneLayout(root.VoyagrRoadMatchOrchestration.getLaneObservation());
+                return;
+            }
             renderLaneGuidanceUI(hybrid);
             return;
         }

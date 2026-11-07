@@ -15,6 +15,7 @@ module.exports = {
         'static/js/modules/map/weather-layer.js',
         'static/js/modules/navigation/camera-pitch.js',
         'static/js/modules/navigation/road-matching.js',
+        'static/js/modules/navigation/lane-connectivity.js',
         'static/js/modules/navigation/turn-instructions.js',
         'static/js/modules/navigation/voice-announcements.js',
         'static/js/modules/navigation/lane-guidance.js',
@@ -36,6 +37,9 @@ module.exports = {
             statements: 24
         },
         'static/js/modules/navigation/road-matching.js': {
+            statements: 80, branches: 70, functions: 80, lines: 90
+        },
+        'static/js/modules/navigation/lane-connectivity.js': {
             statements: 80, branches: 70, functions: 80, lines: 90
         },
         // Floors aligned with measured coverage after modularisation expansion (Jul 2026).

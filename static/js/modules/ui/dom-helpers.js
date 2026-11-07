@@ -385,7 +385,7 @@
         return Object.assign({}, base, {
             headerSelector: BOTTOM_SHEET_HEADER_SELECTOR,
             contentSelector: BOTTOM_SHEET_CONTENT_SELECTOR,
-            headerButtonIgnoreSelector: 'button',
+            headerButtonIgnoreSelector: 'button, .sheet-toolbar',
             dragCollapsePreviewMaxPx: BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX,
             touchTapSlopPx: BOTTOM_SHEET_TOUCH_TAP_SLOP_PX,
             focusExpandInputIds: BOTTOM_SHEET_FOCUS_EXPAND_INPUT_IDS.slice(),

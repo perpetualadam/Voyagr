@@ -203,6 +203,7 @@ function clearAllRouteLayersFromMap() {
 
 function clearRouteLayerHandlesFromPlan(plan) {
     if (!allowPreviewMutation()) return false;
+    if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.clearMap();
     const generation=++previewMountGeneration;
     if (!plan) return true;
     const owned=rt().getRouteLayer();
@@ -548,6 +549,7 @@ function applyDoAddRouteLayersFromPlan(apply, batchToken) {
     if (!previewBatchCurrent(batch) || applyDoAddRouteLayersBatchFromPlan(apply.batchExecute,batch)===false) return false;
     if (!previewBatchCurrent(batch)) return false;
     applyDoAddRouteLayersPostMountFromPlan(apply.postMount,batch);
+    if(previewBatchCurrent(batch)&&root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.showMap((getRouteOptions()||[])[getSelectedRouteIndex()],rt().getMap());
     return previewBatchCurrent(batch);
 }
 
@@ -688,6 +690,7 @@ function allowPreviewMutation() {
 // Only comparison handles are eligible; never remove the owned guidance layer.
 // Used by a verified navigation transaction after its new line is mounted.
 function clearComparisonRouteLayers() {
+    if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.clearMap();
     if (!runtime) return false;
     const generation=++previewMountGeneration;
     const owned=rt().getRouteLayer();
@@ -865,7 +868,9 @@ function displaySingleRoute(index) {
     const orch = RS().buildDisplaySingleRouteEntryOrchestrationPlan(
         collectDisplaySingleRouteInput(index)
     );
-    return applyDisplaySingleRouteFromPlan(orch.apply);
+    const result=applyDisplaySingleRouteFromPlan(orch.apply);
+    if(result!==false&&root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.showMap((getRouteOptions()||[])[index],rt().getMap());
+    return result;
 }
 
 /**

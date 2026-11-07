@@ -105,3 +105,46 @@ The draft contains implementation and deterministic regressions, with no product
 - This report: architecture, root causes, evidence, migration/rollback and remaining acceptance gates.
 
 Generated output syntax was checked locally for **152 JavaScript outputs** across **156 release assets**. This is syntax verification, not browser initialization or device acceptance. Preparation failures return a bounded no-store 503; no unhashed fallback shell is served and no user data is changed.
+
+## 2026-11-07 conflict-resolution investigation
+
+Compared current main `501d166c` with all four open Voyagr PRs before editing:
+
+- **#383:** merge `fef4e654` duplicated a calculation continuation and lost its
+  catch callback. Repair `cd83c3d8` combines arrival-intent refusal/preparation
+  handling with latest-ticket cleanup and stale-error guards. All five hosted
+  checks passed. Its independent-review requirement remains; no automatic merge.
+- **#421:** README wording/deletion only; merges cleanly, no runtime code conflict.
+- **#377:** earlier safety-UX draft overlaps features carried into main through
+  #378 and later work. Current main already has outcome classification, selected
+  route start gating and committed best-effort warnings, plus newer planning
+  notices. A trial merge exposes nine conflict paths; do not revive its old file
+  versions or remove current endpoint, geometry, lane and UI work. Left unchanged.
+- **#381:** trial merge exposes service-worker and asynchronous-audit-test
+  conflicts. Reconcile this draft with main rather than selecting whole files.
+
+The worker keeps main's optional bounded map-cache operations, parallel tile
+network requests, root map aliases, no-store probes and tracked background work.
+Its draft executable-release staging still verifies all dependencies before
+committing a shell; natural activation does not force control or clear caches.
+Read current v52 tiles first and retained v51 tiles second, without deleting either.
+Keep main's future-completion audit-test fix (the old draft executor replacement
+is superseded). Correct the legacy-message guard so null messages cannot throw.
+
+Two main tests asserted forced worker takeover: that contradicts this draft's
+explicit natural-activation design. Replace those lifecycle expectations with
+strict no-claim/no-skip/no-cache-deletion checks; retain every healthy-map/cache-
+failure assertion. Add real-worker v51/v52 offline-upgrade and empty-message cases.
+The Nginx templates intentionally revalidate mutable generic static paths in this
+architecture; reconcile the newer integration test to require that exact header,
+no Expires/upstream policy and unchanged security/proxy headers, rather than
+asserting that these same paths remain immutable. JS/CSS-specific checks remain.
+This is a deliberate draft policy difference, not permission to weaken tests.
+
+Local validation: frontend lint/coverage 129 suites, 2,837 tests passed; declared
+backend 1,912 passed, one skip, 74 subtests passed; isolated PostgreSQL policy
+11 passed; all 154 generated JavaScript assets passed Node syntax checks. Full
+Nginx integration runs in hosted CI; the local image lacks the binary/package
+index. This branch remains a draft: no production/cache/Contabo changes, forced
+activation, deployment or merge of the architecture. Real-browser update timing,
+physical-device acceptance, storage capacity and rollback acceptance stay open.
