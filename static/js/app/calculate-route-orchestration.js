@@ -163,7 +163,6 @@
             return;
         }
 
-        if (plan.hideRouteProgressBar) hideRouteProgressBar();
         if (plan.updateRouteOnMap) {
             // Supply this request's destination before the shared transition;
             // never patch raw response state over its canonical committed route.
@@ -219,8 +218,6 @@
                 rt().call.updateARButtonVisibility();
             }
         }, delayMs);
-
-        if (plan.hideRouteProgressBar) hideRouteProgressBar();
 
         if (plan.showStartNavButtons) {
             (plan.startNavButtonIds || []).forEach(function (id) {
@@ -306,7 +303,6 @@
     function applyCalculateRouteIdlePreviewErrorFromPlan(postMap) {
         if (!postMap || postMap.shouldApply) return false;
         rt().call.showStatus(postMap.errorStatusMessage, 'error');
-        if (postMap.hideRouteProgressBarOnError) hideRouteProgressBar();
         return true;
     }
 
@@ -459,10 +455,11 @@
             }
             applyCalculateRouteIdlePreviewFromPlan(orch, data);
         } catch (e) {
+            // A late commit rejection must not replace a newer request's UI.
+            if (labels.requestCurrent && !labels.requestCurrent()) return;
             var errApply = rt().routeSelection().buildCalculateRouteIdlePreviewParseErrorApplyPlan(e);
             rt().call.showStatus(errApply.statusMessage, errApply.statusType);
             console.error(errApply.logPrefix, e);
-            if (errApply.hideRouteProgressBar) hideRouteProgressBar();
         }
     }
 
@@ -484,7 +481,6 @@
 
         if (apply.branch === 'error') {
             rt().call.showStatus(apply.statusMessage, apply.statusType);
-            if (apply.hideRouteProgressBar) hideRouteProgressBar();
             return;
         }
 
@@ -572,15 +568,29 @@
         if (!errApply) return;
         rt().call.showStatus(errApply.statusMessage, errApply.statusType);
         console.error(errApply.logPrefix, error);
-        if (errApply.hideRouteProgressBar) hideRouteProgressBar();
+    }
+
+    // Missing integrity cannot issue an owned request or validate its result.
+    // Older calculation clients may omit journey modes, never integrity;
+    // existing navigation gates still decide authority.
+    function calculationCapabilities() {
+        try {
+            var integrity=root.VoyagrAvoidanceIntegrity,modes=root.VoyagrJourneyModes,plan=root.VoyagrJourneyPlan;
+            if(!integrity||['begin','current','isLatest','finish','fetchOptions','augment','tag',
+                'prepareNavigationCandidate','geometryPoints','responseCurrent','gate'].some(function(name){return typeof integrity[name]!=='function';}))return null;
+            if(modes&&['beforePlanning','captureIntent','intentCurrent','endpointIntentCompatible','commitPlanning']
+                .some(function(name){return typeof modes[name]!=='function';}))return null;
+            if((modes&&!plan)||(plan&&typeof plan.requestContext!=='function')||(modes&&typeof plan.inspection!=='function'))return null;
+            return {integrity:integrity,modes:modes};
+        } catch (_) { return null; }
     }
 
     async function calculateRoute() {
-        if(root.VoyagrJourneyModes&&(!root.VoyagrJourneyModes.commitPlanning||!root.VoyagrJourneyModes.captureIntent||!root.VoyagrJourneyModes.endpointIntentCompatible)){rt().call.showStatus('Planning modules differ. Reload online; current journey retained.','warning');return;}
-        if (root.VoyagrJourneyModes && !root.VoyagrJourneyModes.beforePlanning()) return;
-        var modes=root.VoyagrJourneyModes;
+        var capabilities=calculationCapabilities();
+        if(!capabilities){rt().call.showStatus('Route safety modules are unavailable. Reconnect and reload when safe; current journey retained.','warning');return;}
+        var integrity=capabilities.integrity,modes=capabilities.modes;
+        if (modes && !modes.beforePlanning()) return;
         var planningToken=modes&&modes.captureIntent();
-        var integrity = root.VoyagrAvoidanceIntegrity;
         var ticket = integrity ? integrity.begin(localStorage) : null;
         try {
         var RR = rt().routingRequest();
@@ -591,25 +601,25 @@
             rt().getIsGeocoding()
         );
 
-        if (!applyCalculateRoutePreflightFromPlan(preflightOrch.apply)) return;
+            if (!applyCalculateRoutePreflightFromPlan(preflightOrch.apply)) return;
 
-        var start = preflightOrch.collect.start;
-        var end = preflightOrch.collect.end;
+            var start = preflightOrch.collect.start;
+            var end = preflightOrch.collect.end;
 
-        var geocodedResult = await rt().call.geocodeLocations(start, end);
-        if (!geocodedResult) {
-            return;
-        }
+            var geocodedResult = await rt().call.geocodeLocations(start, end);
+            if (!geocodedResult) {
+                return;
+            }
 
-        if (integrity && !integrity.current(ticket, localStorage)) return;
-        var geocodedStart = geocodedResult.start;
-        var geocodedEnd = geocodedResult.end;
+            if (integrity && !integrity.current(ticket, localStorage)) return;
+            var geocodedStart = geocodedResult.start;
+            var geocodedEnd = geocodedResult.end;
 
-        console.log('[calculateRoute] Endpoints resolved');
+            console.log('[calculateRoute] Endpoints resolved');
 
-        applyCalculateRouteLoadingFromPlan(
-            RR.buildCalculateRouteLoadingApplyPlan(RR.buildCalculateRouteLoadingExecutePlan())
-        );
+            applyCalculateRouteLoadingFromPlan(
+                RR.buildCalculateRouteLoadingApplyPlan(RR.buildCalculateRouteLoadingExecutePlan())
+            );
 
         var apiOrch = RR.buildCalculateRouteApiOrchestrationPlan(
             collectCalculateRouteApiInput(geocodedStart, geocodedEnd)
@@ -637,33 +647,31 @@
             .then(function (data) {
                 if (integrity && !integrity.current(ticket, localStorage)) {
                     if (integrity.isLatest(ticket)) {
-                        hideRouteProgressBar();
                         rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                     }
                     return;
                 }
                 if (window.VoyagrJourneyPlan && !window.VoyagrJourneyPlan.responseArrivalIntentMatches(
                     fetchPlan.body.journey_context && fetchPlan.body.journey_context.arrival_intent, data)) {
-                    hideRouteProgressBar();
                     rt().call.showStatus('Arrival-intent modules differ. Reload online and recalculate; previous journey retained.', 'warning');
                     return false;
                 }
                 if (integrity) integrity.tag(data,ticket);
                 if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
                     storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
-                })) { hideRouteProgressBar(); return; }
+                })) { return; }
                 return applyCalculateRouteResponseFromPlan(
                     RR.buildCalculateRouteResponseApplyPlan(
                         RR.buildCalculateRouteResponseExecutePlan(data, modes?false:rt().getRouteInProgress())
                     ),
                     data,
-                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken }
+                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken,
+                        requestCurrent:function(){return integrity.current(ticket,localStorage);} }
                 );
             })
             .catch(function (error) {
                 if (integrity && !integrity.current(ticket, localStorage)) {
                     if (integrity.isLatest(ticket)) {
-                        hideRouteProgressBar();
                         rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                     }
                     return;
@@ -675,11 +683,18 @@
             });
         } catch(error) {
             if(!integrity||integrity.current(ticket,localStorage)){
-                hideRouteProgressBar();
                 rt().call.showStatus((error&&error.message?error.message:'Route request could not be prepared.')+' Previous journey retained.','warning');
             }
             return false;
-        } finally { if(integrity)integrity.finish(ticket); }
+        } finally {
+            // Settled failures can resolve false. Only the latest ticket owns
+            // progress; always dispose its timer even if rendering fails.
+            try {
+                if (integrity.isLatest(ticket)) hideRouteProgressBar();
+            } finally {
+                integrity.finish(ticket);
+            }
+        }
     }
 
     function bind(nextRuntime) {
