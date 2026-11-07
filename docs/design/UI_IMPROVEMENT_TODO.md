@@ -52,7 +52,7 @@ fixture device/map/provider actions. They cover horizontal overflow, touch targe
 native disclosure keyboard operation, route switching, notices and action wiring.
 They do not establish live WebGL/GPS/provider or production acceptance.
 
-## 3. Map controls (current increment)
+## 3. Map controls (implemented; deployed acceptance pending)
 
 - [x] Audit existing controls, including Parking POI, before changing placement.
   See [MAP_CONTROL_UI_AUDIT.md](MAP_CONTROL_UI_AUDIT.md) for owners and preserved paths.
@@ -75,3 +75,19 @@ They do not establish live WebGL/GPS/provider or production acceptance.
   landscape layouts, safe areas and light/dark themes.
 - [ ] Run relevant regressions for each increment and record browser acceptance
   separately. Do not automatically deploy or change routing/GPS/data behaviour.
+
+### 4a. Bottom-sheet toolbar (implemented; deployed acceptance pending)
+
+- [x] Audit and retain all nine existing action handlers/destinations.
+- [x] Replace emoji controls with labelled SVGs, scoped theme colours, 48 px
+  targets, visible focus and current-page markers.
+- [x] Keep the toolbar within the collapsed peek; use horizontal scrolling and
+  reveal focused buttons completely. Protect toolbar swipes from drawer gestures.
+- [x] Verify normal/200% text, contrast, keyboard/touch, scrolling, page selection,
+  Premium action wiring and collapse/expand through controlled regressions.
+- [ ] Accept the deployed toolbar on real phones and Firefox/WebKit, with long
+  text, native font scaling, touch scrolling and the live application shell.
+
+See [SHEET_TOOLBAR_UI.md](SHEET_TOOLBAR_UI.md) for scope and validation. This
+completes one UI increment only; the wider checks above, previous phone/provider
+acceptance and GitHub notification identification remain open alongside it.

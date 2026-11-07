@@ -4682,3 +4682,40 @@ html.dark-mode .map-poi-shortcuts, body.dark-mode .map-poi-shortcuts {
         max-height: clamp(88px, calc(100dvh - var(--bottom-sheet-peek-height, 110px) - var(--map-summary-offset) - var(--safe-area-inset-bottom, 0px) - 24px), 300px);
     }
 }
+
+/* Sheet tools stay in one scrollable row, including within the 110 px peek. */
+.bottom-sheet-header .sheet-header-inner {
+    --sheet-tool-surface: #fff; --sheet-tool-text: #202530; --sheet-tool-border: #d9dce4;
+    --sheet-tool-accent: #56328a; --sheet-tool-tint: #f2edf8;
+    display: block; min-width: 0;
+}
+.bottom-sheet-header .sheet-title { margin-bottom: 8px; overflow-wrap: anywhere; }
+.bottom-sheet-header .sheet-toolbar {
+    display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: stretch;
+    width: 100%; min-width: 0; gap: 6px; padding: 4px; overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain; touch-action: pan-x; scrollbar-width: thin;
+    scroll-behavior: auto;
+    scrollbar-color: var(--sheet-tool-accent) var(--sheet-tool-tint);
+}
+.bottom-sheet-header .sheet-toolbar .sheet-icon-btn {
+    width: auto; height: auto; min-width: max(48px, 4rem); min-height: 48px; padding: 3px 6px;
+    flex: 0 0 auto; flex-direction: column; gap: 2px; margin: 0; scroll-margin-inline: 4px;
+    background: var(--sheet-tool-surface); color: var(--sheet-tool-text); border: 1px solid var(--sheet-tool-border);
+    border-radius: 12px; box-shadow: none; transform: none; filter: none;
+}
+.sheet-toolbar svg { width: 24px; height: 24px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sheet-tool-label { font-size: .75rem; line-height: 1.2; font-weight: 600; }
+.bottom-sheet-header .sheet-toolbar .sheet-icon-btn[aria-current="page"] { background: var(--sheet-tool-tint); border-color: var(--sheet-tool-accent); }
+.sheet-toolbar [aria-current="page"] .sheet-tool-label { text-decoration: underline; text-underline-offset: 3px; }
+.sheet-toolbar .sheet-icon-btn:focus-visible { outline: 3px solid var(--sheet-tool-accent); outline-offset: 1px; }
+.sheet-toolbar-hint { color: var(--sheet-tool-text); font-size: .75rem; line-height: 1.4; margin-top: 4px; }
+.bottom-sheet:not(.expanded) .bottom-sheet-handle { height: 48px; }
+.bottom-sheet:not(.expanded) .bottom-sheet-header { min-height: 60px; padding: 2px 12px; }
+.bottom-sheet:not(.expanded) .sheet-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip-path: inset(50%); }
+.bottom-sheet:not(.expanded) .sheet-toolbar-hint { display: none; }
+.bottom-sheet:not(.expanded) .sheet-toolbar .sheet-icon-btn { flex-direction: row; gap: 6px; white-space: nowrap; }
+html.dark-mode .bottom-sheet-header .sheet-header-inner,
+body.dark-mode .bottom-sheet-header .sheet-header-inner {
+    --sheet-tool-surface: #20232b; --sheet-tool-text: #f4f5f8; --sheet-tool-border: #505666;
+    --sheet-tool-accent: #c6a9f2; --sheet-tool-tint: #363047;
+}

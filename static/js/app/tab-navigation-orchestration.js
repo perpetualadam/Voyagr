@@ -134,11 +134,22 @@
             if (navigationTab) navigationTab.style.display = 'block';
             sheetTitle.textContent = '🗺️ Navigation';
         }
+        const visibleTab=getCurrentVisibleTab();
+        document.querySelectorAll('.sheet-toolbar [data-sheet-tab]').forEach(button=>{
+            if(button.dataset.sheetTab===visibleTab)button.setAttribute('aria-current','page');
+            else button.removeAttribute('aria-current');
+        });
     }
 
     function goBackToPreviousTab() {
         console.log('[GoBack] Returning to previous tab:', previousTab);
         switchTab(previousTab);
+    }
+
+    function revealToolbarFocus(event) {
+        const target=event&&event.target;
+        const button=target&&typeof target.closest==='function'&&target.closest('.sheet-icon-btn');
+        if(button&&typeof button.scrollIntoView==='function')button.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
     }
 
     function bind(nextRuntime) {
@@ -147,6 +158,7 @@
 
     var api = {
         bind: bind,
+        revealToolbarFocus: revealToolbarFocus,
         switchTab: switchTab,
         getCurrentVisibleTab: getCurrentVisibleTab,
         goBackToPreviousTab: goBackToPreviousTab,
