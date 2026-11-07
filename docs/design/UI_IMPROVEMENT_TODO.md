@@ -5,7 +5,7 @@ the existing Overpass acceptance queue in [OVERPASS_CONSUMER_AUDIT.md](OVERPASS_
 or other navigation, deployment and acceptance checklists. Complete and verify
 one UI increment at a time; retain outstanding functional acceptance items.
 
-## 1. Route playback controls (current increment)
+## 1. Route playback controls (implemented; deployed acceptance pending)
 
 - [x] Replace the dense playback panel with a compact, icon-led player.
 - [x] Show only the applicable play/pause action; retain restart, speed, follow,
@@ -26,12 +26,31 @@ recovery. It does not establish live WebGL/GPS or deployed-device acceptance.
 Re-run with `node scripts/check-preview-player.cjs` (Chromium required; optionally
 set `PLAYWRIGHT_CHROMIUM_EXECUTABLE`). No production deployment is included.
 
-## 2. Selected route preview
+## 2. Selected route preview (current increment)
 
-- [ ] Lead with duration/distance and a clearly labelled navigation action.
-- [ ] Group secondary actions such as Save/Share under a labelled More menu.
-- [ ] Make costs and preferences expandable without concealing route limitations.
-- [ ] Verify all route choices and journey-mode permission checks still work.
+- [x] Lead with duration/distance and a clearly labelled navigation action.
+  Navigate retains the existing journey chooser and fresh-GPS permission path.
+- [x] Group the preview's secondary map/settings/edit actions under a labelled
+  More route tools disclosure. Save/Share retain their existing screens; they
+  were not previously preview actions. Keep Overview, Parking and Compare visible.
+- [x] Make estimated costs and route details expandable without concealing route
+  limitations. Keep planning, avoidance, arrival, CAZ and hazard assessment notices
+  outside disclosures. Keep the estimated total visible on the cost summary.
+- [x] Verify route choices, panel hydration and journey-mode permission checks
+  through controlled regression tests.
+- [ ] Accept the deployed preview on a real phone: select alternatives, open costs
+  and tools, find parking, play a route and enter the journey chooser. Retain all
+  previous Overpass, lane/speed and route-access acceptance items.
+
+This increment changes preview HTML/CSS only; existing action handlers, route
+selection, provider acquisition and navigation permission logic remain unchanged.
+Controlled validation includes 2,806 JavaScript tests, the backend CI web selection,
+and `node scripts/check-route-preview-panel.cjs`: four viewport sizes plus a 2×
+zoom case in light/dark themes (10 Chromium cases). Browser checks use production
+panel markup/CSS, hydration, alternative cards and navigation entrypoints with
+fixture device/map/provider actions. They cover horizontal overflow, touch targets,
+native disclosure keyboard operation, route switching, notices and action wiring.
+They do not establish live WebGL/GPS/provider or production acceptance.
 
 ## 3. Map controls
 

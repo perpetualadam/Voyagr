@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261106playerui1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107previewui1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -1621,140 +1621,99 @@
 
                 <!-- ROUTE PREVIEW TAB (NEW FEATURE) -->
                 <div id="routePreviewTab" style="display: none;">
-                    <div class="preferences-section">
-                        <h3>📍 Route Preview</h3>
-                        <button type="button" class="route-playback-button" onclick="VoyagrJourneyModes.startSimulation()"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="m8 5 11 7-11 7Z" /></svg>Play route preview</button>
-                        <section id="arrivalEndpointPreview" aria-label="Arrival endpoints" hidden style="border:1px solid #b87916;border-radius:8px;padding:12px;margin-bottom:12px;"></section>
-                        <p id="routePlanningNotice" role="status"></p>
-                        <p id="routeAvoidanceNotice" role="status" tabindex="0">Avoidance verification pending.</p>
+                    <div class="preferences-section route-preview-panel">
+                        <h3>Route preview</h3>
+                        <section class="preview-summary-card" aria-label="Selected route summary">
+                            <dl class="preview-summary-metrics">
+                                <div><dt>Duration</dt><dd id="previewDuration">-</dd></div>
+                                <div><dt>Distance</dt><dd id="previewDistance">-</dd></div>
+                            </dl>
+                            <p id="previewRoute" class="preview-route-label">-</p>
+                        </section>
 
-                        <!-- Route Summary -->
-                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                                <div>
-                                    <div style="font-size: 12px; opacity: 0.9;">📏 Distance</div>
-                                    <div style="font-size: 24px; font-weight: bold;" id="previewDistance">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 12px; opacity: 0.9;">⏱️ Duration</div>
-                                    <div style="font-size: 24px; font-weight: bold;" id="previewDuration">-</div>
-                                </div>
-                            </div>
-                            <div style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: 12px;">
-                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">📍 Route</div>
-                                <div style="font-size: 13px;" id="previewRoute">-</div>
-                            </div>
+                        <!-- Route limitations remain outside every disclosure. -->
+                        <p id="routePlanningNotice" class="preview-notice" role="status"></p>
+                        <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>
+                        <section id="arrivalEndpointPreview" class="preview-arrival-notice" aria-label="Arrival endpoints" hidden></section>
+                        <div id="cazStatusContainer" class="preview-caz-notice" style="display: none;"></div>
+                        <div id="hazardInfoContainer" class="preview-hazard-notice" style="display: none;">
+                            <h4>Route preferences</h4>
+                            <div class="preview-value-row"><span data-hazard-count-label>Nearby observations:</span><strong id="previewHazardCount">0</strong></div>
+                            <div class="preview-value-row"><span>Preference scoring penalty:</span><strong id="previewHazardPenalty">0 min</strong></div>
                         </div>
 
-                        <!-- Cost Breakdown -->
-                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">💰 Cost Breakdown</h4>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">⛽ Fuel</div>
-                                    <div style="font-weight: bold; color: #333;" id="previewFuelCost">-</div>
-                                    <div style="color: #555; font-size: 12px; margin-top: 3px; font-weight: 500;" id="previewFuelLitres"></div>
-                                </div>
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">🛣️ Tolls</div>
-                                    <div style="font-weight: bold; color: #333;" id="previewTollCost">-</div>
-                                </div>
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">🚗 CAZ</div>
-                                    <div style="font-weight: bold; color: #333;" id="previewCAZCost">-</div>
-                                </div>
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">💵 Total</div>
-                                    <div style="font-weight: bold; color: #667eea; font-size: 14px;" id="previewTotalCost">-</div>
-                                </div>
-                            </div>
-                            <!-- CAZ Status Display -->
-                            <div id="cazStatusContainer" style="display: none; margin-top: 10px; padding: 8px; background: #f5f5f5; border-radius: 6px;"></div>
+                        <div class="preview-primary-actions" role="group" aria-label="Journey actions">
+                            <button type="button" class="preview-action preview-navigate" data-journey-choose onclick="startNavigationFromPreview()" aria-controls="journeyModeChooser" aria-describedby="previewNavigationHelp">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z" /></svg>Navigate
+                            </button>
+                            <button type="button" class="route-playback-button" onclick="VoyagrJourneyModes.startSimulation()" aria-label="Play route preview">
+                                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="m8 5 11 7-11 7Z" /></svg>Play preview
+                            </button>
+                        </div>
+                        <p id="previewNavigationHelp" class="preview-action-help">Choose a journey mode to continue.</p>
+
+                        <div class="preview-quick-actions" role="group" aria-label="Route tools">
+                            <button type="button" class="preview-action" onclick="overviewRoute()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16" /></svg>Overview
+                            </button>
+                            <button type="button" class="preview-action" onclick="findParkingNearDestination()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M9 17V7h4a3 3 0 0 1 0 6H9" /></svg>Parking
+                            </button>
+                            <button type="button" class="preview-action" onclick="showRouteComparison()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 20V10M12 20V4M18 20v-7" /></svg>Compare
+                            </button>
                         </div>
 
-                        <!-- Hazard Information -->
-                        <div id="hazardInfoContainer" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">Route preferences</h4>
-                            <div style="font-size: 13px; line-height: 1.6;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;" data-hazard-count-label>Nearby observations:</span>
-                                    <strong id="previewHazardCount">0</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #666;">Preference scoring penalty:</span>
-                                    <strong id="previewHazardPenalty">0 min</strong>
-                                </div>
-                            </div>
+                        <!-- Parking remains next to its action and outside disclosures. -->
+                        <div id="parkingSection" class="preview-parking-results" style="display: none;">
+                            <h4>Parking options</h4>
+                            <div id="parkingList"></div>
+                            <button type="button" class="preview-action" onclick="clearParkingSelection()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>Clear parking selection
+                            </button>
                         </div>
 
-                        <!-- Route Details -->
-                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📋 Route Details</h4>
-                            <div style="font-size: 13px; line-height: 1.6;">
-                                <!-- Backend routing stack is not shown to end users -->
-                                <div id="previewRoutingEngineRow" style="display: none;" aria-hidden="true">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="color: #666;">Routing Engine:</span>
-                                        <strong id="previewRoutingEngine"></strong>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;">Routing Mode:</span>
-                                    <strong id="previewRoutingMode">-</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #666;">Vehicle Type:</span>
-                                    <strong id="previewVehicleType">-</strong>
-                                </div>
+                        <details id="previewMoreTools" class="preview-disclosure">
+                            <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>More route tools</span></summary>
+                            <div class="preview-more-actions">
+                                <button type="button" class="preview-action" onclick="showAllRoutes()">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V7a3 3 0 0 1 6 0v10a3 3 0 0 0 6 0V4M13 7l3-3 3 3" /></svg>Show all routes on map
+                                </button>
+                                <button type="button" class="preview-action" onclick="switchTab('settings')">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="3" /><circle cx="15" cy="17" r="3" /></svg>Route settings
+                                </button>
+                                <button type="button" class="preview-action" onclick="switchTab('navigation')">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14Z" /></svg>Modify route
+                                </button>
                             </div>
-                        </div>
+                        </details>
 
-                        <!-- Alternative Routes (if available) -->
-                        <div id="previewAlternativeRoutesContainer" style="display: none; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">🛣️ Alternative Routes</h4>
+                        <details id="previewCostDetails" class="preview-disclosure">
+                            <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>Estimated costs</span><strong id="previewTotalCost">-</strong></summary>
+                            <dl class="preview-cost-grid">
+                                <div><dt>Fuel / energy</dt><dd id="previewFuelCost">-</dd><dd id="previewFuelLitres"></dd></div>
+                                <div><dt>Tolls</dt><dd id="previewTollCost">-</dd></div>
+                                <div><dt>CAZ</dt><dd id="previewCAZCost">-</dd></div>
+                            </dl>
+                        </details>
+
+                        <details id="previewRouteDetails" class="preview-disclosure">
+                            <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>Route details</span></summary>
+                            <!-- Backend routing stack is not shown to end users. -->
+                            <div id="previewRoutingEngineRow" style="display: none;" aria-hidden="true"><strong id="previewRoutingEngine"></strong></div>
+                            <dl class="preview-route-details-grid">
+                                <div><dt>Routing mode</dt><dd id="previewRoutingMode">-</dd></div>
+                                <div><dt>Vehicle type</dt><dd id="previewVehicleType">-</dd></div>
+                            </dl>
+                        </details>
+
+                        <div id="previewAlternativeRoutesContainer" class="preview-alternatives" style="display: none;">
+                            <h4>Alternative routes</h4>
                             <div id="previewAlternativeRoutesList"></div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="overviewRoute()" style="background: #9C27B0; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🗺️ Overview Route
-                            </button>
-                            <button data-journey-choose onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                Choose journey mode
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="findParkingNearDestination()" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🅿️ Find Parking
-                            </button>
-                            <button onclick="showRouteComparison()" style="background: #FF5722; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                📊 Compare Routes
-                            </button>
-                        </div>
-                        <!-- Parking results appear directly below Find Parking -->
-                        <div id="parkingSection" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">🅿️ Parking Options</h4>
-                            <div id="parkingList" style="margin-bottom: 10px;"></div>
-                            <button onclick="clearParkingSelection()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ✕ Clear Parking Selection
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="showAllRoutes()" style="background: #667eea; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🗺️ Show All Routes on Map
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="switchTab('settings')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ⚙️ Route Settings
-                            </button>
-                            <button onclick="switchTab('navigation')" style="background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ✏️ Modify Route
-                            </button>
                         </div>
                     </div>
                 </div>
+
 
                 <!-- JOURNEY SUMMARY MODAL (NEW) -->
                 <div id="journeySummaryModal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; padding: 20px; box-sizing: border-box; overflow-y: auto;">
