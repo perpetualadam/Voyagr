@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107arrivaloptions1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107waypointoptions1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -112,7 +112,7 @@
     <script defer src="/static/js/modules/navigation/route-selection.js?v=20261104arrivalpresentation1"></script>
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261031phase12fgremediation"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20261106parkingpoi1"></script>
-    <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
+    <script defer src="/static/js/modules/navigation/waypoints.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20261106parkingfees1"></script>
     <script defer src="/static/js/modules/navigation/offline-navigation.js?v=20261031phase12fgr9"></script>
     <script defer src="/static/js/modules/navigation/ml-predictions.js?v=20260711zzzf"></script>
@@ -181,7 +181,7 @@
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
     <script defer src="/static/js/app/geocoding-orchestration.js?v=20261107arrivaloptions1"></script>
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261106speedobservations1"></script>
-    <script defer src="/static/js/app/waypoints-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/waypoints-orchestration.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
     <script defer src="/static/js/app/route-preferences-orchestration.js?v=20260712ab24"></script>
@@ -473,50 +473,54 @@
                 <small id="drivingArrivalHelp" class="arrival-options-notice">Keep your destination above. After choosing a driving arrival, calculate again. Check vehicle access and opening restrictions. The onward connection is not included.</small>
 
                 <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
-                <div class="form-group card-waypoints">
-                    <label class="card-waypoints-title">Via-Points &amp; Stops</label>
+                <details id="waypointOptions" class="waypoint-options" ontoggle="VoyagrWaypointsOrchestration.syncWaypointSummary()">
+                    <summary><span>Via-points &amp; stops <span class="waypoint-options-optional">(optional)</span><small id="waypointOptionsSummary">No via-points or stops</small></span><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+                    <div class="waypoint-options-fields">
 
-                    <!-- Via-Point Address Input -->
-                    <div class="waypoint-block">
-                        <div class="waypoint-field-row">
-                            <input type="text" id="viaPointAddress" placeholder="Via-point address…" autocomplete="off"
-                                   oninput="showAutocomplete('viaPointAddress')" onfocus="showAutocomplete('viaPointAddress')"
-                                   onkeydown="if(event.key==='Enter'){event.preventDefault();addViaPointFromAddress();}"
-                                   class="input-waypoint input-waypoint--via">
-                            <button type="button" class="btn-waypoint btn-waypoint--via" onclick="addViaPointFromAddress()">Add via</button>
-                            <button type="button" id="addViaPointBtn" class="btn-waypoint-map btn-waypoint-map--via" onclick="toggleAddViaPoint()" title="Pick via-point on map">🗺️</button>
+                        <!-- Via-Point Address Input -->
+                        <label for="viaPointAddress">Via-point address</label>
+                        <div class="waypoint-block">
+                            <div class="waypoint-field-row">
+                                <input type="text" id="viaPointAddress" placeholder="Via-point address…" autocomplete="off"
+                                       oninput="showAutocomplete('viaPointAddress')" onfocus="showAutocomplete('viaPointAddress')"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();addViaPointFromAddress();}"
+                                       class="input-waypoint input-waypoint--via">
+                                <button type="button" class="btn-waypoint btn-waypoint--via" onclick="addViaPointFromAddress()">Add via</button>
+                                <button type="button" id="addViaPointBtn" class="btn-waypoint-map btn-waypoint-map--via" onclick="toggleAddViaPoint()" title="Pick via-point on map">🗺️</button>
+                            </div>
+                            <div class="autocomplete-dropdown" id="autocompleteViaPoint"></div>
                         </div>
-                        <div class="autocomplete-dropdown" id="autocompleteViaPoint"></div>
-                    </div>
 
-                    <!-- Stop Address Input -->
-                    <div class="waypoint-block">
-                        <div class="waypoint-field-row">
-                            <input type="text" id="stopAddress" placeholder="Stop address…" autocomplete="off"
-                                   oninput="showAutocomplete('stopAddress')" onfocus="showAutocomplete('stopAddress')"
-                                   onkeydown="if(event.key==='Enter'){event.preventDefault();addStopFromAddress();}"
-                                   class="input-waypoint input-waypoint--stop">
-                            <button type="button" class="btn-waypoint btn-waypoint--stop" onclick="addStopFromAddress()">Add stop</button>
-                            <button type="button" onclick="VoyagrJourneyModes.addGpsStop()">Add current GPS stop</button>
-                            <button type="button" id="addStopBtn" class="btn-waypoint-map btn-waypoint-map--stop" onclick="toggleAddStop()" title="Pick stop on map">🗺️</button>
+                        <!-- Stop Address Input -->
+                        <label for="stopAddress">Stop address</label>
+                        <div class="waypoint-block">
+                            <div class="waypoint-field-row">
+                                <input type="text" id="stopAddress" placeholder="Stop address…" autocomplete="off"
+                                       oninput="showAutocomplete('stopAddress')" onfocus="showAutocomplete('stopAddress')"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();addStopFromAddress();}"
+                                       class="input-waypoint input-waypoint--stop">
+                                <button type="button" class="btn-waypoint btn-waypoint--stop" onclick="addStopFromAddress()">Add stop</button>
+                                <button type="button" onclick="VoyagrJourneyModes.addGpsStop()">Add current GPS stop</button>
+                                <button type="button" id="addStopBtn" class="btn-waypoint-map btn-waypoint-map--stop" onclick="toggleAddStop()" title="Pick stop on map">🗺️</button>
+                            </div>
+                            <div class="autocomplete-dropdown" id="autocompleteStop"></div>
                         </div>
-                        <div class="autocomplete-dropdown" id="autocompleteStop"></div>
-                    </div>
 
-                    <div class="waypoint-actions">
-                        <button type="button" class="btn-waypoint-clear" onclick="clearAllWaypoints()">Clear all</button>
+                        <div class="waypoint-actions">
+                            <button type="button" class="btn-waypoint-clear" onclick="clearAllWaypoints()">Clear all</button>
+                        </div>
+                        <div class="waypoint-edit-wrap">
+                            <button type="button" id="editRouteBtn" class="btn-edit-route" onclick="toggleRouteEditing()">Edit route (drag on map)</button>
+                        </div>
+                        <div id="waypointsList">
+                            <div class="waypoints-empty">No waypoints yet. Enter an address or use the map buttons.</div>
+                        </div>
+                        <p class="waypoints-hint">
+                            <strong>Via-points</strong> force the route through a place. <strong>Stops</strong> add dwell time.
+                            <strong>Edit route</strong> lets you drag markers on the line.
+                        </p>
                     </div>
-                    <div class="waypoint-edit-wrap">
-                        <button type="button" id="editRouteBtn" class="btn-edit-route" onclick="toggleRouteEditing()">Edit route (drag on map)</button>
-                    </div>
-                    <div id="waypointsList">
-                        <div class="waypoints-empty">No waypoints yet. Enter an address or use the map buttons.</div>
-                    </div>
-                    <p class="waypoints-hint">
-                        <strong>Via-points</strong> force the route through a place. <strong>Stops</strong> add dwell time.
-                        <strong>Edit route</strong> lets you drag markers on the line.
-                    </p>
-                </div>
+                </details>
 
                 <!-- Vehicle Type Selector -->
                 <div class="form-group">
