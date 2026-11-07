@@ -79,6 +79,7 @@
             '<div style="text-align:center;font-size:12px;max-width:220px;">' +
                 '<div style="margin-bottom:6px;display:flex;justify-content:center;">' + svg + '</div>' +
                 '<strong>Level crossing</strong>' +
+                '<br>Mapped location. Live barrier or train state is unavailable.' +
             '</div>'
         );
     }

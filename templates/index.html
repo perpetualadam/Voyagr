@@ -125,7 +125,7 @@
     <script defer src="/static/js/modules/navigation/caz-info.js?v=20260711s"></script>
     <script defer src="/static/js/modules/map/preview-marker.js?v=20260711zzs"></script>
     <script defer src="/static/js/modules/map/vehicle-marker.js?v=20260727marker4"></script>
-    <script defer src="/static/js/modules/map/osm-map-icons.js?v=20260711s"></script>
+    <script defer src="/static/js/modules/map/osm-map-icons.js?v=20261107crossings1"></script>
     <script defer src="/static/js/modules/map/map-controls.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/modules/map/map-layer-toggles.js?v=20260711zzzr"></script>
     <script defer src="/static/js/modules/map/map-overlay-toggles.js?v=20260711zzzp"></script>
@@ -197,7 +197,7 @@
     <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
     <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20261102trafficcooldown1"></script>
-    <script defer src="/static/js/app/map-overlay-orchestration.js?v=20261107signals1"></script>
+    <script defer src="/static/js/app/map-overlay-orchestration.js?v=20261107crossings1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
     <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20261105arrivalpreview1"></script>
@@ -1130,6 +1130,7 @@
                             <span class="preference-label">Level crossings (map)</span>
                             <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
+                        <p id="osmRailwayCrossingDataStatus" role="status">Level-crossing coverage has not been checked.</p>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Map overlays for traffic signals and level crossings. Separate from the routing toggles above.</p>
 
                         <div class="preference-item">
