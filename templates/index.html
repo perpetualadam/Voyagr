@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107previewui1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107mapicons1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -126,7 +126,7 @@
     <script defer src="/static/js/modules/map/preview-marker.js?v=20260711zzs"></script>
     <script defer src="/static/js/modules/map/vehicle-marker.js?v=20260727marker4"></script>
     <script defer src="/static/js/modules/map/osm-map-icons.js?v=20260711s"></script>
-    <script defer src="/static/js/modules/map/map-controls.js?v=20260827pwa03"></script>
+    <script defer src="/static/js/modules/map/map-controls.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/modules/map/map-layer-toggles.js?v=20260711zzzr"></script>
     <script defer src="/static/js/modules/map/map-overlay-toggles.js?v=20260711zzzp"></script>
     <script defer src="/static/js/modules/map/map-view-3d.js?v=20260711zzzl"></script>
@@ -148,7 +148,7 @@
     <script defer src="/static/js/modules/navigation/road-report.js?v=20260711zzzk"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20260711zzzc"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260711zzzn"></script>
-    <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260711w"></script>
+    <script defer src="/static/js/modules/ui/toggle-ui.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261031phase12fg"></script>
@@ -202,7 +202,7 @@
     <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
-    <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260717ffsheet1"></script>
+    <script defer src="/static/js/app/nav-menu-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
     <script defer src="/static/js/app/profile-store-orchestration.js?v=20260712ab14"></script>
     <script defer src="/static/js/app/settings-orchestration.js?v=20260812loc1"></script>
@@ -238,8 +238,8 @@
     <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261106ghlanes1"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261104arrivalintent1"></script>
-    <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/app/map-recenter-orchestration.js?v=20260827pwa03"></script>
+    <script defer src="/static/js/app/journey-overview-orchestration.js?v=20261107mapicons1"></script>
+    <script defer src="/static/js/app/map-recenter-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/voyagr-app.js?v=20261106playback2"></script>
     <script defer src="/static/js/app.js?v=20260717ffsheet1"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
@@ -556,33 +556,26 @@
                      as a live navigation overlay (was hidden here inside the sidebar). -->
 
                 <!-- Quick Search Buttons -->
-                <div class="quick-search">
-                    <button class="quick-search-btn" onclick="quickSearch('parking')">
-                        <span class="quick-search-btn-icon">🅿️</span>
+                <div class="quick-search map-poi-shortcuts" role="group" aria-label="Nearby places">
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('parking')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
                         <span>Parking</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('fuel')">
-                        <span class="quick-search-btn-icon">⛽</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('fuel')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 21V4h10v17M2 21h12M5 7h6M13 11h2a2 2 0 0 1 2 2v4a2 2 0 0 0 4 0V8l-4-4M18 5v4h3"/></svg>
                         <span>Fuel</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('food')">
-                        <span class="quick-search-btn-icon">🍔</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('food')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 3v6M2 3v4a3 3 0 0 0 6 0V3M5 10v11M15 3v18M15 3c6 0 6 10 0 10"/></svg>
                         <span>Food</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('charging')">
-                        <span class="quick-search-btn-icon">🔌</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('charging')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3v5M16 3v5M6 8h12v4a6 6 0 0 1-12 0ZM12 18v4"/></svg>
                         <span>EV Charge</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('pharmacy')">
-                        <span class="quick-search-btn-icon">💊</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('pharmacy')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5-4 4a5 5 0 0 0 7 7l4-4a5 5 0 0 0-7-7ZM8 6l7 7"/></svg>
                         <span>Pharmacy</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('hospital')">
-                        <span class="quick-search-btn-icon">🏥</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('hospital')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 21V3h18v18ZM9 21v-5h6v5M9 8h6M12 5v6"/></svg>
                         <span>Hospital</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('groceries')">
-                        <span class="quick-search-btn-icon">🛒</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('groceries')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 3h3l3 12h10l3-9H6M9 19h.01M18 19h.01"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
                         <span>Groceries</span>
                     </button>
                 </div>
@@ -1914,32 +1907,30 @@
         <div id="mapHintToast" class="map-hint-toast" role="status" aria-live="polite" hidden></div>
 
         <!-- Map action menu (bottom-right hamburger) -->
-        <div class="nav-control-menu">
-            <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed" hidden>
-                <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
-                <button id="startNavBtn" data-journey-choose class="fab" title="Choose journey mode" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
-                <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
-                <button type="button" id="recenterVehicleFab" class="fab fab-recenter" title="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;" aria-label="Recenter on vehicle">
-                    <svg class="fab-recenter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                    </svg>
-                </button>
-                <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
-                <button type="button" id="currentLocationFab" class="fab" title="Current Location" onclick="getCurrentLocation()">📍</button>
-                <button type="button" id="voiceFab" class="fab" title="Voice control" onclick="toggleVoiceInput()" aria-label="Voice control" aria-pressed="false">🎤</button>
-                <button type="button" id="showCamerasFab" class="fab active" title="Show speed cameras on map" onclick="toggleShowCameras()" aria-label="Show speed cameras on map" aria-pressed="true">📷</button>
-                <button id="roadReportFab" class="fab" title="Report road issue" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
-                <button type="button" id="mapControlsHintFab" class="fab fab-hint" title="Full list of map buttons. Tip: on a phone, press and hold any round icon ~half a second for a bottom caption." onclick="openMapControlsHintModal()" aria-label="Map button guide">i</button>
+        <div class="nav-control-menu map-action-menu">
+            <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed" role="group" aria-label="Map actions" hidden>
+                <button type="button" id="startTrackingBtn" class="fab map-action-button" title="Start GPS tracking" aria-label="Start GPS tracking" onclick="startGPSTracking()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14M8 8a6 6 0 0 0 0 8M16 8a6 6 0 0 1 0 8"/></svg><span class="map-action-label">GPS tracking</span></button>
+                <button type="button" id="startNavBtn" class="fab map-action-button" title="Choose journey mode" aria-label="Choose journey mode" onclick="startNavigation()" data-journey-choose style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z"/></svg><span class="map-action-label">Journey mode</span></button>
+                <button type="button" id="zoomFollowToggle" class="fab map-action-button active" title="Follow vehicle" aria-label="Follow vehicle" onclick="toggleZoomAndFollow()" aria-pressed="true" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 6 15-6-3-6 3Z"/><path d="M4 4H2v4M20 4h2v4M2 16v4h4M22 16v4h-4"/></svg><span class="map-action-label">Follow</span></button>
+                <button type="button" id="recenterVehicleFab" class="fab map-action-button" title="Recenter on vehicle" aria-label="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="map-action-label">Recenter</span></button>
+                <button type="button" id="journeyOverviewBtn" class="fab map-action-button" title="Journey overview" aria-label="Journey overview" onclick="toggleJourneyOverview()" aria-pressed="false" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16"/></svg><span class="map-action-label">Overview</span></button>
+                <button type="button" id="currentLocationFab" class="fab map-action-button" title="Current location" aria-label="Current location" onclick="getCurrentLocation()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="map-action-label">My location</span></button>
+                <button type="button" id="voiceFab" class="fab map-action-button" title="Voice control" aria-label="Voice control" onclick="toggleVoiceInput()" aria-pressed="false"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span class="map-action-label">Voice</span></button>
+                <button type="button" id="showCamerasFab" class="fab map-action-button active" title="Show speed cameras on map" aria-label="Show speed cameras on map" onclick="toggleShowCameras()" aria-pressed="true"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="m8 6 2-3h4l2 3"/><circle cx="12" cy="13" r="4"/></svg><span class="map-action-label">Cameras</span></button>
+                <button type="button" id="roadReportFab" class="fab map-action-button" title="Report road issue" aria-label="Report road issue" onclick="openRoadReportModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4 2 19a1 1 0 0 0 1 2h18a1 1 0 0 0 1-2L14 4a2 2 0 0 0-4 0Z"/><path d="M12 9v5M12 17h.01"/></svg><span class="map-action-label">Report</span></button>
+                <button type="button" id="mapControlsHintFab" class="fab map-action-button" title="Map button guide" aria-label="Map button guide" onclick="openMapControlsHintModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span class="map-action-label">Help</span></button>
             </div>
-            <button id="endNavigationBtn" data-testid="end-navigation" class="fab nav-end-nav-fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
-            <button type="button" id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" aria-label="Toggle map actions menu" aria-expanded="false" aria-controls="navControlButtons">☰</button>
+            <button type="button" id="endNavigationBtn" data-testid="end-navigation" class="fab nav-end-nav-fab" title="End navigation" aria-label="End navigation" onclick="stopTurnByTurnNavigation()" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span class="map-action-label">End</span></button>
+            <button type="button" id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" aria-label="Open map actions" aria-expanded="false" aria-controls="navControlButtons">
+                <span data-nav-menu-icons aria-hidden="true"><svg class="nav-menu-icon-closed" viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg><svg class="nav-menu-icon-open" viewBox="0 0 24 24" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></span><span class="map-action-label" data-nav-menu-label>Map</span>
+            </button>
         </div>
 
         <div id="mapControlsHintModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="mapControlsHintTitle">
             <div class="road-report-modal-backdrop" onclick="closeMapControlsHintModal()"></div>
             <div class="road-report-modal-panel map-controls-hint-panel">
                 <h3 id="mapControlsHintTitle" class="map-controls-hint-title">Map controls</h3>
-                <p id="mapControlsHintIntro" class="map-controls-hint-intro"><strong>Phones &amp; tablets:</strong> press and hold any round map button for about <strong>half a second</strong> — a dark banner appears at the bottom explaining it (desktop: hover for tooltips). Tap the <strong>i</strong> button for this full list. The list below only includes buttons that are visible right now.</p>
+                <p id="mapControlsHintIntro" class="map-controls-hint-intro">Tap <strong>Map</strong> to open labelled actions and <strong>Close</strong> to dismiss them. Keyboard users can press Escape to close. Press and hold a map action for about half a second for its description (desktop: hover for tooltips). <strong>Help</strong> opens this guide. The list below only includes buttons that are visible right now.</p>
                 <ul id="mapControlsHintList" class="map-controls-hint-list"></ul>
                 <button type="button" class="map-controls-hint-close" onclick="closeMapControlsHintModal()">Close</button>
             </div>

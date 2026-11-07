@@ -26,7 +26,7 @@ recovery. It does not establish live WebGL/GPS or deployed-device acceptance.
 Re-run with `node scripts/check-preview-player.cjs` (Chromium required; optionally
 set `PLAYWRIGHT_CHROMIUM_EXECUTABLE`). No production deployment is included.
 
-## 2. Selected route preview (current increment)
+## 2. Selected route preview (implemented; deployed acceptance pending)
 
 - [x] Lead with duration/distance and a clearly labelled navigation action.
   Navigate retains the existing journey chooser and fresh-GPS permission path.
@@ -52,13 +52,20 @@ fixture device/map/provider actions. They cover horizontal overflow, touch targe
 native disclosure keyboard operation, route switching, notices and action wiring.
 They do not establish live WebGL/GPS/provider or production acceptance.
 
-## 3. Map controls
+## 3. Map controls (current increment)
 
-- [ ] Audit existing controls, including Parking POI, before changing placement.
-- [ ] Replace mixed emoji with consistent SVG icons and accessible names.
-- [ ] Keep frequent actions discoverable; use icon-and-label controls when an
+- [x] Audit existing controls, including Parking POI, before changing placement.
+  See [MAP_CONTROL_UI_AUDIT.md](MAP_CONTROL_UI_AUDIT.md) for owners and preserved paths.
+- [x] Replace mixed emoji in map actions and Nearby Places with consistent SVG
+  icons and accessible names. Keep native MapLibre/optional AR owners intact.
+- [x] Keep frequent actions discoverable; use icon-and-label controls when an
   icon's meaning is ambiguous. Preserve selected/pressed states.
-- [ ] Check overlap with maneuver, lane, speed and hazard displays on phones.
+- [x] Check bounded scrolling, touch targets, keyboard/pointer operation and
+  turn/lane/speed overlap with controlled phone/landscape/desktop fixtures.
+- [ ] Accept on deployed phones with live maneuver/lane/speed/hazard overlays,
+  long instructions, text zoom, safe areas and real GPS. Verify Parking results,
+  camera visibility, Follow/Overview, Help/long-press and End Navigation. This
+  remains alongside every previous functional/provider acceptance item.
 
 ## 4. Wider UI consistency and acceptance
 
