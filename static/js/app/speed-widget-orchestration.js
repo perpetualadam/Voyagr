@@ -77,7 +77,7 @@
         return r.value;
     }
 
-    function updateSpeedWidget(currentSpeedInMph, speedLimitInMph, evidence) {
+    function updateSpeedWidget(currentSpeedInMph, speedLimitInMph, evidence, observation) {
         if (speedLimitInMph === undefined) speedLimitInMph = null;
         const widget = document.getElementById('speedWidget');
         if (!widget) return;
@@ -99,6 +99,16 @@
 
         const limitValueEl = document.getElementById('speedLimitValue');
         const limitUnitEl = document.getElementById('speedLimitUnit');
+        const mappedLabel = document.getElementById('speedLimitMappedLabel');
+        const mapped = observation && observation.evidence_state === 'MAPPED_OBSERVATION'
+            && observation.applicable === false && Number.isFinite(observation.speed_limit_mph)
+            && observation.speed_limit_mph > 0 && observation.speed_limit_mph <= 100;
+        if (mappedLabel) mappedLabel.hidden = !mapped;
+        const circle = document.getElementById('speedLimitCircle');
+        if (circle) {
+            circle.style.borderColor = mapped ? '#777' : '#E53935';
+            circle.title = mapped ? 'Mapped speed; check road signs' : '';
+        }
         if (limitValueEl && limitUnitEl) {
             const resolvedLimit = (evidence && evidence.applicable===true && evidence.evidence_state==='MAPPED_POSTED' && speedLimitInMph !== null && speedLimitInMph > 0)
                 ? speedLimitInMph
@@ -110,6 +120,13 @@
                 limitValueEl.textContent = String(speedLimit.sanitizeWidgetDisplayNumber(limitDisplay.value));
                 limitUnitEl.textContent = limitDisplay.unitLabel;
                 widget.style.borderLeft = '4px solid #4285F4';
+            } else if (mapped) {
+                // Display only: do not populate the legal limit used by alerts.
+                setCurrentSpeedLimitMph(null);
+                const display = speedLimit.formatSpeedForWidget(observation.speed_limit_mph, rt().getSpeedUnit(), speedGps);
+                limitValueEl.textContent = String(speedLimit.sanitizeWidgetDisplayNumber(display.value));
+                limitUnitEl.textContent = display.unitLabel;
+                widget.style.borderLeft = '4px solid #999';
             } else {
                 setCurrentSpeedLimitMph(null);
                 limitValueEl.textContent = '—';
@@ -176,7 +193,7 @@
         if (outcomeApply.widgetUpdate) {
             updateSpeedWidget(
                 outcomeApply.widgetUpdate.displaySpeedMph,
-                outcomeApply.widgetUpdate.shownLimit, outcomeApply.legalEvidence
+                outcomeApply.widgetUpdate.shownLimit, outcomeApply.legalEvidence, outcomeApply.speedObservation
             );
         }
 
@@ -195,7 +212,10 @@
             var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
             var legal=bundle && bundle.speed;
             var known=legal && legal.applicable===true && legal.evidence_state==='MAPPED_POSTED';
+            var observation=!known && root.VoyagrRoadMatchOrchestration.getSpeedObservation
+                ? root.VoyagrRoadMatchOrchestration.getSpeedObservation() : null;
             applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
+                speedObservation:observation,
                 statePatch:{currentLimitMph:known ? legal.speed_limit_mph : null,currentSpeedLimitMph:known ? legal.speed_limit_mph : null},
                 widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:known ? legal.speed_limit_mph : null}});
             return;

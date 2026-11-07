@@ -12,6 +12,18 @@ from voyagr.utils.osrm import (
 
 
 class TestOsrmRoadClassInference(unittest.TestCase):
+    def test_native_lanes_are_bound_to_the_first_maneuver_intersection(self):
+        coords=[(51.5,-.12),(51.51,-.11),(51.52,-.10)]
+        step={'maneuver':{'type':'turn','modifier':'left','location':[-.11,51.51]},
+              'intersections':[{'location':[-.11,51.51],'lanes':[
+                  {'indications':['left'],'valid':True},{'indications':['straight'],'valid':False}]}]}
+        maneuvers=build_osrm_maneuvers({'legs':[{'steps':[step]}]},coords)
+        self.assertEqual(maneuvers[0]['lane_source'],'OSRM')
+        self.assertEqual(maneuvers[0]['begin_shape_index'],1)
+        self.assertTrue(maneuvers[0]['lanes'][0]['active'])
+        step['intersections'][0]['location']=[-.10,51.52]
+        self.assertNotIn('lanes',build_osrm_maneuvers({'legs':[{'steps':[step]}]},coords)[0])
+
     def test_motorway_from_ref(self):
         self.assertEqual(infer_road_class_from_names('M1', []), 'motorway')
 

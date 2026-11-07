@@ -32,7 +32,8 @@
         if (!btn || !plan.shouldApply) return;
         btn.classList.toggle('active', plan.active);
         btn.style.background = plan.background;
-        btn.innerHTML = plan.innerHtml;
+        if(btn.hasAttribute('aria-pressed'))btn.setAttribute('aria-pressed',String(!!plan.active));
+        if(!btn.querySelector('[data-map-action-icon]'))btn.innerHTML = plan.innerHtml;
     }
 
     function metersMapCenterFromVehicle() {

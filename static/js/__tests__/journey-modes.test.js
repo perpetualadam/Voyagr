@@ -70,6 +70,127 @@ test('simulation pause/resume/speed/restart and owned cleanup leave live resourc
     expect(marker.setLngLat.mock.calls.at(-1)).not.toEqual(moving);expect(Modes.restart()).toBe(true);expect(marker.setLngLat.mock.calls.at(-1)[0]).toEqual([-1,53]);
     expect(Modes.exit()).toBe(true);expect(context.layers.size).toBe(initial);expect(markerEl.isConnected).toBe(false);expect(Modes.getState()).toBe('PLANNING');
 });
+
+test('compact player exposes named icon actions and transfers keyboard focus between play and pause',()=>{
+    const pause=document.getElementById('simulationPause'),resume=document.getElementById('simulationResume');
+    expect(Modes.startSimulation()).toBe(true);
+    expect(pause.hidden).toBe(false);expect(resume.hidden).toBe(true);
+    for(const id of ['simulationPause','simulationResume','simulationRestart','simulationExit']){
+        const button=document.getElementById(id);
+        expect(button.getAttribute('aria-label')).toMatch(/route preview/);
+        expect(button.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
+    }
+    pause.focus();Modes.pause();
+    expect(pause.hidden).toBe(true);expect(resume.hidden).toBe(false);
+    expect(document.activeElement).toBe(resume);
+    expect(document.getElementById('simulationState').textContent).toBe('Paused');
+    Modes.resume();expect(document.activeElement).toBe(pause);
+    expect(document.getElementById('simulationState').textContent).toBe('Playing');
+    Modes.seek(100);
+    expect(resume.disabled).toBe(true);
+    expect(document.activeElement).toBe(document.getElementById('simulationRestart'));
+    expect(document.getElementById('simulationState').textContent).toBe('Preview complete');
+    Modes.restart();expect(pause.hidden).toBe(false);expect(pause.disabled).toBe(false);
+    expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(calls.persistCompletedTrip).not.toHaveBeenCalled();
+});
+
+test('compact player keeps recovery feedback outside collapsed details and disables playback until exit succeeds',()=>{
+    Modes.startSimulation();context.mapHelpers.isPolylineLayerRemoved=()=>false;
+    expect(Modes.exit()).toBe(false);
+    const recovery=document.getElementById('simulationRecovery');
+    expect(recovery.hidden).toBe(false);expect(recovery.closest('details')).toBeNull();
+    expect(document.getElementById('simulationIndicator').hidden).toBe(false);
+    expect(document.getElementById('simulationState').textContent).toBe('Recovery required');
+    for(const id of ['simulationPause','simulationResume','simulationRestart','simulationSpeed','simulationPosition','simulationFollow'])expect(document.getElementById(id).disabled).toBe(true);
+    expect(document.getElementById('simulationExit').disabled).toBe(false);
+    context.mapHelpers.isPolylineLayerRemoved=()=>true;
+    expect(Modes.exit()).toBe(true);expect(document.getElementById('simulationControls').hidden).toBe(true);
+    expect(runtime.acceptPosition).not.toHaveBeenCalled();
+});
+
+test('route preview follows synthetic positions, supports seeking and restores the captured camera',()=>{
+    const view={center:[-1.4,53.2],zoom:11,bearing:20,pitch:0};
+    runtime.captureSimulationView=jest.fn(()=>view);
+    runtime.moveSimulationCamera=jest.fn();runtime.restoreSimulationView=jest.fn();runtime.showSimulationMap=jest.fn();runtime.stopSimulationCamera=jest.fn();
+    expect(Modes.startSimulation()).toBe(true);
+    expect(runtime.moveSimulationCamera).toHaveBeenCalledWith(expect.objectContaining({lat:53,lon:-1,heading_deg:expect.any(Number)}),true);
+    expect(runtime.showSimulationMap).toHaveBeenCalledTimes(1);
+    expect(Modes.setSpeed(100)).toBe(true);
+    expect(document.getElementById('simulationSpeed').value).toBe('100');
+    expect(Modes.seek(50)).toBe(true);
+    expect(document.getElementById('simulationPercent').textContent).toBe('50%');
+    expect(document.getElementById('simulationTiming').textContent).toContain('100×');
+    Modes.setFollow(false);runtime.moveSimulationCamera.mockClear();
+    expect(runtime.stopSimulationCamera).toHaveBeenCalledTimes(1);
+    Modes.pause();Modes.seek(25);jest.advanceTimersByTime(1000);
+    expect(runtime.moveSimulationCamera).not.toHaveBeenCalled();
+    expect(document.getElementById('simulationPercent').textContent).toBe('25%');
+    Modes.setFollow(true);expect(runtime.moveSimulationCamera).toHaveBeenCalledTimes(1);
+    expect(Modes.seek(100)).toBe(true);
+    expect(Modes.getState()).toBe('SIMULATION_PAUSED');
+    expect(document.getElementById('simulationResume').disabled).toBe(true);
+    expect(document.getElementById('simulationNextTurn').textContent).toContain('preview complete');
+    Modes.seek(50);expect(document.getElementById('simulationResume').disabled).toBe(false);
+    expect(Modes.seek(-1)).toBe(false);expect(Modes.seek(Infinity)).toBe(false);expect(Modes.seek(101)).toBe(false);
+    expect(Modes.exit()).toBe(true);expect(runtime.restoreSimulationView).toHaveBeenCalledWith(view);
+    expect(runtime.stopSimulationCamera).toHaveBeenCalledTimes(2);
+    expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
+    expect(calls.persistCompletedTrip).not.toHaveBeenCalled();
+});
+
+test('camera failure during preview startup cleans owned resources without entering navigation',()=>{
+    const initial=context.layers.size;
+    runtime.captureSimulationView=()=>({center:[-1,53],zoom:12,bearing:0,pitch:0});
+    runtime.moveSimulationCamera=()=>{throw Error('Camera unavailable');};
+    runtime.restoreSimulationView=jest.fn();
+    expect(Modes.startSimulation()).toBe(false);
+    expect(context.layers.size).toBe(initial);expect(markerEl.isConnected).toBe(false);
+    expect(runtime.restoreSimulationView).toHaveBeenCalledTimes(1);
+    expect(Life.getRouteInProgress()).toBe(false);expect(runtime.acceptPosition).not.toHaveBeenCalled();
+});
+
+test('backgrounding pauses playback and a failed layer cleanup does not restore over owned resources',()=>{
+    runtime.captureSimulationView=()=>({center:[-1,53],zoom:12,bearing:0,pitch:0});
+    runtime.moveSimulationCamera=jest.fn();runtime.restoreSimulationView=jest.fn();
+    Modes.startSimulation();
+    const hidden=jest.spyOn(document,'hidden','get').mockReturnValue(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(Modes.getState()).toBe('SIMULATION_PAUSED');
+    const cameraCalls=runtime.moveSimulationCamera.mock.calls.length;
+    jest.advanceTimersByTime(10000);expect(runtime.moveSimulationCamera).toHaveBeenCalledTimes(cameraCalls);
+    hidden.mockRestore();
+    context.mapHelpers.isPolylineLayerRemoved=()=>false;
+    expect(Modes.exit()).toBe(false);expect(runtime.restoreSimulationView).not.toHaveBeenCalled();
+    const beforeRecovery=runtime.moveSimulationCamera.mock.calls.length;
+    Modes.setSpeed(20);Modes.setFollow(true);expect(Modes.seek(50)).toBe(false);
+    expect(runtime.moveSimulationCamera).toHaveBeenCalledTimes(beforeRecovery);
+    context.mapHelpers.isPolylineLayerRemoved=()=>true;
+    expect(Modes.exit()).toBe(true);expect(runtime.restoreSimulationView).toHaveBeenCalledTimes(1);
+});
+
+test('playback computes route-relative headings, upcoming maneuvers and the final arrival',()=>{
+    const p=Plan.inspection({geometry:[[53,-1],[53.001,-1],[53.001,-.999]],duration_minutes:2,
+        maneuvers:[{begin_shape_index:0,instruction:'Head north'},{begin_shape_index:1,instruction:'Turn right'},
+            {begin_shape_index:2,instruction:'Arrive'}]},AI);
+    const start=Plan.position(p,0),afterTurn=Plan.position(p,p.lengths[1]+1),end=Plan.position(p,p.total);
+    expect(start.heading_deg).toBeCloseTo(0,1);expect(start.next_instruction).toBe('Turn right');
+    expect(start.next_maneuver_m).toBeGreaterThan(100);
+    expect(afterTurn.heading_deg).toBeCloseTo(90,1);expect(afterTurn.next_instruction).toBe('Arrive');
+    expect(end).toMatchObject({lat:53.001,lon:-.999,complete:true,progress:1,instruction:'Arrive',next_instruction:null});
+});
+
+test('phone preview framing keeps the vehicle above playback controls without changing map padding',()=>{
+    const position={lat:53,lon:-1,heading_deg:90};
+    for(const height of [360,700]){
+        const frame={top:0,left:0,width:360,height},panel={left:12,right:348,top:height-80-height*.45};
+        const camera=Plan.previewCamera(position,true,frame,panel);
+        expect(height/2+camera.offset[1]+20).toBeLessThan(panel.top);
+        expect(camera).toMatchObject({center:[-1,53],bearing:90,zoom:16,pitch:45});
+        expect(camera.padding).toBeUndefined();
+    }
+    const desktop=Plan.previewCamera(position,false,{top:0,left:0,width:1200,height:700},{left:12,right:432,top:300});
+    expect(desktop.offset).toEqual([0,0]);expect(desktop.zoom).toBeUndefined();expect(desktop.pitch).toBeUndefined();
+});
 test('unconfirmed map cleanup blocks live mode and obtains no GPS fix',async()=>{
     Modes.startSimulation();context.mapHelpers.isPolylineLayerRemoved=()=>false;
     expect(await Modes.navigateFromGPS()).toBe(false);expect(Modes.getState()).toBe('RECOVERY_REQUIRED');expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
@@ -233,4 +354,51 @@ test('remaining stops cannot be taken from an alternative unrelated to active pr
 test('unindexed maneuvers do not fabricate timed turn instructions',()=>{
     const r=selected();r.maneuvers=[{instruction:'Turn somewhere without shape evidence'}];
     const inspected=Plan.inspection(r,AI);expect(Plan.position(inspected,0).instruction).toMatch(/instructions unavailable/);
+});
+
+test('journey chooser displays endpoint gaps and preserves the selected planning locations',()=>{
+    const route=selected();
+    Object.assign(route.avoidance_assessment.origin_integrity,{
+        navigation_allowed:false,status:'UNVERIFIED',reason:'material_endpoint_relocation',
+        origin_displacement_m:23.651,destination_displacement_m:22.793
+    });
+    preview(route);
+    const before=JSON.stringify(window.lastCalculatedRoute);
+    expect(Modes.choose()).toBe(true);
+    const message=document.getElementById('journeyModeStatus').textContent;
+    expect(message).toContain('start: about 24 m');
+    expect(message).toContain('destination: about 23 m');
+    expect(message).toContain('separate driving arrival point');
+    expect(message).toContain('actual GPS location');
+    expect(JSON.stringify(window.lastCalculatedRoute)).toBe(before);
+    expect(Modes.liveStartPermitted(route)).toBe(false);
+    expect(runtime.fetch).not.toHaveBeenCalled();
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+});
+
+test('GPS recalculation carries the explicit arrival and retained city as distinct context',async()=>{
+    const route=selected();
+    route.journey_context.arrival_choice={version:1,target:Plan.coordinate(route.destination),requested_destination:{coordinates:[53.5227681,-1.1335312],kind:'searched',label:'Doncaster'}};
+    preview(route);
+    expect(await Modes.navigateFromGPS()).toBe(true);
+    const body=JSON.parse(runtime.fetch.mock.calls[0][1].body);
+    expect(body.end).toBe(route.destination);
+    expect(body.journey_context.arrival_choice.requested_destination.label).toBe('Doncaster');
+    expect(body.journey_context.arrival_choice.target).toEqual(Plan.coordinate(route.destination));
+    expect(body.journey_context.purpose).toBe('live_gps');
+});
+
+test.each(['roadside','vehicle_entrance'])('preview-only %s intent does not start GPS acquisition or replace the journey',async mode=>{
+    const route=selected();route.journey_context.arrival_intent={version:1,mode,target:Plan.coordinate(route.destination)};preview(route);
+    expect(await Modes.navigateFromGPS()).toBe(false);
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+    expect(runtime.fetch).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();
+    expect(context.status.mock.calls.at(-1)[0]).toContain('preview only');
+});
+test('default versioned intent survives the existing fresh-GPS recalculation protocol',async()=>{
+    const route=selected();route.journey_context.arrival_intent={version:1,mode:'place',status:'DECLARED',target:Plan.coordinate(route.destination)};preview(route);
+    expect(await Modes.navigateFromGPS()).toBe(true);
+    const body=JSON.parse(runtime.fetch.mock.calls[0][1].body);
+    expect(body.journey_context.arrival_intent).toEqual(route.journey_context.arrival_intent);
+    expect(Life.getRouteInProgress()).toBe(true);
 });

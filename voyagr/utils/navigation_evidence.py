@@ -6,7 +6,8 @@ import time
 UK_JURISDICTIONS={'England','Scotland','Wales','Northern Ireland'}
 TURNS={'left':{'left','slight_left'},'right':{'right','slight_right'},'straight':{'through'},
        'exit_left':{'left','slight_left'},'exit_right':{'right','slight_right'},
-       'slight_left':{'slight_left'},'slight_right':{'slight_right'}}
+       'slight_left':{'slight_left'},'slight_right':{'slight_right'},
+       'sharp_left':{'sharp_left'},'sharp_right':{'sharp_right'},'uturn':{'reverse'}}
 
 
 def lane_evidence(tags=None,*,road_matched=False,direction=None,maneuver='straight',vehicle='car'):

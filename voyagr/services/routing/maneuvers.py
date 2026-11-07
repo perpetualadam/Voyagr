@@ -68,7 +68,12 @@ def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = Fa
             out['roundabout_exit_count'] = 0
     lanes = maneuver.get('lanes')
     if lanes:
-        out['lanes'] = lanes
+        from voyagr.utils.provider_lanes import normalize_provider_lanes
+        normalized = normalize_provider_lanes(lanes, 'Valhalla')
+        if normalized:
+            out['lanes'] = normalized
+            if any(lane['active_indications'] for lane in normalized):
+                out['lane_source'] = 'Valhalla'
     rc = infer_road_class_from_names(
         None,
         maneuver.get('begin_street_names') or maneuver.get('street_names') or [],

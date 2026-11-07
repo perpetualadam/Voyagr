@@ -19,14 +19,14 @@
     var AR_FAB_VISIBLE_ICON = '👓';
 
     var MAP_CONTROLS_HINT_SECTIONS = [
-        { title: 'Map (round buttons)', selector: '#navControlButtons .fab, .nav-control-menu > .fab' },
+        { title: 'Map actions', selector: '#navControlButtons .fab, .nav-control-menu > .fab' },
         { title: 'Bottom sheet toolbar', selector: '.sheet-toolbar .sheet-icon-btn' },
     ];
 
     var MAP_CONTROLS_HINT_EXTRAS = [
-        '\u2014 After you calculate a route, \u201cStart navigation\u201d can appear on the map.',
-        '\u2014 During turn-by-turn, Zoom & follow, Recenter, and Journey overview may appear as round buttons.',
-        '\u2014 Long-press any round map icon ~\u00bds for this same text as a bottom banner.',
+        '\u2014 After you calculate a route, Journey mode can appear in map actions.',
+        '\u2014 During turn-by-turn, Follow, Recenter, and Overview may appear in map actions.',
+        '\u2014 Long-press any map action ~\u00bds for its description as a bottom banner.',
     ];
 
     var MAP_CONTROLS_HINT_SKIP_IDS = ['mapControlsHintFab', 'navMenuToggle'];

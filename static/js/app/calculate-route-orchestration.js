@@ -470,6 +470,7 @@
 
         if (apply.degradedLogWarning) {
             console.warn(
+                apply.degradedLogPrefix || '[Route API] Route limitations:',
                 apply.degradedLogWarning.warning,
                 apply.degradedLogWarning.engines
             );
@@ -592,13 +593,13 @@
         var planningToken=modes&&modes.captureIntent();
         var ticket = integrity ? integrity.begin(localStorage) : null;
         try {
-            var RR = rt().routingRequest();
-            var startInput = document.getElementById('start');
-            var endInput = document.getElementById('end');
-            var preflightOrch = RR.buildCalculateRoutePreflightOrchestrationPlan(
-                RR.buildCalculateRouteInputCollectPlan({ startInput: startInput, endInput: endInput }),
-                rt().getIsGeocoding()
-            );
+        var RR = rt().routingRequest();
+        var startInput = document.getElementById('start');
+        var endInput = document.getElementById('end');
+        var preflightOrch = RR.buildCalculateRoutePreflightOrchestrationPlan(
+            RR.buildCalculateRouteInputCollectPlan({ startInput: startInput, endInput: endInput }),
+            rt().getIsGeocoding()
+        );
 
             if (!applyCalculateRoutePreflightFromPlan(preflightOrch.apply)) return;
 
@@ -620,23 +621,54 @@
                 RR.buildCalculateRouteLoadingApplyPlan(RR.buildCalculateRouteLoadingExecutePlan())
             );
 
-            var apiOrch = RR.buildCalculateRouteApiOrchestrationPlan(
-                collectCalculateRouteApiInput(geocodedStart, geocodedEnd)
-            );
-            var routePlan = apiOrch.routePlan;
-            var fetchPlan = apiOrch.fetchPlan;
-            if (root.VoyagrJourneyPlan) fetchPlan.body.journey_context=root.VoyagrJourneyPlan.requestContext(fetchPlan.body,startInput,endInput);
-            var requestLog = apiOrch.requestLog;
+        var apiOrch = RR.buildCalculateRouteApiOrchestrationPlan(
+            collectCalculateRouteApiInput(geocodedStart, geocodedEnd)
+        );
+        var routePlan = apiOrch.routePlan;
+        var fetchPlan = apiOrch.fetchPlan;
+        if (root.VoyagrJourneyPlan) {
+            fetchPlan.body.journey_context=root.VoyagrJourneyPlan.applyDrivingArrival(fetchPlan.body,startInput,endInput,document.getElementById('drivingArrival'));
+            geocodedEnd=fetchPlan.body.end;
+            if(fetchPlan.body.journey_context.arrival_choice)end=fetchPlan.body.journey_context.destination.label;
+        }
+        var requestLog = apiOrch.requestLog;
 
-            console.log(requestLog.requestLogPrefix);
-            console.log(requestLog.viaPointsLogMessage);
-            console.log(requestLog.multiDropLogMessage);
+        console.log(requestLog.requestLogPrefix);
+        console.log(requestLog.viaPointsLogMessage);
+        console.log(requestLog.multiDropLogMessage);
 
-            return await fetch(fetchPlan.apiPath, {
-                ...(integrity ? integrity.fetchOptions(ticket) : {}),
-                method: fetchPlan.method,
-                headers: fetchPlan.headers,
-                body: JSON.stringify(integrity ? integrity.augment(fetchPlan.body, localStorage, geocodedStart) : fetchPlan.body),
+        return await fetch(fetchPlan.apiPath, {
+            ...(integrity ? integrity.fetchOptions(ticket) : {}),
+            method: fetchPlan.method,
+            headers: fetchPlan.headers,
+            body: JSON.stringify(integrity ? integrity.augment(fetchPlan.body, localStorage, geocodedStart) : fetchPlan.body),
+        })
+            .then(function (response) { return applyCalculateRouteFetchHttpResponse(response, fetchPlan); })
+            .then(function (data) {
+                if (integrity && !integrity.current(ticket, localStorage)) {
+                    if (integrity.isLatest(ticket)) {
+                        hideRouteProgressBar();
+                        rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
+                    }
+                    return;
+                }
+                if (window.VoyagrJourneyPlan && !window.VoyagrJourneyPlan.responseArrivalIntentMatches(
+                    fetchPlan.body.journey_context && fetchPlan.body.journey_context.arrival_intent, data)) {
+                    hideRouteProgressBar();
+                    rt().call.showStatus('Arrival-intent modules differ. Reload online and recalculate; previous journey retained.', 'warning');
+                    return false;
+                }
+                if (integrity) integrity.tag(data,ticket);
+                if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
+                    storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
+                })) { hideRouteProgressBar(); return; }
+                return applyCalculateRouteResponseFromPlan(
+                    RR.buildCalculateRouteResponseApplyPlan(
+                        RR.buildCalculateRouteResponseExecutePlan(data, modes?false:rt().getRouteInProgress())
+                    ),
+                    data,
+                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken }
+                );
             })
                 .then(function (response) { return applyCalculateRouteFetchHttpResponse(response, fetchPlan); })
                 .then(function (data) {
@@ -646,40 +678,20 @@
                         }
                         return;
                     }
-                    if (integrity) integrity.tag(data,ticket);
-                    if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
-                        storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
-                    })) { return; }
-                    return applyCalculateRouteResponseFromPlan(
-                        RR.buildCalculateRouteResponseApplyPlan(
-                            RR.buildCalculateRouteResponseExecutePlan(data, modes?false:rt().getRouteInProgress())
-                        ),
-                        data,
-                        { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken,
-                            requestCurrent:function(){return !integrity||integrity.current(ticket,localStorage);} }
-                    );
-                })
-                .catch(function (error) {
-                    if (integrity && !integrity.current(ticket, localStorage)) {
-                        if (integrity.isLatest(ticket)) {
-                            rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
-                        }
-                        return;
-                    }
-                    applyCalculateRouteFetchErrorFromPlan(
-                        RR.buildCalculateRouteFetchErrorApplyPlan(error),
-                        error
-                    );
-                });
-        } finally {
-            // A settled failure may resolve false rather than throw. Only this
-            // ticket may retire its indicator; a newer request owns its progress.
-            try {
-                if (integrity && integrity.isLatest(ticket)) hideRouteProgressBar();
-            } finally {
-                if (integrity) integrity.finish(ticket);
+                    return;
+                }
+                applyCalculateRouteFetchErrorFromPlan(
+                    RR.buildCalculateRouteFetchErrorApplyPlan(error),
+                    error
+                );
+            });
+        } catch(error) {
+            if(!integrity||integrity.current(ticket,localStorage)){
+                hideRouteProgressBar();
+                rt().call.showStatus((error&&error.message?error.message:'Route request could not be prepared.')+' Previous journey retained.','warning');
             }
-        }
+            return false;
+        } finally { if(integrity)integrity.finish(ticket); }
     }
 
     function bind(nextRuntime) {

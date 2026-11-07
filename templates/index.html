@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261031phase12fg" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107arrivaloptions1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -94,9 +94,10 @@
     <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/speech-synthesis.js?v=20260712voice1"></script>
     <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20261027phase6a"></script>
-    <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20261027phase6a"></script>
-    <script defer src="/static/js/modules/navigation/road-matching.js?v=20261027phase8a"></script>
-    <script defer src="/static/js/app/road-match-orchestration.js?v=20261027phase8a"></script>
+    <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20261106ghlanes1"></script>
+    <script defer src="/static/js/modules/navigation/road-matching.js?v=20261106ghlanes1"></script>
+    <script defer src="/static/js/modules/navigation/lane-connectivity.js?v=20261106ghlanes1"></script>
+    <script defer src="/static/js/app/road-match-orchestration.js?v=20261106ghlanes1"></script>
     <script defer src="/static/js/modules/navigation/route-geometry.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/units.js?v=20260711zzzd"></script>
     <script defer src="/static/js/modules/navigation/traffic-change.js?v=20260715opt1"></script>
@@ -108,11 +109,11 @@
     <script defer src="/static/js/modules/navigation/trip-history.js?v=20260712aacg"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027phase5a"></script>
-    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261031phase12fgr9"></script>
+    <script defer src="/static/js/modules/navigation/route-selection.js?v=20261104arrivalpresentation1"></script>
     <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261031phase12fgremediation"></script>
-    <script defer src="/static/js/modules/navigation/poi-search.js?v=20260711zb"></script>
+    <script defer src="/static/js/modules/navigation/poi-search.js?v=20261106parkingpoi1"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20260712aace"></script>
-    <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20260712aacn"></script>
+    <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20261106parkingfees1"></script>
     <script defer src="/static/js/modules/navigation/offline-navigation.js?v=20261031phase12fgr9"></script>
     <script defer src="/static/js/modules/navigation/ml-predictions.js?v=20260711zzzf"></script>
     <script defer src="/static/js/modules/navigation/search-autocomplete.js?v=20260711s"></script>
@@ -125,32 +126,32 @@
     <script defer src="/static/js/modules/map/preview-marker.js?v=20260711zzs"></script>
     <script defer src="/static/js/modules/map/vehicle-marker.js?v=20260727marker4"></script>
     <script defer src="/static/js/modules/map/osm-map-icons.js?v=20260711s"></script>
-    <script defer src="/static/js/modules/map/map-controls.js?v=20260827pwa03"></script>
+    <script defer src="/static/js/modules/map/map-controls.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/modules/map/map-layer-toggles.js?v=20260711zzzr"></script>
     <script defer src="/static/js/modules/map/map-overlay-toggles.js?v=20260711zzzp"></script>
     <script defer src="/static/js/modules/map/map-view-3d.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/map/map-theme.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/modules/map/center-on-location.js?v=20260919loc1"></script>
-    <script defer src="/static/js/modules/map/map-recovery.js?v=20260728maprec1"></script>
+    <script defer src="/static/js/modules/map/map-recovery.js?v=20261102styleready1"></script>
     <script defer src="/static/js/modules/map/camera-map-markers.js?v=20260711zzzv"></script>
     <script defer src="/static/js/modules/map/hazard-map-markers.js?v=20260712aabd"></script>
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
     <script defer src="/static/js/modules/ui/pwa-install.js?v=20260906app01"></script>
     <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
-    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261031phase12fgr5r6"></script>
-    <script defer src="/static/js/app/navigation-safety-ux.js?v=20261031phase12fg"></script>
-    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261031phase12fgremediation"></script>
-    <script defer src="/static/js/app/journey-modes.js?v=20261031phase12fgr9"></script>
-    <script defer src="/static/js/modules/navigation/routing-request.js?v=20261031phase12fgremediation"></script>
+    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
+    <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
+    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261107arrivaloptions1"></script>
+    <script defer src="/static/js/app/journey-modes.js?v=20261106playerui1"></script>
+    <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
     <script defer src="/static/js/modules/navigation/road-report.js?v=20260711zzzk"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20260711zzzc"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260711zzzn"></script>
-    <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260711w"></script>
+    <script defer src="/static/js/modules/ui/toggle-ui.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
-    <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261031phase12fg"></script>
+    <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261107sheettools1"></script>
     <script defer src="/static/js/modules/navigation/route-prefs.js?v=20260712aaci"></script>
     <script defer src="/static/js/modules/navigation/recent-destinations.js?v=20260711e"></script>
     <script defer src="/static/js/modules/util/html.js?v=20260711e"></script>
@@ -165,7 +166,7 @@
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260811noshake"></script>
     <script defer src="/static/js/modules/navigation/google-plus-codes-prefs.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/voyagr-modules.js?v=20260812loc1"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20261027maprec2"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20261102styleready1"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
@@ -178,15 +179,15 @@
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
-    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261031phase12fgr7r8"></script>
-    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261027phase7a"></script>
+    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261107arrivaloptions1"></script>
+    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261106speedobservations1"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
     <script defer src="/static/js/app/route-preferences-orchestration.js?v=20260712ab24"></script>
     <script defer src="/static/js/app/offline-navigation-orchestration.js?v=20261031phase12fgr9"></script>
     <script defer src="/static/js/app/search-favorites-orchestration.js?v=20261031phase12fgr7r8"></script>
-    <script defer src="/static/js/app/poi-search-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/poi-search-orchestration.js?v=20261106parkingpoi1"></script>
     <script defer src="/static/js/app/best-time-leave-orchestration.js?v=20260712aaen"></script>
     <script defer src="/static/js/app/caz-orchestration.js?v=20260712aaeo"></script>
     <script defer src="/static/js/app/route-avoidance-orchestration.js?v=20260712aaeo"></script>
@@ -194,13 +195,14 @@
     <script defer src="/static/js/app/mobile-pwa-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/hazard-preferences-orchestration.js?v=20260712aaer"></script>
     <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
-    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261031phase12fgr7r8"></script>
-    <script defer src="/static/js/app/map-layers-orchestration.js?v=20260712ab47"></script>
+    <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261105arrivalpreview1"></script>
+    <script defer src="/static/js/app/map-layers-orchestration.js?v=20261102trafficcooldown1"></script>
     <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
-    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
+    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
-    <script defer src="/static/js/app/nav-menu-orchestration.js?v=20260717ffsheet1"></script>
+    <script defer src="/static/js/app/nav-menu-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
     <script defer src="/static/js/app/profile-store-orchestration.js?v=20260712ab14"></script>
     <script defer src="/static/js/app/settings-orchestration.js?v=20260812loc1"></script>
@@ -212,7 +214,7 @@
     <script defer src="/static/js/app/phase3-features-orchestration.js?v=20260712aaf9"></script>
     <script defer src="/static/js/app/gesture-control-orchestration.js?v=20260811noshake"></script>
     <script defer src="/static/js/app/battery-saving-orchestration.js?v=20260712aafc"></script>
-    <script defer src="/static/js/app/location-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/location-orchestration.js?v=20261103drivingarrival1"></script>
     <script defer src="/static/js/app/units-preferences-orchestration.js?v=20260712ab54"></script>
     <script defer src="/static/js/app/smart-zoom-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/center-on-location-orchestration.js?v=20261031phase12fg"></script>
@@ -226,19 +228,19 @@
     <script defer src="/static/js/app/road-report-orchestration.js?v=20261031phase12fg"></script>
     <script defer src="/static/js/app/service-worker-orchestration.js?v=20260727swreload1"></script>
     <script defer src="/static/js/app/pwa-lifecycle-orchestration.js?v=20260712ab0e"></script>
-    <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20260811dash1"></script>
+    <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20261107sheettools1"></script>
     <script defer src="/static/js/app/driver-camera-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/recent-destinations-orchestration.js?v=20260712ab10"></script>
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/ar-navigation-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712dark4"></script>
     <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261031phase12fgr9"></script>
-    <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261027phase7a"></script>
+    <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261106ghlanes1"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
-    <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261102progresssettlement3"></script>
-    <script defer src="/static/js/app/journey-overview-orchestration.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/app/map-recenter-orchestration.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20261031phase12fgr9"></script>
+    <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261104arrivalintent1"></script>
+    <script defer src="/static/js/app/journey-overview-orchestration.js?v=20261107mapicons1"></script>
+    <script defer src="/static/js/app/map-recenter-orchestration.js?v=20261107mapicons1"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20261106playback2"></script>
     <script defer src="/static/js/app.js?v=20260717ffsheet1"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -388,17 +390,18 @@
             <div class="bottom-sheet-header">
                 <div class="sheet-header-inner">
                     <h2 id="sheetTitle" class="sheet-title">🗺️ Navigation</h2>
-                    <nav class="sheet-toolbar" aria-label="Quick navigation">
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--saved" title="Saved Routes" onclick="switchTab('savedRoutes')">⭐</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--analytics" title="Analytics" onclick="switchTab('routeAnalytics')">📊</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--share" title="Share Route" onclick="switchTab('routeSharing')">🔗</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" onclick="switchTab('routeComparison')">🛣️</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" onclick="switchTab('tripHistory')">📋</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" onclick="switchTab('dashcam')">📹</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--premium" title="Voyager Premium — subscribe &amp; tips" onclick="openVoyagerPremiumSection()">⚡</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" onclick="switchTab('settings')">⚙️</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" onclick="collapseBottomSheet()">▼</button>
+                    <nav class="sheet-toolbar" aria-label="Quick navigation" aria-describedby="sheetToolbarHint" onfocusin="VoyagrTabNavigationOrchestration.revealToolbarFocus(event)" onclick="if(event.target.closest('[data-sheet-tab]')) expandBottomSheet()">
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--saved" title="Saved Routes" aria-label="Saved Routes" onclick="switchTab('savedRoutes')" data-sheet-tab="savedRoutes" aria-controls="savedRoutesTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/></svg><span class="sheet-tool-label">Saved</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--analytics" title="Analytics" aria-label="Analytics" onclick="switchTab('routeAnalytics')" data-sheet-tab="routeAnalytics" aria-controls="routeAnalyticsTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span class="sheet-tool-label">Stats</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--share" title="Share Route" aria-label="Share Route" onclick="switchTab('routeSharing')" data-sheet-tab="routeSharing" aria-controls="routeSharingTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 11 6-4M9 13l6 4"/></svg><span class="sheet-tool-label">Share</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" aria-label="Route Options" onclick="switchTab('routeComparison')" data-sheet-tab="routeComparison" aria-controls="routeComparisonTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V7a3 3 0 0 1 6 0v10a3 3 0 0 0 6 0V4M13 7l3-3 3 3"/></svg><span class="sheet-tool-label">Routes</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" aria-label="Trip History" onclick="switchTab('tripHistory')" data-sheet-tab="tripHistory" aria-controls="tripHistoryTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6M12 7v6l4 2"/></svg><span class="sheet-tool-label">History</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" aria-label="Dashcam" onclick="switchTab('dashcam')" data-sheet-tab="dashcam" aria-controls="dashcamTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 9 6-4v14l-6-4"/></svg><span class="sheet-tool-label">Dashcam</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--premium" title="Voyager Premium — subscribe &amp; tips" aria-label="Voyager Premium — subscribe &amp; tips" onclick="openVoyagerPremiumSection()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m13 2-9 12h7l-1 8 10-13h-7Z"/></svg><span class="sheet-tool-label">Premium</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" aria-label="Settings" onclick="switchTab('settings')" data-sheet-tab="settings" aria-controls="settingsTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span class="sheet-tool-label">Settings</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" aria-label="Collapse" onclick="collapseBottomSheet()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 7 7 7-7"/></svg><span class="sheet-tool-label">Collapse</span></button>
                     </nav>
+                    <p id="sheetToolbarHint" class="sheet-toolbar-hint">Swipe or scroll for more tools.</p>
                 </div>
             </div>
 
@@ -438,6 +441,36 @@
                         <div class="search-history-dropdown" id="searchHistoryDropdown"></div>
                     </div>
                 </div>
+
+                <details id="arrivalOptions" class="arrival-options" ontoggle="VoyagrJourneyPlan.syncArrivalSummary()">
+                    <summary><span>Arrival &amp; parking <span class="arrival-options-optional">(optional)</span><small id="arrivalOptionsSummary">Use destination</small></span><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+                    <div class="arrival-options-fields">
+                        <label for="drivingArrival">Driving arrival point (optional)</label>
+                        <div class="location-input-group">
+                            <input type="text" id="drivingArrival" placeholder="Search parking near your destination, or a named entrance" aria-describedby="drivingArrivalHelp arrivalSearchContext" oninput="showAutocomplete('drivingArrival',true)" onfocus="showAutocomplete('drivingArrival')">
+                            <div class="autocomplete-dropdown" id="autocomplete_drivingArrival"></div>
+                        </div>
+                        <label for="arrivalIntent">Planning arrival intent</label>
+                        <select id="arrivalIntent" aria-describedby="arrivalIntentHelp" onchange="VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true});VoyagrJourneyPlan.syncArrivalSummary()">
+                            <option value="place">Place or parking point (default)</option>
+                            <option value="roadside">Roadside arrival — preview only</option>
+                            <option value="vehicle_entrance">Vehicle entrance — preview only</option>
+                        </select>
+
+                        <label for="arrivalParkingPrice">Nearby parking price</label>
+                        <select id="arrivalParkingPrice" onchange="VoyagrJourneyPlan.syncArrivalSummary();VoyagrGeocodingOrchestration.searchArrivalParking()">
+                            <option value="any">Any price</option>
+                            <option value="free">Reported free only</option>
+                            <option value="paid">Reported paid only</option>
+                        </select>
+                        <small>Based on mapped fee tags. Check signs, time limits and customer restrictions. Missing fee data is not free.</small>
+                        <small id="arrivalSearchContext" role="status"></small>
+
+                        <button type="button" class="btn" onclick="VoyagrJourneyPlan.clearArrival();VoyagrLocationOrchestration.invalidateEndpointRequests('end')">Clear arrival point</button>
+                    </div>
+                </details>
+                <small id="arrivalIntentHelp" class="arrival-options-notice">Arrival choices do not verify stopping, property access or an entrance. Roadside and entrance intents are preview only.</small>
+                <small id="drivingArrivalHelp" class="arrival-options-notice">Keep your destination above. After choosing a driving arrival, calculate again. Check vehicle access and opening restrictions. The onward connection is not included.</small>
 
                 <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
                 <div class="form-group card-waypoints">
@@ -529,33 +562,26 @@
                      as a live navigation overlay (was hidden here inside the sidebar). -->
 
                 <!-- Quick Search Buttons -->
-                <div class="quick-search">
-                    <button class="quick-search-btn" onclick="quickSearch('parking')">
-                        <span class="quick-search-btn-icon">🅿️</span>
+                <div class="quick-search map-poi-shortcuts" role="group" aria-label="Nearby places">
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('parking')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
                         <span>Parking</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('fuel')">
-                        <span class="quick-search-btn-icon">⛽</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('fuel')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 21V4h10v17M2 21h12M5 7h6M13 11h2a2 2 0 0 1 2 2v4a2 2 0 0 0 4 0V8l-4-4M18 5v4h3"/></svg>
                         <span>Fuel</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('food')">
-                        <span class="quick-search-btn-icon">🍔</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('food')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 3v6M2 3v4a3 3 0 0 0 6 0V3M5 10v11M15 3v18M15 3c6 0 6 10 0 10"/></svg>
                         <span>Food</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('charging')">
-                        <span class="quick-search-btn-icon">🔌</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('charging')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3v5M16 3v5M6 8h12v4a6 6 0 0 1-12 0ZM12 18v4"/></svg>
                         <span>EV Charge</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('pharmacy')">
-                        <span class="quick-search-btn-icon">💊</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('pharmacy')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5-4 4a5 5 0 0 0 7 7l4-4a5 5 0 0 0-7-7ZM8 6l7 7"/></svg>
                         <span>Pharmacy</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('hospital')">
-                        <span class="quick-search-btn-icon">🏥</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('hospital')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 21V3h18v18ZM9 21v-5h6v5M9 8h6M12 5v6"/></svg>
                         <span>Hospital</span>
                     </button>
-                    <button class="quick-search-btn" onclick="quickSearch('groceries')">
-                        <span class="quick-search-btn-icon">🛒</span>
+                    <button type="button" class="quick-search-btn" onclick="quickSearch('groceries')"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 3h3l3 12h10l3-9H6M9 19h.01M18 19h.01"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
                         <span>Groceries</span>
                     </button>
                 </div>
@@ -1183,9 +1209,9 @@
                             <span class="preference-label">Price Preference</span>
                             <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="any" selected>Any Price</option>
-                                <option value="free">Free Only (Any Type)</option>
-                                <option value="free_street">🆓 Free Street Parking</option>
-                                <option value="paid">Paid Parking</option>
+                                <option value="free">Reported Free Only (Any Type)</option>
+                                <option value="free_street">Reported Free Street Parking</option>
+                                <option value="paid">Reported Paid Parking</option>
                             </select>
                         </div>
                     </div>
@@ -1594,137 +1620,99 @@
 
                 <!-- ROUTE PREVIEW TAB (NEW FEATURE) -->
                 <div id="routePreviewTab" style="display: none;">
-                    <div class="preferences-section">
-                        <h3>📍 Route Preview</h3>
-                        <p id="routeAvoidanceNotice" role="status" tabindex="0">Avoidance verification pending.</p>
+                    <div class="preferences-section route-preview-panel">
+                        <h3>Route preview</h3>
+                        <section class="preview-summary-card" aria-label="Selected route summary">
+                            <dl class="preview-summary-metrics">
+                                <div><dt>Duration</dt><dd id="previewDuration">-</dd></div>
+                                <div><dt>Distance</dt><dd id="previewDistance">-</dd></div>
+                            </dl>
+                            <p id="previewRoute" class="preview-route-label">-</p>
+                        </section>
 
-                        <!-- Route Summary -->
-                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                                <div>
-                                    <div style="font-size: 12px; opacity: 0.9;">📏 Distance</div>
-                                    <div style="font-size: 24px; font-weight: bold;" id="previewDistance">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 12px; opacity: 0.9;">⏱️ Duration</div>
-                                    <div style="font-size: 24px; font-weight: bold;" id="previewDuration">-</div>
-                                </div>
-                            </div>
-                            <div style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: 12px;">
-                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">📍 Route</div>
-                                <div style="font-size: 13px;" id="previewRoute">-</div>
-                            </div>
+                        <!-- Route limitations remain outside every disclosure. -->
+                        <p id="routePlanningNotice" class="preview-notice" role="status"></p>
+                        <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>
+                        <section id="arrivalEndpointPreview" class="preview-arrival-notice" aria-label="Arrival endpoints" hidden></section>
+                        <div id="cazStatusContainer" class="preview-caz-notice" style="display: none;"></div>
+                        <div id="hazardInfoContainer" class="preview-hazard-notice" style="display: none;">
+                            <h4>Route preferences</h4>
+                            <div class="preview-value-row"><span data-hazard-count-label>Nearby observations:</span><strong id="previewHazardCount">0</strong></div>
+                            <div class="preview-value-row"><span>Preference scoring penalty:</span><strong id="previewHazardPenalty">0 min</strong></div>
                         </div>
 
-                        <!-- Cost Breakdown -->
-                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">💰 Cost Breakdown</h4>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">⛽ Fuel</div>
-                                    <div style="font-weight: bold; color: #333;" id="previewFuelCost">-</div>
-                                    <div style="color: #555; font-size: 12px; margin-top: 3px; font-weight: 500;" id="previewFuelLitres"></div>
-                                </div>
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">🛣️ Tolls</div>
-                                    <div style="font-weight: bold; color: #333;" id="previewTollCost">-</div>
-                                </div>
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">🚗 CAZ</div>
-                                    <div style="font-weight: bold; color: #333;" id="previewCAZCost">-</div>
-                                </div>
-                                <div>
-                                    <div style="color: #666; margin-bottom: 4px;">💵 Total</div>
-                                    <div style="font-weight: bold; color: #667eea; font-size: 14px;" id="previewTotalCost">-</div>
-                                </div>
-                            </div>
-                            <!-- CAZ Status Display -->
-                            <div id="cazStatusContainer" style="display: none; margin-top: 10px; padding: 8px; background: #f5f5f5; border-radius: 6px;"></div>
+                        <div class="preview-primary-actions" role="group" aria-label="Journey actions">
+                            <button type="button" class="preview-action preview-navigate" data-journey-choose onclick="startNavigationFromPreview()" aria-controls="journeyModeChooser" aria-describedby="previewNavigationHelp">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z" /></svg>Navigate
+                            </button>
+                            <button type="button" class="route-playback-button" onclick="VoyagrJourneyModes.startSimulation()" aria-label="Play route preview">
+                                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="m8 5 11 7-11 7Z" /></svg>Play preview
+                            </button>
+                        </div>
+                        <p id="previewNavigationHelp" class="preview-action-help">Choose a journey mode to continue.</p>
+
+                        <div class="preview-quick-actions" role="group" aria-label="Route tools">
+                            <button type="button" class="preview-action" onclick="overviewRoute()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16" /></svg>Overview
+                            </button>
+                            <button type="button" class="preview-action" onclick="findParkingNearDestination()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M9 17V7h4a3 3 0 0 1 0 6H9" /></svg>Parking
+                            </button>
+                            <button type="button" class="preview-action" onclick="showRouteComparison()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 20V10M12 20V4M18 20v-7" /></svg>Compare
+                            </button>
                         </div>
 
-                        <!-- Hazard Information -->
-                        <div id="hazardInfoContainer" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">Route preferences</h4>
-                            <div style="font-size: 13px; line-height: 1.6;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;" data-hazard-count-label>Route score:</span>
-                                    <strong id="previewHazardCount">0</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #666;">Time Penalty:</span>
-                                    <strong id="previewHazardPenalty">0 min</strong>
-                                </div>
-                            </div>
+                        <!-- Parking remains next to its action and outside disclosures. -->
+                        <div id="parkingSection" class="preview-parking-results" style="display: none;">
+                            <h4>Parking options</h4>
+                            <div id="parkingList"></div>
+                            <button type="button" class="preview-action" onclick="clearParkingSelection()">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>Clear parking selection
+                            </button>
                         </div>
 
-                        <!-- Route Details -->
-                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📋 Route Details</h4>
-                            <div style="font-size: 13px; line-height: 1.6;">
-                                <!-- Backend routing stack is not shown to end users -->
-                                <div id="previewRoutingEngineRow" style="display: none;" aria-hidden="true">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="color: #666;">Routing Engine:</span>
-                                        <strong id="previewRoutingEngine"></strong>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;">Routing Mode:</span>
-                                    <strong id="previewRoutingMode">-</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #666;">Vehicle Type:</span>
-                                    <strong id="previewVehicleType">-</strong>
-                                </div>
+                        <details id="previewMoreTools" class="preview-disclosure">
+                            <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>More route tools</span></summary>
+                            <div class="preview-more-actions">
+                                <button type="button" class="preview-action" onclick="showAllRoutes()">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V7a3 3 0 0 1 6 0v10a3 3 0 0 0 6 0V4M13 7l3-3 3 3" /></svg>Show all routes on map
+                                </button>
+                                <button type="button" class="preview-action" onclick="switchTab('settings')">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="3" /><circle cx="15" cy="17" r="3" /></svg>Route settings
+                                </button>
+                                <button type="button" class="preview-action" onclick="switchTab('navigation')">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14Z" /></svg>Modify route
+                                </button>
                             </div>
-                        </div>
+                        </details>
 
-                        <!-- Alternative Routes (if available) -->
-                        <div id="previewAlternativeRoutesContainer" style="display: none; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">🛣️ Alternative Routes</h4>
+                        <details id="previewCostDetails" class="preview-disclosure">
+                            <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>Estimated costs</span><strong id="previewTotalCost">-</strong></summary>
+                            <dl class="preview-cost-grid">
+                                <div><dt>Fuel / energy</dt><dd id="previewFuelCost">-</dd><dd id="previewFuelLitres"></dd></div>
+                                <div><dt>Tolls</dt><dd id="previewTollCost">-</dd></div>
+                                <div><dt>CAZ</dt><dd id="previewCAZCost">-</dd></div>
+                            </dl>
+                        </details>
+
+                        <details id="previewRouteDetails" class="preview-disclosure">
+                            <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>Route details</span></summary>
+                            <!-- Backend routing stack is not shown to end users. -->
+                            <div id="previewRoutingEngineRow" style="display: none;" aria-hidden="true"><strong id="previewRoutingEngine"></strong></div>
+                            <dl class="preview-route-details-grid">
+                                <div><dt>Routing mode</dt><dd id="previewRoutingMode">-</dd></div>
+                                <div><dt>Vehicle type</dt><dd id="previewVehicleType">-</dd></div>
+                            </dl>
+                        </details>
+
+                        <div id="previewAlternativeRoutesContainer" class="preview-alternatives" style="display: none;">
+                            <h4>Alternative routes</h4>
                             <div id="previewAlternativeRoutesList"></div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="overviewRoute()" style="background: #9C27B0; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🗺️ Overview Route
-                            </button>
-                            <button data-journey-choose onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                Choose journey mode
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="findParkingNearDestination()" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🅿️ Find Parking
-                            </button>
-                            <button onclick="showRouteComparison()" style="background: #FF5722; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                📊 Compare Routes
-                            </button>
-                        </div>
-                        <!-- Parking results appear directly below Find Parking -->
-                        <div id="parkingSection" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">🅿️ Parking Options</h4>
-                            <div id="parkingList" style="margin-bottom: 10px;"></div>
-                            <button onclick="clearParkingSelection()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ✕ Clear Parking Selection
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="showAllRoutes()" style="background: #667eea; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🗺️ Show All Routes on Map
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="switchTab('settings')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ⚙️ Route Settings
-                            </button>
-                            <button onclick="switchTab('navigation')" style="background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ✏️ Modify Route
-                            </button>
                         </div>
                     </div>
                 </div>
+
 
                 <!-- JOURNEY SUMMARY MODAL (NEW) -->
                 <div id="journeySummaryModal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; padding: 20px; box-sizing: border-box; overflow-y: auto;">
@@ -1804,7 +1792,9 @@
         </div>
 
         <!-- Turn-by-Turn Navigation Display Widget -->
-        <div id="turnInstructionWidget" class="turn-instruction-widget" style="display: none;">
+        <div id="navigationOverlayLayout" class="navigation-overlay-layout">
+        <div class="navigation-guidance-stack">
+        <div id="turnInstructionWidget" class="turn-instruction-widget" role="group" aria-label="Turn and lane guidance" tabindex="0" style="display: none;">
             <!-- Next Turn Display (Always Visible When Navigating) -->
             <div id="nextTurnDisplay" class="next-turn-display" onclick="toggleInstructionsList()">
                 <div class="turn-icon-container">
@@ -1853,9 +1843,21 @@
             </div>
         </div>
 
+        <aside id="bestEffortWarning" class="best-effort-warning" aria-label="Route limitations" tabindex="0" role="status" aria-live="polite" aria-atomic="true" hidden>
+            <strong>Route limitations</strong>
+            <p>This route may include hazards or restrictions that Voyagr could not avoid or fully verify.</p>
+            <p>Follow road signs and traffic laws. Avoidance is not guaranteed.</p>
+            <button type="button" id="dismissBestEffortWarning" aria-label="Dismiss hazard warning">Dismiss</button>
+        </aside>
+        <!-- Current Road Name Bar - Shows road name during navigation -->
+        <div id="roadNameBar" style="display: none; position: absolute; bottom: 155px; left: 50%; transform: translateX(-50%); z-index: 250; background: rgba(0,0,0,0.8); color: white; padding: 6px 18px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis; text-align: center; backdrop-filter: blur(10px);">
+            <span id="currentRoadName">--</span>
+        </div>
+        </div>
+
         <!-- Speed Widget - GPS speedometer + posted limit circle -->
         <!-- z-index: 300 in mobile layout hierarchy -->
-        <div id="speedWidget" class="speed-widget" style="position: absolute; top: 20px; right: 20px; z-index: 300; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 100px; text-align: center; border-left: 4px solid #4285F4;">
+        <div id="speedWidget" class="speed-widget" role="group" aria-label="Speed display" tabindex="0" style="position: absolute; top: 20px; right: 20px; z-index: 300; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 100px; text-align: center; border-left: 4px solid #4285F4;">
             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <div style="text-align: center;">
                     <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
@@ -1864,67 +1866,88 @@
                 <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                     <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">…</div>
                     <div id="speedLimitUnit" style="font-size: 8px; color: #666;">km/h</div>
+                    <div id="speedLimitMappedLabel" hidden title="OpenStreetMap observation; check road signs. Legal applicability is unverified." style="font-size: 8px; color: #666;">Mapped</div>
                 </div>
             </div>
+        </div>
+
+
         </div>
 
         <section id="journeyModeChooser" class="journey-mode-panel" aria-labelledby="journeyModeTitle" hidden>
             <h2 id="journeyModeTitle">Choose how to use this journey</h2>
             <p>Plan anywhere. Simulation inspects the planned geometry. Live navigation requires your actual location and a fresh safety assessment.</p>
             <button type="button" onclick="VoyagrJourneyModes.abandonJourney()">End previous journey</button>
-            <button type="button" onclick="VoyagrJourneyModes.startSimulation()">Simulate Journey</button>
+            <button type="button" onclick="VoyagrJourneyModes.startSimulation()">▶ Play route preview</button>
             <button type="button" data-live-recalculate onclick="VoyagrJourneyModes.navigateFromGPS()">Navigate From My Location</button>
             <button type="button" id="startVerifiedHere" data-navigation-start hidden onclick="VoyagrJourneyModes.startHere()">Start verified live navigation here</button>
             <p id="journeyModeStatus" role="status" aria-live="polite"></p>
             <button type="button" onclick="VoyagrJourneyModes.exit();document.getElementById('journeyModeChooser').hidden=true">Close journey controls</button>
         </section>
         <section id="simulationControls" class="simulation-controls" hidden aria-label="Journey simulation controls">
-            <strong id="simulationIndicator" hidden>SIMULATION — NOT LIVE GPS — NOT APPROVED FOR DRIVING</strong>
-            <p id="simulationProgress" aria-live="off"></p>
-            <button type="button" onclick="VoyagrJourneyModes.pause()">Pause</button>
-            <button type="button" onclick="VoyagrJourneyModes.resume()">Resume</button>
-            <button type="button" onclick="VoyagrJourneyModes.restart()">Restart</button>
-            <label>Simulation speed <select onchange="VoyagrJourneyModes.setSpeed(this.value)"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option></select></label>
-            <button type="button" onclick="VoyagrJourneyModes.exit()">Exit simulation</button>
+            <div class="simulation-header">
+                <div>
+                    <strong id="simulationIndicator" hidden>ROUTE PREVIEW · SIMULATION — NOT LIVE GPS</strong>
+                    <span id="simulationState" role="status" aria-live="polite"></span>
+                </div>
+                <button type="button" class="simulation-icon-button" id="simulationExit" onclick="VoyagrJourneyModes.exit()" aria-label="Exit route preview" title="Exit route preview">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                </button>
+            </div>
+            <div class="simulation-toolbar" role="group" aria-label="Playback controls">
+                <button type="button" class="simulation-icon-button" id="simulationRestart" onclick="VoyagrJourneyModes.restart()" aria-label="Restart route preview" title="Restart route preview">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6" /></svg>
+                </button>
+                <button type="button" class="simulation-icon-button simulation-primary" id="simulationPause" onclick="VoyagrJourneyModes.pause()" aria-label="Pause route preview" title="Pause route preview">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14M16 5v14" /></svg>
+                </button>
+                <button type="button" class="simulation-icon-button simulation-primary" id="simulationResume" onclick="VoyagrJourneyModes.resume()" aria-label="Resume route preview" title="Resume route preview" hidden>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m8 5 11 7-11 7Z" /></svg>
+                </button>
+                <label class="simulation-speed-label"><span>Speed</span><select id="simulationSpeed" aria-label="Playback speed" onchange="VoyagrJourneyModes.setSpeed(this.value)"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="20">20×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+                <label class="simulation-follow-label"><input id="simulationFollow" type="checkbox" aria-label="Follow vehicle" checked onchange="VoyagrJourneyModes.setFollow(this.checked)" /> Follow</label>
+            </div>
+            <p id="simulationNextTurn" aria-live="off"></p>
+            <div class="simulation-position-label"><label for="simulationPosition">Route position</label><output id="simulationPercent" for="simulationPosition">0%</output></div>
+            <input id="simulationPosition" type="range" min="0" max="100" step="0.1" value="0" oninput="VoyagrJourneyModes.seek(this.value)" />
+            <p id="simulationRecovery" role="alert" hidden>Preview cleanup is incomplete. Use Exit route preview again to retry.</p>
+            <details class="simulation-details">
+                <summary>Preview details</summary>
+                <p id="simulationProgress" aria-live="off"></p>
+                <p id="simulationTiming" aria-live="off"></p>
+                <small>1× follows the planned duration when available. This is a route walkthrough.</small>
+            </details>
         </section>
-        <aside id="bestEffortWarning" class="best-effort-warning" role="status" aria-live="polite" aria-atomic="true" hidden>
-            <strong>Some hazards could not be avoided</strong>
-            <p>This route may include hazards or restrictions that Voyagr could not avoid or fully verify.</p>
-            <p>Follow road signs and traffic laws. Avoidance is not guaranteed.</p>
-            <button type="button" id="dismissBestEffortWarning" aria-label="Dismiss hazard warning">Dismiss</button>
-        </aside>
         <!-- Notification Container (styles in voyagr.css) -->
         <!-- z-index: 500 in mobile layout hierarchy - always on top of content -->
         <div id="notificationContainer" class="notification-container" aria-live="polite" aria-relevant="additions"></div>
         <div id="mapHintToast" class="map-hint-toast" role="status" aria-live="polite" hidden></div>
 
         <!-- Map action menu (bottom-right hamburger) -->
-        <div class="nav-control-menu">
-            <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed" hidden>
-                <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
-                <button id="startNavBtn" data-journey-choose class="fab" title="Choose journey mode" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
-                <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
-                <button type="button" id="recenterVehicleFab" class="fab fab-recenter" title="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;" aria-label="Recenter on vehicle">
-                    <svg class="fab-recenter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                    </svg>
-                </button>
-                <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
-                <button type="button" id="currentLocationFab" class="fab" title="Current Location" onclick="getCurrentLocation()">📍</button>
-                <button type="button" id="voiceFab" class="fab" title="Voice control" onclick="toggleVoiceInput()" aria-label="Voice control" aria-pressed="false">🎤</button>
-                <button type="button" id="showCamerasFab" class="fab active" title="Show speed cameras on map" onclick="toggleShowCameras()" aria-label="Show speed cameras on map" aria-pressed="true">📷</button>
-                <button id="roadReportFab" class="fab" title="Report road issue" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
-                <button type="button" id="mapControlsHintFab" class="fab fab-hint" title="Full list of map buttons. Tip: on a phone, press and hold any round icon ~half a second for a bottom caption." onclick="openMapControlsHintModal()" aria-label="Map button guide">i</button>
+        <div class="nav-control-menu map-action-menu">
+            <div id="navControlButtons" class="nav-control-buttons nav-menu-collapsed" role="group" aria-label="Map actions" hidden>
+                <button type="button" id="startTrackingBtn" class="fab map-action-button" title="Start GPS tracking" aria-label="Start GPS tracking" onclick="startGPSTracking()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14M8 8a6 6 0 0 0 0 8M16 8a6 6 0 0 1 0 8"/></svg><span class="map-action-label">GPS tracking</span></button>
+                <button type="button" id="startNavBtn" class="fab map-action-button" title="Choose journey mode" aria-label="Choose journey mode" onclick="startNavigation()" data-journey-choose style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z"/></svg><span class="map-action-label">Journey mode</span></button>
+                <button type="button" id="zoomFollowToggle" class="fab map-action-button active" title="Follow vehicle" aria-label="Follow vehicle" onclick="toggleZoomAndFollow()" aria-pressed="true" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 6 15-6-3-6 3Z"/><path d="M4 4H2v4M20 4h2v4M2 16v4h4M22 16v4h-4"/></svg><span class="map-action-label">Follow</span></button>
+                <button type="button" id="recenterVehicleFab" class="fab map-action-button" title="Recenter on vehicle" aria-label="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="map-action-label">Recenter</span></button>
+                <button type="button" id="journeyOverviewBtn" class="fab map-action-button" title="Journey overview" aria-label="Journey overview" onclick="toggleJourneyOverview()" aria-pressed="false" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16"/></svg><span class="map-action-label">Overview</span></button>
+                <button type="button" id="currentLocationFab" class="fab map-action-button" title="Current location" aria-label="Current location" onclick="getCurrentLocation()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="map-action-label">My location</span></button>
+                <button type="button" id="voiceFab" class="fab map-action-button" title="Voice control" aria-label="Voice control" onclick="toggleVoiceInput()" aria-pressed="false"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span class="map-action-label">Voice</span></button>
+                <button type="button" id="showCamerasFab" class="fab map-action-button active" title="Show speed cameras on map" aria-label="Show speed cameras on map" onclick="toggleShowCameras()" aria-pressed="true"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="m8 6 2-3h4l2 3"/><circle cx="12" cy="13" r="4"/></svg><span class="map-action-label">Cameras</span></button>
+                <button type="button" id="roadReportFab" class="fab map-action-button" title="Report road issue" aria-label="Report road issue" onclick="openRoadReportModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4 2 19a1 1 0 0 0 1 2h18a1 1 0 0 0 1-2L14 4a2 2 0 0 0-4 0Z"/><path d="M12 9v5M12 17h.01"/></svg><span class="map-action-label">Report</span></button>
+                <button type="button" id="mapControlsHintFab" class="fab map-action-button" title="Map button guide" aria-label="Map button guide" onclick="openMapControlsHintModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span class="map-action-label">Help</span></button>
             </div>
-            <button id="endNavigationBtn" data-testid="end-navigation" class="fab nav-end-nav-fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
-            <button type="button" id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" aria-label="Toggle map actions menu" aria-expanded="false" aria-controls="navControlButtons">☰</button>
+            <button type="button" id="endNavigationBtn" data-testid="end-navigation" class="fab nav-end-nav-fab" title="End navigation" aria-label="End navigation" onclick="stopTurnByTurnNavigation()" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span class="map-action-label">End</span></button>
+            <button type="button" id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" aria-label="Open map actions" aria-expanded="false" aria-controls="navControlButtons">
+                <span data-nav-menu-icons aria-hidden="true"><svg class="nav-menu-icon-closed" viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg><svg class="nav-menu-icon-open" viewBox="0 0 24 24" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></span><span class="map-action-label" data-nav-menu-label>Map</span>
+            </button>
         </div>
 
         <div id="mapControlsHintModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="mapControlsHintTitle">
             <div class="road-report-modal-backdrop" onclick="closeMapControlsHintModal()"></div>
             <div class="road-report-modal-panel map-controls-hint-panel">
                 <h3 id="mapControlsHintTitle" class="map-controls-hint-title">Map controls</h3>
-                <p id="mapControlsHintIntro" class="map-controls-hint-intro"><strong>Phones &amp; tablets:</strong> press and hold any round map button for about <strong>half a second</strong> — a dark banner appears at the bottom explaining it (desktop: hover for tooltips). Tap the <strong>i</strong> button for this full list. The list below only includes buttons that are visible right now.</p>
+                <p id="mapControlsHintIntro" class="map-controls-hint-intro">Tap <strong>Map</strong> to open labelled actions and <strong>Close</strong> to dismiss them. Keyboard users can press Escape to close. Press and hold a map action for about half a second for its description (desktop: hover for tooltips). <strong>Help</strong> opens this guide. The list below only includes buttons that are visible right now.</p>
                 <ul id="mapControlsHintList" class="map-controls-hint-list"></ul>
                 <button type="button" class="map-controls-hint-close" onclick="closeMapControlsHintModal()">Close</button>
             </div>
@@ -1956,13 +1979,9 @@
             </div>
         </div>
 
-        <!-- Current Road Name Bar - Shows road name during navigation -->
-        <div id="roadNameBar" style="display: none; position: absolute; bottom: 155px; left: 50%; transform: translateX(-50%); z-index: 250; background: rgba(0,0,0,0.8); color: white; padding: 6px 18px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis; text-align: center; backdrop-filter: blur(10px);">
-            <span id="currentRoadName">--</span>
-        </div>
 
         <!-- Journey Summary Bar - Shows remaining distance, ETA, and time during navigation -->
-        <div id="journeySummaryBar" class="journey-summary-bar" style="display: none;">
+        <div id="journeySummaryBar" class="journey-summary-bar" role="group" aria-label="Journey progress" style="display: none;">
             <div class="journey-summary-item">
                 <span class="journey-summary-icon">📍</span>
                 <div class="journey-summary-content">
@@ -2029,6 +2048,20 @@
             return result.data && result.data.session;
         }
 
+        function showDashcamSignedOutState() {
+            document.getElementById('dashcamRecordingsList').textContent = 'Sign in to view your private recordings';
+            document.getElementById('dashcamTotalRecordings').textContent = '0';
+            document.getElementById('dashcamTotalSize').textContent = '0 MB';
+            document.getElementById('dashcamOldestRecording').textContent = '-';
+        }
+
+        async function canLoadPrivateDashcamData() {
+            const session = await getDashcamSession();
+            if (session && session.access_token && session.user && session.user.id) return true;
+            showDashcamSignedOutState();
+            return false;
+        }
+
         function dashcamFetch(url, options, expectedOwner) {
             return getDashcamCapture().privateFetch(url, options, {
                 getSession: getDashcamSession,
@@ -2054,10 +2087,7 @@
         window.addEventListener('pagehide', clearDashcamPlayback);
         window.addEventListener('voyagr-auth-changed', event => {
             clearDashcamPlayback();
-            document.getElementById('dashcamRecordingsList').textContent = 'Sign in to view your private recordings';
-            document.getElementById('dashcamTotalRecordings').textContent = '0';
-            document.getElementById('dashcamTotalSize').textContent = '0 MB';
-            document.getElementById('dashcamOldestRecording').textContent = '-';
+            showDashcamSignedOutState();
             if (dashcamState.starting && !dashcamState.localOnly &&
                 dashcamState.ownerUserId !== event.detail.userId) {
                 dashcamState.startCancelled = true;
@@ -2506,7 +2536,9 @@
 
         async function loadDashcamRecordings() {
             try {
+                if (!await canLoadPrivateDashcamData()) return;
                 const response = await dashcamFetch('/api/dashcam/recordings');
+                if (!response.ok) throw new Error('Private recording list unavailable');
                 const data = await response.json();
                 await assertDashcamResponseOwner(response);
 
@@ -2623,25 +2655,27 @@
             }
         }
 
-        function loadDashcamSettings() {
+        async function loadDashcamSettings() {
             try {
-                const response = dashcamFetch('/api/dashcam/settings');
-                response.then(async r => { const data = await r.json(); await assertDashcamResponseOwner(r); return data; }).then(data => {
-                    if (data.success && data.settings) {
-                        document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
-                        document.getElementById('dashcamFps').value = String(data.settings.fps != null ? data.settings.fps : '30');
-                        document.getElementById('dashcamRetention').value = String(data.settings.retention_days != null ? data.settings.retention_days : '14');
+                if (!await canLoadPrivateDashcamData()) return;
+                const response = await dashcamFetch('/api/dashcam/settings');
+                if (!response.ok) throw new Error('Private dashcam settings unavailable');
+                const data = await response.json();
+                await assertDashcamResponseOwner(response);
+                if (data.success && data.settings) {
+                    document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
+                    document.getElementById('dashcamFps').value = String(data.settings.fps != null ? data.settings.fps : '30');
+                    document.getElementById('dashcamRetention').value = String(data.settings.retention_days != null ? data.settings.retention_days : '14');
 
-                        const audioBtn = document.getElementById('dashcamAudio');
-                        if (audioBtn) {
-                            if (data.settings.audio_enabled) {
-                                audioBtn.classList.add('active');
-                            } else {
-                                audioBtn.classList.remove('active');
-                            }
+                    const audioBtn = document.getElementById('dashcamAudio');
+                    if (audioBtn) {
+                        if (data.settings.audio_enabled) {
+                            audioBtn.classList.add('active');
+                        } else {
+                            audioBtn.classList.remove('active');
                         }
                     }
-                }).catch(function (e) { console.error('Dashcam settings load failed:', e); });
+                }
             } catch (error) {
                 console.error('Error loading dashcam settings:', error);
             }

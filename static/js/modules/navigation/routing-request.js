@@ -676,11 +676,23 @@
     }
 
     /**
-     * Status banner when routing fell back to a degraded engine (Valhalla/GraphHopper offline).
+     * Explain route limitations without inferring an engine outage from a safety refusal.
+     * @param {Object} [data]
      * @returns {string}
      */
-    function getDegradedRoutingStatusMessage() {
-        return '⚠️ Basic route only (Valhalla/GraphHopper offline). No camera avoidance.';
+    function getDegradedRoutingStatusMessage(data) {
+        data = data || {};
+        if (data.navigation_outcome === 'REFUSED' || data.automatic_selection_allowed === false || data.avoidance_status === 'NO_COMPLIANT_ROUTE') {
+            return 'Route preview available. Navigation checks are unresolved; review endpoint connections and mandatory requirements.';
+        }
+        if ((Array.isArray(data.provider_limitations) && data.provider_limitations.length) ||
+            (data.avoidance_status && data.avoidance_status !== 'SATISFIED')) {
+            return 'Route preview has avoidance limitations. Review the preferences and available evidence before navigation.';
+        }
+        if (data.engines_failed && Object.keys(data.engines_failed).length) {
+            return 'A routing engine failed; a fallback route is available. Review its limitations before navigation.';
+        }
+        return 'Route preview has routing limitations. Review the route details before navigation.';
     }
 
     /**
@@ -693,6 +705,7 @@
         return {
             success: !!data.success,
             routingDegraded: !!data.routing_degraded,
+            degradedStatusMessage: data.routing_degraded ? getDegradedRoutingStatusMessage(data) : null,
             degradedLogWarning: data.routing_degraded ? {
                 warning: data.routing_warning || data.source,
                 engines: data.engines_failed || {},
@@ -730,7 +743,7 @@
         return {
             branch: routeInProgress ? 'in_nav_reroute' : 'idle_preview',
             hideRouteProgressBar: true,
-            degradedStatusMessage: apiPlan.routingDegraded ? getDegradedRoutingStatusMessage() : null,
+            degradedStatusMessage: apiPlan.routingDegraded ? (apiPlan.degradedStatusMessage || getDegradedRoutingStatusMessage()) : null,
             degradedLogWarning: apiPlan.degradedLogWarning,
             responseLogMeta: apiPlan.responseLogMeta,
         };
@@ -1007,7 +1020,7 @@
         return {
             responseLogPrefix: '[Route API] Response received:',
             responseLogMeta: dispatch.responseLogMeta,
-            degradedLogPrefix: '[Route API] Degraded routing — local engines failed:',
+            degradedLogPrefix: '[Route API] Route limitations:',
             degradedLogWarning: dispatch.degradedLogWarning,
             degradedStatusMessage: dispatch.degradedStatusMessage,
             branch: dispatch.branch,

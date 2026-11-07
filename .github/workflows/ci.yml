@@ -80,6 +80,7 @@ jobs:
           pytest -q --junitxml=/tmp/voyagr-backend-results.xml
           tests/test_graphhopper_sign_mapping.py
           tests/test_lane_recommendation.py
+          tests/test_lane_maneuvers.py
           tests/test_lane_guidance.py
           tests/test_speed_limit_detector.py
           tests/test_route_request_params.py
@@ -147,6 +148,9 @@ jobs:
           tests/test_routing_avoidance_integrity.py
           tests/test_best_effort_navigation.py
           tests/test_journey_modes.py
+          tests/test_endpoint_resolution.py
+          tests/test_geocoding.py
+          tests/test_arrival_parking_context.py
           tests/test_phase5_journey.py
           tests/test_phase6_navigation_evidence.py
           tests/test_phase7_road_matching.py
