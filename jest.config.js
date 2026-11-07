@@ -9,9 +9,10 @@ module.exports = {
     // Coverage is scoped to the files the running app actually loads AND that have
     // behaviour tests. The large unwired parallel module trees were pruned, so there
     // is no longer a phantom codebase inflating/deflating the numbers. Wired-but-untested
-    // files (ar-navigation.js, traffic-lights.js) are intentionally excluded here until
+    // files (ar-navigation.js) are intentionally excluded here until
     // they get real tests; add them (and a per-file lock) when they do.
     collectCoverageFrom: [
+        'static/js/modules/traffic-lights.js',
         'static/js/modules/map/weather-layer.js',
         'static/js/modules/navigation/camera-pitch.js',
         'static/js/modules/navigation/road-matching.js',
@@ -30,6 +31,7 @@ module.exports = {
     // function ratio down). Raise these as maplibre-helpers and the wired-but-untested
     // modules get real tests.
     coverageThreshold: {
+        'static/js/modules/traffic-lights.js': {statements:90, branches:75, functions:90, lines:90},
         global: {
             branches: 24,
             functions: 20,

@@ -50,7 +50,7 @@ is possible; neither free availability nor public access is guaranteed.
 
 | Order | Feature and code path | Repository finding | Remaining feature-specific acceptance |
 |---|---|---|---|
-| 2 | Traffic signal map areas and selected-route overlays: `api/hazards.py`, `services/hazards.py` | `/traffic-lights/area` and `/traffic-lights` call the shared Overpass helper. Large extents are deliberately bounded/skipped; failures retain unknown/partial coverage. | Controlled web endpoint/display checks and deployed small-area/selected-route evidence. A long-route empty overlay is not proof of no signals. |
+| 2 | Traffic signal map areas and selected-route overlays: `api/hazards.py`, `services/hazards.py` | `/traffic-lights/area` and `/traffic-lights` call the shared Overpass helper. Large extents are deliberately bounded/skipped; failures retain unknown/partial coverage. | Controlled endpoint/display checks passed (item 2 below); deployed small-area/selected-route evidence remains pending. A long-route empty overlay is not proof of no signals. |
 | 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Known crossing area, empty/failure distinction, multi-stop and route-assessment coverage. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
@@ -185,3 +185,66 @@ queries were performed here. Retain the original eight-objective tracker as the
 master scope; this audit is a subordinate provider/UI acceptance queue. Item 1's
 code/test increment is complete only when checks pass, and live acceptance remains
 pending. No remaining queue item is marked fully working from static inspection.
+
+## Item 2: Traffic-light overlay verification (7 November 2026)
+
+Controlled implementation/verification is complete; deployed source and device
+acceptance remains open. Both viewport and selected-route displays now use the
+shared bounded traffic-signal acquisition service and configured Overpass client.
+Coverage retains endpoint class, dataset timestamp, revision, retrieval/cache and
+response state. Route requests share the two-slot/12-second acquisition boundary,
+accept at most 10,000 coordinates, inspect at most 1,000 returned nodes and show
+at most 200 markers. Existing 0.35-degree bounds remain; an oversized request is
+explicitly PARTIAL/NOT_QUERIED rather than a successful assertion of no signals.
+
+Reproduced on unmodified main: a signal directly on a sparse segment midpoint,
+about 660 m from either vertex, was omitted. Display proximity now uses the
+existing segment index within 150 m. This is **geographic proximity only**, not
+same-road/direction association, an applicable signal or avoidance verification.
+The routing avoidance evaluator, mandatory policy and navigation gates are not
+changed by this endpoint/display increment.
+
+Route fetches are cancelled/invalidate on newer selections, clear or toggle-off;
+viewport responses require the current generation, bounds, map and owner runtime.
+Older responses cannot restore old markers. Unknown/failed, valid-empty, stale,
+partial and oversized results retain distinct coverage messaging in the preview
+or map settings. Provider names are escaped in route popups. OSM markers stay
+neutral with state unknown; location-only responses do not start a countdown timer.
+Camera markers still use their separate database source.
+
+Verification includes deterministic API tests with the **real shared client and
+parser** against fixture HTTP, real segment matching, bounds/caps/admission and
+failure evidence; browser owner tests cover response overlap, toggle/clear, panning,
+teardown, invalid records and empty/error distinctions. A new per-file traffic-
+light coverage floor supplements existing floors. `node scripts/check-traffic-light-overlays.cjs`
+checks real bundled MapLibre marker/popup mounting and coverage copy in portrait
+and landscape Chromium using a synthetic background style and API responses.
+It makes no tile/provider/GPS requests and is not live acceptance.
+
+After a separately authorized deployment, inspect the small-area response:
+
+```sh
+curl --fail --silent --show-error --max-time 20 \
+  'http://127.0.0.1:5000/api/traffic-lights/area?north=53.53&south=53.51&east=-1.12&west=-1.15'
+```
+
+Require the expected LOCAL endpoint class and dataset timestamp/revision to
+establish use of the updated local interpreter; source labels alone do not prove
+that. A VALID_EMPTY result differs from UNAVAILABLE, but proves no physical absence.
+Then select a short actual route in the browser, inspect `/api/traffic-lights`,
+verify neutral markers/unknown state and geographic-only coverage, change routes
+quickly, pan/zoom and switch each independent overlay off/on. Check a known signal
+location separately; no production coordinate inventory or complete UK coverage
+has been verified here. Long-route segmentation remains separate future work;
+this increment preserves the bounded skip rather than issuing many route queries.
+
+Local final verification: 134 JavaScript suites / 2,946 tests, lint and coverage
+floors passed; CI web backend selection 1,933 passed, one platform skip and
+74 subtests passed. Portrait/landscape Chromium checks passed with real MapLibre
+and the production marker helper for both viewport and selected-route displays.
+
+Final acquisition review also verifies that the shared worker inherits any shorter
+parent request deadline and bounds its wait to remaining time. Two regressions
+prove that an already-expired request performs no transport, and expiry during
+transport cannot publish/cache the result. Cooperative cancellation and the
+two-slot no-backlog policy remain intact, including for existing shared callers.

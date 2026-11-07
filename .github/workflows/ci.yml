@@ -108,6 +108,7 @@ jobs:
           tests/test_review_package_diagnostics.py
           tests/test_windows_evidence_metadata.py
           tests/test_phase11c_acceptance_tools.py
+          tests/test_traffic_light_overlays.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py
           tests/test_graphhopper_costing_parity.py

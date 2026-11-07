@@ -46,11 +46,14 @@ _osm_area_slots = threading.BoundedSemaphore(2)
 
 def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
     """Two owned tasks, no pending backlog; cooperative cancellation, never hard preemption."""
+    parent_budget = route_transport.current_budget()
+    if parent_budget is not None:
+        parent_budget.check()
     if not _osm_area_slots.acquire(blocking=False):
         audit.emit('area_admission_rejected')
         return HazardList(coverage={'status':'UNAVAILABLE','reason':'acquisition_busy'})
     current = audit.trace()
-    budget = route_transport.WorkBudget(_OSM_AREA_FETCH_TIMEOUT_SEC)
+    budget = route_transport.WorkBudget(_OSM_AREA_FETCH_TIMEOUT_SEC, parent=parent_budget)
     def run():
         with audit.bind_trace(current), route_transport.use_budget(budget):
             audit.emit('area_task_started')
@@ -69,7 +72,7 @@ def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
     future.add_done_callback(lambda done: _osm_area_slots.release())
     audit.emit('area_task_submitted')
     try:
-        return future.result(timeout=_OSM_AREA_FETCH_TIMEOUT_SEC)
+        return future.result(timeout=min(_OSM_AREA_FETCH_TIMEOUT_SEC, budget.remaining()))
     except FuturesTimeout:
         budget.cancel()
         cancelled = future.cancel()
@@ -313,8 +316,11 @@ def get_traffic_lights_in_area():
         east = float(request.args.get('east', 180))
         west = float(request.args.get('west', -180))
 
+        if not (all(math.isfinite(x) for x in (south,north,west,east))
+                and -90 <= south < north <= 90 and -180 <= west < east <= 180):
+            return jsonify(success=False, error='Invalid map bounds', traffic_lights=[], coverage={'status':'UNKNOWN'}), 400
         if abs(north - south) > 0.35 or abs(east - west) > 0.35:
-            return jsonify({'success': True, 'traffic_lights': [], 'message': 'Zoom in to see traffic lights'})
+            return jsonify({'success': True, 'traffic_lights': [], 'count':0, 'message': 'Zoom in to see traffic lights', 'coverage':{'status':'PARTIAL','reason':'area_too_large','response_state':'NOT_QUERIED'}})
 
         from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
         lights = _run_osm_area_fetch(
@@ -411,99 +417,40 @@ def get_cameras_in_area():
 def get_traffic_lights():
     """Get traffic lights along a route from OpenStreetMap via Overpass API."""
     try:
-        data = request.json
-        route_geojson = data.get('route', {})
-
-        if not route_geojson or route_geojson.get('type') != 'LineString':
-            return jsonify({'success': False, 'error': 'Invalid route GeoJSON'})
-
-        coordinates = route_geojson.get('coordinates', [])
-        if len(coordinates) < 2:
-            return jsonify({'success': False, 'error': 'Route must have at least 2 coordinates'})
-
-        lngs = [c[0] for c in coordinates if len(c) >= 2]
-        lats = [c[1] for c in coordinates if len(c) >= 2]
-
-        if not lngs or not lats:
-            return jsonify({'success': False, 'error': 'No valid coordinates in route'})
-
-        buffer = 0.001
-        min_lat = min(lats) - buffer
-        max_lat = max(lats) + buffer
-        min_lng = min(lngs) - buffer
-        max_lng = max(lngs) + buffer
-
-        lat_diff = abs(max_lat - min_lat)
-        lon_diff = abs(max_lng - min_lng)
-        diagonal_sq = (lat_diff * lat_diff) + (lon_diff * lon_diff * 0.6)
-        estimated_km = int(math.sqrt(diagonal_sq) * 111)
-
-        if max_lat-min_lat>0.35 or max_lng-min_lng>0.35:
-            return jsonify(success=True, lights=[], count=0, warning='Area too large for bounded traffic signal acquisition', coverage={'status':'PARTIAL'})
-        from overpass_helper import query_overpass, build_traffic_signals_query
-        result = query_overpass(build_traffic_signals_query(min_lat,min_lng,max_lat,max_lng),cache_ttl=300)
-        if not result.get('success'):
-            return jsonify(success=True, lights=[], count=0, warning='Traffic signal data unavailable', coverage={'status':'UNKNOWN'})
-        elements = result['elements']
-        cached = result.get('cached',False)
-
-        lights = []
-        seen_ids = set()
-
-        for element in elements:
-            try:
-                osm_id = element.get('id')
-                if osm_id in seen_ids:
-                    continue
-                seen_ids.add(osm_id)
-
-                lat = float(element.get('lat', 0))
-                lng = float(element.get('lon', 0))
-                tags = element.get('tags', {})
-
-                if diagonal_sq > 1.0:
-                    proximity_threshold = 0.005
-                elif diagonal_sq > 0.25:
-                    proximity_threshold = 0.003
-                else:
-                    proximity_threshold = 0.0015
-
-                is_near_route = False
-                for coord in coordinates:
-                    if len(coord) >= 2:
-                        route_lng, route_lat = coord[0], coord[1]
-                        dist = math.sqrt((lat - route_lat)**2 + (lng - route_lng)**2)
-                        if dist < proximity_threshold:
-                            is_near_route = True
-                            break
-
-                if not is_near_route:
-                    continue
-
-                lights.append({
-                    'id': f'osm_{osm_id}',
-                    'lat': lat,
-                    'lng': lng,
-                    'state': 'unknown',
-                    'name': tags.get('name', ''),
-                    'crossing': tags.get('crossing', ''),
-                    'button_operated': tags.get('button_operated', ''),
-                    'source': 'openstreetmap'
-                })
-            except (ValueError, KeyError) as e:
-                logger.debug(f"[Traffic Lights] Error processing element: {e}")
-                continue
-
-        logger.info(f"[Traffic Lights] Found {len(lights)} traffic signals")
-
-        return jsonify({
-            'success': True,
-            'lights': lights,
-            'count': len(lights),
-            'source': 'openstreetmap',
-            'coverage': {'status':'PARTIAL','dataset_coverage':result.get('dataset_coverage','UNVERIFIED'),'retrieved_at':result.get('retrieved_at'),'response_state':result.get('response_state')},
-            'cached': cached if 'cached' in dir() else False
-        })
+        data = request.get_json(silent=True)
+        route = data.get('route') if isinstance(data, dict) else None
+        coordinates = route.get('coordinates') if isinstance(route, dict) and route.get('type') == 'LineString' else None
+        if not isinstance(coordinates, list) or not 2 <= len(coordinates) <= 10000:
+            return jsonify(success=False, error='Route must contain 2 to 10000 coordinates'), 400
+        if any(not isinstance(c, list) or len(c) < 2 or
+               any(isinstance(v, bool) or not isinstance(v, (int,float)) or not math.isfinite(v) for v in c[:2])
+               or abs(c[0]) > 180 or abs(c[1]) > 90 for c in coordinates):
+            return jsonify(success=False, error='Invalid route coordinates'), 400
+        south=max(-90,min(c[1] for c in coordinates)-.001)
+        north=min(90,max(c[1] for c in coordinates)+.001)
+        west=max(-180,min(c[0] for c in coordinates)-.001)
+        east=min(180,max(c[0] for c in coordinates)+.001)
+        if north-south > .35 or east-west > .35:
+            return jsonify(success=True, lights=[], count=0, source='openstreetmap',
+                           coverage={'status':'PARTIAL','reason':'area_too_large','response_state':'NOT_QUERIED'})
+        from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
+        from voyagr.utils.hazard_matching import SegmentIndex
+        signals = _run_osm_area_fetch(fetch_traffic_lights_osm_bbox, south, north, west, east, max_nodes=1000)
+        coverage=dict(getattr(signals,'coverage',{'status':'UNKNOWN'}))
+        coverage.update(proximity_m=150, association='GEOGRAPHIC_ONLY')
+        index=SegmentIndex([[c[1],c[0]] for c in coordinates])
+        lights=[]
+        for signal in signals:
+            # Display nearby mapped locations; this never establishes road,
+            # direction, live signal state or avoidance applicability.
+            if any(distance <= 150 for distance, _ in index.nearby(signal['lat'],signal['lon'],150)):
+                lights.append({'id':signal['id'],'lat':signal['lat'],'lng':signal['lon'],
+                               'state':'unknown','source':'openstreetmap','name':signal.get('name',''),
+                               'crossing':signal.get('crossing',''),'button_operated':signal.get('button_operated','')})
+        if len(lights) > 200:
+            coverage.update(status='PARTIAL', display_truncated=True)
+        return jsonify(success=True, lights=lights[:200], count=min(200,len(lights)),
+                       source='openstreetmap', cached=bool(coverage.get('cached',False)), coverage=coverage)
 
     except route_transport.RoutingDeadlineExceeded:
         raise
