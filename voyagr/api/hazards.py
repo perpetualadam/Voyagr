@@ -339,13 +339,20 @@ def get_traffic_lights_in_area():
 def get_railway_crossings_in_area():
     """Road–rail level crossings in map viewport (OSM via Overpass), for map layer."""
     try:
-        north = float(request.args.get('north', 90))
-        south = float(request.args.get('south', -90))
-        east = float(request.args.get('east', 180))
-        west = float(request.args.get('west', -180))
+        try:
+            north = float(request.args.get('north', 90))
+            south = float(request.args.get('south', -90))
+            east = float(request.args.get('east', 180))
+            west = float(request.args.get('west', -180))
 
+        except (ValueError,TypeError):
+            return jsonify(success=False, error='Invalid map bounds', railway_crossings=[], coverage={'status':'UNKNOWN'}), 400
+
+        if not (all(math.isfinite(x) for x in (south,north,west,east))
+                and -90 <= south < north <= 90 and -180 <= west < east <= 180):
+            return jsonify(success=False, error='Invalid map bounds', railway_crossings=[], coverage={'status':'UNKNOWN'}), 400
         if abs(north - south) > 0.35 or abs(east - west) > 0.35:
-            return jsonify({'success': True, 'railway_crossings': [], 'message': 'Zoom in to see railway crossings'})
+            return jsonify({'success': True, 'railway_crossings': [], 'count':0, 'message': 'Zoom in to see railway crossings', 'coverage':{'status':'PARTIAL','reason':'area_too_large','response_state':'NOT_QUERIED'}})
 
         from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
         crossings = _run_osm_area_fetch(

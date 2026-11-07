@@ -7,6 +7,7 @@
 
     var runtime = null;
     var trafficLightAreaGeneration = 0;
+    var railwayAreaGeneration = 0;
     var MOT = typeof VoyagrMapOverlayToggles !== 'undefined' ? VoyagrMapOverlayToggles : null;
     var showCamerasEnabled = MOT
         ? MOT.resolveShowCamerasEnabledFromStorage(localStorage.getItem('showCamerasEnabled'))
@@ -164,6 +165,7 @@
     }
 
     function clearOsmRailwayCrossingMarkers() {
+        railwayAreaGeneration++;
         applyClearOverlayMarkersFromPlan(OT().buildClearOsmRailwayCrossingMarkersExecutePlan());
     }
 
@@ -273,9 +275,18 @@
         });
     }
 
+    function describeRailwayCoverage(data, count) {
+        var coverage=data&&data.coverage||{};
+        if(coverage.reason==='area_too_large')return 'Level-crossing area is too large; zoom in. Coverage is partial.';
+        if(!data||data.success!==true||(!count&&['UNKNOWN','UNAVAILABLE'].includes(coverage.status)))return 'Level-crossing data unavailable. Coverage is unknown; an empty overlay does not mean there are no crossings.';
+        var text=count?count+' mapped level-crossing locations shown.':'No mapped level crossings returned for this area. This does not establish that there are no crossings.';
+        return text+' Coverage is '+(coverage.status==='STALE'?'stale':coverage.status==='AVAILABLE'?'limited to mapped data':'partial or unverified')+'. Live barrier or train state is unavailable.';
+    }
+
     function fetchAndDisplayOsmRailwayCrossings() {
+        var generation=++railwayAreaGeneration;
         var map = rt().getMap();
-        if (!map) return;
+        if (!map) {clearOsmRailwayCrossingMarkers();return;}
         var bounds = map.getBounds();
         var dispatch = OT().buildFetchOsmOverlayDispatchPlan({
             enabled: showOsmRailwayCrossingsEnabled,
@@ -288,14 +299,22 @@
             apiPath: OT().OSM_RAILWAY_CROSSINGS_AREA_API_PATH,
             logLabel: 'OSM Railway Crossings',
         });
+        var status=document.getElementById('osmRailwayCrossingDataStatus');
         if (!dispatch.shouldFetch) {
+            if(status)status.textContent=showOsmRailwayCrossingsEnabled?'Zoom in to load mapped level crossings.':'Map level-crossing overlay is off.';
             if (dispatch.clearMarkers) clearOsmRailwayCrossingMarkers();
             return;
         }
-        fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then(function (data) {
-            if (data && data.success && data.railway_crossings) {
-                displayOsmRailwayCrossingMarkers(data.railway_crossings);
-            }
+        clearOsmRailwayCrossingMarkers();generation=railwayAreaGeneration;
+        if(status)status.textContent='Loading mapped level-crossing locations…';
+        return fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then(function (data) {
+            if(!runtime||generation!==railwayAreaGeneration||!showOsmRailwayCrossingsEnabled||rt().getMap()!==map)return;
+            var current=map.getBounds();
+            if([current.getNorth(),current.getSouth(),current.getEast(),current.getWest()].join(',')!==[bounds.getNorth(),bounds.getSouth(),bounds.getEast(),bounds.getWest()].join(','))return;
+            var valid=data&&data.success===true&&Array.isArray(data.railway_crossings);
+            var crossings=valid?data.railway_crossings.filter(point=>point&&Number.isFinite(point.lat)&&Number.isFinite(point.lon)&&Math.abs(point.lat)<=90&&Math.abs(point.lon)<=180).slice(0,200):[];
+            displayOsmRailwayCrossingMarkers(crossings);
+            if(status)status.textContent=describeRailwayCoverage(valid?data:null,win.osmRailwayCrossingMarkers.length);
         });
     }
 
@@ -329,15 +348,18 @@
         if (!execute.shouldApply) return;
 
         showOsmRailwayCrossingsEnabled = execute.enabled;
+        var status=document.getElementById('osmRailwayCrossingDataStatus');if(status&&!execute.enabled)status.textContent='Map level-crossing overlay is off.';
         TU().writeBoolPref(execute.storageKey, showOsmRailwayCrossingsEnabled);
         TU().applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmRailwayCrossingsEnabled);
 
+        var pending;
         if (execute.mapAction === 'fetchOsmRailwayCrossings') {
-            fetchAndDisplayOsmRailwayCrossings();
+            pending=fetchAndDisplayOsmRailwayCrossings();
         } else {
             clearOsmRailwayCrossingMarkers();
         }
         if (execute.saveAllSettings) rt().call.saveAllSettings();
+        return pending;
     }
 
     function initializeCameraLayer() {
@@ -433,6 +455,7 @@
 
     function bind(nextRuntime) {
         trafficLightAreaGeneration++;
+        railwayAreaGeneration++;
         runtime = nextRuntime;
     }
 
@@ -449,7 +472,15 @@
         getShowOsmTrafficLightsEnabled: function () { return showOsmTrafficLightsEnabled; },
         setShowOsmTrafficLightsEnabled: function (val) { if(val!==showOsmTrafficLightsEnabled)trafficLightAreaGeneration++; showOsmTrafficLightsEnabled = val; },
         getShowOsmRailwayCrossingsEnabled: function () { return showOsmRailwayCrossingsEnabled; },
-        setShowOsmRailwayCrossingsEnabled: function (val) { showOsmRailwayCrossingsEnabled = val; },
+        setShowOsmRailwayCrossingsEnabled: function (val) {
+            if(val!==showOsmRailwayCrossingsEnabled)railwayAreaGeneration++;
+            showOsmRailwayCrossingsEnabled=val;
+            if(!val&&runtime){
+                clearOsmRailwayCrossingMarkers();
+                var status=document.getElementById('osmRailwayCrossingDataStatus');
+                if(status)status.textContent='Map level-crossing overlay is off.';
+            }
+        },
     };
 
     if (typeof module !== 'undefined' && module.exports) {

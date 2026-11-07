@@ -51,7 +51,7 @@ is possible; neither free availability nor public access is guaranteed.
 | Order | Feature and code path | Repository finding | Remaining feature-specific acceptance |
 |---|---|---|---|
 | 2 | Traffic signal map areas and selected-route overlays: `api/hazards.py`, `services/hazards.py` | `/traffic-lights/area` and `/traffic-lights` call the shared Overpass helper. Large extents are deliberately bounded/skipped; failures retain unknown/partial coverage. | Controlled endpoint/display checks passed (item 2 below); deployed small-area/selected-route evidence remains pending. A long-route empty overlay is not proof of no signals. |
-| 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Known crossing area, empty/failure distinction, multi-stop and route-assessment coverage. |
+| 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Controlled acquisition/display/snapshot and multi-leg checks passed (item 3 below); known-location and deployed/device acceptance remain pending. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
 | 6 | Other quick POI categories: `api/search.py`, `overpass_helper.build_poi_query` | TomTom first; empty TomTom suppresses fallback. Generic Overpass query is node-only. Not changed in item 1. | Sequentially assess intended empty-result fallback and area/way/relation support, preserving category semantics. |
@@ -248,3 +248,57 @@ parent request deadline and bounds its wait to remaining time. Two regressions
 prove that an already-expired request performs no transport, and expiry during
 transport cannot publish/cache the result. Cooperative cancellation and the
 two-slot no-backlog policy remain intact, including for existing shared callers.
+
+## Item 3: Railway-crossing overlay verification (7 November 2026)
+
+Controlled verification is complete; known-location, deployed-source and device
+acceptance remains open. The real shared Overpass client requests
+`node["railway"="level_crossing"]`; pedestrian `railway=crossing` is not the
+queried category. Both map display and route hazard preparation use
+`fetch_railway_crossings_osm_bbox`. Multi-stop preparation retains that list and
+its coverage in the hazard snapshot. No routing algorithms, avoidance policy,
+mandatory thresholds, engine requests or camera ingestion are changed.
+
+Reproduced on unchanged main: a delayed area response mounts a crossing after
+the user switches the overlay off. The corrected viewport path requires current
+request generation, bounds, map and owner runtime before mounting. New fetches,
+toggle-off and restored off preferences clear old crossing markers; old requests
+cannot restore them. Source failures, mapped-empty results, stale observations
+and oversized/not-queried areas retain distinct settings copy. The popup and
+status describe mapped locations, never live barrier or train state.
+
+The API validates finite ordered WGS84 bounds before acquisition and preserves
+the existing 0.35-degree size limit, 200-node display acquisition cap and shared
+two-slot, 12-second worker with shorter parent deadlines. Service results retain
+endpoint class, dataset timestamp/revision, retrieval time and cache state.
+Malformed coordinates are skipped conservatively; duplicate node IDs do not
+inflate results. Existing default routing fetch limits are retained.
+
+Verification:
+- Real shared client/parser with fixture HTTP proves the correct category query,
+  LOCAL source metadata, valid empty versus unavailable outcomes and a second
+  request's cache hit retaining its original retrieval time.
+- Real hazard preparation preserves the coverage-bearing crossing list in the
+  request snapshot. Real multi-leg assessment refuses mandatory crossing avoidance
+  for partial/unknown acquired data on every leg; no permission is inferred from
+  merely having a mapped point or a successful acquisition.
+- Actual map owner tests cover newer/older requests, toggle and preference restore,
+  panning, map replacement, teardown, failed HTTP/JSON, malformed records, duplicate
+  positions, display caps and zoom-out. Other overlay markers remain untouched.
+- `node scripts/check-railway-crossing-overlays.cjs` uses real Chromium, bundled
+  MapLibre and the production marker helper for portrait/landscape mounting,
+  popup, coverage, empty/error and toggle-clear checks, with a synthetic background
+  style/API and no provider, tile, GPS or train-state calls.
+- Local full regressions: 135 JavaScript suites / 2,962 tests, lint and coverage
+  floors passed; CI web backend selection 1,948 passed, one platform skip and
+  74 subtests passed. Syntax and diff checks passed.
+
+After a separately authorized deployment, inspect a small viewport around a
+known level crossing, using `/api/railway-crossings/area?north=...&south=...&east=...&west=...`.
+Require expected LOCAL source class and dataset timestamp/revision to establish
+use of the updated interpreter; then verify the known point in the actual map.
+Repeat after panning rapidly, zooming out, toggling off/on and restoring an off
+preference. Mapped-empty is not proof of physical absence. Confirm mandatory
+route assessments separately; map markers never establish road/profile applicability
+or live barrier state. No production queries, configuration changes or deployment
+were performed for this increment.

@@ -1077,14 +1077,19 @@ def fetch_railway_crossings_osm_bbox(
     out.coverage = {'status':'PARTIAL' if len(elements)>max_nodes or result.get('dataset_coverage')!='VERIFIED' else 'AVAILABLE',
                     'bounds':[south,west,north,east], 'retrieved_at':result.get('retrieved_at', time.time()-(300 if result.get('cached') else 0)), 'source':'Overpass OSM',
                     'endpoint_class':result.get('endpoint_class','UNKNOWN'), 'source_version':result.get('source_version','unknown'),
-                    'response_state':result.get('response_state','UNKNOWN'), 'dataset_coverage':result.get('dataset_coverage','UNVERIFIED')}
+                    'response_state':result.get('response_state','UNKNOWN'), 'dataset_coverage':result.get('dataset_coverage','UNVERIFIED'),
+                    'dataset_timestamp':result.get('dataset_timestamp'), 'cached':bool(result.get('cached',False))}
     if time.time()-out.coverage['retrieved_at']>300: out.coverage['status']='STALE'
+    seen=set()
     for el in result.get("elements", [])[:max_nodes]:
-        lat = el.get("lat")
-        lon = el.get("lon")
-        if lat is None or lon is None:
+        lat,lon = el.get('lat'),el.get('lon')
+        if (isinstance(lat,bool) or isinstance(lon,bool) or not isinstance(lat,(int,float))
+                or not isinstance(lon,(int,float)) or not math.isfinite(lat+lon) or abs(lat)>90 or abs(lon)>180):
             out.coverage['status']='PARTIAL'
             continue
+        identity=el.get('id')
+        if identity in seen: continue
+        seen.add(identity)
         out.append({
             "lat": float(lat),
             "lon": float(lon),
