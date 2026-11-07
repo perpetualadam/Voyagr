@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107mapicons1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107sheettools1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -151,7 +151,7 @@
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
-    <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261031phase12fg"></script>
+    <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261107sheettools1"></script>
     <script defer src="/static/js/modules/navigation/route-prefs.js?v=20260712aaci"></script>
     <script defer src="/static/js/modules/navigation/recent-destinations.js?v=20260711e"></script>
     <script defer src="/static/js/modules/util/html.js?v=20260711e"></script>
@@ -228,7 +228,7 @@
     <script defer src="/static/js/app/road-report-orchestration.js?v=20261031phase12fg"></script>
     <script defer src="/static/js/app/service-worker-orchestration.js?v=20260727swreload1"></script>
     <script defer src="/static/js/app/pwa-lifecycle-orchestration.js?v=20260712ab0e"></script>
-    <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20260811dash1"></script>
+    <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20261107sheettools1"></script>
     <script defer src="/static/js/app/driver-camera-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/recent-destinations-orchestration.js?v=20260712ab10"></script>
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
@@ -390,17 +390,18 @@
             <div class="bottom-sheet-header">
                 <div class="sheet-header-inner">
                     <h2 id="sheetTitle" class="sheet-title">🗺️ Navigation</h2>
-                    <nav class="sheet-toolbar" aria-label="Quick navigation">
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--saved" title="Saved Routes" onclick="switchTab('savedRoutes')">⭐</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--analytics" title="Analytics" onclick="switchTab('routeAnalytics')">📊</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--share" title="Share Route" onclick="switchTab('routeSharing')">🔗</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" onclick="switchTab('routeComparison')">🛣️</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" onclick="switchTab('tripHistory')">📋</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" onclick="switchTab('dashcam')">📹</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--premium" title="Voyager Premium — subscribe &amp; tips" onclick="openVoyagerPremiumSection()">⚡</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" onclick="switchTab('settings')">⚙️</button>
-                        <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" onclick="collapseBottomSheet()">▼</button>
+                    <nav class="sheet-toolbar" aria-label="Quick navigation" aria-describedby="sheetToolbarHint" onfocusin="VoyagrTabNavigationOrchestration.revealToolbarFocus(event)" onclick="if(event.target.closest('[data-sheet-tab]')) expandBottomSheet()">
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--saved" title="Saved Routes" aria-label="Saved Routes" onclick="switchTab('savedRoutes')" data-sheet-tab="savedRoutes" aria-controls="savedRoutesTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/></svg><span class="sheet-tool-label">Saved</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--analytics" title="Analytics" aria-label="Analytics" onclick="switchTab('routeAnalytics')" data-sheet-tab="routeAnalytics" aria-controls="routeAnalyticsTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span class="sheet-tool-label">Stats</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--share" title="Share Route" aria-label="Share Route" onclick="switchTab('routeSharing')" data-sheet-tab="routeSharing" aria-controls="routeSharingTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 11 6-4M9 13l6 4"/></svg><span class="sheet-tool-label">Share</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" aria-label="Route Options" onclick="switchTab('routeComparison')" data-sheet-tab="routeComparison" aria-controls="routeComparisonTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V7a3 3 0 0 1 6 0v10a3 3 0 0 0 6 0V4M13 7l3-3 3 3"/></svg><span class="sheet-tool-label">Routes</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" aria-label="Trip History" onclick="switchTab('tripHistory')" data-sheet-tab="tripHistory" aria-controls="tripHistoryTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6M12 7v6l4 2"/></svg><span class="sheet-tool-label">History</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" aria-label="Dashcam" onclick="switchTab('dashcam')" data-sheet-tab="dashcam" aria-controls="dashcamTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 9 6-4v14l-6-4"/></svg><span class="sheet-tool-label">Dashcam</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--premium" title="Voyager Premium — subscribe &amp; tips" aria-label="Voyager Premium — subscribe &amp; tips" onclick="openVoyagerPremiumSection()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m13 2-9 12h7l-1 8 10-13h-7Z"/></svg><span class="sheet-tool-label">Premium</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" aria-label="Settings" onclick="switchTab('settings')" data-sheet-tab="settings" aria-controls="settingsTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span class="sheet-tool-label">Settings</span></button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" aria-label="Collapse" onclick="collapseBottomSheet()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 7 7 7-7"/></svg><span class="sheet-tool-label">Collapse</span></button>
                     </nav>
+                    <p id="sheetToolbarHint" class="sheet-toolbar-hint">Swipe or scroll for more tools.</p>
                 </div>
             </div>
 
