@@ -178,3 +178,27 @@ test('journey-module-free inspection renders refused alternatives under integrit
  options.forEach((route,i)=>{expect(AI.geometryBinding(route)).toBe(captured.routes[i].avoidance_assessment.geometry_binding);expect(AI.decision(route).allowed).toBe(false);});
  await jest.advanceTimersByTimeAsync(300);expect(previewCalls).toBe(1);expect(document.getElementById('routePreviewTab').style.display).toBe('block');expect(jest.getTimerCount()).toBe(0);
 });
+
+test('arrival-intent mismatch preserves the previous plan and retires its request-owned progress',async()=>{
+ bind({ready:true});
+ selected=RS.buildRouteOptionsFromApiResponse(body(),Codec.decodePolyline)[0];window.lastCalculatedRoute=selected;options=[selected];const previousOptions=options;
+ const intent=document.createElement('select');intent.id='arrivalIntent';intent.innerHTML='<option value="roadside">Roadside</option>';document.body.appendChild(intent);
+ const commit=jest.spyOn(Modes,'commitPlanning');
+ expect(await Calculate.calculateRoute()).toBe(false);
+ const request=JSON.parse(global.fetch.mock.calls[0][1].body);
+ expect(request.journey_context.arrival_intent.mode).toBe('roadside');
+ expect(commit).not.toHaveBeenCalled();expect(window.lastCalculatedRoute).toBe(selected);expect(options).toBe(previousOptions);
+ expect(statuses).toContain('Arrival-intent modules differ. Reload online and recalculate; previous journey retained.');
+ expect(visible()).toBe(false);expect(finish).toHaveBeenCalledTimes(1);expect(jest.getTimerCount()).toBe(0);
+});
+
+test('a stale geocoding failure cannot hide or replace a newer pending request',async()=>{
+ const olderGeocode=deferred(),newerFetch=deferred();let count=0;
+ geocode=()=>++count===1?olderGeocode.promise:Promise.resolve({start:'53.3806626,-1.4702278',end:'53.5227681,-1.1335312'});
+ const older=Calculate.calculateRoute();global.fetch.mockReturnValueOnce(newerFetch.promise);
+ const newer=Calculate.calculateRoute();await fetched(1);const before=statuses.length;
+ olderGeocode.reject(Error('obsolete geocoding failed'));expect(await older).toBe(false);
+ expect(visible()).toBe(true);expect(statuses).toHaveLength(before);
+ newerFetch.resolve(response({success:false,error:'newer API error'}));await newer;
+ expect(visible()).toBe(false);expect(finish).toHaveBeenCalledTimes(2);expect(jest.getTimerCount()).toBe(0);
+});

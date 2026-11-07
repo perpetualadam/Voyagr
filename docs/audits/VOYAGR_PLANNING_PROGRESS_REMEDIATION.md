@@ -130,3 +130,31 @@ The script URL advances to `20261102progresssettlement3`; no worker or cache pol
 Final full-suite counts, real-Chromium matrix results, exact new HEAD/tree and hosted CI are recorded in the PR after verification. All browser evidence here is local loopback simulation with a real Chromium engine and real bundled prototype, not production/VPS 2, WebGL/GPS or browser/device acceptance. The actual live commitPlanning=false cause remains **UNVERIFIED**. Independent re-review is required; auto-merge remains disabled and no merge/deployment/Contabo/Cloudflare/user-storage operation is authorized or performed.
 
 Second-round local validation completed: **7 focused suites / 203 passed** (including active-journey, continuation and preview-ownership suites); **118 full JavaScript suites / 2,654 passed**, coverage and lint passed; declared backend selection **1,658 passed, one skipped, 68 subtests passed**; isolated SQL **11 passed**. The same 27-case Chromium matrix returns **19 passed / 8 failed** on reviewed source 2ef0502c and **27 passed / zero failed** on corrected source. One reviewed-source failure checks the newly explicit unavailable-inherited-observation contract; the other seven expose changed dynamic dispatch. These are regression cases, not eight separate live defects. Original counterexamples and prior accepted ownership/descriptor reproductions were also rerun successfully after correction. Hosted exact-head evidence is recorded separately in the PR; it does not stand in for live acceptance.
+
+## 2026-11-07 merge-resolution CI repair
+
+Merging main `501d166c` into this branch produced `fef4e654`. Its calculation
+pipeline contained a duplicated HTTP/JSON continuation and a missing catch
+callback, causing a JavaScript parse error at line 683. The failure reproduces
+locally at that exact head; the linked Frontend job 128508221754 failed its Jest
+step while the other four jobs passed. Main's frontend suite passes separately.
+The archived job-log download was unavailable through this environment; the
+reproduction and GitHub step/check metadata establish the defect independently.
+
+Reconcile both implementations instead of accepting either file wholesale:
+retain main's arrival-intent response guard and synchronous preparation-error
+handling; retain this PR's preflight capabilities, awaited pipeline, stale-error
+presentation guard, latest-ticket-only progress cleanup and unconditional ticket
+timer disposal. Remove the duplicate continuation and restore the catch callback.
+Advance only the changed calculation script's query label. No safety or coverage
+threshold is weakened. Existing destination/geometry and navigation gates remain.
+
+Two additional real-ticket regressions verify that an arrival-intent mismatch
+preserves the old plan and retires progress, and that an older geocoding rejection
+cannot hide a newer pending request or replace its status. Local frontend/lint:
+131 suites / 2,905 tests passed. Declared backend selection: 1,902 passed, one skip,
+74 subtests passed. Existing real-Chromium diagnostic matrix: 27 passed, zero
+failed. This remains controlled laboratory validation; physical-device acceptance
+and the original live commit-failure cause remain unverified. Update this existing
+PR for hosted checks and independent review; do not deploy or automatically merge
+the broader historical PR as part of this CI repair.

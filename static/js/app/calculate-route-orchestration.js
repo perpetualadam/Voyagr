@@ -647,36 +647,32 @@
             .then(function (data) {
                 if (integrity && !integrity.current(ticket, localStorage)) {
                     if (integrity.isLatest(ticket)) {
-                        hideRouteProgressBar();
                         rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                     }
                     return;
                 }
                 if (window.VoyagrJourneyPlan && !window.VoyagrJourneyPlan.responseArrivalIntentMatches(
                     fetchPlan.body.journey_context && fetchPlan.body.journey_context.arrival_intent, data)) {
-                    hideRouteProgressBar();
                     rt().call.showStatus('Arrival-intent modules differ. Reload online and recalculate; previous journey retained.', 'warning');
                     return false;
                 }
                 if (integrity) integrity.tag(data,ticket);
                 if (!modes && integrity && rt().getRouteInProgress() && data.routes && data.routes[0] && !integrity.gate(data.routes[0], {
                     storage:localStorage, automatic:true, quiet:true, showStatus:rt().call.showStatus,
-                })) { hideRouteProgressBar(); return; }
+                })) { return; }
                 return applyCalculateRouteResponseFromPlan(
                     RR.buildCalculateRouteResponseApplyPlan(
                         RR.buildCalculateRouteResponseExecutePlan(data, modes?false:rt().getRouteInProgress())
                     ),
                     data,
-                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken }
+                    { geocodedStart: geocodedStart, geocodedEnd: geocodedEnd, start: start, end: end, planningToken:planningToken,
+                        requestCurrent:function(){return integrity.current(ticket,localStorage);} }
                 );
             })
-                .then(function (response) { return applyCalculateRouteFetchHttpResponse(response, fetchPlan); })
-                .then(function (data) {
-                    if (integrity && !integrity.current(ticket, localStorage)) {
-                        if (integrity.isLatest(ticket)) {
-                            rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
-                        }
-                        return;
+            .catch(function (error) {
+                if (integrity && !integrity.current(ticket, localStorage)) {
+                    if (integrity.isLatest(ticket)) {
+                        rt().call.showStatus('Avoidance settings changed; calculate a new route.', 'warning');
                     }
                     return;
                 }
@@ -687,11 +683,18 @@
             });
         } catch(error) {
             if(!integrity||integrity.current(ticket,localStorage)){
-                hideRouteProgressBar();
                 rt().call.showStatus((error&&error.message?error.message:'Route request could not be prepared.')+' Previous journey retained.','warning');
             }
             return false;
-        } finally { if(integrity)integrity.finish(ticket); }
+        } finally {
+            // Settled failures can resolve false. Only the latest ticket owns
+            // progress; always dispose its timer even if rendering fails.
+            try {
+                if (integrity.isLatest(ticket)) hideRouteProgressBar();
+            } finally {
+                integrity.finish(ticket);
+            }
+        }
     }
 
     function bind(nextRuntime) {
