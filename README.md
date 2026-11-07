@@ -1,4 +1,4 @@
-# Voyagr - Open-Source Sat Nav Mobile Application
+# Voyagr - Smart Sat Nav Mobile Application
 
 A feature-rich, cost-free satellite navigation application with toll road cost estimation, electric vehicle support, and hands-free operation.
 
@@ -6,7 +6,6 @@ A feature-rich, cost-free satellite navigation application with toll road cost e
 
 ### Core Navigation
 - **Routing Engine**: Valhalla for route calculation
-- **Map Rendering**: Kivy with MapView for interactive maps
 - **GPS Integration**: Real-time location tracking
 
 ### Toll Road Support
