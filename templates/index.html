@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107navlayout1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261107arrivaloptions1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -140,7 +140,7 @@
     <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
     <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
-    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261106playback2"></script>
+    <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261107arrivaloptions1"></script>
     <script defer src="/static/js/app/journey-modes.js?v=20261106playerui1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
@@ -179,7 +179,7 @@
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
-    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261106parkingfees1"></script>
+    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261107arrivaloptions1"></script>
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261106speedobservations1"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
@@ -442,30 +442,35 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="drivingArrival">Driving arrival point (optional)</label>
-                    <div class="location-input-group">
-                        <input type="text" id="drivingArrival" placeholder="Search parking near your destination, or a named entrance" aria-describedby="drivingArrivalHelp arrivalSearchContext" oninput="showAutocomplete('drivingArrival',true)" onfocus="showAutocomplete('drivingArrival')">
-                        <div class="autocomplete-dropdown" id="autocomplete_drivingArrival"></div>
+                <details id="arrivalOptions" class="arrival-options" ontoggle="VoyagrJourneyPlan.syncArrivalSummary()">
+                    <summary><span>Arrival &amp; parking <span class="arrival-options-optional">(optional)</span><small id="arrivalOptionsSummary">Use destination</small></span><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+                    <div class="arrival-options-fields">
+                        <label for="drivingArrival">Driving arrival point (optional)</label>
+                        <div class="location-input-group">
+                            <input type="text" id="drivingArrival" placeholder="Search parking near your destination, or a named entrance" aria-describedby="drivingArrivalHelp arrivalSearchContext" oninput="showAutocomplete('drivingArrival',true)" onfocus="showAutocomplete('drivingArrival')">
+                            <div class="autocomplete-dropdown" id="autocomplete_drivingArrival"></div>
+                        </div>
+                        <label for="arrivalIntent">Planning arrival intent</label>
+                        <select id="arrivalIntent" aria-describedby="arrivalIntentHelp" onchange="VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true});VoyagrJourneyPlan.syncArrivalSummary()">
+                            <option value="place">Place or parking point (default)</option>
+                            <option value="roadside">Roadside arrival — preview only</option>
+                            <option value="vehicle_entrance">Vehicle entrance — preview only</option>
+                        </select>
+
+                        <label for="arrivalParkingPrice">Nearby parking price</label>
+                        <select id="arrivalParkingPrice" onchange="VoyagrJourneyPlan.syncArrivalSummary();VoyagrGeocodingOrchestration.searchArrivalParking()">
+                            <option value="any">Any price</option>
+                            <option value="free">Reported free only</option>
+                            <option value="paid">Reported paid only</option>
+                        </select>
+                        <small>Based on mapped fee tags. Check signs, time limits and customer restrictions. Missing fee data is not free.</small>
+                        <small id="arrivalSearchContext" role="status"></small>
+
+                        <button type="button" class="btn" onclick="VoyagrJourneyPlan.clearArrival();VoyagrLocationOrchestration.invalidateEndpointRequests('end')">Clear arrival point</button>
                     </div>
-                    <label for="arrivalIntent">Planning arrival intent</label>
-                    <select id="arrivalIntent" aria-describedby="arrivalIntentHelp" onchange="VoyagrLocationOrchestration.invalidateEndpointRequests('end',{keepArrival:true})">
-                        <option value="place">Place or parking point (default)</option>
-                        <option value="roadside">Roadside arrival — preview only</option>
-                        <option value="vehicle_entrance">Vehicle entrance — preview only</option>
-                    </select>
-                    <small id="arrivalIntentHelp">This records the intended arrival. It does not verify stopping, property access or an entrance. Roadside and entrance intents cannot start live navigation yet.</small>
-                    <label for="arrivalParkingPrice">Nearby parking price</label>
-                    <select id="arrivalParkingPrice" onchange="VoyagrGeocodingOrchestration.searchArrivalParking()">
-                        <option value="any">Any price</option>
-                        <option value="free">Reported free only</option>
-                        <option value="paid">Reported paid only</option>
-                    </select>
-                    <small>Based on mapped fee tags. Check signs, time limits and customer restrictions. Missing fee data is not free.</small>
-                    <small id="arrivalSearchContext" role="status"></small>
-                    <small id="drivingArrivalHelp">Keep your destination above. Choose where driving guidance should end, then calculate again. Check the vehicle entrance and opening restrictions. The onward connection is not included.</small>
-                    <button type="button" class="btn" onclick="VoyagrJourneyPlan.clearArrival();VoyagrLocationOrchestration.invalidateEndpointRequests('end')">Clear arrival point</button>
-                </div>
+                </details>
+                <small id="arrivalIntentHelp" class="arrival-options-notice">Arrival choices do not verify stopping, property access or an entrance. Roadside and entrance intents are preview only.</small>
+                <small id="drivingArrivalHelp" class="arrival-options-notice">Keep your destination above. After choosing a driving arrival, calculate again. Check vehicle access and opening restrictions. The onward connection is not included.</small>
 
                 <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
                 <div class="form-group card-waypoints">

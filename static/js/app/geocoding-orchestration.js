@@ -130,6 +130,8 @@ async function showAutocomplete(fieldId, userEdit) {
         delete input.dataset.displayName;
     }
 
+    if(fieldId==='drivingArrival'&&root.VoyagrJourneyPlan?.syncArrivalSummary)root.VoyagrJourneyPlan.syncArrivalSummary();
+
     if (autocompleteTimeout) {
         clearTimeout(autocompleteTimeout);
     }
@@ -332,6 +334,7 @@ function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched', 
     input.dataset.lat = lat;
     input.dataset.lon = lon;
     input.dataset.displayName = name;
+    if(fieldId==='drivingArrival'&&root.VoyagrJourneyPlan?.syncArrivalSummary)root.VoyagrJourneyPlan.syncArrivalSummary();
 
     if (dropdown) dropdown.classList.remove('show');
 
