@@ -72,9 +72,12 @@
 
         window.addEventListener('load', () => {
             const regPlan = PWA().buildServiceWorkerRegistrationExecutePlan();
-            navigator.serviceWorker.register(regPlan.scriptPath)
+            navigator.serviceWorker.register(regPlan.scriptPath, {updateViaCache:'none'})
                 .then((registration) => {
                     console.log(regPlan.successLogPrefix, registration);
+                    function waitingNotice(){if(registration.waiting){rt().call.showStatus('Update ready. Finish navigation, then close all Voyagr tabs and reopen when safe. Saved data is retained.','info');}}
+                    waitingNotice();
+                    if(registration.addEventListener)registration.addEventListener('updatefound',function(){var installing=registration.installing;if(installing&&installing.addEventListener)installing.addEventListener('statechange',waitingNotice);});
 
                     setInterval(() => {
                         void safeServiceWorkerUpdate(registration, 'periodic');

@@ -159,11 +159,11 @@ http {{
         finally:
             connection.close()
 
-    def policy(self, path, status=200):
+    def policy(self, path, status=200, cache_control='no-cache, must-revalidate'):
         result, headers, body = self.request(path)
         self.assertEqual(result, status)
         values = lambda name: [v for k, v in headers if k.lower() == name.lower()]
-        self.assertEqual(values('Cache-Control'), ['no-cache, must-revalidate'])
+        self.assertEqual(values('Cache-Control'), [cache_control])
         self.assertEqual(values('Expires'), [])
         self.assertEqual(values('X-Content-Type-Options'), ['nosniff'])
         self.assertTrue(any('max-age=' in v for v in values('Strict-Transport-Security')))
@@ -190,13 +190,11 @@ http {{
         self.policy('/static/js/missing.js', 404)
         self.policy('/static/css/missing.css', 404)
 
-    def test_other_static_assets_keep_seven_days(self):
+    def test_unversioned_vendor_and_other_static_assets_revalidate(self):
+        # The coherent-release draft deliberately stops treating mutable paths
+        # as immutable. Exact headers still exclude upstream cache policy.
         for path in ('/static/images/icon.png', '/static/vendor/maplibre-gl.js'):
-            status, headers, _ = self.request(path)
-            self.assertEqual(status, 200)
-            cc = ', '.join(v for k, v in headers if k.lower() == 'cache-control')
-            self.assertIn('max-age=604800', cc)
-            self.assertIn('immutable', cc)
+            self.policy(path, cache_control='no-cache, max-age=0, must-revalidate')
 
     def test_service_worker_stays_no_store(self):
         status, headers, _ = self.request('/service-worker.js')

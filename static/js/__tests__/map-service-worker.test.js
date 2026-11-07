@@ -103,16 +103,13 @@ test('failed HTTP responses are not cached',async()=>{
     expect((await event.response).status).toBe(502);await event.settle();
     expect(env.cache.put).not.toHaveBeenCalled();
 });
-test.each(['rejected','stalled'])('worker installs and claims clients with %s cache storage',async mode=>{
-    jest.useFakeTimers();
+test.each(['rejected','stalled'])('natural activation does not force control or touch %s cache storage',async mode=>{
     const env=setup();
     for(const method of ['open','keys'])env.caches[method].mockImplementation(()=>mode==='rejected'?Promise.reject(new Error('cache unavailable')):new Promise(()=>{}));
-    const install=env.dispatch('install');
-    await jest.advanceTimersByTimeAsync(1000);await install.settle();
-    expect(env.self.skipWaiting).toHaveBeenCalled();
-    const activate=env.dispatch('activate');
-    await jest.advanceTimersByTimeAsync(1000);await activate.settle();
-    expect(env.self.clients.claim).toHaveBeenCalledTimes(1);
+    await env.dispatch('activate').settle();
+    expect(env.self.skipWaiting).not.toHaveBeenCalled();
+    expect(env.self.clients.claim).not.toHaveBeenCalled();
+    expect(env.caches.open).not.toHaveBeenCalled();expect(env.caches.keys).not.toHaveBeenCalled();expect(env.caches.delete).not.toHaveBeenCalled();
 });
 
 test('a stalled cache write cannot hold the response or worker event forever',async()=>{
@@ -127,9 +124,10 @@ test('a synchronous cache-storage error falls back to the tile network',async()=
     const event=env.dispatch('fetch',env.request());
     expect(await event.response).toBe(env.networkReply);await event.settle();
 });
-test('a failed old-cache cleanup still allows the replacement worker to claim clients',async()=>{
+test('activation retains old caches and leaves existing clients with their controller',async()=>{
     const env=setup();env.caches.keys.mockResolvedValue(['voyagr-tiles-v51']);
     env.caches.delete.mockRejectedValue(new Error('cache unavailable'));
     await env.dispatch('activate').settle();
-    expect(env.self.clients.claim).toHaveBeenCalledTimes(1);
+    expect(env.caches.delete).not.toHaveBeenCalled();
+    expect(env.self.clients.claim).not.toHaveBeenCalled();
 });

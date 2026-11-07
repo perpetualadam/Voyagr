@@ -107,8 +107,9 @@ describe('pwa-install module', () => {
             hasRegistration: true,
             hasWaiting: true,
         });
-        expect(waiting.action).toBe('activate-waiting');
-        expect(waiting.skipWaitingMessageType).toBe('SKIP_WAITING');
+        expect(waiting.action).toBe('waiting-for-tabs');
+        expect(waiting.skipWaitingMessageType).toBeUndefined();
+        expect(waiting.saveAppState).toBe(false);
 
         const version = PWA.buildDisplayPwaVersionExecutePlan({ buildDate: '2026-07-11' });
         expect(version.versionText).toBe('App version: 2026-07-11');
