@@ -91,3 +91,18 @@ They do not establish live WebGL/GPS/provider or production acceptance.
 See [SHEET_TOOLBAR_UI.md](SHEET_TOOLBAR_UI.md) for scope and validation. This
 completes one UI increment only; the wider checks above, previous phone/provider
 acceptance and GitHub notification identification remain open alongside it.
+
+### 4b. Combined navigation overlays (implemented; deployed acceptance pending)
+
+- [x] Reproduce long-turn/speed, warning/viewport and road-name/summary collisions.
+- [x] Group existing display regions into a bounded layout with wrapping and
+  keyboard/touch scrolling, safe-area/offline clearance and scalable footer space.
+- [x] Retain source labels, source-controlled border states, warning timing,
+  dismissal, navigation refusals and End access.
+- [x] Check four screen sizes in light/dark mode at normal/200% text, with long
+  instructions, five lane arrows, mapped speed, warning on/off and offline space.
+- [x] Run full web/JavaScript regressions plus existing map-action and playback
+  browser checks. See [NAVIGATION_OVERLAY_LAYOUT.md](NAVIGATION_OVERLAY_LAYOUT.md).
+- [ ] Accept on deployed phones and Firefox/WebKit with real guidance, different
+  evidence/urgency states, offline notifications, gestures and dynamic orientation.
+  Continue the remaining whole-app and native-map accessibility checks above.

@@ -4719,3 +4719,96 @@ body.dark-mode .bottom-sheet-header .sheet-header-inner {
     --sheet-tool-surface: #20232b; --sheet-tool-text: #f4f5f8; --sheet-tool-border: #505666;
     --sheet-tool-accent: #c6a9f2; --sheet-tool-tint: #363047;
 }
+
+/* Bounded navigation HUD: long guidance and limitations scroll within their own cards. */
+:root { --journey-summary-bar-height: max(64px, calc(28px + 2.25rem)); }
+.navigation-overlay-layout {
+    --nav-top: max(12px, var(--safe-area-inset-top, 0px)); --nav-summary-space: 0px;
+    --nav-speed-width: max(128px, calc(5rem + 32px));
+    position: fixed; top: var(--nav-top); left: max(12px, var(--safe-area-inset-left, 0px));
+    right: max(12px, var(--safe-area-inset-right, 0px)); z-index: 250;
+    height: calc(100dvh - var(--nav-top) - var(--bottom-sheet-peek-height, 110px) - var(--nav-summary-space) - var(--safe-area-inset-bottom, 0px) - 80px);
+    display: grid; grid-template-columns: minmax(0, 420px) var(--nav-speed-width);
+    justify-content: space-between; grid-template-rows: minmax(0, 1fr); gap: 8px;
+    pointer-events: none; min-height: 0;
+}
+body.voyagr-journey-summary-visible .navigation-overlay-layout { --nav-summary-space: var(--journey-summary-bar-height, 64px); }
+body.voyagr-has-offline-banner .navigation-overlay-layout { --nav-top: max(72px, calc(var(--safe-area-inset-top, 0px) + 52px)); }
+.navigation-guidance-stack { display: flex; flex-direction: column; gap: 8px; height: 100%; min-width: 0; min-height: 0; }
+#navigationOverlayLayout #turnInstructionWidget {
+    position: relative; top: auto; left: auto; right: auto; width: 100%; min-width: 0; max-width: none;
+    flex: 0 1 auto; min-height: 0; max-height: 100%; overflow: auto; overscroll-behavior: contain; pointer-events: auto;
+}
+#navigationOverlayLayout .next-turn-display { padding: 10px; gap: 8px; align-items: flex-start; }
+#navigationOverlayLayout .turn-info-container { min-width: 0; }
+#navigationOverlayLayout .turn-instruction, #navigationOverlayLayout .turn-street,
+#navigationOverlayLayout .next-turn-then-text { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+#navigationOverlayLayout .turn-distance { font-size: 1.125rem; }
+#navigationOverlayLayout .turn-instruction, #navigationOverlayLayout .turn-street,
+#navigationOverlayLayout .next-turn-then-text, #navigationOverlayLayout .lane-guidance-text { font-size: .875rem; }
+#navigationOverlayLayout .turn-instruction, #navigationOverlayLayout .turn-street,
+#navigationOverlayLayout .next-turn-then-label, #navigationOverlayLayout .lane-guidance-title { opacity: 1; }
+#navigationOverlayLayout .turn-icon-container { min-width: 24px; width: 24px; height: 32px; flex: 0 0 24px; }
+#navigationOverlayLayout .turn-icon { font-size: 24px; }
+#navigationOverlayLayout .next-turn-then { min-width: 0; padding: 8px; gap: 6px; color: #fff; }
+#navigationOverlayLayout .next-turn-then-label { font-size: .625rem; }
+#navigationOverlayLayout .lane-guidance-display { padding: 10px; overflow-wrap: anywhere; }
+#navigationOverlayLayout .lane-guidance-header { flex-wrap: wrap; gap: 4px; }
+#navigationOverlayLayout .lane-visual { flex-wrap: wrap; max-width: 100%; }
+#navigationOverlayLayout #bestEffortWarning {
+    position: relative; left: auto; bottom: auto; width: 100%; margin: 0; padding: 4px 8px;
+    flex: 0 0 auto; min-height: 0; max-height: 40%; overflow: auto; overflow-wrap: anywhere; overscroll-behavior: contain; pointer-events: auto;
+}
+#navigationOverlayLayout #bestEffortWarning[hidden] { display: none; }
+#navigationOverlayLayout #bestEffortWarning > strong { display: block; line-height: 1.1; }
+#navigationOverlayLayout #bestEffortWarning button { min-height: 48px; }
+#navigationOverlayLayout #speedWidget {
+    position: relative !important; top: auto !important; right: auto !important; min-width: 0 !important;
+    width: 100%; max-height: 100%; padding: 6px !important; box-sizing: border-box;
+    align-self: start; overflow: auto; overscroll-behavior: contain; transform: none; pointer-events: auto;
+}
+#navigationOverlayLayout #speedWidget > div { gap: 6px !important; justify-content: space-around !important; }
+#navigationOverlayLayout #speedValue { font-size: 1.5rem !important; }
+#navigationOverlayLayout #speedUnitDisplay { font-size: .625rem !important; line-height: 1; margin-top: 0 !important; }
+#navigationOverlayLayout #speedLimitCircle { width: max(50px, 2.25rem) !important; min-width: max(50px, 2.25rem); height: max(50px, 2.25rem) !important; min-height: 50px; padding: 0; flex-shrink: 0; }
+#navigationOverlayLayout #speedLimitValue { font-size: .875rem !important; line-height: 1 !important; color: #202530 !important; }
+#navigationOverlayLayout #speedLimitUnit, #navigationOverlayLayout #speedLimitMappedLabel { font-size: .5rem !important; line-height: 1; }
+html.dark-mode #navigationOverlayLayout #speedUnitDisplay, body.dark-mode #navigationOverlayLayout #speedUnitDisplay { color: #c2c7d2 !important; }
+#navigationOverlayLayout #roadNameBar {
+    position: relative !important; top: auto; bottom: auto !important; left: auto !important; transform: none !important;
+    width: 100%; max-width: 100% !important; margin: 0; padding: 6px 10px !important; flex: 0 0 auto; min-height: 0; max-height: 100%;
+    font-size: .875rem !important; text-align: left !important; pointer-events: auto;
+}
+.navigation-overlay-layout :is([tabindex], button):focus-visible { outline: 3px solid #17212b; outline-offset: -3px; }
+#navigationOverlayLayout #turnInstructionWidget:focus-visible { outline-color: #fff; }
+#journeySummaryBar { bottom: calc(var(--bottom-sheet-peek-height, 110px) + var(--safe-area-inset-bottom, 0px)); height: var(--journey-summary-bar-height, 64px); padding: 8px 12px; box-sizing: border-box; }
+#journeySummaryBar .journey-summary-item, #journeySummaryBar .journey-summary-content { min-width: 0; }
+#journeySummaryBar .journey-summary-item { padding: 0 4px; }
+#journeySummaryBar .journey-summary-value { font-size: 1rem; overflow-wrap: anywhere; }
+#journeySummaryBar .journey-summary-label { font-size: .625rem; color: #fff; }
+#journeySummaryBar .journey-summary-icon { font-size: 1rem; }
+@media (max-width: 600px) {
+    .navigation-overlay-layout { --nav-speed-width: max(88px, calc(2.25rem + 16px)); }
+    #navigationOverlayLayout #speedWidget > div { flex-direction: column; }
+    #navigationOverlayLayout #speedValue { font-size: 1.25rem !important; }
+    #journeySummaryBar .journey-summary-icon { display: none; }
+    #journeySummaryBar .journey-summary-value { font-size: .875rem; }
+}
+@media (max-height: 500px) and (min-width: 700px) {
+    .navigation-overlay-layout {
+        right: calc(148px + var(--safe-area-inset-right, 0px));
+        height: calc(100dvh - var(--nav-top) - var(--bottom-sheet-peek-height, 110px) - var(--nav-summary-space) - var(--safe-area-inset-bottom, 0px) - 12px);
+    }
+    .navigation-guidance-stack { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: start; }
+    #navigationOverlayLayout .next-turn-display { display: block; }
+    #navigationOverlayLayout .turn-icon-container { float: left; margin-right: 6px; }
+    #navigationOverlayLayout .expand-indicator { margin-top: 4px; }
+    #navigationOverlayLayout #bestEffortWarning { max-height: 100%; }
+    #navigationOverlayLayout #speedWidget { padding: 2px !important; }
+    .map-action-menu > .nav-control-buttons {
+        width: 128px; padding: 4px; grid-template-columns: 1fr;
+        max-height: clamp(60px, calc(100dvh - var(--bottom-sheet-peek-height, 110px) - var(--map-summary-offset) - var(--safe-area-inset-bottom, 0px) - max(12px, var(--safe-area-inset-top, 0px)) - max(50px, 2.25rem) - 16px), 200px);
+    }
+    .map-action-menu .nav-control-buttons .map-action-button { min-height: 48px; flex-direction: row; padding: 4px; gap: 6px; }
+    .map-action-menu .nav-control-buttons .map-action-button[aria-pressed] { padding-right: 20px; }
+}
