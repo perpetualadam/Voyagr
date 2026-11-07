@@ -6,6 +6,17 @@
     'use strict';
 
     var runtime = null;
+    var endpointGenerations={start:0,end:0};
+    function invalidateEndpointRequests(field,options){
+        if(field==='end'&&!(options&&options.keepArrival)&&root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
+        if(field==='start'||field==='end')endpointGenerations[field]++;
+        else if(field===undefined){endpointGenerations.start++;endpointGenerations.end++;}
+        if(!(options&&options.endpointOnly)&&(field===undefined||field==='start'||field==='end')&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.endpointChanged)root.VoyagrJourneyModes.endpointChanged(field);
+    }
+    function endpointSnapshot(input){return JSON.stringify([input.value,input.dataset.lat,input.dataset.lon,input.dataset.displayName,input.dataset.journeySource]);}
+    if(typeof document!=='undefined')document.addEventListener('input',function(event){
+        if(event.target&&(event.target.id==='start'||event.target.id==='end'))invalidateEndpointRequests(event.target.id);
+    },true);
 
     var currentLat = 51.5074;
     var currentLon = -0.1278;
@@ -63,6 +74,12 @@
     }
 
     function setCurrentLocation(field) {
+        if(field!=='start'&&field!=='end')return;
+        const input=document.getElementById(field);if(!input)return;
+        invalidateEndpointRequests(field);
+        const generation=endpointGenerations[field],snapshot=endpointSnapshot(input);
+        let settled=false;
+        const owns=()=>!settled&&endpointGenerations[field]===generation&&document.getElementById(field)===input&&endpointSnapshot(input)===snapshot;
         if (!navigator.geolocation) {
             rt().call.showStatus('Geolocation not supported', 'error');
             return;
@@ -71,10 +88,13 @@
         rt().call.showStatus('Getting location...', 'loading');
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                const input = document.getElementById(field);
+                if(!owns())return;settled=true;
+                const coords=position&&position.coords||{};
+                const lat = coords.latitude;
+                const lon = coords.longitude;
+                if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){rt().call.showStatus('Invalid GPS location; previous selection retained.','warning');return;}
 
+                input.dataset.journeySource='gps';delete input.dataset.journeyOriginalSource;
                 input.value = 'Current Location';
                 input.dataset.lat = lat;
                 input.dataset.lon = lon;
@@ -85,12 +105,15 @@
                 rt().call.showStatus('Location set!', 'success');
             },
             (error) => {
+                if(!owns())return;settled=true;
                 rt().call.showStatus('Error: ' + error.message, 'error');
             }
         );
     }
 
     function swapStartAndDestination() {
+        if(root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
+        invalidateEndpointRequests();
         const startInput = document.getElementById('start');
         const endInput = document.getElementById('end');
 
@@ -99,6 +122,16 @@
             return;
         }
 
+        const startOriginal=startInput.dataset.journeyOriginalSource||'unknown';
+        startInput.dataset.journeyOriginalSource=endInput.dataset.journeyOriginalSource||'unknown';endInput.dataset.journeyOriginalSource=startOriginal;
+        const startSearch=startInput.dataset.journeySearchEvidence;
+        if(endInput.dataset.journeySearchEvidence)startInput.dataset.journeySearchEvidence=endInput.dataset.journeySearchEvidence;
+        else delete startInput.dataset.journeySearchEvidence;
+        if(startSearch)endInput.dataset.journeySearchEvidence=startSearch;
+        else delete endInput.dataset.journeySearchEvidence;
+        const startSource=startInput.dataset.journeySource||'unknown';
+        startInput.dataset.journeySource=endInput.dataset.journeySource||'unknown';
+        endInput.dataset.journeySource=startSource;
         const startValue = startInput.value;
         const startLat = startInput.dataset.lat;
         const startLon = startInput.dataset.lon;
@@ -157,9 +190,12 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         getCurrentLocation: getCurrentLocation,
         setCurrentLocation: setCurrentLocation,
+        invalidateEndpointRequests: invalidateEndpointRequests,
         swapStartAndDestination: swapStartAndDestination,
         getCurrentLat: getCurrentLat,
         setCurrentLat: setCurrentLat,

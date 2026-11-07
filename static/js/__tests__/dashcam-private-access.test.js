@@ -98,7 +98,7 @@ function inlineDashcam(session = null, localOnly = false, recorderFails = false)
     const source = fs.readFileSync(path.join(__dirname, '../../../templates/index.html'), 'utf8');
     const section = source.split('        // DASHCAM FUNCTIONALITY')[1].split('</script>')[0];
     const run = new Function('window','document','navigator','MediaRecorder','sendNotification', section +
-        '\nreturn { startDashcamRecording, stopDashcamRecording, playDashcamRecording, loadDashcamRecordings, getState: () => dashcamState };');
+        '\nreturn { startDashcamRecording, stopDashcamRecording, playDashcamRecording, loadDashcamRecordings, loadDashcamSettings, getState: () => dashcamState };');
     const app = run(win, document, nav, Recorder, notify);
     return { ...app, win, fetch, nav, notify, listeners, track, setSession: s => { currentSession = s; } };
 }
@@ -235,4 +235,83 @@ describe('actual inline dashcam controls', () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-local-video');
         expect(document.getElementById('dashcamRecordingsList').textContent).toContain('Sign in');
     });
+
+    test.each([null, {user:{id:'user-A'}}, {access_token:'test-token'}])('startup with incomplete session %p shows sign-in without private loads', async session => {
+        const app = inlineDashcam(session);
+        const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const transport = jest.spyOn(DC, 'privateFetch');
+        const resolution = document.getElementById('dashcamResolution').value;
+        await Promise.all([app.loadDashcamRecordings(), app.loadDashcamSettings()]);
+        expect(transport).not.toHaveBeenCalled();
+        expect(app.fetch).not.toHaveBeenCalled();
+        expect(errors).not.toHaveBeenCalled();
+        expect(document.getElementById('dashcamRecordingsList').textContent).toBe('Sign in to view your private recordings');
+        expect(document.getElementById('dashcamTotalRecordings').textContent).toBe('0');
+        expect(document.getElementById('dashcamResolution').value).toBe(resolution);
+        expect(app.nav.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    });
+
+    test('signing in after anonymous startup loads authenticated private data normally', async () => {
+        const app = inlineDashcam(null);
+        await Promise.all([app.loadDashcamRecordings(), app.loadDashcamSettings()]);
+        app.setSession(sessionA);
+        app.fetch.mockImplementation(async url => ({status:200,ok:true,json:async()=>url.endsWith('/recordings')
+            ? {success:true,recordings:[]}
+            : {success:true,settings:{resolution:'720p',fps:30,retention_days:7,audio_enabled:true}}}));
+        app.listeners['voyagr-auth-changed']({detail:{userId:'user-A'}});
+        await jest.advanceTimersByTimeAsync(0);
+        expect(app.fetch.mock.calls.map(c=>c[0])).toEqual(['/api/dashcam/recordings','/api/dashcam/settings']);
+        app.fetch.mock.calls.forEach(([,options])=>expect(options.headers.get('Authorization')).toBe('Bearer '+sessionA.access_token));
+        expect(document.getElementById('dashcamRecordingsList').textContent).toBe('No recordings yet');
+        expect(document.getElementById('dashcamResolution').value).toBe('720p');
+        expect(document.getElementById('dashcamRetention').value).toBe('7');
+        expect(document.getElementById('dashcamAudio').classList.contains('active')).toBe(true);
+    });
+
+    test.each(['loadDashcamRecordings','loadDashcamSettings'])('%s still reports genuine network errors', async method => {
+        const app=inlineDashcam(sessionA);
+        const errors=jest.spyOn(console,'error').mockImplementation(()=>{});
+        app.fetch.mockRejectedValue(new Error('network unavailable'));
+        await app[method]();
+        expect(app.fetch).toHaveBeenCalledTimes(1);
+        expect(errors).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({message:'network unavailable'}));
+    });
+
+    test.each(['loadDashcamRecordings','loadDashcamSettings'])('%s rejects a private response body after sign-out', async method => {
+        const app=inlineDashcam(sessionA);
+        jest.spyOn(console,'error').mockImplementation(()=>{});
+        let release,bodyStarted;
+        const pending=new Promise(resolve=>{bodyStarted=resolve;});
+        app.fetch.mockResolvedValue({status:200,ok:true,json:()=>{
+            bodyStarted();return new Promise(resolve=>{release=resolve;});
+        }});
+        const loading=app[method]();await pending;
+        app.setSession(null);app.listeners['voyagr-auth-changed']({detail:{userId:null}});
+        release({success:true,recordings:[{recording_id:'private-A',start_time:0}],settings:{resolution:'private-A'}});
+        await loading;
+        expect(document.getElementById('dashcamRecordingsList').textContent).not.toContain('private-A');
+        expect(document.getElementById('dashcamResolution').value).toBe('720p');
+        expect(document.getElementById('dashcamTotalRecordings').textContent).toBe('0');
+    });
+
+
+    test('page-load initialization treats a guest session as a normal sign-in state', async () => {
+        const app=inlineDashcam(null);
+        const errors=jest.spyOn(console,'error').mockImplementation(()=>{});
+        app.listeners.load();await jest.advanceTimersByTimeAsync(0);
+        expect(app.fetch).not.toHaveBeenCalled();
+        expect(errors).not.toHaveBeenCalled();
+        expect(document.getElementById('dashcamRecordingsList').textContent).toContain('Sign in');
+    });
+
+    test.each(['loadDashcamRecordings','loadDashcamSettings'])('%s reports HTTP failures without displaying their body', async method => {
+        const app=inlineDashcam(sessionA);
+        const errors=jest.spyOn(console,'error').mockImplementation(()=>{});
+        const json=jest.fn(async()=>({success:true,recordings:[],settings:{resolution:'720p'}}));
+        app.fetch.mockResolvedValue({status:503,ok:false,json});
+        await app[method]();
+        expect(errors).toHaveBeenCalled();
+        expect(json).not.toHaveBeenCalled();
+    });
+
 });

@@ -255,7 +255,16 @@
     }
 
     function updateRouteOnMap(newRoute, options) {
+        var intentOwner=root.VoyagrJourneyModes;
+        if((intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!root.VoyagrOfflineNavigationOrchestration||root.VoyagrOfflineNavigationOrchestration.DURABLE_OWNERSHIP_PROTOCOL!==1))return {ok:false,scheduleRetry:false,reason:'durable_ownership_modules_incompatible'};
+        if((intentOwner||root.VOYAGR_JOURNEY_PROTOCOL===1)&&(!intentOwner||!intentOwner.endpointIntentCompatible||intentOwner.endpointIntentCompatible()!==true||intentOwner.isAbandoning&&intentOwner.isAbandoning()))return {ok:false,scheduleRetry:false,reason:'endpoint_intent_modules_incompatible'};
+        if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) {
+            return {ok:false,scheduleRetry:false,reason:'simulation_active'};
+        }
         options = options || {};
+        var owner=root.VoyagrJourneyModes;
+        var intentToken=newRoute&&newRoute.avoidance_intent_token!=null?newRoute.avoidance_intent_token:owner&&owner.captureIntent?owner.captureIntent():null;
+        function contextCurrent(){return (!owner||!!(owner.intentCurrent&&owner.intentCurrent(intentToken)&&owner.endpointIntentCompatible&&owner.endpointIntentCompatible()===true))&&(!options.isCurrent||options.isCurrent()===true);}
         var life = root.VoyagrNavigationLifecycleOrchestration;
         try {
             if (!life || typeof life.failNavigation!=='function' || typeof life.getNavigationFailure!=='function' ||
@@ -275,7 +284,7 @@
             })===true;
             candidate = verified && typeof integrity.prepareNavigationCandidate==='function'
                 ? integrity.prepareNavigationCandidate(candidate) : null;
-            verified = !!candidate;
+            verified = !!candidate&&contextCurrent();
         } catch (_) { /* Missing/broken verifier never authorizes replacement. */ }
         if (!verified) {
             rt().call.showStatus('Safety verification unavailable or route safety unresolved; current route retained.','warning');
@@ -344,11 +353,12 @@
                     mapTheme: storedMapTheme(),
                 });
             if (!mount.valid) throw new Error('Invalid mount');
+            if(!contextCurrent())throw new Error('Journey intent changed before map staging');
             if (rt().getMapLibreHelpers().invalidateDeferredPolylineMounts(map) !== true) throw new Error('Deferred map ownership unavailable');
             // Stage the new owned line while the old line remains available. No
             // asynchronous/pending mount may authorize an active-route transition.
             staged = rt().getMapLibreHelpers().addPolyline(map, mount.polyline, mount.style);
-            if (!mounted(staged, candidate.polyline)) throw new Error('Map mount failed');
+            if (!mounted(staged, candidate.polyline)||!contextCurrent()) throw new Error('Map mount failed or intent changed');
             pairs[8][1]=staged;
             try {
                 // Synchronous setters only: no render/service callbacks or awaits
@@ -356,7 +366,7 @@
                 committingVerifiedTransition = true;
                 try {
                     pairs.forEach(function(pair) { rt()['set'+pair[0]](pair[1]); });
-                    if (!pairs.every(function(pair) { return rt()['get'+pair[0]]() === pair[1]; })) throw new Error('State commitment incomplete');
+                    if (!contextCurrent() || !pairs.every(function(pair) { return rt()['get'+pair[0]]() === pair[1]; })) throw new Error('State commitment incomplete');
                 }
                 finally { committingVerifiedTransition = false; }
                 applyDeviationRerouteState(state.deviation);
@@ -388,10 +398,11 @@
             return inconsistentMap();
         }
         try {
-            if (rt().call.clearAllRouteLayerHandles() !== true || !mounted(staged,candidate.polyline)) return inconsistentMap();
+            if (!contextCurrent() || rt().call.clearAllRouteLayerHandles() !== true || !mounted(staged,candidate.polyline)) return inconsistentMap();
         } catch (_) { return inconsistentMap(); }
         authorisedCurrentRoute = JSON.parse(JSON.stringify(candidate));
         window.lastRouteApiResponse = null;
+        try { if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.committed(candidate); } catch (_) { /* Guidance retains its independently verified transaction. */ }
         try {
             if (state.deviation.clearFailureRetries) rt().call.clearRerouteFailureRetries();
             resetVoiceAnnouncementStateForNewRoute();
@@ -581,6 +592,10 @@
     }
 
     var api = {
+        DURABLE_OWNERSHIP_PROTOCOL:1,
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
+        INTENT_OWNERSHIP_PROTOCOL: 1,
         bind: bind,
         authoriseCurrentRouteRedraw:authoriseCurrentRouteRedraw,
         isCommittingVerifiedTransition:function() { return committingVerifiedTransition; },

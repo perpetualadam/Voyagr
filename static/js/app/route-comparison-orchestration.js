@@ -203,6 +203,7 @@ function clearAllRouteLayersFromMap() {
 
 function clearRouteLayerHandlesFromPlan(plan) {
     if (!allowPreviewMutation()) return false;
+    if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.clearMap();
     const generation=++previewMountGeneration;
     if (!plan) return true;
     const owned=rt().getRouteLayer();
@@ -548,6 +549,7 @@ function applyDoAddRouteLayersFromPlan(apply, batchToken) {
     if (!previewBatchCurrent(batch) || applyDoAddRouteLayersBatchFromPlan(apply.batchExecute,batch)===false) return false;
     if (!previewBatchCurrent(batch)) return false;
     applyDoAddRouteLayersPostMountFromPlan(apply.postMount,batch);
+    if(previewBatchCurrent(batch)&&root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.showMap((getRouteOptions()||[])[getSelectedRouteIndex()],rt().getMap());
     return previewBatchCurrent(batch);
 }
 
@@ -655,6 +657,9 @@ function displayRouteComparison() {
 }
 
 function allowSelectionWrite() {
+    const planner=root.VoyagrJourneyModes;
+    if(planner&&planner.isPublishingPlanningPlan&&planner.isPublishingPlanningPlan()===true)return true;
+    if(planner&&planner.isJourneyCommitPending&&planner.isJourneyCommitPending()===true)return false;
     // Only the verifier-backed synchronous transition may write an active
     // selection. The capability is read-only and scoped inside that operation.
     const updater = root.VoyagrRerouteMapOrchestration;
@@ -673,6 +678,8 @@ function knownInactiveLifecycle() {
 }
 
 function allowPreviewMutation() {
+    const planner=root.VoyagrJourneyModes;
+    if(planner&&planner.isJourneyCommitPending&&planner.isJourneyCommitPending()&&!(planner.isPublishingPlanningPlan&&planner.isPublishingPlanningPlan()))return false;
     if (runtime && knownInactiveLifecycle()) return true;
     try { if (runtime && runtime.call && typeof runtime.call.showStatus === 'function') {
         runtime.call.showStatus('Preview display unavailable during navigation or incomplete startup. Select a verified route instead.', 'warning');
@@ -683,6 +690,7 @@ function allowPreviewMutation() {
 // Only comparison handles are eligible; never remove the owned guidance layer.
 // Used by a verified navigation transaction after its new line is mounted.
 function clearComparisonRouteLayers() {
+    if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.clearMap();
     if (!runtime) return false;
     const generation=++previewMountGeneration;
     const owned=rt().getRouteLayer();
@@ -860,7 +868,9 @@ function displaySingleRoute(index) {
     const orch = RS().buildDisplaySingleRouteEntryOrchestrationPlan(
         collectDisplaySingleRouteInput(index)
     );
-    return applyDisplaySingleRouteFromPlan(orch.apply);
+    const result=applyDisplaySingleRouteFromPlan(orch.apply);
+    if(result!==false&&root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.showMap((getRouteOptions()||[])[index],rt().getMap());
+    return result;
 }
 
 /**

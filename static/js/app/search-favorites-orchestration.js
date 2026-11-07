@@ -86,6 +86,8 @@
                     favorites.forEach((fav) => {
                         mountFavoriteGridItem(grid, fav, {
                             onSelect: (item) => {
+                                if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end');
+                                delete document.getElementById('end').dataset.journeyOriginalSource;document.getElementById('end').dataset.journeySource='saved';
                                 document.getElementById('end').value = item.name;
                                 document.getElementById('end').dataset.lat = item.lat;
                                 document.getElementById('end').dataset.lon = item.lon;
@@ -195,6 +197,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         addToSearchHistory: addToSearchHistory,
         loadFavorites: loadFavorites,

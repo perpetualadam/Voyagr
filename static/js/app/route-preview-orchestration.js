@@ -203,7 +203,9 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
 }
 
 function showRestoredRoutePreview(payload) {
+    if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
     if (!payload || !payload.navigation_resume_requires_fresh_gps || rt().getRouteInProgress()) return false;
+    if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isJourneyCommitPending&&root.VoyagrJourneyModes.isJourneyCommitPending()){rt().call.showStatus('Previous planning transaction is finishing. Retry shortly.','warning');return false;}
     // Replace the entire preview context, never combine a saved destination with
     // an unrelated selection. The restored marker remains a navigation refusal.
     rt().setRouteOptions([payload]);
@@ -212,9 +214,24 @@ function showRestoredRoutePreview(payload) {
     window.lastRouteApiResponse = null;
     const origin=payload.avoidance_assessment && payload.avoidance_assessment.origin_integrity;
     const start=document.getElementById('start'), end=document.getElementById('end');
+    if(root.VoyagrAutoGpsOrchestration){root.VoyagrAutoGpsOrchestration.setAutoGpsEnabled(false);root.VoyagrAutoGpsOrchestration.stopAutoGpsLocation();}
     if (start) start.value=typeof payload.saved_origin_label==='string' ? payload.saved_origin_label :
         origin && Array.isArray(origin.requested_origin) ? origin.requested_origin.join(',') : 'Saved origin (unverified)';
     if (end) end.value=typeof payload.destination==='string' ? payload.destination : 'Saved destination (unverified)';
+    [start,end].forEach(function(input,index){
+        if(!input)return;
+        var endpoint=payload.journey_context && payload.journey_context[index===0?'origin':'destination'];
+        var point=endpoint && root.VoyagrJourneyPlan && root.VoyagrJourneyPlan.coordinate(endpoint.coordinates);
+        input.dataset.journeySource=endpoint&&endpoint.kind||'unknown';
+        input.dataset.journeyOriginalSource=endpoint&&endpoint.source_kind||'unknown';
+        if(endpoint&&endpoint.search_evidence)input.dataset.journeySearchEvidence=JSON.stringify(endpoint.search_evidence);
+        else delete input.dataset.journeySearchEvidence;
+        if(point){input.dataset.lat=String(point[0]);input.dataset.lon=String(point[1]);}
+        else{delete input.dataset.lat;delete input.dataset.lon;}
+        input.dataset.displayName=input.value;
+    });
+    if(root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.restoreArrival(payload.journey_context,end,document.getElementById('drivingArrival'));
+    var gpsToggle=document.getElementById('autoGpsToggle');if(gpsToggle)gpsToggle.checked=false;
     showRoutePreview(payload);
     rt().call.showStatus('Saved journey is preview only. Recalculate from your actual location and destination before navigation.', 'warning');
     return true;
@@ -231,6 +248,8 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const restored=!!(routeData && routeData.navigation_resume_requires_fresh_gps);
     const integrity = restored ? null : root.VoyagrAvoidanceIntegrity;
     const notice = document.getElementById('routeAvoidanceNotice');
+    const planningNotice=document.getElementById('routePlanningNotice');
+    if(planningNotice)planningNotice.textContent=integrity?integrity.planningSummary(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex())):'';
     if (notice && restored) {
         notice.textContent='Saved journey is preview only; navigation cannot start. Recalculate from your actual location and destination.';
     } else if (notice && integrity) {
@@ -241,6 +260,11 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         collectShowRoutePreviewInput(routeData, skipMapDisplay)
     );
     applyShowRoutePreviewFromPlan(orch.apply, routeData, skipMapDisplay);
+    if (root.VoyagrNavigationSafetyUX) {
+        root.VoyagrNavigationSafetyUX.present(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()));
+    }
+    if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.render(restored?null:RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex()),rt().getMap());
+    if (root.VoyagrJourneyModes) root.VoyagrJourneyModes.onPreview();
 }
 
 function collectShowAlternativeRoutesPreviewInput() {
@@ -579,6 +603,8 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         applyAlternativeRoutesPreviewDomFromPlan: applyAlternativeRoutesPreviewDomFromPlan,
         applyRouteComparisonModalFromPlan: applyRouteComparisonModalFromPlan,

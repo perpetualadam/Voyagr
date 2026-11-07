@@ -155,3 +155,125 @@ def test_stale_fixture_engine_version_does_not_execute_a_routing_request():
         result=m.run(manifest,approved_local_services=True)
     assert request.call_count==1 and result['routing_requests_attempted']==0
     assert result['execution_status']=='REAL_ENGINE_EXECUTION_NOT_TESTED'
+
+
+def speed_context_response():
+    return dict(success=True, response_state='VALID_WITH_DATA', retrieved_at=1800000000,
+                dataset_timestamp='2027-01-14T08:00:00Z', elements=[dict(
+                    type='way', id=10, nodes=[1, 2], tags={'highway':'residential','maxspeed':'30 mph'},
+                    geometry=[{'lat':53.52,'lon':-1.13},{'lat':53.53,'lon':-1.13}])])
+
+
+def connectivity_response():
+    return dict(success=True,response_state='VALID_WITH_DATA',retrieved_at=1800000000,
+                dataset_timestamp='2027-01-14T08:00:00Z',elements=[dict(type='relation',id=99,
+                    tags={'type':'connectivity','connectivity':'2:1'},members=[
+                        {'type':'way','ref':10,'role':'from'}, {'type':'node','ref':2,'role':'via'},
+                        {'type':'way','ref':20,'role':'to'}])])
+
+
+def test_connectivity_is_separate_bounded_same_snapshot_source_data():
+    from voyagr.services.overpass_road_context import live_context
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),connectivity_response()]) as query:
+        context=live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)
+    assert context['coverage']=='PARTIAL'
+    relation=context['lane_connectivity']['relations'][0]
+    assert relation['from_way']=='10' and relation['via_node']=='2' and relation['to_way']=='20'
+    assert relation['unsupported'] is False
+    assert '["type"="connectivity"]' in query.call_args_list[1].args[0]
+    assert '["type"="restriction"]' in query.call_args_list[1].args[0]
+
+
+@pytest.mark.parametrize('change',[
+    {'success':False}, {'dataset_timestamp':'2027-01-15T07:00:00Z'}, {'retrieved_at':1799999900},
+    {'retrieved_at':1800000001}, {'elements':connectivity_response()['elements']*257},
+    {'elements':[dict(connectivity_response()['elements'][0],tags={'type':'connectivity','connectivity':'2:1','note':'x'*524288})]},
+])
+def test_unusable_connectivity_does_not_remove_speed_or_layout_context(change):
+    from voyagr.services.overpass_road_context import live_context
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),dict(connectivity_response(),**change)]):
+        context=live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)
+    assert context['roads'][0]['osm_way_id']=='10' and context['lane_connectivity'] is None
+
+
+def test_connectivity_timeout_keeps_base_context_and_via_way_stays_unsupported():
+    from voyagr.services.overpass_road_context import live_context
+    import requests
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),requests.exceptions.Timeout()]):
+        assert live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)['roads']
+    data=connectivity_response();data['elements'][0]['members'][1]['type']='way'
+    with patch('overpass_helper.query_overpass',side_effect=[speed_context_response(),data]):
+        relation=live_context(53.524,-1.13,now=1800000000000,with_connectivity=True)['lane_connectivity']['relations'][0]
+    assert relation['unsupported'] is True and relation['from_ways']==['10']
+
+
+def test_live_speed_context_uses_shared_overpass_and_retains_two_source_clocks():
+    from voyagr.services.overpass_road_context import live_context
+    data=speed_context_response()
+    with patch('overpass_helper.query_overpass', return_value=data) as query:
+        context=live_context(53.524,-1.13,now=1800000000000)
+    assert context is not None
+    assert context['coverage']=='PARTIAL' and context['speed_observations_only'] is True
+    assert context['lane_observations_only'] is True
+    assert context['acquired_at_ms']==1800000000000
+    assert context['source_data_at_ms']<context['acquired_at_ms']
+    assert 'attribute_bundles' not in context['roads'][0]
+    assert context['roads'][0]['node_ids']==[1,2]
+    assert not RoadIndex(context).invalid
+    assert '["highway"]' in query.call_args.args[0]
+    assert '["maxspeed"]' not in query.call_args.args[0]  # retain competitors
+
+
+@pytest.mark.parametrize('change', [
+    {'success':False}, {'response_state':'VALID_EMPTY'}, {'dataset_timestamp':None},
+    {'dataset_timestamp':'2020-01-01T00:00:00Z'},
+    {'dataset_timestamp':'2030-01-01T00:00:00Z'}, {'retrieved_at':1799999900},
+    {'retrieved_at':1800000001}, {'elements':[{'type':'way'}]},
+])
+def test_live_speed_context_fails_closed(change):
+    from voyagr.services.overpass_road_context import live_context
+    data=dict(speed_context_response(),**change)
+    with patch('overpass_helper.query_overpass',return_value=data):
+        assert live_context(53.524,-1.13,now=1800000000000) is None
+
+
+def test_new_overpass_retrieval_is_compared_to_time_after_acquisition():
+    from voyagr.services.overpass_road_context import live_context
+    data=speed_context_response();data['retrieved_at']=1800000001
+    with patch('overpass_helper.query_overpass',return_value=data), \
+         patch('voyagr.services.overpass_road_context.time.time',side_effect=[1800000000,1800000002]):
+        assert live_context(53.524,-1.13)['acquired_at_ms']==1800000001000
+
+
+def test_live_speed_context_rejects_missing_nodes_and_conflicting_geometry():
+    from voyagr.services.overpass_road_context import live_context
+    data=speed_context_response();data['elements'][0]['nodes']=[]
+    with patch('overpass_helper.query_overpass',return_value=data):
+        assert live_context(53.524,-1.13,now=1800000000000) is None
+    data=speed_context_response();data['elements']*=2
+    with patch('overpass_helper.query_overpass',return_value=data):
+        assert live_context(53.524,-1.13,now=1800000000000) is None
+
+
+def test_speed_only_http_fallback_is_explicit_and_preserves_operator_file_priority(monkeypatch):
+    import voyagr_web as vw
+    monkeypatch.delenv('VOYAGR_ROAD_EVIDENCE_FILE',raising=False)
+    client=vw.app.test_client()
+    with patch('voyagr.services.road_context.local_context',return_value=None), \
+         patch('voyagr.services.overpass_road_context.live_context',return_value={'coverage':'PARTIAL','speed_observations_only':True}) as live:
+        assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13}).json['context'] is None
+        live.assert_not_called()
+        response=client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'speed_observations':True})
+        assert response.status_code==200 and response.headers['Cache-Control']=='no-store'
+        assert response.json['context']['speed_observations_only'] is True
+        live.assert_called_once_with(53.524,-1.13)
+        live.reset_mock()
+        assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'lane_observations':True}).json['context'] is not None
+        live.assert_called_once_with(53.524,-1.13)
+        live.reset_mock()
+        assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'lane_observations':True,'lane_connectivity':True}).json['context'] is not None
+        live.assert_called_once_with(53.524,-1.13,with_connectivity=True)
+        live.reset_mock()
+        monkeypatch.setenv('VOYAGR_ROAD_EVIDENCE_FILE','/operator-selected-source')
+        assert client.post('/api/road-context',json={'lat':53.524,'lon':-1.13,'speed_observations':True}).json['context'] is None
+        live.assert_not_called()

@@ -21,6 +21,8 @@
      * @param {{ distance_km?: number, duration_minutes?: number }|null|undefined} walkingData
      * @returns {MultimodalLegTotals}
      */
+    function escapeParkingText(value){return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
     function computeMultimodalLegTotals(drivingData, walkingData) {
         var drivingDistKm = (drivingData && drivingData.distance_km) || 0;
         var drivingTimeMin = (drivingData && drivingData.duration_minutes) || 0;
@@ -110,12 +112,18 @@
         var walkingMinutes = computeWalkingMinutesFromMeters(parking.distance_m);
         return (
             '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">' +
-                '<strong style="font-size: 13px;">' + parking.name + '</strong>' +
+                '<strong style="font-size: 13px;">' + escapeParkingText(parking.name) + '</strong>' +
                 '<span style="background: #FF9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">' + (index + 1) + '</span>' +
             '</div>' +
             '<div style="font-size: 12px; color: #666;">' +
                 '📍 ' + opts.distanceText + ' ' + opts.distUnit + ' away<br>' +
-                '🚶 ' + walkingMinutes + ' min walk' +
+                '🚶 ' + walkingMinutes + ' min walk<br>' +
+                escapeParkingText(parking.fee_label||'Fee unknown — check signs')+'<br>'+
+                escapeParkingText(parking.access_category==='customers'?'Customers only — check eligibility':parking.access_category==='restricted'?'Restricted/private access — check permission':'Vehicle access unverified')+
+                (parking.reported_fee&&parking.reported_fee.maxstay?'<br>Reported maximum stay: '+escapeParkingText(parking.reported_fee.maxstay):'')+
+                (parking.reported_fee&&parking.reported_fee['fee:conditional']?'<br>Fee condition: '+escapeParkingText(parking.reported_fee['fee:conditional']):'')+
+                (parking.reported_fee&&parking.reported_fee['charge:conditional']?'<br>Charge condition: '+escapeParkingText(parking.reported_fee['charge:conditional']):'')+
+                (parking.opening_hours?'<br>Reported hours: '+escapeParkingText(parking.opening_hours):'')+
             '</div>' +
             '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
                 '<button type="button" class="parking-show-route-btn" style="flex: 1; background: #2196F3; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">' +
@@ -162,7 +170,7 @@
      * @returns {string}
      */
     function buildParkingMapMarkerPopupHtml(name, distanceDisplay, distUnit) {
-        return '<strong>' + (name || '') + '</strong><br>Distance: ' + distanceDisplay + ' ' + distUnit;
+        return '<strong>' + escapeParkingText(name) + '</strong><br>Distance: ' + distanceDisplay + ' ' + distUnit;
     }
 
     /**

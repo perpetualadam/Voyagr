@@ -240,6 +240,22 @@ describe('view-model: shouldShow', () => {
 });
 
 describe('view-model: badge', () => {
+    test('matched directional evidence keeps its mapped label through hybrid rendering', () => {
+        const data = LG.buildHybridLaneGuidance({
+            apiData: {source: 'matched_directional_source', evidence_state: 'EXPLICIT',
+                total_lanes: 2, recommended_lanes: [2], recommended_lane: 2,
+                show_lane_guidance: true, has_turn_lanes: true},
+            maneuver: 'right', roadType: 'primary', distanceToManeuver: 150,
+        });
+        expect(LG.isActionableLaneGuidance(data)).toBe(true);
+        expect(LG.buildLaneGuidanceDomApplyPlan(data, '').badge).toEqual({text: 'Mapped', visible: true});
+    });
+    test.each(['UNKNOWN', 'INFERRED'])('source name alone cannot relabel %s evidence as mapped', evidence_state => {
+        const data = {source: 'matched_directional_source', evidence_state,
+            total_lanes: 2, recommended_lanes: [2], recommended_lane: 2};
+        expect(LG.isActionableLaneGuidance(data)).toBe(false);
+        expect(LG.badge(data)).toEqual({text: 'Estimated', visible: true});
+    });
     test('OSM data shows no badge', () => {
         expect(LG.badge({ has_osm_data: true })).toEqual({ text: '', visible: false });
     });

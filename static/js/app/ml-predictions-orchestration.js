@@ -37,6 +37,8 @@
                     el.className = item.className;
                     el.innerHTML = item.html;
                     el.onclick = () => {
+                        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+                        [fetchPlan.startInputId,fetchPlan.endInputId].forEach(id=>{const input=document.getElementById(id);delete input.dataset.lat;delete input.dataset.lon;delete input.dataset.displayName;delete input.dataset.journeyOriginalSource;input.dataset.journeySource='saved';});
                         document.getElementById(fetchPlan.startInputId).value = item.routeInputs.start;
                         document.getElementById(fetchPlan.endInputId).value = item.routeInputs.end;
                         rt().call.calculateRoute();
@@ -83,6 +85,8 @@
     }
 
     var api = {
+        ENDPOINT_INTENT_PROTOCOL:1,
+        endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         loadMLPredictions: loadMLPredictions,
         toggleMLPredictions: toggleMLPredictions,

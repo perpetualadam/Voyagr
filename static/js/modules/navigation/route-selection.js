@@ -1843,6 +1843,9 @@
             provider_capabilities: route.provider_capabilities,
             camera_evidence: route.camera_evidence,
             route_comparison: route.route_comparison,
+            avoidance_intent_token: route.avoidance_intent_token,
+            journey_context: route.journey_context,
+            endpoint_resolution: route.endpoint_resolution,
             avoidance_assessment: route.avoidance_assessment,
             avoidance_preferences_snapshot: route.avoidance_preferences_snapshot,
             avoidance_tradeoff: route.avoidance_tradeoff,
@@ -1887,6 +1890,9 @@
             provider_capabilities:data.provider_capabilities,
             camera_evidence: data.camera_evidence,
             route_comparison: data.route_comparison,
+            avoidance_intent_token:data.avoidance_intent_token,
+            journey_context:data.journey_context,
+            endpoint_resolution:data.endpoint_resolution,
             avoidance_assessment:data.avoidance_assessment,
             avoidance_preferences_snapshot:data.avoidance_preferences_snapshot,
         }];
@@ -2189,8 +2195,8 @@
             durationMinutes: resolveInitialRouteDurationMinutes(data),
             displayTime: displayTime,
             notification: {
-                title: 'Route Ready',
-                message: notificationDist + ' ' + (fmt.distUnit || '') + ' in ' + data.time + '. Ready to navigate?',
+                title: 'Route Preview Ready',
+                message: notificationDist + ' ' + (fmt.distUnit || '') + ' in ' + data.time + '. Review the preview and choose a journey mode.',
                 type: 'success',
             },
             recentDestinations: recentDestinations,
@@ -2388,9 +2394,9 @@
         error = error || {};
         return {
             shouldApply: true,
-            statusMessage: 'Error parsing coordinates: ' + (error.message || 'unknown'),
+            statusMessage: 'Route preview failed: ' + (error.message || 'unknown'),
             statusType: 'error',
-            logPrefix: 'Coordinate parsing error:',
+            logPrefix: 'Route preview error:',
             hideRouteProgressBar: true,
         };
     }
@@ -2480,6 +2486,10 @@
                 provider_capabilities: sel.provider_capabilities,
                 camera_evidence: sel.camera_evidence,
                 route_comparison: sel.route_comparison,
+                avoidance_intent_token: sel.avoidance_intent_token,
+                journey_context: sel.journey_context,
+                endpoint_resolution: sel.endpoint_resolution,
+                durable_journey_id:sel.durable_journey_id,
                 avoidance_assessment: sel.avoidance_assessment,
                 avoidance_requirements: sel.avoidance_requirements || routeData.avoidance_requirements,
                 avoidance_preferences_snapshot: sel.avoidance_preferences_snapshot || routeData.avoidance_preferences_snapshot,
@@ -2510,6 +2520,9 @@
             provider_capabilities: route.provider_capabilities,
             camera_evidence: route.camera_evidence,
             route_comparison: route.route_comparison,
+            avoidance_intent_token: route.avoidance_intent_token,
+            journey_context: route.journey_context,
+            endpoint_resolution: route.endpoint_resolution,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
             geometry_precision: Number.isFinite(route.geometry_precision)
@@ -2543,6 +2556,8 @@
             if (base.avoidance_assessment.status==='SATISFIED') base.avoidance_assessment.status='UNVERIFIED';
         }
         base.navigation_resume_requires_fresh_gps=true;
+        base.durable_journey_id=typeof saved.journey_id==='string'?saved.journey_id:undefined;
+        if(saved.continuation)base.journey_continuation=JSON.parse(JSON.stringify(saved.continuation));
         base.polyline=saved.polyline.map(function(p) { return [p[0],p[1]]; });
         base.maneuvers = saved.steps || base.maneuvers || [];
         if (!base.geometry || typeof base.geometry !== 'string') {
@@ -2656,23 +2671,26 @@
      */
     function getHazardPreviewPanelState(o) {
         o = o || {};
-        if (o.preferencesApplied && o.camerasNearRoute != null) {
+        var assessment=o.assessment&&typeof o.assessment==='object'?o.assessment:null,limitations=Array.isArray(o.providerLimitations)&&o.providerLimitations.length>0;
+        var needsReview=assessment&&(assessment.status!=='SATISFIED'||(Array.isArray(assessment.requirements)?assessment.requirements:[]).some(function(row){return row&&row.enabled&&row.status!=='SATISFIED';}));
+        var title=limitations?'⚠ Provider preferences limited':needsReview?'⚠ Route preferences need review':assessment?'Route preference assessment':'Route preference assessment unavailable';
+        if ((o.preferencesApplied && o.camerasNearRoute != null)||limitations||needsReview) {
             return {
                 visible: true,
-                title: '✓ Route preferences applied',
-                countLabel: 'Route score:',
-                count: String(o.camerasNearRoute),
+                title: title,
+                countLabel: 'Nearby observations:',
+                count: Number.isFinite(o.camerasNearRoute)&&o.camerasNearRoute>=0?String(o.camerasNearRoute):'Not available',
                 showPenalty: o.hazardPenaltySeconds > 0,
                 penaltyMinutes: o.hazardPenaltySeconds > 0 ? Math.round(o.hazardPenaltySeconds / 60) : 0,
-                background: o.camerasNearRoute === 0 ? '#E8F5E9' : '#FFF3E0',
-                borderLeftColor: o.camerasNearRoute === 0 ? '#4CAF50' : '#FF9800',
+                background: '#FFF3E0',
+                borderLeftColor: '#FF9800',
             };
         }
         if (o.hazardCount > 0 && o.hazardPenaltySeconds > 0) {
             return {
                 visible: true,
                 title: '⚠️ Route alerts',
-                countLabel: 'Route score:',
+                countLabel: 'Reported hazards:',
                 count: String(o.hazardCount),
                 showPenalty: true,
                 penaltyMinutes: Math.round(o.hazardPenaltySeconds / 60),
@@ -2798,7 +2816,7 @@
             updateArButtonVisibility: !!idleUiPlan.updateArButtonVisibility,
             notification: idleUiPlan.notification || null,
             recentDestinations: idleUiPlan.recentDestinations || [],
-            notificationLogPrefix: '[Route] Route ready notification:',
+            notificationLogPrefix: '[Route] Preview ready notification:',
         };
     }
 
@@ -2875,6 +2893,8 @@
             : (routeData.hazard_penalty_seconds || 0);
         var hazardPlan = buildHazardPreviewPanelApplyPlan(getHazardPreviewPanelState({
             preferencesApplied: !!o.preferencesApplied,
+            assessment: previewRoute.avoidance_assessment,
+            providerLimitations: previewRoute.provider_limitations,
             camerasNearRoute: camerasNearRoute,
             hazardCount: hazardCount,
             hazardPenaltySeconds: hazardPenaltySeconds,
@@ -2886,7 +2906,18 @@
             distanceKm: distanceKm,
             distanceText: o.distanceText,
             durationText: String(previewCosts.durationMinutes != null ? previewCosts.durationMinutes : 0) + ' min',
-            routeLabel: String(o.startLabel || '') + ' → ' + String(o.endLabel || ''),
+            routeLabel: String(o.startLabel || '') + ' → ' + (function(){
+                var context=previewRoute.journey_context,choice=context&&context.arrival_choice,target=context&&context.destination;
+                if(!choice||choice.version!==1||choice.authority!=='request_metadata_only'||choice.navigation_authority!=='NONE'||
+                    !target||!choice.requested_destination||JSON.stringify(choice.target)!==JSON.stringify(target.coordinates))return String(o.endLabel||'');
+                var validPoint=function(point){return Array.isArray(point)&&point.length===2&&point.every(Number.isFinite)&&Math.abs(point[0])<=90&&Math.abs(point[1])<=180;};
+                if(!validPoint(target.coordinates)||!validPoint(choice.requested_destination.coordinates))return String(o.endLabel||'');
+                var label=typeof target.label==='string'&&target.label||target.coordinates.join(',');
+                if(/^(?:unnamed parking|unnamed car park|parking|car park|carpark)$/i.test(label.trim()))label+=' — map point '+target.coordinates.map(function(n){return n.toFixed(6);}).join(', ');
+                var requested=choice.requested_destination;
+                var original=typeof requested.label==='string'&&requested.label||requested.coordinates.join(',');
+                return label&&original?label+' (driving arrival for '+original+')':String(o.endLabel||'');
+            })(),
             fuelCostText: symbol + previewCosts.fuelCost.toFixed(2),
             tollCostText: symbol + previewCosts.tollCost.toFixed(2),
             cazCostText: symbol + previewCosts.cazCost.toFixed(2),

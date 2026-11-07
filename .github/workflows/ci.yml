@@ -80,6 +80,7 @@ jobs:
           pytest -q --junitxml=/tmp/voyagr-backend-results.xml
           tests/test_graphhopper_sign_mapping.py
           tests/test_lane_recommendation.py
+          tests/test_lane_maneuvers.py
           tests/test_lane_guidance.py
           tests/test_speed_limit_detector.py
           tests/test_route_request_params.py
@@ -145,6 +146,11 @@ jobs:
           tests/test_traffic_tile_proxy.py
           tests/test_dashcam_ownership.py
           tests/test_routing_avoidance_integrity.py
+          tests/test_best_effort_navigation.py
+          tests/test_journey_modes.py
+          tests/test_endpoint_resolution.py
+          tests/test_geocoding.py
+          tests/test_arrival_parking_context.py
           tests/test_phase5_journey.py
           tests/test_phase6_navigation_evidence.py
           tests/test_phase7_road_matching.py
@@ -200,3 +206,24 @@ jobs:
         run: python -m pip install pytest Flask requests python-dotenv PyJWT
       - name: Verify native identity and no-atime metadata on disposable files
         run: python -m pytest -q tests/test_windows_evidence_metadata.py
+
+  nginx-cache-policy:
+    name: Nginx static cache policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Unpack test-only Nginx (no package installation or service changes)
+        run: |
+          sudo apt-get update -qq
+          nginx_test_root="$RUNNER_TEMP/voyagr-nginx-package"
+          mkdir -p "$nginx_test_root"
+          cd "$nginx_test_root"
+          apt-get download nginx
+          dpkg-deb --extract nginx_*.deb unpacked
+          "$nginx_test_root/unpacked/usr/sbin/nginx" -v
+      - name: Validate full vhost syntax, routing and effective response headers
+        run: |
+          NGINX_BINARY="$RUNNER_TEMP/voyagr-nginx-package/unpacked/usr/sbin/nginx" python scripts/test-nginx-cache-policy.py

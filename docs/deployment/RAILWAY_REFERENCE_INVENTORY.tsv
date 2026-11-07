@@ -1,0 +1,185 @@
+path	classification	reference_count	baseline_lines
+.env.example	Active deployment configuration (preserved; proxy compatibility/example comments)	2	15,171
+.env.production	Active deployment configuration (preserved; proxy compatibility/example comments)	4	109,111,112,130
+AGENT_HANDOFF_SUMMARY.md	Historical documentation	33	1,5,21,22,36,37,38,39,40,46,47,57,73,78,89,110,125,126,127,135,136,137,138,139,140,146,147,148,186,187,200,208,210
+ALL_TOGGLES_FIXED_SUMMARY.md	Historical documentation	1	166
+BARNSLEY_HAZARD_AVOIDANCE_FIXED.md	Historical documentation	3	59,60,80
+CACHE_BUG_FIX_COMPLETE.md	Historical documentation	2	51,53
+CODE_CHANGES_REFERENCE.md	Historical documentation	1	71
+CODE_LOCATIONS_MAP.md	Historical documentation	1	78
+COMPLETION_CHECKLIST.md	Historical documentation	1	55
+CONSOLE_ERROR_FIX.md	Historical documentation	1	82
+DASHCAM_COMPLETION_SUMMARY.md	Historical documentation	2	234,299
+DASHCAM_QUICK_START.md	Historical documentation	1	245
+DEPLOYMENT_COMPLETE.md	Historical documentation	6	1,46,62,83,122,136
+DEPLOYMENT_FINAL_SUMMARY.md	Historical documentation	12	1,3,20,96,105,110,116,154,166,173,193,205
+DEPLOYMENT_STATUS.md	Historical documentation	5	12,45,62,67,79
+FINAL_PRODUCTION_SUMMARY.md	Historical documentation	6	143,156,174,175,211,219
+FINAL_PROJECT_SUMMARY.md	Historical documentation	2	53,54
+FINAL_SUMMARY.md	Historical documentation	2	92,193
+FINAL_SUMMARY_TRAFFIC_LIGHT_CAMERA_PRIORITY.md	Historical documentation	1	73
+FINAL_VERIFICATION_REPORT.md	Historical documentation	1	113
+FIXES_AND_RECOMMENDATIONS.md	Historical documentation	4	25,150,184,244
+GITHUB_ACTIONS_INVESTIGATION_REPORT.md	Historical documentation	39	10,12,13,17,27,30,31,37,61,64,69,70,74,75,83,84,89,102,104,109,110,113,114,125,142,143,144,154,155,165,168,169,177,178,179,183,189,190,193
+GRAPHHOPPER_INTEGRATION_FINAL_SUMMARY.md	Historical documentation	1	41
+GRAPHHOPPER_VS_ORIGINAL_CODE_ANALYSIS.md	Historical documentation	1	46
+HANDOFF_INDEX.md	Historical documentation	21	1,72,76,91,95,111,115,162,163,164,183,184,185,192,231,232,233,242,243,252,253
+HAZARD_AVOIDANCE_FINAL_SUMMARY.md	Historical documentation	1	126
+HAZARD_AVOIDANCE_FRONTEND_FIX.md	Historical documentation	3	111,137,142
+HAZARD_AVOIDANCE_IMPLEMENTATION.md	Historical documentation	2	44,57
+HAZARD_AVOIDANCE_IMPLEMENTATION_COMPLETE.md	Historical documentation	2	44,206
+HAZARD_AVOIDANCE_MOBILE_FIX_COMPLETE.md	Historical documentation	6	5,12,36,55,73,95
+HAZARD_AVOIDANCE_QUICK_TEST.md	Historical documentation	2	10,125
+HAZARD_AVOIDANCE_SUMMARY.md	Historical documentation	1	51
+HAZARD_AVOIDANCE_TESTING_RESULTS.md	Historical documentation	2	24,178
+HAZARD_MARKERS_COMPLETE.md	Historical documentation	4	50,76,78,101
+HAZARD_TYPE_FIX_SUMMARY.md	Historical documentation	1	109
+IMPLEMENTATION_DETAILS.md	Historical documentation	1	264
+IMPLEMENTATION_SUMMARY.md	Historical documentation	1	103
+JAVASCRIPT_EXTRACTION_COMPLETE.md	Historical documentation	1	90
+NEXT_AGENT_CHECKLIST.md	Historical documentation	30	1,14,16,20,24,28,32,33,42,46,47,67,69,78,79,80,81,82,85,86,92,98,100,105,112,113,114,148,149,173
+NEXT_STEPS.md	Historical documentation	10	1,5,6,13,17,121,128,145,148,167
+PARKING_INTEGRATION_GUIDE.md	Historical documentation	1	226
+PERSISTENT_SETTINGS_IMPLEMENTATION_SUMMARY.md	Historical documentation	1	207
+PHASE2_SUMMARY.md	Historical documentation	1	97
+PHASE3_DEPLOYMENT_READY.md	Historical documentation	4	125,126,131,177
+PHASE3_INTEGRATION_COMPLETE.md	Historical documentation	1	71
+PHASE3_TEST_RESULTS.md	Historical documentation	1	122
+PHASE6_CLOUD_DEPLOYMENT_GUIDE.md	Historical documentation	12	3,7,14,20,31,33,43,50,58,77,82,104
+PHASE6_COMPLETION_SUMMARY.md	Historical documentation	3	33,36,85
+PRODUCTION_DEPLOYMENT_GUIDE.md	Historical documentation	1	221
+PRODUCTION_FEATURES_SUMMARY.md	Historical documentation	10	5,222,223,224,225,227,230,233,258,281
+PRODUCTION_IMPLEMENTATION_COMPLETE.md	Historical documentation	5	5,228,229,255,272
+PROJECT_COMPLETION_REPORT.md	Historical documentation	5	24,122,123,145,171
+PWA_CONSOLE_ERRORS_ANALYSIS.md	Historical documentation	1	184
+PWA_CONSOLE_ERRORS_FIX_SUMMARY.md	Historical documentation	2	165,187
+PWA_DEPLOYMENT_COMPLETE.md	Historical documentation	8	1,5,20,118,154,165,172,192
+PWA_REFACTORING_DEPLOYMENT.md	Historical documentation	2	38,39
+QUESTION_ANSWERS.md	Historical documentation	2	19,252
+QUICK_REFERENCE.md	Historical documentation	1	267
+QUICK_REFERENCE_PHASES_1_2_3.md	Historical documentation	1	56
+RAILWAY_AUTH_FIX.md	Historical documentation	10	1,4,15,24,42,47,51,52,57,66
+RAILWAY_BUILD_FIX.md	Historical documentation	15	1,5,10,19,24,25,35,36,43,60,61,78,87,96,98
+RAILWAY_CROSSING_FINAL_SUMMARY.md	Historical documentation	31	1,5,12,18,19,25,31,32,37,66,71,76,81,86,87,92,93,94,107,119,121,122,155,157,158,164,178,179,185,211,224
+RAILWAY_CROSSING_HANDOFF.md	Historical documentation	38	1,4,13,15,20,25,30,35,36,42,44,45,46,52,55,58,65,70,77,78,97,100,112,113,114,115,116,117,126,134,140,141,142,143,144,169,170,187
+RAILWAY_CROSSING_IMPLEMENTATION.md	Historical documentation	34	1,4,14,29,34,39,40,49,54,55,60,70,72,73,78,79,89,102,115,127,129,130,131,136,146,149,150,154,194,195,198,202,211,214
+RAILWAY_DEBUGGING_GUIDE.md	Historical documentation	11	1,4,10,14,15,24,36,49,50,82,96
+RAILWAY_DEPLOYMENT_CHECKLIST.md	Historical documentation	30	1,5,8,10,21,22,23,27,28,31,40,48,68,69,70,79,88,98,103,106,114,116,131,132,133,134,140,153,154,172
+RAILWAY_DEPLOYMENT_FIXED.md	Historical documentation	30	1,5,12,16,17,18,26,31,33,34,35,47,49,51,52,58,65,80,83,84,90,113,114,116,125,127,129,131,137,138
+RAILWAY_DEPLOYMENT_GUIDE.md	Historical documentation	24	1,3,7,10,15,17,20,29,35,53,55,63,68,84,94,99,101,117,119,127,132,149,155,156
+RAILWAY_DEPLOYMENT_INVESTIGATION.md	Historical documentation	20	1,10,12,25,27,34,39,67,68,73,80,82,83,86,91,118,119,126,138,140
+RAILWAY_DEPLOYMENT_READY.md	Historical documentation	33	1,6,7,9,10,11,14,21,22,24,33,37,39,52,57,60,68,83,84,85,92,93,108,123,124,125,133,134,135,139,151,159,160
+RAILWAY_DEPLOYMENT_SUMMARY.md	Historical documentation	30	1,10,19,21,37,38,40,46,49,51,57,58,67,73,74,78,79,93,103,106,107,110,111,117,119,125,128,135,136,141
+RAILWAY_DOCKERFILE_FIXED.md	Historical documentation	5	1,83,103,112,114
+RAILWAY_FIX_SUMMARY.md	Historical documentation	6	1,4,7,39,59,69
+RAILWAY_ISSUE_RESOLVED.md	Historical documentation	8	1,4,7,47,87,88,98,114
+RAILWAY_QUICK_START.md	Historical documentation	18	1,5,6,8,15,17,20,33,36,52,55,63,75,76,77,84,92,113
+RAILWAY_SETUP_COMPLETE.md	Historical documentation	34	1,5,12,13,15,18,19,20,21,24,32,33,34,38,39,41,50,54,64,67,73,89,106,107,108,132,133,134,135,142,143,158,167,179
+RAILWAY_SETUP_INSTRUCTIONS.md	Historical documentation	28	1,3,9,11,13,19,21,24,28,30,34,38,40,51,67,76,87,97,110,112,116,117,123,132,134,151,159,160
+README_FOR_NEXT_AGENT.md	Historical documentation	26	1,5,22,23,24,25,26,31,32,40,58,70,71,73,77,78,113,118,127,129,134,175,178,186,213,214
+README_HAZARD_AVOIDANCE.md	Historical documentation	1	51
+REFACTORING_DEPLOYMENT_COMPLETE.md	Historical documentation	3	34,44,45
+REFACTORING_TASKS_COMPLETE.md	Historical documentation	1	153
+REVIEW_SUMMARY.md	Historical documentation	1	219
+ROUTE_PREVIEW_COMPLETION_REPORT.md	Historical documentation	3	158,294,331
+ROUTE_PREVIEW_FINAL_SUMMARY.md	Historical documentation	3	108,200,280
+ROUTE_PREVIEW_IMPLEMENTATION_SUMMARY.md	Historical documentation	2	238,284
+ROUTE_REVIEW_VERIFICATION.md	Historical documentation	4	5,69,71,99
+ROUTING_INFRASTRUCTURE_STATUS.md	Historical documentation	1	154
+SETTINGS_CONSOLIDATION_COMPLETE.md	Historical documentation	2	104,211
+SETTINGS_CONSOLIDATION_SUMMARY.md	Historical documentation	1	205
+SMART_ROUTE_PREDICTIONS_FIX.md	Historical documentation	1	129
+TASK_COMPLETION_SUMMARY.md	Historical documentation	3	92,265,294
+TOGGLE_SWITCH_FIX_COMPLETE.md	Historical documentation	1	71
+TOLL_CAZ_FIX_SUMMARY.md	Historical documentation	1	83
+TRAFFIC_CAMERA_TESTING_GUIDE.md	Historical documentation	1	22
+TRAFFIC_LIGHT_CAMERA_IMPLEMENTATION_COMPLETE.md	Historical documentation	1	77
+TRAFFIC_LIGHT_CAMERA_PRIORITY_UPDATE.md	Historical documentation	1	19
+UI_VERIFICATION_COMPLETE.md	Historical documentation	1	116
+VERIFICATION_COMMANDS.md	Historical documentation	23	1,12,15,20,21,62,71,80,89,98,99,110,119,142,156,157,175,176,178,179,180,181,182
+VOICE_FIXES_COMPLETE.md	Historical documentation	2	12,93
+VOICE_FIXES_IMPLEMENTATION_COMPLETE.md	Historical documentation	2	101,184
+VOICE_FIXES_TESTING_GUIDE.md	Historical documentation	2	163,164
+VOYAGR_PWA_FIXES_SUMMARY.md	Historical documentation	1	209
+WEB_APP_HAZARD_AVOIDANCE_GUIDE.md	Historical documentation	2	17,263
+cameras.geojson	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	60093
+create_hazard_preferences.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	34
+docs/audits/VOYAGR_GRAPHHOPPER8_COMBINED_MODEL_ROOT_CAUSE.md	Historical documentation	1	41
+docs/audits/VOYAGR_PHASE11C_ENGINE_ACCEPTANCE.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	51,111,171
+docs/audits/VOYAGR_PHASE11_CONTABO_ACCEPTANCE.md	Historical documentation	3	36,87,90
+docs/audits/VOYAGR_PHASE11_OVERPASS_ARCHITECTURE.md	Historical documentation	2	12,13
+docs/audits/VOYAGR_PHASE11_OVERPASS_ROOT_CAUSES.md	Historical documentation	1	20
+docs/audits/VOYAGR_PHASE11_RETRY_AND_DEADLINE_TESTS.md	Historical documentation	1	28
+docs/audits/VOYAGR_PHASE12B_ENGINE_STATUS.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	51,111,171
+docs/audits/VOYAGR_PHASE12FC_VALHALLA_ACCEPTANCE.md	Historical documentation	1	33
+docs/audits/VOYAGR_PHASE12FC_VALHALLA_IMPLEMENTATION.md	Historical documentation	1	31
+docs/audits/VOYAGR_PHASE5_ENGINE_DISCOVERY.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	48,108,168
+docs/audits/VOYAGR_PHASE5_ROUTING_ENGINE_VALIDATION.md	Historical documentation	1	57
+docs/audits/VOYAGR_PHASE8_ENGINE_DISCOVERY.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	51,111,171
+docs/audits/VOYAGR_PHASE8_ENGINE_VALIDATION.md	Historical documentation	1	7
+docs/audits/VOYAGR_PHASE9_ENGINE_DISCOVERY.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	51,111,171
+docs/audits/VOYAGR_PHASE9_ENGINE_REPLAY.md	Historical documentation	1	16
+docs/audits/VOYAGR_ROUTE_INVENTORY.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	428,432
+docs/audits/VOYAGR_ROUTING_AVOIDANCE_INTEGRITY.md	Historical documentation	2	44,69
+hazard_service.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	86
+overpass_helper.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	52,724,735
+railway.toml	Obsolete Railway deployment configuration	0	filename-only
+requirements-railway.txt	Obsolete Railway deployment configuration	1	1
+satnav.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	7	864,5714,5770,8785,8803,8815,8816
+scripts/benchmark-phase5-routing.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	65
+scripts/export-phase8-road-evidence.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	37,64
+scripts/fixtures/phase8/fixture-area-requests.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	56
+scripts/fixtures/phase9/fixture-area-requests.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	56
+scripts/fixtures/routing-engine-replay.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	53
+static/css/voyagr.css	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	576
+static/js/__tests__/avoidance-integrity.test.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	5	105,108,153,259,401
+static/js/__tests__/map-overlay-toggles.test.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	69
+static/js/__tests__/osm-map-icons.test.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	4	7,8,13,14
+static/js/__tests__/routing-request.test.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	11	17,53,114,124,133,145,198,212,223,288,336
+static/js/__tests__/settings-snapshot.test.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	25,64,238
+static/js/app/map-overlay-orchestration.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	38	2,16,17,18,23,164,165,215,218,220,223,225,226,230,235,265,270,277,278,281,285,286,310,311,312,314,317,318,319,321,322,324,336,366,373,428,436,437
+static/js/app/parking-orchestration.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	351,374
+static/js/app/route-avoidance-orchestration.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	88
+static/js/app/settings-orchestration.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	59,113
+static/js/modules/map/hazard-map-markers.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	52,91
+static/js/modules/map/map-overlay-toggles.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	31	42,43,44,51,85,86,169,179,185,186,189,276,308,309,357,434,450,453,463,487,492,522,534,535,540,543,549,550,556,560,566
+static/js/modules/map/osm-map-icons.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	8	12,62,63,76,77,110,119,120
+static/js/modules/navigation/app-state.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	19,20
+static/js/modules/navigation/avoidance-integrity.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	8,122
+static/js/modules/navigation/route-prefs.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	34,42
+static/js/modules/navigation/routing-request.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	9	32,57,78,92,108,137,201,346,374
+static/js/modules/navigation/search-autocomplete.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	31,48
+static/js/modules/navigation/settings-snapshot.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	14	26,74,110,235,306,307,333,334,335,760,765,790,898,899
+static/js/voyagr-app.js	Active application dependency (preserved; road/rail hazards or runtime compatibility)	4	341,342,1025,1026
+static/map/styles/dark/style.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	1
+templates/index.html	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	815,1093
+tests/fixtures/phase5-journey.json	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	436
+tests/test_calculate_route_smoke.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	126,331
+tests/test_graphhopper_attempt.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	18
+tests/test_graphhopper_model_composition.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	12,80
+tests/test_hazard_avoidance.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	12	36,253,254,263,264,266,270,271,272,274,275,277
+tests/test_hazard_dict.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	21
+tests/test_hazard_fetch.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	60
+tests/test_hazard_fetch_detailed.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	49
+tests/test_phase11_overpass_audit.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	205,207
+tests/test_phase11b_overpass.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	501,508
+tests/test_polygon_hazard_avoidance.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	8
+tests/test_route_request_params.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	23
+tests/test_routing_avoidance_integrity.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	81,87,390
+tests/test_settings_ui_labels.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	20
+voyagr/api/hazards.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	8	332,333,342,344,346,352,357,361
+voyagr/api/routing.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	81
+voyagr/models/database.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	663
+voyagr/services/__init__.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	34,73
+voyagr/services/hazards.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	12	11,262,497,675,1041,1051,1053,1057,1060,1065,1084,1087
+voyagr/services/routing/engines.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	7	223,245,321,322,507,535,550
+voyagr/services/routing/hazard_prep.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	9	7,32,121,123,128,130,135,136,138
+voyagr/services/routing/integrity.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	19,26,52
+voyagr/services/routing/integrity_api.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	39
+voyagr/services/routing/multidrop.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	12	373,439,549,560,605,629,1057,1058,1059,1061,1063,1106
+voyagr/services/routing/request_params.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	3	38,93,178
+voyagr/services/routing/route_cache_key.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	2	56,85
+voyagr/utils/client_ip.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	4
+voyagr/utils/hazard_matching.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	97
+voyagr/utils/origin_replay.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	1	401
+voyagr_web.py	Active application dependency (preserved; road/rail hazards or runtime compatibility)	13	750,777,804,824,857,877,1262,1292,1372,1381,1418,2108,2300
