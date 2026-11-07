@@ -117,9 +117,29 @@ acceptance and GitHub notification identification remain open alongside it.
   and normal/200% text using production markup/CSS and selection handlers.
 - [ ] Accept on deployed phones and Firefox/WebKit with actual parking results,
   saved-route restoration and destination changes in the full app shell.
-- [ ] Review via-points/stops as the next separate form increment.
+- [x] Review via-points/stops as the next separate form increment (4d below).
 
 This presentation-only increment preserves endpoint provenance, request cancellation,
 parking filters and live-navigation gates. Existing IDs and action handlers remain.
 `node scripts/check-arrival-options.cjs` runs 16 controlled Chromium cases; provider
 calls are fixtures. All earlier functional, deployment and UI acceptance stays open.
+
+
+### 4d. Via-points and stops (implemented; deployed acceptance pending)
+
+- [x] Group optional waypoint tools in a native disclosure with visible stop/via
+  counts, stop time and active map-pick/edit mode when closed.
+- [x] Preserve address/map/GPS entrypoints, coordinate/provenance records,
+  reorder/remove/clear, stop duration and route editing. Fix the independently
+  reproduced address-add helper reference error (`WP.build...` versus `wp.build...`).
+- [x] Add labels, accessible row-action names, scalable scoped light/dark styling,
+  48 px targets and narrow-screen wrapping without horizontal overflow.
+- [x] Check actual owner add/reorder/remove/clear and selected/geocoded address
+  paths, plus 16 Chromium viewport/theme/normal and 200% text cases.
+- [ ] Accept in the deployed full shell on phones and Firefox/WebKit: address,
+  map and GPS additions, drag/keyboard ordering, dwell times and saved journeys.
+
+Run `node scripts/check-waypoint-options.cjs` for controlled browser checks using
+production markup/CSS, waypoint plans and owner with fixture map/provider/GPS
+boundaries. This does not establish live provider, GPS or WebGL acceptance.
+Existing functional/Overpass acceptance remains separate and unchanged.

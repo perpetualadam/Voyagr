@@ -25,9 +25,9 @@
                 '<span style="margin-right: 6px; color: #999; font-size: 14px; cursor: grab;">⠿</span>' +
                 '<span style="background: #FF9800; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">' + (index + 1) + '</span>' +
                 '<span style="flex: 1; font-size: 13px;">' + point.name + '</span>' +
-                '<button onclick="moveWaypoint(\'via\', ' + index + ', -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move up">▲</button>' +
-                '<button onclick="moveWaypoint(\'via\', ' + index + ', 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move down">▼</button>' +
-                '<button onclick="removeViaPoint(' + index + ')" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>' +
+                '<button onclick="moveWaypoint(\'via\', ' + index + ', -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" aria-label="Move waypoint up" title="Move up">▲</button>' +
+                '<button onclick="moveWaypoint(\'via\', ' + index + ', 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" aria-label="Move waypoint down" title="Move down">▼</button>' +
+                '<button onclick="removeViaPoint(' + index + ')" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;" aria-label="Remove waypoint">✕</button>' +
             '</div>'
         );
     }
@@ -45,9 +45,9 @@
                 '<span style="margin-right: 6px; color: #999; font-size: 14px; cursor: grab;">⠿</span>' +
                 '<span style="background: #E91E63; color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">' + (index + 1) + '</span>' +
                 '<span style="flex: 1; font-size: 13px;">' + stop.name + ' (' + stop.duration + ' min)</span>' +
-                '<button onclick="moveWaypoint(\'stop\', ' + index + ', -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move up">▲</button>' +
-                '<button onclick="moveWaypoint(\'stop\', ' + index + ', 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move down">▼</button>' +
-                '<button onclick="removeStop(' + index + ')" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>' +
+                '<button onclick="moveWaypoint(\'stop\', ' + index + ', -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" aria-label="Move waypoint up" title="Move up">▲</button>' +
+                '<button onclick="moveWaypoint(\'stop\', ' + index + ', 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" aria-label="Move waypoint down" title="Move down">▼</button>' +
+                '<button onclick="removeStop(' + index + ')" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;" aria-label="Remove waypoint">✕</button>' +
             '</div>'
         );
     }

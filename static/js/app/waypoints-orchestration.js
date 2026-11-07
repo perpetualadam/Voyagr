@@ -46,6 +46,7 @@ function applyRouteEditEnableFromPlan(runtimeApply) {
     });
 
     rt().call.showStatus(runtimeApply.statusMessage, runtimeApply.statusType);
+    syncWaypointSummary();
     console.log(runtimeApply.addedLogPrefix + routeDragMarkers.length + runtimeApply.addedLogSuffix);
 }
 
@@ -145,6 +146,7 @@ function clearRouteDragMarkers() {
         routeDragMarkers = [];
     }
     if (apply.disableRouteEditing) routeEditingEnabled = false;
+    syncWaypointSummary();
 }
 
 /**
@@ -152,6 +154,7 @@ function clearRouteDragMarkers() {
  */
 function applyRouteEditingToggleDomFromPlan(domPlan) {
     if (!domPlan) return;
+    syncWaypointSummary();
     const btn = document.getElementById(domPlan.elementId);
     if (!btn) return;
     btn.classList.toggle('active', domPlan.active);
@@ -196,6 +199,7 @@ function applyWaypointMapPickToggleFromPlan(apply) {
 
     addingViaPoint = apply.addingViaPoint;
     addingStop = apply.addingStop;
+    syncWaypointSummary();
 
     const btn = document.getElementById(apply.buttonDom.elementId);
     if (btn) {
@@ -293,7 +297,7 @@ async function addWaypointFromAddress(waypointKind) {
     const input = document.getElementById(inputId);
     if (!input) return;
 
-    const dispatch = WP.buildWaypointAddressAddDispatchPlan({
+    const dispatch = wp.buildWaypointAddressAddDispatchPlan({
         lat: input.dataset.lat,
         lon: input.dataset.lon,
         displayName: input.dataset.displayName,
@@ -309,7 +313,7 @@ async function addWaypointFromAddress(waypointKind) {
         if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(input.value)?'coordinates':input.dataset.journeySource||'searched');
         else addStop(dispatch.lat, dispatch.lon, dispatch.name,15,root.VoyagrJourneyPlan&&root.VoyagrJourneyPlan.coordinate(input.value)?'coordinates':input.dataset.journeySource||'searched');
         applyWaypointAddressResolvedDomFromPlan(
-            WP.buildWaypointAddressResolvedDomApplyPlan(dispatch),
+            wp.buildWaypointAddressResolvedDomApplyPlan(dispatch),
             input
         );
         return;
@@ -317,7 +321,7 @@ async function addWaypointFromAddress(waypointKind) {
 
     rt().call.showStatus(dispatch.loadingMessage, 'loading');
     const result = await rt().call.geocodeAddress(dispatch.query);
-    const outcome = WP.buildWaypointAddressGeocodeOutcomeApplyPlan(
+    const outcome = wp.buildWaypointAddressGeocodeOutcomeApplyPlan(
         waypointKind,
         result,
         dispatch.query
@@ -510,7 +514,25 @@ function applyWaypointsListDomFromPlan(apply) {
     container.innerHTML = apply.innerHtml;
 }
 
+// Presentation only: the stored waypoint arrays and routing order are untouched.
+function syncWaypointSummary() {
+    if(typeof document==='undefined')return;
+    const summary=document.getElementById('waypointOptionsSummary');
+    if(!summary)return;
+    const parts=[];
+    if(stops.length)parts.push(stops.length+' '+(stops.length===1?'stop':'stops'));
+    if(viaPoints.length)parts.push(viaPoints.length+' '+(viaPoints.length===1?'via-point':'via-points'));
+    if(!parts.length)parts.push('No via-points or stops');
+    const minutes=stops.reduce((total,stop)=>{const value=Number(stop.duration);return total+(Number.isFinite(value)&&value>0?value:0);},0);
+    if(minutes>0)parts.push(minutes+' min stop time');
+    if(addingViaPoint)parts.push('Choosing a via-point on the map');
+    if(addingStop)parts.push('Choosing a stop on the map');
+    if(routeEditingEnabled)parts.push('Map editing on');
+    summary.textContent=parts.join(' · ');
+}
+
 function updateWaypointsList() {
+    syncWaypointSummary();
     applyWaypointsListDomFromPlan(
         WP().buildWaypointsListUpdateApplyPlan(viaPoints, stops)
     );
@@ -713,6 +735,7 @@ function clearMultiDropLayers() {
 
     function bind(nextRuntime) {
         runtime = nextRuntime;
+        syncWaypointSummary();
     }
 
     var api = {
@@ -734,6 +757,7 @@ function clearMultiDropLayers() {
         removeStop: removeStop,
         clearAllWaypoints: clearAllWaypoints,
         updateWaypointsList: updateWaypointsList,
+        syncWaypointSummary: syncWaypointSummary,
         onWaypointDragStart: onWaypointDragStart,
         onWaypointDragOver: onWaypointDragOver,
         onWaypointDrop: onWaypointDrop,

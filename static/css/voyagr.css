@@ -4845,3 +4845,43 @@ html.dark-mode .arrival-options, body.dark-mode .arrival-options {
     --arrival-surface: #20232b; --arrival-text: #f4f5f8; --arrival-muted: #c2c7d2;
     --arrival-border: #505666; --arrival-accent: #c6a9f2;
 }
+
+/* Optional waypoint planning controls; counts and active map modes remain visible. */
+.waypoint-options {
+    --waypoint-surface: #fff; --waypoint-text: #202530; --waypoint-muted: #535b6b;
+    --waypoint-border: #d9dce4; --waypoint-accent: #56328a; --waypoint-row: #f6f7fa;
+    margin: 12px 0; border: 1px solid var(--waypoint-border); border-radius: 12px;
+    color: var(--waypoint-text); background: var(--waypoint-surface);
+}
+.waypoint-options > summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    list-style: none; cursor: pointer; min-height: 48px; padding: 12px;
+    font-size: 1rem; line-height: 1.5; font-weight: 600;
+}
+.waypoint-options > summary::-webkit-details-marker { display: none; }
+.waypoint-options > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.waypoint-options-optional { font-weight: 400; color: var(--waypoint-muted); }
+#waypointOptionsSummary { display: block; font-size: .875rem; font-weight: 400; color: var(--waypoint-muted); }
+.waypoint-options > summary > svg { flex-shrink: 0; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; }
+.waypoint-options[open] > summary > svg { transform: rotate(180deg); }
+.waypoint-options :is(summary, button, input):focus-visible { outline: 3px solid var(--waypoint-accent); outline-offset: 2px; }
+.waypoint-options-fields { padding: 0 12px 12px; }
+.waypoint-options-fields > label { display: block; margin: 12px 0 6px; font-size: .875rem; font-weight: 600; }
+.waypoint-options .waypoint-field-row { flex-wrap: wrap; }
+.waypoint-options .input-waypoint { flex-basis: 100%; width: 100%; font-size: 1rem !important; }
+.waypoint-options :is(input, button) { min-height: 48px; }
+.waypoint-options button { min-width: 48px; font-size: .875rem; white-space: normal; overflow-wrap: anywhere; }
+.waypoint-options .waypoint-field-row > button { flex: 1; border: 1px solid var(--waypoint-border); border-radius: 8px; padding: 8px; }
+.waypoint-options :is(.input-waypoint, button) { background: var(--waypoint-surface) !important; color: var(--waypoint-text) !important; }
+.waypoint-options button.active { border: 2px solid var(--waypoint-accent); box-shadow: inset 0 0 0 1px var(--waypoint-accent); }
+.waypoint-options .waypoint-item { display: grid !important; grid-template-columns: 16px 28px minmax(0, 1fr) repeat(3, 48px); gap: 3px; background: var(--waypoint-row) !important; color: var(--waypoint-text); }
+.waypoint-options .waypoint-item > span { margin-right: 0 !important; }
+.waypoint-options .waypoint-item > span:nth-child(3) { min-width: 0; overflow-wrap: anywhere; font-size: .875rem !important; }
+.waypoint-options .waypoint-item > button { padding: 4px !important; font-size: 1rem !important; border-radius: 6px; }
+.waypoint-options .waypoints-hint, .waypoint-options .waypoints-empty { font-size: .875rem; line-height: 1.5; color: var(--waypoint-muted); }
+.waypoint-options .waypoints-hint strong { color: var(--waypoint-text); }
+html.dark-mode .waypoint-options, body.dark-mode .waypoint-options {
+    --waypoint-surface: #20232b; --waypoint-text: #f4f5f8; --waypoint-muted: #c2c7d2;
+    --waypoint-border: #505666; --waypoint-accent: #c6a9f2; --waypoint-row: #292e38;
+}
+.waypoint-options #waypointsList > div:not(.waypoint-item) { background: var(--waypoint-row) !important; color: var(--waypoint-muted) !important; font-size: .875rem !important; }
