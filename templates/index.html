@@ -89,7 +89,7 @@
     <!-- Google Plus Codes Service -->
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
-    <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
+    <script defer src="/static/js/modules/traffic-lights.js?v=20261107signals1"></script>
     <script defer src="/static/js/modules/navigation/camera-pitch.js?v=20260827pwa03"></script>
     <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/speech-synthesis.js?v=20260712voice1"></script>
@@ -197,7 +197,7 @@
     <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
     <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20261102trafficcooldown1"></script>
-    <script defer src="/static/js/app/map-overlay-orchestration.js?v=20260712maptheme1"></script>
+    <script defer src="/static/js/app/map-overlay-orchestration.js?v=20261107signals1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
     <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20261105arrivalpreview1"></script>
@@ -1124,6 +1124,8 @@
                             <button class="toggle-switch active" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
 
+                        <p id="osmTrafficLightDataStatus" role="status">Traffic-light coverage has not been checked.</p>
+
                         <div class="preference-item">
                             <span class="preference-label">Level crossings (map)</span>
                             <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
@@ -1636,6 +1638,7 @@
 
                         <!-- Route limitations remain outside every disclosure. -->
                         <p id="routePlanningNotice" class="preview-notice" role="status"></p>
+                        <p id="routeTrafficLightStatus" class="preview-notice" role="status"></p>
                         <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>
                         <section id="arrivalEndpointPreview" class="preview-arrival-notice" aria-label="Arrival endpoints" hidden></section>
                         <div id="cazStatusContainer" class="preview-caz-notice" style="display: none;"></div>

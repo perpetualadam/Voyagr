@@ -1,13 +1,14 @@
 /**
  * Traffic Lights Module
- * Manages traffic light markers along routes with state, countdown, and live updates
+ * Displays mapped traffic-light locations. OSM does not provide live signal phases.
  * @module modules/traffic-lights
  */
 
 // ===== TRAFFIC LIGHT STATE =====
 const trafficLightMarkers = new Map(); // id -> marker
 let trafficLightsEnabled = localStorage.getItem('trafficLightsEnabled') !== 'false';
-let trafficLightUpdateInterval = null;
+let trafficLightRequestGeneration = 0;
+let trafficLightRequestController = null;
 
 // Traffic light states and colors
 const TRAFFIC_LIGHT_STATES = {
@@ -121,8 +122,8 @@ function addTrafficLight(light) {
                     <strong>Traffic Light</strong>
                 </div>
                 State: <span style="color: ${stateInfo.color}; font-weight: bold;">${stateInfo.label}</span><br>
-                ${light.duration ? `Duration: ${light.duration}s<br>` : ''}
-                ${light.name ? `Name: ${light.name}<br>` : ''}
+                ${Number.isFinite(light.duration) && light.duration>0 ? `Duration: ${light.duration}s<br>` : ''}
+                ${light.name ? `Name: ${String(light.name).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}<br>` : ''}
             </div>
         `);
     marker.setPopup(popup);
@@ -201,7 +202,9 @@ function removeTrafficLight(id) {
 /**
  * Clear all traffic light markers
  */
-function clearAllTrafficLights() {
+function clearAllTrafficLights(invalidateRequest = true) {
+    if(invalidateRequest){trafficLightRequestGeneration++;if(trafficLightRequestController)trafficLightRequestController.abort();trafficLightRequestController=null;}
+    if(invalidateRequest)routeTrafficLightStatus('');
     trafficLightMarkers.forEach((entry, id) => {
         entry.marker.remove();
     });
@@ -213,71 +216,51 @@ function clearAllTrafficLights() {
  * Fetch and display traffic lights along a route
  * @param {Array} route - Route coordinates [[lat, lng], ...]
  */
+function describeTrafficLightCoverage(data, count, scope = 'route') {
+    const coverage=data&&data.coverage||{};
+    if(coverage.reason==='area_too_large')return 'Traffic-light area is too large; zoom in or inspect a shorter route. Coverage is partial.';
+    if(!data||data.success!==true||(!count&&['UNKNOWN','UNAVAILABLE'].includes(coverage.status)))return 'Traffic-light data unavailable. Coverage is unknown; an empty overlay does not mean there are no signals.';
+    const where=scope==='area'?'in this map area':'near this route';
+    const message=count?count+' mapped traffic-light locations shown '+where+'.':'No mapped traffic-light locations returned '+where+'. This does not establish that there are no signals.';
+    return message+' Coverage is '+(coverage.status==='STALE'?'stale':coverage.status==='AVAILABLE'?'limited to mapped data':'partial or unverified')+'. Live signal state is unavailable.';
+}
+function routeTrafficLightStatus(text) {
+    const el=document.getElementById('routeTrafficLightStatus');if(el)el.textContent=text;
+}
 async function plotTrafficLightsOnRoute(route) {
-    if (!trafficLightsEnabled || !route || route.length === 0) return;
-
+    const generation=++trafficLightRequestGeneration;
+    if(trafficLightRequestController)trafficLightRequestController.abort();
+    trafficLightRequestController=null;
+    clearAllTrafficLights(false);
+    if(!trafficLightsEnabled||!Array.isArray(route)||route.length<2){routeTrafficLightStatus(trafficLightsEnabled?'':'Route traffic-light overlay is off.');return;}
+    const currentMap=typeof map==='undefined'?null:map;
+    if(!currentMap){routeTrafficLightStatus('');return;}
+    const controller=typeof AbortController==='function'?new AbortController():null;
+    trafficLightRequestController=controller;
+    const current=()=>generation===trafficLightRequestGeneration&&trafficLightsEnabled&&currentMap===(typeof map==='undefined'?null:map);
+    routeTrafficLightStatus('Loading mapped traffic-light locations…');
     try {
-        // Convert route to GeoJSON LineString for API
-        const routeGeoJSON = {
-            type: 'LineString',
-            coordinates: route.map(p => [p[1], p[0]]) // [lng, lat]
-        };
-
-        const response = await fetch('/api/traffic-lights', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ route: routeGeoJSON })
+        const response=await fetch('/api/traffic-lights',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            ...(controller?{signal:controller.signal}:{}),
+            body:JSON.stringify({route:{type:'LineString',coordinates:route.map(p=>[p[1],p[0]])}})
         });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const data = await response.json();
-
-        if (data.success && data.lights) {
-            // Clear existing lights
-            clearAllTrafficLights();
-
-            // Limit to 200 traffic lights to prevent performance issues
-            const MAX_LIGHTS = 200;
-            const lightsToShow = data.lights.slice(0, MAX_LIGHTS);
-
-            if (data.lights.length > MAX_LIGHTS) {
-                console.log(`[Traffic Lights] Limiting to ${MAX_LIGHTS} of ${data.lights.length} lights (performance)`);
-            }
-
-            // Add new lights
-            lightsToShow.forEach(light => addTrafficLight(light));
-
-            console.log(`[Traffic Lights] Plotted ${lightsToShow.length} lights on route${data.lights.length > MAX_LIGHTS ? ` (${data.lights.length - MAX_LIGHTS} hidden)` : ''}`);
-
-            // Start countdown update interval
-            startCountdownUpdates();
-        }
-    } catch (error) {
-        console.log('[Traffic Lights] Error fetching lights:', error.message);
-    }
-}
-
-/**
- * Start interval to update countdowns
- */
-function startCountdownUpdates() {
-    stopCountdownUpdates();
-
-    trafficLightUpdateInterval = setInterval(() => {
-        trafficLightMarkers.forEach((entry, id) => {
-            updateTrafficLight(id, {}); // Refresh countdown
+        if(!response.ok)throw Error('Traffic-light request failed');
+        const data=await response.json();
+        if(!current())return;
+        if(!data||data.success!==true||!Array.isArray(data.lights))throw Error('Invalid traffic-light response');
+        const shown=new Set();
+        data.lights.slice(0,200).forEach(light=>{
+            if(!light||!light.id||shown.has(light.id)||!Number.isFinite(light.lat)||!Number.isFinite(light.lng)||Math.abs(light.lat)>90||Math.abs(light.lng)>180)return;
+            shown.add(light.id);
+            addTrafficLight({...light,state:'unknown',duration:undefined,lastChanged:undefined});
         });
-    }, 1000);
-}
-
-/**
- * Stop countdown update interval
- */
-function stopCountdownUpdates() {
-    if (trafficLightUpdateInterval) {
-        clearInterval(trafficLightUpdateInterval);
-        trafficLightUpdateInterval = null;
+        routeTrafficLightStatus(describeTrafficLightCoverage(data,shown.size));
+        // OSM supplies locations, not signal phases or countdowns.
+    } catch(error) {
+        if(current())routeTrafficLightStatus(describeTrafficLightCoverage(null,0));
+    } finally {
+        if(generation===trafficLightRequestGeneration)trafficLightRequestController=null;
     }
 }
 
@@ -303,7 +286,7 @@ function toggleTrafficLights() {
         }
     } else {
         clearAllTrafficLights();
-        stopCountdownUpdates();
+        routeTrafficLightStatus('Route traffic-light overlay is off.');
         if (typeof showStatus === 'function') {
             showStatus('🚦 Traffic lights disabled', 'info');
         }
@@ -359,6 +342,7 @@ window.TrafficLights = {
     toggleTrafficLights,
     checkNearbyTrafficLights,
     isEnabled: () => trafficLightsEnabled,
+    describeCoverage: describeTrafficLightCoverage,
     /** Shared vertical icon for OSM + route markers (activeLight: red|yellow|green|none) */
     createIconSVG: createTrafficLightSVG
 };

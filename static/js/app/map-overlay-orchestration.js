@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = null;
+    var trafficLightAreaGeneration = 0;
     var MOT = typeof VoyagrMapOverlayToggles !== 'undefined' ? VoyagrMapOverlayToggles : null;
     var showCamerasEnabled = MOT
         ? MOT.resolveShowCamerasEnabledFromStorage(localStorage.getItem('showCamerasEnabled'))
@@ -158,6 +159,7 @@
     }
 
     function clearOsmTrafficLightMarkers() {
+        trafficLightAreaGeneration++;
         applyClearOverlayMarkersFromPlan(OT().buildClearOsmTrafficLightMarkersExecutePlan());
     }
 
@@ -166,9 +168,10 @@
     }
 
     function fetchOsmAreaOverlay(url, logLabel) {
+        var plans=OT();
         return fetch(url)
             .then(function (response) {
-                var httpPlan = OT().buildOsmAreaOverlayResponsePlan({
+                var httpPlan = plans.buildOsmAreaOverlayResponsePlan({
                     ok: response.ok,
                     statusCode: response.status,
                     logLabel: logLabel,
@@ -180,7 +183,7 @@
                 return response.json();
             })
             .catch(function (err) {
-                var errPlan = OT().buildOsmAreaOverlayFetchErrorPlan({
+                var errPlan = plans.buildOsmAreaOverlayFetchErrorPlan({
                     logLabel: logLabel,
                     errorMessage: err.message || String(err),
                 });
@@ -237,8 +240,9 @@
     }
 
     function fetchAndDisplayOsmTrafficLights() {
+        var generation=++trafficLightAreaGeneration;
         var map = rt().getMap();
-        if (!map) return;
+        if (!map) {clearOsmTrafficLightMarkers();return;}
         var bounds = map.getBounds();
         var dispatch = OT().buildFetchOsmOverlayDispatchPlan({
             enabled: showOsmTrafficLightsEnabled,
@@ -251,14 +255,21 @@
             apiPath: OT().OSM_TRAFFIC_LIGHTS_AREA_API_PATH,
             logLabel: 'OSM Traffic Lights',
         });
+        var status=document.getElementById('osmTrafficLightDataStatus');
         if (!dispatch.shouldFetch) {
+            if(status)status.textContent=showOsmTrafficLightsEnabled?'Zoom in to load mapped traffic-light locations.':'Map traffic-light overlay is off.';
             if (dispatch.clearMarkers) clearOsmTrafficLightMarkers();
             return;
         }
-        fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then(function (data) {
-            if (data && data.success && data.traffic_lights) {
-                displayOsmTrafficLightMarkers(data.traffic_lights);
-            }
+        clearOsmTrafficLightMarkers();generation=trafficLightAreaGeneration;
+        if(status)status.textContent='Loading mapped traffic-light locations…';
+        return fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then(function (data) {
+            if(!runtime||generation!==trafficLightAreaGeneration||!showOsmTrafficLightsEnabled||rt().getMap()!==map)return;
+            const boundsNow=map.getBounds();
+            if([boundsNow.getNorth(),boundsNow.getSouth(),boundsNow.getEast(),boundsNow.getWest()].join(',')!==[bounds.getNorth(),bounds.getSouth(),bounds.getEast(),bounds.getWest()].join(','))return;
+            const lights=data&&data.success&&Array.isArray(data.traffic_lights)?data.traffic_lights.filter(light=>light&&Number.isFinite(light.lat)&&Number.isFinite(light.lon)&&Math.abs(light.lat)<=90&&Math.abs(light.lon)<=180).slice(0,200):[];
+            displayOsmTrafficLightMarkers(lights);
+            if(status)status.textContent=root.TrafficLights&&root.TrafficLights.describeCoverage?root.TrafficLights.describeCoverage(data,win.osmTrafficLightMarkers.length,'area'):'Traffic-light coverage is unverified.';
         });
     }
 
@@ -296,15 +307,18 @@
         if (!execute.shouldApply) return;
 
         showOsmTrafficLightsEnabled = execute.enabled;
+        var status=document.getElementById('osmTrafficLightDataStatus');if(status&&!execute.enabled)status.textContent='Map traffic-light overlay is off.';
         TU().writeBoolPref(execute.storageKey, showOsmTrafficLightsEnabled);
         TU().applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmTrafficLightsEnabled);
 
+        var pending;
         if (execute.mapAction === 'fetchOsmTrafficLights') {
-            fetchAndDisplayOsmTrafficLights();
+            pending=fetchAndDisplayOsmTrafficLights();
         } else {
             clearOsmTrafficLightMarkers();
         }
         if (execute.saveAllSettings) rt().call.saveAllSettings();
+        return pending;
     }
 
     function toggleShowOsmRailwayCrossings() {
@@ -418,6 +432,7 @@
     }
 
     function bind(nextRuntime) {
+        trafficLightAreaGeneration++;
         runtime = nextRuntime;
     }
 
@@ -432,7 +447,7 @@
         getShowCamerasEnabled: function () { return showCamerasEnabled; },
         setShowCamerasEnabled: function (val) { showCamerasEnabled = val; },
         getShowOsmTrafficLightsEnabled: function () { return showOsmTrafficLightsEnabled; },
-        setShowOsmTrafficLightsEnabled: function (val) { showOsmTrafficLightsEnabled = val; },
+        setShowOsmTrafficLightsEnabled: function (val) { if(val!==showOsmTrafficLightsEnabled)trafficLightAreaGeneration++; showOsmTrafficLightsEnabled = val; },
         getShowOsmRailwayCrossingsEnabled: function () { return showOsmRailwayCrossingsEnabled; },
         setShowOsmRailwayCrossingsEnabled: function (val) { showOsmRailwayCrossingsEnabled = val; },
     };
