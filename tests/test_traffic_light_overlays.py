@@ -4,7 +4,7 @@ import time
 from unittest.mock import patch
 import pytest
 import requests
-from flask import Flask
+from flask import Flask, g
 import overpass_helper as oh
 from voyagr.api.hazards import hazards_bp
 from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
@@ -106,3 +106,34 @@ def test_viewport_admission_failure_preserves_unavailable_evidence():
     with patch.object(hazards,'_run_osm_area_fetch',return_value=HazardList(coverage={'status':'UNAVAILABLE','reason':'acquisition_busy'})):
         data=client().get('/api/traffic-lights/area?north=53.51&south=53.49&east=-1.18&west=-1.20').get_json()
     assert data['count']==0 and data['coverage']['reason']=='acquisition_busy'
+
+
+def test_expired_parent_refuses_route_acquisition_before_transport():
+    app=Flask(__name__);app.config['TESTING']=True;app.register_blueprint(hazards_bp,url_prefix='/api')
+    @app.before_request
+    def deadline():
+        g.routing_budget=rb.RoutingBudget(0)
+    with patch.object(oh,'query_overpass') as query, pytest.raises(rb.RoutingDeadlineExceeded):
+        app.test_client().post('/api/traffic-lights',json=route())
+    query.assert_not_called()
+
+
+def test_parent_expiring_in_transport_prevents_publication_and_cache_commit():
+    now=[100.0]
+    app=Flask(__name__);app.config['TESTING']=True;app.register_blueprint(hazards_bp,url_prefix='/api')
+    @app.before_request
+    def deadline():
+        g.routing_budget=rb.RoutingBudget(1,clock=lambda:now[0])
+    provider=oh.OverpassClient(endpoints=['http://localhost:8080/api/interpreter'],cache=oh.OverpassCache(),max_retries=1)
+    def transport(*args,**kwargs):
+        budget=rb.current_budget()
+        assert budget.parent is not None and budget.remaining() <= 1
+        now[0]=102.0
+        response=requests.Response();response.status_code=200
+        response._content=json.dumps({'elements':[node()]}).encode();response._content_consumed=True;response.headers['Content-Type']='application/json'
+        return response
+    with patch.object(oh,'get_client',return_value=provider),patch.object(rb,'post',side_effect=transport):
+        data=app.test_client().post('/api/traffic-lights',json=route()).get_json()
+    assert data['count']==0 and data['coverage']['status']=='UNAVAILABLE'
+    assert data['coverage']['reason']=='deadline_exceeded'
+    assert provider.cache.stats['size']==0

@@ -239,6 +239,12 @@ has been verified here. Long-route segmentation remains separate future work;
 this increment preserves the bounded skip rather than issuing many route queries.
 
 Local final verification: 134 JavaScript suites / 2,946 tests, lint and coverage
-floors passed; CI web backend selection 1,931 passed, one platform skip and
+floors passed; CI web backend selection 1,933 passed, one platform skip and
 74 subtests passed. Portrait/landscape Chromium checks passed with real MapLibre
 and the production marker helper for both viewport and selected-route displays.
+
+Final acquisition review also verifies that the shared worker inherits any shorter
+parent request deadline and bounds its wait to remaining time. Two regressions
+prove that an already-expired request performs no transport, and expiry during
+transport cannot publish/cache the result. Cooperative cancellation and the
+two-slot no-backlog policy remain intact, including for existing shared callers.

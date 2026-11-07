@@ -46,11 +46,14 @@ _osm_area_slots = threading.BoundedSemaphore(2)
 
 def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
     """Two owned tasks, no pending backlog; cooperative cancellation, never hard preemption."""
+    parent_budget = route_transport.current_budget()
+    if parent_budget is not None:
+        parent_budget.check()
     if not _osm_area_slots.acquire(blocking=False):
         audit.emit('area_admission_rejected')
         return HazardList(coverage={'status':'UNAVAILABLE','reason':'acquisition_busy'})
     current = audit.trace()
-    budget = route_transport.WorkBudget(_OSM_AREA_FETCH_TIMEOUT_SEC)
+    budget = route_transport.WorkBudget(_OSM_AREA_FETCH_TIMEOUT_SEC, parent=parent_budget)
     def run():
         with audit.bind_trace(current), route_transport.use_budget(budget):
             audit.emit('area_task_started')
@@ -69,7 +72,7 @@ def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
     future.add_done_callback(lambda done: _osm_area_slots.release())
     audit.emit('area_task_submitted')
     try:
-        return future.result(timeout=_OSM_AREA_FETCH_TIMEOUT_SEC)
+        return future.result(timeout=min(_OSM_AREA_FETCH_TIMEOUT_SEC, budget.remaining()))
     except FuturesTimeout:
         budget.cancel()
         cancelled = future.cancel()
