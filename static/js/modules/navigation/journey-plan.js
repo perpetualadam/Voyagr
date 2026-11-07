@@ -51,6 +51,16 @@
             stops:(body.stops||[]).map(function(s){return {kind:KINDS.indexOf(s.provenance)>=0?s.provenance:'unknown',coordinates:[s.lat,s.lon]};})};
     }
     function destinationKey(input){return JSON.stringify([input&&input.value,input&&input.dataset.lat,input&&input.dataset.lon]);}
+    // Presentation only: never changes selected coordinates, provenance or live permission.
+    function syncArrivalSummary(){
+        if(typeof document==='undefined')return;
+        var summary=document.getElementById('arrivalOptionsSummary');if(!summary)return;
+        var input=document.getElementById('drivingArrival'),intent=document.getElementById('arrivalIntent'),price=document.getElementById('arrivalParkingPrice');
+        var value=input&&input.value.trim(),parts=[value?(input.dataset.displayName===input.value&&input.dataset.lat&&input.dataset.lon?'Driving arrival: ':'Select a result: ')+value:'Use destination'];
+        if(intent&&intent.value!=='place')parts.push(intent.value==='roadside'?'Roadside — preview only':intent.value==='vehicle_entrance'?'Vehicle entrance — preview only':'Unsupported intent — choose again');
+        if(price&&price.value!=='any')parts.push(price.value==='free'?'Parking search: reported free':'Parking search: reported paid');
+        summary.textContent=parts.join(' · ');
+    }
     function clearArrival(){
         var input=typeof document!=='undefined'&&document.getElementById('drivingArrival');
         var context=typeof document!=='undefined'&&document.getElementById('arrivalSearchContext');
@@ -59,6 +69,7 @@
         if(input){input.value='';Object.keys(input.dataset).forEach(function(key){delete input.dataset[key];});}
         var dropdown=typeof document!=='undefined'&&document.getElementById('autocomplete_drivingArrival');
         if(dropdown)dropdown.classList.remove('show');
+        syncArrivalSummary();
     }
     function applyDrivingArrival(body,startInput,endInput,arrivalInput){
         var context=requestContext(body,startInput,endInput);
@@ -84,6 +95,7 @@
                 intentSelect.value='unsupported';
             }
         }
+        syncArrivalSummary();
         var choice=context&&context.arrival_choice,original=choice&&choice.requested_destination;
         var target=context&&context.destination,point=target&&coordinate(target.coordinates),requested=original&&coordinate(original.coordinates);
         if(!endInput||!arrivalInput||!choice||choice.version!==1||!point||!requested||JSON.stringify(choice.target)!==JSON.stringify(point))return;
@@ -95,6 +107,7 @@
             if(row[1].search_evidence)row[0].dataset.journeySearchEvidence=JSON.stringify(row[1].search_evidence);
         });
         arrivalInput.dataset.arrivalFor=destinationKey(endInput);
+        syncArrivalSummary();
     }
     function inspection(route,integrity){
         var points=integrity.geometryPoints(route);
@@ -181,6 +194,6 @@
         return {destination:destinationText,destinationName:route.destinationName||destinationText,stops:preserved,
             arrivalIntent:context&&context.arrival_intent,arrivalChoice:context&&context.arrival_choice,destinationProvenance:context&&context.destination||{kind:'unknown',coordinates:destination}};
     }
-    var api={responseArrivalIntentMatches:responseArrivalIntentMatches,destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,previewCamera:previewCamera,liveIntent:liveIntent};
+    var api={syncArrivalSummary:syncArrivalSummary,responseArrivalIntentMatches:responseArrivalIntentMatches,destinationKey:destinationKey,clearArrival:clearArrival,applyDrivingArrival:applyDrivingArrival,restoreArrival:restoreArrival,searchEvidence:searchEvidence,coordinate:coordinate,distance:distance,endpoint:endpoint,requestContext:requestContext,inspection:inspection,position:position,previewCamera:previewCamera,liveIntent:liveIntent};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyPlan=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

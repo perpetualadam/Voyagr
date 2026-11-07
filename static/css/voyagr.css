@@ -4812,3 +4812,36 @@ html.dark-mode #navigationOverlayLayout #speedUnitDisplay, body.dark-mode #navig
     .map-action-menu .nav-control-buttons .map-action-button { min-height: 48px; flex-direction: row; padding: 4px; gap: 6px; }
     .map-action-menu .nav-control-buttons .map-action-button[aria-pressed] { padding-right: 20px; }
 }
+
+/* Optional planning controls: native disclosure, with selected arrival always visible. */
+.arrival-options {
+    --arrival-surface: #fff; --arrival-text: #202530; --arrival-muted: #535b6b;
+    --arrival-border: #d9dce4; --arrival-accent: #56328a;
+    border: 1px solid var(--arrival-border); border-radius: 12px;
+    background: var(--arrival-surface); color: var(--arrival-text); margin: 12px 0 8px;
+}
+.arrival-options > summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: 48px; padding: 12px; cursor: pointer; list-style: none;
+    font-weight: 600; font-size: 1rem; line-height: 1.5;
+}
+.arrival-options > summary::-webkit-details-marker { display: none; }
+.arrival-options > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.arrival-options-optional { color: var(--arrival-muted); font-weight: 400; }
+.arrival-options #arrivalOptionsSummary { display: block; color: var(--arrival-muted); font-weight: 400; font-size: .875rem; }
+.arrival-options > summary > svg { width: 24px; height: 24px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; }
+.arrival-options[open] > summary > svg { transform: rotate(180deg); }
+.arrival-options > summary:focus-visible { outline: 3px solid var(--arrival-accent); outline-offset: 2px; border-radius: 10px; }
+.arrival-options-fields { padding: 0 12px 12px; }
+.arrival-options-fields label { display: block; margin: 12px 0 6px; color: var(--arrival-muted); font-size: .875rem; font-weight: 600; }
+.arrival-options-fields input, .arrival-options-fields select, .arrival-options-fields button {
+    min-height: 48px; font-size: 1rem; max-width: 100%; color: var(--arrival-text); background: var(--arrival-surface);
+}
+.arrival-options-fields select { width: 100%; border: 1px solid var(--arrival-border); border-radius: 8px; padding: 8px; }
+.arrival-options-fields small, .arrival-options-notice { display: block; font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
+.arrival-options-fields small { color: var(--arrival-muted); margin: 6px 0; }
+.arrival-options-notice { margin: 4px 0 8px; }
+html.dark-mode .arrival-options, body.dark-mode .arrival-options {
+    --arrival-surface: #20232b; --arrival-text: #f4f5f8; --arrival-muted: #c2c7d2;
+    --arrival-border: #505666; --arrival-accent: #c6a9f2;
+}

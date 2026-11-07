@@ -106,3 +106,20 @@ acceptance and GitHub notification identification remain open alongside it.
 - [ ] Accept on deployed phones and Firefox/WebKit with real guidance, different
   evidence/urgency states, offline notifications, gestures and dynamic orientation.
   Continue the remaining whole-app and native-map accessibility checks above.
+
+### 4c. Optional arrival controls (implemented; deployed acceptance pending)
+
+- [x] Group existing arrival/intent/parking-search controls in a native disclosure.
+- [x] Keep selected arrival, unfinished search, preview-only intent and parking
+  search filter visible in its closed summary; update on selection/edit/clear/restore.
+- [x] Retain access/entrance and onward-connection limitations outside the disclosure.
+- [x] Check keyboard operation, long names, four viewport sizes, light/dark themes
+  and normal/200% text using production markup/CSS and selection handlers.
+- [ ] Accept on deployed phones and Firefox/WebKit with actual parking results,
+  saved-route restoration and destination changes in the full app shell.
+- [ ] Review via-points/stops as the next separate form increment.
+
+This presentation-only increment preserves endpoint provenance, request cancellation,
+parking filters and live-navigation gates. Existing IDs and action handlers remain.
+`node scripts/check-arrival-options.cjs` runs 16 controlled Chromium cases; provider
+calls are fixtures. All earlier functional, deployment and UI acceptance stays open.
