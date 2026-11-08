@@ -493,3 +493,20 @@ See [Overpass item 6c](OVERPASS_CONSUMER_AUDIT.md#item-6c--nearby-ev-charge-2026
 for validation and scope. Next category: Pharmacy, followed by hospital and
 Groceries, each separately. The existing UI, unit, arrival and deferred road
 acceptance workstreams remain alongside this queue.
+
+
+## Nearby Pharmacy POI increment (8 November 2026)
+
+- [x] Preserve usable TomTom first; add bounded shared Overpass pharmacy nodes/
+  ways/relations after empty/failed/unusable primary results and keep the existing
+  Nominatim last resort after failed map acquisition.
+- [x] Retain source/cache timestamps, exact pharmacy category semantics and
+  independent distance/radius checks. Separate mapped-empty from unknown coverage.
+- [x] Label hours/operator as reported and services/stock/access as unverified;
+  keep selected distance units, stale-result protection and existing route planning.
+- [ ] Complete live VPS/provider and device acceptance after deployment; synthetic
+  Northern Ireland samples do not prove live UK-wide coverage.
+
+See [Overpass item 6d](OVERPASS_CONSUMER_AUDIT.md#item-6d--nearby-pharmacy-2026-11-08).
+Next nearby category is Hospital, then Groceries. Existing arrival, unit, UI and
+user-deferred sat-nav acceptance work remains alongside this increment.

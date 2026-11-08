@@ -114,6 +114,7 @@ jobs:
           tests/test_fuel_poi_search.py
           tests/test_food_poi_search.py
           tests/test_charging_poi_search.py
+          tests/test_pharmacy_poi_search.py
           tests/test_traffic_light_overlays.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py

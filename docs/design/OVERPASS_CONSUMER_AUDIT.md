@@ -54,7 +54,7 @@ is possible; neither free availability nor public access is guaranteed.
 | 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Controlled acquisition/display/snapshot and multi-leg checks passed (item 3 below); known-location and deployed/device acceptance remain pending. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
-| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel, Food and Charging controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Remaining categories retain their existing policy and node-only query. | Fuel/Food/Charging live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
+| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel, Food, Charging and Pharmacy controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Remaining categories retain their existing policy and node-only query. | Fuel/Food/Charging/Pharmacy live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
 | 7 | Along-route POI: `/poi-along-route` in `api/search.py` | Samples route points using TomTom, then Nominatim. It currently does not query Overpass. | Bounded integration design/tests before adding Overpass; avoid several unbounded queries per route. |
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
@@ -428,3 +428,52 @@ Full local checks: 143 JavaScript suites / 3,062 tests, lint and coverage floors
 passed; declared backend selection 2,105 passed, one platform skip and 74 subtests.
 No live provider/GPS or deployed-device acceptance was performed. No production
 configuration, database, credentials or deployment were changed.
+
+
+### Item 6d — Nearby Pharmacy (2026-11-08)
+
+The existing Pharmacy button now joins the bounded candidate-search admission
+path: usable TomTom first, shared configured Overpass after empty/failed/unusable
+primary results, existing Nominatim last resort after map acquisition failure.
+It preserves the existing exact `amenity=pharmacy` category meaning while adding
+nodes, ways and relations with centers. Hospitals, clinics and general chemist/
+drug stores are not automatically reclassified as pharmacies. Hospital and
+Groceries nearby searches and along-route acquisition remain outside this change.
+
+The search uses the shared 18-second cooperative budget and a 12-second Overpass
+child budget. The query has a 7-second server timeout, 2 MiB maxsize setting and
+200-element bound, with the existing 5-minute shared cache. Inputs require finite
+numeric WGS84 coordinates and a 1–5,000 metre integer radius. Candidates are
+independently distance-filtered, deduplicated, ranked and capped at 15. Available
+endpoint class, original dataset/retrieval timestamps, revision and cache state
+are preserved. A valid mapped-empty response is distinguished from unavailable
+acquisition/unknown coverage; neither establishes complete geographic coverage.
+
+The modal escapes provider text, labels opening hours/operator as reported, and
+asks users to check current hours, services, medicine stock and access with the
+pharmacy. All sources retain `opening_hours_verified=false`,
+`access_verified=false`, `services_verified=false` and `stock_verified=false`.
+These are location candidates, not confirmation of present opening, prescription
+services, stock or an entrance. No medical-services or stock feed was added.
+Distances stay under the selected display units. New searches clear old modal
+selections; stale HTTP/GPS callbacks cannot replace newer searches. Selecting a
+candidate invalidates old endpoint requests and invokes the existing planner;
+it does not start live navigation.
+
+Validation: 25 focused backend cases cover real shared-client parsing with
+fixture HTTP and cached provenance, exact category/area semantics, provider
+precedence/fallback, invalid and distant records, candidate bounds/ranking,
+deadlines, Northern Ireland/zero-longitude coordinates and unverified provider
+claims. Existing Fuel/Food/Charging cases remain passing. The unrelated-category
+empty-primary assertions now use Hospital because Pharmacy intentionally joins
+the reviewed fallback path. Six browser-owner regressions cover request/units,
+escaping, stale responses/GPS, empty/error states and planner selection.
+`node scripts/check-pharmacy-poi.cjs` passed at 390×844 and 844×390 using the real
+template button and production modal/owner with fixture data.
+
+No live provider, GPS, deployed-device acceptance or production changes were
+performed. Next nearby category: Hospital, then Groceries, each separately.
+
+Full local Pharmacy validation: 144 JavaScript suites / 3,068 tests, test lint and
+coverage floors passed; declared backend selection 2,130 passed, one platform
+skip and 74 subtests. These checks do not establish live provider/device behavior.
