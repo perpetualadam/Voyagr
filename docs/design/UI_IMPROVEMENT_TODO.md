@@ -610,3 +610,28 @@ source-maintenance work; retain the user's deferred sat-nav acceptance tasks.
 
 Keep statistics UI, remaining units/source maintenance and the user's deferred
 sat-nav acceptance alongside this work. No production deployment is automatic.
+
+## Group Settings by effect (8 November 2026)
+
+- [x] Add nine native expandable groups: Units & currency, Smart routing, Route
+  preferences, Traffic & navigation, Stops & departure, Map & display, Voice &
+  alerts, Parking, and Account & app. Units opens initially; groups remain mounted
+  so existing controllers can restore preferences while a group is closed.
+- [x] Move speedometer visibility out of Units; place avoidance enforcement and
+  charge-zone information beside mapped avoidances. Explain that enforcement also
+  applies to road-type avoidances and that map layers/alerts are separate.
+- [x] Move traffic-aware planning/closure/incident controls out of Multi-Drop;
+  retain stop/departure controls together. Label destination predictions as
+  suggested journeys, separately from hazard routing.
+- [x] Preserve control IDs, values/options/defaults, handlers and persistence;
+  open the account disclosure before existing sign-in/Premium shortcuts scroll.
+  Unconfigured Premium remains hidden and retains its existing status message.
+- [x] Validate 2,221 backend tests (one skipped), 3,104 JavaScript tests with
+  coverage, lint, and controlled browser layouts/keyboard disclosures/actions/unit
+  persistence plus account shortcuts across four viewports, light/dark, and
+  100%/200% root text. API/auth/navigation are fixtures, not live acceptance.
+- [ ] Accept on deployed devices with signed-in/Premium views and assistive
+  technology. Deployment remains separate; no routing policy or schema migration.
+
+Statistics remains the next UI milestone. Keep source maintenance, remaining unit
+policy and the user's deferred live sat-nav acceptance alongside this increment.

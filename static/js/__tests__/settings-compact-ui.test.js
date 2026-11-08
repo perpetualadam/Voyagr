@@ -1,3 +1,4 @@
+const Account=require('../app/supabase-auth-orchestration');
 const Units=require('../modules/navigation/units');
 const Preferences=require('../app/units-preferences-orchestration');
 const fs=require('fs'),path=require('path');
@@ -37,4 +38,41 @@ test('native distance control still drives the production preference controller 
  select.value='mi';Preferences.updateDistanceUnit();
  expect(localStorage.getItem('unit_distance')).toBe('mi');expect(Preferences.convertDistance(10)).toBe('6.21');
  delete global.fetch;
+});
+
+test('settings are grouped by effect with native disclosures and stable control ownership',()=>{
+ const groups={
+  settingsUnits:['distanceUnit','speedUnit','temperatureUnit','currencyUnit'],
+  settingsSmartRouting:['avoidCAZ','avoidCameras','avoidTrafficLights','avoidRailwayCrossings','avoidanceMode','cazInfoContainer'],
+  settingsRoutePreferences:['avoidTollRoads','avoidMotorways','avoidFerries','preferScenic','preferQuiet','avoidUnpaved','routeOptimization','maxDetour'],
+  settingsTrafficNavigation:['autoTrafficUpdateToggle','autoRerouteDeviationToggle','trafficAwareRouting','avoidRoadClosures','avoidIncidents'],
+  settingsStopsDeparture:['optimizeStopOrder','roundTrip','departureTime','bestTimeResult'],
+  settingsMapDisplay:['speedWidgetToggle','mapThemeSelector','smartZoomToggle','showCamerasToggle','showOsmTrafficLightsToggle','driverPerspectiveToggle'],
+  settingsVoiceAlerts:['voiceTurnDistance1','voiceTurnDistance2','voiceTurnDistance3','voiceHazardDistance','voiceAnnouncementsEnabled','cameraAlertType','cameraAlertDistance'],
+  settingsParking:['parkingMaxWalkingDistance','parkingPreferredType','parkingPricePreference'],
+  settingsAccountApp:['accountSection','supportVoyagrSection','mlPredictionsEnabled','batterySavingMode','pwaStatus']
+ };
+ expect(document.querySelectorAll('details.settings-group')).toHaveLength(9);
+ for(const [group,ids] of Object.entries(groups)){
+  const el=document.getElementById(group);expect(el.tagName).toBe('DETAILS');expect(el.firstElementChild.tagName).toBe('SUMMARY');
+  for(const id of ids){expect(document.querySelectorAll('#'+id)).toHaveLength(1);expect(document.getElementById(id).closest('details').id).toBe(group);}
+ }
+ expect(document.querySelectorAll('details.settings-group[open]')).toHaveLength(1);
+ expect(document.getElementById('settingsUnits').open).toBe(true);
+ expect(document.getElementById('settingsMapDisplay').textContent).toContain('Speedometer');
+ expect(document.getElementById('settingsUnits').textContent).not.toContain('Speedometer');
+});
+
+test('sign-in and configured Premium shortcuts reveal the closed account group before scrolling',()=>{
+ jest.useFakeTimers();
+ try {
+  Account.bind({call:{switchTab:()=>{},expandBottomSheet:()=>{},showStatus:()=>{}}});
+  const group=document.getElementById('settingsAccountApp');
+  const account=document.getElementById('accountSection'),premium=document.getElementById('supportVoyagrSection');
+  account.scrollIntoView=()=>{expect(group.open).toBe(true);};
+  premium.scrollIntoView=()=>{expect(group.open).toBe(true);};
+  Account.voyagrOpenSignInFromBanner();jest.runAllTimers();expect(group.open).toBe(true);
+  group.open=false;premium.style.display='block';Account.openVoyagerPremiumSection();jest.runAllTimers();expect(group.open).toBe(true);
+  group.open=false;premium.style.display='none';Account.openVoyagerPremiumSection();jest.runAllTimers();expect(group.open).toBe(false);
+ } finally {jest.useRealTimers();}
 });

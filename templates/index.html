@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108settings1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108settingsgroups1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -204,7 +204,7 @@
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20261107mapicons1"></script>
-    <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
+    <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20261108settingsgroups1"></script>
     <script defer src="/static/js/app/profile-store-orchestration.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/app/settings-orchestration.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/app/voice-control-orchestration.js?v=20261031phase12fgr7r8"></script>
@@ -699,104 +699,14 @@
 
                 <!-- UNIFIED SETTINGS TAB -->
                 <div id="settingsTab" class="settings-panel" style="display: none;">
-                    <div class="settings-heading"><h3>Settings</h3><button type="button" class="settings-action" onclick="goBackToPreviousTab()" title="Back to previous screen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Back</span></button></div>
+                    <div class="settings-heading"><h3>Settings</h3><button type="button" class="settings-action" onclick="goBackToPreviousTab()" title="Back to previous screen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"></path></svg><span>Back</span></button></div>
+                    <details class="settings-group" id="settingsUnits" open="">
+                    <summary>Units &amp; currency</summary>
 
-                    <!-- Account Section (Supabase) -->
-                    <div class="preferences-section" id="accountSection">
-                        <h3>👤 Account</h3>
-                        <div id="accountStatus" style="font-size: 12px; color: #666; margin-bottom: 10px;">
-                            Loading account status...
-                        </div>
-
-                        <div id="accountSignedOut" style="display: none;">
-                            <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
-                                <input id="authEmail" type="email" placeholder="Email" autocomplete="email"
-                                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
-                                <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password"
-                                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                <button onclick="authSignInEmail()" style="padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                                    Sign in
-                                </button>
-                                <button onclick="authSignUpEmail()" style="padding: 10px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                                    Create account
-                                </button>
-                            </div>
-
-                            <!-- Continue with Google — disabled (use email sign-in). Re-enable by uncommenting:
-                            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 10px;">
-                                <button onclick="authSignInProvider('google')" style="padding: 10px; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                                    Continue with Google
-                                </button>
-                            </div>
-                            -->
-                            <div style="font-size: 11px; color: #888; margin-top: 8px;">
-                                Tip: if this server requires sign-in, you&apos;ll unlock the app on the welcome screen first; you can manage your account here anytime.
-                            </div>
-                        </div>
-
-                        <div id="accountSignedIn" style="display: none;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                                <div style="font-size: 13px; color: #333;">
-                                    Signed in as <strong id="accountEmail">-</strong>
-                                </div>
-                                <button onclick="authSignOut()" style="padding: 8px 12px; background: #fff; color: #c62828; border: 1px solid #ffcdd2; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
-                                    Sign out
-                                </button>
-                            </div>
-                            <div style="margin-top: 10px; font-size: 11px; color: #666;">
-                                Your on-device (guest) profile can stay separate. On first sign-in, you can choose to import it into your account profile.
-                            </div>
-                        </div>
-
-                        <div id="promoCodeBlock" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee;">
-                            <h4 style="margin: 0 0 6px 0; font-size: 14px; color: #333;">Promo code</h4>
-                            <p style="font-size: 11px; color: #888; margin: 0 0 8px 0;">Trial or lifetime codes. Some codes only work for the account they were issued to.</p>
-                            <div id="promoCodeGuestNote" style="display: none; font-size: 12px; color: #888;">Sign in to apply a promo code.</div>
-                            <div id="promoCodeFormWrap" style="display: none;">
-                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                                    <input id="promoCodeInput" type="text" placeholder="Enter code" autocomplete="off"
-                                           style="flex: 1; min-width: 140px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
-                                    <button type="button" onclick="redeemPromoCode()"
-                                            style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">Apply</button>
-                                </div>
-                                <div id="promoCodeStatus" style="margin-top: 6px; font-size: 12px; color: #666;"></div>
-                                <div id="promoEntitlementSummary" style="margin-top: 4px; font-size: 12px; color: #333;"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Voyager Premium (Stripe subscription) + tips (BMC / Patreon) — URLs from server config -->
-                    <div class="preferences-section" id="supportVoyagrSection" style="display: none;">
-                        <h3>⚡ Voyager Premium</h3>
-                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
-                            <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features.
-                        </p>
-                        <p id="serviceRegionNote" style="display: none; font-size: 12px; color: #5d4037; margin: 0 0 10px 0; padding: 8px 10px; background: #fff8e1; border-radius: 6px; border-left: 3px solid #ff8f00;"></p>
-                        <p id="supportStripeTrialNote" style="display: none; font-size: 12px; color: #1565c0; margin: 0 0 10px 0;"></p>
-                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-                            <button type="button" id="supportStripePremiumBtn" style="display: none; padding: 12px; background: #635bff; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">💳 Subscribe — Voyager Premium</button>
-                            <button type="button" id="supportBmcBtn" style="display: none; padding: 12px; background: #ffdd00; color: #0d0d0d; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">☕ Tip — Buy Me a Coffee</button>
-                            <button type="button" id="supportPatreonBtn" style="display: none; padding: 12px; background: #ff424d; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">🎭 Tip / patron — Patreon</button>
-                        </div>
-                    </div>
-
-                    <!-- Privacy & Your Rights Section -->
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Choose how measurements are displayed. Feature-specific distances remain with their controls.</p>
                     <div class="preferences-section">
-                        <h3>🔒 Privacy &amp; your rights</h3>
-                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
-                            How Voyagr handles your data, and your rights under UK GDPR / data protection law.
-                        </p>
-                        <div class="settings-actions">
-                            <a href="/privacy" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"/></svg><span>Privacy policy</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
-                            <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice && voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Review safety notice</span></button>
-                        </div>
-                    </div>
 
-                    <!-- Unit Preferences Section -->
-                    <div class="preferences-section">
-                        <h3>📏 Units</h3>
 
                         <div class="preference-item">
                             <label class="preference-label" for="distanceUnit">📏 Distance Unit</label>
@@ -814,13 +724,8 @@
                             </select>
                         </div>
 
-                        <div class="preference-item">
-                            <span class="preference-label">🚗 Speedometer &amp; limit</span>
-                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map" aria-label="🚗 Speedometer &amp; limit"></button>
-                        </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
-                            The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
-                        </p>
+
+
 
                         <div class="preference-item">
                             <label class="preference-label" for="temperatureUnit">🌡️ Temperature</label>
@@ -840,11 +745,15 @@
                             </select>
                         </div>
                         <p id="costCurrencyHelp" style="font-size:12px;line-height:1.45;">Cost estimates are in GBP (£). USD and EUR conversion is currently unavailable; choosing a preference does not convert amounts.</p>
-                    </div>
+                    </div></div></details>
 
-                    <!-- Routing preferences (route planning & map data) -->
+                    <details class="settings-group" id="settingsSmartRouting">
+                    <summary>Smart routing</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Routing around mapped hazards and charge zones. These preferences do not control map markers or spoken alerts.</p>
                     <div class="preferences-section">
-                        <h3>🛣️ Routing</h3>
+
                         <p style="font-size: 12px; color: #666; margin: 0 0 12px 0; line-height: 1.45;">
                             Choose what your routes should favour or steer clear of. You remain responsible for following road signs and local rules.
                         </p>
@@ -881,7 +790,7 @@
 
                         <div class="preferences-subsection">
                             <h4 class="preferences-subsection-title">Map data filters</h4>
-                            <p class="preferences-subsection-help">When smarter routing is on, include or exclude each point type from route planning.</p>
+                            <p class="preferences-subsection-help">These camera and mapped-point filters apply when map-based routing is enabled. Map visibility and spoken alerts are controlled separately.</p>
 
                             <div class="preference-item">
                                 <span class="preference-label">Speed cameras</span>
@@ -909,52 +818,31 @@
                             </div>
                         </div>
 
-                    </div>
-
-                    <!-- Navigation Automation Section -->
-                    <div class="preferences-section">
-                        <h3>🤖 While navigating</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic traffic checks and rerouting during a trip</p>
-
-                        <div class="preference-item">
-                            <span class="preference-label">Live traffic updates</span>
-                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Live traffic updates"></button>
-                        </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p>
-
-                        <div class="preference-item">
-                            <span class="preference-label">Reroute when off course</span>
-                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Reroute when off course"></button>
-                        </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p>
-
-                        <div class="preference-item">
-                            <span class="preference-label">Traffic check now</span>
-                            <button type="button" class="settings-action" onclick="manualTrafficUpdate()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Update now</span></button>
-                        </div>
-                    </div>
-
-                    <!-- CAZ Information Section -->
-                    <div class="preferences-section">
-                        <h3>🌿 Emissions charge zones</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK zones with daily charges, passes, and vehicle exemptions</p>
-
-                        <button type="button" class="settings-action" onclick="showCAZInfo()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Zone charges &amp; passes</span></button>
-
-                        <div id="cazInfoContainer" style="display: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
-                    </div>
-
-                    <!-- Route Preferences Section -->
-                    <div class="preferences-section">
-                        <h3>🛣️ Route style</h3>
+                    <p class="settings-group-help">Avoidance enforcement applies to selected avoidances here and road-type avoidances under Route preferences.</p>
                         <label>Avoidance enforcement
                             <select id="avoidanceMode" onchange="localStorage.setItem('pref_avoidance_mode', this.value); window.VoyagrAvoidanceIntegrity.invalidate();">
                                 <option value="preference">Best effort (existing preferences)</option>
                                 <option value="mandatory">Require selected avoidances; refuse unresolved routes</option>
                             </select>
-                        </label>
-                        <p>Available map data cannot guarantee hazard-free travel. Unresolved mandatory requirements prevent navigation. Refused routes remain available as previews for inspection.</p>
-                        <script>window.addEventListener('load', function () { document.getElementById('avoidanceMode').value = localStorage.getItem('pref_avoidance_mode') || 'preference'; });</script>
+                        </label><p>Available map data cannot guarantee hazard-free travel. Unresolved mandatory requirements prevent navigation. Refused routes remain available as previews for inspection.</p><script>window.addEventListener('load', function () { document.getElementById('avoidanceMode').value = localStorage.getItem('pref_avoidance_mode') || 'preference'; });</script></div><div class="preferences-section">
+                        <h3>🌿 Emissions charge zones</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK zones with daily charges, passes, and vehicle exemptions</p>
+
+                        <button type="button" class="settings-action" onclick="showCAZInfo()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Zone charges &amp; passes</span></button>
+
+                        <div id="cazInfoContainer" style="display: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
+                    </div></div></details>
+
+                    <details class="settings-group" id="settingsRoutePreferences">
+                    <summary>Route preferences</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Choose route style, road types and your maximum detour.</p>
+                    <div class="preferences-section">
+
+
+
+
 
                         <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Road types and how routes are calculated</p>
 
@@ -1008,16 +896,65 @@
                                 <span id="detourLabel" style="font-size: 13px; font-weight: 500; min-width: 40px;">20%</span>
                             </div>
                         </div>
-                    </div>
+                    </div></div></details>
 
-                    <!-- Multi-Drop Settings Section -->
+                    <details class="settings-group" id="settingsTrafficNavigation">
+                    <summary>Traffic &amp; navigation</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Traffic-aware planning, reported closures and incidents, and automatic updates while navigating.</p>
                     <div class="preferences-section">
-                        <h3>📦 Multi-Drop Settings</h3>
+
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic traffic checks and rerouting during a trip</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Live traffic updates</span>
+                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Live traffic updates"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Reroute when off course</span>
+                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Reroute when off course"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Traffic check now</span>
+                            <button type="button" class="settings-action" onclick="manualTrafficUpdate()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"></path></svg><span>Update now</span></button>
+                        </div>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="trafficAwareRouting" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Traffic-Aware Routing</span>
+                                    <div style="font-size: 11px; color: #888;">Use real-time traffic data for route calculation and ETAs</div>
+                                </div>
+                            </label><label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidRoadClosures" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Route around closures</span>
+                                    <div style="font-size: 11px; color: #888;">Skips reported road closures when possible</div>
+                                </div>
+                            </label><label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidIncidents" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Route around incidents</span>
+                                    <div style="font-size: 11px; color: #888;">Skips accidents, roadworks, and similar reports when possible</div>
+                                </div>
+                            </label></div></div></details>
+
+                    <details class="settings-group" id="settingsStopsDeparture">
+                    <summary>Stops &amp; departure</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Stop order, round trips and departure planning.</p>
+                    <div class="preferences-section">
+
                         <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Configure multi-stop delivery and route optimization</p>
 
                         <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="optimizeStopOrder" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <input type="checkbox" id="optimizeStopOrder" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
                                     <span style="font-size: 13px; font-weight: 500;">Optimize Stop Order</span>
                                     <div style="font-size: 11px; color: #888;">Automatically find the most efficient route through all stops</div>
@@ -1030,51 +967,37 @@
                                     <div style="font-size: 11px; color: #888;">Return to starting point after all stops</div>
                                 </div>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="trafficAwareRouting" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <div>
-                                    <span style="font-size: 13px; font-weight: 500;">Traffic-Aware Routing</span>
-                                    <div style="font-size: 11px; color: #888;">Use real-time traffic data for route calculation and ETAs</div>
-                                </div>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="avoidRoadClosures" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <div>
-                                    <span style="font-size: 13px; font-weight: 500;">Route around closures</span>
-                                    <div style="font-size: 11px; color: #888;">Skips reported road closures when possible</div>
-                                </div>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="avoidIncidents" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <div>
-                                    <span style="font-size: 13px; font-weight: 500;">Route around incidents</span>
-                                    <div style="font-size: 11px; color: #888;">Skips accidents, roadworks, and similar reports when possible</div>
-                                </div>
-                            </label>
+
+
+
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Departure Time</span>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <input type="datetime-local" id="departureTime" onchange="saveMultiDropPreferences()" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <button type="button" class="settings-action" onclick="clearDepartureTime()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Now</span></button>
+                                <button type="button" class="settings-action" onclick="clearDepartureTime()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Now</span></button>
                             </div>
                             <div style="font-size: 11px; color: #888; margin-top: 4px;">Set departure time for accurate ETAs. Leave empty to use current time.</div>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">🕐 Best Time to Leave</span>
-                            <button type="button" class="settings-action" onclick="analysebestTimeToLeave()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Analyse departure</span></button>
+                            <button type="button" class="settings-action" onclick="analysebestTimeToLeave()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Analyse departure</span></button>
                         </div>
                         <div id="bestTimeResult" style="display: none; margin-top: 8px; padding: 12px; background: #f0f4ff; border-radius: 8px; border: 1px solid #dde4ff;">
                             <div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px;">Recommended Departure Times</div>
                             <div id="bestTimeSlots" style="font-size: 12px; color: #555;"></div>
                         </div>
-                    </div>
+                    </div></div></details>
 
-                    <!-- Display Preferences Section -->
+                    <details class="settings-group" id="settingsMapDisplay">
+                    <summary>Map &amp; display</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Appearance, map layers, speedometer visibility, location and 3D views.</p>
                     <div class="preferences-section">
-                        <h3>🎨 Map &amp; display</h3>
+
 
                         <div class="preference-item">
                             <span class="preference-label">🗺️ Map Theme</span>
@@ -1129,7 +1052,7 @@
 
                         <div class="preference-item">
                             <span class="preference-label preference-label--with-tl-icon">
-                                <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
+                                <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"></rect><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"></circle><circle cx="8" cy="18" r="4.2" fill="#f59e0b"></circle><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"></circle></svg></span>
                                 <span>Traffic signals (map)</span>
                             </span>
                             <button class="toggle-switch active" type="button" aria-label="Traffic signals (map)" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
@@ -1151,7 +1074,7 @@
 
                         <div class="preference-item">
                             <span class="preference-label preference-label--with-tl-icon">
-                                <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
+                                <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"></rect><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"></circle><circle cx="8" cy="18" r="4.2" fill="#f59e0b"></circle><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"></circle></svg></span>
                                 <span>Show Traffic Lights</span>
                             </span>
                             <button class="toggle-switch active" type="button" aria-label="Show Traffic Lights" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
@@ -1183,7 +1106,7 @@
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Enable Plus Code input for destination search (free, offline-capable)</p>
 
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR & 3D View</h4>
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR &amp; 3D View</h4>
                             <div class="preference-item">
                                 <span class="preference-label">🗺️ 3D Map View</span>
                                 <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()" type="button" aria-label="🗺️ 3D Map View"></button>
@@ -1198,45 +1121,20 @@
                                 <button class="toggle-switch" id="driverPerspectiveToggle" onclick="toggleDriverPerspective()" type="button" aria-label="🚗 3D Driver View"></button>
                             </div>
                         </div>
-                    </div>
+                    <div class="preference-item">
+                            <span class="preference-label">🚗 Speedometer &amp; limit</span>
+                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map" aria-label="🚗 Speedometer &amp; limit"></button>
+                        </div><p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
+                            The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
+                        </p></div></div></details>
 
-                    <!-- Parking Preferences Section -->
+                    <details class="settings-group" id="settingsVoiceAlerts">
+                    <summary>Voice &amp; alerts</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Spoken guidance, warning distances, chimes and the wake phrase.</p>
                     <div class="preferences-section">
-                        <h3>🅿️ Parking Preferences</h3>
 
-                        <div class="preference-item">
-                            <label class="preference-label" for="parkingMaxWalkingDistance">Max Walking Distance</label>
-                            <select id="parkingMaxWalkingDistance" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="5">5 minutes (400m)</option>
-                                <option value="10" selected>10 minutes (800m)</option>
-                                <option value="15">15 minutes (1.2km)</option>
-                            </select>
-                        </div>
-
-                        <div class="preference-item">
-                            <label class="preference-label" for="parkingPreferredType">Preferred Parking Type</label>
-                            <select id="parkingPreferredType" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="any" selected>Any Type</option>
-                                <option value="garage">Garage</option>
-                                <option value="street">Street Parking</option>
-                                <option value="lot">Parking Lot</option>
-                            </select>
-                        </div>
-
-                        <div class="preference-item">
-                            <label class="preference-label" for="parkingPricePreference">Price Preference</label>
-                            <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="any" selected>Any Price</option>
-                                <option value="free">Reported Free Only (Any Type)</option>
-                                <option value="free_street">Reported Free Street Parking</option>
-                                <option value="paid">Reported Paid Parking</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Voice Preferences Section -->
-                    <div class="preferences-section">
-                        <h3>🎤 Voice &amp; alerts</h3>
 
 
 
@@ -1244,7 +1142,7 @@
                             <label class="preference-label" for="voiceTurnDistance1">Turn Announcement Distance (1st)</label>
                             <select id="voiceTurnDistance1" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="300">300 meters</option>
-                                <option value="500" selected>500 meters</option>
+                                <option value="500" selected="">500 meters</option>
                                 <option value="800">800 meters</option>
                                 <option value="1000">1 kilometer</option>
                             </select>
@@ -1255,7 +1153,7 @@
                             <select id="voiceTurnDistance2" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="100">100 meters</option>
                                 <option value="150">150 meters</option>
-                                <option value="200" selected>200 meters</option>
+                                <option value="200" selected="">200 meters</option>
                                 <option value="300">300 meters</option>
                             </select>
                         </div>
@@ -1265,7 +1163,7 @@
                             <select id="voiceTurnDistance3" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="50">50 meters</option>
                                 <option value="75">75 meters</option>
-                                <option value="100" selected>100 meters</option>
+                                <option value="100" selected="">100 meters</option>
                                 <option value="150">150 meters</option>
                             </select>
                         </div>
@@ -1274,7 +1172,7 @@
                             <label class="preference-label" for="voiceHazardDistance">Hazard Warning Distance</label>
                             <select id="voiceHazardDistance" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="300">300 meters</option>
-                                <option value="500" selected>500 meters</option>
+                                <option value="500" selected="">500 meters</option>
                                 <option value="800">800 meters</option>
                                 <option value="1000">1 kilometer</option>
                             </select>
@@ -1307,7 +1205,7 @@
                             <label class="preference-label" for="cameraAlertType">Roadside alert style</label>
                             <select id="cameraAlertType" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="off">Off</option>
-                                <option value="voice" selected>Voice only</option>
+                                <option value="voice" selected="">Voice only</option>
                                 <option value="chime">Chime only</option>
                                 <option value="both">Voice + chime</option>
                             </select>
@@ -1319,20 +1217,141 @@
                             <select id="cameraAlertDistance" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="200">200 meters</option>
                                 <option value="300">300 meters</option>
-                                <option value="500" selected>500 meters</option>
+                                <option value="500" selected="">500 meters</option>
                                 <option value="800">800 meters</option>
                                 <option value="1000">1 kilometer</option>
                             </select>
                         </div>
-                    </div>
+                    </div></div></details>
 
-                    <!-- Advanced Features Section -->
+                    <details class="settings-group" id="settingsParking">
+                    <summary>Parking</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Walking allowance, parking type and reported prices.</p>
                     <div class="preferences-section">
-                        <h3>⚙️ Advanced Features</h3>
+
 
                         <div class="preference-item">
-                            <span class="preference-label">🤖 Smart Route Predictions</span>
-                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()" type="button" aria-label="🤖 Smart Route Predictions"></button>
+                            <label class="preference-label" for="parkingMaxWalkingDistance">Max Walking Distance</label>
+                            <select id="parkingMaxWalkingDistance" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="5">5 minutes (400m)</option>
+                                <option value="10" selected="">10 minutes (800m)</option>
+                                <option value="15">15 minutes (1.2km)</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <label class="preference-label" for="parkingPreferredType">Preferred Parking Type</label>
+                            <select id="parkingPreferredType" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="any" selected="">Any Type</option>
+                                <option value="garage">Garage</option>
+                                <option value="street">Street Parking</option>
+                                <option value="lot">Parking Lot</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <label class="preference-label" for="parkingPricePreference">Price Preference</label>
+                            <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="any" selected="">Any Price</option>
+                                <option value="free">Reported Free Only (Any Type)</option>
+                                <option value="free_street">Reported Free Street Parking</option>
+                                <option value="paid">Reported Paid Parking</option>
+                            </select>
+                        </div>
+                    </div></div></details>
+
+                    <details class="settings-group" id="settingsAccountApp">
+                    <summary>Account &amp; app</summary>
+
+                    <div class="settings-group-content">
+                    <p class="settings-group-help">Account, Premium, privacy, suggested journeys, battery saving and app updates.</p><div class="preferences-section" id="accountSection">
+                        <h3>👤 Account</h3>
+                        <div id="accountStatus" style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                            Loading account status...
+                        </div>
+
+                        <div id="accountSignedOut" style="display: none;">
+                            <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
+                                <input id="authEmail" type="email" placeholder="Email" autocomplete="email" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+                                <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <button onclick="authSignInEmail()" style="padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                    Sign in
+                                </button>
+                                <button onclick="authSignUpEmail()" style="padding: 10px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                    Create account
+                                </button>
+                            </div>
+
+                            <!-- Continue with Google — disabled (use email sign-in). Re-enable by uncommenting:
+                            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 10px;">
+                                <button onclick="authSignInProvider('google')" style="padding: 10px; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                    Continue with Google
+                                </button>
+                            </div>
+                            -->
+                            <div style="font-size: 11px; color: #888; margin-top: 8px;">
+                                Tip: if this server requires sign-in, you'll unlock the app on the welcome screen first; you can manage your account here anytime.
+                            </div>
+                        </div>
+
+                        <div id="accountSignedIn" style="display: none;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                <div style="font-size: 13px; color: #333;">
+                                    Signed in as <strong id="accountEmail">-</strong>
+                                </div>
+                                <button onclick="authSignOut()" style="padding: 8px 12px; background: #fff; color: #c62828; border: 1px solid #ffcdd2; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                                    Sign out
+                                </button>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11px; color: #666;">
+                                Your on-device (guest) profile can stay separate. On first sign-in, you can choose to import it into your account profile.
+                            </div>
+                        </div>
+
+                        <div id="promoCodeBlock" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee;">
+                            <h4 style="margin: 0 0 6px 0; font-size: 14px; color: #333;">Promo code</h4>
+                            <p style="font-size: 11px; color: #888; margin: 0 0 8px 0;">Trial or lifetime codes. Some codes only work for the account they were issued to.</p>
+                            <div id="promoCodeGuestNote" style="display: none; font-size: 12px; color: #888;">Sign in to apply a promo code.</div>
+                            <div id="promoCodeFormWrap" style="display: none;">
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                    <input id="promoCodeInput" type="text" placeholder="Enter code" autocomplete="off" style="flex: 1; min-width: 140px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+                                    <button type="button" onclick="redeemPromoCode()" style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">Apply</button>
+                                </div>
+                                <div id="promoCodeStatus" style="margin-top: 6px; font-size: 12px; color: #666;"></div>
+                                <div id="promoEntitlementSummary" style="margin-top: 4px; font-size: 12px; color: #333;"></div>
+                            </div>
+                        </div>
+                    </div><div class="preferences-section" id="supportVoyagrSection" style="display: none;">
+                        <h3>⚡ Voyager Premium</h3>
+                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
+                            <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features.
+                        </p>
+                        <p id="serviceRegionNote" style="display: none; font-size: 12px; color: #5d4037; margin: 0 0 10px 0; padding: 8px 10px; background: #fff8e1; border-radius: 6px; border-left: 3px solid #ff8f00;"></p>
+                        <p id="supportStripeTrialNote" style="display: none; font-size: 12px; color: #1565c0; margin: 0 0 10px 0;"></p>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                            <button type="button" id="supportStripePremiumBtn" style="display: none; padding: 12px; background: #635bff; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">💳 Subscribe — Voyager Premium</button>
+                            <button type="button" id="supportBmcBtn" style="display: none; padding: 12px; background: #ffdd00; color: #0d0d0d; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">☕ Tip — Buy Me a Coffee</button>
+                            <button type="button" id="supportPatreonBtn" style="display: none; padding: 12px; background: #ff424d; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">🎭 Tip / patron — Patreon</button>
+                        </div>
+                    </div><div class="preferences-section">
+                        <h3>🔒 Privacy &amp; your rights</h3>
+                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
+                            How Voyagr handles your data, and your rights under UK GDPR / data protection law.
+                        </p>
+                        <div class="settings-actions">
+                            <a href="/privacy" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"></path></svg><span>Privacy policy</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
+                            <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice &amp;&amp; voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Review safety notice</span></button>
+                        </div>
+                    </div><div class="preferences-section">
+                        <h3>Suggested journeys &amp; battery</h3>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Suggested journeys</span>
+                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()" type="button" aria-label="Suggested journeys"></button>
                         </div>
 
                         <div class="preference-item">
@@ -1340,29 +1359,24 @@
                             <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()" type="button" aria-label="🔋 Battery Saving Mode"></button>
                         </div>
 
-                    </div>
-
-                    <!-- App Section -->
-                    <div class="preferences-section">
+                    </div><div class="preferences-section">
                         <h3>📱 App Controls</h3>
 
                         <div class="settings-actions">
-                            <button type="button" class="settings-action" onclick="refreshApp()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Refresh app</span></button>
-                            <button type="button" class="settings-action" onclick="checkForUpdates()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>Check updates</span></button>
+                            <button type="button" class="settings-action" onclick="refreshApp()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"></path></svg><span>Refresh app</span></button>
+                            <button type="button" class="settings-action" onclick="checkForUpdates()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"></path></svg><span>Check updates</span></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Refresh to reload the app. Check Updates to get the latest version.</p>
 
                         <div id="pwaStatus" style="padding: 10px; background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #666;">
                             <span id="pwaVersionText">App version: Loading...</span>
                         </div>
-                    </div>
+                    </div></div></details>
+<div class="settings-actions settings-actions--footer">
+                        <button type="button" class="settings-action" onclick="recalculateRouteWithPreferences()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"></path></svg><span>Recalculate route</span></button>
+                        <button type="button" class="settings-action" onclick="switchTab('navigation')"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"></path></svg><span>Map</span></button>
+                    </div></div>
 
-                    <!-- Action Buttons -->
-                    <div class="settings-actions settings-actions--footer">
-                        <button type="button" class="settings-action" onclick="recalculateRouteWithPreferences()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Recalculate route</span></button>
-                        <button type="button" class="settings-action" onclick="switchTab('navigation')"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Map</span></button>
-                    </div>
-                </div>
 
                 <!-- TRIP HISTORY TAB (NEW FEATURE) -->
                 <div id="tripHistoryTab" class="journey-collection" style="display: none;">

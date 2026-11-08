@@ -32,6 +32,11 @@
         return userId ? STRIPE_ONBOARD_SKIP_PREFIX + userId : null;
     }
 
+    function revealSettingsGroup(el) {
+        var group = el.closest('details.settings-group');
+        if (group) group.open = true;
+    }
+
     function openVoyagerPremiumSection() {
         try {
             if (typeof rt().call.expandBottomSheet === 'function') {
@@ -45,6 +50,7 @@
                     rt().call.showStatus('Voyager Premium is not configured on this server yet (add Stripe or tip URLs in .env).', 'info');
                     return;
                 }
+                revealSettingsGroup(el);
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 80);
         } catch (e) {
@@ -190,7 +196,10 @@
             rt().call.switchTab('settings');
             setTimeout(function () {
                 var el = document.getElementById('accountSection');
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (el) {
+                    revealSettingsGroup(el);
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
             }, 120);
         } catch (e) {
             console.warn('[Auth] Open sign-in from banner failed:', e);
