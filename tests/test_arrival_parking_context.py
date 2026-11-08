@@ -439,7 +439,7 @@ def test_parking_poi_valid_empty_is_distinct_from_failure_and_other_poi_provider
     with patch('overpass_helper.query_overpass', return_value={'success': True, 'elements': []}):
         payload = client().post('/api/poi-search', json={'lat': 53, 'lon': -1, 'type': 'parking'}).get_json()
     assert payload['success'] is True and payload['results'] == [] and payload['source'] == 'Overpass'
-    with patch('voyagr.api.search._tomtom_poi_search', return_value=[{'name': 'Fuel result'}]) as tomtom, \
+    with patch('voyagr.api.search._tomtom_poi_search', return_value=[{'name': 'Fuel result', 'lat': 53, 'lon': -1}]) as tomtom, \
          patch('overpass_helper.query_overpass') as provider:
         payload = client().post('/api/poi-search', json={'lat': 53, 'lon': -1, 'type': 'fuel'}).get_json()
     assert payload['source'] == 'TomTom' and payload['results'][0]['name'] == 'Fuel result'

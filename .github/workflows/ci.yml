@@ -109,6 +109,7 @@ jobs:
           tests/test_windows_evidence_metadata.py
           tests/test_phase11c_acceptance_tools.py
           tests/test_railway_crossing_overlays.py
+          tests/test_fuel_poi_search.py
           tests/test_traffic_light_overlays.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py

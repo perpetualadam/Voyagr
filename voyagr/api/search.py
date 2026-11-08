@@ -501,7 +501,7 @@ def reverse_geocode():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) -> Any:
+def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int, *, budgeted=False) -> Any:
     """Fallback POI search using Nominatim when Overpass fails."""
     try:
         url = f'{NOMINATIM_BASE_URL}/search'
@@ -525,7 +525,7 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
         _nominatim_email_params(params)
 
         headers = _nominatim_headers()
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response = (route_transport.get if budgeted else requests.get)(url, params=params, headers=headers, timeout=10)
 
         if response.status_code != 200:
             return jsonify({'success': False, 'error': 'POI search failed'})
@@ -535,6 +535,9 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
 
         for result in results:
             try:
+                if budgeted and ('lat' not in result or 'lon' not in result or
+                                 isinstance(result['lat'], bool) or isinstance(result['lon'], bool)):
+                    continue
                 p_lat = float(result.get('lat', 0))
                 p_lon = float(result.get('lon', 0))
                 distance_m = get_distance_between_points(lat, lon, p_lat, p_lon)
@@ -550,12 +553,14 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
                     'type': poi_type,
                     'address': result.get('display_name', '')
                 })
-            except (ValueError, KeyError):
+            except (ValueError, KeyError, TypeError, OverflowError):
                 continue
 
         poi_list.sort(key=lambda x: x['distance_m'])
         return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type, 'source': 'nominatim'})
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -643,7 +648,7 @@ def search_parking():
     return response
 
 
-def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> Any:
+def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int, *, budgeted=False) -> Any:
     """Search for POIs using TomTom Search API (primary source)."""
     tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
     if not tomtom_api_key:
@@ -675,7 +680,7 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> An
             'limit': 20,
             'language': 'en-GB',
         }
-        resp = requests.get(url, params=params, timeout=5)
+        resp = (route_transport.get if budgeted else requests.get)(url, params=params, timeout=5)
         if resp.status_code != 200:
             logger.warning(f"[POI-TomTom] API error: status={resp.status_code}")
             return None
@@ -686,9 +691,14 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> An
             return []
 
         poi_list = []
-        for item in results_list:
+        for item in results_list[:200]:
             try:
+                if budgeted and not isinstance(item, dict):
+                    continue
                 pos = item.get('position', {})
+                if budgeted:
+                    from voyagr.services.arrival_map_evidence import point
+                    if not isinstance(pos,dict) or point([pos.get('lat'),pos.get('lon')]) is None:continue
                 p_lat = float(pos.get('lat', 0))
                 p_lon = float(pos.get('lon', 0))
                 poi_info = item.get('poi', {})
@@ -709,13 +719,15 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> An
                     'amenity': poi_type,
                     'source': 'TomTom',
                 })
-            except (ValueError, KeyError, IndexError) as e:
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
                 logger.debug(f"[POI-TomTom] Error parsing result: {e}")
                 continue
 
         poi_list.sort(key=lambda x: x['distance_m'])
         return poi_list[:20]
 
+    except route_transport.RoutingDeadlineExceeded:
+        raise
     except requests.exceptions.Timeout:
         logger.warning("[POI-TomTom] Request timed out")
         return None
@@ -724,11 +736,48 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> An
         return None
 
 
+def _fuel_poi_response(data):
+    from voyagr.services.arrival_map_evidence import point
+    from voyagr.services.fuel_poi import search_osm, normalize_rows
+    target=point([data.get('lat'),data.get('lon')]);radius=data.get('radius',2000)
+    if target is None or type(radius) is not int or not 1<=radius<=5000:
+        return jsonify(success=False,error='Invalid fuel coordinates or radius'),400
+    parent=route_transport.current_budget()
+    context={'coordinates':target,'radius_m':radius,'coverage':'CANDIDATES_ONLY','distance_kind':'STRAIGHT_LINE',
+             'availability_verified':False,'opening_hours_verified':False,'access_verified':False}
+    def result(rows,source):
+        response=jsonify(success=True,type='fuel',results=rows,source=source,search_context=context)
+        response.headers['Cache-Control']='no-store';return response
+    def unavailable():
+        response=jsonify(success=False,type='fuel',error='Fuel search temporarily unavailable',search_context={**context,'coverage':'UNKNOWN'})
+        response.status_code=503;response.headers['Cache-Control']='no-store';return response
+    try:
+        with route_transport.use_budget(route_transport.WorkBudget(18,parent=parent)) as budget:
+            budget.check()
+            rows=normalize_rows(_tomtom_poi_search(*target,'fuel',radius,budgeted=True),*target,radius,'TomTom')
+            budget.check()
+            if rows:return result(rows,'TomTom')
+            rows=search_osm(*target,radius,context);budget.check()
+            if rows is not None:return result(rows,'Overpass')
+            # Keep the existing last-resort provider, without treating its empty
+            # response as a complete search after map acquisition failed.
+            fallback=_nominatim_poi_fallback(*target,'fuel',radius,budgeted=True).get_json()
+            budget.check()
+            rows=normalize_rows(fallback.get('results') if fallback.get('success') is True else [],*target,radius,'nominatim')
+            if rows:return result(rows,'nominatim')
+            return unavailable()
+    except route_transport.RoutingDeadlineExceeded:
+        if parent is not None:parent.check()
+        return unavailable()
+
+
 @search_bp.route('/poi-search', methods=['POST'])
 def search_poi():
     """Search for points of interest. Tries TomTom first, falls back to Overpass/Nominatim."""
     try:
-        data = request.json
+        data = request.get_json(silent=True)
+        if isinstance(data,dict) and data.get('type','fuel')=='fuel':return _fuel_poi_response(data)
+        data = data or {}
         lat = float(data.get('lat', 0))
         lon = float(data.get('lon', 0))
         poi_type = data.get('type', 'fuel')
