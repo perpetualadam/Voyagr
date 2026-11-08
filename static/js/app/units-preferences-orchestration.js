@@ -46,11 +46,16 @@
             mainDistanceKm: mainEl && mainEl.dataset.km,
             previewDistanceKm: previewEl && previewEl.dataset.km,
         });
-        if (!execute.shouldUpdate) return;
-
         execute.elementPatches.forEach(({ id, text }) => {
             const el = document.getElementById(id);
             if (el) el.textContent = text;
+        });
+        document.querySelectorAll('[data-distance-meters]').forEach((el) => {
+            const raw = el.dataset.distanceMeters;
+            if (raw === '' || !Number.isFinite(Number(raw)) || Number(raw) < 0) return;
+            el.textContent = (el.dataset.distancePrefix || '') + U().formatDistanceLabelMeters(
+                Number(raw), getDistanceUnitValue(), el.dataset.distanceStyle
+            ) + (el.dataset.distanceSuffix || '');
         });
     }
 

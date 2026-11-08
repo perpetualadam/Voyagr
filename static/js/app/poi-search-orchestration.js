@@ -192,9 +192,15 @@
             el.textContent = icon;
             el.title = poiItem.name;
 
+            const popupHtml = () => poi.buildPoiMapMarkerPopupHtml(poiItem, {
+                distanceText: rt().call.formatPoiDistance(poiItem.distance_m),
+            });
+            const popup = new maplibregl.Popup({ offset: 25 }).setHTML(popupHtml());
+            // Closed popups are detached from the DOM when preferences change.
+            if (typeof popup.on === 'function') popup.on('open', () => popup.setHTML(popupHtml()));
             const marker = new maplibregl.Marker({ element: el })
                 .setLngLat([poiItem.lon, poiItem.lat])
-                .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(poi.buildPoiMapMarkerPopupHtml(poiItem)))
+                .setPopup(popup)
                 .addTo(window.map);
 
             if (!window._poiMarkers) window._poiMarkers = [];

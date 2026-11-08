@@ -67,7 +67,8 @@
      * @param {Object} poi
      * @returns {string}
      */
-    function buildPoiMapMarkerPopupHtml(poi) {
+    function buildPoiMapMarkerPopupHtml(poi, opts) {
+        opts = opts || {};
         poi = poi || {};
         var distanceKm = (Number(poi.distance_m) || 0) / 1000;
         var phoneHtml = poi.phone
@@ -77,7 +78,7 @@
             '<div style="padding: 8px;">' +
                 '<strong>' + escapeText(poi.name) + '</strong><br>' +
                 '<span style="font-size: 12px; color: #666;">' + escapeText(poi.address) + '</span><br>' +
-                '<span style="font-size: 11px; color: #888;">' + distanceKm.toFixed(1) + ' km away</span>' +
+                '<span data-distance-meters="' + (Number.isFinite(Number(poi.distance_m)) ? Number(poi.distance_m) : '') + '" data-distance-suffix=" away" style="font-size: 11px; color: #888;">' + escapeText(opts.distanceText || distanceKm.toFixed(1) + ' km') + ' away</span>' +
                 feeDetails(poi) + phoneHtml +
             '</div>'
         );
@@ -111,7 +112,7 @@
             '<div style="padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;">' +
                 '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">' +
                     '<div style="font-weight: 600; color: #333; font-size: 14px;">' + icon + ' ' + brand + escapeText(poi.name) + '</div>' +
-                    '<div style="font-size: 12px; color: #667eea; font-weight: 500;">' + opts.distanceText + '</div>' +
+                    '<div data-distance-meters="' + (Number.isFinite(Number(poi.distance_m)) ? Number(poi.distance_m) : '') + '" style="font-size: 12px; color: #667eea; font-weight: 500;">' + escapeText(opts.distanceText) + '</div>' +
                 '</div>'
         );
         if (poi.address) {

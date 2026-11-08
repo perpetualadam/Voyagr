@@ -2605,6 +2605,7 @@ function getGeocodingOrchestrationRuntime() {
             }
         },
         call: {
+            formatPoiDistance: (meters) => _units().formatPoiDistanceMeters(meters, VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue()),
             showStatus,
             collapseBottomSheet,
             addViaPoint,
@@ -3118,6 +3119,7 @@ VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 
 // Explicit mode coordinator; simulation never enters the GPS/navigation runtime.
 if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
+    formatDistance: (meters, style) => _units().formatDistanceLabelMeters(meters, VoyagrUnitsPreferencesOrchestration.getDistanceUnitValue(), style),
     replacementProtocol:1,
     confirmPlanReplacement:text=>window.confirm(text),
     persistPreviousJourney:(route,continuation,guard)=>VoyagrOfflineNavigationOrchestration.persistJourneySnapshot(route,continuation,guard),

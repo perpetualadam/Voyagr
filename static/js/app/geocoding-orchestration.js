@@ -5,6 +5,14 @@
 (function (root) {
     'use strict';
 
+    function distanceLabel(el, meters, prefix, suffix) {
+        el.dataset.distanceMeters = String(meters);
+        el.dataset.distancePrefix = prefix;
+        el.dataset.distanceSuffix = suffix;
+        const formatted = rt().call.formatPoiDistance ? rt().call.formatPoiDistance(meters) : (meters / 1000).toFixed(1) + ' km';
+        el.textContent = prefix + formatted + suffix;
+    }
+
     var runtime = null;
     var geocodingCache = {};
     var GEOCODING_CACHE_KEY = 'voyagr_geocoding_cache';
@@ -119,8 +127,11 @@ async function showAutocomplete(fieldId, userEdit) {
             (document.getElementById('arrivalParkingPrice')?.value||'any')===priceControlValue);
     const cacheKey=JSON.stringify([query,destinationBinding,localParking?price:null]);
     const searchContext=document.getElementById('arrivalSearchContext');
-    if(searchContext&&fieldId==='drivingArrival')searchContext.textContent=localParking?
-        destinationPoint?'Searching for car parks within 2 km of '+document.getElementById('end').value+'.':'Select a destination first to search for nearby parking.':priceControlValue!=='any'?'The price filter applies to nearby car park searches; named-place results are not fee-filtered.':'';
+    if(searchContext&&fieldId==='drivingArrival'){
+        delete searchContext.dataset.distanceMeters;
+        if(localParking&&destinationPoint)distanceLabel(searchContext,2000,'Searching for car parks within ', ' of '+document.getElementById('end').value+'.');
+        else searchContext.textContent=localParking?'Select a destination first to search for nearby parking.':priceControlValue!=='any'?'The price filter applies to nearby car park searches; named-place results are not fee-filtered.':'';
+    }
     if(userEdit){input.dataset.journeySource='searched';delete input.dataset.journeyOriginalSource;delete input.dataset.journeySearchEvidence;}
 
     if (userEdit&&(input.dataset.lat || input.dataset.lon)) {
@@ -169,7 +180,7 @@ async function showAutocomplete(fieldId, userEdit) {
         if(!ownsSearch())return;
         try {
             if (autocompleteCache[cacheKey]) {
-                if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. '+(price==='free'?'Reported free only. ':price==='paid'?'Reported paid only. ':'')+'Fees and vehicle access are not verified.';
+                if(localParking&&searchContext)distanceLabel(searchContext,2000,'Parking candidates within ',' of '+document.getElementById('end').value+'. '+(price==='free'?'Reported free only. ':price==='paid'?'Reported paid only. ':'')+'Fees and vehicle access are not verified.');
                 displayAutocompleteResults(fieldId, autocompleteCache[cacheKey]);
                 return;
             }
@@ -196,7 +207,7 @@ async function showAutocomplete(fieldId, userEdit) {
                 results.some(row=>row.fee_category!==price)))throw new Error('Parking fee filter response mismatch');
 
             autocompleteCache[cacheKey] = results;
-            if(localParking&&searchContext)searchContext.textContent='Parking candidates within 2 km of '+document.getElementById('end').value+'. '+(price==='free'?'Reported free only. ':price==='paid'?'Reported paid only. ':'')+'Fees and vehicle access are not verified.';
+            if(localParking&&searchContext)distanceLabel(searchContext,2000,'Parking candidates within ',' of '+document.getElementById('end').value+'. '+(price==='free'?'Reported free only. ':price==='paid'?'Reported paid only. ':'')+'Fees and vehicle access are not verified.');
 
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
@@ -283,7 +294,7 @@ function displayAutocompleteResults(fieldId, results) {
         }
         if(near&&pointOf(result)){
             const distance=document.createElement('small');
-            distance.textContent='About '+(plan.distance(near,pointOf(result))/1000).toFixed(1)+' km from destination (straight line)';
+            distanceLabel(distance,plan.distance(near,pointOf(result)),'About ',' from destination (straight line)');
             details.appendChild(distance);
         }
         item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name, 'searched', result);

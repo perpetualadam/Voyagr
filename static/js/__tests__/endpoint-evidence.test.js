@@ -248,7 +248,7 @@ test('bare parking search retrieves a category set around the destination, never
         const [url,options]=global.fetch.mock.calls[0];
         expect(url).toBe('/api/arrival-parking-search');expect(options.method).toBe('POST');
         expect(JSON.parse(options.body)).toEqual({lat:53.5227681,lon:-1.1335312});
-        expect(document.getElementById('arrivalSearchContext').textContent).toContain('within 2 km of Doncaster');
+        expect(document.getElementById('arrivalSearchContext').textContent).toContain('within 2.0 km of Doncaster');
         expect(document.getElementById('autocomplete_drivingArrival').textContent).toContain('Nearby parking');
         expect(input.value).toBe('car park');expect(input.dataset.lat).toBeUndefined();
         document.querySelector('#autocomplete_drivingArrival .autocomplete-item').click();
