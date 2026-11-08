@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108settingsgroups1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108statistics1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -106,7 +106,7 @@
     <script defer src="/static/js/modules/navigation/movement-detection.js?v=20260711g"></script>
     <script defer src="/static/js/modules/navigation/eta.js?v=20260712aaaa"></script>
     <script defer src="/static/js/modules/navigation/live-data-refresh.js?v=20260711zzzy"></script>
-    <script defer src="/static/js/modules/navigation/trip-history.js?v=20261108collections1"></script>
+    <script defer src="/static/js/modules/navigation/trip-history.js?v=20261108statistics1"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027phase5a"></script>
     <script defer src="/static/js/modules/navigation/route-selection.js?v=20261108unitrates1"></script>
@@ -1556,74 +1556,35 @@
                 </div>
 
                 <!-- ROUTE ANALYTICS TAB (NEW FEATURE) -->
-                <div id="routeAnalyticsTab" style="display: none;">
-                    <div class="preferences-section">
-                        <h3>📊 Trip Analytics</h3>
-
-                        <!-- Summary Stats -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                            <div style="background: #E3F2FD; padding: 12px; border-radius: 6px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold; color: #1976D2;" id="totalTrips">0</div>
-                                <div style="font-size: 12px; color: #666;">Total Trips</div>
-                            </div>
-                            <div style="background: #F3E5F5; padding: 12px; border-radius: 6px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold; color: #7B1FA2;" id="totalDistance">0</div>
-                                <div style="font-size: 12px; color: #666;">Total Distance</div>
-                            </div>
-                            <div style="background: #E8F5E9; padding: 12px; border-radius: 6px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold; color: #388E3C;" id="totalCost">£0</div>
-                                <div style="font-size: 12px; color: #666;">Total Cost</div>
-                            </div>
-                            <div style="background: #FFF3E0; padding: 12px; border-radius: 6px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold; color: #F57C00;" id="avgDuration">0</div>
-                                <div style="font-size: 12px; color: #666;">Avg Duration</div>
-                            </div>
-                        </div>
-
-                        <!-- Most Frequent Routes -->
-                        <div style="margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">🔄 Most Frequent Routes</h4>
-                            <div id="frequentRoutesList">
-                                <div style="text-align: center; padding: 20px; color: #999;">Loading...</div>
-                            </div>
-                        </div>
-
-                        <!-- Cost Breakdown -->
-                        <div style="margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">💰 Cost Breakdown</h4>
-                            <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 13px;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span>⛽ Fuel Cost:</span>
-                                    <strong id="totalFuelCost">£0.00</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span>🛣️ Toll Cost:</span>
-                                    <strong id="totalTollCost">£0.00</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span>🚗 CAZ Cost:</span>
-                                    <strong id="totalCAZCost">£0.00</strong>
-                                </div>
-                            </div>
-                        </div>
-
-
-
-                        <!-- Time Statistics -->
-                        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 13px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">⏱️ Time Statistics</h4>
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                <span>Total Time:</span>
-                                <strong id="totalTime">0 hours</strong>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>Average Speed:</span>
-                                <strong id="avgSpeed">0 km/h</strong>
-                            </div>
-                        </div>
+                <div id="routeAnalyticsTab" class="journey-collection analytics-panel" style="display: none;">
+                    <div class="collection-heading"><h3>Trip statistics</h3><button type="button" class="collection-action" onclick="switchTab('navigation')" title="Back to navigation" aria-label="Back to navigation"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Map</span></button></div>
+                    <dl class="analytics-summary" aria-label="Trip totals">
+                        <div><dt>Total trips</dt><dd id="totalTrips">0</dd></div>
+                        <div><dt>Total distance</dt><dd id="totalDistance">0</dd></div>
+                        <div><dt>Total cost</dt><dd id="totalCost">£0</dd></div>
+                        <div><dt>Average duration</dt><dd id="avgDuration">0</dd></div>
+                    </dl>
+                    <section class="analytics-section" aria-labelledby="frequentRoutesHeading">
+                        <h4 id="frequentRoutesHeading">Most frequent routes</h4>
+                        <div id="frequentRoutesList"><div class="journey-list-empty" role="status">Loading...</div></div>
+                    </section>
+                    <div class="analytics-detail-grid">
+                        <section class="analytics-section" aria-labelledby="analyticsCostHeading">
+                            <h4 id="analyticsCostHeading">Cost breakdown</h4>
+                            <dl class="analytics-breakdown">
+                                <div><dt>Fuel cost</dt><dd id="totalFuelCost">£0.00</dd></div>
+                                <div><dt>Toll cost</dt><dd id="totalTollCost">£0.00</dd></div>
+                                <div><dt>Emissions zone cost</dt><dd id="totalCAZCost">£0.00</dd></div>
+                            </dl>
+                        </section>
+                        <section class="analytics-section" aria-labelledby="analyticsTimeHeading">
+                            <h4 id="analyticsTimeHeading">Time statistics</h4>
+                            <dl class="analytics-breakdown">
+                                <div><dt>Total time</dt><dd id="totalTime">0 hours</dd></div>
+                                <div><dt>Average speed</dt><dd id="avgSpeed">0 km/h</dd></div>
+                            </dl>
+                        </section>
                     </div>
-
-                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
                 <!-- SAVED ROUTES TAB (NEW FEATURE) -->
