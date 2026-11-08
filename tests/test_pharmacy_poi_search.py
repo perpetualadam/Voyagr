@@ -126,7 +126,7 @@ def test_zero_longitude_valid_and_other_categories_keep_current_policy():
             patch.object(oh, 'query_overpass', return_value=payload([])) as osm:
         assert search(lon=0).get_json()['source'] == 'Overpass'
         osm.reset_mock()
-        assert search(type='hospital').get_json()['source'] == 'TomTom'
+        assert search(type='groceries').get_json()['source'] == 'TomTom'
         osm.assert_not_called()
 
 
