@@ -143,3 +143,44 @@ Run `node scripts/check-waypoint-options.cjs` for controlled browser checks usin
 production markup/CSS, waypoint plans and owner with fixture map/provider/GPS
 boundaries. This does not establish live provider, GPS or WebGL acceptance.
 Existing functional/Overpass acceptance remains separate and unchanged.
+
+## Parallel functional follow-ups agreed 8 November 2026
+
+These additions sit alongside the original Overpass, arrival and UI lists; they
+retain all existing deployment/device acceptance items. Work one increment at a
+time. Agreed next order: Food POI verification, app-wide unit consistency, then
+dynamic fuel-cost accuracy. The remaining Overpass category queue remains open.
+
+### App-wide unit consistency (pending)
+
+- [ ] Inventory every unit-bearing input, API field, stored value and displayed
+  label against the user's settings; document canonical internal units and
+  conversion boundaries before changing calculations.
+- [ ] Check distance and speed across planning, alternatives, route playback,
+  navigation, maneuver prompts/voice, speed limits/alerts, map scale and POIs.
+- [ ] Check fuel consumption, fuel quantities/prices, currency, route costs,
+  statistics/history/saved trips and share/export views. Distinguish UK and US
+  gallons explicitly; settings changes must not silently reinterpret saved data.
+- [ ] Check other available unit settings, including temperature and vehicle
+  dimensions/weights where applicable. Preserve legal/profile constraints and
+  evidence values; display conversion must not change routing decisions.
+- [ ] Verify changes immediately after selecting settings, after reload/profile
+  changes, and with saved/restored route previews. Cover rounding and threshold
+  boundaries, missing/invalid data and metric/imperial combinations.
+- [ ] Fix confirmed issues separately, with focused regressions, full required
+  checks and a separately authorized deployment/device acceptance.
+
+### Dynamic route-preview fuel-cost estimates (pending, after unit audit)
+
+- [ ] Trace existing distance, vehicle consumption, fuel type, unit conversion,
+  price/currency and rounding through preview/alternative-route calculations.
+- [ ] Research current UK price sources, including Northern Ireland; establish
+  coverage, fuel grades, timestamps, licensing/terms and operating limits before
+  choosing an integration. Overpass station locations do not establish prices.
+- [ ] Define local versus national estimate selection, user-entered price
+  precedence, provenance/age display, bounded refresh/caching and offline/stale
+  fallback. Source failure must leave route planning usable.
+- [ ] Implement one reviewed increment at a time. Keep estimates clearly labelled;
+  add consumption/route-condition refinements only where supported by evidence.
+- [ ] Validate unit/currency/consumption combinations and fallback behavior, then
+  retain live-provider and actual-device acceptance as separate pending checks.

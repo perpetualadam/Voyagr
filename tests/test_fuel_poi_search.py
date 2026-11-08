@@ -99,7 +99,7 @@ def test_zero_longitude_valid_and_other_category_empty_policy_unchanged():
     with patch('voyagr.api.search._tomtom_poi_search',return_value=[]),patch.object(oh,'query_overpass',return_value=payload([])) as osm:
         assert search(lon=0).get_json()['source']=='Overpass'
         osm.reset_mock()
-        assert search(type='food').get_json()['source']=='TomTom';osm.assert_not_called()
+        assert search(type='charging').get_json()['source']=='TomTom';osm.assert_not_called()
 
 
 def test_expired_parent_has_no_transport_and_late_results_are_discarded():

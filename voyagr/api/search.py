@@ -736,38 +736,58 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int, *, bu
         return None
 
 
-def _fuel_poi_response(data):
+def _candidate_poi_response(data, poi_type):
+    """Fuel and Food share bounded fallback admission, not category parsing."""
     from voyagr.services.arrival_map_evidence import point
-    from voyagr.services.fuel_poi import search_osm, normalize_rows
-    target=point([data.get('lat'),data.get('lon')]);radius=data.get('radius',2000)
-    if target is None or type(radius) is not int or not 1<=radius<=5000:
-        return jsonify(success=False,error='Invalid fuel coordinates or radius'),400
-    parent=route_transport.current_budget()
-    context={'coordinates':target,'radius_m':radius,'coverage':'CANDIDATES_ONLY','distance_kind':'STRAIGHT_LINE',
-             'availability_verified':False,'opening_hours_verified':False,'access_verified':False}
-    def result(rows,source):
-        response=jsonify(success=True,type='fuel',results=rows,source=source,search_context=context)
-        response.headers['Cache-Control']='no-store';return response
+    from voyagr.services import fuel_poi, food_poi
+    service = {'fuel': fuel_poi, 'food': food_poi}[poi_type]
+    target = point([data.get('lat'), data.get('lon')])
+    radius = data.get('radius', 2000)
+    if target is None or type(radius) is not int or not 1 <= radius <= 5000:
+        return jsonify(success=False, error=f'Invalid {poi_type} coordinates or radius'), 400
+    parent = route_transport.current_budget()
+    context = {
+        'coordinates': target, 'radius_m': radius, 'coverage': 'CANDIDATES_ONLY',
+        'distance_kind': 'STRAIGHT_LINE', 'opening_hours_verified': False, 'access_verified': False,
+        **({'availability_verified': False} if poi_type == 'fuel' else {'dietary_suitability_verified': False}),
+    }
+
+    def result(rows, source):
+        response = jsonify(success=True, type=poi_type, results=rows, source=source, search_context=context)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
     def unavailable():
-        response=jsonify(success=False,type='fuel',error='Fuel search temporarily unavailable',search_context={**context,'coverage':'UNKNOWN'})
-        response.status_code=503;response.headers['Cache-Control']='no-store';return response
+        response = jsonify(success=False, type=poi_type, error=f'{poi_type.title()} search temporarily unavailable',
+                           search_context={**context, 'coverage': 'UNKNOWN'})
+        response.status_code = 503
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
     try:
-        with route_transport.use_budget(route_transport.WorkBudget(18,parent=parent)) as budget:
+        with route_transport.use_budget(route_transport.WorkBudget(18, parent=parent)) as budget:
             budget.check()
-            rows=normalize_rows(_tomtom_poi_search(*target,'fuel',radius,budgeted=True),*target,radius,'TomTom')
+            rows = service.normalize_rows(_tomtom_poi_search(*target, poi_type, radius, budgeted=True),
+                                          *target, radius, 'TomTom')
             budget.check()
-            if rows:return result(rows,'TomTom')
-            rows=search_osm(*target,radius,context);budget.check()
-            if rows is not None:return result(rows,'Overpass')
-            # Keep the existing last-resort provider, without treating its empty
-            # response as a complete search after map acquisition failed.
-            fallback=_nominatim_poi_fallback(*target,'fuel',radius,budgeted=True).get_json()
+            if rows:
+                return result(rows, 'TomTom')
+            rows = service.search_osm(*target, radius, context)
             budget.check()
-            rows=normalize_rows(fallback.get('results') if fallback.get('success') is True else [],*target,radius,'nominatim')
-            if rows:return result(rows,'nominatim')
+            if rows is not None:
+                return result(rows, 'Overpass')
+            # Keep the last-resort provider without treating its empty response
+            # as complete coverage after map acquisition failed.
+            fallback = _nominatim_poi_fallback(*target, poi_type, radius, budgeted=True).get_json()
+            budget.check()
+            rows = service.normalize_rows(fallback.get('results') if fallback.get('success') is True else [],
+                                          *target, radius, 'nominatim')
+            if rows:
+                return result(rows, 'nominatim')
             return unavailable()
     except route_transport.RoutingDeadlineExceeded:
-        if parent is not None:parent.check()
+        if parent is not None:
+            parent.check()
         return unavailable()
 
 
@@ -776,7 +796,8 @@ def search_poi():
     """Search for points of interest. Tries TomTom first, falls back to Overpass/Nominatim."""
     try:
         data = request.get_json(silent=True)
-        if isinstance(data,dict) and data.get('type','fuel')=='fuel':return _fuel_poi_response(data)
+        if isinstance(data, dict) and data.get('type', 'fuel') in ('fuel', 'food'):
+            return _candidate_poi_response(data, data.get('type', 'fuel'))
         data = data or {}
         lat = float(data.get('lat', 0))
         lon = float(data.get('lon', 0))

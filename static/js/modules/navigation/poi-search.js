@@ -118,14 +118,15 @@
             html += '<div style="font-size: 11px; color: #666; margin-bottom: 6px;">' + escapeText(poi.address) + '</div>';
         }
         if (poi.opening_hours) {
-            html += '<div style="font-size: 11px; color: #888;">🕒 ' + (poi.type==='fuel'?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
+            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
         }
         if(poi.type==='fuel'&&Array.isArray(poi.reported_fuels)&&poi.reported_fuels.length)html+='<div style="font-size:12px;">Reported fuels: '+escapeText(poi.reported_fuels.join(', '))+'</div>';
+        if(poi.type==='food'&&poi.cuisine)html+='<div style="font-size:12px;">Reported cuisine: '+escapeText(poi.cuisine)+'</div>';
         html += feeDetails(poi);
         html += (
             '<button '+(handler?'onclick="'+escapeText(handler)+'"':'disabled')+
                 ' style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">' +
-                (poi.type==='fuel'?'Plan route here':'🚗 Navigate Here') +
+                ((poi.type==='fuel'||poi.type==='food')?'Plan route here':'🚗 Navigate Here') +
             '</button></div>'
         );
         return html;
@@ -157,6 +158,10 @@
         if(type==='fuel'){
             html+='<p>Fuel locations from provider/map data. Distance is straight-line. Check current opening hours, fuel availability and vehicle access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No fuel candidates returned. Coverage may be incomplete.</p>';
+        }
+        if(type==='food'){
+            html+='<p>Food locations from provider/map data. Distance is straight-line. Check opening hours, dietary suitability and access; the map point may not be an entrance.</p>';
+            if(!results.length)html+='<p>No food candidates returned. Coverage may be incomplete.</p>';
         }
         if(type==='parking'){
             html+='<label for="poiParkingPrice">Parking price</label><select id="poiParkingPrice" onchange="quickSearch(\'parking\')">';
