@@ -4638,7 +4638,7 @@ html.dark-mode #routePreviewTab .preview-navigate, body.dark-mode #routePreviewT
 .map-action-menu { --map-summary-offset: 0px; --map-action-top-clearance: 24px; flex-direction: row; align-items: flex-end; }
 body.voyagr-journey-summary-visible .map-action-menu { --map-summary-offset: var(--journey-summary-bar-height, 64px); --map-action-top-clearance: 200px; }
 .map-action-menu > .nav-control-buttons {
-    position: absolute; right: 0; bottom: calc(100% + 10px); width: min(252px, calc(100vw - 24px));
+    position: absolute; right: 66px; bottom: calc(100% + 10px); width: min(252px, calc(100vw - 90px));
     max-height: clamp(88px, calc(100dvh - var(--bottom-sheet-peek-height, 110px) - var(--map-summary-offset) - var(--safe-area-inset-bottom, 0px) - var(--map-action-top-clearance) - 78px), 360px);
     overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-gutter: stable;
     grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 8px;
@@ -4660,6 +4660,11 @@ body.voyagr-journey-summary-visible .map-action-menu { --map-summary-offset: var
 .map-action-menu .map-action-button[aria-pressed="true"] { background: var(--map-action-tint) !important; border-color: var(--map-action-accent) !important; }
 .map-action-menu .map-action-button[aria-pressed="true"]::after { content: '✓'; position: absolute; top: 3px; right: 6px; color: var(--map-action-accent); font-size: 13px; font-weight: 700; }
 .map-action-menu > .fab { width: 56px; height: 56px; min-width: 56px; min-height: 56px; flex-direction: column; gap: 2px; padding: 4px; }
+/* Keep the route-owned start action reachable without opening Map actions. */
+.map-action-menu > .nav-start-nav-fab {
+    position: absolute; right: 0; bottom: calc(100% + 10px);
+    background: #24663b; color: #fff; border-color: #24663b;
+}
 .map-action-menu .nav-end-nav-fab { background: #ad241d; color: #fff; border-color: #ad241d; }
 .map-action-menu .nav-menu-toggle { background: #56328a !important; color: #fff !important; box-shadow: 0 4px 12px #56328a40; }
 .map-action-menu [data-nav-menu-icons] { display: flex; }

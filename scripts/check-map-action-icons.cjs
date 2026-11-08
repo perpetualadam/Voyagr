@@ -25,15 +25,31 @@ const intersects=(a,b)=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+
                     window.uiCalls=[];
                     const T=window.VoyagrToggleUI,R=window.VoyagrMapRecenterOrchestration,O=window.VoyagrJourneyOverviewOrchestration;
                     R.bind({mapControls:()=>window.VoyagrMapControls});O.bind({mapControls:()=>window.VoyagrMapControls});
-                    for(const name of ['startGPSTracking','startNavigation','recenterOnVehicle','getCurrentLocation','toggleVoiceInput','openRoadReportModal','openMapControlsHintModal','stopTurnByTurnNavigation'])window[name]=()=>window.uiCalls.push(name);
+                    for(const name of ['startGPSTracking','startNavigation','startNavigationFromPreview','recenterOnVehicle','getCurrentLocation','toggleVoiceInput','openRoadReportModal','openMapControlsHintModal','stopTurnByTurnNavigation'])window[name]=()=>window.uiCalls.push(name);
                     window.toggleZoomAndFollow=()=>{const el=document.getElementById('zoomFollowToggle');R.applyZoomFollowButtonUi(el,el.getAttribute('aria-pressed')!=='true');};
                     window.toggleJourneyOverview=()=>{const el=document.getElementById('journeyOverviewBtn');O.applyJourneyOverviewButtonUi(el,el.getAttribute('aria-pressed')!=='true');};
                     window.toggleShowCameras=()=>{const el=document.getElementById('showCamerasFab');T.applyToggleButton(el,el.getAttribute('aria-pressed')!=='true');};
                     for(const id of ['startNavBtn','zoomFollowToggle','recenterVehicleFab','journeyOverviewBtn','endNavigationBtn'])if(live)document.getElementById(id).style.display='flex';
+                    document.getElementById('startNavBtn').style.display=live?'none':'flex';
                     if(live){document.getElementById('turnInstructionWidget').style.display='block';document.getElementById('speedWidget').style.display='block';document.getElementById('laneGuidanceDisplay').classList.add('show');document.getElementById('laneGuidanceText').textContent='Fixture lane guidance';}
                     window.VoyagrNavMenuOrchestration.initNavMenu();
                 },live);
                 const toggle=page.locator('#navMenuToggle');
+                if(!live){
+                    const start=page.locator('#startNavBtn'),b=await start.boundingBox(),t=await toggle.boundingBox();
+                    assert(b&&b.width>=48&&b.height>=48&&b.y>=0);
+                    assert(Math.abs(b.x-t.x)<1&&b.y+b.height<t.y);
+                    assert.equal(await page.locator('#navControlButtons').isVisible(),false);
+                    const app=read('static/js/voyagr-app.js');
+                    const entries=['startNavigation','startNavigationFromPreview'].map(name=>app.match(new RegExp('function '+name+'\\(\\) \\{[^\\n]+'))[0]).join('\n');
+                    await page.evaluate(()=>{window.VoyagrJourneyModes={PROTOCOL:1,choose:()=>{uiCalls.push('choose');return false;}};window.showStatus=()=>uiCalls.push('unavailable');});
+                    await page.addScriptTag({content:entries});
+                    await start.focus();await page.keyboard.press('Enter');
+                    assert.deepEqual(await page.evaluate(()=>uiCalls),['choose']);
+                    assert.equal(await start.isVisible(),true);
+                    await page.evaluate(()=>{delete window.VoyagrJourneyModes;});
+                    await start.click();assert.deepEqual(await page.evaluate(()=>uiCalls),['choose','unavailable']);
+                }
                 if(live){
                     const speed=await page.locator('#speedWidget').boundingBox(),turn=await page.locator('#turnInstructionWidget').boundingBox();
                     for(const selector of ['#navMenuToggle','#endNavigationBtn']){
@@ -46,6 +62,7 @@ const intersects=(a,b)=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+
                 const bounds=await page.locator('#navControlButtons').boundingBox();
                 assert(bounds.x>=0&&bounds.y>=0&&bounds.x+bounds.width<=width&&bounds.y+bounds.height<=height);
                 assert.equal(await page.locator('#navControlButtons').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+                if(!live)assert.equal(intersects(bounds,await page.locator('#startNavBtn').boundingBox()),false,'Open actions obscure Start');
                 if(live){
                     const end=page.getByRole('button',{name:'End navigation',exact:true});
                     assert.equal(intersects(bounds,await end.boundingBox()),false);

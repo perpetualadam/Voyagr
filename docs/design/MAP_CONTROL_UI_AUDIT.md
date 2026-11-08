@@ -6,7 +6,7 @@ It does not replace functional/provider acceptance or authorize production deplo
 | Existing control | Existing action retained | UI/state handling |
 |---|---|---|
 | `startTrackingBtn` | `startGPSTracking()` | GPS tracking icon and label; visibility remains controller-owned. |
-| `startNavBtn` | `startNavigation()` | Journey mode label; retains `data-journey-choose` and journey permission path. |
+| `startNavBtn` | `startNavigationFromPreview()` | Floating Start icon directly above Map; same entry as preview Navigate. Retains `data-journey-choose`, initial hidden state, controller-owned visibility and journey permission path. |
 | `zoomFollowToggle` | `toggleZoomAndFollow()` | Follow SVG survives runtime redraw; `aria-pressed` follows existing active state. |
 | `recenterVehicleFab` | `recenterOnVehicle()` | Recenter SVG and label; existing visibility is retained. |
 | `journeyOverviewBtn` | `toggleJourneyOverview()` | Overview SVG survives redraw; pressed state and existing return-view title update together. |
@@ -20,7 +20,7 @@ It does not replace functional/provider acceptance or authorize production deplo
 | Nearby Places shortcuts | `quickSearch(category)` | Parking, fuel, food, charging, pharmacy, hospital and groceries retain categories/order/labels with SVGs in a compact three-column grid. Parking still uses its existing nearby search and provider path. |
 
 The floating actions use a two-column scrollable panel. Root Map/Close and End
-buttons are 56 px; panel buttons have at least 48 px targets and visible labels.
+buttons, and the independent Start action, are 56 px; panel buttons have at least 48 px targets and visible labels.
 Pressed states also have a check mark. Opening the panel reads existing owner
 getters so restored camera/Follow/Overview/voice states are reflected without
 flipping preferences or requesting device permissions. Light/dark styles are scoped to these
