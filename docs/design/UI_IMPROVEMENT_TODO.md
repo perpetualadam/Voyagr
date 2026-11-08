@@ -227,3 +227,50 @@ Production deployment and live phone acceptance remain pending. Continue the
 unit task with currency/cost provenance, remaining view refresh and settings
 restore, then consumption/temperature/other exposed unit controls before marking
 the app-wide checklist complete or integrating dynamic fuel-price data.
+
+## Unit audit, second increment — truthful cost currency (8 November 2026)
+
+The current backend costing contract uses GBP: fuel/energy costs multiply the
+configured GBP-per-litre/kWh prices by canonical quantities, and toll/CAZ charges
+are GBP. `services/costs.py` includes an explicitly named GBP-per-litre fuel
+utility; `route-prefs.js` supplies the app's canonical price/consumption defaults.
+No exchange-rate or currency-conversion mechanism was found. Previously the
+unit owner used the preferred currency's symbol for these unchanged amounts.
+Selecting USD/EUR therefore relabelled GBP values without converting them.
+
+- [x] Separate preferred currency from current cost display currency. The pure
+  `getCostCurrencyPresentation` plan explicitly retains source/display GBP and
+  reports NOT_REQUIRED or UNAVAILABLE; it never claims a conversion took place.
+- [x] All existing app cost consumers of the unit owner receive the GBP symbol,
+  including previews, comparison, trip summaries, history, saved routes and
+  sharing. Keep the separate ISO-code-to-symbol utility for explicitly identified
+  currencies; it does not establish the currency of an amount.
+- [x] Preserve USD/EUR preferences in local/backend settings and restored profile
+  state. Selecting them reports that conversion is unavailable and estimates
+  remain GBP. Invalid select values cannot overwrite a saved preference.
+- [x] Add linked settings help and a route-preview cost notice. Selecting a
+  currency does not reinterpret price inputs, costs or saved trip values.
+- [ ] Implement actual foreign-currency display only after a dated rate source,
+  supported currency contract, rounding policy and complete cost-view conversion
+  are established. Cover totals/components, price inputs, already-open views,
+  restored/share/export data, stale/unavailable rates and original provenance.
+  No fabricated/static rate or new network dependency was added in this increment.
+- [ ] Continue the remaining view/profile refresh and consumption/temperature/
+  physical-unit audit before claiming app-wide consistency. Dynamic fuel pricing
+  remains separate; future quotes must carry currency, price unit and timestamp.
+
+This correction covers the app's current GBP costing contract. It does not add
+foreign-currency imports or rates, rewrite old costs, refresh fuel prices or
+change route selection/navigation authority. A future multi-currency cost schema
+must replace the fixed GBP presentation contract before accepting foreign amounts.
+
+Focused regressions exercise the real unit preference owner, settings restoration,
+summary/comparison/share builders, unchanged canonical values, unsupported/invalid
+preferences and GBP round trips. `node scripts/check-cost-currency.cjs` uses the
+actual currency selector, help and preview markup with the production unit owner
+and cost builders at 390×844 and 844×390; fixture backend only, no live rate/GPS/
+provider calls. Controlled browser checks passed. Full local validation: 139 JS
+suites / 2,997 tests, lint and coverage floors passed. Production deployment and
+actual-phone acceptance remain pending.
+Declared web backend regressions also passed: 1,983 tests, one platform skip and
+74 subtests. No production settings, data or deployment were changed.

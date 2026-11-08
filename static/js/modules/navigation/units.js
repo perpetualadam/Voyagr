@@ -86,9 +86,29 @@
     }
 
     /**
-     * Pass-through: currency totals from the API are absolute amounts (£/$/€) and must
-     * not be rescaled when the user switches between mi and km — only distance *labels*
-     * change, not prices.
+     * Current route costing contract: GBP inputs, tolls and CAZ charges.
+     * A preferred ISO currency is not an exchange rate. Keep the source currency
+     * until a dated conversion mechanism is implemented for the whole cost view.
+     */
+    function getCostCurrencyPresentation(preferredCurrency) {
+        var requested = String(preferredCurrency || 'GBP').toUpperCase();
+        if (!Object.prototype.hasOwnProperty.call(CURRENCY_SYMBOLS, requested)) requested = 'GBP';
+        return {
+            requestedCurrency: requested,
+            sourceCurrency: 'GBP',
+            displayCurrency: 'GBP',
+            symbol: CURRENCY_SYMBOLS.GBP,
+            conversionApplied: false,
+            conversionStatus: requested === 'GBP' ? 'NOT_REQUIRED' : 'UNAVAILABLE',
+            notice: requested === 'GBP'
+                ? 'Cost estimates are in GBP (£).'
+                : requested + ' conversion is unavailable. Cost estimates remain in GBP (£).',
+        };
+    }
+
+    /**
+     * Pass-through: current API cost totals are GBP amounts. Distance settings
+     * must not rescale them; preferred currency settings are not conversion rates.
      * @param {number} cost
      * @returns {number}
      */
@@ -287,6 +307,8 @@
      * @returns {Object}
      */
     function buildCurrencyUnitChangeExecutePlan(newUnit) {
+        if (typeof newUnit !== 'string' || !Object.prototype.hasOwnProperty.call(CURRENCY_SYMBOLS, newUnit)) return { shouldChange: false };
+        var presentation = getCostCurrencyPresentation(newUnit);
         return {
             shouldChange: true,
             newUnit: newUnit,
@@ -294,8 +316,8 @@
             updateDisplays: true,
             saveSettings: true,
             saveBackend: true,
-            statusMessage: 'Currency changed to ' + newUnit,
-            statusType: 'success',
+            statusMessage: 'Currency preference saved as ' + newUnit + '. ' + presentation.notice,
+            statusType: presentation.conversionStatus === 'UNAVAILABLE' ? 'warning' : 'success',
         };
     }
 
@@ -343,6 +365,7 @@
         getTemperatureUnit: getTemperatureUnit,
         getFuelEfficiencyInUnits: getFuelEfficiencyInUnits,
         getFuelEfficiencyLabel: getFuelEfficiencyLabel,
+        getCostCurrencyPresentation: getCostCurrencyPresentation,
         getCurrencySymbol: getCurrencySymbol,
         adjustCostForUnits: adjustCostForUnits,
         distanceUnitStatusLabel: distanceUnitStatusLabel,

@@ -99,7 +99,7 @@
     <script defer src="/static/js/modules/navigation/lane-connectivity.js?v=20261106ghlanes1"></script>
     <script defer src="/static/js/app/road-match-orchestration.js?v=20261106ghlanes1"></script>
     <script defer src="/static/js/modules/navigation/route-geometry.js?v=20261027phase6a"></script>
-    <script defer src="/static/js/modules/navigation/units.js?v=20261108unitdistance1"></script>
+    <script defer src="/static/js/modules/navigation/units.js?v=20261108currency1"></script>
     <script defer src="/static/js/modules/navigation/traffic-change.js?v=20260715opt1"></script>
     <script defer src="/static/js/modules/navigation/route-traffic-flow.js?v=20260712aacm"></script>
     <script defer src="/static/js/modules/navigation/navigation-destination.js?v=20260711zzzr"></script>
@@ -215,7 +215,7 @@
     <script defer src="/static/js/app/gesture-control-orchestration.js?v=20260811noshake"></script>
     <script defer src="/static/js/app/battery-saving-orchestration.js?v=20260712aafc"></script>
     <script defer src="/static/js/app/location-orchestration.js?v=20261103drivingarrival1"></script>
-    <script defer src="/static/js/app/units-preferences-orchestration.js?v=20261108unitdistance1"></script>
+    <script defer src="/static/js/app/units-preferences-orchestration.js?v=20261108currency1"></script>
     <script defer src="/static/js/app/smart-zoom-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/center-on-location-orchestration.js?v=20261031phase12fg"></script>
     <script defer src="/static/js/app/map-theme-orchestration.js?v=20260712maptheme1"></script>
@@ -816,13 +816,14 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">💱 Currency</span>
-                            <select id="currencyUnit" onchange="updateCurrencyUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <span class="preference-label">💱 Preferred currency</span>
+                            <select id="currencyUnit" aria-describedby="costCurrencyHelp" onchange="updateCurrencyUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="GBP">GBP (£)</option>
                                 <option value="USD">USD ($)</option>
                                 <option value="EUR">EUR (€)</option>
                             </select>
                         </div>
+                        <p id="costCurrencyHelp" style="font-size:12px;line-height:1.45;">Cost estimates are in GBP (£). USD and EUR conversion is currently unavailable; choosing a preference does not convert amounts.</p>
                     </div>
 
                     <!-- Routing preferences (route planning & map data) -->
@@ -1697,6 +1698,7 @@
 
                         <details id="previewCostDetails" class="preview-disclosure">
                             <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>Estimated costs</span><strong id="previewTotalCost">-</strong></summary>
+                            <p id="previewCostCurrencyNotice">Cost estimates are in GBP (£). Currency conversion is currently unavailable.</p>
                             <dl class="preview-cost-grid">
                                 <div><dt>Fuel / energy</dt><dd id="previewFuelCost">-</dd><dd id="previewFuelLitres"></dd></div>
                                 <div><dt>Tolls</dt><dd id="previewTollCost">-</dd></div>

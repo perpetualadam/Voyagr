@@ -126,7 +126,9 @@
     }
 
     function getCurrencySymbol() {
-        return U().getCurrencySymbol(getCurrencyUnitValue());
+        // All current cost consumers receive GBP amounts from the costing service.
+        // Keep the ISO-symbol utility separate from cost presentation.
+        return U().getCostCurrencyPresentation(getCurrencyUnitValue()).symbol;
     }
 
     function adjustCostForUnits(cost, costType) {
