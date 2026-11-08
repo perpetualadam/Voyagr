@@ -119,15 +119,26 @@
             html += '<div style="font-size: 11px; color: #666; margin-bottom: 6px;">' + escapeText(poi.address) + '</div>';
         }
         if (poi.opening_hours) {
-            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
+            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
         }
         if(poi.type==='fuel'&&Array.isArray(poi.reported_fuels)&&poi.reported_fuels.length)html+='<div style="font-size:12px;">Reported fuels: '+escapeText(poi.reported_fuels.join(', '))+'</div>';
         if(poi.type==='food'&&poi.cuisine)html+='<div style="font-size:12px;">Reported cuisine: '+escapeText(poi.cuisine)+'</div>';
+        if(poi.type==='charging'){
+            if(poi.operator)html+='<div style="font-size:12px;">Reported operator: '+escapeText(poi.operator)+'</div>';
+            if(poi.network)html+='<div style="font-size:12px;">Reported network: '+escapeText(poi.network)+'</div>';
+            var connectorLabels={type2:'Type 2',type2_combo:'CCS2',chademo:'CHAdeMO',type1:'Type 1',type1_combo:'CCS1',tesla_supercharger:'Tesla Supercharger',tesla_destination:'Tesla Destination',bs1363:'UK 3-pin',schuko:'Schuko'};
+            (Array.isArray(poi.reported_connectors)?poi.reported_connectors:[]).slice(0,12).forEach(function(connector){
+                if(!connector||!Object.prototype.hasOwnProperty.call(connectorLabels,connector.type))return;
+                html+='<div style="font-size:12px;">Reported connector: '+connectorLabels[connector.type]+
+                    (connector.count&&connector.count!=='yes'?' · count '+escapeText(connector.count):'')+
+                    (connector.output?' · reported output '+escapeText(connector.output):'')+'</div>';
+            });
+        }
         html += feeDetails(poi);
         html += (
             '<button '+(handler?'onclick="'+escapeText(handler)+'"':'disabled')+
                 ' style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">' +
-                ((poi.type==='fuel'||poi.type==='food')?'Plan route here':'🚗 Navigate Here') +
+                ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging')?'Plan route here':'🚗 Navigate Here') +
             '</button></div>'
         );
         return html;
@@ -159,6 +170,10 @@
         if(type==='fuel'){
             html+='<p>Fuel locations from provider/map data. Distance is straight-line. Check current opening hours, fuel availability and vehicle access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No fuel candidates returned. Coverage may be incomplete.</p>';
+        }
+        if(type==='charging'){
+            html+='<p>Charging locations from provider/map data. Distance is straight-line. Check vehicle and connector compatibility, current opening hours, access, live availability and tariffs with the operator. Reported output is not a guaranteed charging speed; the map point may not be an entrance.</p>';
+            if(!results.length)html+='<p>No charging candidates returned. Coverage may be incomplete.</p>';
         }
         if(type==='food'){
             html+='<p>Food locations from provider/map data. Distance is straight-line. Check opening hours, dietary suitability and access; the map point may not be an entrance.</p>';

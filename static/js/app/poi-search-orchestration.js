@@ -19,7 +19,7 @@
     function POI() { return rt().poiSearch(); }
 
     function quickSearch(type) {
-        const candidateSearch=type==='fuel'||type==='food';
+        const candidateSearch=type==='fuel'||type==='food'||type==='charging';
         const generation=++quickSearchGeneration;
         if(quickSearchController)quickSearchController.abort();
         quickSearchController=null;

@@ -473,3 +473,23 @@ closed, the production chooser wrapper and missing-protocol refusal, keyboard
 activation, menu/overlay bounds, touch targets and unobstructed End access.
 No real GPS, camera permission, provider call or live navigation was exercised.
 No production deployment was performed.
+
+
+## Nearby charging POI increment (8 November 2026)
+
+- [x] Continue the existing EV Charge button's nearby search: usable TomTom first,
+  bounded shared Overpass nodes/ways/relations on empty/unavailable primary and
+  existing Nominatim last resort after map acquisition failure.
+- [x] Preserve source/cache dates, validate geographic/radius bounds and retain
+  unknown/partial coverage rather than treating failure as no chargers.
+- [x] Show reported operator/network/socket details without live availability,
+  compatibility, tariff, charging-speed or entrance guarantees. Preserve EV costs.
+- [x] Use stale-result cancellation, selected distance units and the existing
+  route planner; qualify empty/error states and escape provider text.
+- [ ] Record live VPS/provider and device acceptance after deployment. Controlled
+  Northern Ireland cases do not establish live national coverage.
+
+See [Overpass item 6c](OVERPASS_CONSUMER_AUDIT.md#item-6c--nearby-ev-charge-2026-11-08)
+for validation and scope. Next category: Pharmacy, followed by hospital and
+Groceries, each separately. The existing UI, unit, arrival and deferred road
+acceptance workstreams remain alongside this queue.
