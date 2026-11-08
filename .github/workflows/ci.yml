@@ -117,6 +117,7 @@ jobs:
           tests/test_pharmacy_poi_search.py
           tests/test_hospital_poi_search.py
           tests/test_groceries_poi_search.py
+          tests/test_along_route_poi.py
           tests/test_traffic_light_overlays.py
           tests/test_phase11b_overpass.py
           tests/test_phase11_overpass_audit.py

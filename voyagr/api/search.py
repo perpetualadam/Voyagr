@@ -913,62 +913,18 @@ def search_poi():
 
 @search_bp.route('/poi-along-route', methods=['POST'])
 def search_poi_along_route():
-    """Search for POIs along a route by sampling points along the route polyline."""
+    """Bounded sampled candidates near the selected plan; no driving-detour claim."""
+    from voyagr.services.along_route_poi import search
     try:
-        data = request.json
-        route_points = data.get('route_points', [])
-        poi_type = data.get('type', 'fuel')
-        radius = int(data.get('radius', 1000))
-
-        if not route_points or len(route_points) < 2:
-            return jsonify({'success': False, 'error': 'Route points required'})
-
-        total_pts = len(route_points)
-        sample_indices = set()
-        sample_indices.add(0)
-        sample_indices.add(total_pts - 1)
-        step = max(1, total_pts // 5)
-        for i in range(step, total_pts - 1, step):
-            sample_indices.add(i)
-            if len(sample_indices) >= 6:
-                break
-
-        all_pois = {}
-        for idx in sorted(sample_indices):
-            pt = route_points[idx]
-            pt_lat = float(pt[0]) if isinstance(pt, (list, tuple)) else float(pt.get('lat', 0))
-            pt_lon = float(pt[1]) if isinstance(pt, (list, tuple)) else float(pt.get('lon', 0))
-
-            tomtom_results = _tomtom_poi_search(pt_lat, pt_lon, poi_type, radius)
-            if tomtom_results:
-                for poi in tomtom_results:
-                    key = f"{poi['lat']:.5f},{poi['lon']:.5f}"
-                    if key not in all_pois:
-                        all_pois[key] = poi
-
-        poi_list = list(all_pois.values())
-
-        if not poi_list:
-            for idx in sorted(sample_indices)[:3]:
-                pt = route_points[idx]
-                pt_lat = float(pt[0]) if isinstance(pt, (list, tuple)) else float(pt.get('lat', 0))
-                pt_lon = float(pt[1]) if isinstance(pt, (list, tuple)) else float(pt.get('lon', 0))
-                fallback = _nominatim_poi_fallback(pt_lat, pt_lon, poi_type, radius)
-                if fallback:
-                    fb_data = fallback.get_json()
-                    if fb_data.get('results'):
-                        for poi in fb_data['results']:
-                            key = f"{poi['lat']:.5f},{poi['lon']:.5f}"
-                            if key not in all_pois:
-                                all_pois[key] = poi
-            poi_list = list(all_pois.values())
-
-        logger.info(f"[POI-AlongRoute] Found {len(poi_list)} {poi_type} along route")
-        return jsonify({'success': True, 'results': poi_list[:20], 'type': poi_type, 'source': 'TomTom+route'})
-
-    except Exception as e:
-        logger.error(f"[POI-AlongRoute] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        payload,status = search(request.get_json(silent=True), _tomtom_poi_search, _nominatim_poi_fallback)
+    except ValueError as error:
+        payload,status = {'success':False,'error':str(error)},400
+    except route_transport.RoutingDeadlineExceeded:
+        payload,status = {'success':False,'error':'Along-route search deadline exceeded','search_context':{'coverage':'UNKNOWN'}},503
+    response=jsonify(payload)
+    response.status_code=status
+    response.headers['Cache-Control']='no-store'
+    return response
 
 
 @search_bp.route('/search-history', methods=['GET', 'POST', 'DELETE'])

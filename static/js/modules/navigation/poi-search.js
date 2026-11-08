@@ -71,6 +71,7 @@
         opts = opts || {};
         poi = poi || {};
         var distanceKm = (Number(poi.distance_m) || 0) / 1000;
+        var suffix = poi.distance_kind==='STRAIGHT_LINE_TO_ROUTE' ? ' from route (straight-line)' : ' away';
         var phoneHtml = poi.phone
             ? '<br><a href="tel:' + escapeText(poi.phone) + '" style="font-size: 12px;">' + escapeText(poi.phone) + '</a>'
             : '';
@@ -78,7 +79,7 @@
             '<div style="padding: 8px;">' +
                 '<strong>' + escapeText(poi.name) + '</strong><br>' +
                 '<span style="font-size: 12px; color: #666;">' + escapeText(poi.address) + '</span><br>' +
-                '<span data-distance-meters="' + (Number.isFinite(Number(poi.distance_m)) ? Number(poi.distance_m) : '') + '" data-distance-suffix=" away" style="font-size: 11px; color: #888;">' + escapeText(opts.distanceText || distanceKm.toFixed(1) + ' km') + ' away</span>' +
+                '<span data-distance-meters="' + (Number.isFinite(Number(poi.distance_m)) ? Number(poi.distance_m) : '') + '" data-distance-suffix="'+suffix+'" style="font-size: 11px; color: #888;">' + escapeText(opts.distanceText || distanceKm.toFixed(1) + ' km') + suffix + '</span>' +
                 feeDetails(poi) + phoneHtml +
             '</div>'
         );
@@ -144,7 +145,7 @@
         html += (
             '<button '+(handler?'onclick="'+escapeText(handler)+'"':'disabled')+
                 ' style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">' +
-                ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')?'Plan route here':'🚗 Navigate Here') +
+                ((opts.alongRoute||poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')?'Plan route here':'🚗 Navigate Here') +
             '</button></div>'
         );
         return html;
@@ -173,6 +174,7 @@
                     '</div>' +
                     '<div style="max-height: 50vh; overflow-y: auto; padding: 12px;">'
         );
+        if(opts.alongRoute)html+='<p>Limited search near sampled points across the full planned route, including places already passed. Distances are straight-line offsets from the route, not driving detours. Access and entrances are unverified. Plan route here replaces the destination using this plan’s start; it does not add a stop.</p>';
         if(type==='fuel'){
             html+='<p>Fuel locations from provider/map data. Distance is straight-line. Check current opening hours, fuel availability and vehicle access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No fuel candidates returned. Coverage may be incomplete.</p>';
@@ -197,7 +199,7 @@
             html+='<p>Food locations from provider/map data. Distance is straight-line. Check opening hours, dietary suitability and access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No food candidates returned. Coverage may be incomplete.</p>';
         }
-        if(type==='parking'){
+        if(type==='parking'&&!opts.alongRoute){
             html+='<label for="poiParkingPrice">Parking price</label><select id="poiParkingPrice" onchange="quickSearch(\'parking\')">';
             [['any','Any price'],['free','Reported free only'],['paid','Reported paid only'],['free_street','Reported free street parking']].forEach(function(row){html+='<option value="'+row[0]+'"'+(opts.parkingPricePreference===row[0]?' selected':'')+'>'+row[1]+'</option>';});
             html+='</select><p>Overpass map data near your location. Missing fees are unknown; check signs and restrictions.</p>';
@@ -209,6 +211,7 @@
                 distanceText: opts.distanceTexts ? opts.distanceTexts[i] : opts.distanceText,
                 userLat: opts.userLat,
                 userLon: opts.userLon,
+                alongRoute: opts.alongRoute,
             });
         }
         html += '</div></div></div>';

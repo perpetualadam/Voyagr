@@ -55,7 +55,7 @@ is possible; neither free availability nor public access is guaranteed.
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
 | 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel, Food, Charging, Pharmacy, Hospital and Groceries controlled verification recorded below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Other legacy categories/aliases retain their existing provider policy and node-only query. | Fuel/Food/Charging/Pharmacy/Hospital/Groceries live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
-| 7 | Along-route POI: `/poi-along-route` in `api/search.py` | Samples route points using TomTom, then Nominatim. It currently does not query Overpass. | Bounded integration design/tests before adding Overpass; avoid several unbounded queries per route. |
+| 7 | Along-route POI: `/poi-along-route` in `api/search.py`, `services/along_route_poi.py` | Bounded distance-spaced windows; usable TomTom first, one shared Overpass union query on empty/unavailable primary, one Nominatim last resort. | Controlled checks recorded in item 7 below; live VPS/provider/device acceptance remains pending. Sampling is incomplete and does not verify driving detours, entrances or ahead-of-driver position. |
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
 
@@ -586,3 +586,112 @@ separate from the continuing UI/unit/arrival and deferred road-test workstreams.
 Full local Groceries validation: 146 JavaScript suites / 3,080 tests, test lint
 and coverage floors passed; declared backend selection 2,185 passed, one platform
 skip and 74 subtests. Existing reviewed nearby-category regressions remain passing.
+
+
+## Item 7 — Bounded along-route POI search (8 November 2026)
+
+The prior endpoint sampled polyline indices with up to six independent TomTom
+lookups and up to three Nominatim fallbacks, without a whole-operation budget.
+It did not query Overpass, labelled fallback results as TomTom, and returned
+provider/sample-center distance without verifying route-relative proximity. The
+browser also fell back to London coordinates when GPS was absent and could retain
+old results/markers after route changes.
+
+### Acquisition and coverage contract
+
+`services/along_route_poi.py` accepts 2–8,192 finite numeric WGS84 route points
+(array pairs or latitude/longitude objects), a 1–5,000 metre integer radius and a
+fixed category whitelist. Zero-length routes, malformed points and unsupported
+dateline-crossing segments are rejected before provider calls. Frontend requests
+keep the existing 1,000 metre radius. Oversized/damaged route geometry produces a
+clear error; it is not silently simplified into a different corridor.
+
+Up to three windows are placed at the plan's start, distance midpoint and end,
+using cumulative geometry length rather than vertex density. Usable TomTom results
+remain first, with at most three provider admissions under a 5-second child budget.
+If none are usable, **one shared Overpass query** unions all sampling windows,
+covering matching nodes, ways and relations with centers. It uses the configured
+helper/cache/retry policy under a 12-second child budget, a 7-second query timeout,
+2 MiB maxsize setting, 200-element cap and 5-minute cache. Failed map acquisition
+can make one Nominatim lookup at the midpoint under a 3-second child budget.
+A 20-second cooperative parent budget covers the operation; expired/late data is
+not published. These are cooperative deadlines, not hard interruption of blocked
+socket calls. One Overpass query admission may use the existing bounded helper
+retry/endpoint policy; it does not imply one HTTP attempt under every configuration.
+
+The original provider category meanings are retained: fuel; restaurant/fast_food/
+cafe; charging stations; parking; supermarket/greengrocer/convenience; pharmacy;
+hospital/clinic; ATM/bank; and the supermarket-only legacy alias. No free-text
+selectors or global whole-route bounding-box query are accepted. The UI's displayed
+along-route category buttons remain unchanged.
+
+Coordinates and proximity are independently checked. A candidate must lie inside
+an admitted sampling window and within the radius of the actual plan geometry.
+Results are deduplicated, ranked by approximate position along the full planned
+route and capped at 20. `distance_m` explicitly means a local straight-line offset
+from that geometry (`STRAIGHT_LINE_TO_ROUTE`), not a provider-center distance or
+routed driving detour. `route_position_m` is geometric plan progress, not the
+vehicle's live progress. Sparse/long routes have unsearched gaps. Full-plan
+sampling can include places already passed; nothing claims candidates are ahead
+of the driver, on the correct carriageway or reachable from the route.
+
+Responses use truthful source names and `SAMPLED_CANDIDATES_ONLY`, `complete=false`,
+sampling coordinates/counts and planned sample count. Fallback reporting identifies
+the single Nominatim window. Available original Overpass dataset/retrieval times,
+revision, endpoint class and cache state are preserved on cache hits. A valid
+mapped-empty result stays distinct from failed acquisition with unknown coverage.
+Usable primary results do not merge additional sources; this is not exhaustive
+coverage of any category.
+
+### Reported details and browser transaction
+
+Known category parsers retain bounded map facts such as fuel tags, food cuisine,
+charging connectors, reported parking fees/access, grocery shop types and hospital/
+clinic type. Opening, stock, services, emergency availability, compatibility,
+vehicle access, entrances and driving detours remain unverified. Missing parking
+fees are unknown. Third-party results do not acquire invented mapped shop/facility
+classifications or free-parking claims. No tariff/status feed, stock service,
+routing request or live-navigation permission is introduced by searching.
+
+The browser binds each request and selectable result panel to a captured geometry
+and a shared search generation/AbortController. New nearby/along-route searches
+supersede old ones; late HTTP/GPS callbacks cannot hydrate newer searches. The
+existing route-geometry owner invalidates along-route requests, panels and search
+markers immediately when geometry changes; POI cleanup cannot fail the routing
+setter. Requests/results are also checked at asynchronous publication and user
+selection. This affects POI search markers, not route/hazard/camera overlays.
+
+With no GPS fix, planning selection uses the captured plan's start, never invented
+London coordinates. The modal explicitly states that **Plan route here replaces
+the destination and does not add a stop**. It preserves existing endpoint-request
+invalidation and route planning, not live navigation. Adding a stop remains the
+existing separate waypoint flow. Along-route parking does not expose the unrelated
+nearby parking price-filter action. Distance display and marker popup suffixes
+retain the selected units and explain straight-line distance from the route.
+
+### Validation and limits
+
+Offline tests exercise the real Flask endpoint and shared Overpass client/cache
+with fixture HTTP, bounded batched queries, distance-based samples, independent
+route offsets, category semantics, malformed/duplicate/distant candidates, provider
+precedence, truthful fallback source, empty versus unknown coverage, UK/NI and
+zero-longitude coordinates, parent/child expiry and late-result rejection. Browser
+owner regressions cover captured origins, route changes while pending/open, shared
+nearby/along-route cancellation, marker cleanup through the production geometry
+setter, empty/error states, validation and popup unit semantics.
+
+`node scripts/check-along-route-poi.cjs` uses an actual along-route template button,
+production controllers/geometry setter and unit formatter with fixture state at
+390×844 and 844×390. It checks escaped text, scope copy, plan-origin selection,
+stale-selection refusal and automatic route-change cleanup. No live GPS/provider,
+WebGL route rendering or deployed-device acceptance was performed. No production
+configuration, database, credentials or deployment changes were made.
+
+The original arrival/access, speed/lane, SCDB refresh evidence, wider UI/unit and
+user-deferred road acceptance checklists remain open; completing controlled POI
+checks is not full sat-nav or national-coverage acceptance.
+
+Full local item 7 validation: 36 focused backend cases and 11 browser-owner cases;
+147 JavaScript suites / 3,091 tests, lint and coverage floors passed. The declared
+backend selection passed 2,221 tests, one platform skip and 74 subtests. These
+checks do not establish live provider coverage, road access or device navigation.

@@ -546,3 +546,26 @@ The listed nearby quick-button category increments now have controlled checks.
 Next in the original functional queue is bounded along-route POI acquisition,
 without several unbounded provider queries per route. UI/unit/arrival follow-ups
 and the user's deferred sat-nav acceptance remain alongside this work.
+
+
+## Along-route POI increment (8 November 2026)
+
+- [x] Bound requests and route geometry; use at most three distance-spaced windows,
+  one batched shared Overpass query after unusable primary results and one last-
+  resort lookup, under a cooperative whole-operation budget.
+- [x] Retain original category meanings, provenance, truthful provider sources,
+  independent route-relative proximity and incomplete/sampled coverage labels.
+- [x] Preserve unverified access/entrance/stock/service/compatibility status; do not
+  label straight-line offsets as driving detours or ahead-of-driver results.
+- [x] Remove fabricated GPS-origin fallback; bind requests, panels and markers to
+  the captured plan and clear stale results when geometry or search changes.
+- [x] Preserve existing planning and selected units; state clearly that selecting
+  a result replaces the destination, rather than silently adding a stop.
+- [ ] Accept on the deployed VPS/device with real long routes, provider outages,
+  sparse gaps, selection changes and Northern Ireland data. Controlled tests do
+  not establish live coverage, reachability or GPS/navigation behavior.
+
+See [Overpass item 7](OVERPASS_CONSUMER_AUDIT.md#item-7--bounded-along-route-poi-search-8-november-2026).
+Keep arrival/access and remaining SCDB/source maintenance acceptance separate.
+The parallel compact saved/history/settings UI and remaining unit-policy work
+can continue while the user defers road testing.
