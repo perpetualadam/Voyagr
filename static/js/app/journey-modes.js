@@ -50,7 +50,7 @@
         var panel=document.getElementById('simulationControls');if(panel)panel.hidden=!simulating();
         var indicator=document.getElementById('simulationIndicator');if(indicator)indicator.hidden=!simulating();
         playbackControls();
-        if(state==='RECOVERY_REQUIRED'){var progress=document.getElementById('simulationProgress');if(progress)progress.textContent='Simulation cleanup is incomplete. No animation or live transition is permitted. Retry Exit simulation to verify removal.';}
+        if(state==='RECOVERY_REQUIRED'){var progress=document.getElementById('simulationProgress');if(progress){delete progress.dataset.distanceMeters;progress.textContent='Simulation cleanup is incomplete. No animation or live transition is permitted. Retry Exit simulation to verify removal.';}}
         document.querySelectorAll('[data-live-recalculate]').forEach(function(b){b.disabled=['LOCATING','RECALCULATING','AUTHORIZING'].indexOf(state)>=0;});
     }
     function playbackControls(){
@@ -120,6 +120,13 @@
         if(rt().isLive()){retainLiveJourney();rt().stopLive(options);}
         if(rt().isLive())throw Error('Live guidance could not stop. Recover navigation before switching modes.');
     }
+    function simulationDistance(el, metersValue, style, prefix, suffix) {
+        if(!el)return;
+        el.dataset.distanceMeters=String(metersValue);el.dataset.distanceStyle=style;
+        el.dataset.distancePrefix=prefix;el.dataset.distanceSuffix=suffix;
+        var formatted=rt().formatDistance?rt().formatDistance(metersValue,style):style==='route'?(metersValue/1000).toFixed(2)+' km':Math.round(metersValue)+' m';
+        el.textContent=prefix+formatted+suffix;
+    }
     function drawSimulation(){
         if(!simulation||!animating())return;
         var p=plan().position(simulation,meters);
@@ -128,10 +135,14 @@
         if(follow&&cameraView&&rt().moveSimulationCamera){rt().moveSimulationCamera(p,cameraInitial);cameraInitial=false;}
         var el=document.getElementById('simulationProgress');
         var remainingSeconds=simulation.metersPerSecond>0?p.remaining_m/simulation.metersPerSecond:0;
-        if(el)el.textContent=p.instruction+' — '+(p.remaining_m/1000).toFixed(2)+' km remaining; simulated ETA '+Math.ceil(remainingSeconds/60)+' min; '+p.completedStops+' intermediate stops passed.';
+        simulationDistance(el,p.remaining_m,'route',p.instruction+' — ',' remaining; simulated ETA '+Math.ceil(remainingSeconds/60)+' min; '+p.completedStops+' intermediate stops passed.');
         var timing=document.getElementById('simulationTiming');if(timing)timing.textContent=speed+'× playback · '+Math.ceil(remainingSeconds/speed)+' seconds of preview remaining';
         var next=document.getElementById('simulationNextTurn');
-        if(next)next.textContent=p.complete?'Route preview complete. Restart or choose another journey.':p.next_instruction?'Next: '+p.next_instruction+' in '+Math.round(p.next_maneuver_m)+' m':'Continue to the end of the planned route.';
+        if(next){
+            delete next.dataset.distanceMeters;
+            if(!p.complete&&p.next_instruction)simulationDistance(next,p.next_maneuver_m,'poi','Next: '+p.next_instruction+' in ','');
+            else next.textContent=p.complete?'Route preview complete. Restart or choose another journey.':'Continue to the end of the planned route.';
+        }
         var seekControl=document.getElementById('simulationPosition');if(seekControl)seekControl.value=String(p.progress*100);
         var percent=document.getElementById('simulationPercent');if(percent)percent.textContent=Math.round(p.progress*100)+'%';
         if(meters>=simulation.total)pause();

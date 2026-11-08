@@ -147,6 +147,16 @@
         return (distanceM / 1000).toFixed(1) + ' km';
     }
 
+    /** Format canonical metres without changing stored journey/provider values. */
+    function formatDistanceLabelMeters(meters, distanceUnit, style) {
+        var value = Number(meters);
+        if ((typeof meters !== 'number' && typeof meters !== 'string') ||
+                typeof meters === 'string' && !meters.trim() || !Number.isFinite(value) || value < 0) return '—';
+        if (style === 'route') return convertDistance(value / 1000, distanceUnit) + ' ' + getDistanceUnit(distanceUnit);
+        if (style === 'remaining') return formatRemainingDistanceText(value, distanceUnit);
+        return formatPoiDistanceMeters(value, distanceUnit);
+    }
+
     /**
      * Format a stored km value for a distance display element.
      * @param {number} km
@@ -326,6 +336,7 @@
     }
 
     var api = {
+        formatDistanceLabelMeters: formatDistanceLabelMeters,
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
         convertTemperature: convertTemperature,

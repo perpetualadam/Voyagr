@@ -184,3 +184,46 @@ dynamic fuel-cost accuracy. The remaining Overpass category queue remains open.
   add consumption/route-condition refinements only where supported by evidence.
 - [ ] Validate unit/currency/consumption combinations and fallback behavior, then
   retain live-provider and actual-device acceptance as separate pending checks.
+
+## Unit audit, first increment — distance labels (8 November 2026)
+
+This is the first correction in the app-wide unit task, not a claim that every
+unit-bearing view is consistent. Dynamic fuel pricing remains pending until the
+unit/cost boundaries below are resolved. Initial source tracing found these owners:
+
+| Surface | Canonical values / owner | Audit disposition |
+| --- | --- | --- |
+| Preferences and persistence | `units-preferences-orchestration.js`, `settings-orchestration.js`, `settings-snapshot.js`; local `unit_*` keys and backend unit settings | Distance selection persists through the existing owner; import/profile/reset refresh and invalid stored values still require dedicated coverage. `app.js` also binds unit change events and should be reviewed with that work. |
+| Main and selected preview distance | `route-comparison-orchestration.js` and `route-preview-orchestration.js` store `data-km`; `units.js` converts for display | Existing refresh retained and regression-tested alongside new distance labels. No route/provider numbers are converted in storage. |
+| Playback remaining distance and upcoming turn | `journey-modes.js`, `journey-plan.js`; metres and metre/second simulation clock | Fixed hard-coded km/m. Current setting determines mi/ft or km/m, including a paused preview. Unit changes cannot move the seek position, start live guidance or hide cleanup recovery. |
+| Nearby result list and along-route map popup | `poi-search.js`, `poi-search-orchestration.js`; `distance_m` | Fixed metric-only popup. List/popup labels retain canonical metres and refresh on a unit change; detached popups reformat when opened. Provider acquisition and route selection are unchanged. |
+| Arrival parking radius and result offset | `geocoding-orchestration.js`, `journey-plan.js`; 2,000 m search radius and metre geodesic distance | Fixed hard-coded km copy. Existing displayed radius/offset labels refresh while the actual search radius and chosen coordinates remain unchanged. |
+| Route comparison, saved routes, sharing, trip history and statistics | `route-selection.js`, `route-sharing.js`, `trip-history.js` and their orchestration; distance_km and explicit format callbacks | Rendering paths use format callbacks; already-open cards/tables and profile changes need a separate refresh audit. No complete acceptance claimed. |
+| Navigation, rerouting, alerts and voice | `turn-instructions.js`, `eta.js`, `hazard-alerts.js`, `reroute-decision.js`, `voice-announcements.js` | Existing mi/km branches found. Cross-view rounding thresholds, utterances and unit changes during real navigation remain pending controlled/device acceptance. |
+| GPS speed and limit widgets | `speed-gps.js`, `speed-limit-widget.js`, `speed-widget-orchestration.js`; m/s input, canonical mph, selected display conversion | Keep evidence, matching and alert authority independent of display units. Mixed distance/speed settings and settings restore still need dedicated acceptance. |
+| Currency and route costs | `units.js`, unit preference owner, `route-selection.js`, `services/costs.py`; supplied price × litres/kWh, plus toll/CAZ amounts | Confirmed follow-up: changing the currency currently substitutes symbols; no exchange-rate conversion/provenance mechanism was found. Resolve canonical cost currency and conversion/fallback policy before dynamic prices; do not treat symbol substitution as conversion. |
+| Fuel/energy consumption and price inputs | `route-prefs.js` reads `fuelEfficiency`, `fuelPrice`, `energyEfficiency`, `electricityPrice`; backend uses L/100 km, currency/L, kWh/100 km and currency/kWh | Preserve canonical stored values. `units.js` MPG helper uses the US factor 235.214 but labels only MPG; no display consumer beyond the wrapper was found. Explicit UK/US gallon policy and input/label coverage remain pending. |
+| Temperature and weather | `units.js` has Celsius/Fahrenheit conversion; preference refresh currently logs only. `weather-layer.js` is a provider raster overlay | Do not assume changing preference converts provider raster colours. Numeric temperature displays/legends, if present, require explicit source units and refresh wiring. |
+| Dimensions, weight and other physical units | Routing/profile constraints and any corresponding forms | Inventory actual exposed inputs and canonical API contracts before introducing conversions. No restriction/profile values were changed in this increment. |
+
+Implemented labels use `data-distance-meters` plus optional style/prefix/suffix
+metadata. Refresh reads canonical metres each time, never previously rounded
+text, and only changes leaf label text. No conversion is applied to API search
+radii, route geometry, hazard thresholds, speed evidence, simulation timing,
+route costs or saved trip values. Recovery copy drops distance metadata so a
+later unit change cannot overwrite the refusal message.
+
+Verification: focused tests exercise the real unit preference owner, persistence
+request, modal/popup builders, arrival result renderer and paused simulation.
+They cover round trips, zero/short distances, invalid values, unchanged canonical
+coordinates/distances, detached popup opening and retained planning/live gates.
+`node scripts/check-distance-units.cjs` exercises the actual unit selector and
+POI/arrival renderers at 390×844 and 844×390 with fixture data and no live
+network/GPS/routing calls. Browser checks passed. Full local checks: 138 JS
+suites / 2,989 tests, lint and coverage requirements passed; declared web backend
+selection 1,983 passed, one platform skip and 74 subtests passed.
+
+Production deployment and live phone acceptance remain pending. Continue the
+unit task with currency/cost provenance, remaining view refresh and settings
+restore, then consumption/temperature/other exposed unit controls before marking
+the app-wide checklist complete or integrating dynamic fuel-price data.

@@ -402,3 +402,21 @@ test('default versioned intent survives the existing fresh-GPS recalculation pro
     expect(body.journey_context.arrival_intent).toEqual(route.journey_context.arrival_intent);
     expect(Life.getRouteInProgress()).toBe(true);
 });
+
+test('playback distance uses current units and changing paused labels does not move the simulated journey',()=>{
+    const Units=require('../modules/navigation/units.js');
+    const Pref=require('../app/units-preferences-orchestration.js');
+    let unit='mi';runtime.formatDistance=(meters,style)=>Units.formatDistanceLabelMeters(meters,unit,style);
+    Pref.bind({units:()=>Units,call:{}});Pref.setDistanceUnitValue('mi');
+    const route=makeRoute('Unit preview');route.maneuvers.push({type:2,instruction:'Arrive at destination',begin_shape_index:1,end_shape_index:1});route.journey_context=contextFor(route);preview(route);
+    expect(Modes.startSimulation()).toBe(true);Modes.pause();
+    const progress=document.getElementById('simulationProgress'),next=document.getElementById('simulationNextTurn');
+    expect(progress.textContent).toContain('mi remaining');
+    expect(next.textContent).toMatch(/in .* (ft|mi)$/);
+    const metres=progress.dataset.distanceMeters,position=document.getElementById('simulationPosition').value;
+    unit='km';Pref.setDistanceUnitValue('km');Pref.updateAllDistanceDisplays();
+    expect(progress.textContent).toContain('km remaining');
+    expect(progress.dataset.distanceMeters).toBe(metres);expect(document.getElementById('simulationPosition').value).toBe(position);
+    expect(Life.getRouteInProgress()).toBe(false);expect(runtime.startLive).not.toHaveBeenCalled();
+    Pref.setDistanceUnitValue('mi');
+});
