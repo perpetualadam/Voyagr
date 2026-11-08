@@ -29,8 +29,8 @@ def test_build_route_cache_key_changes_with_avoid_points():
     k1 = build_route_cache_key(**base, avoid_points=[])
     k2 = build_route_cache_key(**base, avoid_points=[{'lat': 51.55, 'lon': -0.15}])
     assert k1 != k2
-    assert k1.endswith(',rv9')
-    assert k2.endswith(',rv9')
+    assert k1.endswith(',rv10')
+    assert k2.endswith(',rv10')
 
 
 def test_build_route_cache_key_changes_with_route_prefs():

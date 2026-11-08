@@ -50,6 +50,7 @@
             currencyUnit: rt().getCurrencyUnit(),
             speedUnit: rt().getSpeedUnit(),
             temperatureUnit: rt().getTemperatureUnit(),
+            fuelPricing: RP().getFuelPricingSettings ? RP().getFuelPricingSettings(localStorage) : undefined,
             vehicleType: rt().getCurrentVehicleType(),
             routingMode: rt().getCurrentRoutingMode(),
             smartZoomEnabled: rt().getSmartZoomEnabled(),
@@ -319,6 +320,7 @@
     }
 
     function applySettingsToUI() {
+        if (root.VoyagrFuelPricingControls) root.VoyagrFuelPricingControls.sync();
         const settingsSnapshot = SS();
         const orch = settingsSnapshot.buildApplySettingsToUiOrchestrationPlan();
         try {

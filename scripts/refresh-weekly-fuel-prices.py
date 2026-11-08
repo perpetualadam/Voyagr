@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit operator refresh only; never enables automatic route pricing."""
+"""Explicit snapshot refresh; does not configure pricing or alter existing journeys."""
 import argparse
 import json
 from pathlib import Path

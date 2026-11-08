@@ -174,6 +174,7 @@ function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
         return;
     }
 
+    if (root.VoyagrFuelPricingControls) root.VoyagrFuelPricingControls.showQuote(routeData);
     const routeSel = RS();
     if (apply.entryLogMessage) {
         console.log(apply.entryLogMessage, routeData && routeData.navigation_resume_requires_fresh_gps ? 'saved preview' : routeData, 'skipMapDisplay:', skipMapDisplay);

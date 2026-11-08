@@ -32,6 +32,15 @@
     }
 
     function getRuntimeProfileSnapshot() {
+        // Migrate legacy manual fuel prices into the outgoing profile, never into
+        // whichever account happens to be selected next.
+        if (root.VoyagrRoutePrefs) {
+            try {
+                var settings = JSON.parse(localStorage.getItem('voyagr_all_settings') || '{}');
+                settings.fuelPricing = root.VoyagrRoutePrefs.getFuelPricingSettings(localStorage);
+                localStorage.setItem('voyagr_all_settings', JSON.stringify(settings));
+            } catch (_e) { /* existing malformed snapshot handling remains */ }
+        }
         return {
             voyagr_all_settings: localStorage.getItem('voyagr_all_settings') || '',
             savedRoutes: localStorage.getItem('savedRoutes') || '[]',
@@ -39,6 +48,12 @@
     }
 
     function applyRuntimeProfileSnapshot(snapshot) {
+        var targetSettings = {};
+        try { targetSettings = JSON.parse(snapshot?.voyagr_all_settings || '{}'); } catch (_e) { /* empty target */ }
+        var fp = targetSettings && targetSettings.fuelPricing;
+        var validFuel = fp && ['automatic', 'manual'].indexOf(fp.mode) >= 0 && ['', 'petrol', 'diesel'].indexOf(fp.category) >= 0 &&
+            (fp.manualPrice === null || typeof fp.manualPrice === 'number' && Number.isFinite(fp.manualPrice) && fp.manualPrice >= 0 && fp.manualPrice <= 100);
+        localStorage.setItem('fuelPricing', JSON.stringify(validFuel ? fp : {mode: 'automatic', category: '', manualPrice: null}));
         localStorage.setItem('voyagr_all_settings', snapshot?.voyagr_all_settings || '');
         localStorage.setItem('savedRoutes', snapshot?.savedRoutes || '[]');
 

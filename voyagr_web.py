@@ -761,6 +761,7 @@ class RouteCache:
         via_points: Optional[List[Dict[str, Any]]] = None,
         stops: Optional[List[Dict[str, Any]]] = None,
         departure_time: Optional[str] = None,
+        cost_fingerprint: str = '',
     ) -> str:
         """Create cache key from route parameters."""
         from voyagr.services.routing.route_cache_key import build_route_cache_key
@@ -788,6 +789,7 @@ class RouteCache:
             via_points=via_points,
             stops=stops,
             departure_time=departure_time,
+            cost_fingerprint=cost_fingerprint,
         )
 
     def get(
@@ -815,6 +817,7 @@ class RouteCache:
         via_points: Optional[List[Dict[str, Any]]] = None,
         stops: Optional[List[Dict[str, Any]]] = None,
         departure_time: Optional[str] = None,
+        cost_fingerprint: str = '',
     ) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
         with self.lock:
@@ -823,7 +826,7 @@ class RouteCache:
                 enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
                 avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
                 avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
-                route_optimization, max_detour, avoid_points, via_points, stops, departure_time,
+                route_optimization, max_detour, avoid_points, via_points, stops, departure_time, cost_fingerprint,
             )
 
             if key not in self.cache:
@@ -868,6 +871,7 @@ class RouteCache:
         via_points: Optional[List[Dict[str, Any]]] = None,
         stops: Optional[List[Dict[str, Any]]] = None,
         departure_time: Optional[str] = None,
+        cost_fingerprint: str = '',
     ) -> None:
         """Cache a route calculation."""
         with self.lock:
@@ -876,7 +880,7 @@ class RouteCache:
                 enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
                 avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
                 avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
-                route_optimization, max_detour, avoid_points, via_points, stops, departure_time,
+                route_optimization, max_detour, avoid_points, via_points, stops, departure_time, cost_fingerprint,
             )
 
             # Remove oldest if at capacity
@@ -1207,8 +1211,12 @@ from voyagr.services.routing.discovery import append_distinct_valhalla_route_typ
 # get_traffic_duration_multiplier moved to voyagr.services.routing.engines (imported above).
 
 
+from voyagr.services.route_fuel_pricing import resolve_fuel_pricing, fuel_pricing_response
+
+
 @app.route('/api/route', methods=['POST'])
 @rate_limit(route_limiter)
+@fuel_pricing_response
 def calculate_route():
     """
     Calculate route using available routing engines.
@@ -1239,6 +1247,13 @@ def calculate_route():
         if not is_valid:
             logger.warning("[ROUTE] validation_failed")
             return jsonify({'success': False, 'error': error_msg}), 400
+
+        from flask import g
+        try:
+            data, g.route_fuel_pricing, price_fingerprint = resolve_fuel_pricing(data)
+            g.route_cost_request = data
+        except (ValueError, TypeError):
+            return jsonify(success=False, error='Invalid fuel pricing or cost parameters'), 400
 
         # Parse + normalize the request body (pure; unit-tested in
         # tests/test_route_request_params.py). Unpack into the local names the
@@ -1286,6 +1301,7 @@ def calculate_route():
         is_reroute = p.is_reroute
 
         cache_kwargs = dict(
+            cost_fingerprint=price_fingerprint,
             enable_hazard_avoidance=enable_hazard_avoidance,
             avoid_traffic_lights=avoid_traffic_lights,
             avoid_cameras=avoid_cameras,
@@ -2278,6 +2294,7 @@ def calculate_route():
         })
 
 @app.route('/api/multi-stop-route', methods=['POST'])
+@fuel_pricing_response
 def calculate_multi_stop_route():
     """
     Calculate a multi-drop route with optional stop order optimization,
@@ -2287,7 +2304,18 @@ def calculate_multi_stop_route():
     voyagr.services.routing.multidrop.build_multidrop_route_from_request.
     """
     from voyagr.services.routing.multidrop import build_multidrop_route_from_request
-    result, status = build_multidrop_route_from_request(request.json or {})
+    from flask import g
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(success=False, error='Request body must be a JSON object'), 400
+    from voyagr.utils.validation import normalize_vehicle_type
+    data = dict(data, vehicle_type=normalize_vehicle_type(data.get('vehicle_type', 'petrol_diesel')))
+    try:
+        data, g.route_fuel_pricing, _ = resolve_fuel_pricing(data)
+        g.route_cost_request = data
+    except (ValueError, TypeError):
+        return jsonify(success=False, error='Invalid fuel pricing or cost parameters'), 400
+    result, status = build_multidrop_route_from_request(data)
     return jsonify(result), status
 
 # Navigation routes (/api/weather, /api/analytics, /api/speed-limit, etc.)
