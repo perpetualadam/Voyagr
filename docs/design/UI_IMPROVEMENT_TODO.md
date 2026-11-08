@@ -527,3 +527,22 @@ user-deferred sat-nav acceptance work remains alongside this increment.
 See [Overpass item 6e](OVERPASS_CONSUMER_AUDIT.md#item-6e--nearby-hospital-and-clinics-2026-11-08).
 Next nearby category is Groceries. The existing arrival, unit, UI, along-route
 and user-deferred sat-nav acceptance work continues alongside this increment.
+
+
+## Nearby Groceries POI increment (8 November 2026)
+
+- [x] Preserve supermarket/greengrocer/convenience categories and usable TomTom
+  first; add bounded shared Overpass nodes/ways/relations after empty/unavailable/
+  unusable primary results and retain the existing Nominatim last resort.
+- [x] Show mapped shop types/hours/operator as reported; retain unknown third-party
+  shop types and unverified stock, current opening and vehicle access.
+- [x] Preserve source/cache provenance, radius/distance checks, selected units,
+  escaped text, stale-result protection and the existing route planner.
+- [ ] Record live VPS/provider and device acceptance after deployment. Synthetic
+  NI records and controlled browsers do not establish live nationwide coverage.
+
+See [Overpass item 6f](OVERPASS_CONSUMER_AUDIT.md#item-6f--nearby-groceries-2026-11-08).
+The listed nearby quick-button category increments now have controlled checks.
+Next in the original functional queue is bounded along-route POI acquisition,
+without several unbounded provider queries per route. UI/unit/arrival follow-ups
+and the user's deferred sat-nav acceptance remain alongside this work.
