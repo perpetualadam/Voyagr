@@ -377,3 +377,19 @@ Full local validation: 141 JavaScript suites / 3,042 tests, lint and coverage
 requirements passed; declared web backend selection 1,983 passed, one platform
 skip and 74 subtests passed. Production deployment and actual-phone acceptance
 remain pending. No production configuration, data or deployment changed.
+
+## Dynamic fuel-price source research (8 November 2026)
+
+Primary-source research and the implementation sequence are recorded in
+[DYNAMIC_FUEL_PRICE_RESEARCH.md](DYNAMIC_FUEL_PRICE_RESEARCH.md). Fuel Finder is
+the preferred later station source and its statutory scope includes Northern
+Ireland. First implement a bounded public DESNZ weekly-average snapshot with
+manual/configured fallback; then add opt-in automatic/manual and fuel-category
+selection without overwriting legacy prices. The current browser sends a fixed
+price even without a user override, so a server-only default update is insufficient.
+
+The official Fuel Finder developer portal returned 403 through the research
+browser; current recipient API schema, quotas and full dataset terms remain
+unverified. No account/credential action or runtime integration was performed.
+Keep earlier unit/Overpass/device acceptance items open. This research completes
+source assessment, not dynamic fuel pricing or live station-price acceptance.
