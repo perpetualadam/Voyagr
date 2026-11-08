@@ -89,7 +89,7 @@
     <!-- Google Plus Codes Service -->
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
-    <script defer src="/static/js/modules/traffic-lights.js?v=20261107signals1"></script>
+    <script defer src="/static/js/modules/traffic-lights.js?v=20261108switchstates1"></script>
     <script defer src="/static/js/modules/navigation/camera-pitch.js?v=20260827pwa03"></script>
     <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20261027phase6a"></script>
     <script defer src="/static/js/modules/navigation/speech-synthesis.js?v=20260712voice1"></script>
@@ -126,7 +126,7 @@
     <script defer src="/static/js/modules/map/preview-marker.js?v=20260711zzs"></script>
     <script defer src="/static/js/modules/map/vehicle-marker.js?v=20260727marker4"></script>
     <script defer src="/static/js/modules/map/osm-map-icons.js?v=20261107crossings1"></script>
-    <script defer src="/static/js/modules/map/map-controls.js?v=20261107mapicons1"></script>
+    <script defer src="/static/js/modules/map/map-controls.js?v=20261108switchstates1"></script>
     <script defer src="/static/js/modules/map/map-layer-toggles.js?v=20260711zzzr"></script>
     <script defer src="/static/js/modules/map/map-overlay-toggles.js?v=20260711zzzp"></script>
     <script defer src="/static/js/modules/map/map-view-3d.js?v=20260711zzzl"></script>
@@ -148,7 +148,7 @@
     <script defer src="/static/js/modules/navigation/road-report.js?v=20260711zzzk"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20261108unitrestore1"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260711zzzn"></script>
-    <script defer src="/static/js/modules/ui/toggle-ui.js?v=20261107mapicons1"></script>
+    <script defer src="/static/js/modules/ui/toggle-ui.js?v=20261108switchstates1"></script>
     <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261107sheettools1"></script>
@@ -764,17 +764,17 @@
 
                             <div class="preference-item">
                                 <span class="preference-label">Emissions charge zones</span>
-                                <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')" type="button" aria-label="Emissions charge zones"></button>
+                                <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')" type="button" aria-label="Emissions charge zones" role="switch" aria-checked="false"></button>
                             </div>
 
                             <div class="preference-item">
                                 <span class="preference-label">Traffic signals</span>
-                                <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')" type="button" aria-label="Traffic signals"></button>
+                                <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')" type="button" aria-label="Traffic signals" role="switch" aria-checked="false"></button>
                             </div>
 
                             <div class="preference-item">
                                 <span class="preference-label">Level crossings</span>
-                                <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')" type="button" aria-label="Level crossings"></button>
+                                <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')" type="button" aria-label="Level crossings" role="switch" aria-checked="false"></button>
                             </div>
                         </div>
 
@@ -784,7 +784,7 @@
 
                             <div class="preference-item">
                                 <span class="preference-label">Use map data in routing</span>
-                                <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')" type="button" aria-label="Use map data in routing"></button>
+                                <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')" type="button" aria-label="Use map data in routing" role="switch" aria-checked="false"></button>
                             </div>
                         </div>
 
@@ -794,27 +794,27 @@
 
                             <div class="preference-item">
                                 <span class="preference-label">Speed cameras</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)" aria-label="Speed cameras"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)" aria-label="Speed cameras" role="switch" aria-checked="false"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Traffic light cameras</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)" aria-label="Traffic light cameras"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)" aria-label="Traffic light cameras" role="switch" aria-checked="false"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Average-speed zones</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)" aria-label="Average-speed zones"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)" aria-label="Average-speed zones" role="switch" aria-checked="false"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Bus lanes</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)" aria-label="Bus lanes"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)" aria-label="Bus lanes" role="switch" aria-checked="false"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Mobile units</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)" aria-label="Mobile units"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)" aria-label="Mobile units" role="switch" aria-checked="false"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Other mapped points</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)" aria-label="Other mapped points"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)" aria-label="Other mapped points" role="switch" aria-checked="false"></button>
                             </div>
                         </div>
 
@@ -848,17 +848,17 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer routes without tolls</span>
-                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads" type="button" aria-label="Prefer routes without tolls"></button>
+                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads" type="button" aria-label="Prefer routes without tolls" role="switch" aria-checked="false"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer non-motorway routes</span>
-                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways" type="button" aria-label="Prefer non-motorway routes"></button>
+                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways" type="button" aria-label="Prefer non-motorway routes" role="switch" aria-checked="false"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer routes without ferries</span>
-                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries" type="button" aria-label="Prefer routes without ferries"></button>
+                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries" type="button" aria-label="Prefer routes without ferries" role="switch" aria-checked="false"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes, including multi-stop legs.</p>
 
@@ -909,13 +909,13 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Live traffic updates</span>
-                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Live traffic updates"></button>
+                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Live traffic updates" role="switch" aria-checked="true"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p>
 
                         <div class="preference-item">
                             <span class="preference-label">Reroute when off course</span>
-                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Reroute when off course"></button>
+                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Reroute when off course" role="switch" aria-checked="true"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p>
 
@@ -1034,12 +1034,12 @@
 
                         <div class="preference-item">
                             <span class="preference-label">🔍 Smart Zoom</span>
-                            <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()" type="button" aria-label="🔍 Smart Zoom"></button>
+                            <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()" type="button" aria-label="🔍 Smart Zoom" role="switch" aria-checked="false"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">📍 Center on my location</span>
-                            <button type="button" class="toggle-switch" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" title="Move the map to your GPS position when location is available" aria-label="📍 Center on my location"></button>
+                            <button type="button" class="toggle-switch" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" title="Move the map to your GPS position when location is available" aria-label="📍 Center on my location" role="switch" aria-checked="false"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0; line-height: 1.45;">
                             When on, the map moves from the default view to your GPS position when location is available. Turn off to keep the map on the default area.
@@ -1047,7 +1047,7 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Mapped points on map</span>
-                            <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()" type="button" aria-label="Mapped points on map"></button>
+                            <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()" type="button" aria-label="Mapped points on map" role="switch" aria-checked="true"></button>
                         </div>
 
                         <div class="preference-item">
@@ -1055,21 +1055,21 @@
                                 <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"></rect><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"></circle><circle cx="8" cy="18" r="4.2" fill="#f59e0b"></circle><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"></circle></svg></span>
                                 <span>Traffic signals (map)</span>
                             </span>
-                            <button class="toggle-switch active" type="button" aria-label="Traffic signals (map)" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" type="button" aria-label="Traffic signals (map)" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;" role="switch" aria-checked="true"></button>
                         </div>
 
                         <p id="osmTrafficLightDataStatus" role="status">Traffic-light coverage has not been checked.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">Level crossings (map)</span>
-                            <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Level crossings (map)"></button>
+                            <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Level crossings (map)" role="switch" aria-checked="true"></button>
                         </div>
                         <p id="osmRailwayCrossingDataStatus" role="status">Level-crossing coverage has not been checked.</p>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Map overlays for traffic signals and level crossings. Separate from the routing toggles above.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Show Traffic Flow</span>
-                            <button class="toggle-switch" id="showTrafficToggle" onclick="toggleTrafficLayer()" type="button" aria-label="🚦 Show Traffic Flow"></button>
+                            <button class="toggle-switch" id="showTrafficToggle" onclick="toggleTrafficLayer()" type="button" aria-label="🚦 Show Traffic Flow" role="switch" aria-checked="false"></button>
                         </div>
 
                         <div class="preference-item">
@@ -1077,31 +1077,31 @@
                                 <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"></rect><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"></circle><circle cx="8" cy="18" r="4.2" fill="#f59e0b"></circle><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"></circle></svg></span>
                                 <span>Show Traffic Lights</span>
                             </span>
-                            <button class="toggle-switch active" type="button" aria-label="Show Traffic Lights" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" type="button" aria-label="Show Traffic Lights" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;" role="switch" aria-checked="true"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Vertical traffic-light icon (red → amber → green) shown along your route.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛤️ Route Traffic Edges</span>
-                            <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛤️ Route Traffic Edges"></button>
+                            <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛤️ Route Traffic Edges" role="switch" aria-checked="true"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Highlight congestion along your route (orange/red/black only — free-flow green is hidden so the route line stays visible)</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛣️ Road Name Labels</span>
-                            <button class="toggle-switch active" id="roadLabelsToggle" onclick="toggleRoadLabels()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛣️ Road Name Labels"></button>
+                            <button class="toggle-switch active" id="roadLabelsToggle" onclick="toggleRoadLabels()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛣️ Road Name Labels" role="switch" aria-checked="true"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display motorway, A-road, and street names on the map</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🏢 3D Buildings</span>
-                            <button class="toggle-switch active" id="buildings3DToggle" onclick="toggle3DBuildings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🏢 3D Buildings"></button>
+                            <button class="toggle-switch active" id="buildings3DToggle" onclick="toggle3DBuildings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🏢 3D Buildings" role="switch" aria-checked="true"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show 3D building extrusions on the map</p>
 
                         <div class="preference-item">
                             <span class="preference-label">📍 Google Plus Codes</span>
-                            <button class="toggle-switch" id="googlePlusCodesToggle" onclick="toggleGooglePlusCodes()" type="button" aria-label="📍 Google Plus Codes"></button>
+                            <button class="toggle-switch" id="googlePlusCodesToggle" onclick="toggleGooglePlusCodes()" type="button" aria-label="📍 Google Plus Codes" role="switch" aria-checked="false"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Enable Plus Code input for destination search (free, offline-capable)</p>
 
@@ -1109,21 +1109,21 @@
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR &amp; 3D View</h4>
                             <div class="preference-item">
                                 <span class="preference-label">🗺️ 3D Map View</span>
-                                <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()" type="button" aria-label="🗺️ 3D Map View"></button>
+                                <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()" type="button" aria-label="🗺️ 3D Map View" role="switch" aria-checked="false"></button>
                             </div>
                             <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D and tilted 3D (perspective + 3D buildings). Applies while browsing and during navigation — 2D navigation still follows heading-up, just flat.</p>
                             <div class="preference-item">
                                 <span class="preference-label">👓 AR Navigation</span>
-                                <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()" type="button" aria-label="👓 AR Navigation"></button>
+                                <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()" type="button" aria-label="👓 AR Navigation" role="switch" aria-checked="false"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">🚗 3D Driver View</span>
-                                <button class="toggle-switch" id="driverPerspectiveToggle" onclick="toggleDriverPerspective()" type="button" aria-label="🚗 3D Driver View"></button>
+                                <button class="toggle-switch" id="driverPerspectiveToggle" onclick="toggleDriverPerspective()" type="button" aria-label="🚗 3D Driver View" role="switch" aria-checked="false"></button>
                             </div>
                         </div>
                     <div class="preference-item">
                             <span class="preference-label">🚗 Speedometer &amp; limit</span>
-                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map" aria-label="🚗 Speedometer &amp; limit"></button>
+                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map" aria-label="🚗 Speedometer &amp; limit" role="switch" aria-checked="true"></button>
                         </div><p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
                             The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
                         </p></div></div></details>
@@ -1189,12 +1189,12 @@
 
                         <div class="preference-item">
                             <span class="preference-label">🔊 Voice Announcements</span>
-                            <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()" type="button" aria-label="🔊 Voice Announcements"></button>
+                            <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()" type="button" aria-label="🔊 Voice Announcements" role="switch" aria-checked="false"></button>
                         </div>
 
                         <div class="preference-item" id="porcupineWakePrefRow">
                             <span class="preference-label">🎙️ Wake phrase (Picovoice)</span>
-                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()" aria-label="🎙️ Wake phrase (Picovoice)"></button>
+                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()" aria-label="🎙️ Wake phrase (Picovoice)" role="switch" aria-checked="false"></button>
                         </div>
                         <p id="porcupineWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0; line-height: 1.5;">
                             Hands-free keyword when a Picovoice access key and web assets are configured on the server. HTTPS required for the microphone.
@@ -1351,12 +1351,12 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Suggested journeys</span>
-                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()" type="button" aria-label="Suggested journeys"></button>
+                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()" type="button" aria-label="Suggested journeys" role="switch" aria-checked="false"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">🔋 Battery Saving Mode</span>
-                            <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()" type="button" aria-label="🔋 Battery Saving Mode"></button>
+                            <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()" type="button" aria-label="🔋 Battery Saving Mode" role="switch" aria-checked="false"></button>
                         </div>
 
                     </div><div class="preferences-section">

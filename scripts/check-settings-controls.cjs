@@ -8,7 +8,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
  const shell=`<html class="${dark?'dark-mode':''}" style="font-size:${scale*100}%"><head><meta charset="utf-8"><style>${read('static/css/voyagr.css')}body{display:block}main{max-width:640px;margin:auto;padding:12px;box-sizing:border-box}</style></head><body class="${dark?'dark-mode':''}"><main>${markup}</main></body></html>`;
  await page.route('**/*',r=>r.request().url()==='https://settings.invalid/'?r.fulfill({contentType:'text/html',body:shell}):r.abort());await page.goto('https://settings.invalid/');
- for(const file of ['modules/navigation/units.js','app/units-preferences-orchestration.js','app/supabase-auth-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file)});
+ for(const file of ['modules/navigation/units.js','app/units-preferences-orchestration.js','app/supabase-auth-orchestration.js','modules/ui/toggle-ui.js','modules/navigation/route-prefs.js','app/route-avoidance-orchestration.js','modules/navigation/hazard-alerts.js','app/hazard-preferences-orchestration.js','modules/map/map-controls.js','modules/traffic-lights.js'])await page.addScriptTag({content:read('static/js/'+file)});
  await page.evaluate(()=>{
   document.getElementById('settingsTab').style.display='block';window.calls=[];window.requests=[];
   window.fetch=(url,options)=>{requests.push([url,options]);return Promise.resolve({ok:true,json:()=>Promise.resolve({})});};
@@ -44,6 +44,32 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  await page.waitForFunction(()=>document.getElementById('settingsAccountApp').open);
  assert.equal(result.dist,'mi');assert.equal(result.currency,'EUR');assert.equal(result.symbol,'£');assert.deepEqual(result.hidden,['none','none','none']);assert(result.requests.every(([url])=>url==='/api/app-settings'));
  if(width===390&&scale===1){await page.locator('.settings-heading').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/voyagr-settings-'+(dark?'dark':'light')+'.png'});}
- console.log(`${width}x${height} ${dark?'dark':'light'} ${scale*100}% controls/actions/units passed`);await page.close();
+ // Switch semantics follow the real preference controllers, including keyboard activation.
+ await page.evaluate(()=>{
+  VoyagrRouteAvoidanceOrchestration.bind({routePrefs:()=>VoyagrRoutePrefs,toggleUI:()=>VoyagrToggleUI,call:{saveAllSettings:()=>{},showStatus:()=>{}}});
+  window.togglePreference=pref=>VoyagrRouteAvoidanceOrchestration.togglePreference(pref);
+ });
+ const switching=page.getByRole('switch',{name:'Use map data in routing',exact:true});
+ assert.equal(await switching.getAttribute('aria-checked'),'false');await switching.focus();await page.keyboard.press('Enter');
+ assert.equal(await switching.getAttribute('aria-checked'),'true');assert.equal(await page.evaluate(()=>localStorage.getItem('pref_cameras')),'true');
+ await page.keyboard.press('Space');assert.equal(await switching.getAttribute('aria-checked'),'false');assert.equal(await page.evaluate(()=>localStorage.getItem('pref_cameras')),'false');
+ await page.evaluate(()=>{localStorage.setItem('pref_avoid_tollRoads','true');VoyagrRouteAvoidanceOrchestration.loadAvoidancePreferences();});
+ assert.equal(await page.locator('#avoidTollRoads').getAttribute('aria-checked'),'true');
+ for(const el of await page.locator('#settingsTab button.toggle-switch').all()){
+  assert.equal(await el.getAttribute('role'),'switch');assert.equal(await el.getAttribute('aria-checked'),String(await el.evaluate(n=>n.classList.contains('active'))));
+ }
+ const client=await page.context().newCDPSession(page);const tree=await client.send('Accessibility.getFullAXTree');
+ const ax=tree.nodes.find(n=>n.role?.value==='switch'&&n.name?.value==='Use map data in routing');assert(ax,'Switch missing from accessibility tree');assert.equal(ax.properties.find(p=>p.name==='checked').value.value,'false');await client.detach();
+ await page.evaluate(()=>{
+  window.resolvePreference=null;const pending=new Promise(resolve=>{window.resolvePreference=resolve;});
+  window.fetch=async(_url,opts)=>({json:()=>opts?pending:Promise.resolve({success:true,preferences:[{hazard_type:'camera_speed',enabled:false}]})});
+  VoyagrHazardPreferencesOrchestration.bind({hazardAlerts:()=>VoyagrHazardAlerts,toggleUI:()=>VoyagrToggleUI,call:{showStatus:()=>{},saveAllSettings:()=>{}}});
+  window.toggleHazardPreferenceApi=(...args)=>VoyagrHazardPreferencesOrchestration.toggleHazardPreferenceApi(...args);
+ });
+ const camera=page.getByRole('switch',{name:'Speed cameras',exact:true});await camera.focus();await page.keyboard.press('Space');assert.equal(await camera.getAttribute('aria-checked'),'false');
+ await page.evaluate(()=>resolvePreference({success:true}));await page.waitForFunction(()=>document.querySelector('[data-hazard-type="camera_speed"]').getAttribute('aria-checked')==='true');
+ await page.evaluate(()=>{TrafficLights.toggleTrafficLights();VoyagrMapControls.applyARModeButtonState(document.getElementById('arModeBtn'),'active');});
+ assert.equal(await page.locator('#trafficLightsToggle').getAttribute('aria-checked'),'false');assert.equal(await page.locator('#arModeBtn').getAttribute('aria-checked'),'true');
+ console.log(`${width}x${height} ${dark?'dark':'light'} ${scale*100}% controls/actions/units/switch accessibility tree passed`);await page.close();
 }
 }finally{await browser.close();}})().catch(error=>{console.error(error);process.exit(1);});
