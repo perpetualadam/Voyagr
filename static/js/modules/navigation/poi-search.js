@@ -119,12 +119,16 @@
             html += '<div style="font-size: 11px; color: #666; margin-bottom: 6px;">' + escapeText(poi.address) + '</div>';
         }
         if (poi.opening_hours) {
-            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
+            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
         }
         if(poi.type==='fuel'&&Array.isArray(poi.reported_fuels)&&poi.reported_fuels.length)html+='<div style="font-size:12px;">Reported fuels: '+escapeText(poi.reported_fuels.join(', '))+'</div>';
         if(poi.type==='food'&&poi.cuisine)html+='<div style="font-size:12px;">Reported cuisine: '+escapeText(poi.cuisine)+'</div>';
-        if((poi.type==='pharmacy'||poi.type==='hospital')&&poi.operator)html+='<div style="font-size:12px;">Reported operator: '+escapeText(poi.operator)+'</div>';
+        if((poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')&&poi.operator)html+='<div style="font-size:12px;">Reported operator: '+escapeText(poi.operator)+'</div>';
         if(poi.type==='hospital'&&(poi.facility_kind==='hospital'||poi.facility_kind==='clinic'))html+='<div style="font-size:12px;">Reported facility: '+(poi.facility_kind==='clinic'?'Clinic':'Hospital')+'</div>';
+        if(poi.type==='groceries'){
+            var shopLabels={supermarket:'Supermarket',greengrocer:'Greengrocer',convenience:'Convenience store'};
+            if(Object.prototype.hasOwnProperty.call(shopLabels,poi.shop_kind))html+='<div style="font-size:12px;">Reported shop: '+shopLabels[poi.shop_kind]+'</div>';
+        }
         if(poi.type==='charging'){
             if(poi.operator)html+='<div style="font-size:12px;">Reported operator: '+escapeText(poi.operator)+'</div>';
             if(poi.network)html+='<div style="font-size:12px;">Reported network: '+escapeText(poi.network)+'</div>';
@@ -140,7 +144,7 @@
         html += (
             '<button '+(handler?'onclick="'+escapeText(handler)+'"':'disabled')+
                 ' style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">' +
-                ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital')?'Plan route here':'🚗 Navigate Here') +
+                ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')?'Plan route here':'🚗 Navigate Here') +
             '</button></div>'
         );
         return html;
@@ -172,6 +176,10 @@
         if(type==='fuel'){
             html+='<p>Fuel locations from provider/map data. Distance is straight-line. Check current opening hours, fuel availability and vehicle access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No fuel candidates returned. Coverage may be incomplete.</p>';
+        }
+        if(type==='groceries'){
+            html+='<p>Supermarket, greengrocer and convenience-store locations from provider/map data. Distance is straight-line and results may be incomplete. Check current opening hours, stock and access with the store; the map point may not be an entrance.</p>';
+            if(!results.length)html+='<p>No grocery candidates returned. Coverage may be incomplete.</p>';
         }
         if(type==='hospital'){
             html+='<p>Hospital and clinic locations from provider/map data. Distance is straight-line. A clinic is not necessarily a hospital or emergency department. Check current services, opening hours and access with the facility; the map point may not be an entrance. Emergency care availability is not verified.</p>';

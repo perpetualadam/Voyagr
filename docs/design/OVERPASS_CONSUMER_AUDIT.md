@@ -54,7 +54,7 @@ is possible; neither free availability nor public access is guaranteed.
 | 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Controlled acquisition/display/snapshot and multi-leg checks passed (item 3 below); known-location and deployed/device acceptance remain pending. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
-| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel, Food, Charging, Pharmacy and Hospital controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Remaining categories retain their existing policy and node-only query. | Fuel/Food/Charging/Pharmacy/Hospital live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
+| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel, Food, Charging, Pharmacy, Hospital and Groceries controlled verification recorded below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Other legacy categories/aliases retain their existing provider policy and node-only query. | Fuel/Food/Charging/Pharmacy/Hospital/Groceries live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
 | 7 | Along-route POI: `/poi-along-route` in `api/search.py` | Samples route points using TomTom, then Nominatim. It currently does not query Overpass. | Bounded integration design/tests before adding Overpass; avoid several unbounded queries per route. |
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
@@ -529,3 +529,60 @@ Full local Hospital validation: 27 focused backend cases and six browser-owner
 cases; 145 JavaScript suites / 3,074 tests, lint and coverage floors passed.
 Declared backend selection: 2,157 passed, one platform skip and 74 subtests.
 These controlled checks do not establish live provider or deployed-device behavior.
+
+
+### Item 6f — Nearby Groceries (2026-11-08)
+
+The Groceries quick button retains its exact existing shop scope: supermarket,
+greengrocer and convenience. Usable TomTom results remain first; empty/failed/
+unusable primary results now fall through to the configured shared Overpass
+client, querying matching shop nodes, ways and relations with centers. Nominatim
+remains the last resort after map acquisition failure. Usable primary results
+are not merged with additional provider searches, so this remains a candidate
+list, not an exhaustive directory of all three shop kinds. The separate legacy
+`supermarket` alias, ATM and along-route acquisition retain their existing policy.
+
+Mapped shop types produce `shop_kind=supermarket|greengrocer|convenience`, shown
+as reported Supermarket, Greengrocer or Convenience store. Non-OSM provider
+categories are not promoted to confirmed map classifications and retain unknown
+shop kinds. Operator and opening hours are reported, bounded and escaped; current
+opening, stock and access stay unverified for every source. The modal asks users
+to check the store and explains that a map point may not be a vehicle entrance.
+No product inventory, opening-now evaluation or access guarantee was added.
+
+The search shares the 18-second cooperative provider admission budget, a
+12-second Overpass child budget, 7-second query timeout, 2 MiB maxsize setting,
+200-element bound and 5-minute shared cache. Inputs require finite numeric WGS84
+coordinates and a 1–5,000 metre integer radius. Candidates are independently
+straight-line distance-filtered, deduplicated, ranked and capped at 15. Available
+endpoint class, original dataset/retrieval times, revision and cache state are
+retained. A valid mapped-empty response remains distinct from failed acquisition
+with unknown coverage. Synthetic NI and zero-longitude cases verify geographic
+acceptance only, not live coverage.
+
+The Groceries button clears old candidates and ignores late HTTP/GPS callbacks.
+Selection preserves endpoint-request invalidation and the existing route planner;
+it does not start live navigation. Distance display follows the user's selected
+units. Other reviewed nearby categories remain under their existing contracts.
+The unrelated-category empty-primary fixtures now use ATM because Groceries
+intentionally joins the bounded fallback path; a separate test preserves the
+legacy `supermarket` alias behavior.
+
+Validation: 28 focused backend cases cover real shared-client acquisition and
+cache provenance with fixture HTTP, all three shop and element types, category
+rejection, input/radius bounds, fallback, invalid/distant/duplicate records,
+ranking/caps, deadlines, UK/NI coordinates and unverified stock/opening claims.
+Six browser-owner cases and `node scripts/check-groceries-poi.cjs` exercise the
+actual template button, production modal/owner, escaped text, selected distance
+format, planning selection, stale responses/GPS and empty/error states. Controlled
+Chromium checks passed at 390×844 and 844×390; no live providers or GPS were used.
+
+No production configuration, credentials, database changes or deployment were
+performed. The listed nearby quick-button categories now have controlled audit
+records, but their live VPS/provider/device acceptance remains open. Next in the
+original functional queue is bounded along-route POI acquisition/design (item 7),
+separate from the continuing UI/unit/arrival and deferred road-test workstreams.
+
+Full local Groceries validation: 146 JavaScript suites / 3,080 tests, test lint
+and coverage floors passed; declared backend selection 2,185 passed, one platform
+skip and 74 subtests. Existing reviewed nearby-category regressions remain passing.
