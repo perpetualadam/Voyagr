@@ -5,6 +5,18 @@
 (function (root) {
     'use strict';
 
+    // Classic browser scripts load units first; CommonJS tests import the same pure helper.
+    var Units = typeof module !== 'undefined' && module.exports ? require('./units.js') : root.VoyagrUnits;
+
+    function costRateCell(route, opts) {
+        var raw = route.cost_per_km;
+        var value = typeof raw === 'number' || typeof raw === 'string' && raw.trim() ? Number(raw) : NaN;
+        var symbol = String(opts.currencySymbol || '');
+        var escaped = symbol.replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+        var attrs = Number.isFinite(value) && value >= 0 ? ' data-cost-per-km="'+value+'" data-cost-rate-symbol="'+escaped+'"' : '';
+        return '<td'+attrs+' style="padding: 8px; text-align: center;">'+Units.formatCostPerDistance(raw, opts.distUnit, escaped)+'</td>';
+    }
+
     function distanceAttrs(km) {
         var value = typeof km === 'number' || typeof km === 'string' && km.trim() ? Number(km) : NaN;
         return Number.isFinite(value) && value >= 0
@@ -617,7 +629,7 @@
                 '<td'+distanceAttrs(route.distance_km)+' style="padding: 8px; text-align: center;">' + opts.distanceText + ' ' + opts.distUnit + '</td>' +
                 '<td style="padding: 8px; text-align: center;">' + Math.round(route.duration_minutes || 0) + ' min</td>' +
                 '<td style="padding: 8px; text-align: center;"><strong>' + opts.currencySymbol + route.total_cost.toFixed(2) + '</strong></td>' +
-                '<td style="padding: 8px; text-align: center;">' + opts.currencySymbol + route.cost_per_km.toFixed(2) + '</td>' +
+                costRateCell(route, opts) +
             '</tr>'
         );
     }
@@ -637,7 +649,7 @@
         html += '<th style="padding: 8px; text-align: center;">Distance</th>';
         html += '<th style="padding: 8px; text-align: center;">Time</th>';
         html += '<th style="padding: 8px; text-align: center;">Cost</th>';
-        html += '<th style="padding: 8px; text-align: center;">Cost/km</th>';
+        html += '<th data-cost-distance-unit style="padding: 8px; text-align: center;">Cost/' + Units.getDistanceUnit(opts.distUnit) + '</th>';
         html += '</tr></thead><tbody>';
         for (var i = 0; i < routes.length; i++) {
             html += buildRouteComparisonTableRowHtml(routes[i], i, {

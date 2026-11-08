@@ -10,6 +10,20 @@
 (function (root) {
     'use strict';
 
+    function finiteValue(value) {
+        if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return null;
+        var number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    /** Display a canonical currency/km rate without changing total cost or currency. */
+    function formatCostPerDistance(costPerKm, distanceUnit, symbol) {
+        var value = finiteValue(costPerKm);
+        if (value === null || value < 0) return '—';
+        var display = value * (distanceUnit === 'mi' ? 1.609344 : 1);
+        return Number.isFinite(display) ? String(symbol || '') + display.toFixed(2) : '—';
+    }
+
     /**
      * Convert kilometres to the user's display distance unit.
      * @param {number} km
@@ -37,8 +51,13 @@
      * @returns {string} Fixed-1 decimal string
      */
     function convertTemperature(celsius, temperatureUnit) {
-        if (temperatureUnit === 'fahrenheit') return ((Number(celsius) * 9 / 5) + 32).toFixed(1);
-        return Number(celsius).toFixed(1);
+        var value = finiteValue(celsius);
+        if (value === null) return '—';
+        if (temperatureUnit === 'fahrenheit') {
+            var fahrenheit = value * 9 / 5 + 32;
+            return Number.isFinite(fahrenheit) ? fahrenheit.toFixed(1) : '—';
+        }
+        return value.toFixed(1);
     }
 
     /**
@@ -57,17 +76,23 @@
      * @returns {string}
      */
     function getFuelEfficiencyInUnits(liters_per_100km, distanceUnit) {
-        if (distanceUnit === 'mi') return (235.214 / liters_per_100km).toFixed(1);
-        return Number(liters_per_100km).toFixed(1);
+        var value = finiteValue(liters_per_100km);
+        if (value === null || value <= 0) return '—';
+        // Preserve the existing US-gallon conversion; do not silently reinterpret it as UK MPG.
+        if (distanceUnit === 'mi') {
+            var mpg = 235.214 / value;
+            return Number.isFinite(mpg) ? mpg.toFixed(1) : '—';
+        }
+        return value.toFixed(1);
     }
 
     /**
      * Return the fuel-efficiency unit label.
      * @param {string} distanceUnit - 'mi' or 'km'
-     * @returns {'MPG'|'L/100km'}
+     * @returns {'MPG (US)'|'L/100km'}
      */
     function getFuelEfficiencyLabel(distanceUnit) {
-        return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
+        return distanceUnit === 'mi' ? 'MPG (US)' : 'L/100km';
     }
 
     /**
@@ -358,6 +383,7 @@
     }
 
     var api = {
+        formatCostPerDistance: formatCostPerDistance,
         formatDistanceLabelMeters: formatDistanceLabelMeters,
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,

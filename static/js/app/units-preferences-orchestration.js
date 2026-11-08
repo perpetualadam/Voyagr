@@ -62,6 +62,12 @@
                 Number(raw), getDistanceUnitValue(), el.dataset.distanceStyle
             ) + (el.dataset.distanceSuffix || '');
         });
+        document.querySelectorAll('[data-cost-distance-unit]').forEach(el => {
+            el.textContent = 'Cost/' + U().getDistanceUnit(getDistanceUnitValue());
+        });
+        document.querySelectorAll('[data-cost-per-km]').forEach(el => {
+            el.textContent = U().formatCostPerDistance(el.dataset.costPerKm, getDistanceUnitValue(), el.dataset.costRateSymbol);
+        });
     }
 
     function updateAllCostDisplays() {

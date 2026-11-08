@@ -326,3 +326,54 @@ Full local JavaScript validation: 140 suites / 3,008 tests, lint and coverage
 floors passed. No production configuration, data or deployment changed.
 Declared web backend validation also passed: 1,983 tests, one platform skip and
 74 subtests. Production deployment and real-device acceptance remain pending.
+
+## Unit audit, fourth increment — consumption labels, temperature and cost rates (8 November 2026)
+
+The comparison report displayed a canonical `cost_per_km` value under a fixed
+Cost/km heading even when the distance setting was miles. Its table now uses the
+shared pure rate formatter: currency/km × 1.609344 becomes currency/mile. Both
+initial rendering and already-open table refresh update the amount and heading
+from canonical data. Rate cells retain source values/symbols; totals, route
+ranking, currency, stored prices and consumption inputs are not recalculated or
+reinterpreted. Missing/invalid rates display unknown in either unit.
+
+- [x] Convert per-distance comparison rates in the correct direction and refresh
+  their headings/leaf values on explicit unit changes and restored settings.
+  Keep canonical rate metadata for round trips without accumulated rounding.
+- [x] Clarify the existing fuel-economy helper's gallon basis: its historical
+  conversion uses US gallons (235.214 divided by L/100 km), so its label is now
+  `MPG (US)`. Positive numeric conversion values are preserved. This helper has
+  no current web reading/input consumer beyond its wrapper; this increment does
+  not add a consumption widget or claim UK MPG support. Any future selectable
+  UK-gallon display must be explicit and leave stored L/100 km unchanged.
+- [x] Missing, invalid, non-positive or overflowing fuel-economy input no longer
+  formats as zero/infinite MPG. Missing/invalid/overflowing temperature input
+  displays unknown rather than treating missing Celsius as freezing. Zero and
+  negative valid Celsius values still convert correctly.
+- [x] Trace temperature consumers: the current weather view uses OpenWeatherMap
+  raster tiles; weather notifications use descriptions, and no current numeric
+  temperature reading renderer was found. Keep the preference and pure numeric
+  converter, and explain next to the selector that provider map colours do not
+  change with it. No image recolouring, provider URL change or new weather request
+  is implied or implemented.
+- [ ] Accept deployed comparison-rate round trips and existing unit/profile flows
+  on an actual phone, including live guidance/voice/summary edge cases from the
+  earlier audit. This does not establish complete live app-wide acceptance.
+- [ ] Research dynamic UK fuel-price sources, including Northern Ireland, before
+  choosing a provider. New quotes must carry fuel grade, currency, price unit and
+  observation time, with explicit freshness/fallback rules. Canonical prices
+  remain GBP/L (or GBP/kWh) and consumption remains L/100 km (or kWh/100 km).
+  No quote ingestion, foreign exchange or price refresh was added here.
+
+Regressions cover per-km/per-mile arithmetic, zero/missing rates, already-mounted
+row identity, unchanged totals/source values, consumption input preservation,
+explicit US-MPG labels, valid/missing Celsius values and temperature preference
+persistence without weather calls. `node scripts/check-consumption-rate-units.cjs`
+uses actual unit selectors, the real comparison table and production unit/cost
+helpers at 390×844 and 844×390 with fixture state; no live routing, weather,
+pricing or GPS requests. Controlled browser checks passed.
+
+Full local validation: 141 JavaScript suites / 3,042 tests, lint and coverage
+requirements passed; declared web backend selection 1,983 passed, one platform
+skip and 74 subtests passed. Production deployment and actual-phone acceptance
+remain pending. No production configuration, data or deployment changed.
