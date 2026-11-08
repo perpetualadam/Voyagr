@@ -426,3 +426,50 @@ and UI contract, keeping legacy overrides and existing route fallback behavior.
 
 This continues alongside the existing UI, Overpass, unit and device checklist.
 See [the implementation record](DYNAMIC_FUEL_PRICE_RESEARCH.md#implemented-step-2-automaticmanual-selection-and-frozen-route-quotes).
+
+## Floating Start action (8 November 2026)
+
+- [x] Move the existing route-owned `startNavBtn` out of the collapsed Map actions
+  panel and float it directly above the hamburger. Keep its ID and initial hidden
+  state so existing route/active-navigation controllers still own visibility.
+- [x] Invoke `startNavigationFromPreview()`, exactly like the preview Navigate
+  button. Keep the production journey chooser, selected-route synchronization,
+  fresh-GPS checks, refusal/acceptance prompts and fail-closed missing-protocol
+  guard. This shortcut does not itself authorize live navigation.
+- [x] Retain a labelled 56px action, keyboard focus and safe-area placement. Offset
+  the expanded menu to avoid covering Start; retain direct End during navigation.
+- [ ] Accept on the deployed device later, alongside the user's deferred sat-nav
+  testing. Controlled checks do not establish real GPS/navigation acceptance.
+
+### Remaining feature work, separate from deferred road testing
+
+1. Continue the Overpass consumer queue: charging, pharmacy, hospital and groceries
+   POIs, then along-route coverage, one category/path per increment. Fuel/Food
+   already have the reviewed fallback work; do not redo or assume other categories
+   share that behavior.
+2. Extend the compact UI treatment to remaining saved-route/history/statistics/
+   settings surfaces, preserving their existing actions and accessibility.
+3. Complete remaining unit audit decisions, including UK vs US gallon policy and
+   any additional physical-unit inputs discovered. Real foreign-currency costs
+   need a separately reviewed dated exchange-rate source and conversion contract.
+4. Later, add station-level fuel prices only after official Fuel Finder API access,
+   schema/terms and UK/NI coverage are verified. Current national weekly estimates
+   are not station-price or cheapest-fuel recommendations.
+5. Keep arrival/entrance evidence work and original lane/speed/Overpass acceptance
+   items on their existing trackers; the floating shortcut does not relax them.
+
+Operator evidence in this conversation confirms live GOV.UK acquisition on VPS1,
+service-account snapshot reads, the app restart/HTTP 200 and installation/enabling
+of the refresh timer. Its first service run was correctly THROTTLED. A due-time
+scheduled acquisition and browser route-source verification remain to be recorded;
+no production changes were made from this development workspace.
+
+Floating-action validation: 142 JavaScript suites / 3,056 tests, test lint and
+coverage floors passed; declared backend selection 2,073 passed, one platform
+skip and 74 subtests. The production map-action browser harness passed at
+320×640, 390×844, 844×390 and 1280×800 in light/dark themes, with selected-plan
+and live-overlay fixture states. It checked Start above Map while the panel is
+closed, the production chooser wrapper and missing-protocol refusal, keyboard
+activation, menu/overlay bounds, touch targets and unobstructed End access.
+No real GPS, camera permission, provider call or live navigation was exercised.
+No production deployment was performed.

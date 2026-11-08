@@ -65,7 +65,7 @@ test('toggle states preserve SVGs and labels through camera, follow and overview
 });
 
 test('map action visibility and existing handlers survive the icon refresh',()=>{
-    const handlers={startTrackingBtn:'startGPSTracking()',startNavBtn:'startNavigation()',zoomFollowToggle:'toggleZoomAndFollow()',
+    const handlers={startTrackingBtn:'startGPSTracking()',startNavBtn:'startNavigationFromPreview()',zoomFollowToggle:'toggleZoomAndFollow()',
         recenterVehicleFab:'recenterOnVehicle()',journeyOverviewBtn:'toggleJourneyOverview()',currentLocationFab:'getCurrentLocation()',
         voiceFab:'toggleVoiceInput()',showCamerasFab:'toggleShowCameras()',roadReportFab:'openRoadReportModal()',
         mapControlsHintFab:'openMapControlsHintModal()',endNavigationBtn:'stopTurnByTurnNavigation()'};
@@ -77,6 +77,9 @@ test('map action visibility and existing handlers survive the icon refresh',()=>
     });
     ['startNavBtn','zoomFollowToggle','recenterVehicleFab','journeyOverviewBtn','endNavigationBtn'].forEach(id=>expect(document.getElementById(id).style.display).toBe('none'));
     expect(document.getElementById('endNavigationBtn').closest('#navControlButtons')).toBeNull();
+    expect(document.getElementById('startNavBtn').closest('#navControlButtons')).toBeNull();
+    expect(document.getElementById('startNavBtn').getAttribute('onclick')).toBe('startNavigationFromPreview()');
+    expect(document.getElementById('startNavBtn').getAttribute('aria-controls')).toBe('journeyModeChooser');
     expect(document.getElementById('startNavBtn').hasAttribute('data-journey-choose')).toBe(true);
 });
 
@@ -85,4 +88,25 @@ test('nearby Parking and every POI category remain labelled direct buttons',()=>
     expect(buttons.map(button=>button.getAttribute('onclick'))).toEqual(['parking','fuel','food','charging','pharmacy','hospital','groceries'].map(category=>`quickSearch('${category}')`));
     expect(buttons[0].textContent.trim()).toBe('Parking');
     buttons.forEach(button=>{expect(button.type).toBe('button');expect(button.closest('details')).toBeNull();expect(button.querySelector('svg').getAttribute('aria-hidden')).toBe('true');});
+});
+
+test('floating Start remains outside collapsed actions and uses the preview journey chooser guard',()=>{
+    Nav.initNavMenu();
+    const button=document.getElementById('startNavBtn');
+    button.style.display='flex';
+    const app=fs.readFileSync(path.join(__dirname,'../voyagr-app.js'),'utf8');
+    const declarations=['startNavigation','startNavigationFromPreview'].map(name=>app.match(new RegExp('function '+name+'\\(\\) \\{[^\\n]+'))[0]).join('\n');
+    const choose=jest.fn(()=>false),showStatus=jest.fn();
+    global.VoyagrJourneyModes={PROTOCOL:1,choose};
+    global.startNavigationFromPreview=new Function('showStatus',declarations+';return startNavigationFromPreview;')(showStatus);
+    button.onclick=new Function(button.getAttribute('onclick'));
+    button.click();
+    expect(choose).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('navControlButtons').hidden).toBe(true);
+    expect(button.style.display).toBe('flex');
+    delete global.VoyagrJourneyModes;
+    button.click();
+    expect(choose).toHaveBeenCalledTimes(1);
+    expect(showStatus).toHaveBeenCalledWith(expect.stringMatching(/unavailable/),'warning');
+    delete global.startNavigationFromPreview;
 });
