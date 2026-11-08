@@ -8,6 +8,8 @@
     var runtime = null;
     var quickSearchGeneration=0;
     var quickSearchController=null;
+    var alongSelection=null;
+    var alongSearchKey=null;
 
     function rt() {
         if (!runtime) {
@@ -19,12 +21,14 @@
     function POI() { return rt().poiSearch(); }
 
     function quickSearch(type) {
+        alongSearchKey=null;
         const candidateSearch=type==='fuel'||type==='food'||type==='charging'||type==='pharmacy'||type==='hospital'||type==='groceries';
         const generation=++quickSearchGeneration;
         if(quickSearchController)quickSearchController.abort();
         quickSearchController=null;
         const price=type==='parking'?(document.getElementById('poiParkingPrice')?.value||document.getElementById('parkingPricePreference')?.value||'any'):'any';
         if(type==='parking'||candidateSearch)closePOIModal();
+        clearPOIMarkers();
         if (!navigator.geolocation) {
             rt().call.showStatus('Geolocation not supported', 'error');
             return;
@@ -101,7 +105,7 @@
         );
     }
 
-    function displayPOIResults(results, type, userLat, userLon,price='any') {
+    function displayPOIResults(results, type, userLat, userLon,price='any',alongRoute=false) {
         const poi = POI();
         closePOIModal();
         document.body.insertAdjacentHTML('beforeend', poi.buildPoiResultsModalHtml(results, type,
@@ -111,11 +115,12 @@
                 userLat,
                 userLon,
                 (distanceM) => rt().call.formatPoiDistance(distanceM)
-            ),parkingPricePreference:price}
+            ),parkingPricePreference:price,alongRoute:alongRoute}
         ));
     }
 
     function closePOIModal() {
+        alongSelection=null;
         const modal = document.getElementById(POI().POI_MODAL_ID);
         if (modal) {
             modal.remove();
@@ -123,6 +128,12 @@
     }
 
     function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
+        if(alongSelection){
+            if(alongSelection.generation!==quickSearchGeneration||JSON.stringify(rt().getRoutePolyline())!==alongSelection.key){
+                closePOIModal();clearPOIMarkers();rt().call.showStatus('The planned route changed. Search along the route again.','warning');return false;
+            }
+            userLat=alongSelection.origin[0];userLon=alongSelection.origin[1];
+        }
         if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
         closePOIModal();
         ['start','end'].forEach(id=>{const input=document.getElementById(id);delete input.dataset.lat;delete input.dataset.lon;delete input.dataset.displayName;delete input.dataset.journeyOriginalSource;input.dataset.journeySource='coordinates';});
@@ -139,42 +150,52 @@
         }
     }
 
-    function searchAlongRouteByType(type) {
-        const poi = POI();
-        const polyline = rt().getRoutePolyline();
-        if (!poi.canSearchAlongRoute(polyline ? polyline.length : 0)) {
-            rt().call.showStatus(poi.getAlongRouteNoRouteMessage(), 'error');
-            return;
+    async function searchAlongRouteByType(type) {
+        alongSearchKey=null;
+        const generation=++quickSearchGeneration;
+        if(quickSearchController)quickSearchController.abort();
+        quickSearchController=null;
+        closePOIModal();clearPOIMarkers();
+        const polyline=rt().getRoutePolyline();
+        if(!Array.isArray(polyline)||polyline.length<2||polyline.length>8192||polyline.some(p=>!Array.isArray(p)||p.length!==2||
+            !p.every((value,i)=>typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<=(i===0?90:180)))){
+            rt().call.showStatus(Array.isArray(polyline)&&polyline.length>8192?'This route is too detailed for along-route search. Try nearby search instead.':'Calculate a valid route before searching along it.','error');return;
         }
-
-        rt().call.showStatus(poi.getAlongRouteSearchingMessage(type), 'info');
-
-        const routePoints = polyline.map((p) => [p[0], p[1]]);
-
-        fetch('/api/poi-along-route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(poi.buildAlongRouteSearchBody(routePoints, type)),
-        })
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.success && data.results && data.results.length > 0) {
-                    displayPOIResults(
-                        data.results,
-                        type,
-                        rt().getCurrentLat() || 51.5074,
-                        rt().getCurrentLon() || -0.1278
-                    );
-                    addPOIMarkersToMap(data.results, type);
-                    rt().call.showStatus(poi.getAlongRouteResultsMessage(type, data.results.length), 'success');
-                } else {
-                    rt().call.showStatus(poi.getAlongRouteNoResultsMessage(type), 'info');
-                }
-            })
-            .catch((err) => {
-                console.error('[AlongRoute] Error:', err);
-                rt().call.showStatus(poi.getAlongRouteSearchFailedMessage(), 'error');
+        const routePoints=polyline.map(p=>[p[0],p[1]]), key=JSON.stringify(routePoints);
+        alongSearchKey=key;
+        const controller=new AbortController();quickSearchController=controller;
+        const current=()=>generation===quickSearchGeneration&&JSON.stringify(rt().getRoutePolyline())===key;
+        rt().call.showStatus('Searching near sampled points on the planned route…','info');
+        try{
+            const response=await fetch('/api/poi-along-route',{
+                signal:controller.signal,method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify(POI().buildAlongRouteSearchBody(routePoints,type)),
             });
+            if(!current())return;
+            if(response.ok===false)throw Error('Along-route search temporarily unavailable');
+            const data=await response.json();
+            if(!current())return;
+            const context=data&&data.search_context;
+            if(!data||data.success!==true||data.type!==type||!Array.isArray(data.results)||data.results.length>20||
+                !context||context.coverage!=='SAMPLED_CANDIDATES_ONLY'||context.distance_kind!=='STRAIGHT_LINE_TO_ROUTE'||
+                data.results.some(row=>!row||row.type!==type||!['lat','lon','distance_m'].every(field=>typeof row[field]==='number'&&Number.isFinite(row[field]))||
+                    Math.abs(row.lat)>90||Math.abs(row.lon)>180||row.distance_m<0||row.distance_m>POI().ALONG_ROUTE_SEARCH_RADIUS_M))throw Error('Invalid along-route search response');
+            displayPOIResults(data.results,type,routePoints[0][0],routePoints[0][1],'any',true);
+            alongSelection={generation:generation,key:key,origin:routePoints[0]};
+            addPOIMarkersToMap(data.results,type);
+            rt().call.showStatus(data.results.length?'Found '+data.results.length+' candidates near sampled route points. Coverage is incomplete.':'No candidates returned near sampled route points. Coverage may be incomplete.',data.results.length?'success':'warning');
+        }catch(error){
+            if(!current()||error.name==='AbortError')return;
+            rt().call.showStatus('Along-route search unavailable. Retry later.','error');
+        }
+    }
+
+    function invalidateAlongRouteForGeometry(polyline) {
+        if(alongSearchKey===null||JSON.stringify(polyline)===alongSearchKey)return;
+        alongSearchKey=null;++quickSearchGeneration;
+        if(quickSearchController)quickSearchController.abort();
+        quickSearchController=null;
+        closePOIModal();clearPOIMarkers();
     }
 
     function addPOIMarkersToMap(pois, type) {
@@ -229,6 +250,7 @@
         selectPOI: selectPOI,
         searchAlongRoute: searchAlongRoute,
         searchAlongRouteByType: searchAlongRouteByType,
+        invalidateAlongRouteForGeometry: invalidateAlongRouteForGeometry,
         addPOIMarkersToMap: addPOIMarkersToMap,
         clearPOIMarkers: clearPOIMarkers,
     };

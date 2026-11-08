@@ -37,7 +37,13 @@
     function getNextManeuverDistance() { return nextManeuverDistance; }
     function setNextManeuverDistance(val) { nextManeuverDistance = val; }
     function getRoutePolyline() { return routePolyline; }
-    function setRoutePolyline(val) { routePolyline = val; }
+    function setRoutePolyline(val) {
+        routePolyline = val;
+        var poi = root.VoyagrPoiSearchOrchestration;
+        if(poi&&typeof poi.invalidateAlongRouteForGeometry==='function'){
+            try{poi.invalidateAlongRouteForGeometry(val);}catch(_error){console.warn('[POI] Route search cleanup failed');}
+        }
+    }
     function getLastSnappedRouteIndex() { return lastSnappedRouteIndex; }
     function setLastSnappedRouteIndex(val) { lastSnappedRouteIndex = val; }
 
