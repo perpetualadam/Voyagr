@@ -274,3 +274,55 @@ suites / 2,997 tests, lint and coverage floors passed. Production deployment and
 actual-phone acceptance remain pending.
 Declared web backend regressions also passed: 1,983 tests, one platform skip and
 74 subtests. No production settings, data or deployment were changed.
+
+## Unit audit, third increment — restored settings and open views (8 November 2026)
+
+Restoring settings applied runtime values without invoking unit display refresh.
+Already-mounted comparison, alternative preview, saved-route and trip-history
+rows also lacked canonical values for the existing leaf-label refresher. The
+analytics summary had the same gap for total distance and average speed.
+
+- [x] Batch supported restored unit fields, then refresh once through the existing
+  settings owner. The local profile-switch path uses that owner. Sync the four
+  unit selectors and existing distance/cost/speed labels without recalculating or
+  replacing a route. Existing non-unit settings and traffic restore policy remain
+  unchanged; the new display refresh performs no acquisition or settings writes.
+- [x] Ignore unsupported unit values in saved/imported snapshots rather than
+  overwriting valid runtime or individual unit-storage keys. Invalid standalone
+  unit keys receive supported startup defaults; legacy `km/h`/`kph` preferences
+  normalize to `kmh`. Missing snapshot fields retain existing behavior.
+- [x] Comparison cards/tables, alternative preview rows, saved routes, history
+  and frequent-route rows retain canonical metre metadata on leaf text nodes.
+  Analytics retains canonical distance and km/h speed metadata. Unit refresh
+  changes text in place, preserving rows, controls, route selection and values.
+- [x] Refresh analytics speed independently of distance preference, through the
+  existing speed converter. A speed-unit refresh can no longer use a road-class
+  fallback to create a displayed posted limit; unknown remains unknown and
+  existing canonical posted-limit values remain available for display conversion.
+- [x] Avoid registering a second unit change listener when the production selector
+  already has its inline handler. Keep listener fallback for markup without one.
+  This removes duplicate persistence/status effects for a single selection.
+- [ ] Accept a deployed phone profile round trip with open comparison/history/
+  analytics, a paused preview and real GPS guidance; verify current posted/mapped/
+  unknown widget states retain their evidence and units. Controlled tests do not
+  establish actual GPS/device acceptance.
+- [ ] Continue consumption/UK-versus-US gallon policy, temperature/other physical
+  displays, explicit per-distance cost rates and remaining live/voice/summary
+  edge cases before claiming app-wide consistency. Actual foreign-currency
+  conversion and dynamic fuel-price integration remain separate pending work.
+
+Focused tests use the real settings/profile owners, unit refresh, distance/card
+builders and analytics renderer. They check metric/imperial round trips, selector
+and storage consistency, invalid/legacy preferences, stable DOM nodes/handlers,
+unchanged route values/destination, canonical speed and unknown posted-limit
+preservation, startup defaults and one dispatch per unit control.
+`node scripts/check-restored-unit-views.cjs` uses the actual unit selectors and
+entry-point listener setup, plus production profile/settings owners and card
+builders at 390×844 and 844×390, with fixture state only. Controlled browser
+profile round-trip and single-change checks passed. No live route/GPS/account/
+rate/provider calls are made by this browser fixture.
+
+Full local JavaScript validation: 140 suites / 3,008 tests, lint and coverage
+floors passed. No production configuration, data or deployment changed.
+Declared web backend validation also passed: 1,983 tests, one platform skip and
+74 subtests. Production deployment and real-device acceptance remain pending.

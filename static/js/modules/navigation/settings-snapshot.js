@@ -266,22 +266,18 @@
         var localStoragePatches = {};
         var runtime = {};
 
-        if (settings.unit_distance) {
-            localStoragePatches.unit_distance = settings.unit_distance;
-            runtime.distanceUnit = settings.unit_distance;
-        }
-        if (settings.unit_currency) {
-            localStoragePatches.unit_currency = settings.unit_currency;
-            runtime.currencyUnit = settings.unit_currency;
-        }
-        if (settings.unit_speed) {
-            localStoragePatches.unit_speed = settings.unit_speed;
-            runtime.speedUnit = settings.unit_speed;
-        }
-        if (settings.unit_temperature) {
-            localStoragePatches.unit_temperature = settings.unit_temperature;
-            runtime.temperatureUnit = settings.unit_temperature;
-        }
+        [
+            ['unit_distance', 'distanceUnit', ['km', 'mi']],
+            ['unit_currency', 'currencyUnit', ['GBP', 'USD', 'EUR']],
+            ['unit_speed', 'speedUnit', ['kmh', 'mph']],
+            ['unit_temperature', 'temperatureUnit', ['celsius', 'fahrenheit']],
+        ].forEach(function (entry) {
+            var value = settings[entry[0]];
+            if (entry[0] === 'unit_speed' && (value === 'km/h' || value === 'kph')) value = 'kmh';
+            if (entry[2].indexOf(value) < 0) return;
+            localStoragePatches[entry[0]] = value;
+            runtime[entry[1]] = value;
+        });
         if (settings.vehicleType) {
             localStoragePatches.vehicleType = settings.vehicleType;
             runtime.currentVehicleType = settings.vehicleType;

@@ -527,7 +527,7 @@
             o.valhallaSpeedLimitMph,
             o.roadType,
             o.region,
-            { allowRoadTypeFallback: true }
+            { allowRoadTypeFallback: false }
         );
         return {
             shouldUpdateWidget: Number.isFinite(o.gpsSpeedMph) && o.gpsSpeedMph >= 0,

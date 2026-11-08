@@ -345,6 +345,7 @@ function getSettingsOrchestrationRuntime() {
         getSpeedWidgetEnabled: () => VoyagrSpeedWidgetOrchestration.getSpeedWidgetEnabled(),
         setSpeedWidgetEnabled: (val) => VoyagrSpeedWidgetOrchestration.setSpeedWidgetEnabled(val),
         call: {
+            refreshUnitDisplays: () => VoyagrUnitsPreferencesOrchestration.refreshUnitDisplays(),
             persistActiveProfile,
             loadPreferences,
             setRoutingMode,
