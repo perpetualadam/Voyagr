@@ -119,10 +119,11 @@
             html += '<div style="font-size: 11px; color: #666; margin-bottom: 6px;">' + escapeText(poi.address) + '</div>';
         }
         if (poi.opening_hours) {
-            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
+            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
         }
         if(poi.type==='fuel'&&Array.isArray(poi.reported_fuels)&&poi.reported_fuels.length)html+='<div style="font-size:12px;">Reported fuels: '+escapeText(poi.reported_fuels.join(', '))+'</div>';
         if(poi.type==='food'&&poi.cuisine)html+='<div style="font-size:12px;">Reported cuisine: '+escapeText(poi.cuisine)+'</div>';
+        if(poi.type==='pharmacy'&&poi.operator)html+='<div style="font-size:12px;">Reported operator: '+escapeText(poi.operator)+'</div>';
         if(poi.type==='charging'){
             if(poi.operator)html+='<div style="font-size:12px;">Reported operator: '+escapeText(poi.operator)+'</div>';
             if(poi.network)html+='<div style="font-size:12px;">Reported network: '+escapeText(poi.network)+'</div>';
@@ -138,7 +139,7 @@
         html += (
             '<button '+(handler?'onclick="'+escapeText(handler)+'"':'disabled')+
                 ' style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">' +
-                ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging')?'Plan route here':'🚗 Navigate Here') +
+                ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy')?'Plan route here':'🚗 Navigate Here') +
             '</button></div>'
         );
         return html;
@@ -170,6 +171,10 @@
         if(type==='fuel'){
             html+='<p>Fuel locations from provider/map data. Distance is straight-line. Check current opening hours, fuel availability and vehicle access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No fuel candidates returned. Coverage may be incomplete.</p>';
+        }
+        if(type==='pharmacy'){
+            html+='<p>Pharmacy locations from provider/map data. Distance is straight-line. Check current opening hours, services, medicine stock and access with the pharmacy; the map point may not be an entrance.</p>';
+            if(!results.length)html+='<p>No pharmacy candidates returned. Coverage may be incomplete.</p>';
         }
         if(type==='charging'){
             html+='<p>Charging locations from provider/map data. Distance is straight-line. Check vehicle and connector compatibility, current opening hours, access, live availability and tariffs with the operator. Reported output is not a guaranteed charging speed; the map point may not be an entrance.</p>';
