@@ -8,7 +8,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
  const shell=`<html class="${dark?'dark-mode':''}" style="font-size:${scale*100}%"><head><meta charset="utf-8"><style>${read('static/css/voyagr.css')}body{display:block}main{max-width:640px;margin:auto;padding:12px;box-sizing:border-box}</style></head><body class="${dark?'dark-mode':''}"><main>${markup}</main></body></html>`;
  await page.route('**/*',r=>r.request().url()==='https://settings.invalid/'?r.fulfill({contentType:'text/html',body:shell}):r.abort());await page.goto('https://settings.invalid/');
- for(const file of ['modules/navigation/units.js','app/units-preferences-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file)});
+ for(const file of ['modules/navigation/units.js','app/units-preferences-orchestration.js','app/supabase-auth-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file)});
  await page.evaluate(()=>{
   document.getElementById('settingsTab').style.display='block';window.calls=[];window.requests=[];
   window.fetch=(url,options)=>{requests.push([url,options]);return Promise.resolve({ok:true,json:()=>Promise.resolve({})});};
@@ -16,9 +16,18 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   const u=VoyagrUnitsPreferencesOrchestration;u.bind({units:()=>VoyagrUnits,call:{saveAllSettings:()=>calls.push(['saveAllSettings']),showStatus:()=>{}}});
   window.updateDistanceUnit=()=>u.updateDistanceUnit();window.updateCurrencyUnit=()=>u.updateCurrencyUnit();
  });
+ // Native disclosures work with keyboard and keep mounted preferences unchanged.
+ assert.equal(await page.locator('details.settings-group').count(),9);
+ assert.equal(await page.locator('details.settings-group[open]').count(),1);
+ const smart=page.locator('#settingsSmartRouting > summary');await smart.focus();await page.keyboard.press('Enter');
+ assert.equal(await page.locator('#settingsSmartRouting').getAttribute('open'),'');
+ await page.keyboard.press('Space');assert.equal(await page.locator('#settingsSmartRouting').getAttribute('open'),null);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Collapsed overflow');
+ if(width===390&&scale===1){await page.locator('.settings-heading').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/voyagr-settings-groups-'+(dark?'dark':'light')+'.png'});}
+ await page.evaluate(()=>document.querySelectorAll('details.settings-group').forEach(d=>{d.open=true;}));
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Horizontal overflow');
  if(dark)assert.equal(await page.locator('#accountStatus').evaluate(n=>getComputedStyle(n).color),'rgb(204, 209, 223)');
- for(const el of await page.locator('#settingsTab .settings-action, #settingsTab select, #settingsTab .toggle-switch').all()){
+ for(const el of await page.locator('#settingsTab .settings-action, #settingsTab select, #settingsTab .toggle-switch, #settingsTab details.settings-group > summary').all()){
   if(!await el.isVisible())continue;await el.scrollIntoViewIfNeeded();const b=await el.boundingBox();assert(b.width>=48&&b.height>=48,JSON.stringify(b));assert(b.x>=0&&b.x+b.width<=width+1,'Control outside viewport');
  }
  for(const command of ['goBackToPreviousTab()','manualTrafficUpdate()','showCAZInfo()','clearDepartureTime()','analysebestTimeToLeave()','refreshApp()','checkForUpdates()','recalculateRouteWithPreferences()',"switchTab('navigation')",'voyagrShowSafetyNotice && voyagrShowSafetyNotice()']){
@@ -28,6 +37,11 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  await page.locator('#distanceUnit').selectOption('km');await page.locator('#distanceUnit').selectOption('mi');await page.locator('#currencyUnit').selectOption('EUR');
  const result=await page.evaluate(()=>({calls,requests,dist:localStorage.getItem('unit_distance'),currency:localStorage.getItem('unit_currency'),symbol:VoyagrUnitsPreferencesOrchestration.getCurrencySymbol(),hidden:['accountSignedIn','accountSignedOut','supportVoyagrSection'].map(id=>document.getElementById(id).style.display)}));
  assert.deepEqual(result.calls.slice(0,10),[['goBackToPreviousTab'],['manualTrafficUpdate'],['showCAZInfo'],['clearDepartureTime'],['analysebestTimeToLeave'],['refreshApp'],['checkForUpdates'],['recalculateRouteWithPreferences'],['switchTab','navigation'],['voyagrShowSafetyNotice']]);
+ // Real account shortcut controller must reveal the disclosure before scrolling.
+ await page.evaluate(()=>{VoyagrSupabaseAuthOrchestration.bind({call:{switchTab:()=>{},expandBottomSheet:()=>{},showStatus:()=>{}}});document.getElementById('settingsAccountApp').open=false;VoyagrSupabaseAuthOrchestration.voyagrOpenSignInFromBanner();});
+ await page.waitForFunction(()=>document.getElementById('settingsAccountApp').open);
+ await page.evaluate(()=>{document.getElementById('settingsAccountApp').open=false;document.getElementById('supportVoyagrSection').style.display='block';VoyagrSupabaseAuthOrchestration.openVoyagerPremiumSection();});
+ await page.waitForFunction(()=>document.getElementById('settingsAccountApp').open);
  assert.equal(result.dist,'mi');assert.equal(result.currency,'EUR');assert.equal(result.symbol,'£');assert.deepEqual(result.hidden,['none','none','none']);assert(result.requests.every(([url])=>url==='/api/app-settings'));
  if(width===390&&scale===1){await page.locator('.settings-heading').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/voyagr-settings-'+(dark?'dark':'light')+'.png'});}
  console.log(`${width}x${height} ${dark?'dark':'light'} ${scale*100}% controls/actions/units passed`);await page.close();

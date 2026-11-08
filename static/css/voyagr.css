@@ -4950,3 +4950,12 @@ html.dark-mode #settingsTab, body.dark-mode #settingsTab { --settings-surface:#2
 html.dark-mode #settingsTab :is(.preferences-section > p, .preferences-subsection-help, #accountStatus),
 body.dark-mode #settingsTab :is(.preferences-section > p, .preferences-subsection-help, #accountStatus) { color:#ccd1df !important; }
 html.dark-mode #settingsTab :is(h3,h4), body.dark-mode #settingsTab :is(h3,h4) { color:var(--settings-ink); }
+
+/* Native disclosure groups keep hidden controls mounted for existing controllers. */
+#settingsTab .settings-group { margin:10px 0; border:1px solid var(--settings-border); border-radius:12px; background:var(--settings-surface); }
+#settingsTab .settings-group > summary { min-height:48px; padding:12px; cursor:pointer; font-size:1rem; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+#settingsTab .settings-group > summary:focus-visible { outline:3px solid var(--settings-accent); outline-offset:3px; border-radius:12px; }
+#settingsTab .settings-group-content { padding:0 12px 12px; min-width:0; }
+#settingsTab .settings-group-content > .preferences-section { margin-top:12px; padding-top:12px; border-color:var(--settings-border); }
+#settingsTab .settings-group-help { font-size:.875rem; line-height:1.5; margin:0 0 12px; color:var(--settings-ink); }
+#settingsTrafficNavigation label:has(> input[type=checkbox]) { min-height:48px; }
