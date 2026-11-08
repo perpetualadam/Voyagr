@@ -4924,3 +4924,29 @@ html.dark-mode .journey-collection, body.dark-mode .journey-collection {
     --collection-muted: #c2c7d2; --collection-border: #505666; --collection-accent: #c6a9f2;
     --collection-tint: #363047; --collection-danger: #ffb4ab; color-scheme: dark;
 }
+
+/* Settings controls: preserve controller-owned visibility/state and native inputs. */
+#settingsTab { --settings-surface:#fff; --settings-row:#f8f9fc; --settings-ink:#252938; --settings-border:#d5d9e5; --settings-accent:#56328d; color:var(--settings-ink); }
+html.dark-mode #settingsTab, body.dark-mode #settingsTab { --settings-surface:#20242d; --settings-row:#292e39; --settings-ink:#f1f2f7; --settings-border:#565d6d; --settings-accent:#d3b9ff; color-scheme:dark; }
+#settingsTab .settings-heading, #settingsTab .settings-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:12px; }
+#settingsTab .settings-heading { justify-content:space-between; }
+#settingsTab .settings-heading h3 { margin:0; font-size:1.1rem; }
+#settingsTab .settings-actions--footer { margin-top:20px; }
+#settingsTab .settings-action { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:auto; max-width:100%; min-width:48px; min-height:48px; padding:10px 12px; border:1px solid var(--settings-border); border-radius:12px; background:var(--settings-surface); color:var(--settings-accent); font-family:inherit; font-size:.875rem; font-weight:600; line-height:1.35; cursor:pointer; text-decoration:none; text-align:center; overflow-wrap:anywhere; }
+#settingsTab .settings-action svg { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+#settingsTab .preference-item { flex-wrap:wrap; gap:10px; min-width:0; background:var(--settings-row); }
+#settingsTab .preference-label { color:var(--settings-ink); overflow-wrap:anywhere; flex:1 1 140px; }
+#settingsTab select { width:auto !important; max-width:100%; min-width:0; min-height:48px; flex:1 1 180px; background:var(--settings-surface); color:var(--settings-ink); font-size:.875rem !important; }
+#settingsTab .preference-item > div { max-width:100%; min-width:0; flex-wrap:wrap; }
+#settingsTab input:not([type=checkbox]):not([type=range]) { min-height:48px; max-width:100%; min-width:0; }
+#settingsTab .theme-selector { display:flex; flex-wrap:wrap; gap:8px; }
+#settingsTab .theme-option { flex:1 1 100px; min-width:0; min-height:48px; overflow-wrap:anywhere; }
+/* Transparent border enlarges hit area while retaining the existing 44x24 track. */
+#settingsTab .toggle-switch { box-sizing:border-box; flex:0 0 68px; width:68px; height:48px; border:12px solid transparent !important; background-clip:padding-box; border-radius:24px; }
+#settingsTab .toggle-switch::after { top:2px; left:2px; }
+#settingsTab .toggle-switch.active::after { left:22px; }
+#settingsTab :is(button,a,input,select):focus-visible { outline:3px solid var(--settings-accent); outline-offset:3px; }
+.settings-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+html.dark-mode #settingsTab :is(.preferences-section > p, .preferences-subsection-help, #accountStatus),
+body.dark-mode #settingsTab :is(.preferences-section > p, .preferences-subsection-help, #accountStatus) { color:#ccd1df !important; }
+html.dark-mode #settingsTab :is(h3,h4), body.dark-mode #settingsTab :is(h3,h4) { color:var(--settings-ink); }
