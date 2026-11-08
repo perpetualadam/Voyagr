@@ -57,7 +57,9 @@
     function applyToggleButton(el, enabled, opts = {}) {
         const style = toggleButtonStyle(enabled, opts);
         if (el) {
-            if (typeof el.hasAttribute==='function' && el.hasAttribute('aria-pressed')) {
+            if (typeof el.getAttribute === 'function' && el.getAttribute('role') === 'switch') {
+                el.setAttribute('aria-checked', String(style.active));
+            } else if (typeof el.hasAttribute==='function' && el.hasAttribute('aria-pressed')) {
                 el.setAttribute('aria-pressed', String(style.active));
             }
             if (el.classList && typeof el.classList.toggle === 'function') {

@@ -378,6 +378,7 @@
         } else {
             btn.classList.remove('active');
         }
+        if (btn.getAttribute('role') === 'switch') btn.setAttribute('aria-checked', String(display.active));
         btn.innerHTML = display.innerHtml;
     }
 

@@ -654,3 +654,22 @@ policy and the user's deferred live sat-nav acceptance alongside this increment.
 
 Keep source maintenance, remaining units/accessibility work and deferred live
 sat-nav acceptance alongside these UI increments.
+
+## Settings switch state accessibility (8 November 2026)
+
+- [x] Give all 34 Settings pill controls `role="switch"` and an initial boolean
+  `aria-checked`, retaining native button keyboard activation and existing names.
+- [x] Synchronize checked state in the shared toggle helper and legacy AR/route
+  traffic-light owners. Keep ordinary pressed buttons and native checkboxes intact;
+  do not add click handlers, observers, duplicate persistence or routing changes.
+- [x] Restore the route-traffic-light control from its existing saved state on DOM
+  readiness, so its default active markup cannot contradict a saved off choice.
+- [x] Check preference restoration, pending/confirmed/rejected API changes, fallback
+  rendering, keyboard Enter/Space and Chromium accessibility-tree checked state.
+  Validate 3,115 JavaScript tests with coverage/lint, 2,221 backend tests (one
+  skipped), and all 16 browser viewport/theme/root-text combinations.
+- [ ] Confirm spoken announcements using real screen readers on deployed devices.
+  Browser accessibility-tree checks do not establish VoiceOver/TalkBack/NVDA speech.
+
+Keep source maintenance, remaining unit policy and deferred sat-nav acceptance
+alongside this UI work. Production deployment remains a separate user action.

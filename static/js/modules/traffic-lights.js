@@ -264,6 +264,14 @@ async function plotTrafficLightsOnRoute(route) {
     }
 }
 
+// Restore the visible/accessible control from the same state used by map queries.
+function syncTrafficLightsToggle() {
+    const toggle = document.getElementById('trafficLightsToggle');
+    if (!toggle) return;
+    toggle.classList.toggle('active', trafficLightsEnabled);
+    if (toggle.getAttribute('role') === 'switch') toggle.setAttribute('aria-checked', String(trafficLightsEnabled));
+}
+
 /**
  * Toggle traffic lights display on/off
  */
@@ -271,10 +279,7 @@ function toggleTrafficLights() {
     trafficLightsEnabled = !trafficLightsEnabled;
     localStorage.setItem('trafficLightsEnabled', trafficLightsEnabled ? 'true' : 'false');
 
-    const toggle = document.getElementById('trafficLightsToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', trafficLightsEnabled);
-    }
+    syncTrafficLightsToggle();
 
     if (trafficLightsEnabled) {
         // Re-fetch if we have an active route
@@ -350,6 +355,12 @@ window.TrafficLights = {
 // Backward-compatible global alias used by legacy callers.
 if (typeof window !== 'undefined') {
     window.plotTrafficLightsOnRoute = plotTrafficLightsOnRoute;
+}
+
+// The classic script may load before or after the Settings markup.
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncTrafficLightsToggle, { once: true });
+    else syncTrafficLightsToggle();
 }
 
 // Add CSS styles for traffic light markers
