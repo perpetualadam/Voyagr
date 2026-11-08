@@ -9,6 +9,17 @@
 (function (root) {
     'use strict';
 
+    function collectionText(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character];
+        });
+    }
+
+    function tripAction(name, id) {
+        return typeof id === 'number' && Number.isSafeInteger(id) && id !== 0
+            ? 'onclick="' + name + '(' + id + ')"' : 'disabled';
+    }
+
     function distanceAttrs(km) {
         var value = typeof km === 'number' || typeof km === 'string' && km.trim() ? Number(km) : NaN;
         return Number.isFinite(value) && value >= 0
@@ -209,7 +220,7 @@
     }
 
     var EMPTY_TRIP_LIST_HTML =
-        '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+        '<div class="journey-list-empty" role="status">No trips found</div>';
 
     var TRIP_HISTORY_ERROR_HTML =
         '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
@@ -707,29 +718,21 @@
      * @returns {string}
      */
     function buildTripHistoryRowHtml(trip, display) {
-        var localBadge = trip._localOnly
-            ? ' <span style="font-size:11px;font-weight:500;color:#1565C0;">(this device)</span>'
-            : '';
-        return (
-            '<div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #667eea;">' +
-                '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">' +
-                    '<div>' +
-                        '<div style="font-weight: 600; color: #333; margin-bottom: 4px;">' +
-                            display.startAddr + ' → ' + display.endAddr + localBadge +
-                        '</div>' +
-                        '<div style="font-size: 12px; color: #666;">' + display.dateStr + '</div>' +
-                    '</div>' +
-                    '<button onclick="deleteTripHistory(' + trip.id + ')" style="background: #f44336; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">Delete</button>' +
-                '</div>' +
-                '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #666; margin-bottom: 8px;">' +
-                    '<div>📏 <span'+distanceAttrs(trip.distance_km)+'>' + display.distance + ' ' + display.distUnit + '</span></div>' +
-                    '<div>⏱️ ' + trip.duration_minutes + ' min</div>' +
-                    '<div>💰 ' + display.symbol + display.totalCost + '</div>' +
-                    '<div>🛣️ ' + trip.routing_mode + '</div>' +
-                '</div>' +
-                '<button onclick="recalculateTrip(' + trip.id + ')" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Recalculate Route</button>' +
-            '</div>'
-        );
+        trip = trip || {}; display = display || {};
+        var start = trip.start_address != null ? trip.start_address : display.startAddr;
+        var end = trip.end_address != null ? trip.end_address : display.endAddr;
+        var localBadge = trip._localOnly ? '<span class="journey-device-badge">(this device)</span>' : '';
+        return '<article class="journey-card trip-history-item">' +
+            '<h4 class="journey-card-title">' + collectionText(start) + ' → ' + collectionText(end) + '</h4>' +
+            '<p class="journey-card-date">' + collectionText(display.dateStr) + localBadge + '</p>' +
+            '<div class="journey-card-metrics"><span'+distanceAttrs(trip.distance_km)+'>' + collectionText(display.distance) + ' ' + collectionText(display.distUnit) + '</span>' +
+            '<span>' + collectionText(trip.duration_minutes) + ' min</span><span title="Recorded cost">' + collectionText(display.symbol) + collectionText(display.totalCost) + '</span>' +
+            '<span class="journey-card-mode">' + collectionText(trip.routing_mode) + '</span></div>' +
+            '<div class="journey-card-actions">' +
+            '<button type="button" class="collection-action collection-action--primary" '+tripAction('recalculateTrip',trip.id)+' title="Recalculate route" aria-label="Recalculate route">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Recalculate</span></button>' +
+            '<button type="button" class="collection-action collection-action--delete" '+tripAction('deleteTripHistory',trip.id)+' title="Delete trip" aria-label="Delete trip">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg><span>Delete</span></button></div></article>';
     }
 
     /**
