@@ -59,7 +59,7 @@ describe('getFuelEfficiencyInUnits', () => {
 });
 
 describe('getFuelEfficiencyLabel', () => {
-    test('mi → MPG', () => expect(U.getFuelEfficiencyLabel('mi')).toBe('MPG'));
+    test('mi explicitly identifies US gallons', () => expect(U.getFuelEfficiencyLabel('mi')).toBe('MPG (US)'));
     test('km → L/100km', () => expect(U.getFuelEfficiencyLabel('km')).toBe('L/100km'));
 });
 
