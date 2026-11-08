@@ -23,7 +23,7 @@
         if(quickSearchController)quickSearchController.abort();
         quickSearchController=null;
         const price=type==='parking'?(document.getElementById('poiParkingPrice')?.value||document.getElementById('parkingPricePreference')?.value||'any'):'any';
-        if(type==='parking')closePOIModal();
+        if(type==='parking'||type==='fuel')closePOIModal();
         if (!navigator.geolocation) {
             rt().call.showStatus('Geolocation not supported', 'error');
             return;
@@ -53,13 +53,14 @@
                 if(response.ok===false)throw Error('Search temporarily unavailable');
                 const data = await response.json();
                 if(generation!==quickSearchGeneration)return;
-                if(!data||data.success!==true)throw Error('Search temporarily unavailable');
+                if(!data||data.success!==true||type==='fuel'&&!Array.isArray(data.results))throw Error('Search temporarily unavailable');
                 if(type==='parking'&&price!=='any'&&(!data.search_context||data.search_context.price_pref!==price||
                     !Array.isArray(data.results)||data.results.some(row=>row.fee_category!==(price==='free_street'?'free':price)||price==='free_street'&&!['street_side','lane','on_street'].includes(row.parking_type))))throw Error('Parking fee-filter response mismatch');
                 console.log('[QuickSearch] Response:', data);
 
                 if (!data.success || !data.results || data.results.length === 0) {
-                    if(type==='parking')displayPOIResults([],type,lat,lon,price);
+                    if(type==='parking'||type==='fuel')displayPOIResults([],type,lat,lon,price);
+                    if(type==='fuel'){rt().call.showStatus('No fuel candidates returned. Coverage may be incomplete.', 'warning');return;}
                     rt().call.showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
                     return;
                 }
@@ -74,7 +75,9 @@
             }
         };
 
-        if (rt().getCurrentLat() && rt().getCurrentLon()) {
+        const cachedLat=rt().getCurrentLat(),cachedLon=rt().getCurrentLon();
+        const validFuelPosition=type==='fuel'&&typeof cachedLat==='number'&&typeof cachedLon==='number'&&Number.isFinite(cachedLat)&&Number.isFinite(cachedLon)&&Math.abs(cachedLat)<=90&&Math.abs(cachedLon)<=180;
+        if (validFuelPosition || type!=='fuel'&&cachedLat&&cachedLon) {
             console.log('[QuickSearch] Using cached position');
             return searchWithPosition(rt().getCurrentLat(), rt().getCurrentLon());
         }

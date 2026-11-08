@@ -54,7 +54,7 @@ is possible; neither free availability nor public access is guaranteed.
 | 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Controlled acquisition/display/snapshot and multi-leg checks passed (item 3 below); known-location and deployed/device acceptance remain pending. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
-| 6 | Other quick POI categories: `api/search.py`, `overpass_helper.build_poi_query` | TomTom first; empty TomTom suppresses fallback. Generic Overpass query is node-only. Not changed in item 1. | Sequentially assess intended empty-result fallback and area/way/relation support, preserving category semantics. |
+| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Other categories retain their existing policy and node-only query. | Fuel live VPS/device acceptance pending. Continue other categories sequentially, preserving category semantics. |
 | 7 | Along-route POI: `/poi-along-route` in `api/search.py` | Samples route points using TomTom, then Nominatim. It currently does not query Overpass. | Bounded integration design/tests before adding Overpass; avoid several unbounded queries per route. |
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
@@ -302,3 +302,37 @@ preference. Mapped-empty is not proof of physical absence. Confirm mandatory
 route assessments separately; map markers never establish road/profile applicability
 or live barrier state. No production queries, configuration changes or deployment
 were performed for this increment.
+
+
+### Item 6a — Nearby Fuel (2026-11-08)
+
+The existing Fuel POI button retains usable TomTom results first. An empty,
+unavailable or unusable response now falls through to the configured shared
+Overpass client, querying `amenity=fuel` nodes, ways and relations with centers.
+The existing Nominatim last resort remains for failed Overpass acquisition.
+Valid mapped-empty and acquisition failure stay distinct; neither establishes
+physical absence. Other Nearby categories and along-route provider policies
+remain separate future increments.
+
+Fuel validates finite WGS84 coordinates (including zero longitude), radius
+1–5,000 metres and provider positions; filters by straight-line radius, ranks
+by distance and offers at most 15 candidates. Acquisition uses an 18-second
+cooperative parent budget and a 12-second Overpass child budget, bounded query
+size/output, and the shared client's transport/cache safeguards. Context retains
+LOCAL/PUBLIC source class, dataset revision/time, retrieval time and cache state
+when supplied. This is candidate coverage, never verified opening, stock,
+compatibility, vehicle permission or an entrance.
+
+The Fuel modal clears stale rows before searching, qualifies reported hours and
+fuel types, distinguishes errors from mapped-empty results, and preserves the
+existing endpoint invalidation/route-planning selection flow. Controlled tests
+exercise the real shared parser/local endpoint transport with fixture HTTP, cache
+provenance, area candidates, radius/identity validation, provider fallback and
+expired budgets. Browser checks at 390×844 and 844×390 exercise real modal and
+selection code with fixture provider data, no live provider or GPS calls:
+`node scripts/check-fuel-poi.cjs`. Live VPS/provider and actual-device acceptance
+remain pending after a separately authorized deployment.
+
+Local full regressions: 136 JavaScript suites / 2,967 tests, lint and coverage
+floors passed; declared web backend selection 1,966 passed, one platform skip
+and 74 subtests passed. No production configuration, data or deployment changed.
