@@ -54,7 +54,7 @@ is possible; neither free availability nor public access is guaranteed.
 | 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Controlled acquisition/display/snapshot and multi-leg checks passed (item 3 below); known-location and deployed/device acceptance remain pending. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
-| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Other categories retain their existing policy and node-only query. | Fuel live VPS/device acceptance pending. Continue other categories sequentially, preserving category semantics. |
+| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel and Food controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Remaining categories retain their existing policy and node-only query. | Fuel/Food live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
 | 7 | Along-route POI: `/poi-along-route` in `api/search.py` | Samples route points using TomTom, then Nominatim. It currently does not query Overpass. | Bounded integration design/tests before adding Overpass; avoid several unbounded queries per route. |
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
@@ -336,3 +336,42 @@ remain pending after a separately authorized deployment.
 Local full regressions: 136 JavaScript suites / 2,967 tests, lint and coverage
 floors passed; declared web backend selection 1,966 passed, one platform skip
 and 74 subtests passed. No production configuration, data or deployment changed.
+
+
+### Item 6b — Nearby Food (2026-11-08)
+
+Food retains usable TomTom results first and now falls through on empty, failed
+or unusable primary results to the configured shared Overpass client. The fixed
+category query covers restaurant, fast_food and cafe nodes/ways/relations with
+centers. Other category meanings and along-route provider policies are unchanged.
+The existing Nominatim last resort remains for failed map acquisition, with
+partial candidate coverage rather than a complete search guarantee.
+
+Food and Fuel share the 18-second cooperative provider admission/fallback path,
+with separate category parsers and a 12-second Overpass child budget. Food
+validates finite WGS84 coordinates (including zero longitude), a 1–5,000 metre
+radius, exact category tags and provider positions; deduplicates, filters by
+straight-line distance and offers at most 15 ranked candidates from a bounded
+200-element query. Available endpoint class, original dataset/retrieval times,
+revision and cache state are retained. Centers are map points, not entrances.
+Hours and cuisine are reported facts, not current opening, dietary suitability
+or access guarantees. Valid mapped-empty results remain distinct from failed
+acquisition.
+
+The Food button clears old selections on new searches; stale network/GPS results
+cannot replace a newer action. Distance display continues through the settings
+formatter. Selection retains endpoint-request invalidation and the existing
+route planner. The modal escapes provider text and qualifies empty/unknown states.
+Controlled regressions cover actual shared client parsing and local transport
+with fixture HTTP, category/area semantics, source/cache metadata, validation,
+provider fallback, deadlines, stale responses and planning selection.
+`node scripts/check-food-poi.cjs` uses the actual template Food button and modal
+owner at 390×844 and 844×390, checking selection, empty/error states and escaped
+text with fixture data. No live providers or GPS are used.
+
+Live VPS/provider and actual-device acceptance remain pending after separately
+authorized deployment. No production configuration, data or deployment changed.
+
+Local full regressions: 137 JavaScript suites / 2,973 tests, lint and coverage
+floors passed; declared web backend selection 1,983 passed, one platform skip
+and 74 subtests passed. Existing Fuel and Parking regressions remain passing.
