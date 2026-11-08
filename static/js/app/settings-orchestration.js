@@ -116,6 +116,8 @@
                 default: break;
             }
         });
+        if ((execute.runtimePatches || []).some(({key}) => ['distanceUnit','currencyUnit','speedUnit','temperatureUnit'].includes(key)) &&
+                typeof rt().call.refreshUnitDisplays === 'function') rt().call.refreshUnitDisplays();
     }
 
     function applySettingsRestoreFromPlan(plan) {

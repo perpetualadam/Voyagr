@@ -5,6 +5,13 @@
 (function (root) {
     'use strict';
 
+    function distanceAttrs(km) {
+        var value = typeof km === 'number' || typeof km === 'string' && km.trim() ? Number(km) : NaN;
+        return Number.isFinite(value) && value >= 0
+            ? ' data-distance-meters="' + (value * 1000) + '" data-distance-style="route"' : '';
+    }
+
+
     /**
      * Build the shareable route payload embedded in share links / QR codes.
      * @param {Object} route
@@ -238,7 +245,7 @@
                     '<button onclick="deleteSavedRoute(' + route.id + ')" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕</button>' +
                 '</div>' +
                 '<div style="font-size: 12px; color: #666; margin-bottom: 8px;">' +
-                    '📏 ' + opts.distanceText + ' ' + opts.distUnit + ' | ⏱️ ' + route.duration_minutes +
+                    '📏 <span'+distanceAttrs(route.distance_km)+'>' + opts.distanceText + ' ' + opts.distUnit + '</span> | ⏱️ ' + route.duration_minutes +
                     ' | 💰 ' + opts.currencySymbol + totalCost +
                 '</div>' +
                 '<button onclick="useSavedRoute(' + route.id + ')" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">View journey</button>' +

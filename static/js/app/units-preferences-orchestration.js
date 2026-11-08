@@ -7,10 +7,15 @@
 
     var runtime = null;
 
-    var distanceUnit = localStorage.getItem('unit_distance') || 'mi';
-    var currencyUnit = localStorage.getItem('unit_currency') || 'GBP';
-    var speedUnit = localStorage.getItem('unit_speed') || 'mph';
-    var temperatureUnit = localStorage.getItem('unit_temperature') || 'celsius';
+    function validUnit(kind, value, fallback) {
+        var choices = {distance:['km','mi'],currency:['GBP','USD','EUR'],speed:['kmh','mph'],temperature:['celsius','fahrenheit']};
+        if (kind === 'speed' && (value === 'km/h' || value === 'kph')) value = 'kmh';
+        return choices[kind].includes(value) ? value : fallback;
+    }
+    var distanceUnit = validUnit('distance', localStorage.getItem('unit_distance'), 'mi');
+    var currencyUnit = validUnit('currency', localStorage.getItem('unit_currency'), 'GBP');
+    var speedUnit = validUnit('speed', localStorage.getItem('unit_speed'), 'mph');
+    var temperatureUnit = validUnit('temperature', localStorage.getItem('unit_temperature'), 'celsius');
 
     var currencySymbols = {
         'GBP': '£',
@@ -19,13 +24,13 @@
     };
 
     function getDistanceUnitValue() { return distanceUnit; }
-    function setDistanceUnitValue(val) { distanceUnit = val; }
+    function setDistanceUnitValue(val) { distanceUnit = validUnit('distance', val, distanceUnit); }
     function getCurrencyUnitValue() { return currencyUnit; }
-    function setCurrencyUnitValue(val) { currencyUnit = val; }
+    function setCurrencyUnitValue(val) { currencyUnit = validUnit('currency', val, currencyUnit); }
     function getSpeedUnitValue() { return speedUnit; }
-    function setSpeedUnitValue(val) { speedUnit = val; }
+    function setSpeedUnitValue(val) { speedUnit = validUnit('speed', val, speedUnit); }
     function getTemperatureUnitValue() { return temperatureUnit; }
-    function setTemperatureUnitValue(val) { temperatureUnit = val; }
+    function setTemperatureUnitValue(val) { temperatureUnit = validUnit('temperature', val, temperatureUnit); }
 
     function rt() {
         if (!runtime) {
@@ -77,7 +82,26 @@
         });
     }
 
+    function refreshSpeedLabels() {
+        document.querySelectorAll('[data-speed-kmh]').forEach((el) => {
+            const raw = el.dataset.speedKmh;
+            if (raw === '' || !Number.isFinite(Number(raw)) || Number(raw) < 0) return;
+            el.textContent = convertSpeed(Number(raw)) + ' ' + getSpeedUnit();
+        });
+    }
+
+    function refreshUnitDisplays() {
+        U().buildLoadUnitPreferencesDomApplyPlan({distanceUnit,currencyUnit,speedUnit,temperatureUnit}).selects.forEach(({id,value}) => {
+            const el = document.getElementById(id); if (el) el.value = value;
+        });
+        updateAllDistanceDisplays();
+        updateAllCostDisplays();
+        updateAllSpeedDisplays();
+        updateAllTemperatureDisplays();
+    }
+
     function updateAllSpeedDisplays() {
+        refreshSpeedLabels();
         const execute = SLW().buildUpdateAllSpeedDisplaysExecutePlan({
             apiSpeedLimitMph: rt().getCurrentSpeedLimitMph(),
             valhallaSpeedLimitMph: null,
@@ -222,6 +246,7 @@
 
     var api = {
         bind: bind,
+        refreshUnitDisplays: refreshUnitDisplays,
         getDistanceUnitValue: getDistanceUnitValue,
         setDistanceUnitValue: setDistanceUnitValue,
         getCurrencyUnitValue: getCurrencyUnitValue,

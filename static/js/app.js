@@ -154,22 +154,22 @@ function setupEventListeners() {
     
     // Unit preference selectors
     const distanceSelect = document.getElementById('distanceUnit');
-    if (distanceSelect) {
+    if (distanceSelect && !distanceSelect.hasAttribute('onchange')) {
         distanceSelect.addEventListener('change', updateDistanceUnit);
     }
     
     const currencySelect = document.getElementById('currencyUnit');
-    if (currencySelect) {
+    if (currencySelect && !currencySelect.hasAttribute('onchange')) {
         currencySelect.addEventListener('change', updateCurrencyUnit);
     }
     
     const speedSelect = document.getElementById('speedUnit');
-    if (speedSelect) {
+    if (speedSelect && !speedSelect.hasAttribute('onchange')) {
         speedSelect.addEventListener('change', updateSpeedUnit);
     }
     
     const temperatureSelect = document.getElementById('temperatureUnit');
-    if (temperatureSelect) {
+    if (temperatureSelect && !temperatureSelect.hasAttribute('onchange')) {
         temperatureSelect.addEventListener('change', updateTemperatureUnit);
     }
     

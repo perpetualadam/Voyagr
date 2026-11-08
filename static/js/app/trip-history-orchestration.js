@@ -349,6 +349,21 @@
             if (el) el.textContent = text;
         });
 
+        const meta = execute.unitMetadata || {};
+        const totalDistance = document.getElementById('totalDistance'), avgSpeed = document.getElementById('avgSpeed');
+        if (totalDistance) {
+            delete totalDistance.dataset.distanceMeters;
+            if (typeof meta.distanceKm === 'number' && Number.isFinite(meta.distanceKm) && meta.distanceKm >= 0) {
+                totalDistance.dataset.distanceMeters = String(meta.distanceKm * 1000);
+                totalDistance.dataset.distanceStyle = 'route';
+            }
+        }
+        if (avgSpeed) {
+            delete avgSpeed.dataset.speedKmh;
+            if (typeof meta.averageSpeedKmh === 'number' && Number.isFinite(meta.averageSpeedKmh) && meta.averageSpeedKmh >= 0)
+                avgSpeed.dataset.speedKmh = String(meta.averageSpeedKmh);
+        }
+
         const frequentRoutesList = document.getElementById(execute.frequentRoutesListId);
         if (frequentRoutesList) frequentRoutesList.innerHTML = execute.frequentRoutesHtml;
     }

@@ -5,6 +5,13 @@
 (function (root) {
     'use strict';
 
+    function distanceAttrs(km) {
+        var value = typeof km === 'number' || typeof km === 'string' && km.trim() ? Number(km) : NaN;
+        return Number.isFinite(value) && value >= 0
+            ? ' data-distance-meters="' + (value * 1000) + '" data-distance-style="route"' : '';
+    }
+
+
     /** Route colours for multi-route display (contrast with traffic overlay). */
     var ROUTE_COLORS = [
         '#2563EB',
@@ -366,7 +373,7 @@
                 '</div>' +
                 '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">' +
                     '<div><strong>⏱️ ' + route.duration_minutes + ' min</strong></div>' +
-                    '<div><strong>📏 ' + opts.distanceText + ' ' + opts.distUnit + '</strong></div>' +
+                    '<div><strong>📏 <span'+distanceAttrs(route.distance_km)+'>' + opts.distanceText + ' ' + opts.distUnit + '</span></strong></div>' +
                     '<div>⛽ ' + opts.currencySymbol + fuelCost.toFixed(2) + '</div>' +
                     '<div>🛣️ ' + opts.currencySymbol + tollCost.toFixed(2) + '</div>' +
                 '</div>' +
@@ -607,7 +614,7 @@
         return (
             '<tr style="background: ' + bgColor + '; border-bottom: 1px solid #ddd;">' +
                 '<td style="padding: 8px;"><strong>Route ' + route.route_id + '</strong></td>' +
-                '<td style="padding: 8px; text-align: center;">' + opts.distanceText + ' ' + opts.distUnit + '</td>' +
+                '<td'+distanceAttrs(route.distance_km)+' style="padding: 8px; text-align: center;">' + opts.distanceText + ' ' + opts.distUnit + '</td>' +
                 '<td style="padding: 8px; text-align: center;">' + Math.round(route.duration_minutes || 0) + ' min</td>' +
                 '<td style="padding: 8px; text-align: center;"><strong>' + opts.currencySymbol + route.total_cost.toFixed(2) + '</strong></td>' +
                 '<td style="padding: 8px; text-align: center;">' + opts.currencySymbol + route.cost_per_km.toFixed(2) + '</td>' +
@@ -1522,7 +1529,7 @@
                 '<span style="background: ' + hazardColor + '; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; flex-shrink: 0;">Nearby ' + hazardCount + '</span>' +
             '</div>' +
             '<div style="font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' +
-                '⏱️ ' + route.duration_minutes + ' min | 📏 ' + opts.distanceText + ' ' + opts.distUnit +
+                '⏱️ ' + route.duration_minutes + ' min | 📏 <span'+distanceAttrs(route.distance_km)+'>' + opts.distanceText + ' ' + opts.distUnit + '</span>' +
                 ' | ⛽ ' + fuelLitres + ' ' + fuelUnit +
                 ' | 💰 ' + opts.currencySymbol + totalCost +
             '</div>' +

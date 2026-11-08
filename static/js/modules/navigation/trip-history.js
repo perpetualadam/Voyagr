@@ -9,6 +9,13 @@
 (function (root) {
     'use strict';
 
+    function distanceAttrs(km) {
+        var value = typeof km === 'number' || typeof km === 'string' && km.trim() ? Number(km) : NaN;
+        return Number.isFinite(value) && value >= 0
+            ? ' data-distance-meters="' + (value * 1000) + '" data-distance-style="route"' : '';
+    }
+
+
     /**
      * Parse a "lat,lon" string into { lat, lon }.
      * @param {string} str
@@ -715,7 +722,7 @@
                     '<button onclick="deleteTripHistory(' + trip.id + ')" style="background: #f44336; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">Delete</button>' +
                 '</div>' +
                 '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #666; margin-bottom: 8px;">' +
-                    '<div>📏 ' + display.distance + ' ' + display.distUnit + '</div>' +
+                    '<div>📏 <span'+distanceAttrs(trip.distance_km)+'>' + display.distance + ' ' + display.distUnit + '</span></div>' +
                     '<div>⏱️ ' + trip.duration_minutes + ' min</div>' +
                     '<div>💰 ' + display.symbol + display.totalCost + '</div>' +
                     '<div>🛣️ ' + trip.routing_mode + '</div>' +
@@ -767,7 +774,7 @@
                 '</div>' +
                 '<div style="font-size: 12px; color: #666;">' +
                     '<span>🔄 ' + route.count + ' trips</span> | ' +
-                    '<span>📏 ' + opts.distanceText + ' ' + opts.distUnit + '</span> | ' +
+                    '<span>📏 <span'+distanceAttrs(route.avg_distance)+'>' + opts.distanceText + ' ' + opts.distUnit + '</span></span> | ' +
                     '<span>💰 ' + opts.currencySymbol + route.avg_cost.toFixed(2) + '</span>' +
                 '</div>' +
             '</div>'
@@ -885,6 +892,10 @@
         var routes = input.data.frequent_routes || [];
         return {
             shouldRender: true,
+            unitMetadata: {
+                distanceKm: input.data.total_distance_km,
+                averageSpeedKmh: input.data.avg_speed,
+            },
             elementPatches: {
                 totalTrips: display.totalTrips,
                 totalDistance: display.totalDistanceText + ' ' + (input.distUnit || ''),
