@@ -510,3 +510,20 @@ acceptance workstreams remain alongside this queue.
 See [Overpass item 6d](OVERPASS_CONSUMER_AUDIT.md#item-6d--nearby-pharmacy-2026-11-08).
 Next nearby category is Hospital, then Groceries. Existing arrival, unit, UI and
 user-deferred sat-nav acceptance work remains alongside this increment.
+
+
+## Nearby Hospital POI increment (8 November 2026)
+
+- [x] Keep the existing hospital/clinic scope and usable TomTom first; add bounded
+  shared Overpass nodes/ways/relations after empty/failed/unusable primary results,
+  with the existing Nominatim last resort after failed map acquisition.
+- [x] Distinguish reported hospitals/clinics and retain unknown third-party types;
+  do not infer current services, emergency care, opening or vehicle entrances.
+- [x] Preserve source/cache timestamps, radius/distance checks, selected units,
+  escaped reported details, stale-result protection and existing route planning.
+- [ ] Record live VPS/provider and device acceptance after deployment. Synthetic
+  NI coordinates and controlled browser checks do not establish live coverage.
+
+See [Overpass item 6e](OVERPASS_CONSUMER_AUDIT.md#item-6e--nearby-hospital-and-clinics-2026-11-08).
+Next nearby category is Groceries. The existing arrival, unit, UI, along-route
+and user-deferred sat-nav acceptance work continues alongside this increment.
