@@ -4890,3 +4890,37 @@ html.dark-mode .waypoint-options, body.dark-mode .waypoint-options {
     --waypoint-border: #505666; --waypoint-accent: #c6a9f2; --waypoint-row: #292e38;
 }
 .waypoint-options #waypointsList > div:not(.waypoint-item) { background: var(--waypoint-row) !important; color: var(--waypoint-muted) !important; font-size: .875rem !important; }
+
+/* Saved journeys and history: shared compact actions, existing data/controllers. */
+.journey-collection {
+    --collection-surface: #fff; --collection-soft: #f6f7fa; --collection-text: #202530;
+    --collection-muted: #535b6b; --collection-border: #d9dce4; --collection-accent: #56328a;
+    --collection-tint: #f2edf8; --collection-danger: #a32323;
+    color: var(--collection-text);
+}
+.journey-collection .collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.journey-collection .collection-heading h3 { min-width: 0; margin: 0; padding: 0; color: var(--collection-text); }
+.journey-collection .collection-label { display: block; margin-bottom: 6px; color: var(--collection-muted); font-size: .8rem; }
+.journey-collection .collection-input { width: 100%; min-width: 0; min-height: 48px; padding: 10px 12px; box-sizing: border-box; border: 1px solid var(--collection-border); border-radius: 12px; background: var(--collection-soft); color: var(--collection-text); font: inherit; }
+.journey-collection .collection-save { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: flex-end; gap: 8px; margin-bottom: 16px; }
+.journey-collection .collection-save-field { flex: 1 1 150px; min-width: 0; }
+.journey-collection .journey-card { margin: 0 0 12px; padding: 12px; border: 1px solid var(--collection-border); border-radius: 14px; background: var(--collection-surface); color: var(--collection-text); }
+.journey-collection .journey-card-title { margin: 0; color: var(--collection-text); font-size: .95rem; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.journey-collection .journey-card-endpoints, .journey-collection .journey-card-date { margin: 5px 0 0; color: var(--collection-muted); font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }
+.journey-collection .journey-card-metrics { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0; color: var(--collection-muted); font-size: .8rem; line-height: 1.5; }
+.journey-collection .journey-card-metrics > span { overflow-wrap: anywhere; }
+.journey-collection .journey-card-mode { text-transform: capitalize; }
+.journey-collection .journey-device-badge { display: inline-block; margin-left: 8px; color: var(--collection-accent); }
+.journey-collection .journey-card-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.journey-collection .collection-action { display: inline-flex; flex: 0 1 auto; align-items: center; justify-content: center; gap: 6px; min-width: 48px; min-height: 48px; max-width: 100%; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--collection-border); border-radius: 12px; background: var(--collection-surface); color: var(--collection-text); font: 600 .8rem/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; cursor: pointer; }
+.journey-collection .collection-action--primary { background: var(--collection-tint); color: var(--collection-accent); }
+.journey-collection .collection-action--delete { color: var(--collection-danger); }
+.journey-collection .collection-action:disabled { opacity: .55; cursor: default; }
+.journey-collection .collection-action svg { width: 20px; height: 20px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.journey-collection .collection-action:focus-visible, .journey-collection .collection-input:focus-visible { outline: 3px solid var(--collection-accent); outline-offset: 3px; }
+.journey-collection .journey-list-empty { padding: 20px 8px; text-align: center; color: var(--collection-muted); font-size: .9rem; }
+html.dark-mode .journey-collection, body.dark-mode .journey-collection {
+    --collection-surface: #20232b; --collection-soft: #2d313c; --collection-text: #f4f5f8;
+    --collection-muted: #c2c7d2; --collection-border: #505666; --collection-accent: #c6a9f2;
+    --collection-tint: #363047; --collection-danger: #ffb4ab; color-scheme: dark;
+}

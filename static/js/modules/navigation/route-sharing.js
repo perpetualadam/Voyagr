@@ -5,6 +5,17 @@
 (function (root) {
     'use strict';
 
+    function collectionText(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character];
+        });
+    }
+
+    function savedAction(name, id) {
+        if (!(typeof id === 'number' && Number.isSafeInteger(id) || typeof id === 'string' && id.length > 0 && id.length <= 160)) return 'disabled';
+        return 'onclick="' + collectionText(name + '(' + JSON.stringify(id) + ')') + '"';
+    }
+
     function distanceAttrs(km) {
         var value = typeof km === 'number' || typeof km === 'string' && km.trim() ? Number(km) : NaN;
         return Number.isFinite(value) && value >= 0
@@ -237,22 +248,16 @@
         route = route || {};
         opts = opts || {};
         var totalCost = computeSavedRouteTotalCost(route).toFixed(2);
-        return (
-            '<div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #E91E63;">' +
-                '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">' +
-                    '<div>' +
-                        '<div style="font-weight: 500; font-size: 14px;">' + route.name + '</div>' +
-                        '<div style="font-size: 12px; color: #666; margin-top: 4px;">📍 ' + route.start + ' → ' + route.end + '</div>' +
-                    '</div>' +
-                    '<button onclick="deleteSavedRoute(' + route.id + ')" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕</button>' +
-                '</div>' +
-                '<div style="font-size: 12px; color: #666; margin-bottom: 8px;">' +
-                    '📏 <span'+distanceAttrs(route.distance_km)+'>' + opts.distanceText + ' ' + opts.distUnit + '</span> | ⏱️ ' + route.duration_minutes +
-                    ' | 💰 ' + opts.currencySymbol + totalCost +
-                '</div>' +
-                '<button onclick="useSavedRoute(' + route.id + ')" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">View journey</button>' +
-            '</div>'
-        );
+        return '<article class="journey-card saved-route-card">' +
+            '<h4 class="journey-card-title">' + collectionText(route.name || 'Saved journey') + '</h4>' +
+            '<p class="journey-card-endpoints">' + collectionText(route.start) + ' → ' + collectionText(route.end) + '</p>' +
+            '<div class="journey-card-metrics"><span'+distanceAttrs(route.distance_km)+'>' + collectionText(opts.distanceText) + ' ' + collectionText(opts.distUnit) + '</span>' +
+            '<span>' + collectionText(route.duration_minutes) + '</span><span title="Estimated cost">' + collectionText(opts.currencySymbol) + totalCost + '</span></div>' +
+            '<div class="journey-card-actions">' +
+            '<button type="button" class="collection-action collection-action--primary" '+savedAction('useSavedRoute',route.id)+' title="View saved journey" aria-label="View saved journey">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16"/></svg><span>View journey</span></button>' +
+            '<button type="button" class="collection-action collection-action--delete" '+savedAction('deleteSavedRoute',route.id)+' title="Delete saved route" aria-label="Delete saved route">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg><span>Delete</span></button></div></article>';
     }
 
     var QR_CODE_IMAGE_SIZE_PX = 200;
@@ -286,7 +291,7 @@
      */
     function buildSavedRoutesListHtml(routes, opts) {
         if (!routes || routes.length === 0) {
-            return '<div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>';
+            return '<div class="journey-list-empty" role="status">No saved routes yet</div>';
         }
         opts = opts || {};
         var html = '';

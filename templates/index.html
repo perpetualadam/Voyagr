@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108floatingstart1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108collections1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -106,11 +106,11 @@
     <script defer src="/static/js/modules/navigation/movement-detection.js?v=20260711g"></script>
     <script defer src="/static/js/modules/navigation/eta.js?v=20260712aaaa"></script>
     <script defer src="/static/js/modules/navigation/live-data-refresh.js?v=20260711zzzy"></script>
-    <script defer src="/static/js/modules/navigation/trip-history.js?v=20261108unitrestore1"></script>
+    <script defer src="/static/js/modules/navigation/trip-history.js?v=20261108collections1"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027phase5a"></script>
     <script defer src="/static/js/modules/navigation/route-selection.js?v=20261108unitrates1"></script>
-    <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261108fuelpricing1"></script>
+    <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261108collections1"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20261108alongpoi1"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20261106parkingfees1"></script>
@@ -1386,22 +1386,22 @@
                 </div>
 
                 <!-- TRIP HISTORY TAB (NEW FEATURE) -->
-                <div id="tripHistoryTab" style="display: none;">
+                <div id="tripHistoryTab" class="journey-collection" style="display: none;">
                     <div class="preferences-section">
-                        <h3>📋 Trip History</h3>
+                        <div class="collection-heading"><h3>Trip history</h3><button type="button" class="collection-action" onclick="switchTab('navigation')" title="Back to navigation" aria-label="Back to navigation"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Map</span></button></div>
 
                         <!-- Search/Filter -->
                         <div class="form-group">
-                            <input type="text" id="tripSearchInput" placeholder="Search by location or date..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 10px;">
+                            <label class="collection-label" for="tripSearchInput">Search trips</label>
+                            <input type="search" id="tripSearchInput" class="collection-input" placeholder="Location or date" autocomplete="off">
                         </div>
 
                         <!-- Trip List -->
                         <div id="tripHistoryList">
-                            <div style="text-align: center; padding: 20px; color: #999;">Loading trips...</div>
+                            <div class="journey-list-empty" role="status">Loading trips...</div>
                         </div>
                     </div>
 
-                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
                 <!-- DASHCAM TAB (NEW FEATURE) -->
@@ -1634,23 +1634,22 @@
                 </div>
 
                 <!-- SAVED ROUTES TAB (NEW FEATURE) -->
-                <div id="savedRoutesTab" style="display: none;">
+                <div id="savedRoutesTab" class="journey-collection" style="display: none;">
                     <div class="preferences-section">
-                        <h3>⭐ Saved Routes</h3>
+                        <div class="collection-heading"><h3>Saved routes</h3><button type="button" class="collection-action" onclick="switchTab('navigation')" title="Back to navigation" aria-label="Back to navigation"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Map</span></button></div>
 
                         <!-- Save Current Route -->
-                        <div style="margin-bottom: 15px;">
-                            <input type="text" id="routeName" placeholder="Route name (e.g., 'Home to Work')" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 8px;">
-                            <button onclick="saveCurrentRoute()" style="width: 100%; background: #E91E63; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Save Current Route</button>
+                        <div class="collection-save">
+                            <div class="collection-save-field"><label class="collection-label" for="routeName">Route name</label><input type="text" id="routeName" class="collection-input" placeholder="e.g. Home to work" autocomplete="off"></div>
+                            <button type="button" class="collection-action collection-action--primary" onclick="saveCurrentRoute()" title="Save current route" aria-label="Save current route"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 3h13l4 4v14H3V3ZM7 3v6h10V3M7 21v-8h10v8"/></svg><span>Save</span></button>
                         </div>
 
                         <!-- Saved Routes List -->
                         <div id="savedRoutesList">
-                            <div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>
+                            <div class="journey-list-empty" role="status">No saved routes yet</div>
                         </div>
                     </div>
 
-                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
                 <!-- ROUTE PREVIEW TAB (NEW FEATURE) -->

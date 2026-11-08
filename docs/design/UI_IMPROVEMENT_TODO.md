@@ -569,3 +569,22 @@ See [Overpass item 7](OVERPASS_CONSUMER_AUDIT.md#item-7--bounded-along-route-poi
 Keep arrival/access and remaining SCDB/source maintenance acceptance separate.
 The parallel compact saved/history/settings UI and remaining unit-policy work
 can continue while the user defers road testing.
+
+## Compact saved routes and trip history (8 November 2026)
+
+- [x] Replace full-width row actions with wrapping icon-and-text controls, visible
+  labels, keyboard focus and minimum 48px targets; retain save, search and Map.
+- [x] Support light/dark themes, narrow/landscape screens and enlarged text;
+  wrap long journey names and addresses without horizontal scrolling.
+- [x] Escape stored display text and serialize typed action IDs safely; preserve
+  saved-route review, fresh-GPS eligibility, local/server history, confirmations,
+  stored costs and canonical distance metadata for selected-unit refresh.
+- [x] Validate 2,221 backend tests (one skipped), 3,097 JavaScript tests with
+  coverage, lint and 16 controlled browser combinations (four viewports,
+  light/dark, 100%/200% text). Browser fixtures exercise production renderers,
+  CSS and unit helpers with action spies; they do not establish deployed
+  authentication, persistence, live navigation or GPS acceptance.
+- [ ] Accept on the deployed app/device. Deployment is a separate user action.
+
+Continue the parallel settings/statistics UI, remaining unit-policy and
+source-maintenance work; retain the user's deferred sat-nav acceptance tasks.
