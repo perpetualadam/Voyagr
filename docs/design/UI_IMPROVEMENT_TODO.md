@@ -393,3 +393,14 @@ browser; current recipient API schema, quotas and full dataset terms remain
 unverified. No account/credential action or runtime integration was performed.
 Keep earlier unit/Overpass/device acceptance items open. This research completes
 source assessment, not dynamic fuel pricing or live station-price acceptance.
+
+## Dynamic fuel prices: parser/cache layer (8 November 2026)
+
+The inactive weekly-average parser/cache and explicit operator command are
+implemented; see [the implementation record](DYNAMIC_FUEL_PRICE_RESEARCH.md#implemented-step-1-inactive-parsercache-and-explicit-operator-command).
+Quote reads perform no HTTP and no route code uses the layer yet. Fixture checks
+cover source/redirect bounds, dates/units, last-good atomic publication, stale
+quotes, retries, deadlines and thread/process locking. Live Python refresh could
+not be verified through this runner's proxy; deployed-source acceptance remains
+pending. Next is the separately reviewed automatic/manual/fuel-category request
+and UI contract, keeping legacy overrides and existing route fallback behavior.

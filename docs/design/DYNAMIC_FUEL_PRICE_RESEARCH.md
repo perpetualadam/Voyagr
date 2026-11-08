@@ -133,8 +133,10 @@ configured fallback paths independent of station API availability.
 ## Acceptance checklist and next step
 
 - [x] Primary-source research and current code-path trace recorded.
-- [ ] Implement the weekly-average parser/snapshot/fallback layer with fixture HTTP
-  first, then an opt-in automatic/manual request/UI contract in a separate review.
+- [x] Implement the inactive weekly-average parser/snapshot cache with fixture HTTP
+  and an explicit operator command (implementation record below).
+- [ ] Connect opt-in automatic/manual and fuel-category request/UI handling with
+  manual/configured fallback in a separate review.
 - [ ] Test pence/GBP conversion, numeric rejection, date order, malformed/latest-row
   conflicts, stale/cold caches, timeouts, concurrent refresh and atomic rollback.
 - [ ] Test explicit grade/mode and legacy overrides; electric/premium/unknown
@@ -152,3 +154,88 @@ cost paths were reviewed. Existing declared checks passed unchanged: 141 JavaScr
 suites / 3,042 tests with lint and coverage floors; web backend selection 1,983
 passed, one platform skip and 74 subtests passed. These regressions do not verify
 an authenticated Fuel Finder client or a live price-ingestion deployment.
+
+## Implemented step 1: inactive parser/cache and explicit operator command
+
+`voyagr/services/weekly_fuel_prices.py` implements the acquisition boundary and
+snapshot cache. It is **not imported by routing**, does not instantiate a client,
+start a thread/job, fetch on application startup or change existing prices. The
+next increment is still the explicit automatic/manual/fuel-category UI/request
+contract and its fallback/source-provenance integration.
+
+The adapter discovers the newest labelled CSV series from the fixed GOV.UK
+publication. All publication and attachment redirects are checked before access:
+HTTPS, fixed hosts, expected publication/CSV paths, no credentials, ports, query
+strings or fragments. It uses the existing cooperative request-budget transport,
+a default 12-second acquisition budget, 3/5-second connect/read caps, at most
+four requests per redirect chain, a 512 KiB publication cap, 2 MiB CSV cap and
+10,000-row cap. This is cooperative deadline handling, not a hard interruption
+of a blocked socket or filesystem operation.
+
+The CSV parser accepts UTF-8/BOM, verifies the exact pump-price pence/litre
+headers, rejects duplicate headers/dates and malformed/future/truncated records,
+and selects the greatest observation date rather than the last file row. A
+reviewed plausibility guard accepts 50–500 pence/litre, rejecting common pound/
+pence errors; this is a Voyagr ingestion guard, not a government price rule.
+Both petrol and diesel must validate together. Pence become GBP/L using Decimal,
+without adding the separate duty/VAT columns. Immutable snapshots retain source
+URL, observation/retrieval clocks and a stable identity for the dated prices.
+
+`WeeklyFuelPriceCache.quote('petrol'|'diesel')` is an in-memory, no-HTTP read.
+Missing, future or older-than-policy observations return `None`, never zero or
+an invented default. The default maximum usable observation age is 14 days,
+inclusive by UTC date; the old snapshot remains available for explicit status/
+inspection but is not returned as an automatic quote. Successful reacquisition
+can advance retrieval time while preserving observation date and price identity;
+cache/quote reads cannot renew either clock. Caller dictionaries cannot mutate
+the immutable snapshot.
+
+Refresh is single-flight without queuing per instance. With an explicit cache
+path, nonblocking POSIX advisory locks also coordinate processes. Last-good JSON
+is schema/size/date/unit/URL checked on load, and complete replacements use a
+same-directory private temporary file, fsync and atomic rename. Older source
+observations, failed acquisition, write failure or expired/cancelled work cannot
+replace a known-good snapshot. Persistent refresh is supported on the POSIX VPS
+target; a non-POSIX persistent writer fails closed rather than writing unlocked.
+Memory-only caches remain available without a persistent lock.
+
+Daily refresh cadence and a 60-second exponential failure backoff (capped at one
+hour) are defaults. Age/cadence/budget are constructor policies; failures/backoff
+are process-local and successful retrieval time is persisted. Operate **one
+scheduled refresher**, not one job per web worker; no scheduler is installed in
+this increment. `force=True` bypasses cadence/backoff only, not validation or
+locking. Future route requests must read a ready cache and use their existing
+manual/configured fallback without waiting for refresh.
+
+An explicit operator command is available from the repository root:
+
+```sh
+.venv/bin/python scripts/refresh-weekly-fuel-prices.py --help
+.venv/bin/python scripts/refresh-weekly-fuel-prices.py
+.venv/bin/python scripts/refresh-weekly-fuel-prices.py --cache-file /path/to/owned-directory/fuel-weekly.json
+```
+
+The first command performs no acquisition; the second refreshes memory only.
+For a file, its parent directory must already exist and be writable, and the
+refresher/reader must have compatible ownership (new snapshot/lock files are
+private). No directory, production config or job is created automatically. JSON
+output reports refresh/cache status and any usable quotes, with
+`route_pricing_changed: false`. Exit 0 means a usable quote is available without
+refresh failure, 1 means refresh failed, and 2 means no usable quote is available.
+`--force` and `--max-age-days` are explicit operator options. No source body,
+credential or raw request exception is printed.
+
+Verification for this increment uses fixture HTTP through the real transport,
+discovery, parser, budgets and persistence paths, including a second process
+observing the file lock. Operator-command tests use an explicit temporary cache.
+The runner could not reach GOV.UK through its configured execution proxy, though
+the publication was readable through the research browser. **Live Python HTTP
+refresh and deployed dataset acceptance remain unverified.** No production cache,
+configuration/data changes or deployment were performed. No UI or routing wiring
+is enabled by importing or invoking this layer.
+
+Local validation for the parser/cache increment: 57 focused acquisition/cache/
+operator tests passed. The declared web backend selection passed 2,040 tests,
+with one platform skip and 74 subtests; 141 JavaScript suites / 3,042 tests,
+lint and coverage requirements also passed. No new browser UI was introduced,
+and these checks do not establish live GOV.UK HTTP refresh or deployed pricing.
