@@ -635,3 +635,22 @@ sat-nav acceptance alongside this work. No production deployment is automatic.
 
 Statistics remains the next UI milestone. Keep source maintenance, remaining unit
 policy and the user's deferred live sat-nav acceptance alongside this increment.
+
+## Compact Statistics (8 November 2026)
+
+- [x] Replace inline dashboard styling and full-width return action with semantic
+  summary/breakdown cards, wrapping frequent-route cards and a compact Map action.
+  Match existing collection light/dark tokens, focus styles and 48px action targets.
+- [x] Preserve all metric IDs, analytics requests, authentication/Premium refusal,
+  calculations, cost presentation and canonical distance/speed metadata. Retain
+  ranking/count/average cost; escape frequent-route text with a safe default.
+- [x] Verify production renderer/controller and unit helpers with 3,108 JavaScript
+  tests, coverage and lint; 2,221 declared backend tests passed (one skipped).
+  All 16 browser combinations passed (four viewports, light/dark, 100%/200% root
+  text), including API response rendering, keyboard return, distance/speed changes,
+  long addresses and empty history. API/auth/navigation boundaries are fixtures.
+- [ ] Accept deployed account/Premium data and real device rendering. No production
+  deployment, analytics calculation change or new filters in this increment.
+
+Keep source maintenance, remaining units/accessibility work and deferred live
+sat-nav acceptance alongside these UI increments.

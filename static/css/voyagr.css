@@ -4959,3 +4959,18 @@ html.dark-mode #settingsTab :is(h3,h4), body.dark-mode #settingsTab :is(h3,h4) {
 #settingsTab .settings-group-content > .preferences-section { margin-top:12px; padding-top:12px; border-color:var(--settings-border); }
 #settingsTab .settings-group-help { font-size:.875rem; line-height:1.5; margin:0 0 12px; color:var(--settings-ink); }
 #settingsTrafficNavigation label:has(> input[type=checkbox]) { min-height:48px; }
+
+/* Statistics shares collection action/card tokens while retaining numeric owners. */
+#routeAnalyticsTab .analytics-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; }
+#routeAnalyticsTab .analytics-summary > div, #routeAnalyticsTab .analytics-section { padding:14px; border:1px solid var(--collection-border); border-radius:14px; background:var(--collection-surface); min-width:0; }
+#routeAnalyticsTab .analytics-summary dt { font-size:.875rem; line-height:1.4; color:var(--collection-muted); }
+#routeAnalyticsTab .analytics-summary dd { margin:6px 0 0; font-size:1.4rem; font-weight:700; line-height:1.3; color:var(--collection-text); overflow-wrap:anywhere; }
+#routeAnalyticsTab .analytics-section { margin-bottom:12px; }
+#routeAnalyticsTab .analytics-section h4 { margin:0 0 12px; font-size:1rem; color:var(--collection-text); }
+#routeAnalyticsTab .analytics-detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; }
+#routeAnalyticsTab .analytics-breakdown { margin:0; font-size:.875rem; }
+#routeAnalyticsTab .analytics-breakdown > div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 12px; padding:8px 0; }
+#routeAnalyticsTab .analytics-breakdown dt { color:var(--collection-muted); }
+#routeAnalyticsTab .analytics-breakdown dd { margin:0; color:var(--collection-text); font-weight:600; overflow-wrap:anywhere; }
+#routeAnalyticsTab .analytics-route:last-child { margin-bottom:0; }
+@media (max-width:360px) { #routeAnalyticsTab .analytics-summary { grid-template-columns:minmax(0,1fr); } }

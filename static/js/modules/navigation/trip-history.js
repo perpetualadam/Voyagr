@@ -769,19 +769,13 @@
      */
     function buildFrequentRouteRowHtml(route, index, opts) {
         opts = opts || {};
-        var escape = opts.escapeHtml || function (s) { return String(s); };
-        return (
-            '<div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #FF5722;">' +
-                '<div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">' +
-                    (index + 1) + '. ' + escape(route.start) + ' → ' + escape(route.end) +
-                '</div>' +
-                '<div style="font-size: 12px; color: #666;">' +
-                    '<span>🔄 ' + route.count + ' trips</span> | ' +
-                    '<span>📏 <span'+distanceAttrs(route.avg_distance)+'>' + opts.distanceText + ' ' + opts.distUnit + '</span></span> | ' +
-                    '<span>💰 ' + opts.currencySymbol + route.avg_cost.toFixed(2) + '</span>' +
-                '</div>' +
-            '</div>'
-        );
+        var escape = opts.escapeHtml || collectionText;
+        return '<article class="journey-card analytics-route">' +
+            '<h5 class="journey-card-title">' + (index + 1) + '. ' + escape(route.start) + ' → ' + escape(route.end) + '</h5>' +
+            '<div class="journey-card-metrics"><span>' + collectionText(route.count) + ' trips</span>' +
+            '<span'+distanceAttrs(route.avg_distance)+'>' + collectionText(opts.distanceText) + ' ' + collectionText(opts.distUnit) + '</span>' +
+            '<span title="Average recorded cost">' + collectionText(opts.currencySymbol) + route.avg_cost.toFixed(2) + '</span></div></article>';
+
     }
 
     /**
@@ -791,7 +785,7 @@
      */
     function buildFrequentRoutesListHtml(routes, opts) {
         if (!routes || routes.length === 0) {
-            return '<div style="text-align: center; padding: 20px; color: #999;">No trip history yet</div>';
+            return '<div class="journey-list-empty" role="status">No trip history yet</div>';
         }
         opts = opts || {};
         var html = '';
