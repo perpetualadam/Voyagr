@@ -54,7 +54,7 @@ is possible; neither free availability nor public access is guaranteed.
 | 3 | Railway crossings: `api/hazards.py`, `services/hazards.py`, `routing/hazard_prep.py`, `routing/multidrop.py` | Area display and route hazard preparation query `railway=level_crossing` via the helper. | Controlled acquisition/display/snapshot and multi-leg checks passed (item 3 below); known-location and deployed/device acceptance remain pending. |
 | 4 | Speed limits: `speed_limit_detector.py`, `api/navigation.py` | Runtime detector uses `query_overpass` for nearby highway/maxspeed geometry; other provider evidence and ambiguity rules also participate. | Deployed source/failure evidence with road/direction/profile binding; do not promote a nearby tag to legal speed authority. Existing controlled speed-limit regressions are part of CI. |
 | 5 | Web lane lookup: `_fetch_osm_lane_data` in `api/navigation.py` | Uses shared Overpass acquisition. Lane guidance requires applicable road/direction evidence and can correctly remain unknown. | Test the web lookup and ambiguity/failure handling, not just desktop lane heuristics. |
-| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel and Food controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Remaining categories retain their existing policy and node-only query. | Fuel/Food live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
+| 6 | Other quick POI categories: `api/search.py`, `services/fuel_poi.py`, `overpass_helper.build_poi_query` | Fuel, Food and Charging controlled verification complete below; usable TomTom first, empty/unavailable then bounded Overpass nodes/ways/relations. Remaining categories retain their existing policy and node-only query. | Fuel/Food/Charging live VPS/device acceptance pending. Unit audit and dynamic cost follow-ups are tracked alongside the remaining category queue in UI_IMPROVEMENT_TODO.md. |
 | 7 | Along-route POI: `/poi-along-route` in `api/search.py` | Samples route points using TomTom, then Nominatim. It currently does not query Overpass. | Bounded integration design/tests before adding Overpass; avoid several unbounded queries per route. |
 | 8 | Arrival parking and arrival-access observations: `services/arrival_parking.py`, `arrival_map_evidence.py` | Already use the shared helper. Prior operator evidence established November data and unresolved parking approach. | Deployment/browser acceptance of latest fee and endpoint display changes; do not label entrance/connector access verified. |
 | 9 | Camera markers/route camera hazards: `api/hazards.py`, `services/hazards.py` | Read the app's cameras database. Updating Overpass does not automatically refresh that table. | Establish the deployed camera ingestion/refresh job and source separately. |
@@ -375,3 +375,56 @@ authorized deployment. No production configuration, data or deployment changed.
 Local full regressions: 137 JavaScript suites / 2,973 tests, lint and coverage
 floors passed; declared web backend selection 1,983 passed, one platform skip
 and 74 subtests passed. Existing Fuel and Parking regressions remain passing.
+
+
+### Item 6c — Nearby EV Charge (2026-11-08)
+
+The existing `EV Charge` quick button uses `/api/poi-search` with type `charging`.
+It now retains usable TomTom results first and falls through on empty, failed or
+unusable primary results to the configured shared Overpass client. The bounded
+query covers `amenity=charging_station` nodes, ways and relations with centers;
+parking sites are not guessed to be chargers. Valid mapped-empty results remain
+successful candidate searches; failed map acquisition can try the existing
+Nominatim last resort, and failed/unusable acquisition returns unknown coverage
+rather than claiming no chargers exist.
+
+Charging joins Fuel/Food's 18-second cooperative acquisition budget, with a
+12-second Overpass child budget, 7-second query timeout, 2 MiB query size cap,
+200-element bound and 5-minute shared cache. Input requires finite WGS84 numeric
+coordinates and a 1–5,000 metre integer radius. Results are deduplicated, filtered
+by independently calculated straight-line distance and limited to 15. Synthetic
+Northern Ireland and zero-longitude cases verify that neither is excluded by
+geographic filtering. Available local endpoint class, original dataset/retrieval
+times, source revision and cache state are preserved, not regenerated on hits.
+
+OSM operator, network, opening-hours and allowlisted socket type/count/output tags
+are **reported map facts**. Missing/zero/negative/malformed socket counts do not
+create connector claims; missing output is not inferred. Values are bounded and
+escaped for display. All sources explicitly retain unverified live availability,
+vehicle/connector compatibility, charging power, opening and access. The UI asks
+users to check the operator for availability/tariffs; reported output is not a
+promised charging speed. This does not add a charger-status API, compatibility
+filter, tariff feed or change EV route-cost inputs. Map centers are not entrances.
+
+The quick button uses candidate-search stale response/GPS cancellation, clears
+old selections on a new search and qualifies empty/error states. Selection still
+invalidates old endpoint requests and invokes the existing route planner, not
+live navigation. Distance display remains under the user's selected units.
+The separate `/api/charging-stations` OpenChargeMap endpoint and along-route
+provider/coverage behavior are outside this increment. Pharmacy, hospital and
+groceries retain their existing policies and remain next in the category queue.
+
+Validation: 32 focused backend cases cover real shared-client parsing and cache
+provenance with fixture HTTP, provider precedence, malformed/out-of-radius/area
+records, reported connectors, fallback, deadlines and UK/NI coordinates. Fuel and
+Food regressions remain passing; their unrelated-category policy checks now use
+Pharmacy because Charging intentionally joins the reviewed fallback path.
+Six browser-owner tests cover category dispatch, text escaping, stale responses,
+late GPS callbacks, empty/error state and planner selection. The controlled
+`node scripts/check-charging-poi.cjs` harness passed at 390×844 and 844×390 with
+the actual EV Charge button, production modal/owner and fixture data.
+
+Full local checks: 143 JavaScript suites / 3,062 tests, lint and coverage floors
+passed; declared backend selection 2,105 passed, one platform skip and 74 subtests.
+No live provider/GPS or deployed-device acceptance was performed. No production
+configuration, database, credentials or deployment were changed.

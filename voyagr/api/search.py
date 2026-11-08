@@ -737,10 +737,10 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int, *, bu
 
 
 def _candidate_poi_response(data, poi_type):
-    """Fuel and Food share bounded fallback admission, not category parsing."""
+    """Fuel, Food and Charging share bounded admission, not category parsing."""
     from voyagr.services.arrival_map_evidence import point
-    from voyagr.services import fuel_poi, food_poi
-    service = {'fuel': fuel_poi, 'food': food_poi}[poi_type]
+    from voyagr.services import fuel_poi, food_poi, charging_poi
+    service = {'fuel': fuel_poi, 'food': food_poi, 'charging': charging_poi}[poi_type]
     target = point([data.get('lat'), data.get('lon')])
     radius = data.get('radius', 2000)
     if target is None or type(radius) is not int or not 1 <= radius <= 5000:
@@ -749,7 +749,8 @@ def _candidate_poi_response(data, poi_type):
     context = {
         'coordinates': target, 'radius_m': radius, 'coverage': 'CANDIDATES_ONLY',
         'distance_kind': 'STRAIGHT_LINE', 'opening_hours_verified': False, 'access_verified': False,
-        **({'availability_verified': False} if poi_type == 'fuel' else {'dietary_suitability_verified': False}),
+        **({'availability_verified': False, 'connector_compatibility_verified': False, 'charging_power_verified': False} if poi_type == 'charging' else
+           {'availability_verified': False} if poi_type == 'fuel' else {'dietary_suitability_verified': False}),
     }
 
     def result(rows, source):
@@ -796,7 +797,7 @@ def search_poi():
     """Search for points of interest. Tries TomTom first, falls back to Overpass/Nominatim."""
     try:
         data = request.get_json(silent=True)
-        if isinstance(data, dict) and data.get('type', 'fuel') in ('fuel', 'food'):
+        if isinstance(data, dict) and data.get('type', 'fuel') in ('fuel', 'food', 'charging'):
             return _candidate_poi_response(data, data.get('type', 'fuel'))
         data = data or {}
         lat = float(data.get('lat', 0))
