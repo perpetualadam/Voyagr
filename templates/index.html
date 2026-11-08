@@ -110,7 +110,7 @@
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20261027phase5a"></script>
     <script defer src="/static/js/modules/navigation/route-selection.js?v=20261108unitrates1"></script>
-    <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261108unitrestore1"></script>
+    <script defer src="/static/js/modules/navigation/route-sharing.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/modules/navigation/poi-search.js?v=20261108unitdistance1"></script>
     <script defer src="/static/js/modules/navigation/waypoints.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/modules/navigation/multimodal-parking.js?v=20261106parkingfees1"></script>
@@ -119,7 +119,7 @@
     <script defer src="/static/js/modules/navigation/search-autocomplete.js?v=20260711s"></script>
     <script defer src="/static/js/modules/navigation/geocoding-locations.js?v=20260712aaaq"></script>
     <script defer src="/static/js/modules/navigation/route-progress.js?v=20261027phase6a"></script>
-    <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20261108unitrestore1"></script>
+    <script defer src="/static/js/modules/navigation/settings-snapshot.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/modules/ui/device-environment.js?v=20260810toast1"></script>
     <script defer src="/static/js/modules/navigation/favorites.js?v=20260711y"></script>
     <script defer src="/static/js/modules/navigation/caz-info.js?v=20260711s"></script>
@@ -152,7 +152,8 @@
     <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261107sheettools1"></script>
-    <script defer src="/static/js/modules/navigation/route-prefs.js?v=20260712aaci"></script>
+    <script defer src="/static/js/modules/navigation/route-prefs.js?v=20261108fuelpricing1"></script>
+    <script defer src="/static/js/app/fuel-pricing-controls.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/modules/navigation/recent-destinations.js?v=20260711e"></script>
     <script defer src="/static/js/modules/util/html.js?v=20260711e"></script>
     <script defer src="/static/js/modules/navigation/road-name-display.js?v=20260711zzi"></script>
@@ -200,12 +201,12 @@
     <script defer src="/static/js/app/map-overlay-orchestration.js?v=20261107crossings1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
     <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
-    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261105arrivalpreview1"></script>
+    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20260712ab46"></script>
-    <script defer src="/static/js/app/profile-store-orchestration.js?v=20260712ab14"></script>
-    <script defer src="/static/js/app/settings-orchestration.js?v=20261108unitrestore1"></script>
+    <script defer src="/static/js/app/profile-store-orchestration.js?v=20261108fuelpricing1"></script>
+    <script defer src="/static/js/app/settings-orchestration.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/app/voice-control-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/voice-announcements-orchestration.js?v=20261027phase6a"></script>
     <script defer src="/static/js/app/page-init-orchestration.js?v=20261027maprec2"></script>
@@ -533,6 +534,31 @@
                         <option value="van">🚐 Van</option>
                     </select>
                 </div>
+
+                <details id="fuelPricingControls" class="preview-disclosure">
+                    <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Fuel price estimate</span></summary>
+                    <p>Applies to your next calculation. Electric vehicles use the saved electricity tariff.</p>
+                    <div class="form-group">
+                        <label for="fuelPriceMode">Price source</label>
+                        <select id="fuelPriceMode" class="select-input">
+                            <option value="automatic">Automatic · UK weekly average</option>
+                            <option value="manual">Manual price</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="fuelCategory">Fuel category</label>
+                        <select id="fuelCategory" class="select-input">
+                            <option value="">Choose fuel category</option>
+                            <option value="petrol">Petrol (unleaded average)</option>
+                            <option value="diesel">Diesel average</option>
+                        </select>
+                    </div>
+                    <div id="manualFuelPriceGroup" class="form-group" hidden>
+                        <label for="manualFuelPrice">Manual fuel price (£ per litre)</label>
+                        <input id="manualFuelPrice" class="select-input" type="number" min="0" max="100" step="0.0001" inputmode="decimal" aria-describedby="fuelPricingHelp">
+                    </div>
+                    <p id="fuelPricingHelp" role="status">Automatic uses a dated UK average when available. Otherwise a configured estimate is used. This is not a local pump quote.</p>
+                </details>
 
                 <!-- Routing Mode Selector -->
                 <div class="form-group">
@@ -1699,6 +1725,7 @@
 
                         <details id="previewCostDetails" class="preview-disclosure">
                             <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg><span>Estimated costs</span><strong id="previewTotalCost">-</strong></summary>
+                            <p id="previewFuelPricingNotice" role="status"></p>
                             <p id="previewCostCurrencyNotice">Cost estimates are in GBP (£). Currency conversion is currently unavailable.</p>
                             <dl class="preview-cost-grid">
                                 <div><dt>Fuel / energy</dt><dd id="previewFuelCost">-</dd><dd id="previewFuelLitres"></dd></div>

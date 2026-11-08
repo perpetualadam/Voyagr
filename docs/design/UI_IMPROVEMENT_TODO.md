@@ -398,9 +398,31 @@ source assessment, not dynamic fuel pricing or live station-price acceptance.
 
 The inactive weekly-average parser/cache and explicit operator command are
 implemented; see [the implementation record](DYNAMIC_FUEL_PRICE_RESEARCH.md#implemented-step-1-inactive-parsercache-and-explicit-operator-command).
-Quote reads perform no HTTP and no route code uses the layer yet. Fixture checks
+The first increment kept quote reads free of HTTP and did not wire routing;
+the selection/request increment below now reads a configured snapshot. Fixture checks
 cover source/redirect bounds, dates/units, last-good atomic publication, stale
 quotes, retries, deadlines and thread/process locking. Live Python refresh could
 not be verified through this runner's proxy; deployed-source acceptance remains
 pending. Next is the separately reviewed automatic/manual/fuel-category request
 and UI contract, keeping legacy overrides and existing route fallback behavior.
+
+## Dynamic fuel prices: selection/request integration (8 November 2026)
+
+- [x] Add explicit automatic/manual and petrol/diesel controls; preserve legacy
+  manual prices and retain them when switching to automatic.
+- [x] Persist the selection in settings/profile snapshots and isolate profiles.
+- [x] Freeze one dated quote per calculation, attach provenance to alternatives/
+  legs, explain fallback in the preview and retain original saved-route quotes.
+- [x] Include resolved price/consumption/source in route-cache identity; prevent
+  old cached costs being relabelled with a new price.
+- [x] Keep EV tariffs unchanged and settings changes separate from active-route
+  geometry, GPS and recalculation.
+- [ ] Verify live GOV.UK acquisition on the deployment host, configure a readable
+  snapshot and separately arrange one bounded refresher. No job or deployment
+  was performed in this increment; automatic mode falls back transparently until
+  a usable cache is configured.
+- [ ] Complete actual-phone/VPS journey acceptance, including Northern Ireland.
+  A UK national average is not a local pump quote or NI-specific observation.
+
+This continues alongside the existing UI, Overpass, unit and device checklist.
+See [the implementation record](DYNAMIC_FUEL_PRICE_RESEARCH.md#implemented-step-2-automaticmanual-selection-and-frozen-route-quotes).

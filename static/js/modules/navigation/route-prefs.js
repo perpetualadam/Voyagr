@@ -415,15 +415,31 @@
      * @param {Storage} storage
      * @returns {{fuel_efficiency: number, fuel_price: number, energy_efficiency: number, electricity_price: number}}
      */
+    function getFuelPricingSettings(storage) {
+        var saved = null;
+        try { saved = JSON.parse(storage.getItem('fuelPricing')); } catch (_e) { /* use legacy */ }
+        var legacy = storage.getItem('fuelPrice');
+        var manual = saved && Object.prototype.hasOwnProperty.call(saved, 'manualPrice') ? saved.manualPrice : legacy;
+        var price = typeof manual === 'number' || typeof manual === 'string' && manual.trim() ? Number(manual) : NaN;
+        var mode = saved && ['manual', 'automatic'].indexOf(saved.mode) >= 0 ? saved.mode : legacy !== null ? 'manual' : 'automatic';
+        return { mode: mode, category: saved && ['petrol', 'diesel'].indexOf(saved.category) >= 0 ? saved.category : '',
+            manualPrice: Number.isFinite(price) && price >= 0 && price <= 100 ? price : null };
+    }
+
     function getRouteCostParams(vehicleType, storage) {
         var vt = vehicleType || 'petrol_diesel';
         var defaults = DEFAULT_ROUTE_COST_PARAMS[vt] || DEFAULT_ROUTE_COST_PARAMS.petrol_diesel;
-        return {
+        var settings = getFuelPricingSettings(storage);
+        var params = {
             fuel_efficiency: parseFloat(storage.getItem('fuelEfficiency') || String(defaults.fuel_efficiency)),
-            fuel_price: parseFloat(storage.getItem('fuelPrice') || String(defaults.fuel_price)),
             energy_efficiency: parseFloat(storage.getItem('energyEfficiency') || String(defaults.energy_efficiency)),
             electricity_price: parseFloat(storage.getItem('electricityPrice') || String(defaults.electricity_price)),
+            fuel_price_mode: settings.mode,
+            fuel_category: settings.category,
         };
+        // Do not turn a missing manual price into a silently fabricated estimate.
+        if (settings.mode === 'manual') params.fuel_price = settings.manualPrice;
+        return params;
     }
 
     var api = {
@@ -443,6 +459,7 @@
         migrateTollPrefKey: migrateTollPrefKey,
         isAvoidTollsEnabled: isAvoidTollsEnabled,
         getRouteCostParams: getRouteCostParams,
+        getFuelPricingSettings: getFuelPricingSettings,
         getRoutePreferences: getRoutePreferences,
         buildRoutePreferencesFormStatePlan: buildRoutePreferencesFormStatePlan,
         buildRoutePreferencesUiApplyPlan: buildRoutePreferencesUiApplyPlan,

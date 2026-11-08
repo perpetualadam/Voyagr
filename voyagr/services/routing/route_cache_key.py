@@ -67,8 +67,9 @@ def build_route_cache_key(
     via_points: Optional[Sequence[Dict[str, Any]]] = None,
     stops: Optional[Sequence[Dict[str, Any]]] = None,
     departure_time: Optional[str] = None,
+    cost_fingerprint: str = '',
 ) -> str:
-    """Create cache key from route parameters (rv9 adds via_points, stops, departure_time).
+    """Create cache key from route parameters (rv10 includes cost/source identity).
 
     Route-shaping inputs like via_points, stops, and departure_time are now included
     to prevent returning cached direct routes for multi-leg or time-dependent requests.
@@ -86,7 +87,7 @@ def build_route_cache_key(
         f'{int(avoid_tolls)},{int(avoid_motorways)},{int(avoid_ferries)},'
         f'{int(avoid_unpaved)},{int(prefer_scenic)},{int(prefer_quiet)},'
         f'{ro},{float(max_detour):.0f},'
-        f'{avoid_fp},{via_fp},{stops_fp},{dep_time},rv9'
+        f'{avoid_fp},{via_fp},{stops_fp},{dep_time},{cost_fingerprint},rv10'
     )
 
 

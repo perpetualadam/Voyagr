@@ -1,8 +1,9 @@
 # Dynamic fuel-price research and staged integration
 
-Researched 8 November 2026. Recommendation and implementation design only: no
-runtime pricing, credentials, provider registration or production changes are
-included. Preserve the existing Overpass, arrival and unit/device checklists.
+Researched 8 November 2026. Implementation records below track the parser/cache
+and automatic/manual route-price integration. No credentials, provider
+registration or production changes are included. Preserve the existing Overpass,
+arrival and unit/device checklists.
 
 ## Recommendation
 
@@ -53,7 +54,7 @@ The linked [methodology](https://assets.publishing.service.gov.uk/government/upl
 describes survey-derived weighted averages; its historic sample/quality figures
 must not be presented as measured current station coverage.
 
-## Repository findings
+## Repository findings at the research baseline
 
 - `static/js/modules/navigation/route-prefs.js:getRouteCostParams` always sends a
   price: a `fuelPrice` localStorage override or a static default. Updating backend
@@ -158,10 +159,10 @@ an authenticated Fuel Finder client or a live price-ingestion deployment.
 ## Implemented step 1: inactive parser/cache and explicit operator command
 
 `voyagr/services/weekly_fuel_prices.py` implements the acquisition boundary and
-snapshot cache. It is **not imported by routing**, does not instantiate a client,
-start a thread/job, fetch on application startup or change existing prices. The
-next increment is still the explicit automatic/manual/fuel-category UI/request
-contract and its fallback/source-provenance integration.
+snapshot cache. This first increment shipped without routing imports, client
+instantiation, startup fetches, jobs or price changes. Step 2 below adds the
+explicit automatic/manual/fuel-category request contract and snapshot reads;
+source refresh remains an explicit operator responsibility.
 
 The adapter discovers the newest labelled CSV series from the fixed GOV.UK
 publication. All publication and attachment redirects are checked before access:
@@ -239,3 +240,59 @@ operator tests passed. The declared web backend selection passed 2,040 tests,
 with one platform skip and 74 subtests; 141 JavaScript suites / 3,042 tests,
 lint and coverage requirements also passed. No new browser UI was introduced,
 and these checks do not establish live GOV.UK HTTP refresh or deployed pricing.
+
+## Implemented step 2: automatic/manual selection and frozen route quotes
+
+The browser now offers a collapsed **Fuel price estimate** disclosure with an
+explicit petrol/diesel category and automatic/manual choice. A legacy saved
+`fuelPrice` remains manual until the user opts into automatic; switching to auto
+retains the manual value for switching back. Settings snapshots/export and profile
+switches preserve the choice while isolating one profile from another. Price
+controls are explicitly GBP per litre, independent of display currency/distance.
+Electric costs keep the existing GBP/kWh tariff; no EV feed was added.
+
+Each explicit `/api/route` calculation resolves exactly one quote, before any
+alternatives or multi-drop branch. The separate multi-stop endpoint follows the
+same contract. Automatic mode reads the bounded, validated local snapshot only
+when petrol/diesel is explicitly chosen. It does **no source HTTP, refresh,
+background work or file writes** during route requests. A snapshot older than
+14 days, missing/invalid cache or missing category uses the configured estimate
+with `CONFIGURED_FALLBACK` and a reason. An explicitly invalid manual price
+returns a validation error rather than silently becoming an automatic/default
+price. The combined vehicle label does not establish a fuel category.
+
+`fuel_pricing` metadata records mode, category, actual GBP/L price, source and,
+for weekly averages, observation/retrieval dates and snapshot ID. All alternatives
+and legs carry the same quote. The route preview explains weekly average vs
+manual vs configured fallback, and saved/shared route payloads retain their
+original quote. Editing settings never reprices the displayed/saved journey or
+starts routing/GPS. The next calculation uses the new selection. Multi-drop
+responses previously emitted zero fuel costs; their total/leg fuel estimates now
+use this same rate, without inventing toll/CAZ verification.
+
+The `rv10` memory/persistent cache key includes a fingerprint of resolved fuel/
+energy consumption, prices and quote metadata. A previous price/source/consumption
+cannot replay its costs as a new quote; pre-migration cache rows miss safely.
+Geometry, route ranking, avoidance and navigation eligibility remain under the
+existing routing/verification logic.
+
+**Operator integration, not deployment:** the app reads a snapshot only if
+`VOYAGR_WEEKLY_FUEL_PRICE_CACHE` names the JSON file created by
+`scripts/refresh-weekly-fuel-prices.py --cache-file /chosen/path.json`.
+The parent directory must already exist; the web process needs read access and
+the single refresher needs write access. No environment value, live cache,
+scheduler, source refresh or production configuration was installed here.
+Without a usable file the UI honestly reports a configured estimate. Live GOV.UK
+HTTP acquisition and VPS/source/device acceptance still need verification before
+claiming automatic prices are operational in production. Fuel Finder station
+integration and real currency conversion remain separate future work.
+
+Validation for step 2: 33 focused Python cases, including real Flask/cache wiring,
+and 13 JavaScript selection/profile/provenance cases passed. The full declared
+web backend selection passed 2,073 tests (one platform skip, 74 subtests);
+142 JavaScript suites / 3,055 tests, lint and coverage requirements passed.
+`node scripts/check-fuel-pricing-controls.cjs` exercised the real template controls
+and production helpers at 390×844 and 844×390: legacy/manual/automatic changes,
+reload persistence, no route/GPS/network side effects and no horizontal overflow.
+This was controlled browser acceptance with fixture state, not live source,
+full-map/device navigation or deployed data acceptance.

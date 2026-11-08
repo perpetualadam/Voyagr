@@ -13,6 +13,7 @@
         'unit_currency',
         'unit_speed',
         'unit_temperature',
+        'fuelPricing',
         'vehicleType',
         'routingMode',
         'routePreferences',
@@ -61,6 +62,7 @@
             unit_currency: input.currencyUnit,
             unit_speed: input.speedUnit,
             unit_temperature: input.temperatureUnit,
+            fuelPricing: input.fuelPricing,
             vehicleType: input.vehicleType,
             routingMode: input.routingMode,
             routePreferences: input.routePreferences || {},
@@ -97,6 +99,7 @@
             currencyUnit: runtime.currencyUnit,
             speedUnit: runtime.speedUnit,
             temperatureUnit: runtime.temperatureUnit,
+            fuelPricing: runtime.fuelPricing,
             vehicleType: runtime.vehicleType,
             routingMode: runtime.routingMode,
             routePreferences: formState.routePreferences || {},
@@ -264,6 +267,13 @@
         }
 
         var localStoragePatches = {};
+        if (settings.fuelPricing && typeof settings.fuelPricing === 'object') {
+            var fp = settings.fuelPricing, mp = fp.manualPrice;
+            if (['automatic', 'manual'].indexOf(fp.mode) >= 0 && ['', 'petrol', 'diesel'].indexOf(fp.category) >= 0 &&
+                (mp === null || typeof mp === 'number' && Number.isFinite(mp) && mp >= 0 && mp <= 100)) {
+                localStoragePatches.fuelPricing = JSON.stringify({mode: fp.mode, category: fp.category, manualPrice: mp});
+            }
+        }
         var runtime = {};
 
         [
@@ -749,7 +759,7 @@
     var SETTINGS_RESET_LOCAL_STORAGE_KEYS = [
         SETTINGS_STORAGE_KEY,
         'unit_distance', 'unit_currency', 'unit_speed', 'unit_temperature',
-        'vehicleType', 'routingMode',
+        'vehicleType', 'routingMode', 'fuelPricing', 'fuelPrice',
         'routePreferences',
         'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
         'pref_tolls', 'pref_caz', 'pref_cameras',
@@ -1105,7 +1115,8 @@
                 currencyUnit: input.currencyUnit,
                 speedUnit: input.speedUnit,
                 temperatureUnit: input.temperatureUnit,
-                vehicleType: input.vehicleType,
+                fuelPricing: input.fuelPricing,
+            vehicleType: input.vehicleType,
             },
             routingMode: input.routingMode,
             routePreferenceChecks: {
@@ -1166,6 +1177,7 @@
             currencyUnit: runtime.currencyUnit,
             speedUnit: runtime.speedUnit,
             temperatureUnit: runtime.temperatureUnit,
+            fuelPricing: runtime.fuelPricing,
             vehicleType: runtime.vehicleType,
             routingMode: runtime.routingMode,
             routePreferences: stored.routePreferences,
