@@ -588,3 +588,25 @@ can continue while the user defers road testing.
 
 Continue the parallel settings/statistics UI, remaining unit-policy and
 source-maintenance work; retain the user's deferred sat-nav acceptance tasks.
+
+## Compact Settings controls (8 November 2026)
+
+- [x] Replace ordinary full-width actions with compact, wrapping icon-and-label
+  controls: Back/Map, privacy notice, zone information, traffic update, departure
+  analysis, app refresh/update and route recalculation. Keep existing handlers.
+- [x] Associate native select labels, name empty toggle buttons, enlarge toggle
+  hit areas without changing the controller-owned active class, and provide
+  visible keyboard focus, wrapping native controls and readable dark help text.
+- [x] Preserve all existing control IDs, values, options/defaults, hidden account
+  and billing sections, avoidance refusal text and selected-unit persistence.
+  Authentication, billing and preference-controller behavior is unchanged.
+- [x] Validate 2,221 backend tests (one skipped), 3,102 JavaScript tests with
+  coverage, lint, and controlled browser checks at four viewports in light/dark
+  with 100%/200% text. Browser uses production markup/CSS and the unit controller;
+  account, navigation and API boundaries are fixtures, not live acceptance.
+- [ ] Accept on the deployed app/device, including signed-in/premium views and
+  screen-reader state announcements. This increment names switches but does not
+  replace their existing class-based state ownership with ARIA switch semantics.
+
+Keep statistics UI, remaining units/source maintenance and the user's deferred
+sat-nav acceptance alongside this work. No production deployment is automatic.

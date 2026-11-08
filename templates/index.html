@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108collections1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261108settings1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -698,13 +698,8 @@
                 </div>
 
                 <!-- UNIFIED SETTINGS TAB -->
-                <div id="settingsTab" style="display: none;">
-                    <!-- Back Button -->
-                    <div style="margin-bottom: 15px;">
-                        <button onclick="goBackToPreviousTab()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                            ← Back
-                        </button>
-                    </div>
+                <div id="settingsTab" class="settings-panel" style="display: none;">
+                    <div class="settings-heading"><h3>Settings</h3><button type="button" class="settings-action" onclick="goBackToPreviousTab()" title="Back to previous screen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Back</span></button></div>
 
                     <!-- Account Section (Supabase) -->
                     <div class="preferences-section" id="accountSection">
@@ -793,15 +788,9 @@
                         <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
                             How Voyagr handles your data, and your rights under UK GDPR / data protection law.
                         </p>
-                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-                            <a href="/privacy" target="_blank" rel="noopener"
-                               style="display: block; text-align: center; padding: 11px; background: #667eea; color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none;">
-                                Open Privacy Policy
-                            </a>
-                            <button type="button" onclick="voyagrShowSafetyNotice && voyagrShowSafetyNotice()"
-                                    style="padding: 11px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                                Review safety &amp; privacy notice
-                            </button>
+                        <div class="settings-actions">
+                            <a href="/privacy" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"/></svg><span>Privacy policy</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
+                            <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice && voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Review safety notice</span></button>
                         </div>
                     </div>
 
@@ -810,7 +799,7 @@
                         <h3>📏 Units</h3>
 
                         <div class="preference-item">
-                            <span class="preference-label">📏 Distance Unit</span>
+                            <label class="preference-label" for="distanceUnit">📏 Distance Unit</label>
                             <select id="distanceUnit" onchange="updateDistanceUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="km">Kilometers (km)</option>
                                 <option value="mi">Miles (mi)</option>
@@ -818,7 +807,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">⚡ Speed Unit</span>
+                            <label class="preference-label" for="speedUnit">⚡ Speed Unit</label>
                             <select id="speedUnit" onchange="updateSpeedUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="kmh">km/h</option>
                                 <option value="mph">mph</option>
@@ -827,14 +816,14 @@
 
                         <div class="preference-item">
                             <span class="preference-label">🚗 Speedometer &amp; limit</span>
-                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map"></button>
+                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map" aria-label="🚗 Speedometer &amp; limit"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
                             The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
                         </p>
 
                         <div class="preference-item">
-                            <span class="preference-label">🌡️ Temperature</span>
+                            <label class="preference-label" for="temperatureUnit">🌡️ Temperature</label>
                             <select id="temperatureUnit" aria-describedby="temperatureUnitHelp" onchange="updateTemperatureUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="celsius">Celsius (°C)</option>
                                 <option value="fahrenheit">Fahrenheit (°F)</option>
@@ -843,7 +832,7 @@
                         <p id="temperatureUnitHelp" style="font-size:12px;line-height:1.45;">The current weather view is a map overlay; its provider-supplied colours do not change with this preference.</p>
 
                         <div class="preference-item">
-                            <span class="preference-label">💱 Preferred currency</span>
+                            <label class="preference-label" for="currencyUnit">💱 Preferred currency</label>
                             <select id="currencyUnit" aria-describedby="costCurrencyHelp" onchange="updateCurrencyUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="GBP">GBP (£)</option>
                                 <option value="USD">USD ($)</option>
@@ -866,17 +855,17 @@
 
                             <div class="preference-item">
                                 <span class="preference-label">Emissions charge zones</span>
-                                <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')"></button>
+                                <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')" type="button" aria-label="Emissions charge zones"></button>
                             </div>
 
                             <div class="preference-item">
                                 <span class="preference-label">Traffic signals</span>
-                                <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')"></button>
+                                <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')" type="button" aria-label="Traffic signals"></button>
                             </div>
 
                             <div class="preference-item">
                                 <span class="preference-label">Level crossings</span>
-                                <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')"></button>
+                                <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')" type="button" aria-label="Level crossings"></button>
                             </div>
                         </div>
 
@@ -886,7 +875,7 @@
 
                             <div class="preference-item">
                                 <span class="preference-label">Use map data in routing</span>
-                                <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')"></button>
+                                <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')" type="button" aria-label="Use map data in routing"></button>
                             </div>
                         </div>
 
@@ -896,27 +885,27 @@
 
                             <div class="preference-item">
                                 <span class="preference-label">Speed cameras</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)" aria-label="Speed cameras"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Traffic light cameras</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)" aria-label="Traffic light cameras"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Average-speed zones</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)" aria-label="Average-speed zones"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Bus lanes</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)" aria-label="Bus lanes"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Mobile units</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)" aria-label="Mobile units"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">Other mapped points</span>
-                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)"></button>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)" aria-label="Other mapped points"></button>
                             </div>
                         </div>
 
@@ -929,21 +918,19 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Live traffic updates</span>
-                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Live traffic updates"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p>
 
                         <div class="preference-item">
                             <span class="preference-label">Reroute when off course</span>
-                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Reroute when off course"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p>
 
                         <div class="preference-item">
                             <span class="preference-label">Traffic check now</span>
-                            <button onclick="manualTrafficUpdate()" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                                Update now
-                            </button>
+                            <button type="button" class="settings-action" onclick="manualTrafficUpdate()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Update now</span></button>
                         </div>
                     </div>
 
@@ -952,9 +939,7 @@
                         <h3>🌿 Emissions charge zones</h3>
                         <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK zones with daily charges, passes, and vehicle exemptions</p>
 
-                        <button onclick="showCAZInfo()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
-                            📋 Zone charges &amp; passes
-                        </button>
+                        <button type="button" class="settings-action" onclick="showCAZInfo()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Zone charges &amp; passes</span></button>
 
                         <div id="cazInfoContainer" style="display: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
                     </div>
@@ -975,17 +960,17 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer routes without tolls</span>
-                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads"></button>
+                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads" type="button" aria-label="Prefer routes without tolls"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer non-motorway routes</span>
-                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways"></button>
+                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways" type="button" aria-label="Prefer non-motorway routes"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer routes without ferries</span>
-                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries"></button>
+                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries" type="button" aria-label="Prefer routes without ferries"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes, including multi-stop legs.</p>
 
@@ -1005,7 +990,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Route Optimization</span>
+                            <label class="preference-label" for="routeOptimization">Route Optimization</label>
                             <select id="routeOptimization" onchange="saveRoutePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="fastest">⚡ Fastest</option>
                                 <option value="scenic">🌿 Scenic</option>
@@ -1072,16 +1057,14 @@
                             <span class="preference-label">Departure Time</span>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <input type="datetime-local" id="departureTime" onchange="saveMultiDropPreferences()" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <button onclick="clearDepartureTime()" style="padding: 8px 12px; border: 1px solid #ddd; background: #f5f5f5; border-radius: 4px; cursor: pointer; font-size: 12px;">Now</button>
+                                <button type="button" class="settings-action" onclick="clearDepartureTime()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Now</span></button>
                             </div>
                             <div style="font-size: 11px; color: #888; margin-top: 4px;">Set departure time for accurate ETAs. Leave empty to use current time.</div>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">🕐 Best Time to Leave</span>
-                            <button onclick="analysebestTimeToLeave()" style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%;">
-                                Analyse Best Departure Time
-                            </button>
+                            <button type="button" class="settings-action" onclick="analysebestTimeToLeave()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>Analyse departure</span></button>
                         </div>
                         <div id="bestTimeResult" style="display: none; margin-top: 8px; padding: 12px; background: #f0f4ff; border-radius: 8px; border: 1px solid #dde4ff;">
                             <div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px;">Recommended Departure Times</div>
@@ -1128,12 +1111,12 @@
 
                         <div class="preference-item">
                             <span class="preference-label">🔍 Smart Zoom</span>
-                            <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()"></button>
+                            <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()" type="button" aria-label="🔍 Smart Zoom"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">📍 Center on my location</span>
-                            <button type="button" class="toggle-switch" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" title="Move the map to your GPS position when location is available"></button>
+                            <button type="button" class="toggle-switch" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" title="Move the map to your GPS position when location is available" aria-label="📍 Center on my location"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0; line-height: 1.45;">
                             When on, the map moves from the default view to your GPS position when location is available. Turn off to keep the map on the default area.
@@ -1141,7 +1124,7 @@
 
                         <div class="preference-item">
                             <span class="preference-label">Mapped points on map</span>
-                            <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()"></button>
+                            <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()" type="button" aria-label="Mapped points on map"></button>
                         </div>
 
                         <div class="preference-item">
@@ -1149,21 +1132,21 @@
                                 <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
                                 <span>Traffic signals (map)</span>
                             </span>
-                            <button class="toggle-switch active" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" type="button" aria-label="Traffic signals (map)" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
 
                         <p id="osmTrafficLightDataStatus" role="status">Traffic-light coverage has not been checked.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">Level crossings (map)</span>
-                            <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Level crossings (map)"></button>
                         </div>
                         <p id="osmRailwayCrossingDataStatus" role="status">Level-crossing coverage has not been checked.</p>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Map overlays for traffic signals and level crossings. Separate from the routing toggles above.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Show Traffic Flow</span>
-                            <button class="toggle-switch" id="showTrafficToggle" onclick="toggleTrafficLayer()"></button>
+                            <button class="toggle-switch" id="showTrafficToggle" onclick="toggleTrafficLayer()" type="button" aria-label="🚦 Show Traffic Flow"></button>
                         </div>
 
                         <div class="preference-item">
@@ -1171,31 +1154,31 @@
                                 <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
                                 <span>Show Traffic Lights</span>
                             </span>
-                            <button class="toggle-switch active" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" type="button" aria-label="Show Traffic Lights" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Vertical traffic-light icon (red → amber → green) shown along your route.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛤️ Route Traffic Edges</span>
-                            <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛤️ Route Traffic Edges"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Highlight congestion along your route (orange/red/black only — free-flow green is hidden so the route line stays visible)</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛣️ Road Name Labels</span>
-                            <button class="toggle-switch active" id="roadLabelsToggle" onclick="toggleRoadLabels()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" id="roadLabelsToggle" onclick="toggleRoadLabels()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛣️ Road Name Labels"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display motorway, A-road, and street names on the map</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🏢 3D Buildings</span>
-                            <button class="toggle-switch active" id="buildings3DToggle" onclick="toggle3DBuildings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                            <button class="toggle-switch active" id="buildings3DToggle" onclick="toggle3DBuildings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🏢 3D Buildings"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show 3D building extrusions on the map</p>
 
                         <div class="preference-item">
                             <span class="preference-label">📍 Google Plus Codes</span>
-                            <button class="toggle-switch" id="googlePlusCodesToggle" onclick="toggleGooglePlusCodes()"></button>
+                            <button class="toggle-switch" id="googlePlusCodesToggle" onclick="toggleGooglePlusCodes()" type="button" aria-label="📍 Google Plus Codes"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Enable Plus Code input for destination search (free, offline-capable)</p>
 
@@ -1203,16 +1186,16 @@
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR & 3D View</h4>
                             <div class="preference-item">
                                 <span class="preference-label">🗺️ 3D Map View</span>
-                                <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()"></button>
+                                <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()" type="button" aria-label="🗺️ 3D Map View"></button>
                             </div>
                             <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D and tilted 3D (perspective + 3D buildings). Applies while browsing and during navigation — 2D navigation still follows heading-up, just flat.</p>
                             <div class="preference-item">
                                 <span class="preference-label">👓 AR Navigation</span>
-                                <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()"></button>
+                                <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()" type="button" aria-label="👓 AR Navigation"></button>
                             </div>
                             <div class="preference-item">
                                 <span class="preference-label">🚗 3D Driver View</span>
-                                <button class="toggle-switch" id="driverPerspectiveToggle" onclick="toggleDriverPerspective()"></button>
+                                <button class="toggle-switch" id="driverPerspectiveToggle" onclick="toggleDriverPerspective()" type="button" aria-label="🚗 3D Driver View"></button>
                             </div>
                         </div>
                     </div>
@@ -1222,7 +1205,7 @@
                         <h3>🅿️ Parking Preferences</h3>
 
                         <div class="preference-item">
-                            <span class="preference-label">Max Walking Distance</span>
+                            <label class="preference-label" for="parkingMaxWalkingDistance">Max Walking Distance</label>
                             <select id="parkingMaxWalkingDistance" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="5">5 minutes (400m)</option>
                                 <option value="10" selected>10 minutes (800m)</option>
@@ -1231,7 +1214,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Preferred Parking Type</span>
+                            <label class="preference-label" for="parkingPreferredType">Preferred Parking Type</label>
                             <select id="parkingPreferredType" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="any" selected>Any Type</option>
                                 <option value="garage">Garage</option>
@@ -1241,7 +1224,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Price Preference</span>
+                            <label class="preference-label" for="parkingPricePreference">Price Preference</label>
                             <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="any" selected>Any Price</option>
                                 <option value="free">Reported Free Only (Any Type)</option>
@@ -1258,7 +1241,7 @@
 
 
                         <div class="preference-item">
-                            <span class="preference-label">Turn Announcement Distance (1st)</span>
+                            <label class="preference-label" for="voiceTurnDistance1">Turn Announcement Distance (1st)</label>
                             <select id="voiceTurnDistance1" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="300">300 meters</option>
                                 <option value="500" selected>500 meters</option>
@@ -1268,7 +1251,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Turn Announcement Distance (2nd)</span>
+                            <label class="preference-label" for="voiceTurnDistance2">Turn Announcement Distance (2nd)</label>
                             <select id="voiceTurnDistance2" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="100">100 meters</option>
                                 <option value="150">150 meters</option>
@@ -1278,7 +1261,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Turn Announcement Distance (3rd)</span>
+                            <label class="preference-label" for="voiceTurnDistance3">Turn Announcement Distance (3rd)</label>
                             <select id="voiceTurnDistance3" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="50">50 meters</option>
                                 <option value="75">75 meters</option>
@@ -1288,7 +1271,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Hazard Warning Distance</span>
+                            <label class="preference-label" for="voiceHazardDistance">Hazard Warning Distance</label>
                             <select id="voiceHazardDistance" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="300">300 meters</option>
                                 <option value="500" selected>500 meters</option>
@@ -1298,7 +1281,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Voice Frequency</span>
+                            <label class="preference-label" for="voiceFrequencyMode">Voice Frequency</label>
                             <select id="voiceFrequencyMode" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="all">All announcements</option>
                                 <option value="important">Important only (turns &amp; hazards)</option>
@@ -1308,12 +1291,12 @@
 
                         <div class="preference-item">
                             <span class="preference-label">🔊 Voice Announcements</span>
-                            <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()"></button>
+                            <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()" type="button" aria-label="🔊 Voice Announcements"></button>
                         </div>
 
                         <div class="preference-item" id="porcupineWakePrefRow">
                             <span class="preference-label">🎙️ Wake phrase (Picovoice)</span>
-                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()"></button>
+                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()" aria-label="🎙️ Wake phrase (Picovoice)"></button>
                         </div>
                         <p id="porcupineWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0; line-height: 1.5;">
                             Hands-free keyword when a Picovoice access key and web assets are configured on the server. HTTPS required for the microphone.
@@ -1321,7 +1304,7 @@
                         </p>
 
                         <div class="preference-item">
-                            <span class="preference-label">Roadside alert style</span>
+                            <label class="preference-label" for="cameraAlertType">Roadside alert style</label>
                             <select id="cameraAlertType" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="off">Off</option>
                                 <option value="voice" selected>Voice only</option>
@@ -1332,7 +1315,7 @@
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Roadside alert distance</span>
+                            <label class="preference-label" for="cameraAlertDistance">Roadside alert distance</label>
                             <select id="cameraAlertDistance" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="200">200 meters</option>
                                 <option value="300">300 meters</option>
@@ -1349,12 +1332,12 @@
 
                         <div class="preference-item">
                             <span class="preference-label">🤖 Smart Route Predictions</span>
-                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()"></button>
+                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()" type="button" aria-label="🤖 Smart Route Predictions"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">🔋 Battery Saving Mode</span>
-                            <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()"></button>
+                            <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()" type="button" aria-label="🔋 Battery Saving Mode"></button>
                         </div>
 
                     </div>
@@ -1363,13 +1346,9 @@
                     <div class="preferences-section">
                         <h3>📱 App Controls</h3>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="refreshApp()" style="padding: 12px 16px; background: #2196F3; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🔄 Refresh App
-                            </button>
-                            <button onclick="checkForUpdates()" style="padding: 12px 16px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                📥 Check Updates
-                            </button>
+                        <div class="settings-actions">
+                            <button type="button" class="settings-action" onclick="refreshApp()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Refresh app</span></button>
+                            <button type="button" class="settings-action" onclick="checkForUpdates()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>Check updates</span></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Refresh to reload the app. Check Updates to get the latest version.</p>
 
@@ -1379,9 +1358,9 @@
                     </div>
 
                     <!-- Action Buttons -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;">
-                        <button class="btn-calculate" onclick="recalculateRouteWithPreferences()" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 12px; font-size: 14px; cursor: pointer; font-weight: 500;">🔄 Recalculate Route</button>
-                        <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; background: #666; color: white; border: none; border-radius: 4px; padding: 12px; font-size: 14px; cursor: pointer; font-weight: 500;">← Back to Navigation</button>
+                    <div class="settings-actions settings-actions--footer">
+                        <button type="button" class="settings-action" onclick="recalculateRouteWithPreferences()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg><span>Recalculate route</span></button>
+                        <button type="button" class="settings-action" onclick="switchTab('navigation')"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 4-8 8 8 8M4 12h16"/></svg><span>Map</span></button>
                     </div>
                 </div>
 
