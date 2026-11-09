@@ -24,9 +24,9 @@ describe('map-theme module', () => {
     });
 
     test('dark map theme uses Voyagr dark style not light Positron', () => {
-        expect(MT.MAP_THEME_STYLE_PATHS.dark).toBe('/static/map/styles/dark/style.json');
+        expect(MT.MAP_THEME_STYLE_PATHS.dark).toBe('/static/map/styles/dark/style.json?v=20261109contrast1');
         const plan = MT.buildMapThemeStyleUrlsPlan({ theme: 'dark' });
-        expect(plan.chosenPath).toBe('/static/map/styles/dark/style.json');
+        expect(plan.chosenPath).toBe('/static/map/styles/dark/style.json?v=20261109contrast1');
     });
 
     test('buildRoadLabelPaintPlan uses light text on dark basemap', () => {
@@ -77,7 +77,7 @@ describe('map-theme module', () => {
     test('buildMapBootstrapPlan picks style path and splash background per theme', () => {
         const dark = MT.buildMapBootstrapPlan('dark');
         expect(dark.mapTheme).toBe('dark');
-        expect(dark.stylePath).toBe('/static/map/styles/dark/style.json');
+        expect(dark.stylePath).toBe('/static/map/styles/dark/style.json?v=20261109contrast1');
         expect(dark.backgroundColor).toBe(MT.MAP_BOOTSTRAP_BACKGROUND_COLORS.dark);
 
         const standard = MT.buildMapBootstrapPlan('standard');
