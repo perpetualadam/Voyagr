@@ -420,3 +420,84 @@ test('playback distance uses current units and changing paused labels does not m
     expect(Life.getRouteInProgress()).toBe(false);expect(runtime.startLive).not.toHaveBeenCalled();
     Pref.setDistanceUnitValue('mi');
 });
+
+describe('bounded GPS accuracy improvement',()=>{
+ let observed,failed,priorClearWatch;
+ beforeEach(()=>{
+  observed=null;failed=null;priorClearWatch=navigator.geolocation.clearWatch;
+  navigator.geolocation.clearWatch=jest.fn();
+  navigator.geolocation.watchPosition=jest.fn((ok,error)=>{observed=ok;failed=error;return 71;});
+ });
+ afterEach(()=>{navigator.geolocation.clearWatch=priorClearWatch;});
+ test('coarse first fix waits for a fresh accurate reading before routing and clears its own watch',async()=>{
+  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+  expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
+  expect(navigator.geolocation.watchPosition).toHaveBeenCalledWith(expect.any(Function),expect.any(Function),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+  observed(position(53,45));expect(runtime.fetch).not.toHaveBeenCalled();
+  observed(position(53,30));expect(await pending).toBe(true);
+  expect(runtime.acceptPosition.mock.calls[0][0].coords.accuracy).toBe(30);
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+  expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(Life.getRouteInProgress()).toBe(true);
+ });
+ test.each(['coarse','stale','invalid'])('%s updates never authorize a route and the original deadline clears the watch',async kind=>{
+  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+  jest.advanceTimersByTime(11000);
+  observed(kind==='stale'?position(53,5,Date.now()-20000):kind==='invalid'?position(NaN):position(53,31));
+  jest.advanceTimersByTime(1000);expect(await pending).toBe(false);
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+  expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();
+  expect(Modes.getState()).toBe('CHOOSING');
+  observed(position());expect(runtime.fetch).not.toHaveBeenCalled();
+ });
+ test.each(['exit','destination','simulation'])('%s cancellation releases the accuracy watch and fences late fixes',async change=>{
+  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+  if(change==='exit')Modes.exit();
+  if(change==='destination')Modes.endpointChanged();
+  if(change==='simulation')expect(Modes.startSimulation()).toBe(true);
+  expect(await pending).toBe(false);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+  observed(position());expect(runtime.fetch).not.toHaveBeenCalled();expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
+ });
+ test('permission denial while improving is terminal and clears the watch',async()=>{
+  locations=[position(53,100)];const pending=Modes.navigateFromGPS();failed({code:1});
+  expect(await pending).toBe(false);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+  expect(document.getElementById('journeyModeStatus').textContent).toMatch(/permission denied/);expect(runtime.fetch).not.toHaveBeenCalled();
+ });
+ test('a synchronous successful watch callback still releases the returned watch id',async()=>{
+  locations=[position(53,100)];navigator.geolocation.watchPosition.mockImplementation(ok=>{ok(position());return 72;});
+  expect(await Modes.navigateFromGPS()).toBe(true);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(72);
+ });
+ test('second acquisition after the route response also waits without starting navigation early',async()=>{
+  locations=[position(),position(53,80)];const pending=Modes.navigateFromGPS();
+  for(let i=0;i<10&&!observed;i++)await Promise.resolve();
+  expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(runtime.startLive).not.toHaveBeenCalled();
+  observed(position());expect(await pending).toBe(true);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+ });
+ test('cancelled GPS stop acquisition releases its watch and adds no stop',async()=>{
+  locations=[position(53,100)];const pending=Modes.addGpsStop();Modes.exit();
+  expect(await pending).toBe(false);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+  observed(position());expect(runtime.addStop).not.toHaveBeenCalled();
+ });
+ test('transient watch errors may recover within the original budget',async()=>{
+  locations=[position(53,100)];const pending=Modes.navigateFromGPS();failed({code:2});failed({code:3});
+  expect(runtime.fetch).not.toHaveBeenCalled();observed(position());expect(await pending).toBe(true);
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledTimes(1);
+ });
+ test('wall-clock expiry refuses a good callback even when the timeout has been suspended',async()=>{
+  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+  jest.setSystemTime(Date.now()+13000);observed(position());expect(await pending).toBe(false);
+  expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
+ });
+ test('a late first coarse fix gets only the remainder of the acquisition budget',async()=>{
+  let first;navigator.geolocation.getCurrentPosition.mockImplementation(ok=>{first=ok;});
+  const pending=Modes.navigateFromGPS();jest.advanceTimersByTime(9000);first(position(53,100));
+  jest.advanceTimersByTime(3000);expect(await pending).toBe(false);
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);expect(runtime.fetch).not.toHaveBeenCalled();
+ });
+ test('watch startup failure remains a visible refusal without a routing request',async()=>{
+  locations=[position(53,100)];navigator.geolocation.watchPosition.mockImplementation(()=>{throw Error('Device unavailable');});
+  expect(await Modes.navigateFromGPS()).toBe(false);expect(runtime.fetch).not.toHaveBeenCalled();
+  expect(document.getElementById('journeyModeStatus').textContent).toMatch(/accuracy is insufficient/);
+ });
+
+});

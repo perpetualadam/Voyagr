@@ -1039,9 +1039,8 @@ a stale frame.
   Bound the panel to the viewport and retain internal scrolling for large text.
 - [x] Keep all action handlers, status announcements, verified-start visibility,
   GPS accuracy threshold and durable journey ownership checks unchanged.
-- [ ] Investigate acquisition of an initial coarse GPS fix versus waiting for a
-  better fix. The screenshot confirms refusal, not its device/location cause.
-  Keep the existing 30 m requirement unless evidence supports a separate design.
+- [x] Add bounded GPS accuracy improvement below, retaining the 30 m requirement.
+  The screenshot confirms refusal, not the real device/location cause.
 - [x] Reproduce and prevent plain-plan abandonment from latching false storage
   recovery (see following increment). Existing mismatches still require recovery.
 - [ ] Validate the user's actual restored journey if recovery persists after reload;
@@ -1070,7 +1069,7 @@ only; the GPS and storage warnings remain separate functional investigations.
 - [x] Version the journey modes script; retain all GPS/route safety checks.
 - [ ] Deployed device validation. A session already latched in recovery still needs
   a reload and inspection; this change does not silently clear that flag or storage.
-- [ ] Investigate coarse GPS acquisition separately; retain the 30 m requirement.
+- [x] Bounded GPS acquisition completed below; retain the 30 m requirement.
 
 Focused regressions use production journey/persistence logic and fake IndexedDB:
 plain-plan no-op leaves the intent token and store unchanged, the next GPS attempt
@@ -1083,3 +1082,33 @@ sequence in the user's screenshot. No production data/configuration changes.
 Validation for this increment: 3,253 JavaScript tests with coverage/lint; 2,244
 backend tests plus 74 subtests passed (one skipped); eleven isolated SQL policy
 tests and eight existing chooser browser/layout cases passed. No deployment.
+
+## Bounded GPS accuracy improvement (9 November 2026)
+
+- [x] Keep the immediate path for a fresh accurate initial fix. When the first
+  observation is coarse/stale/invalid, use a temporary high-accuracy watch if both
+  watchPosition and clearWatch are available; otherwise retain visible refusal.
+- [x] Keep the existing 12-second total acquisition budget, fresh timestamp checks,
+  valid coordinates and 30 m accuracy requirement. Repeated readings never extend
+  the budget, and a wall-clock check refuses callbacks after browser suspension.
+- [x] Release the owned watch and timer on success, cancellation, permission denial,
+  deadline or startup failure. Fence late callbacks and unregister cancellation.
+  Transient watch errors may recover within the remaining budget.
+- [x] Apply to the existing initial GPS, post-response GPS and GPS-stop acquisition
+  callers. Route assessment, location-movement checks, lifecycle transactions,
+  durable ownership and continuous navigation GPS tracking are unchanged.
+- [x] A cancelled GPS-stop request cannot add a stop or overwrite newer status.
+- [x] Version the journey script for caches; no new provider or location storage.
+- [ ] Real-device/browser GPS acceptance outdoors and with coarse indoor readings.
+  Waiting cannot guarantee that the receiver achieves the required accuracy.
+
+Validation: 3,268 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+subtests passed (one skipped); eleven isolated SQL policy tests passed. Fifteen
+new journey regressions cover improvement to the 30 m boundary, persistent coarse/
+stale/invalid updates, the unextended deadline, wall-clock expiry, transient errors,
+denial, cancellation/late callbacks, synchronous adapters, watch-start failure,
+post-response acquisition and GPS stops. A real Chromium integration exercises the
+production GPS-stop caller with deterministic position callbacks and verifies
+watch release, no premature stop addition, cancellation, denial and expiry. These
+fixtures do not measure actual satellite reception or guarantee road navigation.
+No production deployment or configuration/data change.

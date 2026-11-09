@@ -213,11 +213,43 @@
         return {lat:c.latitude,lon:c.longitude,accuracy:c.accuracy,timestamp:at};
     }
     function locate(){
+        var token=captureIntent();
         return new Promise(function(resolve,reject){
-            if(!navigator.geolocation){reject(Error('GPS is unavailable. You can still plan or simulate; retry on a device with location support.'));return;}
-            var settled=false;var timeout=setTimeout(function(){done(Error('GPS request timed out. Retry or inspect the planned journey.'));},12000);
-            function done(error,position){if(settled)return;settled=true;clearTimeout(timeout);error?reject(error):resolve(position);}
-            navigator.geolocation.getCurrentPosition(function(position){done(null,position);},function(error){done(Error(error&&error.code===1?'GPS permission denied. Enable location permission and retry; the planned origin will not be substituted.':'GPS location could not be obtained. Retry or use simulation.'));},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+            var geo=navigator.geolocation;
+            if(!geo){reject(Error('GPS is unavailable. You can still plan or simulate; retry on a device with location support.'));return;}
+            var settled=false,improving=false,watchId=null,lastError=null,unregister=function(){};
+            var deadline=Date.now()+12000;
+            var options={enableHighAccuracy:true,maximumAge:0,timeout:10000};
+            var timeout=setTimeout(function(){done(lastError||Error('GPS request timed out. Retry or inspect the planned journey.'));},12000);
+            function releaseWatch(){
+                if(watchId!==null){var id=watchId;watchId=null;try{geo.clearWatch(id);}catch(_){/* Late callbacks are still fenced by settled. */}}
+            }
+            function done(error,position){
+                if(settled)return;settled=true;clearTimeout(timeout);unregister();releaseWatch();
+                error?reject(error):resolve(position);
+            }
+            function failed(error){
+                if(settled)return;
+                var message=Error(error&&error.code===1?'GPS permission denied. Enable location permission and retry; the planned origin will not be substituted.':'GPS location could not be obtained. Retry or use simulation.');
+                if(error&&error.code===1||!improving)done(message);else lastError=lastError||message;
+            }
+            function observed(position,watching){
+                if(settled)return;
+                if(!intentCurrent(token)){done(Error('GPS request cancelled.'));return;}
+                if(Date.now()>=deadline){done(lastError||Error('GPS request timed out. Retry or inspect the planned journey.'));return;}
+                try{fresh(position);done(null,position);return;}catch(error){lastError=error;}
+                if(watching)return;
+                if(typeof geo.watchPosition!=='function'||typeof geo.clearWatch!=='function'){done(lastError);return;}
+                improving=true;
+                status('Improving GPS accuracy… A fresh location within 30 m is required.','loading');
+                try{
+                    watchId=geo.watchPosition(function(next){observed(next,true);},failed,options);
+                    // A test/device adapter may deliver a callback before returning its id.
+                    if(settled)releaseWatch();
+                }catch(error){done(lastError||error);}
+            }
+            unregister=onIntentCancelled(token,function(){done(Error('GPS request cancelled.'));});
+            try{geo.getCurrentPosition(function(position){observed(position,false);},failed,options);}catch(error){done(error);}
         });
     }
     function realFix(){var fix=runtime&&runtime.getFix();return fix&&fresh({timestamp:fix.timestamp,coords:{latitude:fix.lat,longitude:fix.lon,accuracy:fix.accuracy}});}
@@ -455,7 +487,7 @@
     function liveStopped(){if(state==='LIVE')setState('PLANNING');}
     async function addGpsStop(){
         try{var token=captureIntent();status('Getting a GPS location for the stop…','loading');var p=await locate(),fix=fresh(p);if(!intentCurrent(token)||commitPending())return false;rt().addStop(fix.lat,fix.lon,'GPS-selected stop',0,'gps');status('GPS stop added to the plan.','success');return true;}
-        catch(error){status(error.message,'warning');return false;}
+        catch(error){if(intentCurrent(token))status(error.message,'warning');return false;}
     }
     var api={PROTOCOL:1,bind:function(deps){runtime=deps;},getState:function(){return state;},isSimulating:simulating,
         endpointIntentCompatible:endpointIntentCompatible,isJourneyCommitPending:commitPending,isAbandoning:function(){return !!abandonCommit;},commitPlanning:commitPlanning,getContinuation:getContinuation,abandonJourney:abandonJourney,isPlanningCommit:function(){return !!planningCommit;},isPublishingPlanningPlan:function(){return publishingPlan;},
