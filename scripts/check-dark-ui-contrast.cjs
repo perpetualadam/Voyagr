@@ -9,7 +9,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  const dark=owner!=='light',page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
  const shell=`<html class="${owner==='html'||owner==='both'?'dark-mode':''}"><head><meta charset="utf-8"><style>${read('static/vendor/maplibre-gl.css')}\n${read('static/css/voyagr.css')}\nhtml,body{height:auto;overflow:auto}#map{position:relative;width:100%;height:230px}main.bottom-sheet-content{max-width:640px;margin:auto;padding:12px;max-height:none;overflow:visible}</style></head><body class="${owner==='body'||owner==='both'?'dark-mode':''}"><div id="map"></div><main class="bottom-sheet-content">${nav}</main></body></html>`;
  await page.route('**/*',r=>r.request().url()==='https://dark-ui.invalid/'?r.fulfill({contentType:'text/html',body:shell}):r.abort());await page.goto('https://dark-ui.invalid/');
- for(const file of ['vendor/maplibre-gl.js','modules/ui/theme.js','modules/map/map-theme.js','app/dark-mode-orchestration.js','app/map-theme-orchestration.js','app/vehicle-routing-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file.replace('vendor/maplibre-gl.js','../vendor/maplibre-gl.js'))});
+ for(const file of ['vendor/maplibre-gl.js','modules/ui/theme.js','modules/map/map-theme.js','app/dark-mode-orchestration.js','app/map-theme-orchestration.js','app/vehicle-routing-orchestration.js','modules/navigation/favorites.js','app/search-favorites-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file.replace('vendor/maplibre-gl.js','../vendor/maplibre-gl.js'))});
  await page.evaluate(()=>{
   window.fixtureStyle=name=>({version:8,name,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':name==='dark'?'#141820':'#f0f0f0'}}]});
   window.testMap=new maplibregl.Map({container:'map',style:fixtureStyle('standard'),center:[0,0],zoom:4,attributionControl:false});
@@ -20,7 +20,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   const rgb=text=>(text.match(/[\d.]+/g)||[]).map(Number);
   const lum=c=>c.slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
   const contrast=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
-  const selectors=['.navigation-route-controls .btn-calculate--primary','.navigation-route-controls .routing-mode-btn:not(.active)','.routing-mode-btn.active','.btn-voice','.btn-voice-secondary','.btn-clear'];
+  const selectors=['.navigation-save-button','.navigation-route-controls .btn-calculate--primary','.navigation-route-controls .routing-mode-btn:not(.active)','.routing-mode-btn.active','.btn-voice','.btn-voice-secondary','.btn-clear'];
   return {root: getComputedStyle(document.body).backgroundColor,voice:getComputedStyle(document.querySelector('.btn-voice-secondary')).backgroundColor,controls:getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).backgroundColor,canvasFilter:getComputedStyle(document.querySelector('canvas')).filter,canvasOpacity:getComputedStyle(document.querySelector('canvas')).opacity,
    ratios:selectors.map(sel=>{const el=document.querySelector(sel),s=getComputedStyle(el),text=rgb(s.color);let backgrounds=[rgb(s.backgroundColor)];if(s.backgroundImage!=='none')backgrounds=[...s.backgroundImage.matchAll(/rgba?\([^)]+\)/g)].map(m=>rgb(m[0]));return [sel,Math.min(...backgrounds.map(b=>contrast(text,b[3]<1?b.slice(0,3).map((c,i)=>c*b[3]+[20,24,32][i]*(1-b[3])):b)))];})};
  });
@@ -32,7 +32,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  assert.deepEqual(startOrder,{beforeMode:true,beforeCalculate:true,visuallyBefore:true,handler:'toggleAutoGpsLocation()',label:'Use current GPS as start',count:1});
  assert.equal(check.canvasFilter,'none');assert.equal(check.canvasOpacity,'1');
  if(dark){assert.equal(check.voice,'rgba(40, 44, 62, 0.9)');assert.equal(check.controls,'rgb(32, 38, 50)');for(const [sel,ratio] of check.ratios)assert(ratio>=4.5,`${owner} ${sel}: contrast ${ratio}`);}
- else {assert.equal(check.voice,'rgba(255, 255, 255, 0.85)');for(const [sel,ratio] of check.ratios.filter(([sel])=>sel.startsWith('.navigation-route-controls')))assert(ratio>=4.5,`${sel}: contrast ${ratio}`);}
+ else {assert.equal(check.voice,'rgba(255, 255, 255, 0.85)');for(const [sel,ratio] of check.ratios.filter(([sel])=>sel.startsWith('.navigation-route-controls')||sel==='.navigation-save-button'))assert(ratio>=4.5,`${sel}: contrast ${ratio}`);}
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Horizontal overflow');
  const zoom=page.getByRole('button',{name:'Zoom in',exact:true});await zoom.focus();if(dark)assert.equal(await zoom.evaluate(n=>getComputedStyle(n).outlineStyle),'solid');const oldZoom=await page.evaluate(()=>testMap.getZoom());await page.keyboard.press('Enter');await page.waitForFunction(old=>testMap.getZoom()>old,oldZoom);
  if(width===390&&owner==='html'){await page.locator('#autoGpsToggle').locator('xpath=..').screenshot({path:'/tmp/voyagr-gps-start-order.png'});await page.locator('.voice-section').screenshot({path:'/tmp/voyagr-dark-ui-voice.png'});}
@@ -57,6 +57,21 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  await clear.focus();assert.equal(await clear.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');await page.keyboard.press('Space');assert.equal(await page.evaluate(()=>clearInvocations),1);
  const clearBox=await clear.boundingBox();assert(clearBox.width>=44&&clearBox.height>=44);assert.equal(await clear.evaluate(el=>el.getBoundingClientRect().width<el.parentElement.getBoundingClientRect().width),true,'Clear All still spans the panel');
  if(width===390&&owner==='html')await clear.screenshot({path:'/tmp/voyagr-clear-all.png'});
+ // Production favourites owner with only identity, position and transport boundaries.
+ await page.evaluate(()=>{
+  window.savedRequests=[];window.savedStatuses=[];window.favoriteRefreshes=0;
+  window.promptAnswers=['Example place','location'];window.prompt=()=>promptAnswers.shift()??null;
+  window.fetch=(url,options)=>{savedRequests.push({url,options});return Promise.resolve({json:async()=>({success:true})});};
+  document.getElementById('end').value='Example address';
+  VoyagrSearchFavoritesOrchestration.bind({favorites:()=>VoyagrFavorites,getCurrentLat:()=>53.38,getCurrentLon:()=>-1.47,call:{getSupabaseAccessToken:async()=> 'fixture-token',showStatus:(...args)=>savedStatuses.push(args),escapeHtml:s=>s,fetchJsonWithAuth:async()=>{favoriteRefreshes++;return {res:{status:200},data:{success:true,favorites:[{id:1,name:'Example place',address:'Example address',lat:53.38,lon:-1.47,category:'location'}]}};}}});
+  window.addCurrentToFavorites=()=>VoyagrSearchFavoritesOrchestration.addCurrentToFavorites();
+ });
+ const save=page.getByRole('button',{name:'Save Location',exact:true});await save.focus();assert.equal(await save.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>document.getElementById('favoritesGrid').textContent.includes('Example place'));
+ assert.deepEqual(await page.evaluate(()=>({count:savedRequests.length,url:savedRequests[0].url,method:savedRequests[0].options.method,auth:savedRequests[0].options.headers.Authorization,body:JSON.parse(savedRequests[0].options.body),refreshes:favoriteRefreshes})),{count:1,url:'/api/favorites',method:'POST',auth:'Bearer fixture-token',body:{name:'Example place',address:'Example address',lat:53.38,lon:-1.47,category:'location'},refreshes:1});
+ await page.evaluate(()=>{promptAnswers=[null];});await save.focus();await page.keyboard.press('Space');assert.equal(await page.evaluate(()=>savedRequests.length),1,'Cancelled prompt submitted a favourite');
+ const saveBox=await save.boundingBox();assert(saveBox.width>=44&&saveBox.height>=44);assert.equal(await save.evaluate(el=>el.getBoundingClientRect().width<el.parentElement.getBoundingClientRect().width),true,'Save Location still spans the panel');
+ if(width===390&&owner==='html')await save.screenshot({path:'/tmp/voyagr-save-location.png'});
  // Confirm existing default pairing with real controllers and map style replacement.
  await page.evaluate(()=>{
   localStorage.removeItem('linkUiMapTheme');window.fetch=()=>Promise.resolve({ok:true});

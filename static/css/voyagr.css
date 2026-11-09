@@ -5087,3 +5087,23 @@ html.dark-mode .navigation-clear-actions, body.dark-mode .navigation-clear-actio
     --clear-action-surface:#20232b; --clear-action-text:#f4f5f8; --clear-action-border:#70788b;
     --clear-action-hover:#363047; --clear-action-focus:#c6a9f2;
 }
+
+/* Save the current location through the existing favourites flow. */
+.navigation-save-actions {
+    --save-action-surface:#fff; --save-action-text:#293142; --save-action-border:#a3adbf;
+    --save-action-hover:#f3f0fa; --save-action-accent:#56328a; margin-top:10px;
+}
+.navigation-save-actions .btn-calculate.navigation-save-button {
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    width:auto; min-height:48px; padding:10px 14px; border-radius:12px;
+    border:1px solid var(--save-action-border); background:var(--save-action-surface);
+    color:var(--save-action-text); font-size:14px; font-weight:600; cursor:pointer;
+    box-shadow:none; transition:background-color .15s;
+}
+.navigation-save-button svg { width:22px; height:22px; flex-shrink:0; fill:none; stroke:var(--save-action-accent); stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.navigation-save-actions .btn-calculate.navigation-save-button:hover { background:var(--save-action-hover); transform:none; box-shadow:none; }
+.navigation-save-actions .btn-calculate.navigation-save-button:focus-visible { outline:3px solid var(--save-action-accent); outline-offset:3px; }
+html.dark-mode .navigation-save-actions, body.dark-mode .navigation-save-actions {
+    --save-action-surface:#20232b; --save-action-text:#f4f5f8; --save-action-border:#70788b;
+    --save-action-hover:#363047; --save-action-accent:#c6a9f2;
+}
