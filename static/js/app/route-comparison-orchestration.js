@@ -14,15 +14,19 @@
     const previewCleanupInProgress = new WeakSet();
     var routeOptions = [];
     var selectedRouteIndex = 0;
+    var previewStyleIntent = null;
+    var restoringPreviewStyle = false;
 
     function getRouteOptions() { return routeOptions; }
     function setRouteOptions(val) {
         if (!allowSelectionWrite()) { allowPreviewMutation(); return false; }
+        previewStyleIntent = null;
         routeOptions = val; return true;
     }
     function getSelectedRouteIndex() { return selectedRouteIndex; }
     function setSelectedRouteIndex(val) {
         if (!allowSelectionWrite()) { allowPreviewMutation(); return false; }
+        previewStyleIntent = null;
         selectedRouteIndex = val; return true;
     }
 
@@ -203,6 +207,7 @@ function clearAllRouteLayersFromMap() {
 
 function clearRouteLayerHandlesFromPlan(plan) {
     if (!allowPreviewMutation()) return false;
+    previewStyleIntent = null;
     if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.clearMap();
     const generation=++previewMountGeneration;
     if (!plan) return true;
@@ -355,7 +360,7 @@ function applyDoAddRouteLayersPostMountFromPlan(plan, batchToken) {
  * Apply displaySingleRoute side effects from a pure execute plan.
  * @param {Object} plan - from buildSingleRouteMapDisplayExecutePlan
  */
-function applySingleRouteMapDisplayFromPlan(plan) {
+function applySingleRouteMapDisplayFromPlan(plan, styleRestore) {
     if (!allowPreviewMutation()) return false;
     const map = rt().getMap();
     if (!plan || !plan.shouldExecute) return;
@@ -385,10 +390,12 @@ function applySingleRouteMapDisplayFromPlan(plan) {
             return false;
         }
         allRouteLayers.push(layer);
-        rt().getMapLibreHelpers().fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
+        if (!styleRestore) rt().getMapLibreHelpers().fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
     }
 
     if (!previewBatchCurrent(batch)) return false;
+    if (polylinePoints.length > 0) rememberPreviewStyle('single', plan.polyline);
+    if (styleRestore) return previewBatchCurrent(batch);
     if (plan.hazards.action === 'show') {
         rt().call.displayHazardMarkers(plan.hazards.list);
     } else {
@@ -550,6 +557,7 @@ function applyDoAddRouteLayersFromPlan(apply, batchToken) {
     if (!previewBatchCurrent(batch)) return false;
     applyDoAddRouteLayersPostMountFromPlan(apply.postMount,batch);
     if(previewBatchCurrent(batch)&&root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.showMap((getRouteOptions()||[])[getSelectedRouteIndex()],rt().getMap());
+    if (previewBatchCurrent(batch)) rememberPreviewStyle('all');
     return previewBatchCurrent(batch);
 }
 
@@ -690,6 +698,7 @@ function allowPreviewMutation() {
 // Only comparison handles are eligible; never remove the owned guidance layer.
 // Used by a verified navigation transaction after its new line is mounted.
 function clearComparisonRouteLayers() {
+    previewStyleIntent = null;
     if(root.VoyagrArrivalPreview)root.VoyagrArrivalPreview.clearMap();
     if (!runtime) return false;
     const generation=++previewMountGeneration;
@@ -932,6 +941,55 @@ function syncLastCalculatedRouteFromSelection(index) {
         getRouteOptions()[index]
     );
 }
+// Record only a successfully mounted preview. Clearing/replacing it revokes this
+// intent; style recovery never selects a route, updates costs, fits the camera,
+// fetches traffic/hazards, or grants active-navigation authority.
+function rememberPreviewStyle(kind, polyline) {
+    previewStyleIntent = {kind, map:rt().getMap(), generation:previewMountGeneration,
+        routes:getRouteOptions(), selected:getSelectedRouteIndex(),
+        polyline:polyline ? JSON.parse(JSON.stringify(polyline)) : null,
+        colorIndex:polyline ? routeColors().indexOf(polyline.color) : -1,
+        arrivalRoute:polyline ? getRouteOptions().find(r=>r.polyline===polyline.points) : getRouteOptions()[getSelectedRouteIndex()]};
+}
+
+function restorePreviewAfterStyleLoad(map) {
+    const intent=previewStyleIntent;
+    let entered=false;
+    try {
+        const planner=root.VoyagrJourneyModes;
+        if (restoringPreviewStyle || !runtime || !intent || !knownInactiveLifecycle() ||
+                (planner && planner.isJourneyCommitPending && planner.isJourneyCommitPending()) ||
+                map!==rt().getMap() || map!==intent.map || !map || !map.isStyleLoaded() ||
+                intent.generation!==previewMountGeneration || intent.routes!==getRouteOptions() ||
+                intent.selected!==getSelectedRouteIndex() || allRouteLayers.length===0) return false;
+        // A complete style replacement removes every owned resource. If any
+        // survives (or a new style has coincident IDs), do not remove/reclaim it.
+        const handles=allRouteLayers.concat(rt().getRouteLayer() || []);
+        if (handles.some(h=>map.getLayer(h.id) || map.getSource(h.sourceId || h.id) ||
+                (h.outlineId && map.getLayer(h.outlineId)))) return false;
+        restoringPreviewStyle=true;entered=true;
+        if (intent.kind==='single') {
+            const polyline={...intent.polyline,color:routeColors()[intent.colorIndex] || intent.polyline.color};
+            const ok=applySingleRouteMapDisplayFromPlan({shouldExecute:true,clearAllRouteLayers:true,polyline},true);
+            if (ok && previewStyleIntent) previewStyleIntent.arrivalRoute=intent.arrivalRoute;
+            if (ok && root.VoyagrArrivalPreview) root.VoyagrArrivalPreview.showMap(intent.arrivalRoute,map);
+            return ok;
+        }
+        const apply=RS().buildDoAddRouteLayersEntryOrchestrationPlan(collectDoAddRouteLayersInput()).apply;
+        if (!apply || !apply.shouldApply || clearAllRouteLayersFromMap()===false) return false;
+        const batch=capturePreviewBatch();
+        if (applyDoAddRouteLayersBatchFromPlan(apply.batchExecute,batch)===false || !previewBatchCurrent(batch)) {
+            if (previewBatchCurrent(batch)) clearComparisonRouteLayers();
+            return false;
+        }
+        rememberPreviewStyle('all');
+        if (root.VoyagrArrivalPreview) root.VoyagrArrivalPreview.showMap(intent.arrivalRoute,map);
+        return true;
+    } catch (_) {
+        return false;
+    } finally {if (entered) restoringPreviewStyle=false;}
+}
+
     function getAllRouteLayers() {
         return allRouteLayers;
     }
@@ -945,6 +1003,7 @@ function syncLastCalculatedRouteFromSelection(index) {
         routeColors: routeColors,
         navActiveRouteColor: navActiveRouteColor,
         getAllRouteLayers: getAllRouteLayers,
+        restorePreviewAfterStyleLoad: restorePreviewAfterStyleLoad,
         clearComparisonRouteLayers: clearComparisonRouteLayers,
         applyBringRoutesToTopFromPlan: applyBringRoutesToTopFromPlan,
         clearAllRouteLayersFromMap: clearAllRouteLayersFromMap,
