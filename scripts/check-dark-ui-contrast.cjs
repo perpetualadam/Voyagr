@@ -24,12 +24,18 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   return {root: getComputedStyle(document.body).backgroundColor,voice:getComputedStyle(document.querySelector('.btn-voice-secondary')).backgroundColor,controls:getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).backgroundColor,canvasFilter:getComputedStyle(document.querySelector('canvas')).filter,canvasOpacity:getComputedStyle(document.querySelector('canvas')).opacity,
    ratios:selectors.map(sel=>{const el=document.querySelector(sel),s=getComputedStyle(el),text=rgb(s.color);let backgrounds=[rgb(s.backgroundColor)];if(s.backgroundImage!=='none')backgrounds=[...s.backgroundImage.matchAll(/rgba?\([^)]+\)/g)].map(m=>rgb(m[0]));return [sel,Math.min(...backgrounds.map(b=>contrast(text,b[3]<1?b.slice(0,3).map((c,i)=>c*b[3]+[20,24,32][i]*(1-b[3])):b)))];})};
  });
+ const startOrder=await page.evaluate(()=>{
+  const gps=document.getElementById('autoGpsToggle'),mode=document.getElementById('routingAuto'),calculate=document.querySelector('.btn-calculate');
+  const box=gps.closest('.form-group').getBoundingClientRect(),modeBox=mode.getBoundingClientRect();
+  return {beforeMode:!!(gps.compareDocumentPosition(mode)&Node.DOCUMENT_POSITION_FOLLOWING),beforeCalculate:!!(gps.compareDocumentPosition(calculate)&Node.DOCUMENT_POSITION_FOLLOWING),visuallyBefore:box.bottom<=modeBox.top,handler:gps.getAttribute('onchange'),label:document.querySelector('label[for="autoGpsToggle"]').textContent,count:document.querySelectorAll('#autoGpsToggle').length};
+ });
+ assert.deepEqual(startOrder,{beforeMode:true,beforeCalculate:true,visuallyBefore:true,handler:'toggleAutoGpsLocation()',label:'Use current GPS as start',count:1});
  assert.equal(check.canvasFilter,'none');assert.equal(check.canvasOpacity,'1');
  if(dark){assert.equal(check.voice,'rgba(40, 44, 62, 0.9)');assert.equal(check.controls,'rgb(32, 38, 50)');for(const [sel,ratio] of check.ratios)assert(ratio>=4.5,`${owner} ${sel}: contrast ${ratio}`);}
  else {assert.equal(check.voice,'rgba(255, 255, 255, 0.85)');}
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Horizontal overflow');
  const zoom=page.getByRole('button',{name:'Zoom in',exact:true});await zoom.focus();if(dark)assert.equal(await zoom.evaluate(n=>getComputedStyle(n).outlineStyle),'solid');const oldZoom=await page.evaluate(()=>testMap.getZoom());await page.keyboard.press('Enter');await page.waitForFunction(old=>testMap.getZoom()>old,oldZoom);
- if(width===390&&owner==='html'){await page.locator('.voice-section').screenshot({path:'/tmp/voyagr-dark-ui-voice.png'});}
+ if(width===390&&owner==='html'){await page.locator('#autoGpsToggle').locator('xpath=..').screenshot({path:'/tmp/voyagr-gps-start-order.png'});await page.locator('.voice-section').screenshot({path:'/tmp/voyagr-dark-ui-voice.png'});}
  // Confirm existing default pairing with real controllers and map style replacement.
  await page.evaluate(()=>{
   localStorage.removeItem('linkUiMapTheme');window.fetch=()=>Promise.resolve({ok:true});

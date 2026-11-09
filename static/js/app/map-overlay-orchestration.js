@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = null;
+    var cameraAreaGeneration = 0;
     var trafficLightAreaGeneration = 0;
     var railwayAreaGeneration = 0;
     var MOT = typeof VoyagrMapOverlayToggles !== 'undefined' ? VoyagrMapOverlayToggles : null;
@@ -62,6 +63,7 @@
     }
 
     function clearCameraMarkers() {
+        cameraAreaGeneration++;
         applyClearOverlayMarkersFromPlan(OT().buildClearCameraMarkersExecutePlan());
     }
 
@@ -108,6 +110,7 @@
     }
 
     function fetchAndDisplayCameras() {
+        var generation = ++cameraAreaGeneration;
         var map = rt().getMap();
         var dispatch = OT().buildFetchCamerasDispatchPlan({
             enabled: showCamerasEnabled,
@@ -128,9 +131,12 @@
 
         var url = OT().buildAreaBoundsApiUrl(north, south, east, west, dispatch.apiPath);
 
-        fetchOsmAreaOverlay(url, dispatch.logLabel || 'Cameras')
+        return fetchOsmAreaOverlay(url, dispatch.logLabel || 'Cameras')
             .then(function (data) {
-                if (data && data.success && data.cameras) {
+                if (!runtime || generation !== cameraAreaGeneration || !showCamerasEnabled || rt().getMap() !== map) return;
+                var current = map.getBounds();
+                if ([current.getNorth(),current.getSouth(),current.getEast(),current.getWest()].join(',') !== [north,south,east,west].join(',')) return;
+                if (data && data.success && Array.isArray(data.cameras)) {
                     displayCameraMarkers(data.cameras);
                     console.log('[Cameras] Loaded ' + data.cameras.length + ' cameras in viewport');
                 }
@@ -454,6 +460,7 @@
     }
 
     function bind(nextRuntime) {
+        cameraAreaGeneration++;
         trafficLightAreaGeneration++;
         railwayAreaGeneration++;
         runtime = nextRuntime;
@@ -468,7 +475,7 @@
         initializeRoadLabels: initializeRoadLabels,
         getOsmTrafficLightMarkerPillHTML: getOsmTrafficLightMarkerPillHTML,
         getShowCamerasEnabled: function () { return showCamerasEnabled; },
-        setShowCamerasEnabled: function (val) { showCamerasEnabled = val; },
+        setShowCamerasEnabled: function (val) { if(val !== showCamerasEnabled) cameraAreaGeneration++; showCamerasEnabled = val; },
         getShowOsmTrafficLightsEnabled: function () { return showOsmTrafficLightsEnabled; },
         setShowOsmTrafficLightsEnabled: function (val) { if(val!==showOsmTrafficLightsEnabled)trafficLightAreaGeneration++; showOsmTrafficLightsEnabled = val; },
         getShowOsmRailwayCrossingsEnabled: function () { return showOsmRailwayCrossingsEnabled; },
