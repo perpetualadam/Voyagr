@@ -9,6 +9,8 @@
     let displayRequest = null;
     let displayGeneration = 0;
     let lastDisplay = null;
+    let styleDisplay = null;
+    let restoringStyleDisplay = false;
 
     function rt() {
         if (!runtime) {
@@ -212,6 +214,7 @@
         displayGeneration++;
         displayRequest = null;
         lastDisplay = null;
+        styleDisplay = null;
         if (execute.useWriteBoolPref) {
             TU.writeBoolPref(execute.storageKey, routeTrafficEnabled);
         }
@@ -264,6 +267,7 @@
     }
 
     function clearRouteTrafficLayers() {
+        styleDisplay = null;
         applyClearRouteTrafficLayersFromPlan(
             rtfModule().buildClearRouteTrafficLayersApplyPlan(routeTrafficLayers)
         );
@@ -397,7 +401,25 @@
             return undefined;
         }
         clearRouteTrafficLayers();
-        return applyDisplayRouteTrafficEdgesMountFromPlan(plan);
+        const mounted = applyDisplayRouteTrafficEdgesMountFromPlan(plan);
+        if (mounted > 0) styleDisplay = {map, key:JSON.stringify(rt().getRoutePolyline()),
+            segments:JSON.parse(JSON.stringify(segments))};
+        return mounted;
+    }
+
+    // Reuse only the currently displayed data after complete style replacement.
+    // No network acquisition, route choice, camera movement or guidance mutation.
+    function restoreRouteTrafficAfterStyleLoad(map) {
+        const saved = styleDisplay;
+        if (!runtime || restoringStyleDisplay || !saved || !routeTrafficEnabled ||
+                map !== rt().getMap() || map !== saved.map || !map.isStyleLoaded() ||
+                saved.key !== JSON.stringify(rt().getRoutePolyline()) || !routeTrafficLayers.length) return false;
+        if (routeTrafficLayers.some(h => map.getLayer(h.id) || map.getSource(h.sourceId || h.id) ||
+                (h.outlineId && map.getLayer(h.outlineId)))) return false;
+        restoringStyleDisplay = true;
+        try { return displayRouteTrafficEdges(saved.segments) > 0; }
+        catch (_) { clearRouteTrafficLayers(); return false; }
+        finally { restoringStyleDisplay = false; }
     }
 
     /**
@@ -894,6 +916,7 @@
     }
 
     function bind(nextRuntime) {
+        styleDisplay = null;
         runtime = nextRuntime;
     }
 
@@ -909,7 +932,7 @@
         switch (key) {
             case 'autoTrafficUpdateEnabled': autoTrafficUpdateEnabled = value; break;
             case 'autoRerouteOnDeviationEnabled': autoRerouteOnDeviationEnabled = value; break;
-            case 'routeTrafficEnabled': routeTrafficEnabled = value; displayGeneration++; lastDisplay = null; displayRequest = null; break;
+            case 'routeTrafficEnabled': styleDisplay = null; routeTrafficEnabled = value; displayGeneration++; lastDisplay = null; displayRequest = null; break;
             default: break;
         }
     }
@@ -926,6 +949,7 @@
         clearRouteTrafficLayers: clearRouteTrafficLayers,
         fetchAndDisplayRouteTraffic: fetchAndDisplayRouteTraffic,
         displayRouteTrafficEdges: displayRouteTrafficEdges,
+        restoreRouteTrafficAfterStyleLoad: restoreRouteTrafficAfterStyleLoad,
         bringTrafficEdgesToTop: bringTrafficEdgesToTop,
         bringNavRouteAboveTrafficEdges: bringNavRouteAboveTrafficEdges,
         ensureLabelsOnTop: ensureLabelsOnTop,

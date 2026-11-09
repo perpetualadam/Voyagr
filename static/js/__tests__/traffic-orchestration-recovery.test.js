@@ -59,3 +59,40 @@ test('rapid off/on starts a fresh display request instead of joining the invalid
     expect(fetch).toHaveBeenCalledTimes(2);await owner.fetchAndDisplayRouteTraffic();addPolyline.mockClear();
     old.resolve(response(payload()));await pending;expect(addPolyline).not.toHaveBeenCalled();
 });
+
+function styleMap(){
+    const layers=new Map(),sources=new Map();let id=0;
+    map={getStyle:()=>({layers:[...layers.values()]}),isStyleLoaded:()=>true,
+        getLayer:key=>layers.get(key),getSource:key=>sources.get(key)};
+    addPolyline.mockImplementation(()=>{
+        const key='traffic-test-'+(++id);layers.set(key,{id:key});sources.set(key,{});
+        return {id:key,remove:()=>{layers.delete(key);sources.delete(key);}};
+    });
+    return ()=>{layers.clear();sources.clear();};
+}
+test('style replacement restores displayed route traffic once without requesting data',()=>{
+    const wipe=styleMap();owner.displayRouteTrafficEdges(payload().segments);
+    expect(owner.restoreRouteTrafficAfterStyleLoad(map)).toBe(false);
+    wipe();expect(owner.restoreRouteTrafficAfterStyleLoad(map)).toBe(true);
+    expect(addPolyline).toHaveBeenCalledTimes(2);expect(fetch).not.toHaveBeenCalled();
+    expect(addPolyline.mock.calls[1]).toEqual(addPolyline.mock.calls[0]);
+    expect(owner.restoreRouteTrafficAfterStyleLoad(map)).toBe(false);
+});
+test.each(['clear','disable','route','map','loading','foreign'])('traffic restoration refuses %s context',reason=>{
+    const wipe=styleMap();owner.displayRouteTrafficEdges(payload().segments);wipe();
+    if(reason==='clear')owner.clearRouteTrafficLayers();
+    if(reason==='disable')owner.applyTrafficSettingsPatch('routeTrafficEnabled',false);
+    if(reason==='route')polyline=[...line,[52,-1]];
+    const target=map;
+    if(reason==='map')map={...map};
+    if(reason==='loading')map.isStyleLoaded=()=>false;
+    if(reason==='foreign')map.getSource=()=>({foreign:true});
+    expect(owner.restoreRouteTrafficAfterStyleLoad(target)).toBe(false);
+    expect(addPolyline).toHaveBeenCalledTimes(1);expect(fetch).not.toHaveBeenCalled();
+});
+test('all-green refresh revokes previously displayed congestion restoration',()=>{
+    const wipe=styleMap();owner.displayRouteTrafficEdges(payload().segments);
+    owner.displayRouteTrafficEdges(payload('green').segments);wipe();
+    expect(owner.restoreRouteTrafficAfterStyleLoad(map)).toBe(false);
+    expect(addPolyline).toHaveBeenCalledTimes(1);
+});

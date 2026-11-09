@@ -82,6 +82,19 @@
         window.addEventListener('voyagr-vector-style-ready', onVectorStyleReady);
     }
 
+    // Differential style updates may not emit style.load. Reconcile only missing,
+    // enabled overlays on the current idle map; retain credential/backoff policy.
+    function restoreLayersAfterStyleLoad(map) {
+        if (!runtime || !map || map !== rt().getMap() || !map.isStyleLoaded()) return false;
+        var trafficMissing = showTrafficEnabled && Date.now() >= trafficLayerPausedUntil &&
+            !map.getLayer('traffic-layer') &&
+            (window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true || !!window.TOMTOM_API_KEY);
+        var weatherMissing = showWeatherEnabled && !map.getLayer('weather-layer') && !!window.OPENWEATHERMAP_API_KEY;
+        if (trafficMissing) addTrafficLayer();
+        if (weatherMissing) addWeatherLayer();
+        return !!(trafficMissing || weatherMissing);
+    }
+
     function onVectorStyleReady() {
         const layerToggles = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
         const map = rt().getMap();
@@ -705,6 +718,7 @@ function initWeatherLayer() {
 
     var api = {
         bind: bind,
+        restoreLayersAfterStyleLoad: restoreLayersAfterStyleLoad,
         addTrafficLayer: addTrafficLayer,
         addWeatherLayer: addWeatherLayer,
         initTrafficLayer: initTrafficLayer,

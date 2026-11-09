@@ -811,3 +811,36 @@ passed (one skipped). Twelve real MapLibre browser cases cover single/all previe
 at mobile/desktop sizes across Dark, Satellite and Standard, plus rapid changes
 and clearing during reload. Fixtures use local styles/raster tiles, not live map
 coverage. No production deployment or configuration changes.
+
+## Theme overlay parity and GPS start order (9 November 2026)
+
+Completed sequentially: overlay investigation/repair, then the requested GPS layout
+move. Existing compact Navigation action redesign remains a separate queued item.
+
+- [x] Restore missing enabled traffic/weather raster layers on the current idle
+  map, including differential style changes that do not run the style-load path.
+  Respect traffic backoff and available credentials; do not repeatedly acquire
+  configuration on idle or turn disabled overlays back on.
+- [x] Restore already displayed along-route congestion segments after a complete
+  style replacement. Retain route geometry identity and refuse cleared, disabled,
+  loading, replaced-map or coincident-resource contexts. Reuse the displayed data;
+  normal refresh scheduling/data provenance remain unchanged.
+- [x] Prevent late/outdated camera viewport results from repopulating disabled
+  cameras, overwriting a newer viewport or mounting on a replaced map/runtime.
+- [x] Verify speed/red-light/average-speed camera, traffic-light, railway-crossing
+  and route-hazard HTML marker icons/popups across all three themes. These DOM
+  markers survive style changes and do not require layer remounting.
+- [x] Move the existing Use current GPS as start checkbox above Routing Mode and
+  Calculate route. Preserve its ID, associated label, handler and GPS permissions.
+
+Validation: 3,178 JavaScript tests passed with coverage/lint; 2,221 backend tests
+and 74 subtests passed (one skipped). Real MapLibre browser checks cover twelve
+single/all-route and mobile/desktop theme combinations, interactive marker popups
+and overlay toggles, traffic/weather layers, rapid theme changes and cleared
+previews. Existing verified-navigation recovery is regressed for all three themes.
+Sixteen Navigation layout/theme cases verify GPS control order and existing dark
+UI contrast/linking. Browser map/API data and tiles are local fixtures: this does
+not establish live provider availability, real GPS accuracy, SCDB freshness or
+complete OSM coverage. Satellite remains an imagery basemap; vector-only native
+labels/3D buildings require their source and are not fabricated. Deployed/live
+map and device acceptance remain outstanding. No production deployment.

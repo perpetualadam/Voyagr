@@ -39,7 +39,8 @@ test('renderer reentry cannot recursively restore or resurrect a cleared preview
 test('failed remount cleans partial resources and does not claim a visible route',()=>{
  Compare.displayAllRoutesOnMap();wipe();ctx.map.addLayer=()=>{throw Error('Renderer failed');};expect(Compare.restorePreviewAfterStyleLoad(ctx.map)).toBe(false);expect(ctx.map.getStyle().layers).toEqual([]);expect(Object.keys(ctx.map.getStyle().sources)).toEqual([]);expect(Compare.getAllRouteLayers()).toEqual([]);
 });
-test('active verified guidance uses its existing recovery owner while preview restoration refuses',()=>{
+test.each(['standard','dark','satellite'])('active verified guidance uses its existing recovery owner on %s while preview restoration refuses',theme=>{
+ localStorage.setItem('mapTheme',theme);
  const active=routes[0];Compare.setRouteOptions([active]);window.lastCalculatedRoute=active;fixture.bindStart(ctx);expect(Life.startTurnByTurnNavigation(active)).toBe(true);const before=snapshot();wipe();
  expect(Compare.restorePreviewAfterStyleLoad(ctx.map)).toBe(false);expect(require('../app/reroute-map-orchestration').redrawNavigationRouteLayer('style test')).toBe(true);
  expect(ctx.mapHelpers.isPolylineLayerMounted(ctx.map,ctx.runtime.getRouteLayer(),Life.getRoutePolyline())).toBe(true);expect(snapshot()).toBe(before);

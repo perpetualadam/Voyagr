@@ -46,3 +46,24 @@ test('an absent style is still deferred rather than adding layers prematurely',(
     style=undefined;Layers.addTrafficLayer();
     expect(map.addSource).not.toHaveBeenCalled();expect(map.addLayer).not.toHaveBeenCalled();
 });
+
+test('idle reconciliation restores missing enabled traffic and leaves existing resources alone',()=>{
+    map.isStyleLoaded=()=>true;Layers.setShowWeatherEnabled(false);
+    expect(Layers.restoreLayersAfterStyleLoad(map)).toBe(true);
+    expect(map.addLayer).toHaveBeenCalledTimes(1);
+    expect(Layers.restoreLayersAfterStyleLoad(map)).toBe(false);
+    expect(map.addLayer).toHaveBeenCalledTimes(1);
+});
+test.each(['disabled','loading','wrong-map','credentials'])('idle overlay reconciliation respects %s',reason=>{
+    map.isStyleLoaded=()=>reason!=='loading';Layers.setShowWeatherEnabled(false);
+    if(reason==='disabled')Layers.setShowTrafficEnabled(false);
+    if(reason==='credentials')delete window.VOYAGR_TOMTOM_TRAFFIC_PROXY;
+    expect(Layers.restoreLayersAfterStyleLoad(reason==='wrong-map'?{...map}:map)).toBe(false);
+    expect(map.addLayer).not.toHaveBeenCalled();
+});
+test('weather without credentials never starts repeated idle config acquisition',()=>{
+    map.isStyleLoaded=()=>true;Layers.setShowTrafficEnabled(false);Layers.setShowWeatherEnabled(true);
+    delete window.OPENWEATHERMAP_API_KEY;const previous=global.fetch;global.fetch=jest.fn();
+    try {expect(Layers.restoreLayersAfterStyleLoad(map)).toBe(false);expect(fetch).not.toHaveBeenCalled();}
+    finally {global.fetch=previous;Layers.setShowWeatherEnabled(false);}
+});

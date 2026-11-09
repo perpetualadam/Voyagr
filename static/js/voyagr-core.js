@@ -615,13 +615,22 @@ function initializeMap() {
     map.on('style.load', voyagrMapInvalidateRecovery);
     map.on('style.load', onVoyagrStyleLoaded);
 
-    // Style swaps remove preview GeoJSON sources/layers. Recover only once the
-    // current map is idle; the preview owner enforces lifecycle/generation checks.
+    // Style swaps remove custom sources/layers, including differential updates.
+    // Recover on the current idle map through each overlay owner; preview recovery
+    // retains its lifecycle/generation checks and guidance has its separate owner.
     const previewRecoveryMap = map;
     map.on('idle', () => {
+        const layers = window.VoyagrMapLayersOrchestration;
+        if (layers && typeof layers.restoreLayersAfterStyleLoad === 'function') {
+            layers.restoreLayersAfterStyleLoad(previewRecoveryMap);
+        }
         const owner = window.VoyagrRouteComparisonOrchestration;
         if (owner && typeof owner.restorePreviewAfterStyleLoad === 'function') {
             owner.restorePreviewAfterStyleLoad(previewRecoveryMap);
+        }
+        const traffic = window.VoyagrTrafficOrchestration;
+        if (traffic && typeof traffic.restoreRouteTrafficAfterStyleLoad === 'function') {
+            traffic.restoreRouteTrafficAfterStyleLoad(previewRecoveryMap);
         }
     });
 
