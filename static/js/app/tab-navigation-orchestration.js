@@ -40,6 +40,7 @@
         });
         if (!execute.shouldApply) return;
         rt().call.applyDomSelectsFromPlan(execute.selects);
+        if (typeof rt().call.updateAllDistanceDisplays === 'function') rt().call.updateAllDistanceDisplays();
     }
 
     function switchTab(tab) {

@@ -113,6 +113,7 @@ function getTabNavigationOrchestrationRuntime() {
         getTemperatureUnit: () => VoyagrUnitsPreferencesOrchestration.getTemperatureUnitValue(),
         call: {
             applyDomSelectsFromPlan,
+            updateAllDistanceDisplays,
             loadRoutePreferences,
             loadMultiDropPreferences,
             loadVoicePreferences,

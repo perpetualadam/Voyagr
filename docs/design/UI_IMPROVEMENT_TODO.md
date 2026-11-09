@@ -673,3 +673,23 @@ sat-nav acceptance alongside these UI increments.
 
 Keep source maintenance, remaining unit policy and deferred sat-nav acceptance
 alongside this UI work. Production deployment remains a separate user action.
+
+## Settings distance-option units (9 November 2026)
+
+- [x] Add canonical metre metadata to the 24 options in six controls: parking
+  walking allowance, three turn-announcement distances, hazard warning distance
+  and roadside alert distance. Reuse the existing distance-label formatter for
+  feet/miles or metres/kilometres; mark the parking distance as approximate.
+- [x] Refresh labels on first Settings entry as well as unit changes and profile
+  restoration. Keep select/option nodes, values, selected/default choices and
+  handlers intact: parking remains minutes and alert thresholds remain metres.
+  Label refresh dispatches no preference changes and performs no acquisition.
+- [x] Validate production controllers/formatter with 3,121 JavaScript tests and
+  coverage/lint, plus 2,221 backend tests (one skipped). Controlled browser checks
+  exercise first entry, unit round trips, stable option values/selections and
+  accessible combobox labels alongside existing Settings regressions.
+- [ ] Accept on deployed devices, including native option pickers and saved profiles.
+  No new distance policy, alert trigger change or production deployment is included.
+
+Keep the other unit-policy/source maintenance and deferred live navigation and
+screen-reader acceptance work alongside this focused fix.
