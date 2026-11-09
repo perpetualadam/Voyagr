@@ -1180,3 +1180,11 @@ cancel/restart ownership. Four real MapLibre browser cases cover mobile/desktop
 Light/Dark, synchronous view before GPS, background acquisition, observed position,
 keyboard cancellation and selected-polyline preservation. Start action integration
 checks now target the common immediate owner. No safety assertions were weakened.
+
+## GraphHopper route recalculation — queued
+
+- [ ] Investigate GraphHopper route recalculation: triggers during navigation,
+  requests/responses, off-route detection, repeated or stale requests, remaining
+  stops, selected avoidance preferences and safe replacement of the active route.
+  Reproduce and report findings before changing behavior; handle one issue at a
+  time and preserve existing navigation functionality.
