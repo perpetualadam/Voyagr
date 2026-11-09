@@ -958,7 +958,7 @@ Remaining source/provider work and deployed map/device acceptance stay separate.
 - [x] Keep the early-boot helper aligned with the actual inline boot path; update
   theme script cache tags. Existing route/marker ownership code is unchanged.
 - [x] Dark mode raster fallback completed in the following independent increment.
-- [ ] Then improve basemap road/label contrast and verify live map/device acceptance.
+- [x] Dark vector road/label palette completed below; live map/device acceptance remains pending.
 
 Validation: 3,222 JavaScript tests with coverage/lint; 2,244 backend tests and 74
 subtests passed (one skipped). Eight real MapLibre browser configurations cover
@@ -988,8 +988,8 @@ that an earlier release already overwrote. No production deployment/config chang
 - [x] Regress actual glyph-error fallback and theme switching with real MapLibre:
   sampled raster background/label pixels, route colour/geometry, marker/popup and
   camera preservation. Cover missing-style recovery with current/missing helpers.
-- [ ] Next independent map work: improve Dark vector roads/labels at street and
-  overview zooms, then deployed live-tile/device acceptance.
+- [x] Dark vector road/label palette completed below at street and overview zooms.
+- [ ] Deployed live-tile/device acceptance remains separate.
 
 Validation: 3,229 JavaScript tests with coverage/lint; 2,244 backend tests and 74
 subtests passed (one skipped). Ten real-renderer fallback/switch stages start from
@@ -1005,3 +1005,29 @@ Native paint reference: [MapLibre raster layer properties](https://maplibre.org/
 The brightness endpoints are deliberately reversed for this tested monochrome
 night treatment. Recheck the pixel regression when upgrading the bundled renderer;
 no canvas CSS filter or additional tile provider has been introduced.
+
+## Dark vector road and label contrast (9 November 2026)
+
+- [x] Correct near-background paths and overview roads, black water labels and
+  dim place text. Use distinct light road interiors, darker casings and pale text
+  with dark halos. Align static road text with the existing runtime Dark treatment.
+- [x] Preserve source URLs, geometry filters, layer order, zoom ranges, road widths,
+  text placement and font stacks. Only Dark vector paint changes; Standard,
+  Satellite, overlays and raster fallback retain their existing behavior.
+- [x] Version the Dark vector style URL and theme helper script for browser caches.
+- [x] Add palette contrast regressions and a real MapLibre browser fixture with
+  licensed offline glyphs at mobile/desktop widths and zooms 5, 8, 14 and 17.
+- [ ] Check the deployed map with live tiles/fonts and on a real navigation device.
+  No deployment or road acceptance is included in this increment.
+
+Validation: 3,250 JavaScript tests with coverage/lint; 2,244 backend tests and 74
+subtests passed (one skipped). Nominal composited road interiors reach 3:1 against
+selected Dark land surfaces and tested label inks exceed 4.5:1 against their halo
+and water background; this is scoped palette verification, not app-wide contrast
+certification. Eight offline browser cases exercise actual Dark paint, filters and
+label layout with synthetic geographic features, real glyph rendering, sampled
+road/path pixels, a blue route and camera popup. The runtime road-label paint helper
+is included; live tile density, full production fonts and label collisions still
+need deployed acceptance. Twelve existing theme/route/traffic/marker cases and all eleven isolated SQL policy
+tests also pass. Pixel sampling runs within a renderer callback to avoid reading
+a stale frame.
