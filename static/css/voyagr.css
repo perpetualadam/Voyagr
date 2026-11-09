@@ -4526,6 +4526,43 @@ body.dark-mode .safety-notice-privacy ul {
 }
 .journey-mode-panel[hidden], .simulation-controls[hidden] { display: none; }
 .journey-mode-panel button, .simulation-controls button, .simulation-controls select { min-height: 44px; margin: 3px; }
+/* Non-modal journey chooser: compact actions, bounded to the visible viewport. */
+.journey-mode-panel {
+    --journey-surface: #fff; --journey-text: #202530; --journey-muted: #535b6b;
+    --journey-border: #d9dce4; --journey-accent: #56328a; --journey-primary-text: #fff;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    max-height: min(460px, calc(100dvh - 120px));
+    padding: 16px; border: 1px solid var(--journey-border); border-radius: 20px;
+    background: var(--journey-surface); color: var(--journey-text);
+    box-shadow: 0 6px 24px #17212b26; font-size: .875rem; line-height: 1.4;
+    overscroll-behavior: contain;
+}
+.journey-mode-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.journey-mode-panel h2 { margin: 0; font-size: 1.125rem; line-height: 1.3; color: inherit; }
+.journey-mode-panel p { margin: 8px 0 12px; overflow-wrap: anywhere; }
+.journey-mode-description { color: var(--journey-muted); }
+.journey-mode-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.journey-mode-panel button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: auto; max-width: 100%; min-height: 48px; padding: 8px 12px; margin: 0;
+    border: 1px solid var(--journey-border); border-radius: 24px;
+    background: var(--journey-surface); color: var(--journey-text);
+    font: inherit; font-weight: 600; text-align: left; overflow-wrap: anywhere;
+}
+.journey-mode-panel button[hidden] { display: none; }
+.journey-mode-panel svg { flex: 0 0 20px; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.journey-mode-panel .journey-mode-primary { background: var(--journey-accent); border-color: var(--journey-accent); color: var(--journey-primary-text); }
+.journey-mode-panel .journey-mode-close { flex: 0 0 48px; width: 48px; height: 48px; padding: 0; border-radius: 50%; }
+.journey-mode-panel .journey-mode-end { margin-top: 4px; font-weight: 400; }
+.journey-mode-panel #journeyModeStatus:empty { display: none; }
+.journey-mode-panel #journeyModeStatus { border-left: 3px solid var(--journey-accent); padding-left: 10px; margin-top: 12px; }
+.journey-mode-panel button:disabled { opacity: .55; cursor: not-allowed; }
+.journey-mode-panel button:focus-visible { outline: 3px solid var(--journey-accent); outline-offset: 2px; }
+html.dark-mode .journey-mode-panel, body.dark-mode .journey-mode-panel {
+    --journey-surface: #20232b; --journey-text: #f4f5f8; --journey-muted: #c2c7d2;
+    --journey-border: #505666; --journey-accent: #c6a9f2; --journey-primary-text: #20122f;
+    color-scheme: dark;
+}
 .simulation-controls {
     --player-surface: #fff; --player-text: #202530; --player-muted: #535b6b;
     --player-border: #d9dce4; --player-accent: #56328a; --player-tint: #f2edf8;

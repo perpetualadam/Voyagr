@@ -1031,3 +1031,25 @@ is included; live tile density, full production fonts and label collisions still
 need deployed acceptance. Twelve existing theme/route/traffic/marker cases and all eleven isolated SQL policy
 tests also pass. Pixel sampling runs within a renderer callback to avoid reading
 a stale frame.
+
+## Screenshot follow-up: journey chooser (9 November 2026)
+
+- [x] Replace the older chooser's large plain buttons and heading with compact,
+  labelled icon actions, a header close control and shared Light/Dark treatment.
+  Bound the panel to the viewport and retain internal scrolling for large text.
+- [x] Keep all action handlers, status announcements, verified-start visibility,
+  GPS accuracy threshold and durable journey ownership checks unchanged.
+- [ ] Investigate acquisition of an initial coarse GPS fix versus waiting for a
+  better fix. The screenshot confirms refusal, not its device/location cause.
+  Keep the existing 30 m requirement unless evidence supports a separate design.
+- [ ] Investigate the storage recovery path and whether End previous journey is
+  offered when no owned durable journey exists. Do not erase or bypass storage
+  ownership checks. The screenshot alone cannot establish a corrupt record.
+- [ ] Check the deployed chooser on the user's mobile browser/PWA.
+
+Validation: eight real Chromium cases cover mobile/desktop widths, Light/Dark UI
+and 150% root text size, viewport bounds, horizontal overflow, minimum action
+height, unchanged handler dispatch, hidden verified start and keyboard close.
+3,250 JavaScript tests pass with coverage/lint; 2,244 backend tests and 74 subtests
+pass (one skipped). This increment changes presentation
+only; the GPS and storage warnings remain separate functional investigations.
