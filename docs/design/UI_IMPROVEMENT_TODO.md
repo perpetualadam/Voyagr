@@ -729,7 +729,7 @@ handlers, persisted choices, permissions, navigation safety and device acceptanc
 - [x] Navigation routing controls: align Auto/Walk/Bike, Calculate route and
   Use current GPS as start with the app's compact labelled-icon design. Preserve
   the primary calculation action, selected routing mode and real-GPS permission path.
-- [ ] Voice control card: align Listen, Test speech, transcript/status and Example
+- [x] Voice control card: align Listen, Test speech, transcript/status and Example
   phrases with the same action styles, retaining microphone ownership and feedback.
 - [ ] Clear All: use a consistent compact labelled action and preserve the existing
   clearing scope/confirmation and GPS/navigation cleanup.
@@ -866,3 +866,36 @@ map and device acceptance remain outstanding. No production deployment.
 Validation: 3,178 JavaScript tests with coverage/lint and 2,221 declared backend
 checks plus 74 subtests passed (one skipped). Existing calculation, GPS permissions
 and live navigation authority remain unchanged. No production deployment.
+
+
+## Voice controls and provider-independent transcription (9 November 2026)
+
+- [x] Compact labelled microphone, Test speech and Cancel actions; accessible
+  status/transcript, engine choice, keyboard focus and Example phrases disclosure.
+- [x] Investigate Picovoice licensing/dependencies: Porcupine is optional wake
+  activation; Listen already uses browser recognition. Keep existing wake support.
+- [x] Fix UK language, duplicate end handlers/commands, interim-only execution,
+  microphone/start errors, cancellation/background/provider races and mic/TTS
+  competition without changing the command parser or navigation eligibility.
+- [x] Add an optional server-configured OpenAI-compatible transcription adapter,
+  supporting compatible self-hosted or hosted engines. Browser remains default;
+  model, endpoint and credentials stay on the server. No automatic engine fallback.
+- [x] Bound recording/upload/response size, recording time, provider transport,
+  same-origin access, request rates and concurrent upstream work. Release microphone
+  tracks and reject late results after cancellation; store no recordings in Voyagr.
+- [ ] Choose/configure and benchmark an actual AI service before enabling it.
+  Validate codecs, quotas, target phones, real microphones, UK accents/places, road
+  noise, interruptions and wake handoff. No provider was contacted in tests.
+- [ ] Investigate a separately licensed, browser-suitable wake phrase replacement;
+  transcription support does not replace Porcupine wake detection. openWakeWord's
+  browser porting and pre-trained model licensing need separate evaluation.
+- [ ] Next UI increments: Clear All, then Save Location, individually.
+
+Research, source links and the disabled-by-default configuration contract are in
+[VOICE_PROVIDER_RESEARCH.md](VOICE_PROVIDER_RESEARCH.md). Eight real browser cases
+use generated audio through actual MediaRecorder and production controllers;
+recognition/transcription/synthesis boundaries are fixtures. Sixteen existing
+Navigation cases retain dark/light contrast, GPS order and mode keyboard behavior.
+Validation: 3,198 JavaScript tests with coverage/lint; 2,244 declared backend tests
+and 74 subtests passed (one skipped). No deployment, model download, new paid
+subscription or production configuration change.

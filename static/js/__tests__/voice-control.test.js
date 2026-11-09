@@ -35,7 +35,7 @@ describe('buildVoiceRecognitionInitPreflightPlan', () => {
             hasSpeechRecognition: true,
         });
         expect(plan.action).toBe('initialize');
-        expect(plan.recognitionConfig.lang).toBe('en-US');
+        expect(plan.recognitionConfig.lang).toBe('en-GB');
     });
 });
 

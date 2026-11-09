@@ -8,6 +8,13 @@
     var runtime = null;
     var voiceRecognition = null;
     var isListening = false;
+    var recognitionFailed = false;
+    var recognitionEnded = false;
+    var processingRecognition = null;
+    var starting = false;
+    var commandGeneration = 0;
+    var inputGeneration = 0;
+    var voiceBusy = false;
     /** Latest finalized speech-to-text (interim lines are shown separately in the UI). */
     var _voiceFinalTranscript = '';
 
@@ -36,6 +43,7 @@
             btn.classList.toggle('active', !!plan.btnActive);
             btn.setAttribute('aria-pressed', plan.btnAriaPressed);
         }
+        const test = document.getElementById('voiceTestBtn'); if(test)test.disabled=!!plan.btnActive || voiceBusy;
         if (fab) {
             fab.classList.toggle('fab--listening', !!plan.fabListeningClass);
             fab.setAttribute('aria-pressed', plan.fabAriaPressed);
@@ -57,25 +65,57 @@
         applyVoiceListeningUiFromPlan(VC().buildVoiceSetListeningUiExecutePlan(listening));
     }
 
+    function setVoiceBusy(value) {
+        voiceBusy = value;
+        ['voiceBtn','voiceFab'].forEach(id => { const el=document.getElementById(id); if(el){el.disabled=value;el.setAttribute('aria-busy',String(value));} });
+        const test=document.getElementById('voiceTestBtn');if(test)test.disabled=value || isListening;
+        const cancel=document.getElementById('voiceCancelBtn');if(cancel)cancel.hidden=!value;
+    }
+
+    function resumeWake() {
+        if (!document.hidden) rt().call.maybeResumePorcupineWakeAfterVoice();
+    }
+
+    function provider() { return localStorage.getItem('voiceRecognitionProvider') === 'ai' ? 'ai' : 'browser'; }
+
+    function changeProvider(value) {
+        ++commandGeneration; ++inputGeneration;
+        setVoiceBusy(false);
+        const previous = voiceRecognition;
+        voiceRecognition = null; processingRecognition = null;
+        isListening = false; starting = false; _voiceFinalTranscript = '';
+        if (previous && previous.abort) { try { previous.abort(); } catch (_) { /* already idle */ } }
+        localStorage.setItem('voiceRecognitionProvider', value === 'ai' ? 'ai' : 'browser');
+        voyagrVoiceSetListeningUi(false);
+        applyVoiceTranscriptFromPlan(VC().buildVoiceTranscriptUpdateExecutePlan(''));
+        initVoiceRecognition();
+    }
+
     function initVoiceRecognition() {
         const voiceControl = VC();
+        const selected = provider();
+        const ai = root.VoyagrAudioRecognition;
+        const factory = selected === 'ai' ? (root.VoyagrVoiceAIAvailable && ai?.supported() ? ai.AudioRecognition : null) : (window.SpeechRecognition || window.webkitSpeechRecognition);
+        const select = document.getElementById('voiceRecognitionProvider');
+        if (select) select.value = selected;
         const preflight = voiceControl.buildVoiceRecognitionInitPreflightPlan({
             alreadyInitialized: !!window.__voyagrVoiceInitialized,
             hasRecognitionInstance: !!voiceRecognition,
-            hasSpeechRecognition: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+            hasSpeechRecognition: !!factory,
         });
         if (preflight.action === 'ready') {
             return true;
         }
         if (preflight.action === 'unsupported') {
             console.log(preflight.logMessage);
-            voyagrVoiceSetStatus(preflight.statusMessage);
+            voyagrVoiceSetStatus(selected === 'ai' ? 'AI speech is unavailable here. Choose browser speech or check microphone support.' : preflight.statusMessage);
             voyagrVoiceSetListeningUi(preflight.setListeningUi);
             return false;
         }
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        voiceRecognition = new SpeechRecognition();
+        try { voiceRecognition = new factory(); }
+        catch (_) { voyagrVoiceSetStatus('Speech engine could not initialise. Choose another engine or try again.'); return false; }
+        const instance = voiceRecognition;
         if (preflight.markInitialized) {
             window.__voyagrVoiceInitialized = true;
         }
@@ -85,6 +125,9 @@
         voiceRecognition.lang = cfg.lang;
 
         voiceRecognition.onstart = () => {
+            if (voiceRecognition !== instance || recognitionFailed) return;
+            recognitionFailed = false; recognitionEnded = false;
+            setVoiceBusy(false);
             const startPlan = voiceControl.buildVoiceOnStartExecutePlan();
             console.log(startPlan.logMessage);
             if (startPlan.clearFinalTranscript) {
@@ -95,6 +138,7 @@
         };
 
         voiceRecognition.onresult = (event) => {
+            if (voiceRecognition !== instance || recognitionFailed) return;
             const resultPlan = voiceControl.buildVoiceTranscriptCollectPlan(event, _voiceFinalTranscript);
             _voiceFinalTranscript = resultPlan.nextFinalTranscript;
             applyVoiceTranscriptFromPlan(voiceControl.buildVoiceTranscriptUpdateExecutePlan(resultPlan.shown));
@@ -102,29 +146,37 @@
         };
 
         voiceRecognition.onerror = (event) => {
+            if (voiceRecognition !== instance || recognitionFailed) return;
+            recognitionFailed = true; _voiceFinalTranscript = "";
             const errPlan = voiceControl.buildVoiceOnErrorExecutePlan(event.error);
             console.log(errPlan.logMessage);
             voyagrVoiceSetStatus(errPlan.statusMessage);
             voyagrVoiceSetListeningUi(errPlan.setListeningUi);
-            isListening = errPlan.isListening;
+            isListening = errPlan.isListening; setVoiceBusy(false);
             if (errPlan.resumePorcupineWake) {
-                rt().call.maybeResumePorcupineWakeAfterVoice();
+                resumeWake();
             }
         };
 
+        voiceRecognition.onprocessing = () => { if(voiceRecognition !== instance)return;isListening=false;voyagrVoiceSetListeningUi(false);setVoiceBusy(true);voyagrVoiceSetStatus('Transcribing…'); };
         voiceRecognition.onend = () => {
+            if (voiceRecognition !== instance || recognitionFailed) return;
             const endPlan = voiceControl.buildVoiceOnEndExecutePlan();
             console.log(endPlan.logMessage);
             voyagrVoiceSetStatus(endPlan.statusMessage);
             voyagrVoiceSetListeningUi(endPlan.setListeningUi);
-            isListening = endPlan.isListening;
+            isListening = endPlan.isListening; setVoiceBusy(false);
         };
 
+        setupVoiceCommandProcessing();
+        voyagrVoiceSetStatus(selected === 'ai' ? 'Ready — AI speech selected.' : 'Ready');
         return true;
     }
 
     async function toggleVoiceInput() {
         const voiceControl = VC();
+        if (voiceBusy) return;
+        if (starting) { cancelInput(); resumeWake(); return; }
         if (!voiceRecognition) {
             if (!initVoiceRecognition()) {
                 return;
@@ -133,30 +185,42 @@
 
         const orch = voiceControl.buildToggleVoiceInputOrchestrationPlan({
             isListening,
-            porcupineWakePipelineRunning: root.VoyagrPorcupineOrchestration.isPipelineRunning(),
+            porcupineWakePipelineRunning: !!root.VoyagrPorcupineOrchestration?.isPipelineRunning(),
         });
 
         if (orch.action === 'stop') {
-            voiceRecognition.stop();
-            isListening = orch.isListening;
+            setVoiceBusy(true);
+            voyagrVoiceSetStatus('Finishing voice input…');
+            try { voiceRecognition.stop(); } catch (_) { cancelInput(); resumeWake(); }
             return;
         }
 
-        if (orch.pausePorcupineWake) {
-            root.VoyagrPorcupineOrchestration.setResumeAfterVoice(true);
-            await rt().call.stopPorcupineWakePipeline();
-        }
-        if (orch.clearTranscript) {
+        starting = true;
+        const instance = voiceRecognition;
+        const ticket = ++inputGeneration;
+        try {
+            if (orch.pausePorcupineWake) {
+                root.VoyagrPorcupineOrchestration.setResumeAfterVoice(true);
+                await rt().call.stopPorcupineWakePipeline();
+            }
+            if (voiceRecognition !== instance || ticket !== inputGeneration) return;
             applyVoiceTranscriptFromPlan(voiceControl.buildVoiceTranscriptUpdateExecutePlan(''));
-        }
-        if (orch.clearFinalTranscript) {
-            _voiceFinalTranscript = '';
-        }
-        voiceRecognition.start();
-        isListening = orch.isListening;
+            _voiceFinalTranscript = ''; recognitionFailed = false; recognitionEnded = false;
+            isListening = true;
+            voyagrVoiceSetStatus('Requesting microphone…');
+            voyagrVoiceSetListeningUi(true);
+            window.speechSynthesis?.cancel();
+            await instance.start();
+        } catch (_) {
+            recognitionFailed = true; isListening = false;
+            voyagrVoiceSetListeningUi(false);
+            voyagrVoiceSetStatus('Could not start voice input. Check microphone permissions and try again.');
+            resumeWake();
+        } finally { if(ticket === inputGeneration) starting = false; }
     }
 
     function speakText(text) {
+        if (isListening || starting) return;
         const voiceControl = VC();
         const preflight = voiceControl.buildSpeakTextPreflightPlan({
             hasSpeechSynthesis: 'speechSynthesis' in window,
@@ -177,16 +241,19 @@
         utterance.volume = preflight.utterance.volume;
 
         utterance.onstart = () => {
+            if (isListening || starting) return;
             console.log(preflight.logStartPrefix, text);
             voyagrVoiceSetStatus(preflight.onStartStatus);
         };
 
         utterance.onend = () => {
+            if (isListening || starting) return;
             console.log(preflight.logEndMessage);
             voyagrVoiceSetStatus(preflight.onEndStatus);
         };
 
         utterance.onerror = (event) => {
+            if (isListening || starting) return;
             console.log(preflight.logErrorPrefix, event.error);
             voyagrVoiceSetStatus(preflight.onErrorStatusPrefix + event.error);
         };
@@ -195,22 +262,24 @@
     }
 
     function setupVoiceCommandProcessing() {
-        if (!voiceRecognition) return;
-
+        if (!voiceRecognition || processingRecognition === voiceRecognition) return;
+        processingRecognition = voiceRecognition;
+        const instance = voiceRecognition;
         const voiceControl = VC();
         const originalOnEnd = voiceRecognition.onend;
         voiceRecognition.onend = function () {
+            if (voiceRecognition !== instance || recognitionFailed || recognitionEnded) return;
+            recognitionEnded = true;
             originalOnEnd.call(this);
 
-            const tr = document.getElementById(voiceControl.VOICE_TRANSCRIPT_ELEMENT_ID);
             const endPlan = voiceControl.buildVoiceCommandEndProcessingPlan({
                 finalTranscript: _voiceFinalTranscript,
-                fallbackTranscript: tr && tr.textContent ? tr.textContent : '',
+                fallbackTranscript: '',
             });
             if (!endPlan.shouldProcess) {
                 voyagrVoiceSetStatus(endPlan.statusMessage);
                 if (endPlan.resumePorcupineWake) {
-                    rt().call.maybeResumePorcupineWakeAfterVoice();
+                    resumeWake();
                 }
                 return;
             }
@@ -220,14 +289,16 @@
 
     function processVoiceCommand(command) {
         const voiceControl = VC();
+        const generation = ++commandGeneration;
         const orch = voiceControl.buildVoiceCommandProcessOrchestrationPlan(command);
         if (!orch.shouldProcess) {
             if (orch.resumePorcupineWake) {
-                rt().call.maybeResumePorcupineWakeAfterVoice();
+                resumeWake();
             }
             return;
         }
 
+        setVoiceBusy(true);
         console.log(orch.logMessage, orch.transcript);
         voyagrVoiceSetStatus(orch.statusMessage);
 
@@ -244,6 +315,7 @@
         })
             .then(response => response.json())
             .then(data => {
+                if (generation !== commandGeneration || document.hidden) return;
                 console.log('[Voice] Command result:', data);
                 const execute = voiceControl.buildVoiceCommandResultExecutePlan(data);
 
@@ -258,13 +330,14 @@
                 }
             })
             .catch(error => {
+                if (generation !== commandGeneration || document.hidden) return;
                 const errExecute = voiceControl.buildVoiceCommandErrorExecutePlan(error);
                 console.log(errExecute.logMessage, error);
                 speakText(errExecute.speakMessage);
                 voyagrVoiceSetStatus(errExecute.statusMessage);
             })
             .finally(() => {
-                rt().call.maybeResumePorcupineWakeAfterVoice();
+                if (generation === commandGeneration) { setVoiceBusy(false); resumeWake(); }
             });
     }
 
@@ -371,6 +444,7 @@
     }
 
     function setVoiceFinalTranscript(val) {
+        recognitionFailed = false; recognitionEnded = false;
         _voiceFinalTranscript = val;
     }
 
@@ -378,11 +452,28 @@
         runtime = nextRuntime;
     }
 
+    function cancelInput() {
+        if (!isListening && !starting && !voiceBusy) return;
+        ++commandGeneration; ++inputGeneration;
+        if (voiceRecognition && voiceRecognition.abort) {
+            recognitionFailed = true;
+            try { voiceRecognition.abort(); } catch (_) { /* already idle */ }
+        }
+        isListening = false; starting = false; _voiceFinalTranscript = '';
+        if (runtime) { setVoiceBusy(false); voyagrVoiceSetListeningUi(false); voyagrVoiceSetStatus('Voice input cancelled.'); }
+    }
+    if (root.addEventListener) {
+        root.addEventListener('pagehide', cancelInput);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) cancelInput(); });
+    }
+
     var api = {
         ENDPOINT_INTENT_PROTOCOL:1,
         endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         initVoiceRecognition: initVoiceRecognition,
+        changeProvider: changeProvider,
+        cancelVoiceInput: function(){ cancelInput(); resumeWake(); },
         toggleVoiceInput: toggleVoiceInput,
         speakText: speakText,
         setupVoiceCommandProcessing: setupVoiceCommandProcessing,

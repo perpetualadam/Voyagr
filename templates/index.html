@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109routingui1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109voice1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -137,7 +137,7 @@
     <script defer src="/static/js/modules/map/hazard-map-markers.js?v=20260712aabd"></script>
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
     <script defer src="/static/js/modules/ui/pwa-install.js?v=20260906app01"></script>
-    <script defer src="/static/js/modules/ui/voice-control.js?v=20260712aaac"></script>
+    <script defer src="/static/js/modules/ui/voice-control.js?v=20261109voice1"></script>
     <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
     <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261107arrivaloptions1"></script>
@@ -207,7 +207,8 @@
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20261108settingsgroups1"></script>
     <script defer src="/static/js/app/profile-store-orchestration.js?v=20261108fuelpricing1"></script>
     <script defer src="/static/js/app/settings-orchestration.js?v=20261108fuelpricing1"></script>
-    <script defer src="/static/js/app/voice-control-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/audio-recognition.js?v=20261109voice1"></script>
+    <script defer src="/static/js/app/voice-control-orchestration.js?v=20261109voice1"></script>
     <script defer src="/static/js/app/voice-announcements-orchestration.js?v=20261027phase6a"></script>
     <script defer src="/static/js/app/page-init-orchestration.js?v=20261027maprec2"></script>
     <script defer src="/static/js/app/map-explore-orchestration.js?v=20260712aaf7"></script>
@@ -670,21 +671,30 @@
                 <section class="voice-section" role="region" aria-labelledby="voiceSectionTitle">
                     <div class="voice-card__head">
                         <h3 id="voiceSectionTitle" class="voice-card__title">Voice control</h3>
-                        <p class="voice-card__hint">Use Chrome or Edge over HTTPS. Tap Listen, speak a command, then wait for the response. The map microphone uses the same control.</p>
+                        <p class="voice-card__hint">Tap Listen, speak, then stop and wait for the response. The map microphone uses the same control. Wake phrase is optional and separate.</p>
+                    </div>
+                    <div class="voice-engine-field">
+                        <label for="voiceRecognitionProvider">Speech engine</label>
+                        <select id="voiceRecognitionProvider" onchange="VoyagrVoiceControlOrchestration.changeProvider(this.value)" aria-describedby="voiceEngineHelp">
+                            <option value="browser">Browser speech</option>
+                            <option value="ai" {% if not voice_ai_available %}disabled{% endif %}>AI speech{% if not voice_ai_available %} (unavailable){% endif %}</option>
+                        </select>
+                        <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase.</p>
                     </div>
                     <div id="voiceStatus" class="voice-status" data-testid="voice-indicator" role="status" aria-live="polite">Ready</div>
                     <div class="voice-controls">
                         <button type="button" id="voiceBtn" class="btn-voice" data-testid="voice-button" onclick="toggleVoiceInput()" aria-pressed="false">
-                            <span id="voiceBtnText">Listen</span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span id="voiceBtnText">Listen</span>
                         </button>
-                        <button type="button" class="btn-voice-secondary" onclick="speakText('Voice control is ready. For example, say navigate to, or find nearest parking.')">
-                            Test speech
+                        <button type="button" id="voiceTestBtn" class="btn-voice-secondary" onclick="speakText('Voice control is ready. For example, say navigate to, or find nearest parking.')">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m11 4-6 5H2v6h3l6 5ZM15 8a6 6 0 0 1 0 8M18 4a11 11 0 0 1 0 16"/></svg><span>Test speech</span>
                         </button>
+                        <button type="button" id="voiceCancelBtn" class="btn-voice-secondary" onclick="VoyagrVoiceControlOrchestration.cancelVoiceInput()" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M6 18 18 6"/></svg><span>Cancel</span></button>
                     </div>
-                    <div id="voiceTranscript" class="voice-transcript" aria-label="Live transcript"></div>
+                    <div id="voiceTranscript" class="voice-transcript" aria-label="Live transcript" role="log" aria-live="polite"></div>
                     <div id="hazardConfirmation" class="hazard-confirmation" data-testid="hazard-confirmation" hidden role="status" aria-live="polite"></div>
                     <details class="voice-examples">
-                        <summary>Example phrases</summary>
+                        <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg><span>Example phrases</span></summary>
                         <ul>
                             <li>Navigate to … / Go to … / Take me to …</li>
                             <li>Find nearest petrol station, parking, or food</li>
@@ -1197,8 +1207,8 @@
                             <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()" aria-label="🎙️ Wake phrase (Picovoice)" role="switch" aria-checked="false"></button>
                         </div>
                         <p id="porcupineWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0; line-height: 1.5;">
-                            Hands-free keyword when a Picovoice access key and web assets are configured on the server. HTTPS required for the microphone.
-                            <br><span style="color: #aaa;">Optional custom keyword file: set PICOVOICE_WEB_KEYWORD_PATH (default hey_satnav_wasm.ppn under /static/vendor/picovoice/).</span>
+                            Optional hands-free wake phrase. Picovoice licensing applies. Listen works separately without it. HTTPS is required for microphone access.
+
                         </p>
 
                         <div class="preference-item">
@@ -2703,6 +2713,7 @@
     <script>
         window.TOMTOM_API_KEY = {{ tomtom_api_key | tojson }};
         window.VOYAGR_TOMTOM_TRAFFIC_PROXY = {{ tomtom_traffic_proxy | tojson }};
+        window.VoyagrVoiceAIAvailable = {{ voice_ai_available | default(false) | tojson }};
         window.PICOVOICE_ACCESS_KEY = {{ picovoice_access_key | tojson }};
         window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path | tojson }};
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
