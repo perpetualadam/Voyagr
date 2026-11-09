@@ -1,0 +1,43 @@
+{
+  "version": 8,
+  "name": "OSM Raster Dark (Labels Built-In)",
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "attribution": "\u00a9 OpenStreetMap contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#141820"
+      }
+    },
+    {
+      "id": "osm",
+      "type": "raster",
+      "source": "osm",
+      "minzoom": 0,
+      "maxzoom": 19,
+      "paint": {
+        "raster-saturation": -1,
+        "raster-brightness-min": 0.88,
+        "raster-brightness-max": 0.07,
+        "raster-fade-duration": 0
+      }
+    }
+  ],
+  "metadata": {
+    "voyagr.theme": "dark",
+    "voyagr.fallback": true,
+    "voyagr.raster-treatment": "monochrome-night"
+  }
+}

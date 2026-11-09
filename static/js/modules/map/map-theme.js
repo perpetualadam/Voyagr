@@ -196,7 +196,8 @@
 
         if (input.preferredFallbackStyleUrl) {
             styleUrls.standard = input.preferredFallbackStyleUrl;
-            styleUrls.dark = input.preferredFallbackStyleUrl;
+            // A light session fallback must never replace the selected Dark map.
+            styleUrls.dark = '/static/map/styles/osm-raster-dark/style.json';
             styleUrls.satellite = satelliteRasterUrl;
         }
 

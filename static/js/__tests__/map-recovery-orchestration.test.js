@@ -8,11 +8,11 @@ function harness({heartbeat=false}={}){
     const sources=Object.fromEntries(['openmaptiles','natural_earth_shaded_relief','traffic-source'].map(id=>[id,{setTiles:jest.fn()}]));
     const style={version:8,name:'main-map',sources:Object.fromEntries(Object.keys(sources).map(id=>[id,{type:'raster',tiles:['/tiles/{z}/{x}/{y}']} ])),layers:[{id:'route'},{id:'camera'},{id:'traffic'}]};
     const map={getStyle:()=>style,getSource:id=>sources[id],resize:jest.fn(),triggerRepaint:jest.fn(),jumpTo:jest.fn(),getCenter:()=>({lng:0,lat:0}),getZoom:()=>10,getBearing:()=>0,getPitch:()=>0,isStyleLoaded:()=>true,areTilesLoaded:()=>true,loaded:()=>true,setStyle:jest.fn(),on:(event,fn)=>{(handlers[event]||=[]).push(fn);},once:(event,fn)=>{(handlers[event]||=[]).push(fn);}};
-    const context={map,window:{VoyagrMapRecovery:require('../modules/map/map-recovery.js')},document:{visibilityState:'visible'},console,Date,Map,Set,setTimeout,clearTimeout,setInterval,clearInterval,_mapRenderHeartbeatId:null,getMapWebGLContext:()=>({isContextLost:()=>false}),requestAnimationFrame:fn=>setTimeout(fn,16),voyagrMapShouldSkipAggressiveRecovery:()=>false,voyagrMapIsBootstrapStyle:()=>false,voyagrMapCameraRecoveryOpts:()=>({isMapMoving:false,msSinceLastMapMove:10000}),getMapRenderDiagnostics:()=>({}),maybeFallbackToRasterStyle:jest.fn()};
+    const context={map,localStorage:{getItem:()=> 'standard'},toAbsoluteOriginUrl:url=>url,window:{VoyagrMapRecovery:require('../modules/map/map-recovery.js')},document:{visibilityState:'visible'},console,Date,Map,Set,setTimeout,clearTimeout,setInterval,clearInterval,_mapRenderHeartbeatId:null,getMapWebGLContext:()=>({isContextLost:()=>false}),requestAnimationFrame:fn=>setTimeout(fn,16),voyagrMapShouldSkipAggressiveRecovery:()=>false,voyagrMapIsBootstrapStyle:()=>false,voyagrMapCameraRecoveryOpts:()=>({isMapMoving:false,msSinceLastMapMove:10000}),getMapRenderDiagnostics:()=>({}),maybeFallbackToRasterStyle:jest.fn()};
     vm.createContext(context);
     const selected=[];
     for(const n of body){
-        const fn=n.type==='FunctionDeclaration' && /^voyagrMap(ResizeAndRepaint|ForceReloadAllSources|RecoverAfterNetworkEvent|SoftStyleReload|InvalidateRecovery|HasUsableStyleDefinition)$/.test(n.id.name);
+        const fn=n.type==='FunctionDeclaration' && /^voyagrMap(ResizeAndRepaint|ForceReloadAllSources|RecoverAfterNetworkEvent|SoftStyleReload|InvalidateRecovery|HasUsableStyleDefinition|RasterFallbackUrl)$/.test(n.id.name);
         const vars=n.type==='VariableDeclaration' && n.declarations.some(d=>['_mapErrorCount','_MAX_LOGGED_ERRORS','__MAP_STYLE_RELOAD_MIN_GAP_MS','__MAP_MAX_STYLE_RELOADS','MAP_RENDER_HEARTBEAT_MS'].includes(d.id.name));
         const on=n.type==='ExpressionStatement'&&n.expression.type==='CallExpression'&&source.slice(n.start,n.end).startsWith("map.on('error'");
         const invalidator=n.type==='ExpressionStatement'&&source.slice(n.start,n.end).includes("map.on('style.load', voyagrMapInvalidateRecovery)");
@@ -122,4 +122,18 @@ test('source loading while the camera moves does not reset sources or the style'
     h.context.voyagrMapRecoverAfterNetworkEvent('focus');jest.advanceTimersByTime(20000);
     Object.values(h.sources).forEach(s=>expect(s.setTiles).not.toHaveBeenCalled());
     expect(h.map.setStyle).not.toHaveBeenCalled();
+});
+
+test.each([false,true])('missing Dark style uses Dark raster fallback with current helper=%s',helper=>{
+ const h=harness();h.map.getStyle=()=>undefined;h.context.localStorage.getItem=()=> 'dark';
+ if(helper){const MT=require('../modules/map/map-theme.js');h.context.window.VoyagrMapTheme={...MT,readStoredMapTheme:()=>MT.readStoredMapTheme({storage:h.context.localStorage})};}
+ h.context.window.__voyagrPreferredFallbackStyleUrl='/static/map/styles/osm-raster/style.json';
+ h.context.voyagrMapSoftStyleReload('missing Dark definition');
+ expect(h.map.setStyle).toHaveBeenCalledWith('/static/map/styles/osm-raster-dark/style.json',{diff:false});
+});
+test('missing Satellite style keeps imagery when a light session fallback exists',()=>{
+ const h=harness();h.map.getStyle=()=>undefined;h.context.localStorage.getItem=()=> 'satellite';
+ h.context.window.__voyagrPreferredFallbackStyleUrl='/static/map/styles/osm-raster/style.json';
+ h.context.voyagrMapSoftStyleReload('missing imagery definition');
+ expect(h.map.setStyle).toHaveBeenCalledWith('/static/map/styles/satellite/style.json',{diff:false});
 });
