@@ -8,12 +8,16 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
  const shell=`<html class="${dark?'dark-mode':''}" style="font-size:${scale*100}%"><head><meta charset="utf-8"><style>${read('static/css/voyagr.css')}body{display:block}main{max-width:640px;margin:auto;padding:12px;box-sizing:border-box}</style></head><body class="${dark?'dark-mode':''}"><main>${markup}</main></body></html>`;
  await page.route('**/*',r=>r.request().url()==='https://settings.invalid/'?r.fulfill({contentType:'text/html',body:shell}):r.abort());await page.goto('https://settings.invalid/');
- for(const file of ['modules/navigation/units.js','app/units-preferences-orchestration.js','app/supabase-auth-orchestration.js','modules/ui/toggle-ui.js','modules/navigation/route-prefs.js','app/route-avoidance-orchestration.js','modules/navigation/hazard-alerts.js','app/hazard-preferences-orchestration.js','modules/map/map-controls.js','modules/traffic-lights.js'])await page.addScriptTag({content:read('static/js/'+file)});
+ for(const file of ['modules/navigation/units.js','app/units-preferences-orchestration.js','app/supabase-auth-orchestration.js','modules/ui/toggle-ui.js','modules/navigation/route-prefs.js','app/route-avoidance-orchestration.js','modules/navigation/hazard-alerts.js','app/hazard-preferences-orchestration.js','modules/map/map-controls.js','modules/traffic-lights.js','app/tab-navigation-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file)});
  await page.evaluate(()=>{
   document.getElementById('settingsTab').style.display='block';window.calls=[];window.requests=[];
   window.fetch=(url,options)=>{requests.push([url,options]);return Promise.resolve({ok:true,json:()=>Promise.resolve({})});};
   for(const name of ['goBackToPreviousTab','manualTrafficUpdate','showCAZInfo','clearDepartureTime','analysebestTimeToLeave','refreshApp','checkForUpdates','recalculateRouteWithPreferences','switchTab','voyagrShowSafetyNotice'])window[name]=(...args)=>calls.push([name,...args]);
   const u=VoyagrUnitsPreferencesOrchestration;u.bind({units:()=>VoyagrUnits,call:{saveAllSettings:()=>calls.push(['saveAllSettings']),showStatus:()=>{}}});
+  VoyagrTabNavigationOrchestration.bind({units:()=>VoyagrUnits,getDistanceUnit:()=>u.getDistanceUnitValue(),getCurrencyUnit:()=>u.getCurrencyUnitValue(),getSpeedUnit:()=>u.getSpeedUnitValue(),getTemperatureUnit:()=>u.getTemperatureUnitValue(),call:{applyDomSelectsFromPlan:items=>items.forEach(({id,value})=>{const el=document.getElementById(id);if(el)el.value=value;}),updateAllDistanceDisplays:()=>u.updateAllDistanceDisplays()}});
+  u.setDistanceUnitValue('mi');VoyagrTabNavigationOrchestration.loadUnitPreferences();
+  if(document.getElementById('voiceTurnDistance1').selectedOptions[0].label!=='1640 ft')throw Error('First Settings entry failed to refresh');
+  u.setDistanceUnitValue('km');VoyagrTabNavigationOrchestration.loadUnitPreferences();
   window.updateDistanceUnit=()=>u.updateDistanceUnit();window.updateCurrencyUnit=()=>u.updateCurrencyUnit();
  });
  // Native disclosures work with keyboard and keep mounted preferences unchanged.
@@ -35,6 +39,16 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   await el.nth(target).focus();await page.keyboard.press('Tab');await page.keyboard.press('Shift+Tab');assert.equal(await el.nth(target).evaluate(n=>getComputedStyle(n).outlineStyle),'solid');await page.keyboard.press('Enter');
  }
  await page.locator('#distanceUnit').selectOption('km');await page.locator('#distanceUnit').selectOption('mi');await page.locator('#currencyUnit').selectOption('EUR');
+ // Distance-option labels share the production formatter; native option values stay canonical.
+ const labelIds=['voiceTurnDistance1','voiceTurnDistance2','voiceTurnDistance3','voiceHazardDistance','cameraAlertDistance','parkingMaxWalkingDistance'];
+ const canonical=await page.evaluate(ids=>ids.map(id=>[...document.getElementById(id).options].map(o=>[o.value,o.selected,o.dataset.distanceMeters])),labelIds);
+ assert.equal(await page.locator('#voiceTurnDistance1').evaluate(n=>n.selectedOptions[0].label),'1640 ft');
+ assert.equal(await page.locator('#parkingMaxWalkingDistance').evaluate(n=>n.selectedOptions[0].label),'10 minutes (about 2625 ft)');
+ await page.locator('#distanceUnit').selectOption('km');assert.equal(await page.locator('#cameraAlertDistance').evaluate(n=>n.selectedOptions[0].label),'500 m');
+ assert.equal(await page.locator('#parkingMaxWalkingDistance').evaluate(n=>n.options[2].label),'15 minutes (about 1.2 km)');
+ await page.locator('#distanceUnit').selectOption('mi');
+ assert.deepEqual(await page.evaluate(ids=>ids.map(id=>[...document.getElementById(id).options].map(o=>[o.value,o.selected,o.dataset.distanceMeters])),labelIds),canonical);
+ if(width===390&&scale===1){await page.locator('#voiceTurnDistance1').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/voyagr-distance-options-'+(dark?'dark':'light')+'.png'});}
  const result=await page.evaluate(()=>({calls,requests,dist:localStorage.getItem('unit_distance'),currency:localStorage.getItem('unit_currency'),symbol:VoyagrUnitsPreferencesOrchestration.getCurrencySymbol(),hidden:['accountSignedIn','accountSignedOut','supportVoyagrSection'].map(id=>document.getElementById(id).style.display)}));
  assert.deepEqual(result.calls.slice(0,10),[['goBackToPreviousTab'],['manualTrafficUpdate'],['showCAZInfo'],['clearDepartureTime'],['analysebestTimeToLeave'],['refreshApp'],['checkForUpdates'],['recalculateRouteWithPreferences'],['switchTab','navigation'],['voyagrShowSafetyNotice']]);
  // Real account shortcut controller must reveal the disclosure before scrolling.
@@ -59,7 +73,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   assert.equal(await el.getAttribute('role'),'switch');assert.equal(await el.getAttribute('aria-checked'),String(await el.evaluate(n=>n.classList.contains('active'))));
  }
  const client=await page.context().newCDPSession(page);const tree=await client.send('Accessibility.getFullAXTree');
- const ax=tree.nodes.find(n=>n.role?.value==='switch'&&n.name?.value==='Use map data in routing');assert(ax,'Switch missing from accessibility tree');assert.equal(ax.properties.find(p=>p.name==='checked').value.value,'false');await client.detach();
+ const ax=tree.nodes.find(n=>n.role?.value==='switch'&&n.name?.value==='Use map data in routing');assert(ax,'Switch missing from accessibility tree');const optionControl=tree.nodes.find(n=>n.role?.value==='combobox'&&n.name?.value==='Turn Announcement Distance (1st)');assert.equal(optionControl.value.value,'1640 ft');assert.equal(ax.properties.find(p=>p.name==='checked').value.value,'false');await client.detach();
  await page.evaluate(()=>{
   window.resolvePreference=null;const pending=new Promise(resolve=>{window.resolvePreference=resolve;});
   window.fetch=async(_url,opts)=>({json:()=>opts?pending:Promise.resolve({success:true,preferences:[{hazard_type:'camera_speed',enabled:false}]})});

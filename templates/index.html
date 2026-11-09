@@ -229,7 +229,7 @@
     <script defer src="/static/js/app/road-report-orchestration.js?v=20261031phase12fg"></script>
     <script defer src="/static/js/app/service-worker-orchestration.js?v=20260727swreload1"></script>
     <script defer src="/static/js/app/pwa-lifecycle-orchestration.js?v=20260712ab0e"></script>
-    <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20261107sheettools1"></script>
+    <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20261109distanceoptions1"></script>
     <script defer src="/static/js/app/driver-camera-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/recent-destinations-orchestration.js?v=20260712ab10"></script>
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
@@ -241,7 +241,7 @@
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261107settlementmerge1"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20261107mapicons1"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20261108unitrestore1"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20261109distanceoptions1"></script>
     <script defer src="/static/js/app.js?v=20261108unitrestore1"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -1141,40 +1141,40 @@
                         <div class="preference-item">
                             <label class="preference-label" for="voiceTurnDistance1">Turn Announcement Distance (1st)</label>
                             <select id="voiceTurnDistance1" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="300">300 meters</option>
-                                <option value="500" selected="">500 meters</option>
-                                <option value="800">800 meters</option>
-                                <option value="1000">1 kilometer</option>
+                                <option value="300" data-distance-meters="300">300 meters</option>
+                                <option value="500" selected="" data-distance-meters="500">500 meters</option>
+                                <option value="800" data-distance-meters="800">800 meters</option>
+                                <option value="1000" data-distance-meters="1000">1 kilometer</option>
                             </select>
                         </div>
 
                         <div class="preference-item">
                             <label class="preference-label" for="voiceTurnDistance2">Turn Announcement Distance (2nd)</label>
                             <select id="voiceTurnDistance2" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="100">100 meters</option>
-                                <option value="150">150 meters</option>
-                                <option value="200" selected="">200 meters</option>
-                                <option value="300">300 meters</option>
+                                <option value="100" data-distance-meters="100">100 meters</option>
+                                <option value="150" data-distance-meters="150">150 meters</option>
+                                <option value="200" selected="" data-distance-meters="200">200 meters</option>
+                                <option value="300" data-distance-meters="300">300 meters</option>
                             </select>
                         </div>
 
                         <div class="preference-item">
                             <label class="preference-label" for="voiceTurnDistance3">Turn Announcement Distance (3rd)</label>
                             <select id="voiceTurnDistance3" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="50">50 meters</option>
-                                <option value="75">75 meters</option>
-                                <option value="100" selected="">100 meters</option>
-                                <option value="150">150 meters</option>
+                                <option value="50" data-distance-meters="50">50 meters</option>
+                                <option value="75" data-distance-meters="75">75 meters</option>
+                                <option value="100" selected="" data-distance-meters="100">100 meters</option>
+                                <option value="150" data-distance-meters="150">150 meters</option>
                             </select>
                         </div>
 
                         <div class="preference-item">
                             <label class="preference-label" for="voiceHazardDistance">Hazard Warning Distance</label>
                             <select id="voiceHazardDistance" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="300">300 meters</option>
-                                <option value="500" selected="">500 meters</option>
-                                <option value="800">800 meters</option>
-                                <option value="1000">1 kilometer</option>
+                                <option value="300" data-distance-meters="300">300 meters</option>
+                                <option value="500" selected="" data-distance-meters="500">500 meters</option>
+                                <option value="800" data-distance-meters="800">800 meters</option>
+                                <option value="1000" data-distance-meters="1000">1 kilometer</option>
                             </select>
                         </div>
 
@@ -1215,11 +1215,11 @@
                         <div class="preference-item">
                             <label class="preference-label" for="cameraAlertDistance">Roadside alert distance</label>
                             <select id="cameraAlertDistance" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="200">200 meters</option>
-                                <option value="300">300 meters</option>
-                                <option value="500" selected="">500 meters</option>
-                                <option value="800">800 meters</option>
-                                <option value="1000">1 kilometer</option>
+                                <option value="200" data-distance-meters="200">200 meters</option>
+                                <option value="300" data-distance-meters="300">300 meters</option>
+                                <option value="500" selected="" data-distance-meters="500">500 meters</option>
+                                <option value="800" data-distance-meters="800">800 meters</option>
+                                <option value="1000" data-distance-meters="1000">1 kilometer</option>
                             </select>
                         </div>
                     </div></div></details>
@@ -1235,9 +1235,9 @@
                         <div class="preference-item">
                             <label class="preference-label" for="parkingMaxWalkingDistance">Max Walking Distance</label>
                             <select id="parkingMaxWalkingDistance" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="5">5 minutes (400m)</option>
-                                <option value="10" selected="">10 minutes (800m)</option>
-                                <option value="15">15 minutes (1.2km)</option>
+                                <option value="5" data-distance-meters="400" data-distance-prefix="5 minutes (about " data-distance-suffix=")">5 minutes (about 400 m)</option>
+                                <option value="10" selected="" data-distance-meters="800" data-distance-prefix="10 minutes (about " data-distance-suffix=")">10 minutes (about 800 m)</option>
+                                <option value="15" data-distance-meters="1200" data-distance-prefix="15 minutes (about " data-distance-suffix=")">15 minutes (about 1.2 km)</option>
                             </select>
                         </div>
 
