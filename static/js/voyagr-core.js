@@ -338,18 +338,32 @@ function initializeMap() {
     // Log MapLibre errors with useful context. Some style/tile combinations can produce
     // expression evaluation errors like "Expected value to be of type number, but found null instead."
     // When this happens, it is typically triggered by optional layers like 3D buildings.
+    function voyagrMapRasterFallbackUrl() {
+        const MT = window.VoyagrMapTheme;
+        const selectedTheme = MT && typeof MT.readStoredMapTheme === 'function'
+            ? MT.readStoredMapTheme() : localStorage.getItem('mapTheme') || 'standard';
+        const lightFallback = window.__voyagrPreferredFallbackStyleUrl || toAbsoluteOriginUrl('/static/map/styles/osm-raster/style.json');
+        if (MT && typeof MT.buildMapThemeStyleUrlsPlan === 'function') {
+            return MT.buildMapThemeStyleUrlsPlan({theme:selectedTheme,preferredFallbackStyleUrl:lightFallback,toAbs:toAbsoluteOriginUrl}).chosenUrl;
+        }
+        // Older/missing helpers still preserve Dark and Satellite rather than
+        // silently granting the light session fallback authority over every theme.
+        return toAbsoluteOriginUrl(selectedTheme === 'dark' ? '/static/map/styles/osm-raster-dark/style.json'
+            : selectedTheme === 'satellite' ? '/static/map/styles/satellite/style.json' : lightFallback);
+    }
+
     function maybeFallbackToRasterStyle(reason) {
         try {
             // Only do this once per session.
             if (window.__voyagrRasterStyleFallbackApplied) return;
             window.__voyagrRasterStyleFallbackApplied = true;
 
-            const msg = `[MapLibre] Falling back to raster map (labels built-in): ${reason}`;
+            const msg = `[MapLibre] Using theme-compatible map fallback: ${reason}`;
             console.warn(msg);
 
             // Surface to UI if available (defined in voyagr-app.js)
             if (typeof showStatus === 'function') {
-                showStatus('🗺️ Map labels unavailable (fonts/glyphs). Switching to raster map with labels.', 'info');
+                showStatus('🗺️ Map rendering issue. Loading a fallback for the selected theme.', 'info');
             }
 
             // Persist for the session; allow theme changes to respect this.
@@ -357,7 +371,7 @@ function initializeMap() {
             window.__voyagrPreferredFallbackStyleUrl = toAbsoluteOriginUrl('/static/map/styles/osm-raster/style.json');
 
             if (map && typeof map.setStyle === 'function') {
-                map.setStyle(window.__voyagrPreferredFallbackStyleUrl);
+                map.setStyle(voyagrMapRasterFallbackUrl());
             }
         } catch (e) {
             // never crash
@@ -909,7 +923,7 @@ function initializeMap() {
                 const clone = JSON.parse(JSON.stringify(style));
                 map.setStyle(clone, { diff: false });
             } else if (window.__voyagrPreferredFallbackStyleUrl) {
-                map.setStyle(window.__voyagrPreferredFallbackStyleUrl, { diff: false });
+                map.setStyle(voyagrMapRasterFallbackUrl(), { diff: false });
             }
             requestAnimationFrame(() => voyagrMapResizeAndRepaint());
             map.once('style.load', () => {

@@ -957,7 +957,7 @@ Remaining source/provider work and deployed map/device acceptance stay separate.
   linking disabled it leaves the selected map alone. No new preference/migration.
 - [x] Keep the early-boot helper aligned with the actual inline boot path; update
   theme script cache tags. Existing route/marker ownership code is unchanged.
-- [ ] Next independent map issue: Dark mode must not select a light raster fallback.
+- [x] Dark mode raster fallback completed in the following independent increment.
 - [ ] Then improve basemap road/label contrast and verify live map/device acceptance.
 
 Validation: 3,222 JavaScript tests with coverage/lint; 2,244 backend tests and 74
@@ -972,3 +972,36 @@ fixtures, not live Satellite availability or a full installed-PWA acceptance tes
 The existing twelve route/traffic/weather/marker theme cases and sixteen Navigation
 UI cases pass. This preserves future selections; it cannot infer a Satellite choice
 that an earlier release already overwrote. No production deployment/config changes.
+
+## Dark map raster fallback (9 November 2026)
+
+- [x] Confirm the session fallback URL was the light OSM raster style and was reused
+  by Dark selection and missing-style recovery. Preserve session fallback mode while
+  resolving the current theme independently in both paths, including older helpers.
+- [x] Add a bundled monochrome Dark raster style using the same OSM tiles and
+  attribution. Use native raster saturation/brightness endpoints to give light tile
+  backgrounds a dark tone and dark label pixels a light tone. This paint applies
+  only to the basemap raster layer, never the canvas, route lines or HTML markers.
+- [x] Keep Standard's existing fallback/custom URL compatibility and Satellite's
+  own imagery style. Preserve theme storage, once-per-session fallback gating,
+  existing source-loading protections, camera state and navigation ownership.
+- [x] Regress actual glyph-error fallback and theme switching with real MapLibre:
+  sampled raster background/label pixels, route colour/geometry, marker/popup and
+  camera preservation. Cover missing-style recovery with current/missing helpers.
+- [ ] Next independent map work: improve Dark vector roads/labels at street and
+  overview zooms, then deployed live-tile/device acceptance.
+
+Validation: 3,229 JavaScript tests with coverage/lint; 2,244 backend tests and 74
+subtests passed (one skipped). Ten real-renderer fallback/switch stages start from
+Standard or Dark failure, then exercise Dark/Standard/Satellite choices using the
+production core error/fallback/idle hooks and preview/theme owners. Raster pixels
+are generated fixtures; a light background turns dark, dark label shapes turn
+light and the blue route/red marker remain unchanged. Twelve existing route/
+traffic/weather/marker theme cases also pass. No live tile availability, complete
+raster label coverage or installed-PWA/road test claim; no production deployment.
+Vector-only features still require vector data as with the existing raster fallback.
+
+Native paint reference: [MapLibre raster layer properties](https://maplibre.org/maplibre-style-spec/layers/#raster-brightness-min).
+The brightness endpoints are deliberately reversed for this tested monochrome
+night treatment. Recheck the pixel regression when upgrading the bundled renderer;
+no canvas CSS filter or additional tile provider has been introduced.

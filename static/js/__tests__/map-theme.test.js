@@ -19,7 +19,7 @@ describe('map-theme module', () => {
             toAbs: (url) => 'https://app.test' + url,
         });
         expect(plan.styleUrls.standard).toBe('/fallback/style.json');
-        expect(plan.styleUrls.dark).toBe('/fallback/style.json');
+        expect(plan.styleUrls.dark).toBe('/static/map/styles/osm-raster-dark/style.json');
         expect(plan.chosenUrl).toBe('https://app.test/fallback/style.json');
     });
 
@@ -95,4 +95,16 @@ describe('map-theme module', () => {
         expect(MT.resolveNavRouteColorForTheme('standard', '#3366cc')).toBe('#3366cc');
         expect(MT.resolveNavRouteColorForTheme('dark', '#3366cc')).toBe(MT.DARK_MAP_NAV_ROUTE_COLOR);
     });
+});
+
+test.each(['dark','standard','satellite'])('session raster fallback resolves %s independently',theme=>{
+ const plan=MT.buildMapThemeStyleUrlsPlan({theme,preferredFallbackStyleUrl:'https://app.test/static/map/styles/osm-raster/style.json',toAbs:url=>new URL(url,'https://app.test').href});
+ const expected={dark:'/static/map/styles/osm-raster-dark/style.json',standard:'/static/map/styles/osm-raster/style.json',satellite:'/static/map/styles/satellite/style.json'};
+ expect(plan.chosenUrl).toBe('https://app.test'+expected[theme]);
+});
+test('dark raster fallback uses the same tiles and attribution with a layer-local treatment',()=>{
+ const fs=require('fs'),path=require('path');const read=theme=>JSON.parse(fs.readFileSync(path.join(__dirname,'../../map/styles',theme,'style.json'),'utf8'));
+ const light=read('osm-raster'),dark=read('osm-raster-dark');expect(dark.sources).toEqual(light.sources);
+ expect(dark.layers.find(l=>l.type==='background').paint['background-color']).toBe('#141820');
+ expect(dark.layers.find(l=>l.type==='raster').paint).toEqual({'raster-saturation':-1,'raster-brightness-min':.88,'raster-brightness-max':.07,'raster-fade-duration':0});
 });
