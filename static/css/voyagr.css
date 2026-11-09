@@ -5144,3 +5144,12 @@ html.dark-mode .navigation-save-actions, body.dark-mode .navigation-save-actions
     --save-action-surface:#20232b; --save-action-text:#f4f5f8; --save-action-border:#70788b;
     --save-action-hover:#363047; --save-action-accent:#c6a9f2;
 }
+
+/* Keep explanations available without crowding the primary journey actions. */
+.journey-mode-info { margin: 8px 0; color: var(--journey-muted); }
+.journey-mode-info summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px; cursor: pointer; border-radius: 12px; }
+.journey-mode-info summary > span:first-child { font-size: 24px; }
+.journey-mode-info summary:focus-visible { outline: 3px solid var(--journey-accent); outline-offset: 2px; }
+.journey-mode-info[open] { padding: 8px; border: 1px solid var(--journey-border); border-radius: 12px; }
+.journey-mode-info #journeyModeStatus { color: var(--journey-text); }
+.journey-mode-panel #journeyModeSummary:empty { display: none; }

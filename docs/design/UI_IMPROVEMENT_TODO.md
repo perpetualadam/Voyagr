@@ -1112,3 +1112,40 @@ production GPS-stop caller with deterministic position callbacks and verifies
 watch release, no premature stop addition, cancellation, denial and expiry. These
 fixtures do not measure actual satellite reception or guarantee road navigation.
 No production deployment or configuration/data change.
+
+## Mapped-road waiting and concise journey information (9 November 2026)
+
+- [x] Add a cancellable Waiting for a mapped road state for fresh GPS starts whose
+  returned route has a start-only endpoint gap. Guidance stays off; the selected
+  plan and durable journey are not replaced or saved while waiting.
+- [x] Retry the full GPS/request/assessment/lifecycle path after at least 10 seconds
+  and 5 m movement, or after 30 seconds with a fresh stationary reading. Movement
+  triggers a request, never permission. Keep a five-minute total wait budget across
+  retries and release the owned watch on retry, exit, timeout or error.
+- [x] Cancel on destination/selection/simulation/planning changes. Preference changes
+  invalidate the captured request; offline, denied or failed location callbacks end
+  waiting. Reopening controls preserves waiting and disables competing start actions.
+- [x] Do not treat destination gaps, another unresolved leg, invalid geometry,
+  mandatory conflicts or unrelated origin failures as start-only waiting. Existing
+  active guidance replacement retains its prior behavior.
+- [x] Put static explanations and full diagnostics behind native keyboard-accessible
+  Info disclosure. Keep a short announced status and primary actions visible, with
+  explicit guidance-off wording during waiting. Version CSS/journey scripts.
+- [ ] Deployed car-park/road acceptance. The existing backend numerical continuity
+  threshold and live GPS/movement checks are unchanged. This is a waiting/retry
+  workflow, not a new road-matching algorithm or proof of legal car-park access.
+- [ ] Investigate arrival/destination access separately when that is the blocker;
+  waiting at the origin cannot resolve a destination gap.
+
+Validation: 3,284 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+subtests passed (one skipped), and eleven isolated SQL policy tests passed. New production-mode regressions cover no guidance/persistence while
+waiting, movement and stationary retries, successful full lifecycle after a new
+checked response, exit/endpoint/preferences/selection/simulation cancellation,
+non-start-gap refusals, five-minute timeout and reopening controls. Eight Chromium
+chooser cases check Light/Dark, mobile/desktop, enlarged text, collapsed/open Info,
+action dispatch, viewport bounds and keyboard close. Location/provider inputs use
+fixtures; real mobile GPS/road matching and deployment remain unverified.
+
+The final retry rechecks the intent, selection and preference-bound request after
+the movement promise resolves; a destination change in that microtask gap cannot
+start a fresh request. The timing regression is included in the totals above.
