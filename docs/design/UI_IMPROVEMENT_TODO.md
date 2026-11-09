@@ -1181,10 +1181,21 @@ Light/Dark, synchronous view before GPS, background acquisition, observed positi
 keyboard cancellation and selected-polyline preservation. Start action integration
 checks now target the common immediate owner. No safety assertions were weakened.
 
-## GraphHopper route recalculation — queued
+## GraphHopper route recalculation — investigated
 
-- [ ] Investigate GraphHopper route recalculation: triggers during navigation,
+- [x] Investigate GraphHopper route recalculation: triggers during navigation,
   requests/responses, off-route detection, repeated or stale requests, remaining
   stops, selected avoidance preferences and safe replacement of the active route.
   Reproduce and report findings before changing behavior; handle one issue at a
   time and preserve existing navigation functionality.
+
+Findings: [GraphHopper recalculation investigation](GRAPHHOPPER_RECALCULATION_INVESTIGATION.md).
+
+- [ ] First: preserve canonical remaining stops/arrival intent in automatic reroute
+  requests and prove no visit is skipped or restarted.
+- [ ] Second: assess eligible alternatives before the first returned route can
+  block a usable GraphHopper candidate; retain all integrity gates.
+- [ ] Clarify engine-family versus named-route fallback priority before changing
+  possible GraphHopper-to-Valhalla selection.
+- [ ] Capture a real-device recalculation trace after fixes; separately exercise
+  slow/hanging transport and report actual engine timings.
