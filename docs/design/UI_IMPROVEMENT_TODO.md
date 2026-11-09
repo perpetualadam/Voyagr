@@ -726,7 +726,7 @@ mi/km/mi changes with stable thresholds and captured turn/hazard/destination tex
 User-requested additions; complete each increment separately and preserve existing
 handlers, persisted choices, permissions, navigation safety and device acceptance.
 
-- [ ] Navigation routing controls: align Auto/Walk/Bike, Calculate route and
+- [x] Navigation routing controls: align Auto/Walk/Bike, Calculate route and
   Use current GPS as start with the app's compact labelled-icon design. Preserve
   the primary calculation action, selected routing mode and real-GPS permission path.
 - [ ] Voice control card: align Listen, Test speech, transcript/status and Example
@@ -844,3 +844,25 @@ not establish live provider availability, real GPS accuracy, SCDB freshness or
 complete OSM coverage. Satellite remains an imagery basemap; vector-only native
 labels/3D buildings require their source and are not fabricated. Deployed/live
 map and device acceptance remain outstanding. No production deployment.
+
+
+## Compact Navigation routing controls (9 November 2026)
+
+- [x] Replace emoji-only decoration and expanding mode buttons with distinct
+  decorative SVG icons plus visible Auto/Walk/Bike labels and 68px touch targets.
+  Keep the existing button IDs, mode values, event handlers and vehicle selection.
+- [x] Keep a selected check mark and synchronise aria-pressed from the existing
+  mode handler, including restored settings. Native buttons retain Enter/Space
+  keyboard behavior; decorative icons/checks do not alter accessible names.
+- [x] Make Calculate route a compact labelled-icon primary action. Scope the layout
+  to Navigation planning controls, preserving dashcam, saved-place and journey
+  chooser controls which share older button classes. GPS start stays above modes.
+- [x] Verify wrapping, focus rings, contrast and keyboard-triggered mode persistence/
+  calculation in the existing 16-case light/dark Navigation browser matrix at
+  320px, 390px, landscape and desktop sizes. No horizontal overflow; tested action
+  text has at least 4.5:1 contrast. Map/provider/GPS boundaries are fixtures.
+- [ ] Next: voice controls, then Clear All and Save Location as separate increments.
+
+Validation: 3,178 JavaScript tests with coverage/lint and 2,221 declared backend
+checks plus 74 subtests passed (one skipped). Existing calculation, GPS permissions
+and live navigation authority remain unchanged. No production deployment.
