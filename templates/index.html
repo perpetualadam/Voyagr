@@ -62,7 +62,7 @@
             var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             var useDark = theme === 'dark' || (theme === 'auto' && prefersDark);
             var linkThemes = localStorage.getItem('linkUiMapTheme') !== 'false';
-            if (linkThemes) {
+            if (linkThemes && localStorage.getItem('mapTheme') !== 'satellite') {
                 var linkedMap = theme === 'dark' ? 'dark'
                     : (theme === 'auto' ? (prefersDark ? 'dark' : 'standard') : 'standard');
                 localStorage.setItem('mapTheme', linkedMap);
@@ -149,7 +149,7 @@
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20261108unitrestore1"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260711zzzn"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20261108switchstates1"></script>
-    <script defer src="/static/js/modules/ui/theme.js?v=20260712dark3"></script>
+    <script defer src="/static/js/modules/ui/theme.js?v=20261109satellite1"></script>
     <script defer src="/static/js/modules/ui/nav-menu.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/modules/ui/dom-helpers.js?v=20261107sheettools1"></script>
     <script defer src="/static/js/modules/navigation/route-prefs.js?v=20261108fuelpricing1"></script>
@@ -226,7 +226,7 @@
     <script defer src="/static/js/app/vehicle-routing-orchestration.js?v=20261109routingui1"></script>
     <script defer src="/static/js/app/form-clear-orchestration.js?v=20261109clear1"></script>
     <script defer src="/static/js/app/map-hints-orchestration.js?v=20260712ab0a"></script>
-    <script defer src="/static/js/app/dark-mode-orchestration.js?v=20260712dark2"></script>
+    <script defer src="/static/js/app/dark-mode-orchestration.js?v=20261109satellite1"></script>
     <script defer src="/static/js/app/road-report-orchestration.js?v=20261031phase12fg"></script>
     <script defer src="/static/js/app/service-worker-orchestration.js?v=20260727swreload1"></script>
     <script defer src="/static/js/app/pwa-lifecycle-orchestration.js?v=20260712ab0e"></script>

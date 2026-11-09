@@ -101,6 +101,10 @@
      * @returns {{ shouldSet: boolean, mapTheme: string }}
      */
     function buildEarlyLinkedMapThemeBootPlan(storedUiTheme, prefersDark, storage) {
+        if (!storage && typeof localStorage !== 'undefined') storage = localStorage;
+        if (storage && storage.getItem('mapTheme') === 'satellite') {
+            return { shouldSet: false, mapTheme: 'satellite' };
+        }
         if (!isUiMapThemeLinkEnabled(storage)) {
             return { shouldSet: false, mapTheme: 'standard' };
         }

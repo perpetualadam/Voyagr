@@ -945,3 +945,30 @@ action text contrast. Existing GPS start order, theme linking and Clear All chec
 remain in the matrix. Saving semantics, real location acquisition and navigation
 permissions are unchanged. No production deployment or configuration change.
 Remaining source/provider work and deployed map/device acceptance stay separate.
+
+## Satellite selection persistence (9 November 2026)
+
+- [x] Identify two overwrites: early inline startup derives mapTheme from ui_theme,
+  then UI restoration/system application can replace Satellite through linked themes.
+- [x] Preserve a saved Satellite map during early boot, settings restoration and
+  automatic UI/system theme updates. Keep the chosen light/dark/auto UI preference.
+- [x] Retain explicit Light/Dark UI picker/toggle behavior: with linking enabled,
+  an explicit UI choice still selects the corresponding Standard/Dark map. With
+  linking disabled it leaves the selected map alone. No new preference/migration.
+- [x] Keep the early-boot helper aligned with the actual inline boot path; update
+  theme script cache tags. Existing route/marker ownership code is unchanged.
+- [ ] Next independent map issue: Dark mode must not select a light raster fallback.
+- [ ] Then improve basemap road/label contrast and verify live map/device acceptance.
+
+Validation: 3,222 JavaScript tests with coverage/lint; 2,244 backend tests and 74
+subtests passed (one skipped). Eight real MapLibre browser configurations cover
+light/dark/automatic UI, light/dark system preference and linking on/off. Each
+checks boot, theme settings restoration, two real reloads, active map picker,
+explicit UI choices and an explicitly reselected Satellite map; automatic UI
+also follows OS changes without replacing imagery. The browser exercises the
+production early boot snippet/controllers/settings helper, with unrelated Settings
+side effects outside this fixture. Styles/raster tiles/settings transport are local
+fixtures, not live Satellite availability or a full installed-PWA acceptance test.
+The existing twelve route/traffic/weather/marker theme cases and sixteen Navigation
+UI cases pass. This preserves future selections; it cannot infer a Satellite choice
+that an earlier release already overwrote. No production deployment/config changes.
