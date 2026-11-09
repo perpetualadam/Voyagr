@@ -1,32 +1,12 @@
 # GraphHopper recalculation investigation
 
 Investigated 9 November 2026 against main `1d8fbff7`. Runtime behavior unchanged.
-Three findings in Voyagr's shared automatic-reroute pipeline affect GraphHopper.
+One confirmed selection defect, engine fallback behavior and verified stop
+preservation were found in Voyagr's shared automatic-reroute pipeline.
 These observations use synthetic responses and production functions; they do not
 establish the cause of a particular drive or the health of the VPS routing engine.
 
-## 1. Remaining stops are absent from the automatic reroute request — fix first
-
-`voyagr-app.js:949` delegates to `reroute-map-orchestration.js:100`, which calls
-`routing-request.js:284`/`:255`. That path collects origin, final destination,
-avoidance/preferences and costs, but does not collect the active continuation,
-remaining stops, via points or journey context. The automatic GPS handler sends
-that body without adding them (`gps-orchestration.js:1624`).
-
-The probe supplies a selected GraphHopper journey with one remaining stop. The
-actual builder emits no `stops`, `via_points` or `journey_context` fields. Thus a
-recalculation can request a direct trip to the final destination instead of the
-remaining visit sequence. The map replacement installs the returned candidate and
-resets progress (`reroute-map-orchestration.js:300`); it does not reconstruct the
-omitted visits there. Full live replacement and durable checkpoint consequences
-need a focused regression before a fix; no production journey was mutated here.
-
-Proposed first fix: obtain the canonical remaining continuation, preserve ordered
-visits and arrival intent, and reject missing/inconsistent continuation rather than
-silently dropping it. Verify completed visits are not restarted, remaining visits
-are not skipped, and cancellation/ownership races retain the current journey.
-
-## 2. The first response route gates all later alternatives — confirmed
+## 1. The first response route gates all later alternatives — confirmed
 
 `gps-orchestration.js:1642` checks `data.routes[0]` and returns immediately when its
 integrity gate refuses. Source/name selection only happens afterward through
@@ -38,11 +18,11 @@ GraphHopper, yet the GPS reroute handler performs **zero map updates** and clear
 `rerouteInProgress` before reaching selection. This is conditional on response
 order, not proof that every GraphHopper reroute fails.
 
-Proposed second fix: assess/select eligible candidates before committing one,
+Proposed first fix: assess/select eligible candidates before committing one,
 without bypassing any gate. Verify refused-first/eligible-second, all-refused,
 malformed candidates and stale responses. Retain current guidance on failure.
 
-## 3. Engine continuity is best effort — policy decision needed
+## 2. Engine continuity is best effort — policy decision needed
 
 `reroute-decision.js:pickRerouteRouteFromResponse` prioritizes:
 
@@ -56,6 +36,27 @@ the production picker selects Valhalla. This explains a possible engine switch;
 it is not evidence that the GraphHopper server failed. Decide whether engine
 continuity or retaining the named routing intent takes precedence before changing
 this fallback policy. Never retain a refused route just to keep an engine label.
+
+## 3. Remaining stops are restored downstream — preservation confirmed
+
+The initial builder (`reroute-map-orchestration.js:100` and
+`routing-request.js:284`) omits stops. However, the outgoing fetch applies
+`avoidance-integrity.js:augment` first. For a route with `leg_geometry_ranges`,
+that step obtains canonical remaining visits through `VoyagrJourneyPlan.liveIntent`,
+sets `stops`, clears legacy via points, and preserves stop order. It also carries a
+selected arrival choice through its corresponding branch.
+
+The corrected probe captures the **final serialized fetch body**, with the browser's
+window/global route property correctly mirrored in Node. One pending visit is
+present in the outgoing request; once its leg is completed the augmented body has
+zero remaining stops. An earlier intermediate-builder observation suggested stops
+were missing; that conclusion was too broad and is withdrawn. Normal automatic
+rerouting has not been shown to lose stops by this investigation.
+
+The augmentation is conditional on leg-range metadata. Legacy/malformed metadata
+and full durable replacement deserve additional coverage, but are not established
+normal-path stop-loss defects. Preserve this existing behavior when fixing route
+selection rather than rewriting it based on the intermediate body alone.
 
 ## Existing behavior verified during the trace
 
@@ -84,7 +85,7 @@ Run `node scripts/diagnose-graphhopper-recalculation.cjs`. It uses jsdom, produc
 GPS/request/picker functions and deterministic device/network/map adapters, without
 contacting a routing server, saving a journey or changing production data. Output
 records current observations, rather than asserting that defects should persist.
-At the investigated revision:
+Selected observations at the investigated revision (the stop object is abbreviated):
 
 ```json
 {
@@ -96,9 +97,10 @@ At the investigated revision:
   },
   "request_probe": {
     "remaining_stops_in_active_context": 1,
-    "stops_in_request": null,
-    "via_points_in_request": null,
-    "journey_context_in_request": null,
+    "stops_in_final_request": ["one synthetic remaining visit; see script output"],
+    "via_points_in_final_request": [],
+    "preserve_stop_order": true,
+    "stops_after_visit_completed": 0,
     "force_refresh": true,
     "is_reroute": true
   },

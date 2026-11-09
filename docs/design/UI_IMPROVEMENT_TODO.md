@@ -1191,11 +1191,14 @@ checks now target the common immediate owner. No safety assertions were weakened
 
 Findings: [GraphHopper recalculation investigation](GRAPHHOPPER_RECALCULATION_INVESTIGATION.md).
 
-- [ ] First: preserve canonical remaining stops/arrival intent in automatic reroute
-  requests and prove no visit is skipped or restarted.
-- [ ] Second: assess eligible alternatives before the first returned route can
+- [x] Trace the final outgoing request: normal canonical remaining-stop
+  preservation is present in integrity augmentation; intermediate-builder omission
+  alone is not a stop-loss defect.
+- [ ] First fix: assess eligible alternatives before the first returned route can
   block a usable GraphHopper candidate; retain all integrity gates.
 - [ ] Clarify engine-family versus named-route fallback priority before changing
   possible GraphHopper-to-Valhalla selection.
+- [ ] Extend coverage for legacy/malformed leg metadata and durable replacement
+  while retaining normal stop/provenance preservation.
 - [ ] Capture a real-device recalculation trace after fixes; separately exercise
   slow/hanging transport and report actual engine timings.
