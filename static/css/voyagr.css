@@ -5038,3 +5038,33 @@ html.dark-mode .navigation-route-controls .routing-mode-btn.active,
 body.dark-mode .navigation-route-controls .routing-mode-btn.active { background:#4558b8; color:#fff; border-color:#a9b6ff; }
 html.dark-mode .navigation-route-controls button:focus-visible,
 body.dark-mode .navigation-route-controls button:focus-visible { outline-color:#c6a9f2; }
+
+/* Compact voice actions, sharing the labelled-icon rhythm of routing controls. */
+.voice-section .voice-controls { display:flex; flex-wrap:wrap; gap:8px; }
+.voice-section .voice-controls button {
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    min-height:48px; padding:10px 14px; border-radius:12px; box-shadow:none;
+    transition:background-color .15s;
+}
+.voice-section .voice-controls [hidden] { display:none; }
+.voice-section .voice-controls button:hover { transform:none; }
+.voice-section .btn-voice { background:#4558b8; color:#fff; }
+.voice-section .btn-voice.active { background:#166534; color:#fff; }
+.voice-section svg { width:22px; height:22px; flex-shrink:0; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.voice-section button:focus-visible, .voice-section select:focus-visible,
+.voice-section summary:focus-visible { outline:3px solid #56328a; outline-offset:3px; }
+.voice-section button:disabled { opacity:.65; cursor:wait; }
+.voice-section .voice-examples summary { display:flex; align-items:center; gap:6px; min-height:44px; color:#4558b8; }
+.voice-examples[open] summary svg { transform:rotate(90deg); }
+.voice-engine-field { margin:12px 16px 0; }
+.voice-engine-field label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+.voice-engine-field select { max-width:100%; min-height:44px; border:1px solid #a3adbf; border-radius:10px; padding:8px; background:#fff; color:#293142; }
+.voice-engine-field p { font-size:12px; line-height:1.5; color:#475569; margin:6px 0; }
+html.dark-mode .voice-engine-field select, body.dark-mode .voice-engine-field select { background:#20232b; color:#f4f5f8; border-color:#70788b; }
+html.dark-mode .voice-engine-field p, body.dark-mode .voice-engine-field p { color:#cbd5e1; }
+html.dark-mode .voice-section summary, body.dark-mode .voice-section summary { color:#c6a9f2; }
+html.dark-mode .voice-section :focus-visible, body.dark-mode .voice-section :focus-visible { outline-color:#c6a9f2; }
+html.dark-mode .voice-section .btn-voice, body.dark-mode .voice-section .btn-voice { background:#4558b8; }
+html.dark-mode .voice-section .btn-voice.active, body.dark-mode .voice-section .btn-voice.active { background:#166534; }
+.voice-transcript:empty::before { content:'Your words will appear here.'; color:#64748b; }
+html.dark-mode .voice-transcript:empty::before, body.dark-mode .voice-transcript:empty::before { color:#aeb8d6; }

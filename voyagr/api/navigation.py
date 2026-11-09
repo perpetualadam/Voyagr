@@ -12,6 +12,7 @@ Contains:
 
 import logging
 import os
+import threading
 from typing import Any, Dict
 import requests
 from voyagr.utils import request_budget as route_transport
@@ -776,6 +777,45 @@ def voice_speak():
             return jsonify({'success': True, 'text': text, 'use_browser_tts': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+_transcription_slots = threading.BoundedSemaphore(1)
+_transcription_limiter = RateLimiter(max_requests=6, window_seconds=60, key_prefix='voyagr:rl:voice-audio')
+_transcription_global_limiter = RateLimiter(max_requests=30, window_seconds=60, key_prefix='voyagr:rl:voice-audio-global')
+
+
+@navigation_bp.route('/voice/transcribe', methods=['POST'])
+def voice_transcribe():
+    """Opt-in bounded audio proxy; provider credentials never reach the browser."""
+    from voyagr.services import voice_transcription as stt
+    from voyagr.utils.client_ip import get_client_ip
+    if not stt.configured():
+        return jsonify(success=False, error='AI speech is not configured.'), 503
+    origins = {request.host_url.rstrip('/')}
+    public = os.getenv('VOYAGR_PUBLIC_ORIGIN', '').strip().rstrip('/')
+    if public:
+        origins.add(public)
+    if request.headers.get('Origin') not in origins or request.headers.get('X-Voyagr-Voice') != '1':
+        return jsonify(success=False, error='Same-origin voice request required.'), 403
+    if (not _transcription_limiter.is_allowed(get_client_ip()) or
+            not _transcription_global_limiter.is_allowed('all')):
+        return jsonify(success=False, error='Voice request limit reached. Try again shortly.'), 429
+    if request.content_length is not None and request.content_length > stt.MAX_AUDIO_BYTES:
+        return jsonify(success=False, error='Recording is too large.'), 413
+    mime = request.mimetype
+    if mime not in stt.AUDIO_TYPES:
+        return jsonify(success=False, error='Unsupported recording format.'), 415
+    audio = request.stream.read(stt.MAX_AUDIO_BYTES + 1)
+    if not stt.valid_audio(audio, mime):
+        return jsonify(success=False, error='Invalid or oversized recording.'), 400
+    if not _transcription_slots.acquire(blocking=False):
+        return jsonify(success=False, error='Speech service is busy. Try again shortly.'), 429
+    try:
+        return jsonify(success=True, text=stt.transcribe(audio, mime))
+    except stt.TranscriptionUnavailable:
+        return jsonify(success=False, error='Speech service unavailable. Try browser speech or try again.'), 502
+    finally:
+        _transcription_slots.release()
 
 
 @navigation_bp.route('/voice/command', methods=['POST'])

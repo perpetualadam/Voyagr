@@ -8,6 +8,8 @@ import json
 import os
 from typing import Any, Dict, Tuple
 
+from voyagr.services.voice_transcription import configured as voice_ai_configured
+
 from voyagr.discoverability import (
     SEARCH_CRAWLER_UA_TOKENS,
     SEARCH_CRAWLER_UA_WORD_TOKENS,
@@ -98,6 +100,7 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "tomtom_traffic_proxy": _tt_proxy,
         "show_firefox_browser_hint": show_firefox_browser_hint,
         "block_search_indexing": block_indexing,
+        "voice_ai_available": voice_ai_configured(),
         "picovoice_access_key": picovoice_access_key,
         "picovoice_web_assets_ok": picovoice_web_assets_ok,
         "picovoice_keyword_public_path": picovoice_keyword_public_path,

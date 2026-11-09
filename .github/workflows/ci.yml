@@ -136,6 +136,7 @@ jobs:
           tests/test_hazards_dedup.py
           tests/test_voice_hazard_type_alignment.py
           tests/test_voice_report_police_debris.py
+          tests/test_voice_transcription.py
           tests/test_voice_ui_hazard_examples.py
           tests/test_voice_hazard_command_parse.py
           tests/test_voice_hazard_report_parity.py

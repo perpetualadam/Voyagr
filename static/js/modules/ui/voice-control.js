@@ -42,7 +42,7 @@
             recognitionConfig: {
                 continuous: false,
                 interimResults: true,
-                lang: 'en-US',
+                lang: 'en-GB',
             },
         };
     }
@@ -146,8 +146,15 @@
         var msg = errorCode === 'not-allowed'
             ? 'Microphone blocked — allow access in the browser bar.'
             : 'Could not use the microphone (' + (errorCode || 'unknown') + ').';
+        var messages = {
+            'network': 'Speech service unavailable. Check your connection or choose another speech engine.',
+            'recording-too-large': 'Recording too large. Try a shorter command.',
+            'no-speech': 'No speech captured. Tap Listen and try again.',
+            'audio-capture': 'Could not access or record the microphone. Check permissions and audio support.',
+            'service-not-allowed': 'Speech recognition is unavailable. Choose another speech engine.'
+        };
         return {
-            statusMessage: msg,
+            statusMessage: messages[errorCode] || msg,
             setListeningUi: false,
             isListening: false,
             resumePorcupineWake: true,
