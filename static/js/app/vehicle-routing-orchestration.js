@@ -72,9 +72,11 @@
         setCurrentRoutingMode(mode);
         localStorage.setItem('routingMode', mode);
 
-        document.getElementById('routingAuto').classList.toggle('active', mode === 'auto');
-        document.getElementById('routingPedestrian').classList.toggle('active', mode === 'pedestrian');
-        document.getElementById('routingBicycle').classList.toggle('active', mode === 'bicycle');
+        [['routingAuto','auto'],['routingPedestrian','pedestrian'],['routingBicycle','bicycle']].forEach(([id,value]) => {
+            const button = document.getElementById(id);
+            button.classList.toggle('active', mode === value);
+            button.setAttribute('aria-pressed', String(mode === value));
+        });
 
         if (mode === 'pedestrian') {
             document.getElementById('vehicleType').style.display = 'none';

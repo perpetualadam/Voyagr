@@ -9,7 +9,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  const dark=owner!=='light',page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
  const shell=`<html class="${owner==='html'||owner==='both'?'dark-mode':''}"><head><meta charset="utf-8"><style>${read('static/vendor/maplibre-gl.css')}\n${read('static/css/voyagr.css')}\nhtml,body{height:auto;overflow:auto}#map{position:relative;width:100%;height:230px}main.bottom-sheet-content{max-width:640px;margin:auto;padding:12px;max-height:none;overflow:visible}</style></head><body class="${owner==='body'||owner==='both'?'dark-mode':''}"><div id="map"></div><main class="bottom-sheet-content">${nav}</main></body></html>`;
  await page.route('**/*',r=>r.request().url()==='https://dark-ui.invalid/'?r.fulfill({contentType:'text/html',body:shell}):r.abort());await page.goto('https://dark-ui.invalid/');
- for(const file of ['vendor/maplibre-gl.js','modules/ui/theme.js','modules/map/map-theme.js','app/dark-mode-orchestration.js','app/map-theme-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file.replace('vendor/maplibre-gl.js','../vendor/maplibre-gl.js'))});
+ for(const file of ['vendor/maplibre-gl.js','modules/ui/theme.js','modules/map/map-theme.js','app/dark-mode-orchestration.js','app/map-theme-orchestration.js','app/vehicle-routing-orchestration.js'])await page.addScriptTag({content:read('static/js/'+file.replace('vendor/maplibre-gl.js','../vendor/maplibre-gl.js'))});
  await page.evaluate(()=>{
   window.fixtureStyle=name=>({version:8,name,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':name==='dark'?'#141820':'#f0f0f0'}}]});
   window.testMap=new maplibregl.Map({container:'map',style:fixtureStyle('standard'),center:[0,0],zoom:4,attributionControl:false});
@@ -20,7 +20,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   const rgb=text=>(text.match(/[\d.]+/g)||[]).map(Number);
   const lum=c=>c.slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
   const contrast=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
-  const selectors=['.routing-mode-btn.active','.btn-voice','.btn-voice-secondary','.btn-clear'];
+  const selectors=['.navigation-route-controls .btn-calculate--primary','.navigation-route-controls .routing-mode-btn:not(.active)','.routing-mode-btn.active','.btn-voice','.btn-voice-secondary','.btn-clear'];
   return {root: getComputedStyle(document.body).backgroundColor,voice:getComputedStyle(document.querySelector('.btn-voice-secondary')).backgroundColor,controls:getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).backgroundColor,canvasFilter:getComputedStyle(document.querySelector('canvas')).filter,canvasOpacity:getComputedStyle(document.querySelector('canvas')).opacity,
    ratios:selectors.map(sel=>{const el=document.querySelector(sel),s=getComputedStyle(el),text=rgb(s.color);let backgrounds=[rgb(s.backgroundColor)];if(s.backgroundImage!=='none')backgrounds=[...s.backgroundImage.matchAll(/rgba?\([^)]+\)/g)].map(m=>rgb(m[0]));return [sel,Math.min(...backgrounds.map(b=>contrast(text,b[3]<1?b.slice(0,3).map((c,i)=>c*b[3]+[20,24,32][i]*(1-b[3])):b)))];})};
  });
@@ -32,10 +32,26 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  assert.deepEqual(startOrder,{beforeMode:true,beforeCalculate:true,visuallyBefore:true,handler:'toggleAutoGpsLocation()',label:'Use current GPS as start',count:1});
  assert.equal(check.canvasFilter,'none');assert.equal(check.canvasOpacity,'1');
  if(dark){assert.equal(check.voice,'rgba(40, 44, 62, 0.9)');assert.equal(check.controls,'rgb(32, 38, 50)');for(const [sel,ratio] of check.ratios)assert(ratio>=4.5,`${owner} ${sel}: contrast ${ratio}`);}
- else {assert.equal(check.voice,'rgba(255, 255, 255, 0.85)');}
+ else {assert.equal(check.voice,'rgba(255, 255, 255, 0.85)');for(const [sel,ratio] of check.ratios.filter(([sel])=>sel.startsWith('.navigation-route-controls')))assert(ratio>=4.5,`${sel}: contrast ${ratio}`);}
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Horizontal overflow');
  const zoom=page.getByRole('button',{name:'Zoom in',exact:true});await zoom.focus();if(dark)assert.equal(await zoom.evaluate(n=>getComputedStyle(n).outlineStyle),'solid');const oldZoom=await page.evaluate(()=>testMap.getZoom());await page.keyboard.press('Enter');await page.waitForFunction(old=>testMap.getZoom()>old,oldZoom);
  if(width===390&&owner==='html'){await page.locator('#autoGpsToggle').locator('xpath=..').screenshot({path:'/tmp/voyagr-gps-start-order.png'});await page.locator('.voice-section').screenshot({path:'/tmp/voyagr-dark-ui-voice.png'});}
+ // Exercise production mode handlers with native keyboard buttons and persisted state.
+ await page.evaluate(()=>{
+  window.routingEffects={saved:0,calculated:0};
+  VoyagrVehicleRoutingOrchestration.bind({setCurrentUserMarkerIcon:()=>{},call:{saveAllSettings:()=>routingEffects.saved++,showStatus:()=>{}}});
+  window.setRoutingMode=mode=>VoyagrVehicleRoutingOrchestration.setRoutingMode(mode);
+  window.calculateRoute=()=>routingEffects.calculated++;
+ });
+ for(const [name,value,id] of [['Walk','pedestrian','routingPedestrian'],['Bike','bicycle','routingBicycle'],['Auto','auto','routingAuto']]){
+  const button=page.getByRole('button',{name,exact:true});await button.focus();assert.equal(await button.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');await page.keyboard.press('Enter');
+  assert.deepEqual(await page.evaluate(()=>({stored:localStorage.getItem('routingMode'),selected:[...document.querySelectorAll('.navigation-route-controls [aria-pressed="true"]')].map(n=>n.id),active:[...document.querySelectorAll('.navigation-route-controls .active')].map(n=>n.id)})),{stored:value,selected:[id],active:[id]});
+  const box=await button.boundingBox();assert(box.width>=44&&box.height>=44,'Mode hit target too small');
+ }
+ const calculate=page.getByRole('button',{name:'Calculate route',exact:true});await calculate.focus();await page.keyboard.press('Space');
+ assert.deepEqual(await page.evaluate(()=>routingEffects),{saved:3,calculated:1});
+ assert.equal(await calculate.evaluate(el=>el.getBoundingClientRect().width<el.parentElement.getBoundingClientRect().width),true,'Calculate action still spans the panel');
+ if(width===390&&(owner==='html'||owner==='light'))await page.locator('.navigation-route-controls').screenshot({path:`/tmp/voyagr-routing-${owner}.png`});
  // Confirm existing default pairing with real controllers and map style replacement.
  await page.evaluate(()=>{
   localStorage.removeItem('linkUiMapTheme');window.fetch=()=>Promise.resolve({ok:true});

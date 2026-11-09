@@ -4999,3 +4999,42 @@ html.dark-mode .btn-calculate:hover, body.dark-mode .btn-calculate:hover { backg
 html.dark-mode .btn-voice, body.dark-mode .btn-voice { background:linear-gradient(135deg,#4659ad,#65408b); color:#fff; }
 html.dark-mode .btn-voice.active, body.dark-mode .btn-voice.active { background:linear-gradient(135deg,#166534,#14532d); color:#fff; }
 html.dark-mode #startNavBtnSheet, body.dark-mode #startNavBtnSheet { background:#166534 !important; color:#fff; }
+
+/* Navigation planning actions: scoped so dashcam and journey controls keep their layouts. */
+.navigation-route-controls {
+    display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
+    gap:14px; margin:8px 0 18px;
+}
+.navigation-mode-label { display:block; font-size:13px; font-weight:600; }
+.navigation-route-controls .routing-mode-group { flex-wrap:nowrap; }
+.navigation-route-controls .routing-mode-btn {
+    position:relative; display:inline-flex; flex:0 0 68px; width:68px; min-height:68px;
+    flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    padding:8px 6px; border-radius:12px; border-width:1px;
+    background:#fff; color:#293142; border-color:#cbd1df;
+}
+.navigation-route-controls svg {
+    width:24px; height:24px; flex-shrink:0; fill:none; stroke:currentColor;
+    stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
+}
+.navigation-route-controls .routing-mode-btn.active {
+    background:#4558b8; color:#fff; border-color:#4558b8; font-weight:700;
+}
+.navigation-route-controls .routing-mode-check { display:none; }
+.navigation-route-controls .routing-mode-btn.active .routing-mode-check {
+    display:block; position:absolute; top:2px; right:5px; font-size:11px;
+}
+.navigation-route-controls .btn-calculate--primary {
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    width:auto; min-height:48px; margin:0; padding:10px 14px !important;
+    background:#4558b8; color:#fff; font-size:14px !important; letter-spacing:normal;
+    box-shadow:none; transition:background-color .15s;
+}
+.navigation-route-controls .btn-calculate--primary:hover { background:#38499a; transform:none; }
+.navigation-route-controls button:focus-visible { outline:3px solid #56328a; outline-offset:3px; }
+html.dark-mode .navigation-route-controls .routing-mode-btn,
+body.dark-mode .navigation-route-controls .routing-mode-btn { background:#20232b; color:#f4f5f8; border-color:#70788b; }
+html.dark-mode .navigation-route-controls .routing-mode-btn.active,
+body.dark-mode .navigation-route-controls .routing-mode-btn.active { background:#4558b8; color:#fff; border-color:#a9b6ff; }
+html.dark-mode .navigation-route-controls button:focus-visible,
+body.dark-mode .navigation-route-controls button:focus-visible { outline-color:#c6a9f2; }
