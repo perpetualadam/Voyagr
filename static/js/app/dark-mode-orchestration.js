@@ -34,7 +34,7 @@
         }
     }
 
-    function applyTheme(themeName) {
+    function applyTheme(themeName, options) {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const useDark = theme().shouldUseDarkMode(themeName, prefersDark);
 
@@ -52,7 +52,11 @@
             && typeof rt().call.getCurrentMapTheme === 'function') {
             var prefersDarkForMap = window.matchMedia('(prefers-color-scheme: dark)').matches;
             var linkedMapTheme = theme().linkedMapThemeForUiTheme(themeName, prefersDarkForMap);
-            if (rt().call.getCurrentMapTheme() !== linkedMapTheme) {
+            var currentMapTheme = rt().call.getCurrentMapTheme();
+            // Restoration/system updates keep an explicitly selected imagery map.
+            // A new UI picker choice still applies the existing linked-map policy.
+            if (currentMapTheme === 'satellite' && !(options && options.explicitChoice)) return;
+            if (currentMapTheme !== linkedMapTheme) {
                 themeLinkInProgress = true;
                 try {
                     rt().call.setMapTheme(linkedMapTheme);
@@ -72,13 +76,13 @@
 
     function toggleDarkMode() {
         const newTheme = theme().toggleBetweenLightAndDark(currentTheme);
-        applyTheme(newTheme);
+        applyTheme(newTheme, {explicitChoice:true});
         updateThemeButtons();
         rt().call.showStatus('🌙 Theme changed to ' + newTheme + ' mode', 'success');
     }
 
     function setTheme(themeName) {
-        applyTheme(themeName);
+        applyTheme(themeName, {explicitChoice:true});
         updateThemeButtons();
         rt().call.saveAllSettings();
         rt().call.showStatus('🎨 Theme changed to ' + themeName + ' mode', 'success');
