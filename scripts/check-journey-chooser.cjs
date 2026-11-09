@@ -16,6 +16,11 @@ const section=read('templates/index.html').match(/<section id="journeyModeChoose
   }
   assert.deepEqual(await page.evaluate(()=>actions),['startSimulation','navigateFromGPS','abandonJourney']);
   assert(await page.locator('#startVerifiedHere').isHidden());
+  const info=page.locator('.journey-mode-info');assert.equal(await info.evaluate(el=>el.open),false);
+  assert.equal(await page.locator('#journeyModeStatus').isVisible(),false);
+  await page.getByText('Info',{exact:true}).click();assert.equal(await info.evaluate(el=>el.open),true);
+  assert.equal(await page.locator('#journeyModeStatus').isVisible(),true);
+  await page.getByText('Info',{exact:true}).click();
   await page.getByRole('button',{name:'Close journey controls',exact:true}).focus();
   assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'Close journey controls');
   await page.screenshot({path:`/tmp/voyagr-chooser-${width}-${dark}-${large}.png`});

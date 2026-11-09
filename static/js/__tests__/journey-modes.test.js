@@ -243,7 +243,7 @@ test.each(['selection','preferences','cancel'])('late response cannot overwrite 
     const pending=Modes.navigateFromGPS();await Promise.resolve();await Promise.resolve();
     expect(runtime.fetch).toHaveBeenCalledTimes(1);
     if(change==='selection')preview(makeRoute('other'));
-    if(change==='preferences')localStorage.setItem('pref_cameras','false');
+    if(change==='preferences')localStorage.setItem('pref_cameras','false');if(change==='selection')preview(makeRoute('other'));if(change==='simulation')Modes.startSimulation();
     if(change==='cancel')Modes.exit();
     resolve(response());expect(await pending).toBe(false);expect(runtime.startLive).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
 });
@@ -500,4 +500,73 @@ describe('bounded GPS accuracy improvement',()=>{
   expect(document.getElementById('journeyModeStatus').textContent).toMatch(/accuracy is insufficient/);
  });
 
+});
+
+describe('waiting for a mapped start',()=>{
+ let observed,priorClearWatch;
+ function gapRoute(){
+  const r=makeRoute('offroad',[[53.001,-1],[53.01,-1]]);
+  Object.assign(r.avoidance_assessment,{automatic_selection_allowed:false,requires_acceptance:true});
+  Object.assign(r.avoidance_assessment.origin_integrity,{navigation_allowed:false,status:'UNVERIFIED',reason:'material_endpoint_relocation',requested_origin:[53,-1],origin_displacement_m:111,destination_displacement_m:0});
+  return r;
+ }
+ async function untilWaiting(){for(let i=0;i<20&&Modes.getState()!=='WAITING_FOR_ROAD';i++)await Promise.resolve();expect(Modes.getState()).toBe('WAITING_FOR_ROAD');}
+ beforeEach(()=>{
+  observed=null;priorClearWatch=navigator.geolocation.clearWatch;navigator.geolocation.clearWatch=jest.fn();
+  navigator.geolocation.watchPosition=jest.fn(ok=>{observed=ok;return 83;});
+ });
+ afterEach(()=>{Modes.exit();navigator.geolocation.clearWatch=priorClearWatch;});
+ test('start gap waits without guidance, then movement retries through the full GPS and lifecycle checks',async()=>{
+  const good=makeRoute('onroad',[[53.001,-1],[53.01,-1]]);
+  good.avoidance_assessment.origin_integrity.requested_origin=[53.001,-1];
+  runtime.fetch.mockResolvedValueOnce(response(gapRoute())).mockResolvedValueOnce(response(good));
+  locations=[position(),position(53.001),position(53.001)];const pending=Modes.navigateFromGPS();await untilWaiting();
+  expect(Life.getRouteInProgress()).toBe(false);expect(runtime.startLive).not.toHaveBeenCalled();expect(selected().id).toBe('planned');expect(calls.persistActiveRoute).not.toHaveBeenCalled();
+  expect(document.getElementById('journeyModeSummary').textContent).toMatch(/Waiting for a mapped road/);
+  jest.advanceTimersByTime(10000);observed(position());expect(runtime.fetch).toHaveBeenCalledTimes(1);
+  observed(position(53.001));const result=await pending;expect({result,message:document.getElementById("journeyModeStatus").textContent}).toEqual({result:true,message:"Live GPS navigation started."});
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(83);expect(runtime.fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(runtime.fetch.mock.calls[1][1].body).start).toBe('53.001,-1');expect(Life.getRouteInProgress()).toBe(true);
+ });
+ test.each(['exit','endpoint','preferences','selection','simulation'])('%s stops waiting and late movement cannot start navigation',async change=>{
+  runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
+  if(change==='exit')Modes.exit();if(change==='endpoint')Modes.endpointChanged();if(change==='preferences')localStorage.setItem('pref_cameras','false');if(change==='selection')preview(makeRoute('other'));if(change==='simulation')Modes.startSimulation();
+  jest.advanceTimersByTime(10000);observed(position(53.001));expect(await pending).toBe(false);
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(83);expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(runtime.startLive).not.toHaveBeenCalled();
+ });
+ test.each(['destination','mandatory','geometry','other-origin','later-leg'])('%s failure is not treated as a waiting start gap',async kind=>{
+  const r=gapRoute();if(kind==='destination')r.avoidance_assessment.origin_integrity.destination_displacement_m=20;
+  if(kind==='mandatory')Object.assign(r.avoidance_assessment.requirements[0],{enabled:true,mode:'mandatory',status:'VIOLATED'});
+  if(kind==='geometry')r.avoidance_assessment.geometry_binding='invalid';
+  if(kind==='other-origin')r.avoidance_assessment.origin_integrity.reason='mandatory_endpoint_in_or_on_exclusion';
+  if(kind==='later-leg'){const o=r.avoidance_assessment.origin_integrity;o.legs=[{...o},{navigation_allowed:false}];o.reason='unverified_leg_endpoint';}
+  runtime.fetch.mockResolvedValue(response(r));expect(await Modes.navigateFromGPS()).toBe(false);
+  expect(navigator.geolocation.watchPosition).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();
+ });
+ test('a fresh stationary reading also retries after 30 seconds without requiring more driving',async()=>{
+  runtime.fetch.mockResolvedValueOnce(response(gapRoute())).mockResolvedValueOnce(response());
+  const pending=Modes.navigateFromGPS();await untilWaiting();jest.advanceTimersByTime(30000);observed(position());
+  expect(await pending).toBe(true);expect(runtime.fetch).toHaveBeenCalledTimes(2);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(83);
+ });
+ test('reopening controls preserves the wait and keeps start actions disabled',async()=>{
+  runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
+  expect(Modes.choose()).toBe(true);expect(Modes.getState()).toBe('WAITING_FOR_ROAD');
+  expect(document.querySelector('[data-live-recalculate]').disabled).toBe(true);expect(document.getElementById('startVerifiedHere').hidden).toBe(true);
+  Modes.exit();expect(await pending).toBe(false);expect(runtime.fetch).toHaveBeenCalledTimes(1);
+ });
+ test('waiting ends after five minutes without changing the selected plan or starting guidance',async()=>{
+  runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
+  jest.advanceTimersByTime(300000);expect(await pending).toBe(false);
+  expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(83);expect(selected().id).toBe('planned');expect(runtime.startLive).not.toHaveBeenCalled();
+ });
+});
+
+test('journey information is collapsed by default while the concise status remains announced',()=>{
+ Modes.choose();
+ const info=document.querySelector('.journey-mode-info');
+ expect(info.open).toBe(false);expect(info.querySelector('summary').getAttribute('aria-label')).toBe('Journey information');
+ expect(document.getElementById('journeyModeSummary').getAttribute('aria-live')).toBe('polite');
+ expect(document.getElementById('journeyModeSummary').textContent.length).toBeLessThan(90);
+ expect(document.getElementById('journeyModeStatus').textContent.length).toBeGreaterThan(0);
+ expect(document.getElementById('journeyModeStatus').hasAttribute('aria-live')).toBe(false);
 });
