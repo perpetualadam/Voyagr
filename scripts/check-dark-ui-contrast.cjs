@@ -52,6 +52,11 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  assert.deepEqual(await page.evaluate(()=>routingEffects),{saved:3,calculated:1});
  assert.equal(await calculate.evaluate(el=>el.getBoundingClientRect().width<el.parentElement.getBoundingClientRect().width),true,'Calculate action still spans the panel');
  if(width===390&&(owner==='html'||owner==='light'))await page.locator('.navigation-route-controls').screenshot({path:`/tmp/voyagr-routing-${owner}.png`});
+ const clear=page.getByRole('button',{name:'Clear All',exact:true});
+ await page.evaluate(()=>{window.clearInvocations=0;window.clearForm=()=>clearInvocations++;});
+ await clear.focus();assert.equal(await clear.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');await page.keyboard.press('Space');assert.equal(await page.evaluate(()=>clearInvocations),1);
+ const clearBox=await clear.boundingBox();assert(clearBox.width>=44&&clearBox.height>=44);assert.equal(await clear.evaluate(el=>el.getBoundingClientRect().width<el.parentElement.getBoundingClientRect().width),true,'Clear All still spans the panel');
+ if(width===390&&owner==='html')await clear.screenshot({path:'/tmp/voyagr-clear-all.png'});
  // Confirm existing default pairing with real controllers and map style replacement.
  await page.evaluate(()=>{
   localStorage.removeItem('linkUiMapTheme');window.fetch=()=>Promise.resolve({ok:true});

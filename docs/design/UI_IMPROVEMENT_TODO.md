@@ -731,7 +731,7 @@ handlers, persisted choices, permissions, navigation safety and device acceptanc
   the primary calculation action, selected routing mode and real-GPS permission path.
 - [x] Voice control card: align Listen, Test speech, transcript/status and Example
   phrases with the same action styles, retaining microphone ownership and feedback.
-- [ ] Clear All: use a consistent compact labelled action and preserve the existing
+- [x] Clear All: use a consistent compact labelled action and preserve the existing
   clearing scope/confirmation and GPS/navigation cleanup.
 - [ ] Save Location: use the same labelled-icon treatment and retain the saved-place
   behavior. Do not confuse this with saving a route or starting navigation.
@@ -899,3 +899,25 @@ Navigation cases retain dark/light contrast, GPS order and mode keyboard behavio
 Validation: 3,198 JavaScript tests with coverage/lint; 2,244 declared backend tests
 and 74 subtests passed (one skipped). No deployment, model download, new paid
 subscription or production configuration change.
+
+
+## Compact Clear All action (9 November 2026)
+
+- [x] Replace the full-width action with a compact labelled eraser icon button,
+  preserving Clear All's existing handler. Scope styles to its Navigation wrapper;
+  retain light/dark contrast, 48px hit height and a visible keyboard focus ring.
+- [x] Fix the existing missing-result-node exception: current Navigation markup no
+  longer contains the legacy `result` element. Treat it as optional so parking
+  cleanup and automatic GPS refresh can complete. Retain legacy-node support.
+- [x] Regress existing form/pending-address clearing, marker/route handle removal,
+  parking cleanup calls, map reset, automatic/manual GPS choice and active-journey
+  refusal. Keep saved locations and settings outside the clearing scope. Do not
+  redesign remaining visits, durable journey ownership or planning state here.
+- [x] Verify native keyboard activation, compact width, touch target, focus and
+  contrast in the existing sixteen Navigation viewport/light/dark browser cases.
+- [ ] Next separate UI increment: Save Location.
+
+Validation: 3,201 JavaScript tests with coverage/lint; 2,244 backend tests and 74
+subtests passed (one skipped). The focused Clear All and durable-journey regression
+selection passes. Browser map/device boundaries are fixtures; deployed/device
+acceptance remains pending. No production deployment or configuration change.

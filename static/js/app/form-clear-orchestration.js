@@ -25,7 +25,8 @@
             delete startEl.dataset.displayName;
         }
         document.getElementById('end').value = '';
-        document.getElementById('result').classList.remove('show');
+        const resultEl = document.getElementById('result');
+        if (resultEl) resultEl.classList.remove('show');
         document.getElementById('status').className = 'status';
 
         const viaInput = document.getElementById('viaPointAddress');
