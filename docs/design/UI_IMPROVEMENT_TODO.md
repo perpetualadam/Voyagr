@@ -693,3 +693,30 @@ alongside this UI work. Production deployment remains a separate user action.
 
 Keep the other unit-policy/source maintenance and deferred live navigation and
 screen-reader acceptance work alongside this focused fix.
+
+## Spoken distance preferences (9 November 2026)
+
+- [x] Audit the route-to-speech path: Valhalla requests use kilometres, while its
+  verbal alert/pre-transition strings previously overrode selected miles wording.
+- [x] Reject conflicting recognised English distance clauses in provider speech
+  and use existing unit-aware maneuver fallback wording. Preserve compatible and
+  distance-free provider guidance, canonical road names and roundabout exit checks.
+  Do not rewrite arbitrary instruction text or translate unrecognised/localised
+  phrasing; this guard covers the English distance forms used by this integration.
+- [x] Verify hazards/destination milestones already read the selected distance unit.
+  Keep canonical metre thresholds, existing rounded speech, hysteresis, deduplication,
+  priorities, camera mute/chime policy and stored route data unchanged. Speed-unit
+  wording is not reinterpreted as a distance clause.
+- [x] Add regression cases for metric/imperial aliases, numeric/word/fractional
+  quantities, imminent/keep/roundabout guidance and preference changes. Controlled
+  Chromium checks pass through production preference/announcement/speech controllers
+  to a captured native-TTS bridge, without actual GPS, audio or provider acquisition.
+- [ ] Accept actual spoken audio on deployed devices. Native-TTS capture does not
+  establish real speech pronunciation, hardware output or live navigation behaviour.
+
+Continue the separate parking-result/shared-route/summary unit audit and source
+maintenance alongside the user's deferred live sat-nav and screen-reader checks.
+
+Spoken-unit validation: 3,141 JavaScript tests passed with coverage/lint; 2,221
+backend tests passed (one skipped). The controlled speech-pipeline check passed
+mi/km/mi changes with stable thresholds and captured turn/hazard/destination text.
