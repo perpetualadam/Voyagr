@@ -377,6 +377,7 @@
                 if(Date.now()>=waitDeadline)throw Error('No road connection yet. Tap Navigate to retry.');
                 setState('WAITING_FOR_ROAD');status('Waiting for a mapped road — guidance off.','info');
                 await waitForRoadMovement(token,identity,fix,ownedTicket,waitDeadline);
+                if(!intentCurrent(token)||key(rt().selected())!==identity||!integrity().current(ownedTicket,localStorage))return false;
                 integrity().finish(ownedTicket);if(ticket===ownedTicket)ticket=null;ownedTicket=null;
                 return await navigateFromGPS(waitDeadline);
             }

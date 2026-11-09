@@ -554,6 +554,12 @@ describe('waiting for a mapped start',()=>{
   expect(document.querySelector('[data-live-recalculate]').disabled).toBe(true);expect(document.getElementById('startVerifiedHere').hidden).toBe(true);
   Modes.exit();expect(await pending).toBe(false);expect(runtime.fetch).toHaveBeenCalledTimes(1);
  });
+ test('an endpoint change after the movement callback but before its continuation cannot retry a new intent',async()=>{
+  runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
+  jest.advanceTimersByTime(10000);observed(position(53.001));Modes.endpointChanged();
+  expect(await pending).toBe(false);expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
+  expect(runtime.startLive).not.toHaveBeenCalled();
+ });
  test('waiting ends after five minutes without changing the selected plan or starting guidance',async()=>{
   runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
   jest.advanceTimersByTime(300000);expect(await pending).toBe(false);

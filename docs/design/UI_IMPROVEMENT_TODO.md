@@ -1137,7 +1137,7 @@ No production deployment or configuration/data change.
 - [ ] Investigate arrival/destination access separately when that is the blocker;
   waiting at the origin cannot resolve a destination gap.
 
-Validation: 3,283 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+Validation: 3,284 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
 subtests passed (one skipped), and eleven isolated SQL policy tests passed. New production-mode regressions cover no guidance/persistence while
 waiting, movement and stationary retries, successful full lifecycle after a new
 checked response, exit/endpoint/preferences/selection/simulation cancellation,
@@ -1145,3 +1145,7 @@ non-start-gap refusals, five-minute timeout and reopening controls. Eight Chromi
 chooser cases check Light/Dark, mobile/desktop, enlarged text, collapsed/open Info,
 action dispatch, viewport bounds and keyboard close. Location/provider inputs use
 fixtures; real mobile GPS/road matching and deployment remain unverified.
+
+The final retry rechecks the intent, selection and preference-bound request after
+the movement promise resolves; a destination change in that microtask gap cannot
+start a fresh request. The timing regression is included in the totals above.
