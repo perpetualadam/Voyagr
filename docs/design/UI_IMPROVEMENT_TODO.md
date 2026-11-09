@@ -1042,9 +1042,10 @@ a stale frame.
 - [ ] Investigate acquisition of an initial coarse GPS fix versus waiting for a
   better fix. The screenshot confirms refusal, not its device/location cause.
   Keep the existing 30 m requirement unless evidence supports a separate design.
-- [ ] Investigate the storage recovery path and whether End previous journey is
-  offered when no owned durable journey exists. Do not erase or bypass storage
-  ownership checks. The screenshot alone cannot establish a corrupt record.
+- [x] Reproduce and prevent plain-plan abandonment from latching false storage
+  recovery (see following increment). Existing mismatches still require recovery.
+- [ ] Validate the user's actual restored journey if recovery persists after reload;
+  the screenshot alone cannot establish a corrupt record.
 - [ ] Check the deployed chooser on the user's mobile browser/PWA.
 
 Validation: eight real Chromium cases cover mobile/desktop widths, Light/Dark UI
@@ -1053,3 +1054,32 @@ height, unchanged handler dispatch, hidden verified start and keyboard close.
 3,250 JavaScript tests pass with coverage/lint; 2,244 backend tests and 74 subtests
 pass (one skipped). This increment changes presentation
 only; the GPS and storage warnings remain separate functional investigations.
+
+## Plain-plan abandonment and false recovery (9 November 2026)
+
+- [x] Reproduce End previous journey on a fresh inspection plan without live
+  guidance, a continuation, journey identity or observed storage ownership. The
+  old flow confirms, enters abandonment, then latches durable recovery because it
+  cannot find an owner. That unnecessarily blocks subsequent GPS navigation.
+- [x] Hide the action for this case and return a no-op explanation on direct calls,
+  before confirmation, intent cancellation, guidance stops or persistence staging.
+  This does not prove IndexedDB is empty and does not grant navigation permission.
+- [x] Preserve existing behavior for live/retained/restored journeys, observed
+  ownership, missing/legacy modules, owner changes and failed rollback. Never adopt
+  a newer owner, clear records or reset an existing recovery flag in this fix.
+- [x] Version the journey modes script; retain all GPS/route safety checks.
+- [ ] Deployed device validation. A session already latched in recovery still needs
+  a reload and inspection; this change does not silently clear that flag or storage.
+- [ ] Investigate coarse GPS acquisition separately; retain the 30 m requirement.
+
+Focused regressions use production journey/persistence logic and fake IndexedDB:
+plain-plan no-op leaves the intent token and store unchanged, the next GPS attempt
+still reaches the accuracy gate, an unobserved record from another session remains
+untouched, and an unrelated selection with known ownership still requires recovery.
+Existing stale-owner, legacy-record, timeout, rollback and abandonment tests remain
+in force. This is a reproduced cause of the warning, not proof of the precise
+sequence in the user's screenshot. No production data/configuration changes.
+
+Validation for this increment: 3,253 JavaScript tests with coverage/lint; 2,244
+backend tests plus 74 subtests passed (one skipped); eleven isolated SQL policy
+tests and eight existing chooser browser/layout cases passed. No deployment.

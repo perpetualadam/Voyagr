@@ -111,3 +111,39 @@ test('R9 an unowned inspection selection cannot relabel or retire the locally ow
 test('R9 omitted or stale expected ownership never permits a low-level overwrite or clear',async()=>{
  await stored();const oldRecord=await Off.loadActiveRouteRecord(idb),fresh=await newer();expect(await Off.persistActiveRouteRecord(idb,oldRecord)).toBe(false);expect(await Off.persistActiveRouteRecord(idb,oldRecord,null,null,ownership(oldRecord))).toBe(false);expect(await Off.clearActiveRouteRecord(idb)).toBe(false);expect(await Off.clearActiveRouteRecord(idb,ownership(oldRecord))).toBe(false);expect(await Off.loadActiveRouteRecord(idb)).toEqual(fresh);expect(fresh.continuation.intent.stops).toEqual([]);expect(OffApp.getJourneyOwnership()).toEqual(ownership(oldRecord));
 });
+
+test('plain planning abandonment is a no-op without confirmation, cancellation, storage writes or a recovery latch',async()=>{
+ Life.setRouteInProgress(false);Life.setRouteStarted(false);
+ document.getElementById('journeyModeChooser').innerHTML='<button data-journey-abandon>End previous journey</button>';
+ const stageSpy=jest.spyOn(rt,'stageAbandonJourney'),stopSpy=jest.spyOn(rt,'stopLive');
+ const token=Modes.captureIntent();
+ expect(OffApp.getJourneyOwnership()).toBeNull();
+ expect(Modes.choose()).toBe(true);
+ expect(document.querySelector('[data-journey-abandon]').hidden).toBe(true);
+ expect(await Modes.abandonJourney()).toBe(false);
+ expect(rt.confirmPlanReplacement).not.toHaveBeenCalled();expect(stageSpy).not.toHaveBeenCalled();expect(stopSpy).not.toHaveBeenCalled();
+ expect(Modes.intentCurrent(token)).toBe(true);expect(Modes.getState()).toBe('CHOOSING');
+ expect(await Off.loadJourneyState(idb)).toEqual({route:null,ownership:null});
+ // Still performs fresh location acquisition. A poor fix remains refused by
+ // the existing safety gate, rather than the spurious storage-recovery flag.
+ navigator.geolocation.getCurrentPosition.mockImplementation(ok=>ok({...gps(),coords:{...gps().coords,accuracy:100}}));
+ expect(await Modes.navigateFromGPS()).toBe(false);
+ expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
+ expect(document.getElementById('journeyModeStatus').textContent).toMatch(/GPS accuracy is insufficient/);
+ expect(rt.fetch).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
+});
+test('a plan without local ownership cannot retire an unobserved journey stored by another session',async()=>{
+ Life.setRouteInProgress(false);Life.setRouteStarted(false);
+ const fresh=await newer();expect(OffApp.getJourneyOwnership()).toBeNull();
+ expect(await Modes.abandonJourney()).toBe(false);
+ expect(rt.confirmPlanReplacement).not.toHaveBeenCalled();expect(await Off.loadActiveRouteRecord(idb)).toEqual(fresh);
+ expect(Modes.getState()).not.toBe('RECOVERY_REQUIRED');
+});
+test('observed durable ownership keeps abandonment visible and retains identity checks for an unrelated plan',async()=>{
+ await stored();Modes.getContinuation(old);Life.stopTurnByTurnNavigation({preservePersistedJourney:true});window.lastCalculatedRoute=next;Compare.setRouteOptions([next]);
+ document.getElementById('journeyModeChooser').innerHTML='<button data-journey-abandon>End previous journey</button>';
+ const record=await Off.loadActiveRouteRecord(idb);Modes.choose();
+ expect(document.querySelector('[data-journey-abandon]').hidden).toBe(false);
+ expect(await Modes.abandonJourney()).toBe(false);expect(await Off.loadActiveRouteRecord(idb)).toEqual(record);
+ expect(Modes.getState()).toBe('RECOVERY_REQUIRED');
+});

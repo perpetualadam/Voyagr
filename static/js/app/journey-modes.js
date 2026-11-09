@@ -25,6 +25,21 @@
             [root.VoyagrWaypointsOrchestration,['addStop', 'addViaPoint', 'removeStop', 'removeViaPoint', 'clearAllWaypoints']],
         ].every(function(entry){var module=entry[0];return !!module&&module.ENDPOINT_INTENT_PROTOCOL===1&&typeof module.endpointIntentReady==='function'&&module.endpointIntentReady()===true&&entry[1].every(function(name){return typeof module[name]==='function';});});}catch(_){return false;}
     }
+    // This is action availability, never proof that IndexedDB is empty or a
+    // navigation permission. Unknown/legacy storage keeps the fail-closed path.
+    function previousJourneyPresent(route){
+        if(!runtime||durableRecovery||rt().isLive()||retainedIntent||route&&(route.durable_journey_id||route.journey_continuation))return true;
+        try{
+            var service=root.VoyagrOfflineNavigationOrchestration;
+            if(!service||service.DURABLE_OWNERSHIP_PROTOCOL!==1||typeof service.getJourneyOwnership!=='function')return true;
+            return !!service.getJourneyOwnership();
+        }catch(_){return true;}
+    }
+    function refreshAbandonControl(){
+        var present=true;
+        try{present=previousJourneyPresent(runtime&&rt().selected());}catch(_){/* Presentation cannot interrupt cleanup or grant permission. */}
+        document.querySelectorAll('[data-journey-abandon]').forEach(function(button){button.hidden=!present;});
+    }
     function commitPending(){return !!(planningCommit||abandonCommit);}
     function captureIntent(){return epoch;}
     function intentCurrent(token){return Number.isInteger(token)&&token===epoch;}
@@ -50,6 +65,7 @@
         var panel=document.getElementById('simulationControls');if(panel)panel.hidden=!simulating();
         var indicator=document.getElementById('simulationIndicator');if(indicator)indicator.hidden=!simulating();
         playbackControls();
+        refreshAbandonControl();
         if(state==='RECOVERY_REQUIRED'){var progress=document.getElementById('simulationProgress');if(progress){delete progress.dataset.distanceMeters;progress.textContent='Simulation cleanup is incomplete. No animation or live transition is permitted. Retry Exit simulation to verify removal.';}}
         document.querySelectorAll('[data-live-recalculate]').forEach(function(b){b.disabled=['LOCATING','RECALCULATING','AUTHORIZING'].indexOf(state)>=0;});
     }
@@ -296,6 +312,7 @@
         var route=rt().selected();
         if((simulation||ticket||state==='LOCATING')&&selection!==key(route)){cancel();if(!cleanSimulation())return;setState('PLANNING');}
         selection=key(route);
+        refreshAbandonControl();
         document.querySelectorAll('[data-journey-choose]').forEach(function(button){button.disabled=!route;});
     }
     function choose(){
@@ -385,6 +402,13 @@
     }
     async function abandonJourney(){
         if(commitPending())return false;
+        // A plain inspection plan has nothing to retire. Reject before confirm,
+        // cancellation, stopping guidance or entering a persistence transaction.
+        if(!previousJourneyPresent(rt().selected())){
+            refreshAbandonControl();
+            status('This plan has no previous journey to end. Saved journeys have not been changed.','info');
+            return false;
+        }
         if(!root.VoyagrNavigationLifecycleOrchestration||root.VoyagrNavigationLifecycleOrchestration.PERSISTENCE_TRANSACTION_PROTOCOL!==1){status('Journey persistence modules differ. Reload before abandoning; remaining visits retained.','warning');return false;}
         if(!rt().confirmPlanReplacement||rt().confirmPlanReplacement('End the previous journey and discard its remaining stops? This cannot be triggered by a failed calculation.')!==true)return false;
         var previous,continuation,expectedOwnership,owner={},stage=null,timer,unsubscribe=function(){};

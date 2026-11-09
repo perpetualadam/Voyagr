@@ -141,7 +141,7 @@
     <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
     <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261107arrivaloptions1"></script>
-    <script defer src="/static/js/app/journey-modes.js?v=20261108unitdistance1"></script>
+    <script defer src="/static/js/app/journey-modes.js?v=20261109abandon1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
@@ -1899,7 +1899,7 @@
                 <button type="button" id="startVerifiedHere" data-navigation-start hidden onclick="VoyagrJourneyModes.startHere()">Start verified live navigation here</button>
             </div>
             <p id="journeyModeStatus" role="status" aria-live="polite"></p>
-            <button type="button" class="journey-mode-end" onclick="VoyagrJourneyModes.abandonJourney()">
+            <button type="button" class="journey-mode-end" data-journey-abandon onclick="VoyagrJourneyModes.abandonJourney()">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6h12v12H6Z" /></svg>
                 <span>End previous journey</span>
             </button>
