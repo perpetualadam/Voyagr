@@ -1632,26 +1632,46 @@
                 body: JSON.stringify(integrity ? integrity.augment(routeRequest,localStorage,lastAcceptedOriginFix) : routeRequest),
             });
 
-            const data = await response.json();
+            let data = await response.json();
             if (integrity && !integrity.current(requestTicket,localStorage)) {
                 if (activeRerouteTicket===requestTicket) rt().s('rerouteInProgress',false);
                 return;
             }
+            if (integrity && data && Array.isArray(data.routes)) {
+                data=Object.assign({},data,{routes:data.routes.filter(route=>route&&typeof route==='object'&&!Array.isArray(route))});
+            }
             if (integrity) integrity.tag(data,requestTicket);
-            const candidate = data && data.routes && data.routes[0];
-            if (integrity && candidate && !integrity.gate(candidate, {
-                storage:localStorage, automatic:true, quiet:true, offline:navigator.onLine===false,
-                showStatus:rt().call.showStatus,
-            })) {
-                rt().s('rerouteInProgress',false);
-                return; // Retain current route. Never open confirmation while moving.
+            let selectableData=data;
+            if (integrity && data && data.success===true && Array.isArray(data.routes) && data.routes.length) {
+                // One refused alternative must not veto the whole response. Validate
+                // each candidate before source/name selection; the map owner still
+                // independently verifies the selected route before any replacement.
+                const eligible=data.routes.filter(route=>{
+                    try {
+                        return !!integrity.prepareNavigationCandidate(route) && integrity.gate(route, {
+                            storage:localStorage,automatic:true,quiet:true,offline:navigator.onLine===false,
+                        })===true;
+                    } catch (_) { return false; }
+                });
+                if (!eligible.length) {
+                    rt().s('rerouteInProgress',false);
+                    // Retain a useful refusal reason without prompting while moving.
+                    let explained=false;
+                    try { explained=integrity.gate(data.routes[0], {
+                        storage:localStorage,automatic:true,quiet:true,offline:navigator.onLine===false,
+                        showStatus:rt().call.showStatus,
+                    })===false; } catch (_) { /* Unavailable verifier remains a refusal. */ }
+                    if(!explained)rt().call.showStatus('No usable recalculated route. Current route retained.','warning');
+                    return;
+                }
+                selectableData=Object.assign({},data,{routes:eligible});
             }
             const routeCount = data && data.routes ? data.routes.length : 0;
             console.log(
                 '[Reroute] Response received success=' + !!(data && data.success) +
                 ' routeCount=' + routeCount
             );
-            const responsePlans = RD.buildAutomaticRerouteResponsePlans(data, {
+            const responsePlans = RD.buildAutomaticRerouteResponsePlans(selectableData, {
                 convertDistance: rt().call.convertDistance,
                 distUnit: rt().call.getDistanceUnit(),
                 voiceEnabled: rt().g('voiceAnnouncementsEnabled'),

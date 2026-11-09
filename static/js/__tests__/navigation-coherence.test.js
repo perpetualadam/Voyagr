@@ -124,7 +124,7 @@ test('starting a newly selected route during active navigation uses the same coh
     expect(Life.getRoutePolyline()).toEqual(next.polyline);expect(Life.getCurrentRouteSteps()).toEqual(next.maneuvers);
     expect(window.lastCalculatedRoute.id).toBe(next.id);expect(Life.getCurrentStepIndex()).toBe(0);
 });
-test('automatic GPS response with incomplete instructions cannot mutate routes or announce success',async()=>{
+test('automatic GPS response with incomplete instructions is rejected before map replacement',async()=>{
     const GPS=require('../app/gps-orchestration.js'),RD=require('../modules/navigation/reroute-decision.js');
     delete next.maneuvers;next.avoidance_assessment.automatic_selection_allowed=true;
     const values={rerouteInProgress:false,lastRerouteAttemptTime:0,postRerouteGraceUntil:0,rerouteFailureRetryCount:0,voiceAnnouncementsEnabled:false};
@@ -135,7 +135,9 @@ test('automatic GPS response with incomplete instructions cannot mutate routes o
     const previousFetch=global.fetch;global.fetch=jest.fn(async()=>({json:async()=>({success:true,routes:[next]})}));
     const before=ctx.snapshot();
     try {await GPS.triggerAutomaticRerouteWithHazardHandling(53,-1);
-        expect(mapAttempt).toHaveBeenCalledTimes(1);expect(ctx.snapshot()).toBe(before);
+        expect(mapAttempt).not.toHaveBeenCalled();expect(ctx.snapshot()).toBe(before);
+        expect(values.rerouteInProgress).toBe(false);
+        expect(ctx.status).toHaveBeenCalledWith('No usable recalculated route. Current route retained.','warning');
         expect(notification).not.toHaveBeenCalled();expect(values._preferPrimaryRouteOnNextNavUpdate).toBeUndefined();
         expect(ctx.addPolyline).not.toHaveBeenCalled();
     } finally {global.fetch=previousFetch;}
