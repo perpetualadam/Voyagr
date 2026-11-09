@@ -49,6 +49,52 @@
     }
     var simulation=null,line=null,marker=null,timer=null,lastTick=0,meters=0,speed=1,selection=null,cameraView=null,follow=true,cameraInitial=true;
     function rt(){if(!runtime)throw Error('Journey modes are unavailable. Reload the application.');return runtime;}
+    var entryActive=false,entryIdentity=null,entryOwner=null,entryMarker=null;
+    function entryControls(){
+        var card=document.getElementById('navigationEntry');if(card)card.hidden=!entryActive||rt().isLive();
+        var retry=document.getElementById('navigationEntryRetry');if(retry)retry.disabled=!!entryOwner;
+    }
+    function clearEntry(){
+        entryActive=false;entryIdentity=null;entryOwner=null;
+        if(entryMarker){try{entryMarker.remove();}catch(_){/* Presentation only; no guidance authority. */}entryMarker=null;}
+        entryControls();
+    }
+    function entryPosition(fix){
+        if(!entryActive||!runtime)return;
+        try{
+            if(!entryMarker&&rt().entryMarker)entryMarker=rt().entryMarker([fix.lat,fix.lon]);
+            else if(entryMarker)entryMarker.setLngLat([fix.lon,fix.lat]);
+            if(rt().presentEntryPosition)rt().presentEntryPosition(fix);
+        }catch(_){/* Location presentation cannot grant or stop guidance. */}
+    }
+    function startNavigation(){
+        if(entryOwner)return entryOwner.promise;
+        try{
+            var route=rt().selected();if(!route)throw Error('Choose a route first.');
+            if(commitPending())throw Error('Journey is updating. Try again shortly.');
+            plan().inspection(route,integrity());
+            if(rt().isLive()){if(rt().showNavigationMap)rt().showNavigationMap();return Promise.resolve(true);}
+            entryActive=true;entryIdentity=key(route);entryControls();
+            if(rt().showNavigationMap)rt().showNavigationMap();
+            var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=true;
+            status('Finding your location…','info');
+            var owner={promise:null};entryOwner=owner;entryControls();
+            // Queue work after the immediate map/UI update, without granting live
+            // permission from this presentation state or from a cached plan alone.
+            owner.promise=Promise.resolve().then(function(){
+                if(!entryActive||entryOwner!==owner||entryIdentity!==key(rt().selected()))return false;
+                var useHere=false;
+                try{var fix=realFix(),o=route.avoidance_assessment.origin_integrity;
+                    useHere=!!fix&&plan().distance([fix.lat,fix.lon],o.requested_origin)<=2&&
+                        !getContinuation(route)&&integrity().gate(route,{storage:localStorage,offline:navigator.onLine===false,quiet:true});
+                    if(fix)entryPosition(fix);
+                }catch(_){}
+                return useHere?startHere():navigateFromGPS();
+            }).then(function(ok){if(entryOwner===owner&&ok===true)clearEntry();return ok;}).catch(function(error){if(entryOwner===owner)status(error.message||'Navigation could not start. Retry.','warning');return false;}).finally(function(){if(entryOwner===owner){entryOwner=null;entryControls();}});
+            return owner.promise;
+        }catch(error){status(error.message,'warning');return Promise.resolve(false);}
+    }
+
     function plan(){return root.VoyagrJourneyPlan;}
     function integrity(){return root.VoyagrAvoidanceIntegrity;}
     function key(route){return JSON.stringify([route&&route.id,route&&route.destination,route&&route.geometry,route&&route.maneuvers,route&&route.journey_context]);}
@@ -57,17 +103,22 @@
     function status(text,type){
         var el=document.getElementById('journeyModeStatus');if(el)el.textContent=text;
         var summary=document.getElementById('journeyModeSummary');
-        var brief=/GPS accuracy is insufficient/.test(text)?'GPS accuracy is insufficient. Try a clearer location.':
+        var brief=/^Obtaining a fresh/.test(text)?'Finding your location…':
+            /^Calculating and independently/.test(text)?'Updating route…':
+            /^Verifying live navigation/.test(text)?'Starting navigation…':
+            /GPS accuracy is insufficient/.test(text)?'GPS accuracy is insufficient. Try a clearer location.':
             /Journey storage requires recovery|Journey storage ownership/.test(text)?'Journey recovery needed. Reload and inspect.':
             /Live navigation refused for this plan:|^Choose simulation/.test(text)?'Choose preview or navigate from your location.':
             text.length>140?'Journey needs attention. Open Info for details.':text;
         if(summary)summary.textContent=brief;
+        var entryStatus=document.getElementById('navigationEntryStatus');if(entryStatus)entryStatus.textContent=brief;
+        var entryDetails=document.getElementById('navigationEntryDetails');if(entryDetails)entryDetails.textContent=text;
         if(runtime&&runtime.showStatus)runtime.showStatus(summary?brief:text,type||'info');
     }
     function setState(next,keepEndpointLeases){
         if(!keepEndpointLeases&&state!==next&&root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests(undefined,{endpointOnly:true});
         state=next;
-        var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=state!=='CHOOSING'&&state!=='LOCATING'&&state!=='RECALCULATING'&&state!=='AUTHORIZING'&&state!=='WAITING_FOR_ROAD';
+        var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=entryActive||(state!=='CHOOSING'&&state!=='LOCATING'&&state!=='RECALCULATING'&&state!=='AUTHORIZING'&&state!=='WAITING_FOR_ROAD');
         var panel=document.getElementById('simulationControls');if(panel)panel.hidden=!simulating();
         var indicator=document.getElementById('simulationIndicator');if(indicator)indicator.hidden=!simulating();
         playbackControls();
@@ -122,10 +173,10 @@
         if(ticket){if(integrity().isLatest(ticket))integrity().invalidate();integrity().finish(ticket);ticket=null;}
     }
     function endpointChanged(){
-        cancel(true);if(integrity()&&integrity().invalidate)integrity().invalidate();
+        clearEntry();cancel(true);if(integrity()&&integrity().invalidate)integrity().invalidate();
         if(state==='LOCATING'||state==='RECALCULATING'||state==='AUTHORIZING'||state==='WAITING_FOR_ROAD'){setState(rt().isLive()?'LIVE':'CHOOSING',true);status('Journey destination or endpoints changed. Previous request cancelled; recalculate with the current selection.','warning');}
     }
-    function exit(){cancel();if(!cleanSimulation())return false;setState('PLANNING');status('Journey inspection closed. Simulation does not record driven trips.');return true;}
+    function exit(){clearEntry();cancel();if(!cleanSimulation())return false;setState('PLANNING');status('Journey inspection closed. Simulation does not record driven trips.');return true;}
     function currentJourneyId(){var service=root.VoyagrOfflineNavigationOrchestration;var owned=service&&service.DURABLE_OWNERSHIP_PROTOCOL===1&&service.getJourneyOwnership();return owned&&owned.journey_id||null;}
     function bindCommittedJourneyId(){
         var id=currentJourneyId();if(!id)return;
@@ -196,6 +247,7 @@
     function setFollow(value){follow=value===true;var el=document.getElementById('simulationFollow');if(el)el.checked=follow;if(!follow&&cameraView&&runtime&&runtime.stopSimulationCamera){try{runtime.stopSimulationCamera();}catch(_){/* Next frame stays in free-map mode. */}}if(simulation&&animating())redrawSimulation();return follow;}
     function seek(value){value=Number(value);if(!animating()||!simulation||!Number.isFinite(value)||value<0||value>100)return false;meters=simulation.total*value/100;lastTick=Date.now();return redrawSimulation();}
     function startSimulation(){
+        clearEntry();
         try{
             var candidate=JSON.parse(JSON.stringify(rt().selected()));var inspected=plan().inspection(candidate,integrity());
             if(commitPending())throw Error('Journey transaction is pending. Retry shortly.');
@@ -327,6 +379,7 @@
                     if(Date.now()>=deadline){done(Error('No road connection yet. Tap Navigate to retry.'));return;}
                     if(navigator.onLine===false){done(Error('Reconnect, then tap Navigate to retry.'));return;}
                     var latest;try{latest=fresh(position);}catch(_){return;}
+                    entryPosition(latest);
                     if(Date.now()-started>=10000&&(plan().distance([fix.lat,fix.lon],[latest.lat,latest.lon])>=5||Date.now()-started>=30000))done();
                 },function(error){done(Error(error&&error.code===1?'GPS permission denied. Enable location and retry.':'Location unavailable. Tap Navigate to retry.'));},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
                 if(settled)clear();
@@ -353,6 +406,7 @@
             var position=await locate(),fix=fresh(position);
             if(token!==epoch||key(rt().selected())!==identity)return false;
             if(!rt().acceptPosition(position))throw Error('GPS observation could not be validated. Retry.');
+            entryPosition(fix);
             var dest=plan().coordinate(intent.destination);
             if(!dest){dest=await rt().resolveDestination(intent.destination);dest=dest&&plan().coordinate([dest.lat,dest.lon]);}
             if(!dest)throw Error('Destination could not be resolved. Inspect and replan the journey.');
@@ -396,6 +450,7 @@
     function onPreview(){
         if(!runtime)return;
         var route=rt().selected();
+        if(entryActive&&entryIdentity!==key(route)){clearEntry();cancel();}
         if((simulation||ticket||state==='LOCATING'||state==='WAITING_FOR_ROAD')&&selection!==key(route)){cancel();if(!cleanSimulation())return;setState('PLANNING');}
         selection=key(route);
         refreshAbandonControl();
@@ -536,7 +591,7 @@
         }
     }
     function beforePlanning(){
-        try{if(commitPending()){cancel();status('Previous planning transaction is finishing. Retry shortly.','warning');return false;}cancel();if(!cleanSimulation())return false;if(rt().isLive())retainLiveJourney();setState(rt().isLive()?'LIVE':'PLANNING');return true;}
+        try{clearEntry();if(commitPending()){cancel();status('Previous planning transaction is finishing. Retry shortly.','warning');return false;}cancel();if(!cleanSimulation())return false;if(rt().isLive())retainLiveJourney();setState(rt().isLive()?'LIVE':'PLANNING');return true;}
         catch(error){status(error.message,'warning');return false;}
     }
     function liveStopped(){if(state==='LIVE')setState('PLANNING');}
@@ -547,7 +602,7 @@
     var api={PROTOCOL:1,bind:function(deps){runtime=deps;},getState:function(){return state;},isSimulating:simulating,
         endpointIntentCompatible:endpointIntentCompatible,isJourneyCommitPending:commitPending,isAbandoning:function(){return !!abandonCommit;},commitPlanning:commitPlanning,getContinuation:getContinuation,abandonJourney:abandonJourney,isPlanningCommit:function(){return !!planningCommit;},isPublishingPlanningPlan:function(){return publishingPlan;},
         captureIntent:captureIntent,intentCurrent:intentCurrent,onIntentCancelled:onIntentCancelled,endpointChanged:endpointChanged,
-        choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,setFollow:setFollow,seek:seek,exit:exit,
+        startNavigation:startNavigation,choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,setFollow:setFollow,seek:seek,exit:exit,
         navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,beforePlanning:beforePlanning,retainLiveJourney:retainLiveJourney,liveStopped:liveStopped,addGpsStop:addGpsStop};
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',function(){if(document.hidden&&simulating())pause();});
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyModes=api;

@@ -1149,3 +1149,34 @@ fixtures; real mobile GPS/road matching and deployment remain unverified.
 The final retry rechecks the intent, selection and preference-bound request after
 the movement promise resolves; a destination change in that microtask gap cannot
 start a fresh request. The timing regression is included in the totals above.
+
+## Immediate navigation view (9 November 2026)
+
+- [x] Wire the floating and preview Start actions to one immediate startup owner,
+  rather than opening the mode chooser first. Keep simulation as a separate action.
+- [x] Validate usable selected geometry, reveal the map and compact Navigation card
+  synchronously, then acquire/reassess in the background. Repeated Start taps share
+  one pending promise; cancel/restart cannot let an older completion hide a new one.
+- [x] Fast-path a still-valid selected route with a fresh actual fix at its origin
+  through the existing lifecycle without another GPS call or route API request.
+  Retained/restored continuations continue through their existing fresh-GPS path.
+- [x] Show an owned marker only from observed GPS coordinates and center the entry
+  view on that position. Never synthesize vehicle movement from route geometry.
+  Success/cancellation removes the temporary marker without removing the plan.
+- [x] Show concise finding/updating/starting status, Retry after a refusal, Cancel,
+  and full details behind Info. Keep chooser and pending card from overlapping.
+- [x] Preserve lifecycle ownership, persistence and route/movement checks. Entry
+  presentation is separate from permission to issue location-dependent turns.
+- [ ] Deployed mobile acceptance. The map opens without GPS/network delay, but
+  spoken/turn guidance still depends on a usable position and the existing checks.
+  Physical GPS/provider availability and car-park road matching are not established
+  by the fixture tests. No automatic production deployment is included.
+
+Validation: 3,291 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+subtests passed (one skipped); eleven isolated SQL policy tests. Seven new startup
+regressions cover immediate view, duplicate taps, cached-fix lifecycle start without
+network, denial/retry, route changes, observed marker cleanup, missing route and
+cancel/restart ownership. Four real MapLibre browser cases cover mobile/desktop
+Light/Dark, synchronous view before GPS, background acquisition, observed position,
+keyboard cancellation and selected-polyline preservation. Start action integration
+checks now target the common immediate owner. No safety assertions were weakened.
