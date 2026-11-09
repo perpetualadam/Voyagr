@@ -12,7 +12,8 @@
  *     earlier warnings at motorway speed (different threshold sets / wording).
  *   - Valhalla's own verbal phrasing (verbal_transition_alert_instruction / verbal_pre_
  *     transition_instruction) is preferred at the alert and most-imminent thresholds when
- *     present; otherwise a distance-based phrase is synthesised.
+ *     present and compatible with the selected distance units; otherwise a distance-based
+ *     phrase is synthesised.
  *   - Street names join with " toward " for exits/keeps and " onto " for plain turns.
  *   - Imperial ("mi") vs metric wording is hard-coded per threshold to read naturally
  *     (e.g. "In 1600 feet" vs "In 500 meters") rather than mechanically converted.
@@ -47,6 +48,20 @@
         return n + 'th';
     }
 
+    // Valhalla speech is requested in kilometres and may outlive a unit preference
+    // change. Reject conflicting English distance clauses; preserve provider road
+    // names and unit-free guidance rather than rewriting arbitrary instruction text.
+    function verbalForDistanceUnit(text, distanceUnit) {
+        var phrase = String(text || '');
+        var distances = /\b(?:in|after|for)\s+(?:about\s+|approximately\s+)?(?:\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?|[¼½¾]|(?:(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|half|quarter|and)[ -]+)+)[\s-]*(kilomet(?:er|re)s?|met(?:er|re)s?|km|miles?|mi|m|feet|foot|ft|yards?|yds?)\b(?!\s*(?:per\b|\/\s*h\b|an\s+hour\b))/gi;
+        var match;
+        while ((match = distances.exec(phrase))) {
+            var metric = /^(?:km|m|kilomet(?:er|re)s?|met(?:er|re)s?)$/i.test(match[1]);
+            if (metric === (distanceUnit === 'mi')) return '';
+        }
+        return phrase;
+    }
+
     /**
      * Build the spoken phrase for an upcoming turn/exit/keep at a given threshold.
      * Returns '' when the threshold has no phrase (defensive — caller should only pass a
@@ -70,8 +85,8 @@
         var distanceUnit = opts.distanceUnit;
         var streetName = opts.streetName || '';
         var directionText = opts.directionText || 'continue';
-        var verbalAlert = opts.verbalAlert || '';
-        var verbalPre = opts.verbalPre || '';
+        var verbalAlert = verbalForDistanceUnit(opts.verbalAlert, distanceUnit);
+        var verbalPre = verbalForDistanceUnit(opts.verbalPre, distanceUnit);
 
         var isExit = isExitDirection(direction);
         var isKeep = isKeepDirection(direction);
