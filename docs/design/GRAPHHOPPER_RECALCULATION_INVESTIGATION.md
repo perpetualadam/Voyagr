@@ -112,3 +112,12 @@ Baseline verification: 3,291 JavaScript tests with coverage/lint; declared web
 backend selection 2,244 tests plus 74 subtests passed, one skipped. Existing suites
 passing do not invalidate the uncovered scenarios above. No runtime patch, live
 VPS test, deployment or production configuration/data change was made.
+
+## Resolution of finding 1
+
+The eligible-alternatives fix validates each candidate before the existing picker,
+retains the route if none qualify, and preserves independent final map checks.
+Non-object alternatives are excluded before provenance tagging. The diagnostic now
+records `actual_map_updates: 1` instead of `0`; remaining-stop preservation and
+engine-fallback observations are unchanged. The historical output above records
+the investigated revision. Real-device/server acceptance still remains pending.

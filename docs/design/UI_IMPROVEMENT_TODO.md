@@ -1194,7 +1194,7 @@ Findings: [GraphHopper recalculation investigation](GRAPHHOPPER_RECALCULATION_IN
 - [x] Trace the final outgoing request: normal canonical remaining-stop
   preservation is present in integrity augmentation; intermediate-builder omission
   alone is not a stop-loss defect.
-- [ ] First fix: assess eligible alternatives before the first returned route can
+- [x] First fix: assess eligible alternatives before the first returned route can
   block a usable GraphHopper candidate; retain all integrity gates.
 - [ ] Clarify engine-family versus named-route fallback priority before changing
   possible GraphHopper-to-Valhalla selection.
@@ -1202,3 +1202,26 @@ Findings: [GraphHopper recalculation investigation](GRAPHHOPPER_RECALCULATION_IN
   while retaining normal stop/provenance preservation.
 - [ ] Capture a real-device recalculation trace after fixes; separately exercise
   slow/hanging transport and report actual engine timings.
+
+## Automatic reroute eligible alternatives (9 November 2026)
+
+- [x] Validate geometry/instructions and integrity for every returned candidate,
+  then apply the existing source/name picker to eligible routes. A refused or
+  malformed first candidate cannot veto a permitted later GraphHopper candidate.
+- [x] Ignore non-object response entries before request provenance tagging.
+- [x] Retain the current route when none qualify; provide a refusal reason and
+  clear the in-progress flag without opening a confirmation while moving.
+- [x] Retain the map owner's independent final verification and existing engine
+  fallback policy. Stop/order/provenance augmentation is unchanged.
+- [x] Update the GPS script cache tag and the read-only investigation probe. The
+  probe now observes one map update, with pending/completed-stop behavior intact.
+- [ ] Deployed real-device deviation/recalculation acceptance remains pending.
+
+Validation: 3,302 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+subtests passed (one skipped); eleven isolated SQL policy tests. Eleven new real
+GPS -> selection -> map/lifecycle integration cases use a synthetic renderer and
+network: refused/malformed first routes, all-refused/all-malformed retention,
+existing engine/name preference, stale preferences and final map-owner rechecking.
+A coherence regression now requires malformed directions to be rejected before
+any map attempt; prior geometry/resource and no-success-announcement checks remain.
+No production deployment, routing-server change or engine-fallback redesign.

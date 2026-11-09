@@ -3,6 +3,7 @@
 // not assertions that the current defects should remain supported behavior.
 const {JSDOM}=require('jsdom');
 const dom=new JSDOM('<input id="end">',{url:'https://reroute.invalid/'});
+global.sessionStorage=dom.window.sessionStorage;global._routePrefs=()=>({});
 global.window=dom.window;global.document=dom.window.document;global.localStorage=dom.window.localStorage;
 Object.defineProperty(global,'navigator',{value:dom.window.navigator,configurable:true});
 const AI=require('../static/js/modules/navigation/avoidance-integrity');
@@ -20,10 +21,10 @@ MapOwner.bind({routingRequest:()=>RR,getCurrentRoutingMode:()=> 'auto',getCurren
 const body=MapOwner.buildRouteRequest(53,-1,'53.01,-1');
 const first=makeRoute('blocked');first.name='Fastest';first.source='Valhalla';
 Object.assign(first.avoidance_assessment,{automatic_selection_allowed:false,status:'VIOLATED',requires_acceptance:true});first.avoidance_assessment.requirements[0].status='VIOLATED';
-const gh=makeRoute('eligible-gh',[[53,-1],[53.005,-1],[53.01,-1]]);gh.leg_geometry_ranges=previous.leg_geometry_ranges;gh.journey_context=previous.journey_context;gh.name='Optimised';gh.source='GraphHopper';gh.avoidance_assessment.automatic_selection_allowed=true;
+const gh=makeRoute('eligible-gh',[[53,-1],[53.005,-1],[53.01,-1]]);gh.leg_geometry_ranges=previous.leg_geometry_ranges;gh.journey_context=previous.journey_context;gh.name='Optimised';gh.source='GraphHopper';gh.distance_km=1.2;gh.duration_minutes=3;gh.avoidance_assessment.automatic_selection_allowed=true;
 const state={routeInProgress:true,rerouteInProgress:false,lastRerouteAttemptTime:0,postRerouteGraceUntil:0,currentLat:53,currentLon:-1};
 let mapUpdates=0,sent=null;
-GPS.bind({g:k=>state[k],s:(k,v)=>{state[k]=v;},m:{rerouteDecision:()=>RD},call:{resolveNavigationDestination:()=> '53.01,-1',buildRouteRequest:()=>body,showStatus:()=>{},updateRouteOnMap:()=>{mapUpdates++;return {ok:true};}}});
+GPS.bind({g:k=>state[k],s:(k,v)=>{state[k]=v;},m:{rerouteDecision:()=>RD},call:{resolveNavigationDestination:()=> '53.01,-1',buildRouteRequest:()=>body,showStatus:()=>{},convertDistance:String,getDistanceUnit:()=> 'km',sendNotification:()=>{},getAutoRerouteOnDeviationEnabled:()=>false,updateRouteOnMap:()=>{mapUpdates++;state.rerouteInProgress=false;return {ok:true};}}});
 global.fetch=async(_url,options)=>{sent=JSON.parse(options.body);return {json:async()=>({success:true,routes:[first,gh]})};};
 (async()=>{
  await GPS.triggerAutomaticRerouteWithHazardHandling(53,-1);
