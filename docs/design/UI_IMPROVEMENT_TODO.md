@@ -733,7 +733,7 @@ handlers, persisted choices, permissions, navigation safety and device acceptanc
   phrases with the same action styles, retaining microphone ownership and feedback.
 - [x] Clear All: use a consistent compact labelled action and preserve the existing
   clearing scope/confirmation and GPS/navigation cleanup.
-- [ ] Save Location: use the same labelled-icon treatment and retain the saved-place
+- [x] Save Location: use the same labelled-icon treatment and retain the saved-place
   behavior. Do not confuse this with saving a route or starting navigation.
 - [ ] Map contrast, first increment: fix verified low-contrast Dark-style paths,
   overview roads and water/place labels; test actual MapLibre rendering separately
@@ -861,7 +861,7 @@ map and device acceptance remain outstanding. No production deployment.
   calculation in the existing 16-case light/dark Navigation browser matrix at
   320px, 390px, landscape and desktop sizes. No horizontal overflow; tested action
   text has at least 4.5:1 contrast. Map/provider/GPS boundaries are fixtures.
-- [ ] Next: voice controls, then Clear All and Save Location as separate increments.
+- [x] Voice controls, Clear All and Save Location completed as separate increments.
 
 Validation: 3,178 JavaScript tests with coverage/lint and 2,221 declared backend
 checks plus 74 subtests passed (one skipped). Existing calculation, GPS permissions
@@ -889,7 +889,7 @@ and live navigation authority remain unchanged. No production deployment.
 - [ ] Investigate a separately licensed, browser-suitable wake phrase replacement;
   transcription support does not replace Porcupine wake detection. openWakeWord's
   browser porting and pre-trained model licensing need separate evaluation.
-- [ ] Next UI increments: Clear All, then Save Location, individually.
+- [x] Clear All and Save Location completed individually in the following increments.
 
 Research, source links and the disabled-by-default configuration contract are in
 [VOICE_PROVIDER_RESEARCH.md](VOICE_PROVIDER_RESEARCH.md). Eight real browser cases
@@ -915,9 +915,33 @@ subscription or production configuration change.
   redesign remaining visits, durable journey ownership or planning state here.
 - [x] Verify native keyboard activation, compact width, touch target, focus and
   contrast in the existing sixteen Navigation viewport/light/dark browser cases.
-- [ ] Next separate UI increment: Save Location.
+- [x] Save Location completed in the next separate increment below.
 
 Validation: 3,201 JavaScript tests with coverage/lint; 2,244 backend tests and 74
 subtests passed (one skipped). The focused Clear All and durable-journey regression
 selection passes. Browser map/device boundaries are fixtures; deployed/device
 acceptance remains pending. No production deployment or configuration change.
+
+
+## Compact Save Location action (9 November 2026)
+
+- [x] Replace the expanding purple/emoji button with a compact labelled SVG star
+  action consistent with Clear All and the rest of Navigation. Keep the existing
+  handler, button class, name/category prompts and favourites API/authentication.
+- [x] Scope light/dark surface, icon, text, hover and keyboard-focus styles to the
+  Save Location wrapper; retain 48px touch height and a visible text label.
+- [x] Exercise the production favourites owner through the rendered button with
+  native keyboard activation: one authenticated create request, unchanged address/
+  coordinate/category payload and favourites grid refresh. Cancelling the name
+  prompt sends no request. Transport/identity/location are test boundaries.
+- [x] Complete the listed Navigation action styling queue: routing modes and
+  Calculate route, voice controls, Clear All and Save Location.
+
+Validation: 3,201 JavaScript tests with coverage/lint, 2,244 backend tests and 74
+subtests passed (one skipped). Sixteen real Chromium Navigation cases cover four
+viewports and light/html-only/body-only/both Dark classes, with 44px+ targets,
+compact widths, keyboard focus, no horizontal overflow and at least 4.5:1 tested
+action text contrast. Existing GPS start order, theme linking and Clear All checks
+remain in the matrix. Saving semantics, real location acquisition and navigation
+permissions are unchanged. No production deployment or configuration change.
+Remaining source/provider work and deployed map/device acceptance stay separate.
