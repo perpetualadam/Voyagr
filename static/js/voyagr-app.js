@@ -1046,7 +1046,7 @@ function initializeRoadLabels() {
  * @function startNavigation
  * @returns {*} Return value description
  */
-function startNavigation() { if(window.VoyagrJourneyModes && VoyagrJourneyModes.PROTOCOL===1)return VoyagrJourneyModes.choose();showStatus('Journey controls are unavailable. Reload before starting navigation.','warning');return false; }
+function startNavigation() { if(window.VoyagrJourneyModes && VoyagrJourneyModes.PROTOCOL===1&&typeof VoyagrJourneyModes.startNavigation==='function')return VoyagrJourneyModes.startNavigation();showStatus('Journey controls are unavailable. Reload before starting navigation.','warning');return false; }
 
 // ===== ROUTE PREVIEW ORCHESTRATION =====
 function showRoutePreview(routeData, skipMapDisplay = false) {
@@ -3150,6 +3150,12 @@ if(window.VoyagrJourneyModes)VoyagrJourneyModes.bind({
     stopSimulationCamera:()=>map.stop(),
     restoreSimulationView:view=>map.jumpTo(view),
     showSimulationMap:()=>collapseBottomSheet(),
+    showNavigationMap:()=>collapseBottomSheet(),
+    presentEntryPosition:fix=>map.easeTo({center:[fix.lon,fix.lat],zoom:Math.max(map.getZoom(),15),duration:300}),
+    entryMarker:point=>{
+        const el=document.createElement('div');el.className='navigation-entry-position';el.setAttribute('aria-label','Last observed GPS location');
+        return new maplibregl.Marker({element:el}).setLngLat([point[1],point[0]]).addTo(map);
+    },
     simulationMarker:point=>{
         const el=document.createElement('div');el.className='simulation-vehicle';el.textContent='▲';el.setAttribute('aria-label','Preview vehicle — not live GPS');
         return new maplibregl.Marker({element:el,rotationAlignment:'map'}).setLngLat([point[1],point[0]]).addTo(map);

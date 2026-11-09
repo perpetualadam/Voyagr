@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109roadwait1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109entry1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -141,7 +141,7 @@
     <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
     <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
     <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261107arrivaloptions1"></script>
-    <script defer src="/static/js/app/journey-modes.js?v=20261109roadwait1"></script>
+    <script defer src="/static/js/app/journey-modes.js?v=20261109entry1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
@@ -242,7 +242,7 @@
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261107settlementmerge1"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20261107mapicons1"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20261109distanceoptions1"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20261109entry1"></script>
     <script defer src="/static/js/app.js?v=20261108unitrestore1"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -656,7 +656,7 @@
 
                 <!-- Go Now / Start Navigation Button -->
                 <p id="navigationStartExplanation" role="status"></p>
-                <button id="startNavBtnSheet" data-journey-choose class="btn-calculate" onclick="startNavigation()" style="background: #34A853; margin-top: 10px; display: none;">Choose journey mode</button>
+                <button id="startNavBtnSheet" data-journey-choose class="btn-calculate" onclick="startNavigation()" style="background: #34A853; margin-top: 10px; display: none;">Start navigation</button>
 
                 <!-- Add to Favorites Button (Phase 2) -->
                 <div class="navigation-save-actions">
@@ -1645,7 +1645,7 @@
                         </div>
 
                         <div class="preview-primary-actions" role="group" aria-label="Journey actions">
-                            <button type="button" class="preview-action preview-navigate" data-journey-choose onclick="startNavigationFromPreview()" aria-controls="journeyModeChooser" aria-describedby="previewNavigationHelp">
+                            <button type="button" class="preview-action preview-navigate" data-journey-choose onclick="startNavigationFromPreview()" aria-controls="navigationEntry" aria-describedby="previewNavigationHelp">
                                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z" /></svg>Navigate
                             </button>
                             <button type="button" class="route-playback-button" onclick="VoyagrJourneyModes.startSimulation()" aria-label="Play route preview">
@@ -1879,6 +1879,14 @@
 
         </div>
 
+        <section id="navigationEntry" class="navigation-entry" aria-label="Navigation" hidden>
+            <div class="navigation-entry-header"><strong>Navigation</strong>
+                <button type="button" class="journey-mode-close" onclick="VoyagrJourneyModes.exit()" aria-label="Cancel navigation startup" title="Cancel navigation startup">×</button>
+            </div>
+            <p id="navigationEntryStatus" role="status" aria-live="polite"></p>
+            <button id="navigationEntryRetry" type="button" onclick="VoyagrJourneyModes.startNavigation()">Retry</button>
+            <details><summary aria-label="Navigation information">ⓘ Info</summary><p id="navigationEntryDetails"></p></details>
+        </section>
         <section id="journeyModeChooser" class="journey-mode-panel" aria-labelledby="journeyModeTitle" hidden>
             <div class="journey-mode-header">
                 <h2 id="journeyModeTitle">Journey options</h2>
@@ -1961,7 +1969,7 @@
                 <button type="button" id="roadReportFab" class="fab map-action-button" title="Report road issue" aria-label="Report road issue" onclick="openRoadReportModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4 2 19a1 1 0 0 0 1 2h18a1 1 0 0 0 1-2L14 4a2 2 0 0 0-4 0Z"/><path d="M12 9v5M12 17h.01"/></svg><span class="map-action-label">Report</span></button>
                 <button type="button" id="mapControlsHintFab" class="fab map-action-button" title="Map button guide" aria-label="Map button guide" onclick="openMapControlsHintModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span class="map-action-label">Help</span></button>
             </div>
-                <button type="button" id="startNavBtn" class="fab nav-start-nav-fab" title="Start navigation — choose journey mode" aria-label="Start navigation — choose journey mode" aria-controls="journeyModeChooser" onclick="startNavigationFromPreview()" data-journey-choose style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z"/></svg><span class="map-action-label">Start</span></button>
+                <button type="button" id="startNavBtn" class="fab nav-start-nav-fab" title="Start navigation" aria-label="Start navigation" aria-controls="navigationEntry" onclick="startNavigationFromPreview()" data-journey-choose style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z"/></svg><span class="map-action-label">Start</span></button>
             <button type="button" id="endNavigationBtn" data-testid="end-navigation" class="fab nav-end-nav-fab" title="End navigation" aria-label="End navigation" onclick="stopTurnByTurnNavigation()" style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span class="map-action-label">End</span></button>
             <button type="button" id="navMenuToggle" class="fab nav-menu-toggle" title="Map actions" aria-label="Open map actions" aria-expanded="false" aria-controls="navControlButtons">
                 <span data-nav-menu-icons aria-hidden="true"><svg class="nav-menu-icon-closed" viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg><svg class="nav-menu-icon-open" viewBox="0 0 24 24" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></span><span class="map-action-label" data-nav-menu-label>Map</span>

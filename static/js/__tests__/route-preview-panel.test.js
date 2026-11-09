@@ -55,17 +55,17 @@ test('route and CAZ limitations cannot be hidden by closing any preview disclosu
     expect(document.getElementById('hazardInfoContainer').style.display).toBe('block');
 });
 
-test('Navigate uses the existing production journey chooser entrypoint rather than granting live permission',()=>{
+test('Navigate uses the immediate startup owner rather than granting live permission',()=>{
     const app=fs.readFileSync(path.join(__dirname,'../voyagr-app.js'),'utf8');
     const declarations=['startNavigation','startNavigationFromPreview'].map(name=>app.match(new RegExp('function '+name+'\\(\\) \\{[^\\n]+'))[0]).join('\n');
-    const choose=jest.fn(()=>false),showStatus=jest.fn();
-    global.VoyagrJourneyModes={PROTOCOL:1,choose};
+    const start=jest.fn(()=>false),showStatus=jest.fn();
+    global.VoyagrJourneyModes={PROTOCOL:1,startNavigation:start};
     global.startNavigationFromPreview=new Function('showStatus',declarations+';return startNavigationFromPreview;')(showStatus);
     const button=document.querySelector('#routePreviewTab [data-journey-choose]');
     button.onclick=new Function(button.getAttribute('onclick'));
-    button.click();expect(choose).toHaveBeenCalledTimes(1);expect(showStatus).not.toHaveBeenCalled();
+    button.click();expect(start).toHaveBeenCalledTimes(1);expect(showStatus).not.toHaveBeenCalled();
     delete global.VoyagrJourneyModes;
-    button.click();expect(choose).toHaveBeenCalledTimes(1);
+    button.click();expect(start).toHaveBeenCalledTimes(1);
     expect(showStatus).toHaveBeenCalledWith(expect.stringMatching(/unavailable/),'warning');
 });
 

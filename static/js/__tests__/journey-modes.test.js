@@ -15,7 +15,7 @@ function preview(route){window.lastCalculatedRoute=route;Compare.setRouteOptions
 function response(route=makeRoute('newGPS')){route.journey_context=contextFor(route);return {ok:true,json:async()=>({success:true,routes:[route]})};}
 beforeEach(()=>{
     localStorage.clear();jest.useFakeTimers();
-    document.body.innerHTML='<div id="map"></div>'+template.match(/<section id="journeyModeChooser"[\s\S]*?<\/section>/)[0]+template.match(/<section id="simulationControls"[\s\S]*?<\/section>/)[0];
+    document.body.innerHTML='<div id="map"></div>'+template.match(/<section id="navigationEntry"[\s\S]*?<\/section>/)[0]+template.match(/<section id="journeyModeChooser"[\s\S]*?<\/section>/)[0]+template.match(/<section id="simulationControls"[\s\S]*?<\/section>/)[0];
     Life.setRouteInProgress(false);Life.setRouteStarted(false);Life.setRoutePolyline(null);Life.setCurrentRouteSteps([]);
     global.VoyagrJourneyModes=undefined;global.VoyagrJourneyPlan=Plan;global.VoyagrAvoidanceIntegrity=AI;
     delete require.cache[require.resolve('../app/journey-modes.js')];
@@ -575,4 +575,48 @@ test('journey information is collapsed by default while the concise status remai
  expect(document.getElementById('journeyModeSummary').textContent.length).toBeLessThan(90);
  expect(document.getElementById('journeyModeStatus').textContent.length).toBeGreaterThan(0);
  expect(document.getElementById('journeyModeStatus').hasAttribute('aria-live')).toBe(false);
+});
+
+describe('immediate navigation entry',()=>{
+ beforeEach(()=>{runtime.showNavigationMap=jest.fn();});
+ test('opens the map synchronously, deduplicates Start and acquires GPS in the background',async()=>{
+  let gps;navigator.geolocation.getCurrentPosition.mockImplementation(ok=>{gps=ok;});
+  const pending=Modes.startNavigation();expect(Modes.startNavigation()).toBe(pending);
+  expect(runtime.showNavigationMap).toHaveBeenCalledTimes(1);expect(document.getElementById('navigationEntry').hidden).toBe(false);
+  expect(document.getElementById('journeyModeChooser').hidden).toBe(true);expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
+  await Promise.resolve();expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
+  Modes.exit();expect(await pending).toBe(false);gps(position());expect(runtime.fetch).not.toHaveBeenCalled();expect(document.getElementById('navigationEntry').hidden).toBe(true);
+ });
+ test('an already valid route and current GPS fix start through the lifecycle without a fresh route request',async()=>{
+  runtime.acceptPosition(position());expect(await Modes.startNavigation()).toBe(true);
+  expect(runtime.fetch).not.toHaveBeenCalled();expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+  expect(Life.getRouteInProgress()).toBe(true);expect(calls.persistActiveRoute).toHaveBeenCalledTimes(1);expect(document.getElementById('navigationEntry').hidden).toBe(true);
+ });
+ test('permission denial leaves a concise retry view without granting navigation or altering the plan',async()=>{
+  locations=[Object.assign(Error('denied'),{code:1})];expect(await Modes.startNavigation()).toBe(false);
+  expect(document.getElementById('navigationEntry').hidden).toBe(false);expect(document.getElementById('navigationEntryStatus').textContent).toMatch(/permission denied/);
+  expect(document.getElementById('navigationEntryRetry').disabled).toBe(false);expect(selected().id).toBe('planned');expect(Life.getRouteInProgress()).toBe(false);
+ });
+ test('selection changes before background work runs cannot start a new journey implicitly',async()=>{
+  const pending=Modes.startNavigation();preview(makeRoute('other'));expect(await pending).toBe(false);
+  expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();expect(document.getElementById('navigationEntry').hidden).toBe(true);
+ });
+ test('only observed positions create an entry marker, and cancellation removes it without replacing route state',async()=>{
+  const el=document.createElement('i');document.body.append(el);const handle={setLngLat:coordinates=>{el.dataset.position=JSON.stringify(coordinates);},remove:()=>el.remove()};runtime.entryMarker=jest.fn(()=>handle);
+  let reply;runtime.fetch.mockImplementation(()=>new Promise(resolve=>{reply=resolve;}));
+  const pending=Modes.startNavigation();expect(runtime.entryMarker).not.toHaveBeenCalled();
+  for(let i=0;i<10&&!reply;i++)await Promise.resolve();
+  expect(runtime.entryMarker).toHaveBeenCalledWith([53,-1]);expect(selected().id).toBe('planned');Modes.exit();
+  reply(response());expect(await pending).toBe(false);expect(el.isConnected).toBe(false);expect(runtime.startLive).not.toHaveBeenCalled();
+ });
+ test('cancel and immediate restart cannot let the old completion hide the new entry',async()=>{
+  const callbacks=[];navigator.geolocation.getCurrentPosition.mockImplementation(ok=>callbacks.push(ok));
+  const first=Modes.startNavigation();await Promise.resolve();Modes.exit();const second=Modes.startNavigation();await Promise.resolve();
+  callbacks[0](position());expect(await first).toBe(false);expect(document.getElementById('navigationEntry').hidden).toBe(false);
+  Modes.exit();expect(await second).toBe(false);expect(runtime.fetch).not.toHaveBeenCalled();
+ });
+ test('missing route refuses immediately without GPS or a navigation entry view',async()=>{
+  Compare.setRouteOptions([]);window.lastCalculatedRoute=null;
+  expect(await Modes.startNavigation()).toBe(false);expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(runtime.showNavigationMap).not.toHaveBeenCalled();expect(document.getElementById('navigationEntry').hidden).toBe(true);
+ });
 });
