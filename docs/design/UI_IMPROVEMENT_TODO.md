@@ -720,3 +720,72 @@ maintenance alongside the user's deferred live sat-nav and screen-reader checks.
 Spoken-unit validation: 3,141 JavaScript tests passed with coverage/lint; 2,221
 backend tests passed (one skipped). The controlled speech-pipeline check passed
 mi/km/mi changes with stable thresholds and captured turn/hazard/destination text.
+
+## Navigation uniformity and map theme follow-up (9 November 2026)
+
+User-requested additions; complete each increment separately and preserve existing
+handlers, persisted choices, permissions, navigation safety and device acceptance.
+
+- [ ] Navigation routing controls: align Auto/Walk/Bike, Calculate route and
+  Use current GPS as start with the app's compact labelled-icon design. Preserve
+  the primary calculation action, selected routing mode and real-GPS permission path.
+- [ ] Voice control card: align Listen, Test speech, transcript/status and Example
+  phrases with the same action styles, retaining microphone ownership and feedback.
+- [ ] Clear All: use a consistent compact labelled action and preserve the existing
+  clearing scope/confirmation and GPS/navigation cleanup.
+- [ ] Save Location: use the same labelled-icon treatment and retain the saved-place
+  behavior. Do not confuse this with saving a route or starting navigation.
+- [ ] Map contrast, first increment: fix verified low-contrast Dark-style paths,
+  overview roads and water/place labels; test actual MapLibre rendering separately
+  from live tile/font coverage. Standard/Satellite need their own acceptance.
+- [ ] Theme controls, next investigation: verify UI/map coupling (default linked),
+  Satellite persistence on startup, rapid theme changes, style-load callbacks and
+  raster fallback. The current fallback can select a light raster for Dark; inspect
+  this separately rather than silently changing preference behavior in a palette fix.
+- [ ] Map UI follow-up: investigate inherited text/control contrast and existing
+  selectors written as `html.dark-mode, body.dark-mode .component`; verify scoped
+  styles and actual rendered map controls before changing global CSS.
+- [ ] Deployed acceptance: confirm the affected theme(s), readable roads/labels at
+  overview and street zooms, dark/light UI combinations and route-overlay contrast.
+
+This queue runs alongside remaining units/source maintenance and deferred live
+sat-nav/screen-reader acceptance. No automatic deployment is included.
+
+User clarification: the unreadable theme was the UI theme. Dark UI should pair
+with Dark map; investigate lost route polylines on Dark/Satellite as the next
+functional increment. Prioritise Dark UI component scoping/readability first.
+The basemap palette finding is recorded separately and is not part of this fix.
+
+- [ ] Restore route polylines after Dark/Satellite style changes, including both
+  planning alternatives/selected previews and active-navigation overlays. Reproduce
+  style-replacement removal and verify geometry, selection and layer ordering.
+
+## Dark UI readability, first focused fix (9 November 2026)
+
+- [x] Correct 133 component selectors so `html.dark-mode .component` targets the
+  component rather than `html` itself. Retain intentional root variables/rules and
+  the body-class path; cover early boot before the body class is applied.
+- [x] Improve dark Navigation action text contrast and native MapLibre zoom/compass/
+  attribution controls. Filter only native control icons; never the map canvas,
+  tiles, route lines or vehicle markers. Preserve handlers and existing layouts.
+- [x] Verify existing default UI/map linking: selecting Dark UI loads Dark map, and
+  selecting Standard map returns to light UI. No new preference/coupling policy.
+- [ ] Next functional increment: reproduce/fix lost selected/alternative/navigation
+  polylines after Dark/Satellite style replacement. MapLibre removes custom sources
+  and layers during `setStyle`; preview mounting currently listens once when a
+  route is drawn, rather than restoring every later theme change. Active-navigation
+  recovery is separate and needs its own regression before changing ownership.
+- [ ] Continue the queued Navigation icon/layout items and remaining inline-panel/
+  popup/theme-fallback contrast acceptance one increment at a time.
+
+Browser checks use real MapLibre controls and theme controllers with empty local
+style fixtures. They establish UI contrast/keyboard/default linking, not live
+roads, labels, tiles, Satellite imagery or route-overlay restoration. No deployment.
+
+Dark UI validation: 3,146 JavaScript tests passed with coverage/lint; 2,221 backend
+checks passed (one skipped). Sixteen real-MapLibre UI cases cover four viewports
+with html-only/body-only/both Dark classes and light mode; tested Navigation text
+contrast is at least 4.5:1. Ten route-preview cases also retain controls/notices.
+These measurements are scoped checks, not an app-wide accessibility certification.
+The existing 16-case Settings matrix also passed after the shared CSS correction,
+including unit labels, keyboard actions, switch accessibility and account shortcuts.
