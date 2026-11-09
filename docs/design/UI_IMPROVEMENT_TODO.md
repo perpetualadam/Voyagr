@@ -756,7 +756,7 @@ with Dark map; investigate lost route polylines on Dark/Satellite as the next
 functional increment. Prioritise Dark UI component scoping/readability first.
 The basemap palette finding is recorded separately and is not part of this fix.
 
-- [ ] Restore route polylines after Dark/Satellite style changes, including both
+- [x] Restore route polylines after Dark/Satellite style changes, including both
   planning alternatives/selected previews and active-navigation overlays. Reproduce
   style-replacement removal and verify geometry, selection and layer ordering.
 
@@ -770,11 +770,11 @@ The basemap palette finding is recorded separately and is not part of this fix.
   tiles, route lines or vehicle markers. Preserve handlers and existing layouts.
 - [x] Verify existing default UI/map linking: selecting Dark UI loads Dark map, and
   selecting Standard map returns to light UI. No new preference/coupling policy.
-- [ ] Next functional increment: reproduce/fix lost selected/alternative/navigation
+- [x] Next functional increment: reproduce/fix lost selected/alternative/navigation
   polylines after Dark/Satellite style replacement. MapLibre removes custom sources
   and layers during `setStyle`; preview mounting currently listens once when a
   route is drawn, rather than restoring every later theme change. Active-navigation
-  recovery is separate and needs its own regression before changing ownership.
+  recovery is separate; its regression passed without changing ownership (see below).
 - [ ] Continue the queued Navigation icon/layout items and remaining inline-panel/
   popup/theme-fallback contrast acceptance one increment at a time.
 
@@ -789,3 +789,25 @@ contrast is at least 4.5:1. Ten route-preview cases also retain controls/notices
 These measurements are scoped checks, not an app-wide accessibility certification.
 The existing 16-case Settings matrix also passed after the shared CSS correction,
 including unit labels, keyboard actions, switch accessibility and account shortcuts.
+
+## Preview polylines across map themes, second focused fix (9 November 2026)
+
+- [x] Restore successfully mounted selected/single previews or all alternatives
+  after a complete MapLibre style replacement. Retain displayed geometry/colour
+  identity and arrival markers without selecting a route, moving the camera,
+  recalculating, fetching traffic/hazards or granting navigation authority.
+- [x] Revoke restoration on clear/replacement; refuse stale maps, pending journey
+  commits, active navigation, surviving/foreign resources and renderer re-entry.
+  Clean up failed preview batches while preserving newer work.
+- [x] Regress the existing verified active-navigation style recovery separately;
+  leave its ownership and eligibility checks unchanged.
+- [ ] Confirm these changes on deployed live Satellite imagery and real devices.
+  Navigation icon/layout, basemap palette, theme persistence/fallback and remaining
+  inline-panel/popup contrast work remain queued above.
+
+This completes the local preview-restoration increment recorded above. Validation:
+3,156 JavaScript tests passed with coverage/lint; 2,221 backend tests and 74 subtests
+passed (one skipped). Twelve real MapLibre browser cases cover single/all previews
+at mobile/desktop sizes across Dark, Satellite and Standard, plus rapid changes
+and clearing during reload. Fixtures use local styles/raster tiles, not live map
+coverage. No production deployment or configuration changes.

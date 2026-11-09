@@ -615,6 +615,16 @@ function initializeMap() {
     map.on('style.load', voyagrMapInvalidateRecovery);
     map.on('style.load', onVoyagrStyleLoaded);
 
+    // Style swaps remove preview GeoJSON sources/layers. Recover only once the
+    // current map is idle; the preview owner enforces lifecycle/generation checks.
+    const previewRecoveryMap = map;
+    map.on('idle', () => {
+        const owner = window.VoyagrRouteComparisonOrchestration;
+        if (owner && typeof owner.restorePreviewAfterStyleLoad === 'function') {
+            owner.restorePreviewAfterStyleLoad(previewRecoveryMap);
+        }
+    });
+
     // Handle missing images (POI icons) by providing a transparent placeholder
     // This suppresses "Image 'x' could not be loaded" errors in the console
     map.on('styleimagemissing', (e) => {
