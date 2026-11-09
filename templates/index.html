@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109save1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109chooser1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -1880,14 +1880,29 @@
         </div>
 
         <section id="journeyModeChooser" class="journey-mode-panel" aria-labelledby="journeyModeTitle" hidden>
-            <h2 id="journeyModeTitle">Choose how to use this journey</h2>
-            <p>Plan anywhere. Simulation inspects the planned geometry. Live navigation requires your actual location and a fresh safety assessment.</p>
-            <button type="button" onclick="VoyagrJourneyModes.abandonJourney()">End previous journey</button>
-            <button type="button" onclick="VoyagrJourneyModes.startSimulation()">▶ Play route preview</button>
-            <button type="button" data-live-recalculate onclick="VoyagrJourneyModes.navigateFromGPS()">Navigate From My Location</button>
-            <button type="button" id="startVerifiedHere" data-navigation-start hidden onclick="VoyagrJourneyModes.startHere()">Start verified live navigation here</button>
+            <div class="journey-mode-header">
+                <h2 id="journeyModeTitle">Journey options</h2>
+                <button type="button" class="journey-mode-close" aria-label="Close journey controls" title="Close journey controls" onclick="VoyagrJourneyModes.exit();document.getElementById('journeyModeChooser').hidden=true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                </button>
+            </div>
+            <p class="journey-mode-description">Preview the planned route, or navigate from your current location after fresh GPS and safety checks.</p>
+            <div class="journey-mode-actions" role="group" aria-label="Journey actions">
+                <button type="button" onclick="VoyagrJourneyModes.startSimulation()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m8 5 11 7-11 7Z" /></svg>
+                    <span>Play preview</span>
+                </button>
+                <button type="button" class="journey-mode-primary" data-live-recalculate onclick="VoyagrJourneyModes.navigateFromGPS()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-5-8 5Z" /></svg>
+                    <span>Navigate from my location</span>
+                </button>
+                <button type="button" id="startVerifiedHere" data-navigation-start hidden onclick="VoyagrJourneyModes.startHere()">Start verified live navigation here</button>
+            </div>
             <p id="journeyModeStatus" role="status" aria-live="polite"></p>
-            <button type="button" onclick="VoyagrJourneyModes.exit();document.getElementById('journeyModeChooser').hidden=true">Close journey controls</button>
+            <button type="button" class="journey-mode-end" onclick="VoyagrJourneyModes.abandonJourney()">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6h12v12H6Z" /></svg>
+                <span>End previous journey</span>
+            </button>
         </section>
         <section id="simulationControls" class="simulation-controls" hidden aria-label="Journey simulation controls">
             <div class="simulation-header">
