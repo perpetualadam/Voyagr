@@ -29,6 +29,7 @@ test.each([fix(now - 16000), fix(now + 2000), fix(now, 91), fix(now, 51.5, Infin
         GPS.setIsTrackingActive(false);
         navigator.geolocation.watchPosition = jest.fn(() => 7);
         GPS.ensureGPSTracking({ forceRestart: true, documentVisible: true });
+        mutate.mockClear(); // Watch restart intentionally begins a fresh deviation episode.
         GPS.setLastGpsFixAtMs(now - 2000);
         GPS.setSmoothDisplayLat(51.5);
         GPS.setSmoothDisplayLon(-0.1);
@@ -36,7 +37,7 @@ test.each([fix(now - 16000), fix(now + 2000), fix(now, 91), fix(now, 51.5, Infin
         expect(GPS.getLastGpsFixAtMs()).toBe(now - 2000);
         expect(GPS.getSmoothDisplayLat()).toBe(51.5);
         expect(GPS.getSmoothDisplayLon()).toBe(-0.1);
-        expect(mutate).not.toHaveBeenCalled();
+        expect(mutate.mock.calls).toEqual([['deviationStartTimeCheck',null],['deviationOffRouteStreak',0]]);
         expect(showStatus).toHaveBeenCalledWith(expect.stringContaining('last reliable position'), 'warning');
         jest.restoreAllMocks();
     }

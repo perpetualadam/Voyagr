@@ -117,3 +117,18 @@ The read-only replay completed successfully. Existing suites passed unchanged:
 2,244 tests plus 74 subtests (one skipped); eleven isolated SQL policy tests.
 These passing baselines do not convert the observed behavior into a recommended
 future contract. Focused fix regressions remain part of the queued increments.
+
+## Evidence-continuity fix
+
+The following increment resets the active confirmation streak/timer for unknown
+or rejected observations, watch errors/restarts, and recovery after the existing
+15-second freshness window. Confirmed OFF_ROUTE observations continue accumulating.
+The pure helper also clears untrusted-accuracy history. Route progress, join state,
+remaining visits, attempt timestamps and request/retry ownership are unchanged.
+
+The diagnostic's uncertainty case now reports `saved_streak: 0`, a null start and
+`first_restored_action: "waiting"`. The original timing table is historical to the
+investigated revision: ordinary one-Hz triggering still takes 12 seconds and the
+post-success case still takes 96 seconds. Blanket grace handling remains the next
+separate increment. This does not change zero-accuracy policy, cancel already
+owned requests, or establish real-device accuracy/reception quality.

@@ -784,7 +784,16 @@
      * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
      * @param {GeolocationPosition} position
      */
-    function pauseUncertainNavigation() {
+    function resetDeviationConfirmation() {
+        if(rt().g('routeInProgress')===true){
+            rt().s('deviationStartTimeCheck',null);
+            rt().s('deviationOffRouteStreak',0);
+        }
+    }
+    function pauseUncertainNavigation(knownDeviation) {
+        // Known OFF_ROUTE evidence must continue its confirmation window. Unknown
+        // position/road association cannot lend time or readings to that window.
+        if(knownDeviation!==true)resetDeviationConfirmation();
         if (!uncertaintySpeechCleared) {
             if (root.VoyagrVoiceAnnouncementsOrchestration && root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech();
             if (root.VoyagrLaneGuidanceOrchestration && root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute) root.VoyagrLaneGuidanceOrchestration.resetLaneGuidanceForNewRoute();
@@ -802,7 +811,7 @@
         if (rt().g('routeInProgress') && roadMatch && root.VoyagrRoadMatching.shouldPauseNavigation(roadMatch)) {
             var knownDeviation=root.VoyagrRoadMatching.supportsDeviation(roadMatch,Date.now());
             navigationPositionEvidence={state:knownDeviation?'OFF_ROUTE':'UNKNOWN',reason:roadMatch.reason,road_match:roadMatch};
-            pauseUncertainNavigation();
+            pauseUncertainNavigation(knownDeviation);
             rt().call.showStatus(knownDeviation?'Off route — checking a safe reroute':'Road association uncertain — navigation progress paused','warning');
             if(knownDeviation)checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
             return;
@@ -814,7 +823,7 @@
             navigationPositionEvidence=evidence;
             if (evidence.state==='RELIABLE' || evidence.state==='REACQUIRING') navigationAnchor=evidence;
             if (evidence.state!=='RELIABLE') {
-                pauseUncertainNavigation();
+                pauseUncertainNavigation(evidence.state==='OFF_ROUTE');
                 rt().call.showStatus(evidence.state==='OFF_ROUTE' ? 'Off route — checking a safe reroute' : 'GPS uncertain — navigation progress paused','warning');
                 if (root.VoyagrSpeedWidgetOrchestration && root.VoyagrSpeedWidgetOrchestration.updateSpeedWidget && Number.isFinite(position.coords.speed)) root.VoyagrSpeedWidgetOrchestration.updateSpeedWidget(position.coords.speed*2.236936,null);
                 if (evidence.state==='OFF_ROUTE') checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
@@ -870,6 +879,7 @@
             return false;
         }
 
+        resetDeviationConfirmation();
         clearGpsEnsureRetryTimer();
         clearGpsWatchHandle();
         setGpsTrackingStoppedByUser(false);
@@ -891,6 +901,7 @@
                     rt().call.showStatus('GPS unreliable — showing last reliable position', 'warning');
                     return;
                 }
+                if(getLastGpsFixAtMs()>0&&Date.now()-getLastGpsFixAtMs()>15000)resetDeviationConfirmation();
                 lastAcceptedOriginFix = {lat:position.coords.latitude,lon:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:fix.timestamp};
                 setLastGpsFixAtMs(fix.timestamp);
                 applyGpsTrackingTick(position);
