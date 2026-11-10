@@ -15,6 +15,7 @@
     /** True after stopGPSTracking(); cleared when a watch is started again. */
     var gpsTrackingStoppedByUser = false;
     var activeRerouteTicket = null;
+    var offlineRerouteWait = null;
     var navigationPositionEvidence=null;
     var navigationAnchor=null;
     var uncertaintySpeechCleared=false;
@@ -905,6 +906,7 @@
                 lastAcceptedOriginFix = {lat:position.coords.latitude,lon:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:fix.timestamp};
                 setLastGpsFixAtMs(fix.timestamp);
                 applyGpsTrackingTick(position);
+                resumeOfflineReroute();
             },
             (error) => {
                 if(root.VoyagrRoadMatchOrchestration)root.VoyagrRoadMatchOrchestration.invalidate('GPS unavailable');
@@ -1203,6 +1205,7 @@
     }
 
     function initializeGpsModuleState() {
+        clearRerouteFailureRetries();
         rt().s('lastSnappedRouteIndex', 0);
         rt().s('lastTurnDetectRouteVertexIndex', 0);
         setSmoothDisplayLat(null);
@@ -1399,7 +1402,77 @@
     const REROUTE_DEBOUNCE_MS = 30000;
     let lastRerouteAnnouncementTime = 0;
 
+    function clearOfflineRerouteWait() {
+        offlineRerouteWait = null;
+        if (typeof root.removeEventListener === 'function') root.removeEventListener('online', resumeOfflineReroute);
+    }
+
+    function waitForRerouteConnectivity() {
+        if (!rt().g('routeInProgress') || !rt().call.getAutoRerouteOnDeviationEnabled()) {
+            clearRerouteFailureRetries();
+            return;
+        }
+        if (rt().g('rerouteFailureRetryTimer')) {
+            clearTimeout(rt().g('rerouteFailureRetryTimer'));
+            rt().s('rerouteFailureRetryTimer', null);
+        }
+        if (offlineRerouteWait) return;
+        const integrity = root.VoyagrAvoidanceIntegrity;
+        const modes = root.VoyagrJourneyModes;
+        offlineRerouteWait = {
+            route: window.lastCalculatedRoute,
+            destination: rt().call.resolveNavigationDestination(),
+            preferences: integrity ? integrity.snapshot(localStorage) : null,
+            intent: modes && modes.captureIntent ? modes.captureIntent() : null,
+        };
+        if (typeof root.addEventListener === 'function') root.addEventListener('online', resumeOfflineReroute);
+        rt().call.showStatus('Offline — rerouting will resume when connected. Current route retained.', 'warning');
+    }
+
+    function resumeOfflineReroute() {
+        const pending = offlineRerouteWait;
+        if (!pending) return;
+        const integrity = root.VoyagrAvoidanceIntegrity;
+        const modes = root.VoyagrJourneyModes;
+        if (!rt().g('routeInProgress') || !rt().call.getAutoRerouteOnDeviationEnabled() ||
+            pending.route !== window.lastCalculatedRoute ||
+            pending.destination !== rt().call.resolveNavigationDestination() ||
+            (pending.preferences !== null && (!integrity || pending.preferences !== integrity.snapshot(localStorage))) ||
+            (pending.intent !== null && (!modes || !modes.intentCurrent(pending.intent)))) {
+            clearRerouteFailureRetries();
+            return;
+        }
+        if (!navigator.onLine || rt().g('rerouteInProgress') ||
+            Date.now() < rt().g('postRerouteGraceUntil')) return;
+        // Connectivity is not position evidence. Use the next accepted off-route
+        // fix after stale/uncertain GPS, never the coordinates saved before outage.
+        if (navigationPositionEvidence && navigationPositionEvidence.state === 'RELIABLE') {
+            clearRerouteFailureRetries();
+            return;
+        }
+        const fix = lastAcceptedOriginFix;
+        const RD = rdModule();
+        if (!fix || Date.now() - fix.timestamp > 15000 || Date.now() < fix.timestamp ||
+            !Number.isFinite(fix.accuracy) || !RD.isTrustworthyAccuracy(fix.accuracy) ||
+            !navigationPositionEvidence || navigationPositionEvidence.state !== 'OFF_ROUTE') return;
+        const inputs = RD.buildRouteDeviationTickInputsPlan({
+            lat: fix.lat, lon: fix.lon, routePolyline: rt().g('routePolyline'),
+            lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
+            snapFn: (a,b,c) => rgModule().snapToRoutePolylineForDeviation(a,b,c),
+            remainingFn: getNavigationRemainingDistanceMeters,
+        });
+        if (inputs.action !== 'ready') return;
+        if (inputs.remainingToDest <= RD.DEFAULTS.NAV_ARRIVAL_SUPPRESS_REROUTE_METERS ||
+            inputs.minDistance <= RD.effectiveDeviationThreshold(fix.accuracy)) {
+            clearRerouteFailureRetries();
+            return;
+        }
+        clearOfflineRerouteWait();
+        void triggerAutomaticRerouteWithHazardHandling(fix.lat, fix.lon);
+    }
+
     function clearRerouteFailureRetries() {
+        clearOfflineRerouteWait();
         if (rt().g('rerouteFailureRetryTimer')) {
             clearTimeout(rt().g('rerouteFailureRetryTimer'));
             rt().s('rerouteFailureRetryTimer',  null);
@@ -1408,6 +1481,10 @@
     }
 
     function scheduleAutomaticRerouteRetry() {
+        if (!navigator.onLine) {
+            waitForRerouteConnectivity();
+            return;
+        }
         const RD = rdModule();
         const plan = RD.buildRerouteFailureRetryPlan({
             routeInProgress: rt().g('routeInProgress'),
@@ -1485,6 +1562,10 @@
      * Respects auto-reroute toggle setting
      */
     function checkRouteDeviation(lat, lon, accuracy) {
+        if (offlineRerouteWait) {
+            resumeOfflineReroute();
+            return;
+        }
         const VRD = rdModule();
         const inputs = VRD.buildRouteDeviationTickInputsPlan({
             lat,
@@ -1622,6 +1703,7 @@
             return;
         }
 
+        clearOfflineRerouteWait();
         rt().s('rerouteInProgress',  triggerExecute.rerouteInProgress);
         const integrity = root.VoyagrAvoidanceIntegrity;
         const requestTicket = integrity ? integrity.begin(localStorage) : null;
@@ -1975,6 +2057,7 @@
 
 
     function bind(nextRuntime) {
+        clearOfflineRerouteWait();
         runtime = nextRuntime;
     }
 

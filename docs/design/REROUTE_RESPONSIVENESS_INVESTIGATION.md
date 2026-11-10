@@ -154,3 +154,39 @@ crossed, not provider response or guidance-start guarantees.
 Validation: test lint, 3,353 frontend tests, declared web backend selection
 (2,244 passed, 74 subtests passed, one skipped), 11 isolated SQL checks and replay.
 No production deployment. Real-device acceptance is still pending.
+
+
+## Resolution: offline failure recovery — 10 November 2026
+
+Investigation found the offline guard entered the same failure scheduler as a
+failed request. Each deferred invocation consumed another retry despite issuing
+no fetch, eventually showing an exhausted-retries error. Reconnection only
+recovered map/connectivity UI; it did not resume that deferred reroute directly.
+
+The GPS owner now holds one deferred context instead of scheduling repeated
+requests while offline. It retains the current route, instructions and mounted
+layer, registers one reconnect listener, and uses accepted GPS ticks as a fallback
+when the reconnect event is absent. Offline waiting does not advance the retry
+count. If a previously reserved online retry discovers offline status, its existing
+count is retained rather than repeatedly incremented. Existing online failure
+retry delays remain 4/6.5/10/14 seconds with the shared 35-second request timeout.
+
+Recovery checks active navigation, automatic rerouting, route/destination identity,
+avoidance preferences, journey intent, in-progress/grace guards, accepted-fix
+freshness/accuracy and current off-route evidence/distance. Unknown or stale GPS
+waits for an accepted fix; reconnect itself supplies no position evidence. Returning
+to route or reaching the arrival suppression zone cancels recovery. A fetch still
+uses the original integrity and map gates, including origin freshness/binding.
+Success or explicit retry cleanup removes the listener and pending context.
+
+Regression coverage uses the production GPS watcher, request/integrity pipeline,
+map replacement and lifecycle owner with synthetic device/network boundaries.
+It verifies no offline fetch/budget drain, one reconnect fetch, current origin,
+stale/uncertain GPS recovery, context cancellation, old-route retention, retry
+exhaustion and timeout recovery. The reconnect regression fails on the prior code.
+Validation: 3,371 frontend tests with lint/coverage; declared web backend selection
+2,244 passed plus 74 subtests and one skipped; 11 isolated SQL checks; diagnostic.
+
+No deployment. Live network/GPS acceptance remains pending. Browser online status
+is advisory, so online-but-unreachable servers continue using bounded retries;
+normal confirmed GPS deviations can initiate another attempt after that burst.
