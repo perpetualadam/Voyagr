@@ -45,3 +45,33 @@ test('the map owner independently refuses a preference change after candidate fi
  const before=ctx.snapshot();gpsRuntime.call.updateRouteOnMap=r=>{localStorage.setItem('pref_cameras','false');return Reroute.updateRouteOnMap(r);};
  await reroute([refused(),candidate('gh')]);expect(ctx.snapshot()).toBe(before);expect(window.lastCalculatedRoute).toBe(old);expect(Life.getRouteInProgress()).toBe(true);
 });
+
+test('same-intent GraphHopper label variant wins over an exact-name alternative engine',async()=>{
+ await reroute([candidate('vh','Valhalla','Optimised'),candidate('gh','GraphHopper','⚡ Optimised')]);
+ expect(window.lastCalculatedRoute.id).toBe('gh');expect(Life.getCurrentRouteSteps()).toEqual(window.lastCalculatedRoute.maneuvers);
+});
+test('a different-intent GraphHopper option permits a brief fallback notice only after the real replacement',async()=>{
+ const notices=[];gpsRuntime.call.sendNotification=(_title,body)=>notices.push({body,source:window.lastCalculatedRoute.source});
+ await reroute([candidate('vh','Valhalla','Optimised'),candidate('gh','GraphHopper','Scenic')]);
+ expect(window.lastCalculatedRoute.id).toBe('vh');expect(notices).toEqual([{body:'Using Valhalla for this route.',source:'Valhalla'}]);
+});
+test('map replacement refusal cannot announce an engine switch',async()=>{
+ const notices=[];gpsRuntime.call.sendNotification=(_title,body)=>notices.push(body);
+ gpsRuntime.call.updateRouteOnMap=r=>{localStorage.setItem('pref_cameras','false');return Reroute.updateRouteOnMap(r);};
+ const before=ctx.snapshot();await reroute([candidate('vh','Valhalla','Optimised')]);
+ expect(ctx.snapshot()).toBe(before);expect(notices).toEqual([]);expect(window.lastCalculatedRoute.source).toBe('GraphHopper');
+});
+test('an unresolved preference on a renamed GraphHopper option does not override the selected type on a compatible alternative',async()=>{
+ const gh=candidate('gh','GraphHopper','⚡ Optimised');gh.avoidance_assessment.requirements.push({category:'motorways',enabled:true,mode:'preference',status:'UNVERIFIED'});
+ await reroute([candidate('vh','Valhalla','Optimised'),gh]);expect(window.lastCalculatedRoute.id).toBe('vh');
+});
+
+test('an exact-name GraphHopper route with unresolved preferences yields to a compatible same-type alternative',async()=>{
+ const gh=candidate('gh');gh.avoidance_assessment.requirements.push({category:'motorways',enabled:true,mode:'preference',status:'UNVERIFIED'});
+ await reroute([gh,candidate('vh','Valhalla','Optimised')]);expect(window.lastCalculatedRoute.id).toBe('vh');
+});
+test('existing permitted best effort keeps exact-name engine continuity when no matching option establishes preferences',async()=>{
+ const gh=candidate('gh'),vh=candidate('vh','Valhalla','Optimised');
+ for(const route of [gh,vh])route.avoidance_assessment.requirements.push({category:'motorways',enabled:true,mode:'preference',status:'UNVERIFIED'});
+ await reroute([vh,gh]);expect(window.lastCalculatedRoute.id).toBe('gh');
+});

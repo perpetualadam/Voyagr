@@ -717,6 +717,26 @@
         return prev === candidate || candidate.indexOf(prev) >= 0 || prev.indexOf(candidate) >= 0;
     }
 
+    // Display labels are the current route-type contract. Recognize only known
+    // types; an unknown label is not permission to infer a different intent.
+    function routeIntentKey(name) {
+        var label=String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+        if(/^optimi[sz]ed\b/.test(label))return 'optimised';
+        var match=label.match(/^(fastest|shortest|scenic|quiet)\b/);
+        return match?match[1]:null;
+    }
+    function satisfiesRoutePreferences(route) {
+        var rows=route&&route.avoidance_assessment&&route.avoidance_assessment.requirements;
+        return Array.isArray(rows)&&rows.every(function(row){return row&&(!row.enabled||row.mode!=='preference'||row.status==='SATISFIED');});
+    }
+    function routeEngineLabel(source) {
+        var key=normalizeRouteSourceKey(source);
+        if(key.indexOf('graphhopper')>=0)return 'GraphHopper';
+        if(key.indexOf('valhalla')>=0)return 'Valhalla';
+        if(key.indexOf('osrm')>=0)return 'OSRM';
+        return 'another routing engine';
+    }
+
     /**
      * Pick a route from a multi-route reroute response (name + engine source aware).
      * @param {Array<Object>} routes
@@ -737,9 +757,35 @@
             for (var i = 0; i < routes.length; i++) {
                 var exact = routes[i];
                 if ((exact.name || '').toLowerCase() === prevName
-                    && routeSourcesMatch(prevSource, exact.source)) {
+                    && routeSourcesMatch(prevSource, exact.source)
+                    && (!exact.avoidance_assessment||!Array.isArray(exact.avoidance_assessment.requirements)||satisfiesRoutePreferences(exact))) {
                     return exact;
                 }
+            }
+        }
+
+        // Extend exact name+engine matching conservatively: keep engine family
+        // across known label variants only when the route type and preferences fit.
+        var intent=routeIntentKey(prevName);
+        if(prevSource&&intent){
+            for(var k=0;k<routes.length;k++){
+                var sameEngine=routes[k];
+                if(routeSourcesMatch(prevSource,sameEngine.source)&&routeIntentKey(sameEngine.name)===intent&&satisfiesRoutePreferences(sameEngine))return sameEngine;
+            }
+        }
+
+        // Prefer established preferences for the selected type before falling
+        // back to the application's already-permitted best-effort candidates.
+        if(prevName){
+            for(var n=0;n<routes.length;n++){
+                var compatible=routes[n];
+                if(((compatible.name||'').toLowerCase()===prevName||intent&&routeIntentKey(compatible.name)===intent)&&satisfiesRoutePreferences(compatible))return compatible;
+            }
+        }
+        if(prevName&&prevSource){
+            for(var m=0;m<routes.length;m++){
+                var bestEffort=routes[m];
+                if((bestEffort.name||'').toLowerCase()===prevName&&routeSourcesMatch(prevSource,bestEffort.source))return bestEffort;
             }
         }
 
@@ -788,6 +834,11 @@
                 ),
                 announceAt: announceNow,
             };
+            var notification=buildRerouteSuccessNotificationPlan(newRoute,hazardCount,displayDist,distUnit);
+            if(opts.previousRouteSource&&newRoute.source&&!routeSourcesMatch(opts.previousRouteSource,newRoute.source)){
+                // Sent by the existing success path only after map replacement.
+                notification.body='Using '+routeEngineLabel(newRoute.source)+' for this route.'+(hazardCount>0?' '+notification.body:'');
+            }
             return {
                 ok: true,
                 newRoute: newRoute,
@@ -799,12 +850,7 @@
                 clearFailureRetries: true,
                 showUnavoidableHazards: hazardCount > 0,
                 voice: voice,
-                notification: buildRerouteSuccessNotificationPlan(
-                    newRoute,
-                    hazardCount,
-                    displayDist,
-                    distUnit
-                ),
+                notification: notification,
                 successLog: '[Rerouting] New route calculated: ' + newRoute.distance_km +
                     'km, ' + newRoute.duration_minutes + 'min',
                 completeLog: '[Rerouting] Automatic reroute completed successfully',
