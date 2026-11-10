@@ -1110,7 +1110,7 @@
             || (lastAcceptedAt > 0 && at <= lastAcceptedAt)) {
             return { accepted: false, reason: 'stale_fix' };
         }
-        if (!Number.isFinite(c.accuracy) || c.accuracy < 0 || c.accuracy > 150) {
+        if (!Number.isFinite(c.accuracy) || c.accuracy < 0) {
             return { accepted: false, reason: 'poor_accuracy' };
         }
         return { accepted: true, timestamp: at };

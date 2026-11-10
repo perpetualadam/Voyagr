@@ -150,7 +150,7 @@ test.each([AI,undefined,{}, {gate:()=>{throw new Error('unavailable');}}])('save
     expect(document.getElementById('end').value).toBe('SAVED');
     expect(document.getElementById('start').value).toBe('53,-1');
     expect(display).toHaveBeenCalledTimes(1);expect(switchTab).toHaveBeenCalledWith('routePreview');
-    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('navigation cannot start');
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Start follows its selected geometry');
     expect(showStatus).toHaveBeenLastCalledWith(expect.stringContaining('preview only'),'warning');
     bind(options);refused(restored);
 });

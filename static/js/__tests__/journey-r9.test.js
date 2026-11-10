@@ -126,10 +126,10 @@ test('plain planning abandonment is a no-op without confirmation, cancellation, 
  expect(await Off.loadJourneyState(idb)).toEqual({route:null,ownership:null});
  // Still performs fresh location acquisition. A poor fix remains refused by
  // the existing safety gate, rather than the spurious storage-recovery flag.
- navigator.geolocation.getCurrentPosition.mockImplementation(ok=>ok({...gps(),coords:{...gps().coords,accuracy:100}}));
+ navigator.geolocation.getCurrentPosition.mockImplementation(ok=>ok({...gps(),coords:{...gps().coords,accuracy:NaN}}));
  expect(await Modes.navigateFromGPS()).toBe(false);
  expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
- expect(document.getElementById('journeyModeStatus').textContent).toMatch(/GPS accuracy is insufficient/);
+ expect(document.getElementById('journeyModeStatus').textContent).toMatch(/GPS accuracy metadata is invalid/);
  expect(rt.fetch).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
 });
 test('a plan without local ownership cannot retire an unobserved journey stored by another session',async()=>{

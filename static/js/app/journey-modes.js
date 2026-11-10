@@ -1,7 +1,7 @@
 /** Separate inspection clock and fresh-GPS workflow. Live permission stays in the lifecycle. */
 (function(root){
     'use strict';
-    var runtime=null,state='PLANNING',epoch=0,ticket=null,pendingCandidate=null,pendingReplacement=null,retainedIntent=null,retiredIdentity=null,retiredJourneyId=null,durableRecovery=false;
+    var runtime=null,state='PLANNING',epoch=0,ticket=null,pendingCandidate=null,pendingReplacement=null,pendingManualGuidance=false,retainedIntent=null,retiredIdentity=null,retiredJourneyId=null,durableRecovery=false;
     var intentCancellations=[],planningCommit=null,abandonCommit=null;
     // Capability compatibility is a refusal condition, never navigation permission.
     function endpointIntentCompatible(){
@@ -77,19 +77,19 @@
             entryActive=true;entryIdentity=key(route);entryControls();
             if(rt().showNavigationMap)rt().showNavigationMap();
             var chooser=document.getElementById('journeyModeChooser');if(chooser)chooser.hidden=true;
-            status('Finding your location…','info');
+            status('Starting navigation…','info');
             var owner={promise:null};entryOwner=owner;entryControls();
-            // Queue work after the immediate map/UI update, without granting live
-            // permission from this presentation state or from a cached plan alone.
+            // Queue the owned lifecycle start after the immediate map/UI update.
+            // Route limitations are advisory for this explicit user action.
             owner.promise=Promise.resolve().then(function(){
                 if(!entryActive||entryOwner!==owner||entryIdentity!==key(rt().selected()))return false;
-                var useHere=false;
-                try{var fix=realFix(),o=route.avoidance_assessment.origin_integrity;
-                    useHere=!!fix&&plan().distance([fix.lat,fix.lon],o.requested_origin)<=2&&
-                        !getContinuation(route)&&integrity().gate(route,{storage:localStorage,offline:navigator.onLine===false,quiet:true});
-                    if(fix)entryPosition(fix);
-                }catch(_){}
-                return useHere?startHere():navigateFromGPS();
+                // Explicit Start follows the selected geometry immediately. GPS
+                // and enrichment run through the normal live watcher in background.
+                if(getContinuation(route))return navigateFromGPS();
+                var candidate=integrity().prepareGuidanceCandidate(route);
+                if(!candidate)throw Error('Route geometry or directions are unavailable. Calculate a route first.');
+                cancel();if(!cleanSimulation())return false;stopLive();
+                return authorize(candidate,epoch,null,true);
             }).then(function(ok){if(entryOwner===owner&&ok===true)clearEntry();return ok;}).catch(function(error){if(entryOwner===owner)status(error.message||'Navigation could not start. Retry.','warning');return false;}).finally(function(){if(entryOwner===owner){entryOwner=null;entryControls();}});
             return owner.promise;
         }catch(error){status(error.message,'warning');return Promise.resolve(false);}
@@ -168,7 +168,7 @@
         cancelled.forEach(function(entry){try{entry.callback();}catch(_){/* Owned cancellation cannot block invalidation. */}});
         var updater=root.VoyagrRerouteMapOrchestration;
         if(state==='AUTHORIZING'&&!(updater&&updater.isCommittingVerifiedTransition&&updater.isCommittingVerifiedTransition())&&runtime&&(!pendingReplacement||key(rt().selected())!==pendingReplacement.identity))runtime.stopLive(abandonCommit?{preservePersistedJourney:true}:undefined);
-        pendingCandidate=null;pendingReplacement=null;
+        pendingCandidate=null;pendingReplacement=null;pendingManualGuidance=false;
         if(!keepEndpointLeases&&root.VoyagrLocationOrchestration&&root.VoyagrLocationOrchestration.invalidateEndpointRequests)root.VoyagrLocationOrchestration.invalidateEndpointRequests(undefined,{endpointOnly:true});
         if(ticket){if(integrity().isLatest(ticket))integrity().invalidate();integrity().finish(ticket);ticket=null;}
     }
@@ -269,7 +269,7 @@
     function fresh(position){
         var c=position&&position.coords,at=position&&position.timestamp;
         if(!c||!plan().coordinate([c.latitude,c.longitude])||!Number.isFinite(at)||Date.now()-at>15000||at-Date.now()>1000)throw Error('GPS location is stale or unavailable. Retry from your actual location.');
-        if(!Number.isFinite(c.accuracy)||c.accuracy<=0||c.accuracy>30)throw Error('GPS accuracy is insufficient (30 m or better required). Move to a clearer location and retry.');
+        if(!Number.isFinite(c.accuracy)||c.accuracy<0)throw Error('GPS accuracy metadata is invalid. Waiting for a current location.');
         return {lat:c.latitude,lon:c.longitude,accuracy:c.accuracy,timestamp:at};
     }
     function locate(){
@@ -301,7 +301,7 @@
                 if(watching)return;
                 if(typeof geo.watchPosition!=='function'||typeof geo.clearWatch!=='function'){done(lastError);return;}
                 improving=true;
-                status('Improving GPS accuracy… A fresh location within 30 m is required.','loading');
+                status('Waiting for a current GPS location…','loading');
                 try{
                     watchId=geo.watchPosition(function(next){observed(next,true);},failed,options);
                     // A test/device adapter may deliver a callback before returning its id.
@@ -315,23 +315,27 @@
     function realFix(){var fix=runtime&&runtime.getFix();return fix&&fresh({timestamp:fix.timestamp,coords:{latitude:fix.lat,longitude:fix.lon,accuracy:fix.accuracy}});}
     function liveStartPermitted(candidate){
         try{
-            var fix=realFix(),origin=candidate&&candidate.avoidance_assessment&&candidate.avoidance_assessment.origin_integrity;
+            var fix=pendingManualGuidance?null:realFix(),origin=candidate&&candidate.avoidance_assessment&&candidate.avoidance_assessment.origin_integrity;
             var replacementCurrent=!pendingReplacement||(rt().isLive()&&key(rt().selected())===pendingReplacement.identity&&JSON.stringify(plan().liveIntent(rt().selected(),true,rt().progressIndex()).stops)===JSON.stringify(pendingReplacement.intent.stops));
-            return replacementCurrent&&(!ticket||integrity().current(ticket,localStorage))&&state==='AUTHORIZING'&&pendingCandidate===candidate&&!line&&!simulation&&!!fix&&!!origin&&plan().coordinate(origin.requested_origin)!==null&&plan().distance([fix.lat,fix.lon],origin.requested_origin)<=2;
+            return replacementCurrent&&(!ticket||integrity().current(ticket,localStorage))&&state==='AUTHORIZING'&&pendingCandidate===candidate&&!line&&!simulation&&(pendingManualGuidance||!!fix&&!!origin&&plan().coordinate(origin.requested_origin)!==null&&plan().distance([fix.lat,fix.lon],origin.requested_origin)<=2);
         }catch(_){return false;}
     }
-    async function authorize(candidate,token,replacement){
+    async function authorize(candidate,token,replacement,manualGuidance){
         var previous={options:rt().options(),index:rt().index()},staged=[candidate];
-        pendingCandidate=candidate;pendingReplacement=replacement||null;setState('AUTHORIZING');status('Verifying live navigation and map resources…','loading');
+        pendingCandidate=candidate;pendingReplacement=replacement||null;pendingManualGuidance=manualGuidance===true;setState('AUTHORIZING');status('Starting navigation…','loading');
         if(!replacement){rt().setOptions(staged);rt().setIndex(0);}
         try{
             if(!intentCurrent(token)||!root.VoyagrNavigationLifecycleOrchestration||root.VoyagrNavigationLifecycleOrchestration.INTENT_OWNERSHIP_PROTOCOL!==1||root.VoyagrNavigationLifecycleOrchestration.ENDPOINT_INTENT_PROTOCOL!==1||root.VoyagrNavigationLifecycleOrchestration.DURABLE_OWNERSHIP_PROTOCOL!==1||!root.VoyagrRerouteMapOrchestration||root.VoyagrRerouteMapOrchestration.INTENT_OWNERSHIP_PROTOCOL!==1||root.VoyagrRerouteMapOrchestration.ENDPOINT_INTENT_PROTOCOL!==1||root.VoyagrRerouteMapOrchestration.DURABLE_OWNERSHIP_PROTOCOL!==1)throw Error('Navigation intent modules differ. Reload online; current journey retained.');
             if(replacement&&(!root.VoyagrNavigationLifecycleOrchestration||root.VoyagrNavigationLifecycleOrchestration.JOURNEY_REPLACEMENT_PROTOCOL!==1||rt().replacementProtocol!==1))throw Error('Journey replacement modules differ. Reload online; current navigation is retained.');
             var ok=await rt().startLive(candidate,replacement?{gpsReplacement:true}:undefined);
             if(ok!==true||token!==epoch)throw Error('Live navigation was refused or cancelled. Inspect the safety explanation and recalculate.');
-            bindCommittedJourneyId();retainedIntent=null;setState('LIVE');status('Live GPS navigation started.','success');return true;
+            bindCommittedJourneyId();
+            // Ownership metadata is attached after lifecycle commit. Refresh the
+            // immutable redraw record before releasing this explicit-start owner.
+            if(pendingManualGuidance&&root.VoyagrRerouteMapOrchestration.authoriseCurrentRouteRedraw)root.VoyagrRerouteMapOrchestration.authoriseCurrentRouteRedraw();
+            retainedIntent=null;setState('LIVE');status('Live GPS navigation started.','success');return true;
         }finally{
-            if(pendingCandidate===candidate){pendingCandidate=null;pendingReplacement=null;}
+            if(pendingCandidate===candidate){pendingCandidate=null;pendingReplacement=null;pendingManualGuidance=false;}
             if(!rt().isLive()&&rt().options()===staged){rt().setOptions(previous.options);rt().setIndex(previous.index);}
         }
     }
@@ -603,7 +607,7 @@
         endpointIntentCompatible:endpointIntentCompatible,isJourneyCommitPending:commitPending,isAbandoning:function(){return !!abandonCommit;},commitPlanning:commitPlanning,getContinuation:getContinuation,abandonJourney:abandonJourney,isPlanningCommit:function(){return !!planningCommit;},isPublishingPlanningPlan:function(){return publishingPlan;},
         captureIntent:captureIntent,intentCurrent:intentCurrent,onIntentCancelled:onIntentCancelled,endpointChanged:endpointChanged,
         startNavigation:startNavigation,choose:choose,onPreview:onPreview,startSimulation:startSimulation,pause:pause,resume:resume,restart:restart,setSpeed:setSpeed,setFollow:setFollow,seek:seek,exit:exit,
-        navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,beforePlanning:beforePlanning,retainLiveJourney:retainLiveJourney,liveStopped:liveStopped,addGpsStop:addGpsStop};
+        navigateFromGPS:navigateFromGPS,startHere:startHere,liveStartPermitted:liveStartPermitted,userGuidanceStartPermitted:function(candidate){return pendingManualGuidance&&!!pendingCandidate&&key(candidate)===key(pendingCandidate)&&liveStartPermitted(pendingCandidate);},beforePlanning:beforePlanning,retainLiveJourney:retainLiveJourney,liveStopped:liveStopped,addGpsStop:addGpsStop};
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',function(){if(document.hidden&&simulating())pause();});
     if(typeof module!=='undefined'&&module.exports)module.exports=api;root.VoyagrJourneyModes=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

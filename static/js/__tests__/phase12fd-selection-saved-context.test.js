@@ -199,5 +199,5 @@ test('saved inspection also discards the unrelated API envelope used by preview 
     localStorage.setItem('savedRoutes', JSON.stringify([{id: 'B', end: 'DEST_B', geometry: route('B').geometry}]));
     expect(Saving.useSavedRoute('B')).toBe(true);
     expect(window.lastRouteApiResponse).toBeNull();
-    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('navigation cannot start');
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Start follows its selected geometry');
 });
