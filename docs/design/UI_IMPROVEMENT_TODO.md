@@ -1313,3 +1313,24 @@ latency. Real-device acceptance remains pending.
 
 Validation: test lint; 3,353 frontend tests; declared web backend selection 2,244
 passed, 74 subtests passed, one skipped; 11 isolated SQL checks; diagnostic replay.
+
+
+### Reroute failure recovery — 10 November 2026
+
+- [x] Verify route/layer/instruction retention on network failure and timeout.
+- [x] Suspend offline reroutes without draining the timed failure-retry budget or
+  reporting exhausted network requests that were never sent.
+- [x] Resume the deferred attempt once on reconnect or a subsequent accepted GPS
+  fix, using a fresh trusted off-route position. Retain request/map safety gates.
+- [x] Cancel deferred recovery for changed route/destination/preferences/intent,
+  navigation end, disabled automatic rerouting, cleared retries or return to route.
+- [x] Verify the existing four-delay online retry burst and 35-second timeout.
+- [ ] Real-device network outage/reconnect and GPS recovery acceptance.
+
+Eighteen production watcher/request/map-owner regressions were added, including a
+reconnect case that fails on the previous code. Validation: lint and 3,371 frontend
+tests; declared backend selection 2,244 tests and 74 subtests passed, one skipped;
+11 isolated SQL checks; responsiveness diagnostic. No deployment or production
+configuration/data changes. Browser online status is advisory: a server outage
+while reported online still uses the existing bounded timed retry burst; subsequent
+confirmed GPS deviations can start a later attempt.
