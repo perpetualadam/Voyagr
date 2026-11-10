@@ -1,0 +1,119 @@
+# Reroute responsiveness investigation
+
+10 November 2026; main `587c4255`. Investigation only: no runtime tuning or fixes.
+The findings concern Voyagr's shared GPS pipeline, including GraphHopper and
+Valhalla, rather than establishing engine/provider latency on either VPS.
+
+## Reproduced timing
+
+Run `node scripts/diagnose-reroute-responsiveness.cjs`. The script calls production
+decision/apply/trigger/retry plans using synthetic clock and GPS inputs. It makes
+no network requests, starts no real GPS watch and writes no journey data.
+
+Timing starts when the simulated position is already beyond the off-route distance
+threshold. It excludes travel to that threshold, prior road association, routing
+network/server time and final route validation/replacement.
+
+| Scenario | Observed result |
+| --- | --- |
+| Persistent deviation, good 5 m accuracy, joined route, 1-second updates | First request trigger after 12 seconds |
+| Same deviation with updates every 5 seconds | First trigger after 20 seconds |
+| Continuous deviation immediately after a successful reroute, 1-second updates | First trigger after 96 seconds |
+| Three off-route readings, then a long untrusted-accuracy interval | Old streak/timer survive; first restored accurate reading triggers |
+| Failure retry at 4 / 6.5 / 10 / 14 seconds | Each trigger is allowed to fetch despite the 30-second deviation debounce |
+| Shared fetch-options timer | Configured for 35,000 ms; accelerated timer emits AbortSignal cancellation |
+
+The timeout probe accelerates only that scheduler call and restores the native
+scheduler immediately. It verifies the configured value and emitted signal; it is
+not a measured 35-second network request or proof of end-to-end transport cleanup.
+
+## Deliberate delays and limits
+
+Sources: `static/js/modules/navigation/reroute-decision.js` (DEFAULTS,
+`decideRouteDeviation`, `buildRouteDeviationTickPlan`, `shouldSkipRerouteTrigger`,
+`buildRerouteFailureRetryPlan`, `buildRouteMapUpdateStatePlan`), and
+`static/js/app/gps-orchestration.js` (GPS watch, deviation and retry orchestration).
+
+- The base deviation threshold is 50 m, widened by half the reported GPS accuracy,
+  capped at 40 m extra. Examples for trusted fixes: 52.5 m at 5 m accuracy, 60 m at
+  20 m accuracy and 82.5 m at the 65 m trust boundary. The theoretical 90 m cap is
+  not reached while accuracy remains within the current 65 m deviation trust gate.
+- Three consecutive off-route readings are required before a 10-second dwell
+  begins. Update cadence therefore affects elapsed time; it is not simply a
+  universal ten-second wait from the wrong turn.
+- New GPS-driven deviation attempts are debounced for more than 30 seconds since
+  the last attempt/success. This guard is intentionally absent from the direct
+  fetch trigger so scheduled failure retries can run sooner.
+- Successful route replacement applies 90 seconds of post-reroute grace. During
+  that period, confirmed deviations are suppressed. The decision's reset streak/
+  timer is applied even when grace suppresses its request. In the one-Hz replay,
+  suppression occurs at seconds 31, 44, 57, 70 and 83; the next trigger is at 96.
+  A genuine second wrong turn can therefore face a substantial delay.
+- Arrival suppresses deviation rerouting within 100 m remaining. Initial joining
+  has an 85 m gate, while active replacements can seed an already-joined state.
+  These are separate from route-origin validation and engine response speed.
+- Road association and navigation position evidence run before this decision
+  helper. Unknown association can pause progress and skip deviation checks entirely.
+  The replay does not pretend those preceding checks are always satisfied.
+
+## Evidence-continuity issue — address before speeding up dwell
+
+`decideRouteDeviation` returns its existing streak and start timestamp for an
+untrusted-accuracy result. The surrounding apply plans preserve those values.
+The GPS pipeline also returns early for unknown road/position evidence, and
+`pauseUncertainNavigation` clears speech/lane/arrival state rather than deviation
+history. Thus uncertainty is not consistently a fresh start for the continuous
+wrong-turn confirmation window.
+
+The probe demonstrates three readings at seconds 0, 1 and 2, an untrusted reading
+at second 20, then a reliable off-route reading at second 21. That last reading can
+request recalculation immediately using the old timer. This is a confirmed helper
+state-continuity issue, not proof of a specific driver's false reroute. A focused
+GPS integration regression should establish the desired reset at each relevant
+unknown/untrusted path before reducing dwell or grace.
+
+The helper also normalizes missing/nonpositive accuracy to zero, which it treats
+as trustworthy. The GPS watch's upstream validator rejects non-finite accuracy
+but permits zero. Treat this as a separate data-quality policy follow-up; no
+real-device zero-accuracy failure was established in this investigation.
+
+## Retries and request timeout
+
+The 4 / 6.5 / 10 / 14-second retries are not swallowed by the 30-second debounce.
+In-progress, active-navigation, auto-reroute and post-grace guards still apply.
+The shared `avoidance-integrity.js:fetchOptions` supplies a 35-second abort timer;
+`finish` clears it. This corrects the earlier investigation's incomplete observation
+that a client deadline was not visible in the automatic handler itself.
+
+With five consecutive requests each reaching 35 seconds and four backoffs totaling
+34.5 seconds, one failure burst could take about 209.5 seconds. This is conditional
+arithmetic, not a VPS measurement or a hard upper bound under browser suspension.
+Servers may answer sooner; a later GPS deviation can start another burst after
+exhaustion. Actual AbortSignal-aware fetch/error/retry integration remains a useful
+follow-up. Cooperative backend budgets are additional constraints, not evidence
+of actual service latency here.
+
+## Recommended increments
+
+1. Reset stale deviation streak/timer on uncertainty or an interrupted evidence
+   episode. Test that reacquisition requires fresh confirmation and that normal
+   continuous off-route detection still works.
+2. Replace blanket 90-second suppression with a policy that permits a newly
+   confirmed genuine deviation while retaining duplicate/in-progress protection.
+   Include first wrong turn, a second wrong turn soon after recalculation, GPS
+   drift, road reacquisition and failed requests in regression replays.
+3. Measure actual accepted GPS cadence and end-to-end route timings on a device
+   before tuning the 50 m threshold or ten-second dwell. Do not lower every guard
+   together or infer safe values from these synthetic traces alone.
+
+Keep selected-route integrity, canonical remaining visits, engine continuity,
+cancellation and final map verification intact. No deployment, live service test,
+production configuration/data change or behavior change is part of this report.
+
+## Baseline validation
+
+The read-only replay completed successfully. Existing suites passed unchanged:
+3,327 JavaScript tests with coverage/lint; the declared web backend selection of
+2,244 tests plus 74 subtests (one skipped); eleven isolated SQL policy tests.
+These passing baselines do not convert the observed behavior into a recommended
+future contract. Focused fix regressions remain part of the queued increments.

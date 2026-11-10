@@ -74,10 +74,10 @@ selection rather than rewriting it based on the intermediate body alone.
 - Network/error retry delays are 4, 6.5, 10 and 14 seconds, with active-journey and
   auto-reroute guards. The first-candidate integrity refusal exits without that
   network-failure retry schedule; a later GPS deviation can trigger another attempt.
-- Browser fetch has cancellation via the integrity request ticket. A separate
-  client wall-clock deadline is not visible in this automatic-reroute handler;
-  server cooperative request budgets exist. A hanging transport scenario has not
-  been reproduced here and is a separate follow-up, not a confirmed outage.
+- Follow-up tracing confirmed `avoidance-integrity.js:fetchOptions` applies a
+  shared 35-second AbortController timer to this handler. Server cooperative
+  request budgets also exist. Actual hanging-transport behavior remains untested.
+  See [responsiveness investigation](REROUTE_RESPONSIVENESS_INVESTIGATION.md).
 
 ## Reproduction and validation
 
