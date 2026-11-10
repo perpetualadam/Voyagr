@@ -135,22 +135,32 @@
         return (typeof step.instruction==='string' && !!step.instruction.trim()) ||
             (state==='silent' && isEdgeMetadataManeuver(step));
     }
+    // Explicit user guidance validates usable geometry/directions without claiming
+    // an assessment passed. Automatic replacement retains the evidence contract.
     function prepareNavigationCandidate(route, diagnostics) {
+        return prepareRouteCandidate(route,diagnostics,false);
+    }
+    function prepareGuidanceCandidate(route) {
+        return prepareRouteCandidate(route,null,true);
+    }
+    function prepareRouteCandidate(route, diagnostics, guidanceOnly) {
         function reject(reason) { if (diagnostics) diagnostics.reason=reason; return null; }
         if (diagnostics) delete diagnostics.reason;
-        if (!route || route.navigation_resume_requires_fresh_gps ||
-            (route.avoidance_assessment && route.avoidance_assessment.resume_state)) return reject('missing_or_restore_only_candidate');
+        if (!route || !guidanceOnly && (route.navigation_resume_requires_fresh_gps ||
+            (route.avoidance_assessment && route.avoidance_assessment.resume_state))) return reject('missing_or_restore_only_candidate');
         var candidate=JSON.parse(JSON.stringify(route));
         if (!((typeof candidate.id==='string' && candidate.id.trim()) || (typeof candidate.id==='number' && Number.isFinite(candidate.id)))) return reject('missing_candidate_identity');
-        var points=boundGeometry(candidate);
+        var points=guidanceOnly ? geometryPoints(candidate) : boundGeometry(candidate);
         var assessment=candidate.avoidance_assessment;
-        if (assessment==null) return reject('missing_assessment');
-        if (assessment.geometry_valid!==true) return reject('invalid_geometry_validity');
-        if (!Number.isFinite(assessment.checked_at)) return reject('invalid_assessment_timestamp');
-        var age=Date.now()/1000-assessment.checked_at;
-        if (!Number.isFinite(age)) return reject('invalid_assessment_timestamp');
-        if (age<0) return reject('future_assessment');
-        if (age>600) return reject('expired_assessment');
+        if (!guidanceOnly) {
+            if (assessment==null) return reject('missing_assessment');
+            if (assessment.geometry_valid!==true) return reject('invalid_geometry_validity');
+            if (!Number.isFinite(assessment.checked_at)) return reject('invalid_assessment_timestamp');
+            var age=Date.now()/1000-assessment.checked_at;
+            if (!Number.isFinite(age)) return reject('invalid_assessment_timestamp');
+            if (age<0) return reject('future_assessment');
+            if (age>600) return reject('expired_assessment');
+        }
         if (!points) return reject('geometry_or_assessment_binding_mismatch');
         var steps=candidate.maneuvers;
         if (!Array.isArray(steps) || !steps.some(function(step) {return step && typeof step.instruction==='string' && !!step.instruction.trim();}) || steps.some(function(step) {
@@ -371,7 +381,7 @@
     }
     function summary(route) { return planningSummary(route)+navigationSummary(route); }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,planningSummary:planningSummary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,planningSummary:planningSummary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,prepareGuidanceCandidate:prepareGuidanceCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

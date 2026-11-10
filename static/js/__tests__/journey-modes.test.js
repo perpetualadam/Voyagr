@@ -206,7 +206,7 @@ test.each([
 });
 test.each([
     ['permission',Object.assign(new Error('denied'),{code:1}),/permission denied/],
-    ['accuracy',position(53,80),/accuracy/],
+    ['invalid accuracy',position(53,-1),/accuracy/],
     ['stale',position(53,5,Date.now()-20000),/stale/],
     ['invalid',position(NaN),/stale/],
 ])('GPS %s refuses visibly and never substitutes planned origin',async(_,p,message)=>{
@@ -421,7 +421,7 @@ test('playback distance uses current units and changing paused labels does not m
     Pref.setDistanceUnitValue('mi');
 });
 
-describe('bounded GPS accuracy improvement',()=>{
+describe('bounded invalid GPS recovery',()=>{
  let observed,failed,priorClearWatch;
  beforeEach(()=>{
   observed=null;failed=null;priorClearWatch=navigator.geolocation.clearWatch;
@@ -429,20 +429,20 @@ describe('bounded GPS accuracy improvement',()=>{
   navigator.geolocation.watchPosition=jest.fn((ok,error)=>{observed=ok;failed=error;return 71;});
  });
  afterEach(()=>{navigator.geolocation.clearWatch=priorClearWatch;});
- test('coarse first fix waits for a fresh accurate reading before routing and clears its own watch',async()=>{
-  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+ test('invalid first fix recovers with a usable coarse reading and clears its own watch',async()=>{
+  locations=[position(NaN)];const pending=Modes.navigateFromGPS();
   expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
   expect(navigator.geolocation.watchPosition).toHaveBeenCalledWith(expect.any(Function),expect.any(Function),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-  observed(position(53,45));expect(runtime.fetch).not.toHaveBeenCalled();
-  observed(position(53,30));expect(await pending).toBe(true);
-  expect(runtime.acceptPosition.mock.calls[0][0].coords.accuracy).toBe(30);
+  observed(position(NaN));expect(runtime.fetch).not.toHaveBeenCalled();
+  observed(position(53,80));expect(await pending).toBe(true);
+  expect(runtime.acceptPosition.mock.calls[0][0].coords.accuracy).toBe(80);
   expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
   expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(Life.getRouteInProgress()).toBe(true);
  });
- test.each(['coarse','stale','invalid'])('%s updates never authorize a route and the original deadline clears the watch',async kind=>{
-  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+ test.each(['invalid-accuracy','stale','invalid'])('%s updates never authorize a route and the original deadline clears the watch',async kind=>{
+  locations=[position(NaN)];const pending=Modes.navigateFromGPS();
   jest.advanceTimersByTime(11000);
-  observed(kind==='stale'?position(53,5,Date.now()-20000):kind==='invalid'?position(NaN):position(53,31));
+  observed(kind==='stale'?position(53,5,Date.now()-20000):kind==='invalid'?position(NaN):position(53,-1));
   jest.advanceTimersByTime(1000);expect(await pending).toBe(false);
   expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
   expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();
@@ -450,7 +450,7 @@ describe('bounded GPS accuracy improvement',()=>{
   observed(position());expect(runtime.fetch).not.toHaveBeenCalled();
  });
  test.each(['exit','destination','simulation'])('%s cancellation releases the accuracy watch and fences late fixes',async change=>{
-  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+  locations=[position(NaN)];const pending=Modes.navigateFromGPS();
   if(change==='exit')Modes.exit();
   if(change==='destination')Modes.endpointChanged();
   if(change==='simulation')expect(Modes.startSimulation()).toBe(true);
@@ -458,46 +458,46 @@ describe('bounded GPS accuracy improvement',()=>{
   observed(position());expect(runtime.fetch).not.toHaveBeenCalled();expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
  });
  test('permission denial while improving is terminal and clears the watch',async()=>{
-  locations=[position(53,100)];const pending=Modes.navigateFromGPS();failed({code:1});
+  locations=[position(NaN)];const pending=Modes.navigateFromGPS();failed({code:1});
   expect(await pending).toBe(false);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
   expect(document.getElementById('journeyModeStatus').textContent).toMatch(/permission denied/);expect(runtime.fetch).not.toHaveBeenCalled();
  });
  test('a synchronous successful watch callback still releases the returned watch id',async()=>{
-  locations=[position(53,100)];navigator.geolocation.watchPosition.mockImplementation(ok=>{ok(position());return 72;});
+  locations=[position(NaN)];navigator.geolocation.watchPosition.mockImplementation(ok=>{ok(position());return 72;});
   expect(await Modes.navigateFromGPS()).toBe(true);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(72);
  });
  test('second acquisition after the route response also waits without starting navigation early',async()=>{
-  locations=[position(),position(53,80)];const pending=Modes.navigateFromGPS();
+  locations=[position(),position(NaN)];const pending=Modes.navigateFromGPS();
   for(let i=0;i<10&&!observed;i++)await Promise.resolve();
   expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(runtime.startLive).not.toHaveBeenCalled();
   observed(position());expect(await pending).toBe(true);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
  });
  test('cancelled GPS stop acquisition releases its watch and adds no stop',async()=>{
-  locations=[position(53,100)];const pending=Modes.addGpsStop();Modes.exit();
+  locations=[position(NaN)];const pending=Modes.addGpsStop();Modes.exit();
   expect(await pending).toBe(false);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
   observed(position());expect(runtime.addStop).not.toHaveBeenCalled();
  });
  test('transient watch errors may recover within the original budget',async()=>{
-  locations=[position(53,100)];const pending=Modes.navigateFromGPS();failed({code:2});failed({code:3});
+  locations=[position(NaN)];const pending=Modes.navigateFromGPS();failed({code:2});failed({code:3});
   expect(runtime.fetch).not.toHaveBeenCalled();observed(position());expect(await pending).toBe(true);
   expect(navigator.geolocation.clearWatch).toHaveBeenCalledTimes(1);
  });
  test('wall-clock expiry refuses a good callback even when the timeout has been suspended',async()=>{
-  locations=[position(53,100)];const pending=Modes.navigateFromGPS();
+  locations=[position(NaN)];const pending=Modes.navigateFromGPS();
   jest.setSystemTime(Date.now()+13000);observed(position());expect(await pending).toBe(false);
   expect(runtime.acceptPosition).not.toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
   expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);
  });
- test('a late first coarse fix gets only the remainder of the acquisition budget',async()=>{
+ test('a late first invalid fix gets only the remainder of the acquisition budget',async()=>{
   let first;navigator.geolocation.getCurrentPosition.mockImplementation(ok=>{first=ok;});
-  const pending=Modes.navigateFromGPS();jest.advanceTimersByTime(9000);first(position(53,100));
+  const pending=Modes.navigateFromGPS();jest.advanceTimersByTime(9000);first(position(NaN));
   jest.advanceTimersByTime(3000);expect(await pending).toBe(false);
   expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(71);expect(runtime.fetch).not.toHaveBeenCalled();
  });
  test('watch startup failure remains a visible refusal without a routing request',async()=>{
-  locations=[position(53,100)];navigator.geolocation.watchPosition.mockImplementation(()=>{throw Error('Device unavailable');});
+  locations=[position(NaN)];navigator.geolocation.watchPosition.mockImplementation(()=>{throw Error('Device unavailable');});
   expect(await Modes.navigateFromGPS()).toBe(false);expect(runtime.fetch).not.toHaveBeenCalled();
-  expect(document.getElementById('journeyModeStatus').textContent).toMatch(/accuracy is insufficient/);
+  expect(document.getElementById('journeyModeStatus').textContent).toMatch(/stale or unavailable/);
  });
 
 });
@@ -548,10 +548,10 @@ describe('waiting for a mapped start',()=>{
   const pending=Modes.navigateFromGPS();await untilWaiting();jest.advanceTimersByTime(30000);observed(position());
   expect(await pending).toBe(true);expect(runtime.fetch).toHaveBeenCalledTimes(2);expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(83);
  });
- test('reopening controls preserves the wait and keeps start actions disabled',async()=>{
+ test('reopening explicit recalculation controls preserves its wait without disabling Start',async()=>{
   runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
   expect(Modes.choose()).toBe(true);expect(Modes.getState()).toBe('WAITING_FOR_ROAD');
-  expect(document.querySelector('[data-live-recalculate]').disabled).toBe(true);expect(document.getElementById('startVerifiedHere').hidden).toBe(true);
+  expect(document.querySelector('.journey-mode-primary[data-navigation-start]').disabled).toBe(false);expect(document.getElementById('startVerifiedHere').hidden).toBe(true);
   Modes.exit();expect(await pending).toBe(false);expect(runtime.fetch).toHaveBeenCalledTimes(1);
  });
  test('an endpoint change after the movement callback but before its continuation cannot retry a new intent',async()=>{
@@ -559,6 +559,10 @@ describe('waiting for a mapped start',()=>{
   jest.advanceTimersByTime(10000);observed(position(53.001));Modes.endpointChanged();
   expect(await pending).toBe(false);expect(runtime.fetch).toHaveBeenCalledTimes(1);expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
   expect(runtime.startLive).not.toHaveBeenCalled();
+ });
+ test('explicit Start cancels an old road-wait request and follows the selected route immediately',async()=>{
+  runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
+  expect(await Modes.startNavigation()).toBe(true);expect(await pending).toBe(false);expect(Life.getRouteInProgress()).toBe(true);expect(selected().id).toBe('planned');expect(calls.showJourneySummaryBar).toHaveBeenCalled();expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(83);
  });
  test('waiting ends after five minutes without changing the selected plan or starting guidance',async()=>{
   runtime.fetch.mockResolvedValue(response(gapRoute()));const pending=Modes.navigateFromGPS();await untilWaiting();
@@ -579,44 +583,52 @@ test('journey information is collapsed by default while the concise status remai
 
 describe('immediate navigation entry',()=>{
  beforeEach(()=>{runtime.showNavigationMap=jest.fn();});
- test('opens the map synchronously, deduplicates Start and acquires GPS in the background',async()=>{
-  let gps;navigator.geolocation.getCurrentPosition.mockImplementation(ok=>{gps=ok;});
+ test('opens synchronously, deduplicates Start and starts the lifecycle without waiting for GPS or a provider',async()=>{
+  navigator.geolocation.getCurrentPosition.mockImplementation(()=>{});
   const pending=Modes.startNavigation();expect(Modes.startNavigation()).toBe(pending);
-  expect(runtime.showNavigationMap).toHaveBeenCalledTimes(1);expect(document.getElementById('navigationEntry').hidden).toBe(false);
-  expect(document.getElementById('journeyModeChooser').hidden).toBe(true);expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
-  await Promise.resolve();expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
-  Modes.exit();expect(await pending).toBe(false);gps(position());expect(runtime.fetch).not.toHaveBeenCalled();expect(document.getElementById('navigationEntry').hidden).toBe(true);
+  expect(runtime.showNavigationMap).toHaveBeenCalledTimes(1);expect(document.getElementById('journeyModeChooser').hidden).toBe(true);
+  expect(await pending).toBe(true);expect(Life.getRouteInProgress()).toBe(true);expect(calls.showJourneySummaryBar).toHaveBeenCalled();expect(calls.startGPSTracking).toHaveBeenCalled();
+  expect(runtime.fetch).not.toHaveBeenCalled();expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(runtime.startLive).toHaveBeenCalledTimes(1);
  });
- test('an already valid route and current GPS fix start through the lifecycle without a fresh route request',async()=>{
+ test('an already current GPS fix uses the selected route without a fresh request',async()=>{
   runtime.acceptPosition(position());expect(await Modes.startNavigation()).toBe(true);
-  expect(runtime.fetch).not.toHaveBeenCalled();expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
-  expect(Life.getRouteInProgress()).toBe(true);expect(calls.persistActiveRoute).toHaveBeenCalledTimes(1);expect(document.getElementById('navigationEntry').hidden).toBe(true);
+  expect(runtime.fetch).not.toHaveBeenCalled();expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(true);expect(calls.persistActiveRoute).toHaveBeenCalledTimes(1);
  });
- test('permission denial leaves a concise retry view without granting navigation or altering the plan',async()=>{
-  locations=[Object.assign(Error('denied'),{code:1})];expect(await Modes.startNavigation()).toBe(false);
-  expect(document.getElementById('navigationEntry').hidden).toBe(false);expect(document.getElementById('navigationEntryStatus').textContent).toMatch(/permission denied/);
-  expect(document.getElementById('navigationEntryRetry').disabled).toBe(false);expect(selected().id).toBe('planned');expect(Life.getRouteInProgress()).toBe(false);
+ test('absence of a GPS fix does not disable route guidance or fabricate an entry marker',async()=>{
+  runtime.entryMarker=jest.fn();locations=[Object.assign(Error('denied'),{code:1})];expect(await Modes.startNavigation()).toBe(true);
+  expect(runtime.entryMarker).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(true);expect(selected().id).toBe('planned');expect(calls.startGPSTracking).toHaveBeenCalled();
  });
- test('selection changes before background work runs cannot start a new journey implicitly',async()=>{
+ test('selection changes before background work runs cannot start another journey implicitly',async()=>{
   const pending=Modes.startNavigation();preview(makeRoute('other'));expect(await pending).toBe(false);
   expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(runtime.startLive).not.toHaveBeenCalled();expect(document.getElementById('navigationEntry').hidden).toBe(true);
  });
- test('only observed positions create an entry marker, and cancellation removes it without replacing route state',async()=>{
-  const el=document.createElement('i');document.body.append(el);const handle={setLngLat:coordinates=>{el.dataset.position=JSON.stringify(coordinates);},remove:()=>el.remove()};runtime.entryMarker=jest.fn(()=>handle);
-  let reply;runtime.fetch.mockImplementation(()=>new Promise(resolve=>{reply=resolve;}));
-  const pending=Modes.startNavigation();expect(runtime.entryMarker).not.toHaveBeenCalled();
-  for(let i=0;i<10&&!reply;i++)await Promise.resolve();
-  expect(runtime.entryMarker).toHaveBeenCalledWith([53,-1]);expect(selected().id).toBe('planned');Modes.exit();
-  reply(response());expect(await pending).toBe(false);expect(el.isConnected).toBe(false);expect(runtime.startLive).not.toHaveBeenCalled();
+ test.each(['missing assessment','expired assessment','start gap','mandatory conflict','offline','different GPS origin','coarse GPS'])('%s is advisory for explicit Start without altering the assessment',async kind=>{
+  const route=selected();if(kind==='missing assessment')delete route.avoidance_assessment;
+  if(kind==='expired assessment')route.avoidance_assessment.checked_at=Date.now()/1000-3600;
+  if(kind==='start gap')Object.assign(route.avoidance_assessment.origin_integrity,{navigation_allowed:false,status:'UNRESOLVED',reason:'material_endpoint_relocation'});
+  if(kind==='mandatory conflict')Object.assign(route.avoidance_assessment,{status:'VIOLATED',automatic_selection_allowed:false});
+  if(kind==='offline')jest.spyOn(navigator,'onLine','get').mockReturnValue(false);
+  if(kind==='different GPS origin')runtime.acceptPosition(position(53.005));if(kind==='coarse GPS')runtime.acceptPosition(position(53,500));
+  preview(route);const assessment=JSON.stringify(route.avoidance_assessment);expect(await Modes.startNavigation()).toBe(true);
+  expect(JSON.stringify(window.lastCalculatedRoute.avoidance_assessment)).toBe(assessment);expect(Life.getRouteInProgress()).toBe(true);expect(calls.showJourneySummaryBar).toHaveBeenCalled();expect(runtime.fetch).not.toHaveBeenCalled();
+  expect(Modes.userGuidanceStartPermitted(window.lastCalculatedRoute)).toBe(false); // grant exists only inside the owned startup transaction
  });
- test('cancel and immediate restart cannot let the old completion hide the new entry',async()=>{
-  const callbacks=[];navigator.geolocation.getCurrentPosition.mockImplementation(ok=>callbacks.push(ok));
-  const first=Modes.startNavigation();await Promise.resolve();Modes.exit();const second=Modes.startNavigation();await Promise.resolve();
-  callbacks[0](position());expect(await first).toBe(false);expect(document.getElementById('navigationEntry').hidden).toBe(false);
-  Modes.exit();expect(await second).toBe(false);expect(runtime.fetch).not.toHaveBeenCalled();
+ test('manual guidance survives redraw after the durable journey identity is attached',async()=>{
+  jest.spyOn(global.VoyagrOfflineNavigationOrchestration,'getJourneyOwnership').mockReturnValue({journey_id:'committed-owner'});
+  const route=selected();route.avoidance_assessment.origin_integrity.navigation_allowed=false;preview(route);expect(await Modes.startNavigation()).toBe(true);
+  expect(window.lastCalculatedRoute.durable_journey_id).toBe('committed-owner');expect(require('../app/reroute-map-orchestration').redrawNavigationRouteLayer('theme change')).toBe(true);expect(Life.getRouteInProgress()).toBe(true);
  });
- test('missing route refuses immediately without GPS or a navigation entry view',async()=>{
-  Compare.setRouteOptions([]);window.lastCalculatedRoute=null;
-  expect(await Modes.startNavigation()).toBe(false);expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();expect(runtime.showNavigationMap).not.toHaveBeenCalled();expect(document.getElementById('navigationEntry').hidden).toBe(true);
+ test('cancelling pending persistence cannot let an old start complete',async()=>{
+  let persisted;calls.persistActiveRoute.mockImplementationOnce(()=>new Promise(resolve=>{persisted=resolve;}));const pending=Modes.startNavigation();
+  for(let i=0;i<10&&!persisted;i++)await Promise.resolve();expect(persisted).toEqual(expect.any(Function));Modes.exit();persisted(true);
+  expect(await pending).toBe(false);expect(Life.getRouteInProgress()).toBe(false);expect(Modes.userGuidanceStartPermitted(selected())).toBe(false);
+  expect(Life.recoverNavigationMap()).toBe(true);
+ });
+ test.each(['missing route','missing geometry','missing directions'])('%s remains a concrete usable-route error',async kind=>{
+  if(kind==='missing route'){Compare.setRouteOptions([]);window.lastCalculatedRoute=null;}else{const route=selected();if(kind==='missing geometry'){route.geometry=null;route.polyline=null;}else route.maneuvers=[];preview(route);}
+  expect(await Modes.startNavigation()).toBe(false);expect(runtime.fetch).not.toHaveBeenCalled();expect(Life.getRouteInProgress()).toBe(false);
+ });
+ test('explicit GPS recalculation accepts a coarse first fix without waiting for a 30 m improvement',async()=>{
+  locations=[position(53,100)];expect(await Modes.navigateFromGPS()).toBe(true);expect(runtime.acceptPosition.mock.calls[0][0].coords.accuracy).toBe(100);expect(navigator.geolocation.watchPosition).not.toHaveBeenCalled();
  });
 });

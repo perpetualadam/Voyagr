@@ -68,6 +68,14 @@
             return;
         }
 
+        // Keep the countdown present for an active journey, including after a
+        // sheet/theme transition or temporary loss of road-matching evidence.
+        const bar = document.getElementById('journeySummaryBar');
+        if (bar) {
+            bar.style.display = 'flex';
+            document.body.classList.add('voyagr-journey-summary-visible');
+        }
+
         const routePolyline = rt().getRoutePolyline();
         const distanceEl = document.getElementById('remainingDistance');
         const timeEl = document.getElementById('remainingTime');
@@ -75,11 +83,12 @@
 
         if (!distanceEl || !timeEl || !etaEl) return;
 
-        const userHasStartedMoving = hasUserStartedMoving();
+        const currentLat = rt().getCurrentLat();
+        const currentLon = rt().getCurrentLon();
+        // A temporary stop must not reset the countdown to the full planned trip.
+        const userHasStartedMoving = Number.isFinite(currentLat) && Number.isFinite(currentLon);
         let remainingDistanceMeters = 0;
         if (routePolyline.length >= 2) {
-            const currentLat = rt().getCurrentLat();
-            const currentLon = rt().getCurrentLon();
             if (userHasStartedMoving && currentLat != null && currentLon != null) {
                 remainingDistanceMeters = RG().computeRemainingDistanceAlongRoute(
                     currentLat, currentLon, routePolyline, rt().getLastSnappedRouteIndex()

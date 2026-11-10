@@ -190,3 +190,35 @@ Validation: 3,371 frontend tests with lint/coverage; declared web backend select
 No deployment. Live network/GPS acceptance remains pending. Browser online status
 is advisory, so online-but-unreachable servers continue using bounded retries;
 normal confirmed GPS deviations can initiate another attempt after that burst.
+
+
+## User policy change: continuous guidance — 10 November 2026
+
+Valid GPS callbacks could return on UNKNOWN/OFF_ROUTE road or geometry evidence
+before updating current coordinates, marker/follow camera, tracking history,
+directions and countdown. This explains a frozen display even with GPS arriving.
+The road matcher is now enrichment; it cannot suspend those updates. Geometry
+fallback supports progress and deviation when road identity is unavailable.
+Uncertain geometry uses the observed GPS marker without forced snapping. Invalid,
+out-of-order or stale coordinates still cannot fabricate movement.
+
+Explicit Start now follows the user's selected complete geometry/instructions
+without waiting for a 30 m reading, new provider response or passing assessment.
+The existing private startup owner grants only that selected transaction and
+releases its grant on completion/cancellation. Assessment fields remain unchanged;
+UI limitations are advisory, not a claim that checks passed. Automatic replacements
+retain their strict candidate gates and cannot silently substitute rejected routes.
+Owned persistence/map commitment and malformed-data/cancellation checks remain.
+
+The summary bar restores its active visibility and uses position-based remaining
+distance/time rather than resetting to total duration when recent movement stops.
+It continues using selected distance/time units. The older explicit recalculation
+wait cannot disable Start; Start cancels that request and starts the selected route.
+
+Validation: 3,391 frontend tests with lint/coverage; declared backend selection
+2,244 tests plus 74 subtests passed, one skipped; 11 isolated SQL checks. Browser
+replay exercises real MapLibre, GPS planners, summary DOM and journey entry at
+390/1280 px in light/dark. GPS and lifecycle commit adapters are synthetic; Jest
+also covers the actual lifecycle/map owner and preserved automatic/ownership gates.
+The previous GPS handler fails the new marker/countdown regression. No deployment;
+real-device driving acceptance remains outstanding.

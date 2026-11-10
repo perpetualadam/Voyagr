@@ -1334,3 +1334,36 @@ tests; declared backend selection 2,244 tests and 74 subtests passed, one skippe
 configuration/data changes. Browser online status is advisory: a server outage
 while reported online still uses the existing bounded timed retry burst; subsequent
 confirmed GPS deviations can start a later attempt.
+
+
+### Continuous navigation, observed GPS and ETA — 10 November 2026
+
+This user-requested policy supersedes earlier entries that made a fresh safety
+assessment, 30 m accuracy or confirmed road association prerequisites for explicit
+Start or continuous guidance.
+
+- [x] Explicit Start follows the selected usable geometry/directions immediately,
+  through the existing owned lifecycle/map/persistence transaction. GPS runs in
+  background; no fresh provider request or 30 m reading is required.
+- [x] Keep route limitations informational and Start available. Preserve original
+  assessment fields; do not relabel an unresolved route as verified. Automatic
+  replacements still use their existing assessment contract and retain the current
+  route on refusal/failure.
+- [x] Accepted GPS always updates coordinates, marker, follow camera, directions and
+  countdown. Unknown road identity is advisory, with geometry fallback for progress
+  and deviation. Uncertain geometry shows observed coordinates rather than forced
+  road snapping. Coarse accuracy no longer rejects otherwise current valid fixes.
+- [x] Restore the ETA/remaining-distance bar for active journeys. Countdown follows
+  current route progress in the selected units and does not reset to the full trip
+  after a stop. Unknown GPS does not erase the current route/bar.
+- [x] Let Start cancel an older explicit road-wait request, and refresh the redraw
+  record after attaching durable ownership metadata so theme recovery keeps working.
+- [x] Update regression expectations for the requested advisory policy while retaining
+  strict automatic replacement, malformed geometry, cancellation and ownership tests.
+- [ ] Real-device GPS/permission, driving and reconnect acceptance after deployment.
+
+Validation: 3,391 frontend tests with coverage/lint; declared web backend selection
+2,244 passed plus 74 subtests, one skipped; 11 isolated SQL tests. Real Chromium/
+MapLibre replay passed phone/desktop sizes in light/dark with a moving observed
+marker and visible ETA/decreasing miles or kilometres. Device/provider boundaries
+are synthetic. The old code fails the marker/countdown regression. No deployment.

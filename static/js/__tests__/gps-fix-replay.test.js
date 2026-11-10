@@ -5,17 +5,17 @@ const fix = (at, lat = 51.5, accuracy = 8) => ({
     timestamp: at, coords: { latitude: lat, longitude: -0.1, accuracy },
 });
 
-test('replay keeps last reliable position through stale, duplicate, invalid and inaccurate fixes', () => {
+test('replay accepts coarse observed coordinates but rejects stale, duplicate and invalid fixes', () => {
     let accepted = { at: 0, lat: null };
     const replay = [fix(now - 2000), fix(now - 3000, 52), fix(now - 2000, 53),
-        fix(now - 1000, 54, 900), fix(now - 1000, NaN), fix(now - 1000, 51.6)];
+        fix(now - 1000, 51.55, 900), fix(now - 1000, NaN), fix(now - 1000, 51.6)];
     const decisions = replay.map(p => {
         const result = SG.validateNavigationGpsFix(p, now, accepted.at);
         if (result.accepted) accepted = { at: result.timestamp, lat: p.coords.latitude };
         return result.accepted;
     });
-    expect(decisions).toEqual([true, false, false, false, false, true]);
-    expect(accepted).toEqual({ at: now - 1000, lat: 51.6 });
+    expect(decisions).toEqual([true, false, false, true, false, false]);
+    expect(accepted).toEqual({ at: now - 1000, lat: 51.55 });
 });
 
 test.each([fix(now - 16000), fix(now + 2000), fix(now, 91), fix(now, 51.5, Infinity), {}])(

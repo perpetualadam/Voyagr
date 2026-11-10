@@ -503,11 +503,12 @@
             try { if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus(message, 'warning'); } catch (_) { /* fail closed during partial startup */ }
             return false;
         };
+        const manualGuidance=!!(intentOwner && intentOwner.userGuidanceStartPermitted && intentOwner.userGuidanceStartPermitted(routeData));
         // No persisted assessment establishes a fresh complete request context.
         // Refuse before selection can replace its geometry, destination or evidence.
-        if ((navStartOpts && (navStartOpts.fromPersistedResume || navStartOpts.persistedPolyline!==undefined)) ||
+        if (!manualGuidance && ((navStartOpts && (navStartOpts.fromPersistedResume || navStartOpts.persistedPolyline!==undefined)) ||
             (routeData && (routeData.navigation_resume_requires_fresh_gps ||
-                (routeData.avoidance_assessment && routeData.avoidance_assessment.resume_state)))) {
+                (routeData.avoidance_assessment && routeData.avoidance_assessment.resume_state))))) {
             return refuse('Saved journey is preview only. Recalculate from your actual location and destination before navigation.');
         }
         if (navigationFailure) return refuse('Navigation is stopped after an initialization or map failure. Recover the map and recalculate.');
@@ -526,11 +527,11 @@
                 const result = updater.updateRouteOnMap(mergedRoute);
                 return !!result && result.ok===true;
             }
-            mergedRoute = integrity.prepareNavigationCandidate(mergedRoute);
+            mergedRoute = manualGuidance ? integrity.prepareGuidanceCandidate(mergedRoute) : integrity.prepareNavigationCandidate(mergedRoute);
             if (!mergedRoute) return refuse('Route geometry or instructions are incomplete; recalculate before navigation.');
             // The gate contract is synchronous boolean permission, never a truthy
             // object, promise, legacy metadata flag or confirmation substitute.
-            if (integrity.gate(mergedRoute, {
+            if (!manualGuidance && integrity.gate(mergedRoute, {
                 storage:localStorage, offline:navigator.onLine===false,
                 showStatus:rt().call.showStatus,
             })!==true) return refuse('Route safety is not established; navigation not started. Recalculate with the current requirements.');
@@ -582,8 +583,8 @@
                 if (persisted !== true || epoch !== startEpoch || !intentCurrent()) throw new Error('Persistence or startup cancelled');
                 const integrity = root.VoyagrAvoidanceIntegrity;
                 const selected = rt().routeSelection().mergeNavigationRouteFromSelected(routeData,rt().getRouteOptions(),rt().getSelectedRouteIndex());
-                if (JSON.stringify(integrity.prepareNavigationCandidate(selected)) !== JSON.stringify(mergedRoute) ||
-                    integrity.gate(mergedRoute,{storage:localStorage,offline:navigator.onLine===false,quiet:true}) !== true ||
+                if (JSON.stringify(manualGuidance ? integrity.prepareGuidanceCandidate(selected) : integrity.prepareNavigationCandidate(selected)) !== JSON.stringify(mergedRoute) ||
+                    (manualGuidance ? !(intentOwner.userGuidanceStartPermitted && intentOwner.userGuidanceStartPermitted(routeData)) : integrity.gate(mergedRoute,{storage:localStorage,offline:navigator.onLine===false,quiet:true}) !== true) ||
                     !helpers.isPolylineLayerMounted(map,staged,mergedRoute.polyline)) throw new Error('Startup context changed');
                 mutated = true;
                 window.lastCalculatedRoute = mergedRoute;

@@ -1,4 +1,4 @@
-/** Navigation presentation only: the production integrity gate owns permission. */
+/** Route limitations are advisory for explicit Start; geometry remains required. */
 (function (root) {
     'use strict';
     var route = null, refreshTimer = null, warningTimer = null, warningKey = null, previousFocus = null;
@@ -16,9 +16,10 @@
             return {allowed:false,outcome:'REFUSED',message:'Safety verification unavailable. Reload and recalculate before navigation.'};
         }
         var result = integrity.currentDecision(candidate,{offline:root.navigator.onLine===false},root.localStorage);
-        if (result.allowed && !integrity.prepareNavigationCandidate(candidate)) {
+        if (!integrity.prepareGuidanceCandidate(candidate)) {
             return {allowed:false,outcome:'REFUSED',message:'Route geometry or instructions are incomplete. Recalculate before navigation.'};
         }
+        if (!result.allowed) return Object.assign({},result,{allowed:true,outcome:'ADVISORY',assessmentOutcome:result.outcome,preferenceWarnings:result.preferenceWarnings||[],message:'Route limitations are informational; follow road signs.'});
         return result;
     }
     function dismiss() {
@@ -38,11 +39,11 @@
         try { result=classify(route); }
         catch (_) { result={allowed:false,outcome:'REFUSED',message:'Safety verification unavailable. Recalculate before navigation.'}; }
         var lifecycle=root.VoyagrNavigationLifecycleOrchestration;
-        // Movement/age can refuse a NEW start, without erasing the warning for
-        // already committed guidance. This presentation snapshot grants no permission.
+        // Preserve the committed route information while displaying moving GPS.
+        // Presentation alone never starts a journey.
         var details=route===activeRoute && committedDetails && lifecycle && lifecycle.getRouteInProgress() ? committedDetails : result;
-        var text = details.outcome==='REFUSED' ? details.message : details.outcome==='BEST_EFFORT' ? 'Some hazards could not be avoided. '+WARNING : 'Route safety checks passed against available evidence. Avoidance is not guaranteed.';
-        if (details.outcome==='BEST_EFFORT') {
+        var text = details.outcome==='REFUSED' ? details.message : details.outcome==='ADVISORY' ? 'Route limitations are informational. '+WARNING : details.outcome==='BEST_EFFORT' ? 'Some hazards could not be avoided. '+WARNING : 'Route safety checks passed against available evidence. Avoidance is not guaranteed.';
+        if (details.outcome==='BEST_EFFORT' && details.preferenceWarnings.length) {
             text += ' Unresolved preferences: '+details.preferenceWarnings.map(function(row) {return row.category.replace(/_/g,' ');}).join(', ')+'.';
         }
         var planning=document.getElementById('routePlanningNotice');
@@ -68,8 +69,8 @@
         if (!result.allowed) return false;
         activeRoute=candidate; committedDetails=result;
         present(candidate);
-        if (result.outcome!=='BEST_EFFORT') { warningKey=null; dismiss(); return true; }
-        var key=JSON.stringify(result.preferenceWarnings);
+        if (result.outcome!=='BEST_EFFORT' && result.outcome!=='ADVISORY') { warningKey=null; dismiss(); return true; }
+        var key=JSON.stringify([result.outcome,result.preferenceWarnings]);
         if (key===warningKey) return true;
         warningKey=key;
         var warning=document.getElementById('bestEffortWarning');

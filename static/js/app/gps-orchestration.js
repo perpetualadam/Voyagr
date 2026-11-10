@@ -86,7 +86,9 @@
     }
 
     function resolveGpsRouteSnapForTick(lat, lon, speedMph) {
-        if (navigationPositionEvidence && navigationPositionEvidence.state==='RELIABLE' && evidencePolyline===rt().g('routePolyline')) return navigationPositionEvidence.snap;
+        if (navigationPositionEvidence && evidencePolyline===rt().g('routePolyline')) {
+            return navigationPositionEvidence.state==='RELIABLE' ? navigationPositionEvidence.snap : null;
+        }
         const RG = rgModule();
         const stationary = !Number.isFinite(speedMph) || speedMph < 2;
         const plan = RG.buildGpsRouteSnapTickPlan({
@@ -392,7 +394,7 @@
      * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
      */
     function applyGpsHazardAndDeviationSideEffectsTick(lat, lon, accuracy, tickPlan) {
-        if (tickPlan.checkDeviation) {
+        if (tickPlan.checkDeviation && (!navigationPositionEvidence || navigationPositionEvidence.state!=='UNKNOWN' && navigationPositionEvidence.state!=='REACQUIRING')) {
             checkRouteDeviation(lat, lon, accuracy);
         }
         if (tickPlan.processHazards) {
@@ -807,31 +809,28 @@
 
     function applyGpsTrackingTick(position) {
         if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) return;
-        var roadOwner=root.VoyagrRoadMatchOrchestration;
-        var roadMatch=roadOwner ? roadOwner.observe(position,rt().g('routePolyline'),window.lastCalculatedRoute) : null;
-        if (rt().g('routeInProgress') && roadMatch && root.VoyagrRoadMatching.shouldPauseNavigation(roadMatch)) {
-            var knownDeviation=root.VoyagrRoadMatching.supportsDeviation(roadMatch,Date.now());
-            navigationPositionEvidence={state:knownDeviation?'OFF_ROUTE':'UNKNOWN',reason:roadMatch.reason,road_match:roadMatch};
-            pauseUncertainNavigation(knownDeviation);
-            rt().call.showStatus(knownDeviation?'Off route — checking a safe reroute':'Road association uncertain — navigation progress paused','warning');
-            if(knownDeviation)checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
-            return;
-        }
-        if (rt().g('routeInProgress') && rgModule().assessNavigationPosition) {
-            var line=rt().g('routePolyline');
-            if (line!==evidencePolyline) {navigationPositionEvidence=null;navigationAnchor=null;evidencePolyline=line;}
-            var evidence=rgModule().assessNavigationPosition(position,line,navigationAnchor,Date.now());
-            navigationPositionEvidence=evidence;
-            if (evidence.state==='RELIABLE' || evidence.state==='REACQUIRING') navigationAnchor=evidence;
-            if (evidence.state!=='RELIABLE') {
-                pauseUncertainNavigation(evidence.state==='OFF_ROUTE');
-                rt().call.showStatus(evidence.state==='OFF_ROUTE' ? 'Off route — checking a safe reroute' : 'GPS uncertain — navigation progress paused','warning');
-                if (root.VoyagrSpeedWidgetOrchestration && root.VoyagrSpeedWidgetOrchestration.updateSpeedWidget && Number.isFinite(position.coords.speed)) root.VoyagrSpeedWidgetOrchestration.updateSpeedWidget(position.coords.speed*2.236936,null);
-                if (evidence.state==='OFF_ROUTE') checkRouteDeviation(position.coords.latitude,position.coords.longitude,position.coords.accuracy);
-                return;
-            }
+        var line=rt().g('routePolyline');
+        if (line!==evidencePolyline) {navigationPositionEvidence=null;navigationAnchor=null;evidencePolyline=line;}
+        var roadMatch=null;
+        try {
+            var roadOwner=root.VoyagrRoadMatchOrchestration;
+            roadMatch=roadOwner ? roadOwner.observe(position,line,window.lastCalculatedRoute) : null;
+        } catch (_) { /* Road enrichment cannot stop live GPS presentation. */ }
+        if (rt().g('routeInProgress')) {
+            var knownDeviation=!!(roadMatch && root.VoyagrRoadMatching && root.VoyagrRoadMatching.supportsDeviation(roadMatch,Date.now()));
+            // Missing Overpass/road identity must not veto route-geometry progress
+            // or deviation detection. Keep that richer evidence as metadata only.
+            navigationPositionEvidence=rgModule().assessNavigationPosition
+                ? rgModule().assessNavigationPosition(position,line,navigationAnchor,Date.now())
+                : {state:'UNKNOWN',reason:'Route association unavailable'};
+            if(knownDeviation)navigationPositionEvidence={state:'OFF_ROUTE',reason:roadMatch.reason,road_match:roadMatch};
+            var evidence=navigationPositionEvidence;
+            if (evidence && (evidence.state==='RELIABLE' || evidence.state==='REACQUIRING')) navigationAnchor=evidence;
+            if (evidence && evidence.state==='RELIABLE') rt().s('lastSnappedRouteIndex',evidence.snap.index);
+            else if (!evidence || evidence.state!=='OFF_ROUTE') resetDeviationConfirmation();
+            // Road/geometry confidence informs snapping, lane facts and arrival.
+            // It never suspends the observed GPS marker, guidance or countdown.
             uncertaintySpeechCleared=false;
-            rt().s('lastSnappedRouteIndex',evidence.snap.index);
         }
         const SGsample = sgModule();
         const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
@@ -1142,7 +1141,7 @@
      * @returns {number}
      */
     function getNavigationRemainingDistanceMeters(lat, lon) {
-        if (navigationPositionEvidence && evidencePolyline===rt().g('routePolyline')) return navigationPositionEvidence.state==='RELIABLE' ? navigationPositionEvidence.remainingM : Infinity;
+        if (navigationPositionEvidence && evidencePolyline===rt().g('routePolyline') && navigationPositionEvidence.state==='RELIABLE') return navigationPositionEvidence.remainingM;
         const plan = rgModule().buildNavigationRemainingDistancePlan({
             lat,
             lon,
@@ -1287,7 +1286,7 @@
      * @returns {*} Return value description
      */
     function announceDistanceToDestination(currentLat, currentLon) {
-        if (navigationPositionEvidence && (navigationPositionEvidence.state!=='RELIABLE' || getLastGpsFixAgeMs()>15000)) return;
+        if (getLastGpsFixAgeMs()>15000) return;
         if (!rt().g('routeInProgress') || !rt().g('routePolyline') || rt().g('routePolyline').length === 0 || !rt().g('voiceAnnouncementsEnabled')) return;
 
         const remainingDistance = getNavigationRemainingDistanceMeters(rt().g('currentLat'), rt().g('currentLon'));
@@ -1325,7 +1324,7 @@
      */
     function announceUpcomingTurn(turnInfo) {
         if (turnInfo && turnInfo.evidence_state==='INFERRED') return;
-        if (navigationPositionEvidence && (navigationPositionEvidence.state!=='RELIABLE' || getLastGpsFixAgeMs()>15000)) return;
+        if (getLastGpsFixAgeMs()>15000) return;
         const TI = _turnInstructions();
         const VA = vaModule();
 

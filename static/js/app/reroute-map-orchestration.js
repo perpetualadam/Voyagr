@@ -214,8 +214,11 @@
     function authoriseCurrentRouteRedraw() {
         try {
             const integrity = root.VoyagrAvoidanceIntegrity;
-            const candidate = integrity.prepareNavigationCandidate(rt().getLastCalculatedRoute());
-            if (!candidate || integrity.gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true}) !== true ||
+            const route = rt().getLastCalculatedRoute();
+            const modes = root.VoyagrJourneyModes;
+            const manual = !!(modes && modes.userGuidanceStartPermitted && modes.userGuidanceStartPermitted(route));
+            const candidate = manual ? integrity.prepareGuidanceCandidate(route) : integrity.prepareNavigationCandidate(route);
+            if (!candidate || !manual && integrity.gate(candidate,{storage:localStorage,offline:navigator.onLine===false,quiet:true}) !== true ||
                     JSON.stringify(candidate.polyline) !== JSON.stringify(rt().getRoutePolyline()) ||
                     JSON.stringify(candidate.maneuvers) !== JSON.stringify(rt().getCurrentRouteSteps())) return false;
             authorisedCurrentRoute = JSON.parse(JSON.stringify(candidate));
@@ -428,9 +431,9 @@
             const life = root.VoyagrNavigationLifecycleOrchestration;
             if (!life || life.getRouteInProgress() !== true || (life.getNavigationFailure && life.getNavigationFailure())) return false;
             const candidate = authorisedCurrentRoute;
-            // Immutable context recorded only after the real verifier authorises
-            // a complete route. A redraw can outlive assessment freshness and
-            // connectivity, but cannot authorise a different route or assessment.
+            // Immutable geometry recorded by the real startup/replacement owner.
+            // Redraw preserves the selected route even when its assessment is
+            // advisory; it cannot substitute different geometry or instructions.
             if (!candidate || JSON.stringify(candidate) !== JSON.stringify(rt().getLastCalculatedRoute()) ||
                     JSON.stringify(candidate.polyline) !== JSON.stringify(rt().getRoutePolyline()) ||
                     JSON.stringify(candidate.maneuvers) !== JSON.stringify(rt().getCurrentRouteSteps())) return inconsistentMap();

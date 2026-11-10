@@ -93,20 +93,22 @@ test('geometry-only turn inference is labelled and cannot produce a definitive i
     expect(payload.instruction).toContain('unavailable');
 });
 
-test('actual GPS watch rejects ambiguous matching before progress, arrival or voice mutation',()=>{
+test('actual GPS watch retains ambiguous evidence while updating observed position and navigation UI',()=>{
     const GPS=require('../app/gps-orchestration.js'),SG=require('../modules/navigation/speed-gps.js');
     const now=1800000000000;const time=jest.spyOn(Date,'now').mockReturnValue(now);
     const showStatus=jest.fn(),mutate=jest.fn();
     const state={routeInProgress:true,routePolyline:fixtures.routes.parallel};
-    GPS.bind({g:k=>state[k],s:mutate,m:{speedGps:()=>SG,routeGeometry:()=>RG},call:{showStatus}});
+    const presentation=require('./fixtures/gps-presentation.cjs').completeGpsRuntime({g:k=>state[k],s:(k,v)=>{state[k]=v;mutate(k,v);},m:{speedGps:()=>SG,routeGeometry:()=>RG},call:{showStatus}});
+    GPS.bind(presentation);
     GPS.setGpsTrackingStoppedByUser(false);GPS.setGpsWatchId(null);GPS.setIsTrackingActive(false);
     navigator.geolocation.watchPosition=jest.fn(()=>77);
     GPS.ensureGPSTracking({forceRestart:true,documentVisible:true});
     mutate.mockClear(); // Restart intentionally clears off-route confirmation only.
     navigator.geolocation.watchPosition.mock.calls[0][0]({timestamp:now,coords:{latitude:53.525,longitude:-1.1299,accuracy:15,speed:0}});
-    expect(mutate.mock.calls).toEqual([['deviationStartTimeCheck',null],['deviationOffRouteStreak',0]]);
+    expect(state.currentLat).toBe(53.525);expect(state.currentLon).toBe(-1.1299);
+    expect(presentation.marker.addTo).toHaveBeenCalled();expect(presentation.call.updateJourneySummaryBar).toHaveBeenCalled();
     expect(GPS.getNavigationPositionEvidence().state).toBe('UNKNOWN');
-    expect(showStatus).toHaveBeenCalledWith(expect.stringContaining('progress paused'),'warning');
+    expect(showStatus).not.toHaveBeenCalledWith(expect.stringContaining('progress paused'),'warning');
     time.mockRestore();
 });
 

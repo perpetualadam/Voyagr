@@ -155,7 +155,7 @@ test('saved arrival context restores separate fields and live intent retains the
     const next={start:'53,-1',end:'53.5227681,-1.1335312'};
     expect(Plan.applyDrivingArrival(next,null,end,input).arrival_choice).toEqual(context.arrival_choice);
 });
-test('safety display refresh preserves a separate planning notice without enabling navigation',()=>{
+test('route display retains arrival limitations while allowing explicit Start',()=>{
     jest.useFakeTimers();
     const UX=require('../app/navigation-safety-ux.js');
     document.body.innerHTML='<p id="routeAvoidanceNotice"></p><p id="routePlanningNotice"></p><p id="navigationStartExplanation"></p><button data-navigation-start></button>';
@@ -165,8 +165,8 @@ test('safety display refresh preserves a separate planning notice without enabli
     UX.present(route);jest.advanceTimersByTime(1100);
     expect(document.getElementById('routePlanningNotice').textContent).toContain('chosen arrival point');
     expect(document.getElementById('routePlanningNotice').textContent).toContain('onward connection is not included');
-    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Navigation cannot start');
-    expect(document.querySelector('[data-navigation-start]').disabled).toBe(true);
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('limitations are informational');
+    expect(document.querySelector('[data-navigation-start]').disabled).toBe(false);
     UX.reset();jest.useRealTimers();
 });
 test('deviation rerouting preserves the driving target even when the destination field is the city',()=>{

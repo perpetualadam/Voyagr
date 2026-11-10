@@ -138,12 +138,12 @@
     <script defer src="/static/js/modules/navigation/best-time-leave.js?v=20260711v"></script>
     <script defer src="/static/js/modules/ui/pwa-install.js?v=20260906app01"></script>
     <script defer src="/static/js/modules/ui/voice-control.js?v=20261109voice1"></script>
-    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261104arrivalintent1"></script>
-    <script defer src="/static/js/app/navigation-safety-ux.js?v=20261103drivingarrival1"></script>
+    <script defer src="/static/js/modules/navigation/avoidance-integrity.js?v=20261110continuous1"></script>
+    <script defer src="/static/js/app/navigation-safety-ux.js?v=20261110continuous1"></script>
     <script defer src="/static/js/modules/navigation/journey-plan.js?v=20261107arrivaloptions1"></script>
-    <script defer src="/static/js/app/journey-modes.js?v=20261109entry1"></script>
+    <script defer src="/static/js/app/journey-modes.js?v=20261110continuous1"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261102routeassessment1"></script>
-    <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260712dark4"></script>
+    <script defer src="/static/js/modules/navigation/speed-gps.js?v=20261110continuous1"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
     <script defer src="/static/js/modules/navigation/road-report.js?v=20260711zzzk"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20261108unitrestore1"></script>
@@ -173,10 +173,10 @@
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
     <script defer src="/static/js/app/parking-orchestration.js?v=20261031phase12fgr7r8"></script>
-    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261031phase12fgr9"></script>
+    <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20261109overlays1"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/gps-orchestration.js?v=20261110recovery1"></script>
+    <script defer src="/static/js/app/gps-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261108unitrestore1"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
@@ -195,13 +195,13 @@
     <script defer src="/static/js/app/road-name-orchestration.js?v=20260712aaep"></script>
     <script defer src="/static/js/app/mobile-pwa-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/hazard-preferences-orchestration.js?v=20260712aaer"></script>
-    <script defer src="/static/js/app/journey-summary-orchestration.js?v=20260712aaes"></script>
+    <script defer src="/static/js/app/journey-summary-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/route-comparison-orchestration.js?v=20261109previewstyle1"></script>
     <script defer src="/static/js/app/map-layers-orchestration.js?v=20261109overlays1"></script>
     <script defer src="/static/js/app/map-overlay-orchestration.js?v=20261109overlays1"></script>
     <script defer src="/static/js/app/legacy-preferences-orchestration.js?v=20260811noshake"></script>
     <script defer src="/static/js/app/arrival-preview.js?v=20261105arrivalpreview1"></script>
-    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261108fuelpricing1"></script>
+    <script defer src="/static/js/app/route-preview-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20261108settingsgroups1"></script>
@@ -236,7 +236,7 @@
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/ar-navigation-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712dark4"></script>
-    <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261108alongpoi1"></script>
+    <script defer src="/static/js/app/navigation-lifecycle-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/lane-guidance-orchestration.js?v=20261106ghlanes1"></script>
     <script defer src="/static/js/app/hazard-map-orchestration.js?v=20260712maptheme1"></script>
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261107settlementmerge1"></script>
@@ -1899,17 +1899,17 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m8 5 11 7-11 7Z" /></svg>
                     <span>Play preview</span>
                 </button>
-                <button type="button" class="journey-mode-primary" data-live-recalculate onclick="VoyagrJourneyModes.navigateFromGPS()">
+                <button type="button" class="journey-mode-primary" data-navigation-start onclick="VoyagrJourneyModes.startNavigation()">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-5-8 5Z" /></svg>
-                    <span>Navigate from my location</span>
+                    <span>Start navigation</span>
                 </button>
                 <button type="button" id="startVerifiedHere" data-navigation-start hidden onclick="VoyagrJourneyModes.startHere()">Start verified live navigation here</button>
             </div>
             <p id="journeyModeSummary" role="status" aria-live="polite"></p>
             <details class="journey-mode-info">
                 <summary aria-label="Journey information" title="Journey information"><span aria-hidden="true">ⓘ</span><span>Info</span></summary>
-                <p>Preview plays the planned route. Navigate uses your current location and checks a fresh route.</p>
-                <p>If the start is away from a mapped road, Voyagr waits and retries as you move. No directions are given across the gap. Waiting stops after five minutes or when you close these controls.</p>
+                <p>Start follows the selected route while GPS updates your position. Preview simulates the journey.</p>
+                <p>Road matching and route limitations do not pause navigation. Follow road signs; GPS accuracy and remaining distance are estimates.</p>
                 <p id="journeyModeStatus"></p>
             </details>
             <button type="button" class="journey-mode-end" data-journey-abandon onclick="VoyagrJourneyModes.abandonJourney()">

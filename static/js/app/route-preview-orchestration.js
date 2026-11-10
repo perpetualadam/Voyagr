@@ -252,7 +252,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const planningNotice=document.getElementById('routePlanningNotice');
     if(planningNotice)planningNotice.textContent=integrity?integrity.planningSummary(RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex())):'';
     if (notice && restored) {
-        notice.textContent='Saved journey is preview only; navigation cannot start. Recalculate from your actual location and destination.';
+        notice.textContent='Saved route. Start follows its selected geometry; recalculate to request an updated route from your location.';
     } else if (notice && integrity) {
         const selected=RS().resolvePreviewRoute(routeData,rt().getSelectedRouteIndex());
         notice.textContent=RS().buildRouteEvidenceText(selected)+'. '+integrity.summary(selected);

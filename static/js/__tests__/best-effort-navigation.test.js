@@ -55,18 +55,18 @@ test('verified route starts without the hazard warning',()=>{
     expect(Life.startTurnByTurnNavigation(r)).toBe(true);
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
 });
-test.each(['VIOLATED','UNVERIFIED','UNSUPPORTED'])('mandatory %s never becomes best effort or changes protected state',status=>{
+test.each(['VIOLATED','UNVERIFIED','UNSUPPORTED'])('mandatory %s remains refused by automatic gates but does not disable explicit Start',status=>{
     const r=route('speed_cameras',status,'mandatory');const context=bindTransition();bindStart(context);
     const before=context.snapshot();const confirm=jest.spyOn(global,'confirm').mockReturnValue(true);
     for (const automatic of [false,true]) expect(AI.gate(r,{storage:localStorage,automatic,confirm})).toBe(false);
     expect(Life.startTurnByTurnNavigation(r)).toBe(false);
     expect(context.snapshot()).toBe(before);
-    expect(UX.present(r)).toMatchObject({allowed:false,outcome:'REFUSED'});
-    expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
-    expect(document.getElementById('routeAvoidanceNotice').textContent).toMatch(/safety requirements/);
+    expect(UX.present(r)).toMatchObject({allowed:true,outcome:'ADVISORY',assessmentOutcome:'REFUSED'});
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toMatch(/limitations are informational/);
     expect(confirm).not.toHaveBeenCalled();
 });
-test.each(['origin','binding','stale','snapshot','saved','backend','missing','mandatory-missing'])('%s critical failure cannot be replaced by a preference warning',failure=>{
+test.each(['origin','binding','stale','snapshot','saved','backend','missing','mandatory-missing'])('%s assessment remains refused by the automatic gate while usable explicit guidance is advisory',failure=>{
     const r=route();
     if(failure==='origin')r.avoidance_assessment.origin_integrity.navigation_allowed=false;
     if(failure==='binding')r.avoidance_assessment.geometry_binding='00000000';
@@ -79,17 +79,17 @@ test.each(['origin','binding','stale','snapshot','saved','backend','missing','ma
     // A forged display label never grants permission.
     r.navigation_outcome='BEST_EFFORT';
     expect(AI.gate(r,{storage:localStorage})).toBe(false);
-    expect(UX.present(r).outcome).toBe('REFUSED');
+    expect(UX.present(r).outcome).toBe('ADVISORY');
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
 });
-test('offline start refuses and button eligibility follows connectivity and evidence expiry',()=>{
+test('offline status and evidence expiry do not disable explicit Start',()=>{
     const r=route();const online=jest.spyOn(navigator,'onLine','get');online.mockReturnValue(false);
-    expect(UX.present(r).outcome).toBe('REFUSED');
+    expect(UX.present(r).outcome).toBe('ADVISORY');
     online.mockReturnValue(true);window.dispatchEvent(new Event('online'));
     expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     jest.advanceTimersByTime(601000);
-    expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
-    expect(document.getElementById('navigationStartExplanation').textContent).toMatch(/stale/);
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
+    expect(document.getElementById('navigationStartExplanation').textContent).toMatch(/limitations are informational/);
 });
 test('warning expires at six seconds, remains in details, and does not repeat on ordinary refresh',()=>{
     const r=route();UX.committed(r);
@@ -124,7 +124,8 @@ test('selected alternative cannot borrow primary eligibility',()=>{
     const RS=require('../modules/navigation/route-selection.js');
     const good=route(),bad=route('tolls','UNVERIFIED','mandatory');bad.id='bad';
     const chosen=RS.mergeNavigationRouteFromSelected(good,[good,bad],1);
-    expect(UX.present(chosen).outcome).toBe('REFUSED');
+    expect(UX.present(chosen).outcome).toBe('ADVISORY');
+    expect(AI.gate(chosen,{storage:localStorage,automatic:true})).toBe(false);
 });
 
 test('GPS movement cannot erase active preference details or reauthorize a new start',()=>{
@@ -136,7 +137,7 @@ test('GPS movement cannot erase active preference details or reauthorize a new s
         UX.refresh();
         expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Some hazards could not be avoided');
         expect(AI.gate(r,{storage:localStorage})).toBe(false);
-        expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
+        expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     } finally {global.VoyagrGpsOrchestration=saved;}
 });
 test('verified replacement clears the warning; later changed compliance announces again',()=>{
@@ -160,6 +161,6 @@ test('clearing the presentation cannot leave start controls enabled without a ro
     expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     UX.reset();
     expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
-    expect(document.getElementById('navigationStartExplanation').textContent).toContain('navigation cannot start');
+    expect(document.getElementById('navigationStartExplanation').textContent).toContain('geometry or instructions are incomplete');
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
 });
