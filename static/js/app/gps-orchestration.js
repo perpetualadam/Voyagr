@@ -2098,6 +2098,17 @@
             return true;
         },
         getNavigationPositionEvidence:function(){return navigationPositionEvidence;},
+        // Display evidence only; never authorizes alerts or changes navigation eligibility.
+        getRouteSpeedObservation:function(limitMph){
+            const age=lastAcceptedOriginFix ? Date.now()-lastAcceptedOriginFix.timestamp : NaN;
+            if (!rt().g('routeInProgress') || !Number.isFinite(age) || age<0 || age>15000
+                || !navigationPositionEvidence || navigationPositionEvidence.state!=='RELIABLE'
+                || navigationPositionEvidence.timestamp!==lastAcceptedOriginFix.timestamp
+                || evidencePolyline!==rt().g('routePolyline')
+                || root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()
+                || !Number.isFinite(limitMph) || limitMph<=0 || limitMph>100) return null;
+            return {evidence_state:'ROUTE_OBSERVATION',applicable:false,speed_limit_mph:limitMph};
+        },
         triggerAutomaticRerouteWithHazardHandling: triggerAutomaticRerouteWithHazardHandling,
         triggerAutomaticReroute: triggerAutomaticReroute,
         getSnapBlendWeightState: getSnapBlendWeightState,

@@ -100,14 +100,20 @@
         const limitValueEl = document.getElementById('speedLimitValue');
         const limitUnitEl = document.getElementById('speedLimitUnit');
         const mappedLabel = document.getElementById('speedLimitMappedLabel');
-        const mapped = observation && observation.evidence_state === 'MAPPED_OBSERVATION'
+        const routeObservation = observation && observation.evidence_state === 'ROUTE_OBSERVATION';
+        const mapped = observation && (observation.evidence_state === 'MAPPED_OBSERVATION' || routeObservation)
             && observation.applicable === false && Number.isFinite(observation.speed_limit_mph)
             && observation.speed_limit_mph > 0 && observation.speed_limit_mph <= 100;
-        if (mappedLabel) mappedLabel.hidden = !mapped;
+        const observationTitle = routeObservation ? 'From the selected route; check road signs' : 'Mapped speed; check road signs';
+        if (mappedLabel) {
+            mappedLabel.hidden = !mapped;
+            mappedLabel.textContent = routeObservation ? 'Route' : 'Mapped';
+            mappedLabel.title = observationTitle;
+        }
         const circle = document.getElementById('speedLimitCircle');
         if (circle) {
             circle.style.borderColor = mapped ? '#777' : '#E53935';
-            circle.title = mapped ? 'Mapped speed; check road signs' : '';
+            circle.title = mapped ? observationTitle : '';
         }
         if (limitValueEl && limitUnitEl) {
             const resolvedLimit = (evidence && evidence.applicable===true && evidence.evidence_state==='MAPPED_POSTED' && speedLimitInMph !== null && speedLimitInMph > 0)
@@ -214,6 +220,10 @@
             var known=legal && legal.applicable===true && legal.evidence_state==='MAPPED_POSTED';
             var observation=!known && root.VoyagrRoadMatchOrchestration.getSpeedObservation
                 ? root.VoyagrRoadMatchOrchestration.getSpeedObservation() : null;
+            if (!known && !observation && root.VoyagrGpsOrchestration
+                && root.VoyagrGpsOrchestration.getRouteSpeedObservation) {
+                observation=root.VoyagrGpsOrchestration.getRouteSpeedObservation(valhallaSpeedLimit);
+            }
             applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
                 speedObservation:observation,
                 statePatch:{currentLimitMph:known ? legal.speed_limit_mph : null,currentSpeedLimitMph:known ? legal.speed_limit_mph : null},

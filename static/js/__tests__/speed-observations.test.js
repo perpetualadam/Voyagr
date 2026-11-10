@@ -91,3 +91,28 @@ test('real road owner opts into Overpass observations without pausing navigation
         delete window.VoyagrRoadMatchOrchestration;delete window.VoyagrRoadMatching;
     }
 });
+
+test('road enrichment falls back to a labelled route value without legal alerts, respecting units and precedence',()=>{
+    const widget=require('../app/speed-widget-orchestration.js');
+    document.body.innerHTML='<div id="speedWidget"><span id="speedValue"></span><span id="speedUnitDisplay"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden>Mapped</span></div></div>';
+    let unit='mph',mapped=null,legal=null,route={evidence_state:'ROUTE_OBSERVATION',applicable:false,speed_limit_mph:30};
+    const oldRoad=window.VoyagrRoadMatchOrchestration,oldGps=window.VoyagrGpsOrchestration;
+    window.VoyagrRoadMatchOrchestration={getAttributes:()=>legal?{speed:legal}:null,getSpeedObservation:()=>mapped};
+    window.VoyagrGpsOrchestration={getRouteSpeedObservation:jest.fn(()=>route)};
+    widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=>unit,
+        getIsTrackingActive:()=>true,getRouteInProgress:()=>true,call:{getSpeedUnit:()=>unit}});
+    const value=()=>document.getElementById('speedLimitValue').textContent;
+    const badge=document.getElementById('speedLimitMappedLabel');
+    const tick=()=>widget.fetchSpeedLimitThrottled(53.524,-1.13,25,'residential',30,0);
+    try {
+        tick();expect(value()).toBe('30');expect(badge.textContent).toBe('Route');expect(badge.hidden).toBe(false);
+        expect(window.VoyagrGpsOrchestration.getRouteSpeedObservation).toHaveBeenCalledWith(30);
+        expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+        unit='km/h';tick();expect(value()).toBe('48');expect(document.getElementById('speedLimitUnit').textContent).toBe('km/h');
+        mapped={evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:20};
+        tick();expect(value()).toBe('32');expect(badge.textContent).toBe('Mapped');expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+        legal={evidence_state:'MAPPED_POSTED',applicable:true,speed_limit_mph:40};
+        tick();expect(value()).toBe('64');expect(badge.hidden).toBe(true);expect(widget.getCurrentSpeedLimitMph()).toBe(40);
+        legal=null;mapped=null;route=null;tick();expect(value()).toBe('—');expect(badge.hidden).toBe(true);expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+    } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;}
+});
