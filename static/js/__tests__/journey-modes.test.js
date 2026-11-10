@@ -51,9 +51,9 @@ test('manual coordinate text is explicit coordinates, never presumed GPS',()=>{
     expect(Plan.endpoint({value:'53,-1',dataset:{}},'53,-1').kind).toBe('coordinates');
     expect(Plan.coordinate([true,-1])).toBeNull();
 });
-test('elsewhere/manual displaced origin remains inspectable and never authorizes live guidance',()=>{
+test('displaced origin remains inspectable without implicitly starting guidance',()=>{
     const r=selected();r.avoidance_assessment.origin_integrity.navigation_allowed=false;r.avoidance_assessment.origin_integrity.origin_displacement_m=23.7;preview(r);
-    expect(Modes.choose()).toBe(true);expect(document.getElementById('journeyModeStatus').textContent).toMatch(/refused/i);
+    expect(Modes.choose()).toBe(true);expect(document.getElementById('journeyModeStatus').textContent).toBe('Start navigation or play a preview.');
     const before={route:window.lastCalculatedRoute,polyline:Life.getRoutePolyline(),steps:Life.getCurrentRouteSteps()};
     expect(Modes.startSimulation()).toBe(true);expect(document.getElementById('simulationIndicator').hidden).toBe(false);
     expect(document.getElementById('journeyModeChooser').hidden).toBe(true);
@@ -356,7 +356,7 @@ test('unindexed maneuvers do not fabricate timed turn instructions',()=>{
     const inspected=Plan.inspection(r,AI);expect(Plan.position(inspected,0).instruction).toMatch(/instructions unavailable/);
 });
 
-test('journey chooser displays endpoint gaps and preserves the selected planning locations',()=>{
+test('journey chooser keeps its actions concise and preserves the selected planning locations',()=>{
     const route=selected();
     Object.assign(route.avoidance_assessment.origin_integrity,{
         navigation_allowed:false,status:'UNVERIFIED',reason:'material_endpoint_relocation',
@@ -366,10 +366,7 @@ test('journey chooser displays endpoint gaps and preserves the selected planning
     const before=JSON.stringify(window.lastCalculatedRoute);
     expect(Modes.choose()).toBe(true);
     const message=document.getElementById('journeyModeStatus').textContent;
-    expect(message).toContain('start: about 24 m');
-    expect(message).toContain('destination: about 23 m');
-    expect(message).toContain('separate driving arrival point');
-    expect(message).toContain('actual GPS location');
+    expect(message).toBe('Start navigation or play a preview.');
     expect(JSON.stringify(window.lastCalculatedRoute)).toBe(before);
     expect(Modes.liveStartPermitted(route)).toBe(false);
     expect(runtime.fetch).not.toHaveBeenCalled();
@@ -631,4 +628,11 @@ describe('immediate navigation entry',()=>{
  test('explicit GPS recalculation accepts a coarse first fix without waiting for a 30 m improvement',async()=>{
   locations=[position(53,100)];expect(await Modes.navigateFromGPS()).toBe(true);expect(runtime.acceptPosition.mock.calls[0][0].coords.accuracy).toBe(100);expect(navigator.geolocation.watchPosition).not.toHaveBeenCalled();
  });
+});
+
+test('reported 8 m start and 7 m destination offsets do not interrupt explicit Start',async()=>{
+ const route=selected();Object.assign(route.avoidance_assessment.origin_integrity,{navigation_allowed:false,status:'UNVERIFIED',reason:'material_endpoint_relocation',origin_displacement_m:8,destination_displacement_m:7});preview(route);
+ Modes.choose();expect(await Modes.startNavigation()).toBe(true);expect(Life.getRouteInProgress()).toBe(true);expect(calls.showJourneySummaryBar).toHaveBeenCalled();
+ const text=context.status.mock.calls.map(row=>row[0]).join(' ');expect(text).not.toMatch(/requested locations|cannot start|legal access|recalculate|car park entrance/i);
+ expect(window.lastCalculatedRoute.avoidance_assessment.origin_integrity.origin_displacement_m).toBe(8);expect(runtime.fetch).not.toHaveBeenCalled();
 });

@@ -190,18 +190,8 @@
         });
     }
     function enabledMandatory(r) { return r.enabled && r.mode==='mandatory'; }
-    function endpointGapMessage(origin) {
-        var gaps=[];
-        [['origin_displacement_m','start'],['destination_displacement_m','destination']].forEach(function(entry){
-            var meters=origin[entry[0]];
-            if(Number.isFinite(meters)&&meters>2)gaps.push(entry[1]+': about '+Math.round(meters)+' m');
-        });
-        return 'Requested locations and routed road endpoints differ'+(gaps.length?' ('+gaps.join('; ')+')':'')+'. '+
-            'Search locations may be snapped to nearby roads. The distance alone does not establish vehicle access. Your requested locations are unchanged. '+
-            'For planning, inspect the route or select a separate driving arrival point, such as a car park entrance, and recalculate. '+
-            'For live navigation, request a new route from your actual GPS location. '+
-            'Voyagr does not yet verify legal access across endpoint gaps or reliably match GPS to the correct road. '+
-            'Choosing a road point or passing the distance check does not verify access. Navigation cannot start on this route.';
+    function endpointGapMessage() {
+        return 'Locations are matched to nearby roads.';
     }
     function evidenceDecision(route, options) {
         options = options || {};
@@ -326,7 +316,7 @@
         var a=route && route.avoidance_assessment;
         var limits=route && Array.isArray(route.provider_limitations) ? route.provider_limitations : [];
         var limitation=limits.some(function(item) { return item && item.category==='tolls'; }) ? ' Toll avoidance was not applied by this provider.' : limits.length ? ' Some preferences could not be applied by this provider.' : '';
-        if (!a || !a.origin_integrity || a.origin_integrity.navigation_allowed!==true) return 'Unverified start or destination connectivity. Planning preview only; navigation cannot start. Review avoidance evidence and recalculate from the actual location.'+limitation;
+        if (!a || !a.origin_integrity || a.origin_integrity.navigation_allowed!==true) return 'Unverified route information.'+limitation;
         var refused=(root.localStorage ? currentDecision(route, {}, root.localStorage) : decision(route)).allowed===false;
         if (a.claim==='avoidance_disabled' && !refused) return 'Avoidance disabled.'+limitation;
         var labels={SATISFIED:'Verified against available data only',VIOLATED:'Known conflict',UNVERIFIED:'Unverified',UNSUPPORTED:'Unsupported'};
@@ -334,7 +324,7 @@
         var unresolved=rows.filter(function(r) { return r && r.enabled && r.status!=='SATISFIED'; });
         return (refused && a.status==='SATISFIED' ? 'Unverified' : labels[a.status] || 'Unverified') + (unresolved.length ? ': '+unresolved.map(function(r) { return String(r.category || 'unknown').replace(/_/g,' '); }).join(', ') : '') +
             '. Map coverage, road association and data age may be limited.'+
-            (refused ? ' Preview only; navigation cannot start. Recalculate with the current requirements.' : '')+limitation;
+            (refused ? ' Route information is advisory.' : '')+limitation;
     }
     function arrivalSummary(endpoint, label) {
         var arrival=endpoint&&endpoint.arrival_access;

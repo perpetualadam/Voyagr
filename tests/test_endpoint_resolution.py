@@ -414,7 +414,7 @@ process.stdout.write(JSON.stringify(result));
                                    capture_output=True, cwd=Path(__file__).resolve().parents[1], check=True).stdout)
     assert 'chosen arrival point' in row['planning']
     assert 'original destination is retained' in row['planning']
-    assert 'limitations are informational' in row['safety']
+    assert 'information is advisory' in row['safety']
     assert row['disabled'] is False
 
 
