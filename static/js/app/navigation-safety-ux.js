@@ -42,7 +42,7 @@
         // Preserve the committed route information while displaying moving GPS.
         // Presentation alone never starts a journey.
         var details=route===activeRoute && committedDetails && lifecycle && lifecycle.getRouteInProgress() ? committedDetails : result;
-        var text = details.outcome==='REFUSED' ? details.message : details.outcome==='ADVISORY' ? 'Route limitations are informational. '+WARNING : details.outcome==='BEST_EFFORT' ? 'Some hazards could not be avoided. '+WARNING : 'Route safety checks passed against available evidence. Avoidance is not guaranteed.';
+        var text = details.outcome==='REFUSED' ? details.message : details.outcome==='ADVISORY' ? 'Route information is advisory.' : details.outcome==='BEST_EFFORT' ? 'Some hazards could not be avoided. '+WARNING : 'Route safety checks passed against available evidence. Avoidance is not guaranteed.';
         if (details.outcome==='BEST_EFFORT' && details.preferenceWarnings.length) {
             text += ' Unresolved preferences: '+details.preferenceWarnings.map(function(row) {return row.category.replace(/_/g,' ');}).join(', ')+'.';
         }
@@ -69,6 +69,12 @@
         if (!result.allowed) return false;
         activeRoute=candidate; committedDetails=result;
         present(candidate);
+        const assessment=candidate && candidate.avoidance_assessment;
+        const endpointOnly=result.outcome==='ADVISORY' && assessment && assessment.origin_integrity &&
+            assessment.origin_integrity.reason==='material_endpoint_relocation' &&
+            !(assessment.requirements || []).some(row=>row.enabled && row.status!=='SATISFIED') &&
+            !(candidate.provider_limitations || []).length;
+        if (endpointOnly) { warningKey=null; dismiss(); return true; }
         if (result.outcome!=='BEST_EFFORT' && result.outcome!=='ADVISORY') { warningKey=null; dismiss(); return true; }
         var key=JSON.stringify([result.outcome,result.preferenceWarnings]);
         if (key===warningKey) return true;

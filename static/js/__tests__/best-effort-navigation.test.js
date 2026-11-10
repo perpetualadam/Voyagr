@@ -63,7 +63,7 @@ test.each(['VIOLATED','UNVERIFIED','UNSUPPORTED'])('mandatory %s remains refused
     expect(context.snapshot()).toBe(before);
     expect(UX.present(r)).toMatchObject({allowed:true,outcome:'ADVISORY',assessmentOutcome:'REFUSED'});
     expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
-    expect(document.getElementById('routeAvoidanceNotice').textContent).toMatch(/limitations are informational/);
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toMatch(/information is advisory/);
     expect(confirm).not.toHaveBeenCalled();
 });
 test.each(['origin','binding','stale','snapshot','saved','backend','missing','mandatory-missing'])('%s assessment remains refused by the automatic gate while usable explicit guidance is advisory',failure=>{
@@ -89,7 +89,7 @@ test('offline status and evidence expiry do not disable explicit Start',()=>{
     expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     jest.advanceTimersByTime(601000);
     expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
-    expect(document.getElementById('navigationStartExplanation').textContent).toMatch(/limitations are informational/);
+    expect(document.getElementById('navigationStartExplanation').textContent).toMatch(/information is advisory/);
 });
 test('warning expires at six seconds, remains in details, and does not repeat on ordinary refresh',()=>{
     const r=route();UX.committed(r);
@@ -163,4 +163,11 @@ test('clearing the presentation cannot leave start controls enabled without a ro
     expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
     expect(document.getElementById('navigationStartExplanation').textContent).toContain('geometry or instructions are incomplete');
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
+});
+
+test('endpoint-only 8 m/7 m snapping keeps Start enabled without a hazard warning after commit',()=>{
+ const r=route('tolls','SATISFIED');Object.assign(r.avoidance_assessment.origin_integrity,{navigation_allowed:false,status:'UNVERIFIED',reason:'material_endpoint_relocation',origin_displacement_m:8,destination_displacement_m:7});
+ expect(UX.present(r)).toMatchObject({allowed:true,outcome:'ADVISORY'});expect(document.getElementById('startVerifiedHere').disabled).toBe(false);expect(UX.committed(r)).toBe(true);
+ expect(document.getElementById('bestEffortWarning').hidden).toBe(true);expect(document.getElementById('routeAvoidanceNotice').textContent).toBe('Route information is advisory.');
+ expect(r.avoidance_assessment.origin_integrity.navigation_allowed).toBe(false);
 });

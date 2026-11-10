@@ -165,7 +165,7 @@ test('route display retains arrival limitations while allowing explicit Start',(
     UX.present(route);jest.advanceTimersByTime(1100);
     expect(document.getElementById('routePlanningNotice').textContent).toContain('chosen arrival point');
     expect(document.getElementById('routePlanningNotice').textContent).toContain('onward connection is not included');
-    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('limitations are informational');
+    expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('information is advisory');
     expect(document.querySelector('[data-navigation-start]').disabled).toBe(false);
     UX.reset();jest.useRealTimers();
 });

@@ -468,7 +468,7 @@
             if(state==='WAITING_FOR_ROAD'){status('Waiting for a mapped road — guidance off.','info');return true;}
             setState('CHOOSING');
             var d=integrity().currentDecision(selected,{offline:navigator.onLine===false},localStorage);
-            status(d.outcome==='REFUSED'?'Live navigation refused for this plan: '+d.message+' You may inspect the geometry or request a new route from GPS.':'Choose simulation or a new journey from your actual GPS location.');
+            status('Start navigation or play a preview.');
             var direct=document.getElementById('startVerifiedHere');var can=false;
             try{var fix=realFix(),o=selected.avoidance_assessment.origin_integrity;can=!rt().isLive()&&!(retainedIntent&&retainedIntent.identity===key(selected))&&!!fix&&plan().distance([fix.lat,fix.lon],o.requested_origin)<=2&&d.allowed;}catch(_){}
             if(direct)direct.hidden=!can;

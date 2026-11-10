@@ -47,37 +47,22 @@ test('captured assessment expiry is a separate rejection, not inferred browser c
 });
 
 
-test('captured city search gap explains both endpoints without relocating or authorizing them',()=>{
- const route=options()[0];
- route.journey_context={origin:{kind:'searched'},destination:{kind:'searched'}};
- const before=JSON.stringify(route);
- const result=AI.decision(route);
+test('endpoint road matching is a brief note and preserves the requested locations and assessment',()=>{
+ const route=options()[0];route.journey_context={origin:{kind:'searched'},destination:{kind:'searched'}};
+ const before=JSON.stringify(route);const result=AI.decision(route);
  expect(result).toMatchObject({allowed:false,acceptance:false,outcome:'REFUSED'});
- expect(result.message).toContain('start: about 24 m');
- expect(result.message).toContain('destination: about 23 m');
- expect(result.message).toContain('separate driving arrival point');
- expect(result.message).toContain('actual GPS location');
- expect(result.message).toContain('does not yet verify legal access');
- expect(result.message).toContain('passing the distance check does not verify access');
- expect(result.message).not.toContain('until endpoint connections are verified');
- expect(result.message).toContain('requested locations are unchanged');
+ expect(result.message).toBe('Locations are matched to nearby roads.');
+ expect(result.message).not.toMatch(/cannot start|recalculate|entrance|legal access/i);
  expect(JSON.stringify(route)).toBe(before);
 });
-test.each([
- [24,0,'start: about 24 m','destination:'],
- [0,23,'destination: about 23 m','start:'],
- [2,2,null,'about'],
- [undefined,undefined,null,'about'],
- [NaN,Infinity,null,'about'],
- [-1,'23',null,'about'],
-])('endpoint refusal reports only finite material gaps (%p, %p)',(start,end,present,absent)=>{
+test.each([[8,7],[24,0],[0,23],[2,2],[undefined,undefined],[NaN,Infinity],[-1,'23']])(
+ 'endpoint offsets (%p, %p) stay in route data without adding a navigation lecture',(start,end)=>{
  const route=options()[0],origin=route.avoidance_assessment.origin_integrity;
  origin.origin_displacement_m=start;origin.destination_displacement_m=end;
  const result=AI.decision(route);
  expect(result.allowed).toBe(false);expect(result.acceptance).toBe(false);
- if(present)expect(result.message).toContain(present);
- expect(result.message).not.toContain(absent);
- expect(result.message).toContain('distance alone does not establish vehicle access');
+ expect(result.message).toBe('Locations are matched to nearby roads.');
+ expect(origin.origin_displacement_m).toBe(start);expect(origin.destination_displacement_m).toBe(end);
 });
 
 const parkingAssessment=require('./fixtures/sheffield-unnamed-parking-assessment-20261104.json');
@@ -85,7 +70,8 @@ test('captured unnamed-parking assessment refuses endpoint relocation despite pr
  const route=JSON.parse(JSON.stringify(parkingAssessment)),before=JSON.stringify(route);
  const result=AI.decision(route);
  expect(result).toMatchObject({allowed:false,acceptance:false,outcome:'REFUSED'});
- expect(result.message).toContain('start: about 24 m');expect(result.message).toContain('destination: about 14 m');
+ expect(result.message).toBe('Locations are matched to nearby roads.');
+ expect(route.avoidance_assessment.origin_integrity.origin_displacement_m).toBeGreaterThan(20);
  expect(route.avoidance_assessment.requirements.some(row=>row.enabled&&row.mode==='mandatory')).toBe(false);
  expect(AI.planningSummary(route)).toContain('No entrance reference is available');
  expect(JSON.stringify(route)).toBe(before);

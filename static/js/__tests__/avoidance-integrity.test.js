@@ -304,7 +304,7 @@ test('valid mandatory route reaches real bootstrap, unresolved selected alternat
     expect(Lifecycle.startTurnByTurnNavigation(good)).toBe(false);
     expect(mapControls).toHaveBeenCalledTimes(1);
     expect(confirm).not.toHaveBeenCalled();
-    expect(AI.summary(bad)).toContain('Preview only; navigation cannot start');
+    expect(AI.summary(bad)).toContain('Route information is advisory.');
 });
 
 test('persisted mandatory route passes real resume handler but cannot restore permission',async()=>{
@@ -400,6 +400,6 @@ test('preview does not call a stale requirement snapshot verified or offer an ov
     localStorage.setItem('pref_avoidance_requirements',JSON.stringify([
         {category:'railway_crossings',enabled:true,mode:'mandatory'}]));
     const notice=AI.summary(r);
-    expect(notice).toContain('Unverified');expect(notice).toContain('Preview only; navigation cannot start');
+    expect(notice).toContain('Unverified');expect(notice).toContain('Route information is advisory.');
     expect(notice).not.toContain('Verified against available data only');
 });

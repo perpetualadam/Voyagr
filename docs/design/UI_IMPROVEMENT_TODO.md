@@ -1367,3 +1367,22 @@ Validation: 3,391 frontend tests with coverage/lint; declared web backend select
 MapLibre replay passed phone/desktop sizes in light/dark with a moving observed
 marker and visible ETA/decreasing miles or kilometres. Device/provider boundaries
 are synthetic. The old code fails the marker/countdown regression. No deployment.
+
+
+### Concise endpoint information — 10 November 2026
+
+- [x] Remove the legacy endpoint-gap paragraph telling users navigation cannot
+  start or asking them to choose an entrance/recalculate. The brief matching note
+  is now “Locations are matched to nearby roads.”
+- [x] Journey controls say “Start navigation or play a preview.” Assessment summaries
+  no longer contradict the explicit-Start policy with preview-only instructions.
+- [x] Keep endpoint-only snapping from raising a generic hazard banner at startup;
+  actual unresolved hazard/preference information retains its existing warning path.
+- [x] Preserve coordinates, offset/assessment data and automatic-selection decisions.
+  Verify the reported 8 m start / 7 m destination case starts through the real
+  lifecycle without a refusal paragraph or extra routing/location request.
+
+Validation: 3,394 frontend tests with coverage/lint; declared web backend selection
+2,244 tests plus 74 subtests passed, one skipped; 11 isolated SQL checks. Browser
+script tags versioned. No deployment; VPS update/app reload and device acceptance
+remain pending.
