@@ -1253,3 +1253,21 @@ and production GPS/map/lifecycle cases cover compatible variants, different inte
 unresolved preferences, permitted best effort, explicit primary choice, other
 engine families, hazard warning retention, actual replacement before notice, and
 no notice after failed map verification. No production deployment/config changes.
+
+## Recalculation responsiveness — investigation (10 November 2026)
+
+- [x] Trace thresholds, GPS cadence, dwell/debounce, grace, retries and shared timeout.
+  [Report](REROUTE_RESPONSIVENESS_INVESTIGATION.md) and read-only replay script added.
+- [ ] First: reset stale off-route streak/timer when evidence becomes unknown or
+  untrusted; prove fresh reacquisition cannot borrow the old confirmation window.
+- [ ] Then: replace blanket 90-second post-reroute suppression with confirmed-
+  deviation handling while retaining duplicate/in-progress protection.
+- [ ] Measure real accepted GPS cadence and end-to-end engine timings before tuning
+  distance thresholds or dwell. Exercise actual abort/error/retry integration.
+- [ ] Separately review zero/unknown accuracy handling; no real-device fault proved.
+
+Replay: 12 seconds after threshold at one-Hz updates, 20 seconds at five-second
+updates, 96 seconds in the immediate post-success case. These are synthetic inputs,
+not measured wrong-turn/provider latency. The existing four failure retries bypass
+normal debounce correctly, and the shared client abort timer is 35 seconds.
+Runtime behavior is unchanged by this investigation; handle fixes one at a time.
