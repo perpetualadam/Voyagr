@@ -1426,9 +1426,25 @@ Validation: 3,422 frontend tests with coverage/lint; declared backend selection
 new presentation regressions cover visible aliases, raw-data preservation,
 provider matching, error diagnostics and script ordering. No deployment.
 
-### Reported persistent unknown speed limit — queued next
+### Reported persistent unknown speed limit — route fallback
 
-- [ ] Investigate the speed-limit widget showing `--` for an entire established-road
+- [x] Investigate the speed-limit widget showing `--` for an entire established-road
   journey. Trace acquisition, road association, route edge limits and rendering;
   obtain the affected road/location where possible. Keep this separate from the
   provider-label change and preserve the existing navigation fixes.
+- Reported journey: Bromcliffe Park to North Street, Barnsley. No device trace or
+  route response was supplied, so the exact live failure and mapped limits on that
+  journey remain unverified. Road age does not establish available maxspeed tags.
+- [x] Restore the current maneuver's numeric route speed as a display-only fallback
+  when road enrichment has neither an applicable limit nor a mapped observation.
+  Label it `Route`, retain mph/km/h conversion, and keep legal alert state empty.
+  No road-class default is substituted for missing numeric data.
+- [x] Require fresh GPS associated with the current route geometry for this
+  fallback, clear it on uncertainty or route replacement, and exclude simulation.
+  These display checks do not block navigation, GPS movement or ETA updates.
+- [ ] Confirm on a real-device repeat of the reported journey after deployment;
+  missing limits in both mapped and route data must still display as unknown.
+
+Validation: 3,426 frontend tests with coverage, test lint, declared backend selection
+2,244 tests plus 74 subtests passed (one skipped), and 11 isolated SQL checks.
+Asset-release tests passed after versioning both changed browser scripts.

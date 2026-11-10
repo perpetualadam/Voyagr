@@ -37,3 +37,20 @@ test('invalid or stale readings cannot fabricate movement or reset the displayed
 test('restores a hidden summary for active navigation and leaves it hidden after ending',()=>{
  read(53.005);Summary.hideJourneySummaryBar();Summary.updateJourneySummaryBar();expect(document.getElementById('journeySummaryBar').style.display).toBe('flex');state.routeInProgress=false;Summary.hideJourneySummaryBar();Summary.updateJourneySummaryBar();expect(document.getElementById('journeySummaryBar').style.display).toBe('none');
 });
+
+test('route speed is display-only and expires with GPS, route changes or navigation ending',()=>{
+ read(53.001);expect(GPS.getRouteSpeedObservation(30)).toBeNull();
+ read(53.0011);
+ expect(GPS.getRouteSpeedObservation(30)).toEqual({evidence_state:'ROUTE_OBSERVATION',applicable:false,speed_limit_mph:30});
+ for(const invalid of [null,undefined,NaN,0,-10,101,'30']) expect(GPS.getRouteSpeedObservation(invalid)).toBeNull();
+ state.routeInProgress=false;expect(GPS.getRouteSpeedObservation(30)).toBeNull();state.routeInProgress=true;
+ global.VoyagrJourneyModes={isSimulating:()=>true};expect(GPS.getRouteSpeedObservation(30)).toBeNull();delete global.VoyagrJourneyModes;
+ const line=state.routePolyline;state.routePolyline=line.map(point=>point.slice());
+ expect(GPS.getRouteSpeedObservation(30)).toBeNull();state.routePolyline=line;
+ jest.advanceTimersByTime(15001);expect(GPS.getRouteSpeedObservation(30)).toBeNull();
+});
+test.each(['OFF_ROUTE','coarse'])('%s GPS cannot display a route speed as if still on the route',kind=>{
+ read(53.001);read(53.0011);expect(GPS.getRouteSpeedObservation(30)).not.toBeNull();
+ if(kind==='coarse') read(53.0012,-1,500);else {roadState='OFF_ROUTE';read(53.0012);}
+ expect(GPS.getRouteSpeedObservation(30)).toBeNull();expect(state.routeInProgress).toBe(true);
+});
