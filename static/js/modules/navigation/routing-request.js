@@ -17,6 +17,9 @@
 (function (root) {
     'use strict';
 
+    var RoutingPresentation = typeof module !== 'undefined' && module.exports
+        ? require('./routing-presentation.js') : root.VoyagrRoutingPresentation;
+
     /**
      * Build the shared `/api/route` preference fields common to the initial route and reroute
      * requests. Returns a plain object; callers spread it and add start/end + path-specific keys.
@@ -710,7 +713,7 @@
                 warning: data.routing_warning || data.source,
                 engines: data.engines_failed || {},
             } : null,
-            errorMessage: data.success ? null : ('Error: ' + (data.error || 'Unknown error')),
+            errorMessage: data.success ? null : ('Error: ' + (RoutingPresentation ? RoutingPresentation.systemText(data.error || 'Unknown error') : 'Routing service unavailable')),
             responseLogMeta: {
                 success: data.success,
                 source: data.source,

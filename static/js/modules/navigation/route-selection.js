@@ -5,6 +5,9 @@
 (function (root) {
     'use strict';
 
+    var RoutingPresentation = typeof module !== 'undefined' && module.exports
+        ? require('./routing-presentation.js') : root.VoyagrRoutingPresentation;
+
     // Classic browser scripts load units first; CommonJS tests import the same pure helper.
     var Units = typeof module !== 'undefined' && module.exports ? require('./units.js') : root.VoyagrUnits;
 
@@ -364,7 +367,7 @@
     function buildRouteComparisonCardHtml(route, index, opts) {
         opts = opts || {};
         var routeColor = resolveRouteColor(index, opts.routeColors);
-        var routeName = route.name || ('Route ' + (index + 1));
+        var routeName = publicRoutingText(route.name || ('Route ' + (index + 1)));
         var hazardCount = route.hazard_count || 0;
         var hazardColor = hazardBadgeColor(hazardCount);
         var fuelCost = parseFloat(route.fuel_cost || 0);
@@ -673,19 +676,19 @@
         html += '<div style="margin-top: 8px; font-size: 12px;">';
         if (recommendations.cheapest) {
             html += '<div style="margin-bottom: 6px;">💰 <strong>Cheapest:</strong> Route ' +
-                recommendations.cheapest.route_id + ' - ' + recommendations.cheapest.reason + '</div>';
+                recommendations.cheapest.route_id + ' - ' + publicRoutingText(recommendations.cheapest.reason) + '</div>';
         }
         if (recommendations.fastest) {
             html += '<div style="margin-bottom: 6px;">⚡ <strong>Fastest:</strong> Route ' +
-                recommendations.fastest.route_id + ' - ' + recommendations.fastest.reason + '</div>';
+                recommendations.fastest.route_id + ' - ' + publicRoutingText(recommendations.fastest.reason) + '</div>';
         }
         if (recommendations.scenic) {
             html += '<div style="margin-bottom: 6px;">🌿 <strong>Scenic:</strong> Route ' +
-                recommendations.scenic.route_id + ' - ' + recommendations.scenic.reason + '</div>';
+                recommendations.scenic.route_id + ' - ' + publicRoutingText(recommendations.scenic.reason) + '</div>';
         }
         if (recommendations.quiet) {
             html += '<div>🛤️ <strong>Quiet:</strong> Route ' +
-                recommendations.quiet.route_id + ' - ' + recommendations.quiet.reason + '</div>';
+                recommendations.quiet.route_id + ' - ' + publicRoutingText(recommendations.quiet.reason) + '</div>';
         }
         html += '</div></div>';
         return html;
@@ -877,7 +880,7 @@
     function buildShowRouteComparisonErrorExecutePlan(error) {
         error = error || {};
         return {
-            statusMessage: 'Error: ' + (error.message || 'unknown'),
+            statusMessage: 'Error: ' + publicRoutingText(error.message || 'unknown'),
             errorLogPrefix: '[Comparison] Error:',
             logArgs: [error],
         };
@@ -1470,7 +1473,7 @@
      * @returns {string}
      */
     function getRouteComparisonApiErrorMessage(error) {
-        return 'Error comparing routes: ' + (error || 'Unknown error');
+        return 'Error comparing routes: ' + publicRoutingText(error || 'Unknown error');
     }
 
     /**
@@ -1508,8 +1511,10 @@
      * @returns {string}
      */
     function routeEngineLabel(route) {
-        var source=String(route && route.source || '').toLowerCase();
-        return source.includes('graphhopper') ? 'GraphHopper' : source.includes('valhalla') ? 'Valhalla' : source.includes('osrm') ? 'OSRM' : 'Unknown engine';
+        return RoutingPresentation ? RoutingPresentation.sourceLabel(route && route.source) : 'Routing service';
+    }
+    function publicRoutingText(text) {
+        return RoutingPresentation ? RoutingPresentation.systemText(text) : String(text == null ? '' : text).replace(/\b(?:graph[\s_-]*hopper|valhalla|osrm)\b/gi,'Routing service');
     }
     function buildRouteEvidenceText(route) {
         route=route || {};
@@ -1525,7 +1530,7 @@
     function buildPreviewAlternativeRouteCardHtml(route, index, opts) {
         opts = opts || {};
         var routeColor = resolveRouteColor(index, opts.routeColors);
-        var routeName = route.name || ('Route ' + (index + 1));
+        var routeName = publicRoutingText(route.name || ('Route ' + (index + 1)));
         var hazardCount = route.cameras_near_route != null ? route.cameras_near_route : (route.hazard_count || 0);
         var hazardColor = hazardBadgeColor(hazardCount);
         var totalCost = computeRouteTotalCost(route).toFixed(2);
@@ -2413,7 +2418,7 @@
         error = error || {};
         return {
             shouldApply: true,
-            statusMessage: 'Route preview failed: ' + (error.message || 'unknown'),
+            statusMessage: 'Route preview failed: ' + publicRoutingText(error.message || 'unknown'),
             statusType: 'error',
             logPrefix: 'Route preview error:',
             hideRouteProgressBar: true,

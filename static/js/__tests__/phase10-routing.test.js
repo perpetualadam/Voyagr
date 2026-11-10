@@ -19,9 +19,9 @@ test('actual HTTP response handler never logs or consumes a proxy HTML error bod
     expect(text).not.toHaveBeenCalled();
     expect(JSON.stringify(log.mock.calls)).not.toContain('token-secret');
 });
-test('preview cards identify engine and distinguish nearby markers from verified encounters',()=>{
+test('preview cards identify public source and distinguish nearby markers from verified encounters',()=>{
     const RS=require('../modules/navigation/route-selection.js');
     const html=RS.buildPreviewAlternativeRouteCardHtml({name:'⚡ Optimised',source:'GraphHopper',duration_minutes:26,distance_km:22.7,cameras_near_route:20,avoidance_assessment:{status:'UNVERIFIED'},camera_evidence:{evaluated:true,applicable:0,possible:20}},0,{distanceText:'22.7',distUnit:'km',currencySymbol:'£'});
-    expect(html).toContain('GraphHopper');expect(html).toContain('Nearby 20');expect(html).toContain('Unverified');
+    expect(html).toContain('Route source A');expect(html).not.toContain('GraphHopper');expect(html).toContain('Nearby 20');expect(html).toContain('Unverified');
     expect(html).not.toMatch(/camera.free/i);
 });

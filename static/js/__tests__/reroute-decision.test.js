@@ -1094,13 +1094,13 @@ describe('engine continuity within known routing intent',()=>{
  });
  test('engine fallback notice is short and uses a controlled provider name',()=>{
   const outcome=RD.buildAutomaticRerouteOutcomePlan({success:true,routes:[route('⚡ Optimised','Valhalla')]},{previousRouteName:'⚡ Optimised',previousRouteSource:'GraphHopper'});
-  expect(outcome.notification.body).toBe('Using Valhalla for this route.');
-  expect(RD.buildAutomaticRerouteResultExecutePlan(RD.buildAutomaticRerouteResultApplyPlan(outcome)).notification.body).toBe('Using Valhalla for this route.');
+  expect(outcome.notification.body).toBe('Using Route source B for this route.');
+  expect(RD.buildAutomaticRerouteResultExecutePlan(RD.buildAutomaticRerouteResultApplyPlan(outcome)).notification.body).toBe('Using Route source B for this route.');
  });
  test('fallback notice retains hazard warning text',()=>{
   const vh={...route('⚡ Optimised','Valhalla'),hazard_count:2};
   const outcome=RD.buildAutomaticRerouteOutcomePlan({success:true,routes:[vh]},{previousRouteSource:'GraphHopper'});
-  expect(outcome.notification.type).toBe('warning');expect(outcome.notification.body).toContain('Using Valhalla');expect(outcome.notification.body).toContain('2 unavoidable hazards');
+  expect(outcome.notification.type).toBe('warning');expect(outcome.notification.body).toContain('Using Route source B');expect(outcome.notification.body).toContain('2 unavoidable hazards');
  });
 });
 

@@ -53,7 +53,7 @@ test('same-intent GraphHopper label variant wins over an exact-name alternative 
 test('a different-intent GraphHopper option permits a brief fallback notice only after the real replacement',async()=>{
  const notices=[];gpsRuntime.call.sendNotification=(_title,body)=>notices.push({body,source:window.lastCalculatedRoute.source});
  await reroute([candidate('vh','Valhalla','Optimised'),candidate('gh','GraphHopper','Scenic')]);
- expect(window.lastCalculatedRoute.id).toBe('vh');expect(notices).toEqual([{body:'Using Valhalla for this route.',source:'Valhalla'}]);
+ expect(window.lastCalculatedRoute.id).toBe('vh');expect(notices).toEqual([{body:'Using Route source B for this route.',source:'Valhalla'}]);
 });
 test('map replacement refusal cannot announce an engine switch',async()=>{
  const notices=[];gpsRuntime.call.sendNotification=(_title,body)=>notices.push(body);

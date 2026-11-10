@@ -24,6 +24,9 @@
 (function (root) {
     'use strict';
 
+    var RoutingPresentation = typeof module !== 'undefined' && module.exports
+        ? require('./routing-presentation.js') : root.VoyagrRoutingPresentation;
+
     var DEFAULTS = {
         DEVIATION_THRESHOLD_METERS: 50,
         DEVIATION_TIME_THRESHOLD_MS: 10000,
@@ -730,11 +733,7 @@
         return Array.isArray(rows)&&rows.every(function(row){return row&&(!row.enabled||row.mode!=='preference'||row.status==='SATISFIED');});
     }
     function routeEngineLabel(source) {
-        var key=normalizeRouteSourceKey(source);
-        if(key.indexOf('graphhopper')>=0)return 'GraphHopper';
-        if(key.indexOf('valhalla')>=0)return 'Valhalla';
-        if(key.indexOf('osrm')>=0)return 'OSRM';
-        return 'another routing engine';
+        return RoutingPresentation ? RoutingPresentation.sourceLabel(source) : 'Routing service';
     }
 
     /**
