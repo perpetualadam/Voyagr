@@ -496,7 +496,7 @@
         function publish(callback){publishingPlan=true;try{return callback();}finally{publishingPlan=false;}}
         planningCommit=owner;
         try{
-            if(!candidate||!integrity().prepareNavigationCandidate(candidate))throw Error('Plan assessment, geometry or maneuvers are incomplete. Current journey retained.');
+            if(!candidate||!integrity().preparePlanningCandidate(candidate))throw Error('Plan assessment, geometry or maneuvers are incomplete. Current journey retained.');
             plan().inspection(candidate,integrity());
             var assessment=candidate.avoidance_assessment,origin=assessment.origin_integrity;
             if(hadJourney&&!(assessment.automatic_selection_allowed===true&&assessment.requires_acceptance===false&&origin&&origin.navigation_allowed===true&&origin.status==='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'&&origin.transition_verified!==true&&assessment.requirements.every(function(row){return !row.enabled||row.mode!=='mandatory'||row.status==='SATISFIED';})))throw Error('This new plan has unresolved critical checks. Current journey retained; explicitly end it before inspecting another refused plan.');

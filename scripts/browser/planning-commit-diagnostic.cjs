@@ -90,7 +90,7 @@ function install() {
             const release=wrap(operations,name,row,name,name==='stage'?stage:null);if(release)releases.push(release);
         }
         const temporary=[];
-        for(const [object,name,label] of safely(()=>[[window.VoyagrAvoidanceIntegrity,'prepareNavigationCandidate','candidate_revalidation'],[window.VoyagrJourneyPlan,'inspection','inspection']],[])){
+        for(const [object,name,label] of safely(()=>[[window.VoyagrAvoidanceIntegrity,'preparePlanningCandidate','candidate_revalidation'],[window.VoyagrAvoidanceIntegrity,'prepareNavigationCandidate','candidate_revalidation'],[window.VoyagrJourneyPlan,'inspection','inspection']],[])){
             const release=wrap(object,name,row,label);if(release)temporary.push(release);
         }
         let result;

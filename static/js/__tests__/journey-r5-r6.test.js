@@ -191,10 +191,8 @@ test.each([
  ['missing identity',r=>{delete r.id;},'missing_candidate_identity'],
  ['malformed geometry',r=>{r.geometry='?';},'geometry_or_assessment_binding_mismatch'],
  ['assessment mismatch',r=>{r.avoidance_assessment.geometry_binding='deadbeef';},'geometry_or_assessment_binding_mismatch'],
- ['expired assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000-601;},'expired_assessment'],
  ['missing maneuvers',r=>{r.maneuvers=[];},'missing_or_invalid_maneuvers'],
  ['missing instruction',r=>{delete r.maneuvers[0].instruction;},'missing_or_invalid_maneuvers'],
- ['future assessment',r=>{r.avoidance_assessment.checked_at=Date.now()/1000+60;},'future_assessment'],
 ])('candidate rejection reports %s and preserves the previous journey',async(_,mutate,reason)=>{
  mutate(next);const before=ctx.snapshot();await Calc.calculateRoute();expect(ctx.snapshot()).toBe(before);
  expect(ctx.status.mock.calls.some(([text])=>text.includes(reason)&&text.startsWith('Route preview failed:'))).toBe(true);
@@ -265,4 +263,28 @@ test('unselected arrival is a handled warning and retains the active journey',as
  expect(ctx.status).toHaveBeenLastCalledWith(expect.stringContaining('Select the driving arrival point again'),'warning');
  expect(ctx.status.mock.calls.at(-1)[0]).toContain('Previous journey retained');
  expect(confirm).not.toHaveBeenCalled();
+});
+
+// Planning/preview has no browser/server wall-clock prerequisite. The actual
+// calculation, owned transaction, persisted context and mounted map are exercised.
+test.each([.001,60,3600,-601])('idle preview accepts assessment clock offset %p seconds without rewriting it',async offset=>{
+ jest.spyOn(Date,'now').mockReturnValue(Date.now());
+ Life.setRouteInProgress(false);next.avoidance_assessment.checked_at=Date.now()/1000+offset;next.avoidance_assessment.origin_integrity.checked_at=next.avoidance_assessment.checked_at;
+ const assessment=JSON.stringify(next.avoidance_assessment);
+ expect(await Calc.calculateRoute()).toBe(true);expect(Compare.getRouteOptions()[0].id).toBe(next.id);expect(Life.getRouteInProgress()).toBe(false);expect(JSON.stringify(window.lastCalculatedRoute.avoidance_assessment)).toBe(assessment);
+ expect(AI.prepareNavigationCandidate(window.lastCalculatedRoute)).toBeNull();expect(ctx.status.mock.calls.some(([text])=>text.startsWith('Route preview failed:'))).toBe(false);
+ expect(ctx.mapHelpers.isPolylineLayerMounted(ctx.map,ctx.runtime.getRouteLayer(),AI.geometryPoints(next))).toBe(true);
+});
+test('future-dated planning replacement still saves the previous continuation and requires its owned commit',async()=>{
+ next.avoidance_assessment.checked_at=Date.now()/1000+60;
+ expect(await Calc.calculateRoute()).toBe(true);expect(confirm).toHaveBeenCalledTimes(1);expect(Life.getRouteInProgress()).toBe(false);expect(window.lastCalculatedRoute.id).toBe(next.id);expect(AI.prepareNavigationCandidate(window.lastCalculatedRoute)).toBeNull();
+ const record=await Off.loadActiveRouteRecord(indexedDB);expect(record.routeData.id).toBe(next.id);
+});
+
+test('fresh session with no previous journey can calculate a preview despite a server-ahead timestamp',async()=>{
+ Life.setRouteInProgress(false);Life.setRoutePolyline(null);Life.setCurrentRouteSteps([]);Compare.setRouteOptions([]);Compare.setSelectedRouteIndex(0);window.lastCalculatedRoute=null;
+ ctx.runtime.getRouteLayer().remove();ctx.runtime.setRouteLayer(null);
+ next.avoidance_assessment.checked_at=Date.now()/1000+60;
+ expect(await Calc.calculateRoute()).toBe(true);expect(window.lastCalculatedRoute.id).toBe(next.id);expect(Compare.getRouteOptions()).toHaveLength(1);expect(Life.getRouteInProgress()).toBe(false);expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+ await new Promise(resolve=>setTimeout(resolve,350));expect(calcRt.call.showRoutePreview).toHaveBeenCalledTimes(1);
 });

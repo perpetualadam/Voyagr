@@ -448,7 +448,7 @@
                 if(!modes.intentCurrent(labels.planningToken)||!orch.execute.shouldExecute)throw Error('New planning request was cancelled or invalid; previous journey retained.');
                 var options=rt().routeSelection().buildRouteOptionsFromApiResponse(data,rt().call.decodePolyline,orch.execute.routePath);
                 var candidateDiagnostics={};
-                var candidate=root.VoyagrAvoidanceIntegrity.prepareNavigationCandidate(Object.assign({},options[0],{destination:labels.geocodedEnd,destinationName:labels.end,avoidance_requirements:data.avoidance_requirements}),candidateDiagnostics);
+                var candidate=root.VoyagrAvoidanceIntegrity.preparePlanningCandidate(Object.assign({},options[0],{destination:labels.geocodedEnd,destinationName:labels.end,avoidance_requirements:data.avoidance_requirements}),candidateDiagnostics);
                 if(!candidate)throw Error('New route candidate rejected ('+(candidateDiagnostics.reason||'candidate_preparation_failed')+'); previous journey retained.');
                 options[0]=candidate;
                 return await modes.commitPlanning(labels.planningToken,candidate,planningOperations(orch,data,candidate,options));
@@ -577,7 +577,7 @@
         try {
             var integrity=root.VoyagrAvoidanceIntegrity,modes=root.VoyagrJourneyModes,plan=root.VoyagrJourneyPlan;
             if(!integrity||['begin','current','isLatest','finish','fetchOptions','augment','tag',
-                'prepareNavigationCandidate','geometryPoints','responseCurrent','gate'].some(function(name){return typeof integrity[name]!=='function';}))return null;
+                'prepareNavigationCandidate','preparePlanningCandidate','geometryPoints','responseCurrent','gate'].some(function(name){return typeof integrity[name]!=='function';}))return null;
             if(modes&&['beforePlanning','captureIntent','intentCurrent','endpointIntentCompatible','commitPlanning']
                 .some(function(name){return typeof modes[name]!=='function';}))return null;
             if((modes&&!plan)||(plan&&typeof plan.requestContext!=='function')||(modes&&typeof plan.inspection!=='function'))return null;
