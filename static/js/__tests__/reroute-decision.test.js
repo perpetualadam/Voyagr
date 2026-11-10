@@ -845,7 +845,7 @@ describe('reroute retry and notification helpers', () => {
 describe('buildRouteDeviationTickPlan', () => {
     const now = 1_700_000_000_000;
 
-    test('suppresses reroute trigger during post-reroute grace but still tracks deviation', () => {
+    test('ends grace after a fully confirmed and debounced new deviation', () => {
         const plan = RD.buildRouteDeviationTickPlan({
             autoRerouteEnabled: true,
             hasRoute: true,
@@ -861,9 +861,9 @@ describe('buildRouteDeviationTickPlan', () => {
             postRerouteGraceUntil: now + 5000,
             distanceUnit: 'km',
         });
-        expect(plan.action).toBe('grace-suppressed');
-        expect(plan.triggerReroute).toBeUndefined();
-        expect(plan.trackDeviation).toBe(true);
+        expect(plan.action).toBe('reroute');
+        expect(plan.triggerReroute).toBe(true);
+        expect(plan.statePatch.postRerouteGraceUntil).toBe(0);
     });
 
     test('applies reroute notification and state patch when deviation confirmed', () => {
@@ -1108,4 +1108,24 @@ test.each([['Valhalla','Scenic','🌿 Scenic'],['OSRM','Fastest',' Fastest ']])(
  const current={name:variant,source,avoidance_assessment:{automatic_selection_allowed:true,requirements:[]}};
  const other={name,source:'GraphHopper',avoidance_assessment:{automatic_selection_allowed:true,requirements:[]}};
  expect(RD.pickRerouteRouteFromResponse([other,current],{previousRouteName:name,previousRouteSource:source})).toBe(current);
+});
+
+describe('conditional grace confirmation guards',()=>{
+ const now=1800000000000;
+ const confirmed=extra=>({autoRerouteEnabled:true,hasRoute:true,remainingToDest:5000,accuracy:5,minDistance:200,routeJoinConfirmed:true,deviationStartTime:now-12000,offRouteStreak:3,lastRerouteTime:now-40000,lastRerouteAttemptTime:now-40000,now,postRerouteGraceUntil:now+50000,...extra});
+ test.each([
+  ['debounce',{lastRerouteAttemptTime:now-5000}],['in-progress',{rerouteInProgress:true}],
+  ['untrusted',{accuracy:100}],['on-route',{minDistance:5}],['short-dwell',{deviationStartTime:now-1000}],
+  ['unjoined',{routeJoinConfirmed:false}],['arrival',{remainingToDest:50}],['disabled',{autoRerouteEnabled:false}]
+ ])('%s cannot end grace or request a new route',(_name,extra)=>{
+  const p=RD.buildRouteDeviationTickPlan(confirmed(extra));expect(p.triggerReroute).not.toBe(true);expect(p.statePatch&&p.statePatch.postRerouteGraceUntil).toBeUndefined();
+ });
+ test('a newly confirmed deviation clears grace through both apply plans',()=>{
+  const p=RD.buildRouteDeviationTickPlan(confirmed({}));const apply=RD.buildRouteDeviationStateApplyPlan(RD.buildRouteDeviationApplyPlan(p,{}));
+  expect(apply.triggerReroute).toBe(true);expect(apply.statePatch.postRerouteGraceUntil).toBe(0);
+ });
+ test('the direct trigger retains grace and in-progress protection',()=>{
+  expect(RD.shouldSkipRerouteTrigger(now,{postRerouteGraceUntil:now+10000}).reason).toBe('grace');
+  expect(RD.shouldSkipRerouteTrigger(now,{rerouteInProgress:true,postRerouteGraceUntil:0}).reason).toBe('in-progress');
+ });
 });

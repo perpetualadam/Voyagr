@@ -1285,7 +1285,7 @@ Runtime behavior is unchanged by this investigation; handle fixes one at a time.
   retries, in-progress ownership and all thresholds. No 90-second grace change.
 - [x] Version GPS/decision script tags. Keep existing invalid/ambiguous-fix regressions
   strict about protected state while explicitly allowing the two intended resets.
-- [ ] Next: evaluate confirmed-deviation handling during the post-reroute grace period.
+- [x] Evaluate and improve confirmed-deviation handling during the post-reroute grace period.
 - [ ] Real-device outage/reacquisition and deviation acceptance remain pending.
 
 Validation: 3,340 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
@@ -1296,3 +1296,20 @@ recovery, nonzero progress preservation and normal continuous rerouting. The
 read-only replay now reports zero saved streak/null timer and a waiting first
 restored reading. Normal one-Hz timing remains 12 seconds; post-success remains
 96 seconds in the existing synthetic scenario. No deployment/config/data change.
+
+
+### Confirmed deviation during grace — 10 November 2026
+
+A fully confirmed new GPS deviation now ends post-reroute grace before invoking
+its guarded request. Distance, accuracy, route join, arrival, dwell, 30-second
+debounce and in-progress checks remain unchanged. Unconfirmed readings and direct
+triggers retain the 90-second grace guard. Failure retries retain their existing
+schedule. No production deployment or configuration/data changes.
+
+The synthetic post-success replay requests at 31 seconds instead of 96; ordinary
+first-deviation scenarios remain 12 seconds at 1 Hz and 20 seconds at five-second
+updates. These measure request timing after threshold crossing, not live guidance
+latency. Real-device acceptance remains pending.
+
+Validation: test lint; 3,353 frontend tests; declared web backend selection 2,244
+passed, 74 subtests passed, one skipped; 11 isolated SQL checks; diagnostic replay.

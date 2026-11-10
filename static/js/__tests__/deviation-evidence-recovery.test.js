@@ -59,3 +59,30 @@ test('watch restart preserves nonzero navigation progress and outstanding visits
  GPS.ensureGPSTracking({forceRestart:true,documentVisible:true});expect(state.lastSnappedRouteIndex).toBe(1);expect(state.remainingVisits).toBe(visits);
  expect(state.deviationStartTimeCheck).toBeNull();expect(state.deviationOffRouteStreak).toBe(0);expect(state.lastRerouteAttemptTime).toBe(456);
 });
+
+test('a confirmed new deviation after success fetches at 31 seconds and clears grace before the trigger',async()=>{
+ state.lastRerouteTime=BASE;state.lastRerouteAttemptTime=BASE;state.postRerouteGraceUntil=BASE+90000;
+ for(let i=0;i<=30;i++){if(i)jest.advanceTimersByTime(1000);deliver(position());}
+ expect(global.fetch).not.toHaveBeenCalled();expect(state.postRerouteGraceUntil).toBe(BASE+90000);
+ jest.advanceTimersByTime(1000);deliver(position());expect(global.fetch).toHaveBeenCalledTimes(1);expect(state.postRerouteGraceUntil).toBe(0);expect(state.lastRerouteAttemptTime).toBe(BASE+31000);
+ // A duplicate tick while this request is unresolved cannot start another one.
+ jest.advanceTimersByTime(1000);deliver(position());expect(global.fetch).toHaveBeenCalledTimes(1);
+ for(let i=0;i<8;i++)await Promise.resolve();
+ // The normal first failure retry remains allowed after confirmed grace exit.
+ jest.advanceTimersByTime(4000);expect(global.fetch).toHaveBeenCalledTimes(2);
+ for(let i=0;i<8;i++)await Promise.resolve();
+});
+test('a direct request inside grace stays suppressed until new evidence confirms deviation',async()=>{
+ state.postRerouteGraceUntil=BASE+90000;await GPS.triggerAutomaticRerouteWithHazardHandling(53.005,-1.003);
+ expect(global.fetch).not.toHaveBeenCalled();expect(state.postRerouteGraceUntil).toBe(BASE+90000);
+});
+
+test('uncertainty inside grace requires a fresh full confirmation even after debounce has elapsed',async()=>{
+ state.lastRerouteTime=BASE;state.lastRerouteAttemptTime=BASE;state.postRerouteGraceUntil=BASE+90000;
+ for(let i=0;i<3;i++){if(i)jest.advanceTimersByTime(1000);deliver(position());}
+ jest.advanceTimersByTime(19000);classification='UNKNOWN';deliver(position());classification='OFF_ROUTE';
+ for(let elapsed=22;elapsed<=33;elapsed++){jest.advanceTimersByTime(1000);deliver(position());}
+ expect(global.fetch).not.toHaveBeenCalled();expect(state.postRerouteGraceUntil).toBe(BASE+90000);
+ jest.advanceTimersByTime(1000);deliver(position());expect(global.fetch).toHaveBeenCalledTimes(1);expect(state.postRerouteGraceUntil).toBe(0);
+ for(let i=0;i<8;i++)await Promise.resolve();
+});

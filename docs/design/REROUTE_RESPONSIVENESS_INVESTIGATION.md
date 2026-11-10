@@ -132,3 +132,25 @@ investigated revision: ordinary one-Hz triggering still takes 12 seconds and the
 post-success case still takes 96 seconds. Blanket grace handling remains the next
 separate increment. This does not change zero-accuracy policy, cancel already
 owned requests, or establish real-device accuracy/reception quality.
+
+
+## Resolution: confirmed deviation during grace — 10 November 2026
+
+The earlier 96-second result above describes the historical baseline. A new
+confirmed deviation now ends grace in the GPS apply path before the guarded
+request. This occurs only after the existing distance, trusted accuracy, join,
+arrival, consecutive readings, dwell and 30-second debounce requirements pass.
+The in-progress guard still prevents duplicate requests. The 90-second guard
+remains for unconfirmed readings and direct triggers; a new successful replacement
+sets it again. Normal failure retries remain available after confirmation.
+
+The same synthetic post-success replay now triggers at 31 seconds. First deviation
+remains 12 seconds at 1 Hz and 20 seconds with five-second updates. Actual GPS
+handler regressions verify no request through second 30, one at second 31,
+duplicate suppression, subsequent failure retry and fresh confirmation after
+uncertain evidence. These are request timings after the distance threshold is
+crossed, not provider response or guidance-start guarantees.
+
+Validation: test lint, 3,353 frontend tests, declared web backend selection
+(2,244 passed, 74 subtests passed, one skipped), 11 isolated SQL checks and replay.
+No production deployment. Real-device acceptance is still pending.

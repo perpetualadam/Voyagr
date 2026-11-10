@@ -271,23 +271,22 @@
         };
 
         if (decision.action === 'reroute') {
-            if (inPostRerouteGrace) {
-                plan.action = 'grace-suppressed';
-                plan.trackDeviation = true;
-            } else {
-                plan.statePatch.lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
-                plan.rerouteAttemptIncrement = true;
-                plan.notification = buildDeviationRerouteNotification(
-                    opts.minDistance,
-                    opts.distanceUnit,
-                    decision.deviationDuration
-                );
-                plan.logDeviation = {
-                    minDistance: opts.minDistance,
-                    deviationDuration: decision.deviationDuration,
-                };
-                plan.triggerReroute = true;
-            }
+            // Fresh confirmation has passed distance, accuracy, joining, dwell
+            // and debounce checks. End blanket grace for this new deviation;
+            // unconfirmed/direct triggers still retain their existing grace guard.
+            if(inPostRerouteGrace)plan.statePatch.postRerouteGraceUntil=0;
+            plan.statePatch.lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
+            plan.rerouteAttemptIncrement = true;
+            plan.notification = buildDeviationRerouteNotification(
+                opts.minDistance,
+                opts.distanceUnit,
+                decision.deviationDuration
+            );
+            plan.logDeviation = {
+                minDistance: opts.minDistance,
+                deviationDuration: decision.deviationDuration,
+            };
+            plan.triggerReroute = true;
         } else if (decision.action === 'debounced' || decision.action === 'waiting') {
             plan.trackDeviation = true;
         }
@@ -502,6 +501,7 @@
      * GPS-tick spacing is already enforced by decideRouteDeviation (lastRerouteAttemptTime
      * + REROUTE_DEBOUNCE_MS). This guard must NOT repeat that debounce: failure retries
      * (4–14s) fire inside the 30s window, and a just-confirmed deviation must still fetch.
+     * Confirmed GPS deviation ends grace in its apply path; direct triggers retain it.
      *
      * @param {number} now
      * @param {Object} state
