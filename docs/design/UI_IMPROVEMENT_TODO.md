@@ -1408,3 +1408,27 @@ Validation: test lint and 3,410 frontend tests; declared backend selection 2,244
 passed plus 74 subtests, one skipped; 11 isolated SQL checks. The previous Calculate
 path fails the new future-timestamp preview regression. Browser script tags updated.
 No deployment or production clock/configuration/data changes.
+
+
+### Public route-source labels — 10 November 2026
+
+- [x] Present routing providers as Route source A/B/C in route evidence, profile
+  titles, fallback notices, routing errors and comparison recommendations.
+- [x] Keep canonical source/name fields, provider diagnostics, geometry precision
+  and engine-family selection unchanged. Avoid rewriting destinations or directions.
+- [x] Use generic routing-service language in public privacy text; retain technical
+  names in developer/operator diagnostics.
+- [x] Load the shared public presentation helper before its consumers and version
+  changed browser assets. A missing helper uses generic public wording.
+
+Validation: 3,422 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed, one skipped; 11 isolated SQL checks. Twelve
+new presentation regressions cover visible aliases, raw-data preservation,
+provider matching, error diagnostics and script ordering. No deployment.
+
+### Reported persistent unknown speed limit — queued next
+
+- [ ] Investigate the speed-limit widget showing `--` for an entire established-road
+  journey. Trace acquisition, road association, route edge limits and rendering;
+  obtain the affected road/location where possible. Keep this separate from the
+  provider-label change and preserve the existing navigation fixes.
