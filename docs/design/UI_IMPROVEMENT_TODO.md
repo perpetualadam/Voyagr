@@ -1386,3 +1386,25 @@ Validation: 3,394 frontend tests with coverage/lint; declared web backend select
 2,244 tests plus 74 subtests passed, one skipped; 11 isolated SQL checks. Browser
 script tags versioned. No deployment; VPS update/app reload and device acceptance
 remain pending.
+
+
+### Planning preview across clock differences — 10 November 2026
+
+- [x] Trace the uploaded log: successful `/api/route` response followed by idle
+  preview rejection `future_assessment`. The log does not expose the amount of
+  clock skew; any negative assessment age was sufficient for the wrong validator.
+- [x] Use planning-specific candidate validation in Calculate and planning commit.
+  Preserve identity, assessment shape, geometry binding and instruction checks;
+  preview does not depend on browser/server wall-clock agreement or navigation age.
+- [x] Preserve supplied timestamps/assessment fields and strict automatic-navigation
+  freshness checks. Explicit Start keeps the existing advisory policy.
+- [x] Update the read-only planning diagnostic to observe the actual planning
+  validator, while retaining compatibility with older navigation-validator hooks.
+- [x] Cover 1 ms/1 minute/1 hour future timestamps, older assessments, no-previous-
+  journey fresh-session preview, actual delayed preview display and owned active
+  journey replacement; malformed candidates and stale request owners remain refused.
+
+Validation: test lint and 3,410 frontend tests; declared backend selection 2,244
+passed plus 74 subtests, one skipped; 11 isolated SQL checks. The previous Calculate
+path fails the new future-timestamp preview regression. Browser script tags updated.
+No deployment or production clock/configuration/data changes.

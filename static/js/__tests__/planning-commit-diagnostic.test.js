@@ -41,13 +41,13 @@ test('caught presentation failure is recorded without changing the successful co
 test('early stale intent returns false before invoking any operation or style check',async()=>{
  expect(await Modes.commitPlanning(-1,candidate,operations)).toBe(false);const row=report();expect(row.entry_intent_current).toBe(false);expect(row.events).toEqual([]);
 });
-test('expired candidate remains rejected before map staging',async()=>{
- candidate.avoidance_assessment.checked_at-=601;expect(await Modes.commitPlanning(Modes.captureIntent(),candidate,operations)).toBe(false);
+test('malformed geometry binding remains rejected before map staging',async()=>{
+ candidate.avoidance_assessment.geometry_binding='deadbeef';expect(await Modes.commitPlanning(Modes.captureIntent(),candidate,operations)).toBe(false);
  const row=report();expect(seen(row,'candidate_revalidation','returned','empty')).toBe(true);expect(row.events.some(e=>e.operation==='stage')).toBe(false);expect(row.warning_class).toBe('candidate_revalidation_failed');
 });
 test('disposal restores exported functions and temporary revalidation hooks leave no changed implementation',async()=>{
- const rawPrepare=AI.prepareNavigationCandidate,rawInspection=Plan.inspection;ready=true;await Modes.commitPlanning(Modes.captureIntent(),candidate,operations);
- expect(AI.prepareNavigationCandidate).toBe(rawPrepare);expect(Plan.inspection).toBe(rawInspection);const wrapped=Modes.commitPlanning;window.__voyagrPlanningCommitProbe.dispose();expect(Modes.commitPlanning).not.toBe(wrapped);expect(global.map.isStyleLoaded).toBe(originalReady);expect(window.__voyagrPlanningCommitProbe).toBeUndefined();
+ const rawPlanning=AI.preparePlanningCandidate,rawPrepare=AI.prepareNavigationCandidate,rawInspection=Plan.inspection;ready=true;await Modes.commitPlanning(Modes.captureIntent(),candidate,operations);
+ expect(AI.preparePlanningCandidate).toBe(rawPlanning);expect(AI.prepareNavigationCandidate).toBe(rawPrepare);expect(Plan.inspection).toBe(rawInspection);const wrapped=Modes.commitPlanning;window.__voyagrPlanningCommitProbe.dispose();expect(Modes.commitPlanning).not.toBe(wrapped);expect(global.map.isStyleLoaded).toBe(originalReady);expect(window.__voyagrPlanningCommitProbe).toBeUndefined();
 });
 test('requestCurrent=false is observed before staging, without inferring map failure',async()=>{
  operations.requestCurrent=()=>false;expect(await Modes.commitPlanning(Modes.captureIntent(),candidate,operations)).toBe(false);
@@ -57,4 +57,9 @@ test('observer returns the exact coordinator Promise, including a failed result'
  window.__voyagrPlanningCommitProbe.dispose();const coordinator=Modes.commitPlanning;let actual;
  Modes.commitPlanning=function(){actual=coordinator.apply(this,arguments);return actual;};install();
  const observed=Modes.commitPlanning(Modes.captureIntent(),candidate,operations);expect(observed).toBe(actual);expect(await observed).toBe(false);
+});
+
+test.each([-601,60])('diagnostic follows actual planning validation across clock offset %p',async offset=>{
+ ready=true;candidate.avoidance_assessment.checked_at=Date.now()/1000+offset;expect(await Modes.commitPlanning(Modes.captureIntent(),candidate,operations)).toBe(true);
+ const row=report();expect(seen(row,'candidate_revalidation','returned','object')).toBe(true);expect(seen(row,'publish','returned')).toBe(true);expect(window.lastCalculatedRoute).toBe(candidate);
 });

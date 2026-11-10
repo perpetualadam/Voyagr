@@ -66,3 +66,19 @@ test.each([0,599.999,600])('assessment age %p seconds remains within the unchang
  const route=fresh();route.avoidance_assessment.checked_at=epoch-age;
  expect(AI.prepareNavigationCandidate(route)).not.toBeNull();expect(AI.decision(route).allowed).toBe(false);
 });
+
+
+test.each([.001,60,3600,-601])('planning accepts clock offset %p while strict navigation still refuses it',offset=>{
+ const route=fresh(),before=JSON.stringify(route);route.avoidance_assessment.checked_at=epoch+offset;const original=JSON.stringify(route);
+ expect(AI.preparePlanningCandidate(route).polyline).toEqual(AI.geometryPoints(route));expect(JSON.stringify(route)).toBe(original);expect(AI.prepareNavigationCandidate(route)).toBeNull();expect(before).not.toBe(original);
+});
+test.each([
+ ['geometry binding',r=>{r.avoidance_assessment.geometry_binding='deadbeef';}],
+ ['geometry',r=>{r.geometry='?';}],
+ ['instructions',r=>{r.maneuvers=[];}],
+ ['assessment',r=>{delete r.avoidance_assessment;}],
+ ['timestamp',r=>{r.avoidance_assessment.checked_at=Infinity;}],
+ ['zero timestamp',r=>{r.avoidance_assessment.checked_at=0;}],
+])('planning still rejects malformed %s without relying on the browser clock',(_label,mutate)=>{
+ const route=fresh();mutate(route);expect(AI.preparePlanningCandidate(route)).toBeNull();
+});
