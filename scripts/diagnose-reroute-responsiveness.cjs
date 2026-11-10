@@ -3,7 +3,7 @@ const RD=require('../static/js/modules/navigation/reroute-decision');
 const AI=require('../static/js/modules/navigation/avoidance-integrity');
 const base=1000000;
 function initial(extra={}){return {autoRerouteEnabled:true,hasRoute:true,remainingToDest:5000,accuracy:5,minDistance:200,routeJoinConfirmed:true,deviationStartTime:null,offRouteStreak:0,lastRerouteTime:0,lastRerouteAttemptTime:0,rerouteInProgress:false,postRerouteGraceUntil:0,...extra};}
-function apply(state,tick){const applied=RD.buildRouteDeviationStateApplyPlan(RD.buildRouteDeviationApplyPlan(tick,{}));if(applied.action!=='apply')return;const p=applied.statePatch;state.routeJoinConfirmed=p.routeJoinConfirmedForDeviation;state.deviationStartTime=p.deviationStartTimeCheck;state.offRouteStreak=p.deviationOffRouteStreak;}
+function apply(state,tick){const applied=RD.buildRouteDeviationStateApplyPlan(RD.buildRouteDeviationApplyPlan(tick,{}));if(applied.action!=='apply')return;const p=applied.statePatch;state.routeJoinConfirmed=p.routeJoinConfirmedForDeviation;state.deviationStartTime=p.deviationStartTimeCheck;state.offRouteStreak=p.deviationOffRouteStreak;if(p.postRerouteGraceUntil===0)state.postRerouteGraceUntil=0;}
 function replay(interval,extra={}){
  const state=initial(extra),suppressed=[];
  for(let elapsed=0;elapsed<=120000;elapsed+=interval){const tick=RD.buildRouteDeviationTickPlan({...state,now:base+elapsed});apply(state,tick);if(tick.action==='grace-suppressed')suppressed.push(elapsed/1000);if(tick.triggerReroute)return {first_trigger_seconds:elapsed/1000,grace_suppressed_at_seconds:suppressed};}

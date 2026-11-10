@@ -1463,6 +1463,7 @@
         if (stateApply.logJoinLine) console.log(stateApply.logJoinLine);
 
         if (stateApply.triggerReroute) {
+            if(stateApply.statePatch.postRerouteGraceUntil===0)rt().s('postRerouteGraceUntil',0);
             if (stateApply.incrementRerouteAttemptCount) rt().s('rerouteAttemptCount', rt().g('rerouteAttemptCount') + 1);
             if (stateApply.logDeviationLine) console.log(stateApply.logDeviationLine);
             rt().call.sendNotification(
