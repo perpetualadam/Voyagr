@@ -1196,8 +1196,9 @@ Findings: [GraphHopper recalculation investigation](GRAPHHOPPER_RECALCULATION_IN
   alone is not a stop-loss defect.
 - [x] First fix: assess eligible alternatives before the first returned route can
   block a usable GraphHopper candidate; retain all integrity gates.
-- [ ] Clarify engine-family versus named-route fallback priority before changing
-  possible GraphHopper-to-Valhalla selection.
+- [x] Clarify engine continuity within known selected route types and established
+  preferences; retain permitted best effort as fallback and announce engine changes
+  only after confirmed replacement (see following increment).
 - [ ] Extend coverage for legacy/malformed leg metadata and durable replacement
   while retaining normal stop/provenance preservation.
 - [ ] Capture a real-device recalculation trace after fixes; separately exercise
@@ -1225,3 +1226,30 @@ existing engine/name preference, stale preferences and final map-owner recheckin
 A coherence regression now requires malformed directions to be rejected before
 any map attempt; prior geometry/resource and no-success-announcement checks remain.
 No production deployment, routing-server change or engine-fallback redesign.
+
+## Engine continuity and fallback notice (9 November 2026)
+
+- [x] Preserve engine family within the known selected type (Optimised, Fastest,
+  Shortest, Scenic or Quiet), including emoji/spacing and Optimised/Optimized label
+  variants. Never select Scenic instead of Optimised solely to keep GraphHopper.
+- [x] Prefer satisfied preference evidence within that type over a best-effort
+  option, including when the unresolved option has an exact name match. Keep
+  existing permitted best-effort fallback if no matching type establishes them.
+- [x] Retain explicit primary selection, mandatory checks, prior eligible-alternative
+  filtering and final map-owner verification. Unknown route types retain exact-name
+  fallback; names are currently the available type contract, not new authority.
+- [x] Use the existing route-update notification for a short controlled-name notice,
+  such as “Using Valhalla for this route.” It is sent after successful replacement;
+  preserve hazard warning text/severity and do not announce a refused replacement.
+- [x] Update decision-script cache tag, investigation and diagnostic variant probe.
+- [ ] Deployed device acceptance remains pending; no engine availability claim.
+- [ ] Prefer structured backend route-type metadata over label inference when that
+  contract becomes available. Current matching deliberately recognizes only known
+  English route labels; unknown labels do not imply an equivalent type.
+
+Validation: 3,327 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+subtests passed (one skipped); eleven isolated SQL policy tests. New pure decision
+and production GPS/map/lifecycle cases cover compatible variants, different intent,
+unresolved preferences, permitted best effort, explicit primary choice, other
+engine families, hazard warning retention, actual replacement before notice, and
+no notice after failed map verification. No production deployment/config changes.

@@ -1067,3 +1067,45 @@ describe('reroute response and map update helpers', () => {
         expect(RD.buildAutomaticRerouteResultExecutePlan({ action: 'skip' }).shouldApply).toBe(false);
     });
 });
+
+describe('engine continuity within known routing intent',()=>{
+ const route=(name,source='GraphHopper',rows=[])=>({name,source,avoidance_assessment:{automatic_selection_allowed:true,requirements:rows}});
+ const choose=routes=>RD.pickRerouteRouteFromResponse(routes,{previousRouteName:'⚡ Optimised',previousRouteSource:'GraphHopper'});
+ test.each(['Optimised','⚡ Optimized','  ⚡ Optimised  ','⚡ Optimised Discovery'])(
+  'keeps GraphHopper across compatible label %s',name=>{
+   const gh=route(name);expect(choose([route('⚡ Optimised','Valhalla'),gh])).toBe(gh);
+  }
+ );
+ test.each(['Scenic','Quiet','Fastest','Shortest','Unknown route'])('does not change Optimised intent to %s merely to retain GraphHopper',name=>{
+  const vh=route('⚡ Optimised','Valhalla');expect(choose([vh,route(name)])).toBe(vh);
+ });
+ test.each(['UNVERIFIED','VIOLATED','UNSUPPORTED'])('label fallback cannot outrank a preference-compatible route with %s preferences',status=>{
+  const vh=route('⚡ Optimised','Valhalla');const gh=route('Optimised','GraphHopper',[{category:'motorways',enabled:true,mode:'preference',status}]);
+  expect(choose([vh,gh])).toBe(vh);
+ });
+ test('a refused GraphHopper alternative cannot preserve engine continuity',()=>{
+  const gh=route('Optimised');gh.avoidance_assessment.automatic_selection_allowed=false;const vh=route('⚡ Optimised','Valhalla');expect(choose([vh,gh])).toBe(vh);
+ });
+ test('unknown previous intent retains the existing name-based fallback',()=>{
+  const vh=route('UK A1','Valhalla');expect(RD.pickRerouteRouteFromResponse([vh,route('UK A2')],{previousRouteName:'UK A1',previousRouteSource:'GraphHopper'})).toBe(vh);
+ });
+ test('explicit primary selection still takes precedence',()=>{
+  const vh=route('⚡ Optimised','Valhalla');expect(RD.pickRerouteRouteFromResponse([vh,route('Optimised')],{preferPrimary:true,previousRouteName:'⚡ Optimised',previousRouteSource:'GraphHopper'})).toBe(vh);
+ });
+ test('engine fallback notice is short and uses a controlled provider name',()=>{
+  const outcome=RD.buildAutomaticRerouteOutcomePlan({success:true,routes:[route('⚡ Optimised','Valhalla')]},{previousRouteName:'⚡ Optimised',previousRouteSource:'GraphHopper'});
+  expect(outcome.notification.body).toBe('Using Valhalla for this route.');
+  expect(RD.buildAutomaticRerouteResultExecutePlan(RD.buildAutomaticRerouteResultApplyPlan(outcome)).notification.body).toBe('Using Valhalla for this route.');
+ });
+ test('fallback notice retains hazard warning text',()=>{
+  const vh={...route('⚡ Optimised','Valhalla'),hazard_count:2};
+  const outcome=RD.buildAutomaticRerouteOutcomePlan({success:true,routes:[vh]},{previousRouteSource:'GraphHopper'});
+  expect(outcome.notification.type).toBe('warning');expect(outcome.notification.body).toContain('Using Valhalla');expect(outcome.notification.body).toContain('2 unavoidable hazards');
+ });
+});
+
+test.each([['Valhalla','Scenic','🌿 Scenic'],['OSRM','Fastest',' Fastest ']])('known intent continuity also preserves %s', (source,name,variant)=>{
+ const current={name:variant,source,avoidance_assessment:{automatic_selection_allowed:true,requirements:[]}};
+ const other={name,source:'GraphHopper',avoidance_assessment:{automatic_selection_allowed:true,requirements:[]}};
+ expect(RD.pickRerouteRouteFromResponse([other,current],{previousRouteName:name,previousRouteSource:source})).toBe(current);
+});

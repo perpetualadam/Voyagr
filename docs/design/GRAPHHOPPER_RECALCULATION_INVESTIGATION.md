@@ -121,3 +121,20 @@ Non-object alternatives are excluded before provenance tagging. The diagnostic n
 records `actual_map_updates: 1` instead of `0`; remaining-stop preservation and
 engine-fallback observations are unchanged. The historical output above records
 the investigated revision. Real-device/server acceptance still remains pending.
+
+## Resolution of engine fallback policy
+
+Engine continuity now applies within known selected route types, including harmless
+label variants, while established preference evidence takes precedence over a
+best-effort option. Existing permitted best effort remains when no matching type
+establishes preferences. Mandatory safety and map verification are unchanged.
+Exact legacy label handling and explicit primary selection remain compatible;
+unknown labels are not inferred to represent a known intent.
+
+In the original probe, GraphHopper Scenic still does not replace Optimised merely
+to keep an engine. A new compatible GraphHopper Optimized label-variant probe now
+selects GraphHopper over the Valhalla exact-label alternative. Engine switches use
+a brief notice in the existing success notification only after map replacement;
+hazard warning text is retained. No new engine pinning, server endpoint or provider
+availability assumption was added. Structured route-type metadata and deployed
+acceptance remain future work.
