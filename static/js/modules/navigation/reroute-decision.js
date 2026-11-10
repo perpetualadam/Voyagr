@@ -120,7 +120,7 @@
         if (!params.autoRerouteEnabled) return base('disabled');
         if (!params.hasRoute) return base('no-route');
         if (params.remainingToDest <= c.NAV_ARRIVAL_SUPPRESS_REROUTE_METERS) return base('near-destination');
-        if (!isTrustworthyAccuracy(params.accuracy, c)) return base('untrusted-accuracy');
+        if (!isTrustworthyAccuracy(params.accuracy, c)) return base('untrusted-accuracy',{deviationStartTime:null,offRouteStreak:0});
 
         var effectiveThreshold = effectiveDeviationThreshold(params.accuracy, c);
 

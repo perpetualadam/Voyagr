@@ -1258,7 +1258,7 @@ no notice after failed map verification. No production deployment/config changes
 
 - [x] Trace thresholds, GPS cadence, dwell/debounce, grace, retries and shared timeout.
   [Report](REROUTE_RESPONSIVENESS_INVESTIGATION.md) and read-only replay script added.
-- [ ] First: reset stale off-route streak/timer when evidence becomes unknown or
+- [x] First: reset stale off-route streak/timer when evidence becomes unknown or
   untrusted; prove fresh reacquisition cannot borrow the old confirmation window.
 - [ ] Then: replace blanket 90-second post-reroute suppression with confirmed-
   deviation handling while retaining duplicate/in-progress protection.
@@ -1271,3 +1271,28 @@ updates, 96 seconds in the immediate post-success case. These are synthetic inpu
 not measured wrong-turn/provider latency. The existing four failure retries bypass
 normal debounce correctly, and the shared client abort timer is 35 seconds.
 Runtime behavior is unchanged by this investigation; handle fixes one at a time.
+
+## Fresh off-route confirmation after GPS uncertainty (10 November 2026)
+
+- [x] Clear only the active deviation streak/start timer for unknown road association,
+  unknown/reacquiring geometry, rejected GPS fixes and GPS errors. Preserve known
+  OFF_ROUTE accumulation so continuous wrong turns still reach the existing dwell.
+- [x] Start a fresh confirmation episode when the watch restarts or accepted readings
+  resume after the existing 15-second freshness window. Use wall-clock age so a
+  delayed but individually fresh receiver fix cannot borrow an old window.
+- [x] Reset the pure deviation helper's untrusted-accuracy result consistently.
+- [x] Preserve join state, progress, remaining visits, attempt/success timestamps,
+  retries, in-progress ownership and all thresholds. No 90-second grace change.
+- [x] Version GPS/decision script tags. Keep existing invalid/ambiguous-fix regressions
+  strict about protected state while explicitly allowing the two intended resets.
+- [ ] Next: evaluate confirmed-deviation handling during the post-reroute grace period.
+- [ ] Real-device outage/reacquisition and deviation acceptance remain pending.
+
+Validation: 3,340 JavaScript tests with coverage/lint; 2,244 backend tests plus 74
+subtests passed (one skipped); eleven isolated SQL policy tests. Thirteen new
+production watch/decision cases cover known/unknown road and geometry evidence,
+invalid/stale/inaccurate readings, watch errors/restarts, silent and delayed-fix
+recovery, nonzero progress preservation and normal continuous rerouting. The
+read-only replay now reports zero saved streak/null timer and a waiting first
+restored reading. Normal one-Hz timing remains 12 seconds; post-success remains
+96 seconds in the existing synthetic scenario. No deployment/config/data change.

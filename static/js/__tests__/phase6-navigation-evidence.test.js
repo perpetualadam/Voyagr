@@ -102,8 +102,9 @@ test('actual GPS watch rejects ambiguous matching before progress, arrival or vo
     GPS.setGpsTrackingStoppedByUser(false);GPS.setGpsWatchId(null);GPS.setIsTrackingActive(false);
     navigator.geolocation.watchPosition=jest.fn(()=>77);
     GPS.ensureGPSTracking({forceRestart:true,documentVisible:true});
+    mutate.mockClear(); // Restart intentionally clears off-route confirmation only.
     navigator.geolocation.watchPosition.mock.calls[0][0]({timestamp:now,coords:{latitude:53.525,longitude:-1.1299,accuracy:15,speed:0}});
-    expect(mutate).not.toHaveBeenCalled();
+    expect(mutate.mock.calls).toEqual([['deviationStartTimeCheck',null],['deviationOffRouteStreak',0]]);
     expect(GPS.getNavigationPositionEvidence().state).toBe('UNKNOWN');
     expect(showStatus).toHaveBeenCalledWith(expect.stringContaining('progress paused'),'warning');
     time.mockRestore();
