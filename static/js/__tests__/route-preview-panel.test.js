@@ -38,13 +38,22 @@ test('selected-route metrics and all costs hydrate while details remain collapse
     expect(document.getElementById('previewRoutingEngineRow').style.display).toBe('none');
 });
 
-test('route and CAZ limitations cannot be hidden by closing any preview disclosure',()=>{
+test('technical route information is collapsed while costs, preferences and actions remain accessible',()=>{
     const planning=document.getElementById('routePlanningNotice'),avoidance=document.getElementById('routeAvoidanceNotice');
     planning.textContent='Planning only';avoidance.textContent='Navigation refused: mandatory avoidance unresolved';
     apply({fuel_cost:1,caz_cost:10,provider_limitations:['Requested preference unavailable'],
         avoidance_assessment:{status:'NO_COMPLIANT_ROUTE'}});
     document.querySelectorAll('details').forEach(el=>{el.open=false;});
-    for(const id of ['routePlanningNotice','routeAvoidanceNotice','arrivalEndpointPreview','cazStatusContainer','hazardInfoContainer','parkingSection','previewAlternativeRoutesContainer']){
+    const info=document.getElementById('previewRouteInfo');
+    expect(info.open).toBe(false);
+    expect(info.querySelector('summary').getAttribute('aria-label')).toBe('Route information');
+    for(const id of ['routePlanningNotice','routeTrafficLightStatus','routeAvoidanceNotice','arrivalEndpointPreview']){
+        expect(document.getElementById(id).closest('details')).toBe(info);
+    }
+    info.open=true;
+    apply({fuel_cost:1,caz_cost:10,provider_limitations:['Requested preference unavailable'],avoidance_assessment:{status:'NO_COMPLIANT_ROUTE'}});
+    expect(info.open).toBe(true);
+    for(const id of ['cazStatusContainer','hazardInfoContainer','parkingSection','previewAlternativeRoutesContainer']){
         expect(document.getElementById(id).closest('details')).toBeNull();
     }
     expect(avoidance.textContent).toMatch(/Navigation refused/);

@@ -28,7 +28,7 @@ const entrypoints=['startNavigation','startNavigationFromPreview'].map(name=>app
                         {id:'b',name:'Quiet',distance_km:22,duration_minutes:40,fuel_cost:5,toll_cost:0,caz_cost:0,cameras_near_route:0}];
                     window.previewUiCalls=[];
                     window.showStatus=()=>{};
-                    window.VoyagrJourneyModes={PROTOCOL:1,choose:()=>{window.previewUiCalls.push('choose');return false;},startSimulation:()=>window.previewUiCalls.push('play')};
+                    window.VoyagrJourneyModes={PROTOCOL:1,startNavigation:()=>{window.previewUiCalls.push('choose');return false;},startSimulation:()=>window.previewUiCalls.push('play')};
                     const render=index=>{
                         Preview.applyRoutePreviewPanelDomFromPlan(RS.buildRoutePreviewPanelDomApplyPlan(RS.buildRoutePreviewPanelApplyPlan({
                             routeData:routes[index],currencySymbol:'£',distanceText:index?'13.7 mi':'12.4 mi',startLabel:'Sheffield',endLabel:'Doncaster NCP',
@@ -51,7 +51,14 @@ const entrypoints=['startNavigation','startNavigationFromPreview'].map(name=>app
                 });
                 const overflow=()=>page.locator('.bottom-sheet-content').evaluate(el=>el.scrollWidth>el.clientWidth);
                 assert.equal(await overflow(),false,`${width}px ${zoom}x ${theme}: horizontal overflow`);
-                const safetyIds=['routePlanningNotice','routeAvoidanceNotice','cazStatusContainer','hazardInfoContainer'];
+                const info=page.locator('#previewRouteInfo');
+                assert.equal(await info.evaluate(el=>el.open),false);
+                for(const id of ['routePlanningNotice','routeAvoidanceNotice']) assert.equal(await page.locator('#'+id).isVisible(),false);
+                await info.locator('summary').focus();await page.keyboard.press('Enter');
+                for(const id of ['routePlanningNotice','routeAvoidanceNotice']) assert.equal(await page.locator('#'+id).isVisible(),true);
+                await info.locator('summary').focus();await page.keyboard.press('Enter');
+                assert.equal(await info.evaluate(el=>el.open),false);
+                const safetyIds=['cazStatusContainer','hazardInfoContainer'];
                 for(const id of safetyIds){
                     assert.equal(await page.locator('#'+id).isVisible(),true);
                     assert.equal(await page.locator('#'+id).evaluate(el=>el.closest('details')===null),true);

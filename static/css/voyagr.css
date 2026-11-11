@@ -5165,3 +5165,6 @@ html.dark-mode .navigation-save-actions, body.dark-mode .navigation-save-actions
 .navigation-entry :is(button, summary):focus-visible { outline: 3px solid #8456c0; outline-offset: 2px; }
 .navigation-entry-position { width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: #1769d2; box-shadow: 0 0 0 5px #1769d240; }
 html.dark-mode .navigation-entry, body.dark-mode .navigation-entry { background: #20232b; color: #f4f5f8; border-color: #505666; color-scheme: dark; }
+
+/* Technical preview information is available on demand. */
+.preview-route-info-content { padding: 0 4px 12px; overflow-wrap: anywhere; }
