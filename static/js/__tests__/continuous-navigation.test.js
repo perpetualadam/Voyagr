@@ -55,19 +55,46 @@ test.each(['OFF_ROUTE','coarse'])('%s GPS cannot display a route speed as if sti
  expect(GPS.getRouteSpeedObservation(30)).toBeNull();expect(state.routeInProgress).toBe(true);
 });
 
-test.each([0,0.5,250,1000])('real GPS watch with timestamp offset %p carries route speed into the visible widget',timestampOffset=>{
+test.each([[0,5,'mph'],[0.5,5,'mph'],[250,5,'mph'],[1000,5,'mph'],[0,77,'mph'],[0,77,'km/h']])('real GPS watch offset %p accuracy %p unit %p carries a labelled route value', (timestampOffset,accuracy,speedUnit)=>{
  const Widget=require('../app/speed-widget-orchestration'),SL=require('../modules/navigation/speed-limit-widget');
- document.body.insertAdjacentHTML('beforeend','<div id="speedWidget"><span id="speedValue"></span><span id="speedUnitDisplay"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden></span></div></div>');
+ document.body.insertAdjacentHTML('beforeend','<div id="speedWidget"><span id="speedValue"></span><span id="speedUnitDisplay"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden></span></div></div><p id="routeSpeedLimitStatus"></p>');
  state.currentRouteSteps[0].speed_limit=30;state.currentRouteSteps[0].road_class='residential';
  global.VoyagrRoadMatchOrchestration.getAttributes=()=>null;global.VoyagrRoadMatchOrchestration.getSpeedObservation=()=>null;
- Widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>GPS.getIsTrackingActive(),getRouteInProgress:()=>state.routeInProgress,call:{getSpeedUnit:()=> 'mph'}});
+ Widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=>speedUnit,getIsTrackingActive:()=>GPS.getIsTrackingActive(),getRouteInProgress:()=>state.routeInProgress,call:{getSpeedUnit:()=>speedUnit}});
  runtime.m.speedLimitWidget=()=>SL;
  runtime.call.updateSpeedWidget=(speed,limit)=>Widget.updateSpeedWidget(speed,limit);
  runtime.call.fetchSpeedLimitThrottled=(...args)=>Widget.fetchSpeedLimitThrottled(...args);
  runtime.call.getSpeedLimitFetchState=()=>Widget.getSpeedLimitFetchState();
- read(53.001,-1,5,10,timestampOffset);read(53.0011,-1,5,10,timestampOffset);
- expect(GPS.getNavigationPositionEvidence().state).toBe('RELIABLE');
- expect(document.getElementById('speedLimitValue').textContent).toBe('30');
- expect(document.getElementById('speedLimitMappedLabel').textContent).toBe('Route');
+ read(53.001,-1,accuracy,10,timestampOffset);read(53.0011,-1,accuracy,10,timestampOffset);
+ expect(GPS.getNavigationPositionEvidence().state).toBe(accuracy===77?'UNKNOWN':'RELIABLE');
+ expect(document.getElementById('speedLimitValue').textContent).toBe(speedUnit==='mph'?'30':'48');
+ expect(document.getElementById('speedLimitMappedLabel').textContent).toBe(accuracy===77?'Route est.':'Route');
+ if(accuracy===77) {
+  expect(GPS.resolveGpsRouteSnapForTick(53.0011,-1,20)).toBeNull();
+  expect(document.getElementById('routeSpeedLimitStatus').textContent).toContain('route estimate (GPS imprecise)');
+ }
  expect(Widget.getCurrentSpeedLimitMph()).toBeNull();
+});
+
+
+test.each(['different limits','missing limit','outside accuracy area','route replaced','stale fix','known deviation'])('coarse route estimate remains unknown with %s',kind=>{
+ state.routePolyline=[[53,-1],[53.001,-1],[53.002,-1]];
+ state.currentRouteSteps=[{type:1,instruction:'North',begin_shape_index:0,end_shape_index:1,speed_limit:30,road_class:'residential'},
+  {type:8,instruction:'Continue',begin_shape_index:1,end_shape_index:2,speed_limit:30,road_class:'residential'}];
+ if(kind==='different limits') state.currentRouteSteps[1].speed_limit=20;
+ if(kind==='missing limit') delete state.currentRouteSteps[1].speed_limit;
+ if(kind==='known deviation') roadState='OFF_ROUTE';
+ read(53.001,kind==='outside accuracy area'?-1.01:-1,77);
+ if(kind==='route replaced') state.routePolyline=state.routePolyline.map(p=>p.slice());
+ if(kind==='stale fix') jest.advanceTimersByTime(15001);
+ expect(GPS.getRouteSpeedObservation(30)).toBeNull();expect(state.routeInProgress).toBe(true);
+});
+
+test('coarse route estimate neither changes matched position nor route, alert or lane evidence',()=>{
+ state.currentRouteSteps[0].speed_limit=30;state.currentRouteSteps[0].road_class='residential';
+ read(53.001,-1,77);
+ const evidence=GPS.getNavigationPositionEvidence(),routeBefore=JSON.stringify(state.routePolyline);
+ expect(GPS.getRouteSpeedObservation(30)).toEqual({evidence_state:'ROUTE_OBSERVATION',applicable:false,speed_limit_mph:30,position_uncertain:true});
+ expect(GPS.getNavigationPositionEvidence()).toBe(evidence);expect(evidence.state).toBe('UNKNOWN');
+ expect(GPS.resolveGpsRouteSnapForTick(53.001,-1,20)).toBeNull();expect(JSON.stringify(state.routePolyline)).toBe(routeBefore);
 });
