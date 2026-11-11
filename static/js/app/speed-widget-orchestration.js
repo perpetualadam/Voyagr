@@ -213,6 +213,23 @@
         }
     }
 
+    function updateSpeedLimitStatus(known, observation, routeLimit) {
+        const el=document.getElementById('routeSpeedLimitStatus');
+        if (!el) return;
+        const gps=root.VoyagrGpsOrchestration;
+        const position=gps && gps.getNavigationPositionEvidence ? gps.getNavigationPositionEvidence() : null;
+        const fix=gps && gps.getAcceptedOriginFix ? gps.getAcceptedOriginFix() : null;
+        const source=known ? 'mapped road' : observation && observation.evidence_state==='ROUTE_OBSERVATION' ? 'selected route'
+            : observation ? 'mapped observation' : 'unavailable';
+        let text='Speed display: '+source+'. Route-section limit: '+(Number.isFinite(routeLimit) && routeLimit>0 ? 'available' : 'not supplied')+'.';
+        text+=' GPS route position: '+(position && position.state || 'waiting')+'.';
+        if (position && position.reason && source==='unavailable') text+=' '+position.reason+'.';
+        if (fix && Number.isFinite(fix.accuracy) && fix.accuracy>=0 && root.VoyagrUnits) {
+            text+=' GPS accuracy: '+root.VoyagrUnits.formatPreferredDistanceMeters(fix.accuracy)+'.';
+        }
+        el.textContent=text;
+    }
+
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
         if (root.VoyagrRoadMatchOrchestration) {
             var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
@@ -228,6 +245,7 @@
                 speedObservation:observation,
                 statePatch:{currentLimitMph:known ? legal.speed_limit_mph : null,currentSpeedLimitMph:known ? legal.speed_limit_mph : null},
                 widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:known ? legal.speed_limit_mph : null}});
+            updateSpeedLimitStatus(known,observation,valhallaSpeedLimit);
             return;
         }
         if (roadType === undefined) roadType = 'residential';

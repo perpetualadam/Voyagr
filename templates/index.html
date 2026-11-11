@@ -104,7 +104,7 @@
     <script defer src="/static/js/modules/navigation/route-traffic-flow.js?v=20260712aacm"></script>
     <script defer src="/static/js/modules/navigation/navigation-destination.js?v=20260711zzzr"></script>
     <script defer src="/static/js/modules/navigation/movement-detection.js?v=20260711g"></script>
-    <script defer src="/static/js/modules/navigation/eta.js?v=20260712aaaa"></script>
+    <script defer src="/static/js/modules/navigation/eta.js?v=20261111journeycost1"></script>
     <script defer src="/static/js/modules/navigation/live-data-refresh.js?v=20260711zzzy"></script>
     <script defer src="/static/js/modules/navigation/trip-history.js?v=20261108statistics1"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
@@ -182,7 +182,7 @@
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261108unitrestore1"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
     <script defer src="/static/js/app/geocoding-orchestration.js?v=20261108unitdistance1"></script>
-    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261110routespeed1"></script>
+    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261111speedstatus1"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
@@ -1637,6 +1637,7 @@
                             <summary aria-label="Route information"><span aria-hidden="true">ⓘ</span> Info</summary>
                             <div class="preview-route-info-content">
                                 <p id="routePlanningNotice" class="preview-notice" role="status"></p>
+                                <p id="routeSpeedLimitStatus" class="preview-notice">Speed display: waiting for a live GPS update.</p>
                                 <p id="routeTrafficLightStatus" class="preview-notice" role="status"></p>
                                 <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>
                                 <section id="arrivalEndpointPreview" class="preview-arrival-notice" aria-label="Arrival endpoints" hidden></section>

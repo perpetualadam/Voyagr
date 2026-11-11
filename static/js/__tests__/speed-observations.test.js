@@ -116,3 +116,20 @@ test('road enrichment falls back to a labelled route value without legal alerts,
         legal=null;mapped=null;route=null;tick();expect(value()).toBe('—');expect(badge.hidden).toBe(true);expect(widget.getCurrentSpeedLimitMph()).toBeNull();
     } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;}
 });
+
+test('mobile Info distinguishes missing route data from unavailable GPS association without coordinates',()=>{
+ const widget=require('../app/speed-widget-orchestration.js');
+ document.body.innerHTML='<p id="routeSpeedLimitStatus"></p>';
+ const oldRoad=window.VoyagrRoadMatchOrchestration,oldGps=window.VoyagrGpsOrchestration;
+ window.VoyagrRoadMatchOrchestration={getAttributes:()=>null,getSpeedObservation:()=>null};
+ window.VoyagrGpsOrchestration={getRouteSpeedObservation:()=>null,getNavigationPositionEvidence:()=>({state:'UNKNOWN',reason:'Invalid, stale or inaccurate GPS'}),getAcceptedOriginFix:()=>({accuracy:50,lat:53.123456,lon:-1.987654})};
+ widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>true,getRouteInProgress:()=>true,call:{getSpeedUnit:()=> 'mph'}});
+ try {
+  widget.fetchSpeedLimitThrottled(53,-1,20,'residential',30,0);
+  const text=document.getElementById('routeSpeedLimitStatus').textContent;
+  expect(text).toContain('Speed display: unavailable');expect(text).toContain('Route-section limit: available');expect(text).toContain('GPS route position: UNKNOWN');
+  expect(text).toContain('Invalid, stale or inaccurate GPS');expect(text).not.toContain('53.123456');expect(text).not.toContain('-1.987654');
+  widget.fetchSpeedLimitThrottled(53,-1,20,'residential',null,0);
+  expect(document.getElementById('routeSpeedLimitStatus').textContent).toContain('Route-section limit: not supplied');
+ } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;}
+});
