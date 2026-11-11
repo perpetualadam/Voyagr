@@ -26,7 +26,7 @@ test('panel distinguishes chosen point, actual returned endpoint, original desti
     const panel=document.getElementById('arrivalEndpointPreview');
     expect(panel.hidden).toBe(false);expect(panel.textContent).toContain('Chosen driving arrival');
     expect(panel.textContent).toContain('Returned road endpoint');expect(panel.textContent).toContain('Original destination (retained)');
-    expect(panel.textContent).toContain('Straight-line gap: about '+Math.round(Plan.distance(UI.model(r).chosen,UI.model(r).road))+' m');
+    expect(panel.textContent).toContain('Straight-line gap: about '+Math.round(Plan.distance(UI.model(r).chosen,UI.model(r).road)*3.28084)+' ft');
     expect(panel.textContent).toContain('not a driving or walking distance');expect(panel.textContent).toContain('No connection across the gap has been verified');
     expect(made).toHaveLength(2);expect(made[0].setLngLat).toHaveBeenCalledWith(UI.model(r).chosen.slice().reverse());
     expect(made[1].setLngLat).toHaveBeenCalledWith(UI.model(r).road.slice().reverse());

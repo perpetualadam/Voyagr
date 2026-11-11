@@ -1461,3 +1461,17 @@ Asset-release tests passed after versioning both changed browser scripts.
 
 Validation: focused preview/arrival tests and ten real Chromium layout/theme
 scenarios passed. Full frontend/backend and isolated SQL results are in the PR.
+
+### Arrival distances follow settings
+
+- [x] Format planning start/destination offsets and arrival straight-line gaps with
+  shared distance formatting: miles use feet for short gaps, kilometres use metres.
+- [x] Refresh existing arrival labels and planning summaries when distance settings
+  change; preserve canonical metre values, selected points, Info disclosure state
+  and navigation behaviour. No route recalculation is needed for unit changes.
+- [x] Add a real settings-action regression covering miles → kilometres → miles,
+  both offset summaries and arrival labels, without mutating route evidence.
+
+Validation: 3,427 frontend tests with coverage/lint, 2,244 backend tests plus
+74 subtests passed (one skipped), 11 isolated SQL checks and ten Chromium
+preview scenarios. No deployment.

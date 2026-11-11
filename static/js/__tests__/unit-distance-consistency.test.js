@@ -70,3 +70,32 @@ test('a previously closed POI popup formats using the latest units when opened',
         expect(popup.html).toContain('1.0 mi');expect(popup.html).not.toContain('1.6 km');
     }finally{Orch.clearPOIMarkers();window.map=previousMap;global.maplibregl=previousLibrary;}
 });
+
+test('arrival gaps and planning offsets follow real settings changes without changing route evidence',()=>{
+    const AI=require('../modules/navigation/avoidance-integrity.js');
+    const Arrival=require('../app/arrival-preview.js');
+    const route=JSON.parse(JSON.stringify(require('./fixtures/sheffield-doncaster-20261101.json').routes[0]));
+    const end=AI.geometryPoints(route).slice(-1)[0],chosen=[end[0]+0.00015,end[1]-0.00015];
+    route.endpoint_resolution={version:1,authority:'planning_evidence_only',navigation_authority:'NONE',
+        geometry_binding:route.avoidance_assessment.geometry_binding,planning_disposition:'ROAD_SNAPPED',
+        origin:{offset_m:24},destination:{offset_m:24,requested:{coordinates:chosen},routing_anchor:{coordinates:end}}};
+    route.journey_context={destination:{coordinates:chosen}};
+    global.VoyagrAvoidanceIntegrity=AI;global.VoyagrJourneyPlan=Plan;
+    document.body.insertAdjacentHTML('beforeend','<details id="info"><summary>Info</summary><p id="routePlanningNotice"></p><section id="arrivalEndpointPreview"></section></details>');
+    const oldSafety=global.VoyagrNavigationSafetyUX;
+    global.VoyagrNavigationSafetyUX={refresh:()=>{document.getElementById('routePlanningNotice').textContent=AI.planningSummary(route);}};
+    const before=JSON.stringify(route);
+    try {
+        Arrival.render(route,null);change('mi');
+        expect(document.getElementById('routePlanningNotice').textContent).toContain('Start offset: about 79 ft; Destination offset: about 79 ft');
+        const span=document.querySelector('#arrivalEndpointPreview [data-distance-meters]'),canonical=span.dataset.distanceMeters;
+        const feet=Math.round(Number(canonical)*3.28084);
+        expect(span.textContent).toBe(feet+' ft');
+        change('km');
+        expect(document.getElementById('routePlanningNotice').textContent).toContain('Start offset: about 24 m; Destination offset: about 24 m');
+        expect(span.textContent).toBe(Math.round(Number(canonical))+' m');
+        change('mi');expect(span.textContent).toBe(feet+' ft');
+        expect(span.dataset.distanceMeters).toBe(canonical);expect(JSON.stringify(route)).toBe(before);
+        expect(document.getElementById('info').open).toBe(false);
+    } finally {global.VoyagrNavigationSafetyUX=oldSafety;Arrival.clearMap();}
+});

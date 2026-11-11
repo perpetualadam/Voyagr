@@ -13,7 +13,7 @@ beforeEach(()=>{
     Geo.bind({searchAutocomplete:()=>Search,call:{showStatus:jest.fn(),recordRecentDestination:jest.fn()}});
     jest.spyOn(console,'log').mockImplementation(()=>{});
 });
-afterEach(()=>{clock.mockRestore();jest.restoreAllMocks();});
+afterEach(()=>{clock.mockRestore();jest.restoreAllMocks();localStorage.removeItem('unit_distance');});
 function result(){return {lat:'53.3806626',lon:'-1.4702278',name:'Sheffield',type:'city',class:'place',osm_type:'relation',osm_id:123,boundingbox:['53','54','-2','0']};}
 function attach(route,disposition='ROAD_SNAPPED'){
     route.endpoint_resolution={version:1,authority:'planning_evidence_only',navigation_authority:'NONE',geometry_binding:route.avoidance_assessment.geometry_binding,planning_disposition:disposition,
@@ -55,6 +55,7 @@ test('route normalization, selected-route merging and fallback retain independen
 });
 test('planning summary explains ordinary snapping but never grants live navigation',()=>{
     const route=attach(JSON.parse(JSON.stringify(capture.routes[0])));
+    localStorage.setItem('unit_distance','km');
     const before=JSON.stringify(route),summary=AI.summary(route);
     expect(summary).toContain('Road-snapped planning endpoints');expect(summary).toContain('Start offset: about 24 m');
     expect(summary).toContain('Destination offset: about 23 m');expect(summary).toContain('road access remains unverified');

@@ -62,6 +62,9 @@
                 Number(raw), getDistanceUnitValue(), el.dataset.distanceStyle
             ) + (el.dataset.distanceSuffix || '');
         });
+        if (document.getElementById('routePlanningNotice') && root.VoyagrNavigationSafetyUX) {
+            root.VoyagrNavigationSafetyUX.refresh();
+        }
         document.querySelectorAll('[data-cost-distance-unit]').forEach(el => {
             el.textContent = 'Cost/' + U().getDistanceUnit(getDistanceUnitValue());
         });

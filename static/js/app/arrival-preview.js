@@ -41,7 +41,12 @@
         var rows=[['A · '+(data.separate?'Chosen driving arrival':'Chosen destination'),data.chosen],['R · Returned road endpoint',data.road]];
         if(data.original)rows.push(['Original destination (retained)',data.original]);
         rows.forEach(function(row){var dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=row[0];dd.textContent=coordinateText(row[1]);list.append(dt,dd);});panel.appendChild(list);
-        var warning=document.createElement('p');warning.textContent='Straight-line gap: about '+Math.round(data.gap)+' m. This is not a driving or walking distance. The road endpoint is not a verified entrance or stopping place. No connection across the gap has been verified.';panel.appendChild(warning);
+        var units=root.VoyagrUnits || (typeof require==='function' ? require('../modules/navigation/units.js') : null);
+        var warning=document.createElement('p'),distance=document.createElement('span');
+        distance.dataset.distanceMeters=String(data.gap);
+        distance.textContent=units ? units.formatPreferredDistanceMeters(data.gap) : '—';
+        warning.append('Straight-line gap: about ',distance);
+        warning.append('. This is not a driving or walking distance. The road endpoint is not a verified entrance or stopping place. No connection across the gap has been verified.');panel.appendChild(warning);
     }
     var api={model:model,render:render,showMap:showMap,clearMap:clearMap};
     root.VoyagrArrivalPreview=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
