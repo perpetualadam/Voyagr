@@ -1517,3 +1517,25 @@ Validation: 3,431 frontend tests with coverage/lint; 2,244 backend tests plus
 Validation: 3,440 frontend tests with coverage/lint; declared backend selection
 2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and ten
 Chromium preview scenarios. Speed-limit root cause on the phone remains open.
+
+### Confirmed mobile speed blocker — coarse GPS
+
+- Phone status: a route-section limit is supplied but GPS route association is
+  UNKNOWN with reported accuracy 253 ft (about 77 m). The 35 m matching threshold
+  explains the display refusal; this is now live-device evidence, not speculation.
+- [x] Add a separate display-only route estimate when fresh accepted GPS is coarse
+  and every route edge inside its reported uncertainty area explicitly supplies
+  the same numeric limit as the current route hint. No estimate across conflicting
+  or missing values, outside that area, after route replacement, or for stale GPS.
+- [x] Label it `Route est.` and explain imprecise GPS in Info. Keep road/position
+  matching UNKNOWN, real marker coordinates, lane/legal authority, speeding alerts
+  and all navigation eligibility/progress rules unchanged.
+- [x] Regress the actual GPS-watch/planner/widget path at 77 m in mph and km/h;
+  verify conflicting/missing nearby limits, distant routes, route changes, stale
+  fixes and confirmed deviation stay unknown.
+- [ ] Retest the affected phone after deployment and loading the new release.
+
+Validation: 3,449 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and
+16 real Chromium navigation HUD cases including the longer estimate badge.
+No production deployment.

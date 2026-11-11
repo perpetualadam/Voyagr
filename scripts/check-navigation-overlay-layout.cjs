@@ -30,6 +30,7 @@ const overlaps=(a,b)=>a.x<b.x+b.width-1&&a.x+a.width>b.x+1&&a.y<b.y+b.height-1&&
                 for(let i=0;i<5;i++){const lane=document.createElement('div');lane.className='lane-indicator has-direction';lane.innerHTML=window.VoyagrLaneGuidance.buildLaneIndicatorHtml(i===4?'↗':'↑');visual.appendChild(lane);}
                 document.getElementById('laneGuidanceBadge').textContent='Mapped';
                 document.getElementById('speedLimitMappedLabel').hidden=false;
+                document.getElementById('speedLimitMappedLabel').textContent='Route est.';
                 document.getElementById('speedLimitCircle').style.borderColor='#757575';
                 window.stopped=0;window.stopTurnByTurnNavigation=()=>{window.stopped++;};
             });
