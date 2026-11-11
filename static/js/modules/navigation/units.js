@@ -202,6 +202,16 @@
         return formatPoiDistanceMeters(value, distanceUnit);
     }
 
+    /** Use the live preference for secondary distance labels; canonical values stay metres. */
+    function formatPreferredDistanceMeters(meters) {
+        var preferences=root.VoyagrUnitsPreferencesOrchestration;
+        var unit=preferences && preferences.getDistanceUnitValue ? preferences.getDistanceUnitValue() : null;
+        if (!unit) {
+            try { unit=root.localStorage && root.localStorage.getItem('unit_distance'); } catch (_) { /* Default UK display. */ }
+        }
+        return formatDistanceLabelMeters(meters,unit==='km' ? 'km' : 'mi');
+    }
+
     /**
      * Format a stored km value for a distance display element.
      * @param {number} km
@@ -385,6 +395,7 @@
     var api = {
         formatCostPerDistance: formatCostPerDistance,
         formatDistanceLabelMeters: formatDistanceLabelMeters,
+        formatPreferredDistanceMeters: formatPreferredDistanceMeters,
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
         convertTemperature: convertTemperature,

@@ -189,7 +189,8 @@ process.stdout.write(JSON.stringify(rows));
     rows = json.loads(completed.stdout)
     assert len(rows) == 5
     assert rows[0]['planning'] == 'ROAD_SNAPPED'
-    assert 'Start offset: about 24 m' in rows[0]['summary']
+    assert 'Start offset: about 78 ft' in rows[0]['summary']
+    assert 'Destination offset: about 75 ft' in rows[0]['summary']
     assert all(row['steps'] > 0 and row['authority'] == 'NONE' and not row['allowed'] for row in rows)
     assert all(row['planning'] == 'REVIEW_REQUIRED' for row in rows[1:])
 

@@ -368,7 +368,10 @@
         var gaps=[];
         [['origin','Start'],['destination','Destination']].forEach(function(pair){
             var meters=record[pair[0]].offset_m;
-            if(Number.isFinite(meters)&&meters>=0)gaps.push(pair[1]+' offset: about '+Math.round(meters)+' m');
+            if(Number.isFinite(meters)&&meters>=0){
+                var units=root.VoyagrUnits || (typeof require==='function' ? require('./units.js') : null);
+                gaps.push(pair[1]+' offset: about '+(units ? units.formatPreferredDistanceMeters(meters) : '—'));
+            }
         });
         return (record.planning_disposition==='ROAD_SNAPPED'?'Road-snapped planning endpoints. ':'Planning endpoint access needs review. ')+
             (gaps.length?gaps.join('; ')+'. ':'')+'Requested locations are preserved; road access remains unverified. '+
