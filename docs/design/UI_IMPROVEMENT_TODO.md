@@ -1448,3 +1448,16 @@ provider matching, error diagnostics and script ordering. No deployment.
 Validation: 3,426 frontend tests with coverage, test lint, declared backend selection
 2,244 tests plus 74 subtests passed (one skipped), and 11 isolated SQL checks.
 Asset-release tests passed after versioning both changed browser scripts.
+
+### Route preview technical information — on demand
+
+- [x] Move planning endpoint offsets, traffic-light coverage status, route advisory
+  text and the arrival-coordinate/gap panel into one initially collapsed `ⓘ Info`
+  disclosure. Preserve IDs, current-route updates, endpoint markers and evidence.
+- [x] Use a native keyboard-accessible summary labelled `Route information`; retain
+  readable light/dark styles and existing navigation, parking and route actions.
+- [x] Verify closed/open visibility, keyboard toggling, disclosure state preservation,
+  layout at mobile/desktop sizes and 200% zoom. No navigation rules changed.
+
+Validation: focused preview/arrival tests and ten real Chromium layout/theme
+scenarios passed. Full frontend/backend and isolated SQL results are in the PR.

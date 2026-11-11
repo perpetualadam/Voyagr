@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261109entry1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261111previewinfo1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -1633,11 +1633,15 @@
                             <p id="previewRoute" class="preview-route-label">-</p>
                         </section>
 
-                        <!-- Route limitations remain outside every disclosure. -->
-                        <p id="routePlanningNotice" class="preview-notice" role="status"></p>
-                        <p id="routeTrafficLightStatus" class="preview-notice" role="status"></p>
-                        <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>
-                        <section id="arrivalEndpointPreview" class="preview-arrival-notice" aria-label="Arrival endpoints" hidden></section>
+                        <details id="previewRouteInfo" class="preview-disclosure preview-route-info">
+                            <summary aria-label="Route information"><span aria-hidden="true">ⓘ</span> Info</summary>
+                            <div class="preview-route-info-content">
+                                <p id="routePlanningNotice" class="preview-notice" role="status"></p>
+                                <p id="routeTrafficLightStatus" class="preview-notice" role="status"></p>
+                                <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>
+                                <section id="arrivalEndpointPreview" class="preview-arrival-notice" aria-label="Arrival endpoints" hidden></section>
+                            </div>
+                        </details>
                         <div id="cazStatusContainer" class="preview-caz-notice" style="display: none;"></div>
                         <div id="hazardInfoContainer" class="preview-hazard-notice" style="display: none;">
                             <h4>Route preferences</h4>
