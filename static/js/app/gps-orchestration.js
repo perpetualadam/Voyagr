@@ -2101,7 +2101,8 @@
         // Display evidence only; never authorizes alerts or changes navigation eligibility.
         getRouteSpeedObservation:function(limitMph){
             const age=lastAcceptedOriginFix ? Date.now()-lastAcceptedOriginFix.timestamp : NaN;
-            if (!rt().g('routeInProgress') || !Number.isFinite(age) || age<0 || age>15000
+            // Match the GPS validator's one-second allowance for device timestamp skew.
+            if (!rt().g('routeInProgress') || !Number.isFinite(age) || age< -1000 || age>15000
                 || !navigationPositionEvidence || navigationPositionEvidence.state!=='RELIABLE'
                 || navigationPositionEvidence.timestamp!==lastAcceptedOriginFix.timestamp
                 || evidencePolyline!==rt().g('routePolyline')

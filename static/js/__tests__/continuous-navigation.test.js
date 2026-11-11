@@ -1,7 +1,7 @@
 // Accepted device fixes through production GPS, marker/follow planners and ETA DOM rendering.
 let GPS,RG,Summary,SG,state,runtime,deliver,roadState,unit,oldClear;
 const BASE=1800000000000;
-function read(lat,lon=-1,accuracy=5,speed=10){jest.advanceTimersByTime(1000);deliver({timestamp:Date.now(),coords:{latitude:lat,longitude:lon,accuracy,speed,heading:0}});}
+function read(lat,lon=-1,accuracy=5,speed=10,timestampOffset=0){jest.advanceTimersByTime(1000);deliver({timestamp:Date.now()+timestampOffset,coords:{latitude:lat,longitude:lon,accuracy,speed,heading:0}});}
 beforeEach(()=>{
  jest.resetModules();jest.useFakeTimers();jest.setSystemTime(BASE);localStorage.clear();delete global.VoyagrJourneyModes;
  GPS=require('../app/gps-orchestration');RG=require('../modules/navigation/route-geometry');SG=require('../modules/navigation/speed-gps');Summary=require('../app/journey-summary-orchestration');
@@ -53,4 +53,21 @@ test.each(['OFF_ROUTE','coarse'])('%s GPS cannot display a route speed as if sti
  read(53.001);read(53.0011);expect(GPS.getRouteSpeedObservation(30)).not.toBeNull();
  if(kind==='coarse') read(53.0012,-1,500);else {roadState='OFF_ROUTE';read(53.0012);}
  expect(GPS.getRouteSpeedObservation(30)).toBeNull();expect(state.routeInProgress).toBe(true);
+});
+
+test.each([0,0.5,250,1000])('real GPS watch with timestamp offset %p carries route speed into the visible widget',timestampOffset=>{
+ const Widget=require('../app/speed-widget-orchestration'),SL=require('../modules/navigation/speed-limit-widget');
+ document.body.insertAdjacentHTML('beforeend','<div id="speedWidget"><span id="speedValue"></span><span id="speedUnitDisplay"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden></span></div></div>');
+ state.currentRouteSteps[0].speed_limit=30;state.currentRouteSteps[0].road_class='residential';
+ global.VoyagrRoadMatchOrchestration.getAttributes=()=>null;global.VoyagrRoadMatchOrchestration.getSpeedObservation=()=>null;
+ Widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>GPS.getIsTrackingActive(),getRouteInProgress:()=>state.routeInProgress,call:{getSpeedUnit:()=> 'mph'}});
+ runtime.m.speedLimitWidget=()=>SL;
+ runtime.call.updateSpeedWidget=(speed,limit)=>Widget.updateSpeedWidget(speed,limit);
+ runtime.call.fetchSpeedLimitThrottled=(...args)=>Widget.fetchSpeedLimitThrottled(...args);
+ runtime.call.getSpeedLimitFetchState=()=>Widget.getSpeedLimitFetchState();
+ read(53.001,-1,5,10,timestampOffset);read(53.0011,-1,5,10,timestampOffset);
+ expect(GPS.getNavigationPositionEvidence().state).toBe('RELIABLE');
+ expect(document.getElementById('speedLimitValue').textContent).toBe('30');
+ expect(document.getElementById('speedLimitMappedLabel').textContent).toBe('Route');
+ expect(Widget.getCurrentSpeedLimitMph()).toBeNull();
 });

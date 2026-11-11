@@ -1475,3 +1475,25 @@ scenarios passed. Full frontend/backend and isolated SQL results are in the PR.
 Validation: 3,427 frontend tests with coverage/lint, 2,244 backend tests plus
 74 subtests passed (one skipped), 11 isolated SQL checks and ten Chromium
 preview scenarios. No deployment.
+
+### GraphHopper speed follow-up — accepted GPS timestamps
+
+- Operator checks on deployed `ba356174`: GraphHopper 8 advertises `max_speed`;
+  a direct test route returned numeric limits plus unknown segments. Voyagr's
+  hazard-enabled test response retained 36 numeric speed maneuvers out of 48 on
+  its GraphHopper route. Its Valhalla alternatives contained no maneuver limits.
+  This confirms the tested backend path retains values, not the affected phone's
+  actual GPS state or every segment of the reported Barnsley journey.
+- [x] Reproduce an actual GPS-watch → route-planner → visible-widget mismatch:
+  an accepted fix timestamp 250 ms ahead reaches reliable geometry association,
+  but the route-speed display rejects it and shows an unknown limit.
+- [x] Align route-speed display with the existing GPS validator's one-second future
+  timestamp tolerance. Keep stale-fix, route identity, geometry association,
+  simulation and numeric-value checks; retain display-only authority.
+- [x] Test the full GPS/widget chain with zero, fractional-millisecond, 250 ms and
+  1,000 ms timestamp offsets. No navigation eligibility or backend changes.
+- [ ] Retest the affected phone after deploying and loading the updated release.
+  This defect is reproduced; its role in the whole reported trip is unconfirmed.
+
+Validation: 3,431 frontend tests with coverage/lint; 2,244 backend tests plus
+74 subtests passed (one skipped); 11 isolated SQL checks. No deployment.
