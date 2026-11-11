@@ -1497,3 +1497,23 @@ preview scenarios. No deployment.
 
 Validation: 3,431 frontend tests with coverage/lint; 2,244 backend tests plus
 74 subtests passed (one skipped); 11 isolated SQL checks. No deployment.
+
+### Mobile speed diagnosis and completed journey estimates
+
+- [x] Add a live speed-display status inside the existing collapsed Route Info
+  disclosure: source availability, whether the current route section supplies a
+  numeric limit, GPS association state/reason and accuracy in selected distance
+  units. No coordinates, background telemetry or navigation-rule changes.
+- [ ] Obtain that status from the affected phone while the speed limit is unknown.
+  Backend speed values and a reproduced timestamp fix do not establish the cause
+  of the remaining live-device failure. Do not substitute guessed road limits.
+- [x] Fix completed-summary costs reading only `total_cost` even though normalized
+  selected routes carry `fuel_cost`, `toll_cost` and `caz_cost`. Sum valid component
+  estimates, retain legacy total-only support, keep genuine zero and show unknown
+  rather than manufacture zero when no valid estimate exists.
+- [x] Regress selected API route → traveled patch → actual summary DOM; test numeric
+  strings, missing totals, stale zero totals, unknown costs and unchanged route data.
+
+Validation: 3,440 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and ten
+Chromium preview scenarios. Speed-limit root cause on the phone remains open.

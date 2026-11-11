@@ -402,7 +402,15 @@
         if (!routeData) {
             return { visible: false };
         }
-        var cost = routeData.total_cost || 0;
+        function numericCost(value) {
+            if ((typeof value!=='number' && typeof value!=='string') || typeof value==='string' && !value.trim()) return null;
+            var n=Number(value);
+            return Number.isFinite(n) && n>=0 ? n : null;
+        }
+        // Normalized selected routes retain component costs, not always total_cost.
+        var components=['fuel_cost','toll_cost','caz_cost'].map(function(key){return numericCost(routeData[key]);}).filter(function(value){return value!==null;});
+        var sum=components.reduce(function(total,value){return total+value;},0);
+        var cost=components.length && Number.isFinite(sum) ? sum : numericCost(routeData.total_cost);
         var traveled = buildTraveledJourneyRoutePatch(
             routeData,
             opts.traveledMeters,
@@ -420,7 +428,7 @@
             ? opts.convertDistance(distanceKm)
             : String(distanceKm);
         var distUnit = opts.distUnit || 'km';
-        var adjustedCost = typeof opts.adjustCost === 'function'
+        var adjustedCost = cost!==null && typeof opts.adjustCost === 'function'
             ? opts.adjustCost(cost)
             : cost;
         var currencySymbol = opts.currencySymbol || '£';
@@ -432,7 +440,7 @@
             visible: true,
             distanceText: displayDist + ' ' + distUnit,
             timeText: Math.round(durationMin) + ' min',
-            costText: currencySymbol + Number(adjustedCost).toFixed(2),
+            costText: adjustedCost!==null && Number.isFinite(Number(adjustedCost)) ? currencySymbol + Number(adjustedCost).toFixed(2) : '—',
             avgSpeedText: speedText + ' ' + speedUnit,
         };
     }
