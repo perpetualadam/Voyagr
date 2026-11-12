@@ -254,6 +254,13 @@
             }
         });
 
+        // App-lock overlays can restore focus without a visibility transition.
+        window.addEventListener('focus', () => {
+            if (document.visibilityState==='visible' && typeof rt().call.ensureNavWakeLock==='function') {
+                rt().call.ensureNavWakeLock({documentVisible:true});
+            }
+        });
+
         window.addEventListener('pageshow', (ev) => {
             if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
                 if (ev.persisted) {

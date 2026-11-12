@@ -13,6 +13,14 @@
     var navigationStarting = false;
     var routeStarted = false;
     var routeInProgress = false;
+    var wakeRequest = null, wakeRetryTimer = null, wakeRetries = 0, wakeEpoch = 0;
+    function clearWakeRetry() { clearTimeout(wakeRetryTimer); wakeRetryTimer=null; }
+    function wakeVisible() { return typeof document==='undefined' || document.visibilityState==='visible'; }
+    function retryWakeLock() {
+        if (!getRouteInProgress() || !wakeVisible() || wakeRetryTimer || wakeRetries>=3) return;
+        const delays=[1000,3000,10000];
+        wakeRetryTimer=setTimeout(function(){wakeRetryTimer=null;ensureNavWakeLock({retry:true});},delays[wakeRetries++]);
+    }
     var currentRouteSteps = [];
     var currentStepIndex = 0;
     var nextManeuverDistance = 0;
@@ -29,7 +37,10 @@
     function getRouteStarted() { return routeStarted; }
     function setRouteStarted(val) { routeStarted = !!val; }
     function getRouteInProgress() { return routeInProgress; }
-    function setRouteInProgress(val) { routeInProgress = !!val; }
+    function setRouteInProgress(val) {
+        if (routeInProgress!==!!val) { wakeEpoch++; wakeRequest=null; clearWakeRetry(); wakeRetries=0; }
+        routeInProgress = !!val;
+    }
     function getCurrentRouteSteps() { return currentRouteSteps; }
     function setCurrentRouteSteps(val) { currentRouteSteps = val; }
     function getCurrentStepIndex() { return currentStepIndex; }
@@ -158,35 +169,35 @@
             return;
         }
 
-        navigator.wakeLock.request(wakeLockExecute.lockType)
+        if (!getRouteInProgress() || !wakeVisible() || wakeRequest
+            || window.screenWakeLock && window.screenWakeLock.released!==true
+            || !navigator.wakeLock || typeof navigator.wakeLock.request!=='function') return;
+        const request={epoch:wakeEpoch};wakeRequest=request;
+        Promise.resolve().then(()=>navigator.wakeLock.request(wakeLockExecute.lockType))
             .then((wakeLock) => {
+                if (request.epoch!==wakeEpoch || !getRouteInProgress() || !wakeVisible()) {
+                    return wakeLock.release();
+                }
                 window[wakeLockExecute.windowProperty] = wakeLock;
                 console.log(wakeLockExecute.acquireLog);
                 if (wakeLockExecute.successStatusMessage && !wakeLockExecute.quietStatus) {
-                    rt().call.showStatus(
-                        wakeLockExecute.successStatusMessage,
-                        wakeLockExecute.successStatusType || 'success'
-                    );
+                    rt().call.showStatus(wakeLockExecute.successStatusMessage,wakeLockExecute.successStatusType || 'success');
                 }
-
                 wakeLock.addEventListener('release', () => {
+                    if (window[wakeLockExecute.windowProperty] !== wakeLock) return;
                     console.log(wakeLockExecute.releaseLog);
-                    if (window[wakeLockExecute.windowProperty] === wakeLock) {
-                        window[wakeLockExecute.windowProperty] = null;
-                    }
-                    // Screen/system can release the lock while nav continues; retry if still visible.
-                    if (typeof document !== 'undefined' &&
-                        document.visibilityState === 'visible' &&
-                        getRouteInProgress()) {
-                        setTimeout(function () {
-                            try { ensureNavWakeLock(); } catch (_) { /* ignore */ }
-                        }, 500);
-                    }
+                    window[wakeLockExecute.windowProperty] = null;
+                    retryWakeLock();
                 });
+                if (wakeLock.released===true) {
+                    window[wakeLockExecute.windowProperty]=null;retryWakeLock();
+                }
             })
             .catch((err) => {
                 console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
-            });
+                if (request.epoch===wakeEpoch) retryWakeLock();
+            })
+            .finally(()=>{if(wakeRequest===request)wakeRequest=null;});
     }
 
     function applyNavStartWakeLockFromPlan(stateInit, wakeLockApiAvailable) {
@@ -201,12 +212,14 @@
      */
     function ensureNavWakeLock(opts) {
         opts = opts || {};
+        if (!opts.retry) { clearWakeRetry(); wakeRetries=0; }
+        if (wakeRequest) return {shouldRequest:false,reason:'request_pending'};
         const plan = MC().buildNavForegroundWakeLockEnsurePlan({
             documentVisible: opts.documentVisible !== false &&
                 (typeof document === 'undefined' || document.visibilityState !== 'hidden'),
             routeInProgress: getRouteInProgress(),
             wakeLockApiAvailable: typeof navigator !== 'undefined' && 'wakeLock' in navigator,
-            hasWakeLock: !!window.screenWakeLock,
+            hasWakeLock: !!window.screenWakeLock && window.screenWakeLock.released!==true,
         });
         requestWakeLockFromExecutePlan(plan);
         return plan;
@@ -350,10 +363,10 @@
     function applyNavStopWakeLockReleaseFromPlan(lifecycle) {
         if (!lifecycle || !lifecycle.releaseWakeLock || !window.screenWakeLock) return;
 
-        window.screenWakeLock.release()
+        const lock=window.screenWakeLock;window.screenWakeLock=null;
+        Promise.resolve().then(()=>lock.release())
             .then(() => {
                 console.log(lifecycle.wakeLockReleaseLog);
-                window.screenWakeLock = null;
             })
             .catch((err) => {
                 console.log(lifecycle.wakeLockReleaseErrorLogPrefix, err);
