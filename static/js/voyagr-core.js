@@ -305,6 +305,8 @@ function initializeMap() {
 
     map = new maplibregl.Map({
         container: 'map',
+        ...(window.VoyagrMapContextRecovery ? window.VoyagrMapContextRecovery.renderOptions(
+            window.devicePixelRatio,!!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) : {}),
         style: VOYAGR_BOOTSTRAP_STYLE,
         // Belt-and-suspenders: also rewrite any URL MapLibre constructs at runtime.
         transformRequest: (url /*, resourceType */) => {
@@ -942,47 +944,31 @@ function initializeMap() {
     }
     window.__voyagrMapSoftStyleReload = voyagrMapSoftStyleReload;
 
-    try {
-        const glCanvas = typeof map.getCanvas === 'function' ? map.getCanvas() : null;
-        if (glCanvas && glCanvas.addEventListener) {
-            glCanvas.addEventListener(
-                'webglcontextlost',
-                (e) => {
-                    try {
-                        window.__voyagrMapWebGLLastLostAt = Date.now();
-                    } catch (err) {
-                        /* ignore */
-                    }
-                    console.warn('[MapLibre] WebGL context lost; browser may restore it', e);
-                    try {
-                        e.preventDefault();
-                    } catch (err) {
-                        /* must preventDefault to allow webglcontextrestored on some UAs */
-                    }
-                },
-                false
-            );
-            glCanvas.addEventListener(
-                'webglcontextrestored',
-                () => {
-                    try {
-                        window.__voyagrMapWebGLLastLostAt = 0;
-                    } catch (err) {
-                        /* ignore */
-                    }
-                    console.warn('[MapLibre] WebGL context restored — resyncing map size and repaint');
-                    voyagrMapResizeAndRepaint();
-                    voyagrMapRecoverAfterNetworkEvent('webglcontextrestored');
-                },
-                false
-            );
-        }
-    } catch (e) {
-        /* non-fatal */
+    if (window.VoyagrMapContextRecovery) {
+        const owner=map;
+        const recoveryMessage=(message)=>{
+            showMapLoadingOverlay();
+            const overlay=document.getElementById('mapLoadingOverlay');
+            if(overlay)overlay.textContent=message;
+        };
+        window.VoyagrMapContextRecovery.install(owner,getMapWebGLContext(),{
+            isCurrent:()=>map===owner,
+            lost:()=>{
+                window.__voyagrMapWebGLLastLostAt=Date.now();
+                console.warn('[MapLibre] WebGL context lost; requesting graphics recovery');
+                recoveryMessage('Restoring map… Navigation continues.');
+            },
+            unavailable:()=>recoveryMessage('Map rendering interrupted. Navigation continues.'),
+            restored:()=>{
+                window.__voyagrMapWebGLLastLostAt=0;
+                hideMapLoadingOverlay();
+                voyagrMapResizeAndRepaint();
+                voyagrMapRecoverAfterNetworkEvent('webglcontextrestored');
+                if(typeof window.__voyagrRedrawNavigationOverlays==='function')window.__voyagrRedrawNavigationOverlays('webglcontextrestored');
+            }
+        });
     }
 
-    // Long drive / mobile: WebGL and canvas size can drift or stall without user interaction
-    // (no visibility toggle). A periodic resize+repaint prevents "map vanished after ~10+ min" reports.
     if (!window.__voyagrMapFocusHandlerAdded) {
         window.__voyagrMapFocusHandlerAdded = true;
         window.addEventListener(

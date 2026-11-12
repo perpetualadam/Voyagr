@@ -221,13 +221,20 @@
         const fix=gps && gps.getAcceptedOriginFix ? gps.getAcceptedOriginFix() : null;
         const source=known ? 'mapped road' : observation && observation.evidence_state==='ROUTE_OBSERVATION' ? (observation.position_uncertain ? 'route estimate (GPS imprecise)' : 'selected route')
             : observation ? 'mapped observation' : 'unavailable';
-        let text='Speed display: '+source+'. Route-section limit: '+(Number.isFinite(routeLimit) && routeLimit>0 ? 'available' : 'not supplied')+'.';
+        let text='Speed display: '+source+'. Route-section limit: '+(observation && observation.evidence_state==='ROUTE_OBSERVATION' || Number.isFinite(routeLimit) && routeLimit>0 ? 'available' : 'not supplied')+'.';
         text+=' GPS route position: '+(position && position.state || 'waiting')+'.';
         if (position && position.reason && source==='unavailable') text+=' '+position.reason+'.';
         if (fix && Number.isFinite(fix.accuracy) && fix.accuracy>=0 && root.VoyagrUnits) {
             text+=' GPS accuracy: '+root.VoyagrUnits.formatPreferredDistanceMeters(fix.accuracy)+'.';
         }
         el.textContent=text;
+        const mapStatus=document.getElementById('routeMapRenderStatus');
+        if(mapStatus && typeof root.__voyagrMapGetDiagnostics==='function') {
+            try {
+                const state=root.__voyagrMapGetDiagnostics();
+                mapStatus.textContent='Map renderer: '+(state.contextLost===true ? 'graphics context lost' : state.contextLost!==false ? 'graphics status unavailable' : state.canvas && (!state.canvas.width || !state.canvas.height) ? 'canvas has no size' : state.isStyleLoaded ? 'style loaded' : 'style loading')+'.';
+            } catch(_){mapStatus.textContent='Map renderer: status unavailable.';}
+        }
     }
 
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {

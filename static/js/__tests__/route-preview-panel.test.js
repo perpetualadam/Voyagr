@@ -47,7 +47,7 @@ test('technical route information is collapsed while costs, preferences and acti
     const info=document.getElementById('previewRouteInfo');
     expect(info.open).toBe(false);
     expect(info.querySelector('summary').getAttribute('aria-label')).toBe('Route information');
-    for(const id of ['routePlanningNotice','routeTrafficLightStatus','routeSpeedLimitStatus','routeAvoidanceNotice','arrivalEndpointPreview']){
+    for(const id of ['routePlanningNotice','routeTrafficLightStatus','routeMapRenderStatus','routeSpeedLimitStatus','routeAvoidanceNotice','arrivalEndpointPreview']){
         expect(document.getElementById(id).closest('details')).toBe(info);
     }
     info.open=true;

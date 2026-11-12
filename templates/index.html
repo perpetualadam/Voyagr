@@ -133,6 +133,7 @@
     <script defer src="/static/js/modules/map/map-view-3d.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/map/map-theme.js?v=20261109contrast1"></script>
     <script defer src="/static/js/modules/map/center-on-location.js?v=20260919loc1"></script>
+    <script defer src="/static/js/modules/map/map-context-recovery.js?v=20261112graphics1"></script>
     <script defer src="/static/js/modules/map/map-recovery.js?v=20261102styleready1"></script>
     <script defer src="/static/js/modules/map/camera-map-markers.js?v=20260711zzzv"></script>
     <script defer src="/static/js/modules/map/hazard-map-markers.js?v=20260712aabd"></script>
@@ -168,7 +169,7 @@
     <script defer src="/static/js/modules/navigation/phase3-features.js?v=20260811noshake"></script>
     <script defer src="/static/js/modules/navigation/google-plus-codes-prefs.js?v=20260711zzzl"></script>
     <script defer src="/static/js/modules/voyagr-modules.js?v=20260812loc1"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20261109darkfallback1"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20261112graphics1"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
@@ -177,12 +178,12 @@
     <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20261109overlays1"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
-    <script defer src="/static/js/app/gps-orchestration.js?v=20261111coarsespeed1"></script>
+    <script defer src="/static/js/app/gps-orchestration.js?v=20261112speedposition1"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
     <script defer src="/static/js/app/trip-history-orchestration.js?v=20261108unitrestore1"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
     <script defer src="/static/js/app/geocoding-orchestration.js?v=20261108unitdistance1"></script>
-    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261111coarsespeed1"></script>
+    <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261112speedposition1"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
@@ -1637,6 +1638,7 @@
                             <summary aria-label="Route information"><span aria-hidden="true">ⓘ</span> Info</summary>
                             <div class="preview-route-info-content">
                                 <p id="routePlanningNotice" class="preview-notice" role="status"></p>
+                                <p id="routeMapRenderStatus" class="preview-notice">Map renderer: waiting for status.</p>
                                 <p id="routeSpeedLimitStatus" class="preview-notice">Speed display: waiting for a live GPS update.</p>
                                 <p id="routeTrafficLightStatus" class="preview-notice" role="status"></p>
                                 <p id="routeAvoidanceNotice" class="preview-notice" role="status" tabindex="0">Avoidance verification pending.</p>

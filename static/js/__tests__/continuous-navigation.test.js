@@ -98,3 +98,16 @@ test('coarse route estimate neither changes matched position nor route, alert or
  expect(GPS.getNavigationPositionEvidence()).toBe(evidence);expect(evidence.state).toBe('UNKNOWN');
  expect(GPS.resolveGpsRouteSnapForTick(53.001,-1,20)).toBeNull();expect(JSON.stringify(state.routePolyline)).toBe(routeBefore);
 });
+
+test.each([null,70])('coarse GPS resolves the nearby route limit despite an old index with hint %p',oldLimit=>{
+ const Widget=require('../app/speed-widget-orchestration'),SL=require('../modules/navigation/speed-limit-widget');
+ state.currentRouteSteps=[{type:1,instruction:'Start',begin_shape_index:0,end_shape_index:1,speed_limit:oldLimit,road_class:'motorway'},
+  {type:8,instruction:'Continue',begin_shape_index:1,end_shape_index:2,speed_limit:30,road_class:'residential'}];
+ document.body.insertAdjacentHTML('beforeend','<div id="speedWidget"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel"></span></div>');
+ global.VoyagrRoadMatchOrchestration.getAttributes=()=>null;global.VoyagrRoadMatchOrchestration.getSpeedObservation=()=>null;
+ Widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>true,getRouteInProgress:()=>true,call:{getSpeedUnit:()=> 'mph'}});
+ runtime.m.speedLimitWidget=()=>SL;runtime.call.updateSpeedWidget=(...args)=>Widget.updateSpeedWidget(...args);runtime.call.fetchSpeedLimitThrottled=(...args)=>Widget.fetchSpeedLimitThrottled(...args);runtime.call.getSpeedLimitFetchState=()=>Widget.getSpeedLimitFetchState();
+ read(53.015,-1,77);read(53.0151,-1,77);
+ expect(state.lastSnappedRouteIndex).toBe(0);expect(GPS.getNavigationPositionEvidence().state).toBe('UNKNOWN');
+ expect(document.getElementById('speedLimitValue').textContent).toBe('30');expect(document.getElementById('speedLimitMappedLabel').textContent).toBe('Route est.');expect(Widget.getCurrentSpeedLimitMph()).toBeNull();
+});

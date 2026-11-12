@@ -1559,3 +1559,31 @@ Validation: 3,457 frontend tests with coverage/lint; declared backend selection
 2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and
 four real Chromium navigation-entry/GPS/ETA cases. Eight focused wake-lock tests
 cover races, foreground/focus recovery and bounded denial retries. No deployment.
+
+### Mobile white map and repeated unknown Optimised-route speed
+
+- Phone screenshots show the basemap absent while DOM controls, GPS/turn guidance
+  and ETA continue. The completed journey now correctly displays a £0.79 estimate.
+  A GPU/context failure is consistent with the image, but its exact phone cause
+  is not established by screenshots alone.
+- [x] Fix a recovery gap: context-loss handling previously waited for browser
+  restoration; the heartbeat's style-reload path skips intact style definitions.
+  Cache the optional WebGL restore extension before loss and request bounded
+  restoration while visible, without replacing map/route or navigation state.
+  Resync/redraw on restoration; show a recovery message if graphics stay unavailable.
+- [x] Bound coarse-pointer/mobile rendering density to 2x to reduce framebuffer
+  memory pressure while retaining CSS layout and desktop defaults.
+- [x] Fix coarse-GPS speed estimates tied to an old snapped index/hint. Resolve a
+  common explicit limit from nearby route sections inside current GPS uncertainty,
+  independently of an earlier missing/different hint. Keep missing/conflicting
+  candidates unknown and keep GPS/road association and alert authority unchanged.
+- [x] Add mobile Info map-renderer status for a future failure capture. Preserve the
+  working completed-cost path and regression coverage.
+- [ ] Retest on the affected phone after deployment; if still blank or unknown,
+  capture the current Map renderer and Speed display lines inside Route Info.
+
+Validation: 3,463 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks. Real
+Chromium/MapLibre tests deliberately lose and restore WebGL at phone/desktop
+sizes, retain the selected route and journey state, and verify mobile 2x density.
+No production deployment; physical-device acceptance remains open.
