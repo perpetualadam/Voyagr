@@ -1539,3 +1539,23 @@ Validation: 3,449 frontend tests with coverage/lint; declared backend selection
 2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and
 16 real Chromium navigation HUD cases including the longer estimate badge.
 No production deployment.
+
+### Keep-screen-on recovery during navigation
+
+- Confirmed keep-screen-on remains implemented with the Screen Wake Lock API and
+  is requested after navigation starts. Visibility/pageshow recovery already exists.
+- [x] Coalesce overlapping requests, recognize released sentinel references and
+  retry transient request failures or automatic releases with a bounded backoff.
+  New foreground/focus activity can retry after the bounded budget is exhausted.
+- [x] Restore the lock on visible window focus, covering overlays that return focus
+  without a document visibility transition. No tap or navigation restart required.
+- [x] Discard/release acquisitions arriving after navigation changes or the page
+  becomes hidden. Late releases cannot clear a newer sentinel. Stop cancels retries.
+- [x] Preserve existing journey-summary wake-lock ownership and navigation/GPS rules.
+- [ ] Test on the affected Android/Bitdefender device while parked. Browser wake
+  lock does not override OS/app-lock policy, battery restrictions or security UI.
+
+Validation: 3,457 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and
+four real Chromium navigation-entry/GPS/ETA cases. Eight focused wake-lock tests
+cover races, foreground/focus recovery and bounded denial retries. No deployment.

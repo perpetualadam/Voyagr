@@ -178,10 +178,10 @@
 
     function releaseScreenWakeLockFromPlan(execute) {
         if (!execute || !execute.releaseWakeLock || !window.screenWakeLock) return;
-        window.screenWakeLock.release()
+        const lock=window.screenWakeLock;window.screenWakeLock=null;
+        Promise.resolve().then(()=>lock.release())
             .then(() => {
                 if (execute.wakeLockReleaseLog) console.log(execute.wakeLockReleaseLog);
-                window.screenWakeLock = null;
             })
             .catch((err) => {
                 console.log(execute.wakeLockReleaseErrorLogPrefix || '[Screen Wake Lock] Error releasing wake lock:', err);
