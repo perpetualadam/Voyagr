@@ -119,8 +119,8 @@ test('road enrichment falls back to a labelled route value without legal alerts,
 
 test('mobile Info distinguishes missing route data from unavailable GPS association without coordinates',()=>{
  const widget=require('../app/speed-widget-orchestration.js');
- document.body.innerHTML='<p id="routeSpeedLimitStatus"></p>';
- const oldRoad=window.VoyagrRoadMatchOrchestration,oldGps=window.VoyagrGpsOrchestration;
+ document.body.innerHTML='<p id="routeSpeedLimitStatus"></p><p id="routeMapRenderStatus"></p>';
+ const oldRoad=window.VoyagrRoadMatchOrchestration,oldGps=window.VoyagrGpsOrchestration,oldMap=window.__voyagrMapGetDiagnostics;
  window.VoyagrRoadMatchOrchestration={getAttributes:()=>null,getSpeedObservation:()=>null};
  window.VoyagrGpsOrchestration={getRouteSpeedObservation:()=>null,getNavigationPositionEvidence:()=>({state:'UNKNOWN',reason:'Invalid, stale or inaccurate GPS'}),getAcceptedOriginFix:()=>({accuracy:50,lat:53.123456,lon:-1.987654})};
  widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>true,getRouteInProgress:()=>true,call:{getSpeedUnit:()=> 'mph'}});
@@ -131,5 +131,9 @@ test('mobile Info distinguishes missing route data from unavailable GPS associat
   expect(text).toContain('Invalid, stale or inaccurate GPS');expect(text).not.toContain('53.123456');expect(text).not.toContain('-1.987654');
   widget.fetchSpeedLimitThrottled(53,-1,20,'residential',null,0);
   expect(document.getElementById('routeSpeedLimitStatus').textContent).toContain('Route-section limit: not supplied');
- } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;}
+  for(const [state,expected] of [[{contextLost:true},'graphics context lost'],[{contextLost:null},'graphics status unavailable'],[{contextLost:false,canvas:{width:0,height:100}},'canvas has no size'],[{contextLost:false,isStyleLoaded:true},'style loaded']]) {
+   window.__voyagrMapGetDiagnostics=()=>state;widget.fetchSpeedLimitThrottled(53,-1,20,'residential',null,0);
+   expect(document.getElementById('routeMapRenderStatus').textContent).toContain(expected);
+  }
+ } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;window.__voyagrMapGetDiagnostics=oldMap;}
 });

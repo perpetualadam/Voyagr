@@ -104,25 +104,26 @@
 
     // A route estimate is not a road match. Every candidate route edge inside
     // the GPS uncertainty area must explicitly supply the same numeric limit.
-    function routeLimitWithinGpsUncertainty(fix, line, limitMph) {
+    function routeLimitWithinGpsUncertainty(fix, line) {
         const steps=rt().g('currentRouteSteps'),RG=rgModule(),SG=sgModule();
         if (!Array.isArray(line) || line.length<2 || !Array.isArray(steps) || !steps.length
-            || !Number.isFinite(fix.accuracy) || fix.accuracy<=35) return false;
-        let found=false;
+            || !Number.isFinite(fix.accuracy) || fix.accuracy<=35) return null;
+        let found=false,limitMph=null;
         const cos=Math.cos(fix.lat*Math.PI/180);
         for (let i=0;i<line.length-1;i++) {
             const a=line[i],b=line[i+1];
-            if (!Array.isArray(a) || !Array.isArray(b) || ![a[0],a[1],b[0],b[1]].every(Number.isFinite)) return false;
+            if (!Array.isArray(a) || !Array.isArray(b) || ![a[0],a[1],b[0],b[1]].every(Number.isFinite)) return null;
             const point=RG.projectToSegment(fix.lat,fix.lon,a[0],a[1],b[0],b[1],cos);
             if (RG.haversineDistanceMeters(fix.lat,fix.lon,point.projLat,point.projLon)>fix.accuracy) continue;
             const step=steps[SG.getActiveRouteManeuverIndex(steps,i)];
             if (!step || !Number.isFinite(step.speed_limit) || !Number.isInteger(step.begin_shape_index)
-                || !Number.isInteger(step.end_shape_index) || step.begin_shape_index>i || step.end_shape_index<=i) return false;
+                || !Number.isInteger(step.end_shape_index) || step.begin_shape_index>i || step.end_shape_index<=i) return null;
             const value=SG.normalizeManeuverSpeedLimitMph(step.speed_limit,step.road_class||'unknown',0);
-            if (value!==limitMph) return false;
+            if (value===null || limitMph!==null && value!==limitMph) return null;
+            limitMph=value;
             found=true;
         }
-        return found;
+        return found ? limitMph : null;
     }
 
     function getVehicleDisplayCoordinates() {
@@ -2129,11 +2130,13 @@
                 || !navigationPositionEvidence
                 || navigationPositionEvidence.timestamp!==lastAcceptedOriginFix.timestamp
                 || evidencePolyline!==rt().g('routePolyline')
-                || root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()
-                || !Number.isFinite(limitMph) || limitMph<=0 || limitMph>100) return null;
-            const uncertain=navigationPositionEvidence.state==='UNKNOWN'
-                && routeLimitWithinGpsUncertainty(lastAcceptedOriginFix,evidencePolyline,limitMph);
+                || root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) return null;
+            const estimate=navigationPositionEvidence.state==='UNKNOWN'
+                ? routeLimitWithinGpsUncertainty(lastAcceptedOriginFix,evidencePolyline) : null;
+            const uncertain=estimate!==null;
+            if (uncertain) limitMph=estimate;
             if (navigationPositionEvidence.state!=='RELIABLE' && !uncertain) return null;
+            if (!Number.isFinite(limitMph) || limitMph<=0 || limitMph>100) return null;
             const observation={evidence_state:'ROUTE_OBSERVATION',applicable:false,speed_limit_mph:limitMph};
             if (uncertain) observation.position_uncertain=true;
             return observation;
