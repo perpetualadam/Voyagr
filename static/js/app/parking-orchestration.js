@@ -157,7 +157,7 @@
 
     async function findParkingNearDestination() {
         console.log('[Parking] findParkingNearDestination called');
-        console.log('[Parking] lastCalculatedRoute:', rt().getLastCalculatedRoute());
+        console.log('[Parking] lastCalculatedRoute available');
 
         const module = MP();
         const input = collectFindParkingNearDestinationInput();
@@ -175,7 +175,7 @@
 
         try {
             const endCoords = await resolveParkingDestinationCoords(input.lastRoute, input.endInput);
-            console.log('[Parking] End coordinates:', endCoords);
+            console.log('[Parking] End coordinates available');
 
             if (!endCoords || isNaN(endCoords.lat) || isNaN(endCoords.lon)) {
                 console.error('[Parking] Could not determine destination coordinates');
@@ -193,9 +193,9 @@
             });
 
             let searchParams = searchPlan.initialSearch;
-            console.log('[Parking] Search parameters:', searchParams);
+            console.log('[Parking] Search parameters available');
             let data = await fetchParkingSearch(searchParams);
-            console.log('[Parking] Response data:', data);
+            console.log('[Parking] Response data available');
 
             if (!data.success) {
                 rt().showStatus('Parking search failed: ' + (data.error || 'Unknown error'), 'error');
@@ -226,7 +226,7 @@
                 fitMapToParkingResults(data.parking, endCoords);
             }
         } catch (error) {
-            console.error('[Parking] Error:', error);
+            console.error('[Parking] Error:');
             rt().showStatus('Error searching for parking: ' + error.message, 'error');
         }
     }
@@ -390,15 +390,15 @@
             updateParkingPreview(drivingData, walkingData, parking);
             rt().showStatus(module.getParkingSelectSuccessMessage(), 'success');
         } catch (error) {
-            console.error('[Parking] Error selecting parking:', error);
+            console.error('[Parking] Error selecting parking:');
             rt().showStatus('Error: ' + error.message, 'error');
         }
     }
 
     function displayParkingRoutes(drivingData, walkingData, parking, destination) {
         console.log('[Parking] displayParkingRoutes called');
-        console.log('[Parking] drivingData:', drivingData);
-        console.log('[Parking] walkingData:', walkingData);
+        console.log('[Parking] drivingData available');
+        console.log('[Parking] walkingData available');
 
         const parkingModule = MP();
         const map = rt().getMap();
@@ -473,7 +473,7 @@
     }
 
     async function setParkingAsDestination(parking) {
-        console.log('[Parking] Setting parking as destination:', parking);
+        console.log('[Parking] Setting parking as destination available');
 
         try {
             const endInput = document.getElementById('end');
@@ -494,7 +494,7 @@
             await rt().calculateRoute();
             rt().showStatus(`✅ Route calculated to ${parking.name}`, 'success');
         } catch (error) {
-            console.error('[Parking] Error setting parking as destination:', error);
+            console.error('[Parking] Error setting parking as destination:');
             rt().showStatus('Error: ' + error.message, 'error');
         }
     }

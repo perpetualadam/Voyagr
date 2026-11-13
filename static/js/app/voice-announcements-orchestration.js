@@ -196,7 +196,7 @@
                 voices: refreshCachedSpeechVoices(),
                 language: (typeof navigator !== 'undefined' && navigator.language) || 'en',
             })
-            : { shouldSpeak: true, shouldResume: true, utterance: { text: message, rate: 1.0, pitch: 1.0, volume: 1.0 }, logLine: '[Voice] Speaking: "' + message + '"' };
+            : { shouldSpeak: true, shouldResume: true, utterance: { text: message, rate: 1.0, pitch: 1.0, volume: 1.0 }, logLine: '[Voice] Speech requested' };
 
         if (!speakPlan.shouldSpeak) return;
 

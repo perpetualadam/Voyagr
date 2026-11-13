@@ -1335,8 +1335,7 @@
         }
 
         if (apply.speak && apply.spokenMessage) {
-            const displayRemaining = rt().call.convertDistance(remainingDistance / 1000);
-            console.log(`[Voice] Distance announcement: ${apply.spokenMessage} (remaining: ${displayRemaining} ${rt().call.getDistanceUnit()})`);
+            console.log('[Voice] Distance announcement requested');
             rt().call.speakMessage(apply.spokenMessage);
         }
     }
@@ -1809,8 +1808,8 @@
                 if (activeRerouteTicket===requestTicket) rt().s('rerouteInProgress',false);
                 return;
             }
-            console.error('[Rerouting] Error during automatic reroute:', error);
-            console.log('[Reroute] Reroute failed: ' + (error && error.message ? error.message : error));
+            console.error('[Rerouting] Automatic reroute failed');
+            console.log('[Reroute] Request failed');
             const errorPlans = RD.buildAutomaticRerouteErrorResponsePlans({ rerouteFailureRetryCount: rt().g('rerouteFailureRetryCount') });
             applyAutomaticRerouteResult({
                 apply: errorPlans.apply,

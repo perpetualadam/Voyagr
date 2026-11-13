@@ -502,8 +502,7 @@
                 plan.speak = true;
                 plan.speakPriority = 'high';
                 plan.spokenMessage = message;
-                plan.logLine = '[Voice] Announcing ' + category + ': ' + message +
-                    ' (distance: ' + distance.toFixed(0) + 'm)';
+                plan.logLine = '[Voice] Turn announcement requested';
             }
 
             plan.announcedThresholdValues = Array.from(announcedSet);

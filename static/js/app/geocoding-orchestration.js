@@ -52,7 +52,7 @@
             console.log('[Geocoding] Cache loaded with', Object.keys(geocodingCache).length, 'entries');
         }
     } catch (e) {
-        console.log('[Geocoding] Cache load error:', e);
+        console.log('[Geocoding] Cache load error:');
         geocodingCache = {};
     }
 }
@@ -66,7 +66,7 @@ function saveGeocodeCache() {
     try {
         localStorage.setItem(GEOCODING_CACHE_KEY, JSON.stringify(geocodingCache));
     } catch (e) {
-        console.log('[Geocoding] Cache save error:', e);
+        console.log('[Geocoding] Cache save error:');
     }
     }
 
@@ -160,7 +160,7 @@ async function showAutocomplete(fieldId, userEdit) {
             dropdown.innerHTML = mod.buildAutocompleteLoadingHtml(mod.AUTOCOMPLETE_LOADING_RECENT_TEXT);
             dropdown.classList.add('show');
             renderEndDestinationSuggestions(dropdown, fieldId).catch((err) => {
-                console.error('[Recent locations]', err);
+                console.error('[Recent locations]');
                 dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml(mod.AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE);
             });
             return;
@@ -212,7 +212,7 @@ async function showAutocomplete(fieldId, userEdit) {
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
             if(!ownsSearch()||error.name==='AbortError')return;
-            console.warn('[Autocomplete] Search unavailable:', error.message);
+            console.warn('[Autocomplete] Search unavailable:');
             dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml('Search temporarily unavailable. Try again or search a named car park.');
         }
     }, 300); // 300ms debounce
@@ -357,7 +357,7 @@ function selectAutocompleteResult(fieldId, lat, lon, name, source = 'searched', 
 
     rt().call.showStatus(`✅ Selected: ${name}`, 'success');
 
-    console.log(`[Autocomplete] Selected ${fieldId}: ${name} (${lat}, ${lon})`);
+    console.log('[Autocomplete] Location selected');
 }
 
 function collectGeocodePlusCodeDecodeState(trimmed) {
@@ -384,7 +384,7 @@ function collectGeocodePlusCodeDecodeState(trimmed) {
             }
         } catch (error) {
             state.errorMessage = error.message;
-            console.log('[Geocoding] Plus Code decode error:', error.message);
+            console.log('[Geocoding] Plus Code decode error:');
         }
     }
 
@@ -407,7 +407,7 @@ async function geocodeAddress(address) {
 
     if (orch.branch === 'resolve') {
         const resolve = gl.buildGeocodeAddressResolveExecutePlan(orch);
-        console.log(resolve.resolveLogPrefix, resolve.trimmed);
+        console.log('[Geocoding] Resolving location');
         return resolve.result;
     }
 
@@ -416,9 +416,8 @@ async function geocodeAddress(address) {
         collectGeocodePlusCodeDecodeState(trimmedAddress)
     );
     if (plusPlan.action === 'resolve') {
-        const plusLog = gl.buildGeocodePlusCodeResolveLogPlan(trimmedAddress);
-        console.log(plusLog.detectLogMessage, trimmedAddress);
-        console.log(plusLog.decodeLogPrefix, plusPlan.result.lat, plusPlan.result.lon);
+        console.log('[Geocoding] Plus Code detected');
+        console.log('[Geocoding] Plus Code resolved');
         return plusPlan.result;
     }
 
@@ -431,13 +430,13 @@ async function geocodeAddress(address) {
     orch = gl.buildGeocodeAddressOrchestrationPlan(lookup);
     if (orch.branch === 'resolve') {
         const resolve = gl.buildGeocodeAddressResolveExecutePlan(orch);
-        console.log('[Geocoding] Cache hit for:', resolve.trimmed);
+        console.log('[Geocoding] Cache hit');
         return resolve.result;
     }
 
     try {
         const fetchPlan = gl.buildGeocodeNominatimFetchRequestPlan(lookup);
-        console.log('[Geocoding] Fetching:', fetchPlan.trimmed);
+        console.log('[Geocoding] Fetching location');
         const response = await fetch(fetchPlan.url, {
             headers: fetchPlan.headers,
         });
@@ -456,7 +455,7 @@ async function geocodeAddress(address) {
                 throw new Error(outcome.errorMessage);
             }
             const empty = gl.buildGeocodeNominatimEmptyExecutePlan(outcome);
-            console.log(empty.emptyLogPrefix, empty.trimmed);
+            console.log('[Geocoding] No result');
             return null;
         }
 
@@ -464,11 +463,11 @@ async function geocodeAddress(address) {
         geocodingCache = gl.writeGeocodeCacheEntry(geocodingCache, success.cacheKey, success.cacheEntry);
         saveGeocodeCache();
 
-        console.log(success.successLogPrefix, success.trimmed, '→', success.result.lat, success.result.lon);
+        console.log('[Geocoding] Location resolved');
         return success.result;
     } catch (error) {
         const fetchErr = gl.buildGeocodeAddressFetchErrorExecutePlan(error.message);
-        console.log(fetchErr.errorLogPrefix, fetchErr.errorMessage);
+        console.log('[Geocoding] Request failed');
         return null;
     }
 }
@@ -477,7 +476,7 @@ async function resolveGeocodeEndpoint(GL, endpointPlan, which, fallbackAddress) 
     const gl = GL();
     const resolvePlan = gl.buildGeocodeEndpointResolveExecutePlan(which, endpointPlan);
     if (resolvePlan.useStored) {
-        console.log(resolvePlan.storedLogPrefix, resolvePlan.storedResult);
+        console.log('[Geocoding] Using selected coordinates');
         return { ok: true, result: resolvePlan.storedResult };
     }
 
@@ -536,7 +535,7 @@ async function geocodeLocations(startAddress, endAddress) {
         const execute = gl.buildGeocodePairOutcomeExecutePlan(
             gl.buildGeocodePairErrorOutcomePlan(error.message)
         );
-        if (execute.errorLogPrefix) console.log(execute.errorLogPrefix, error);
+        if (execute.errorLogPrefix) console.log(execute.errorLogPrefix);
         return applyGeocodePairOutcomeFromPlan(
             gl.buildGeocodePairOutcomeApplyPlan(execute)
         );
@@ -612,7 +611,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
             });
         }
     } catch (e) {
-        console.error('[Search history]', e);
+        console.error('[Search history]');
     }
 
     if (!recent.length && serverCount === 0) {
@@ -624,7 +623,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
 function showSearchHistory() {
     const dropdown = getAutocompleteDropdown('end');
     if (!dropdown) return;
-    renderEndDestinationSuggestions(dropdown).catch((e) => console.error('Error loading search history:', e));
+    renderEndDestinationSuggestions(dropdown).catch((e) => console.error('Error loading search history'));
 }
     function bind(nextRuntime) {
         runtime = nextRuntime;

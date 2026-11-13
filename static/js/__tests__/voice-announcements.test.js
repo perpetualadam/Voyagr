@@ -430,6 +430,8 @@ describe('buildTurnAnnouncementTickPlan', () => {
         expect(tick.action).toBe('announce');
         expect(tick.speak).toBe(true);
         expect(tick.spokenMessage).toContain('turn left');
+        expect(tick.logLine).not.toContain(tick.spokenMessage);
+        expect(tick.logLine).not.toContain('turn left');
         expect(tick.announcedThresholdValues).toContain(200);
         expect(tick.statePatch.voiceAnnouncedForManeuverIndex).toBe(2);
     });
