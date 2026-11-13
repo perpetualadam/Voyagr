@@ -142,3 +142,20 @@ def test_policy_does_not_promise_unverified_automatic_deletion(client):
     assert 'Community reports' in body
     assert 'not stored on our\n    servers unless' not in body
     assert 'email address provided in the app' not in body
+
+
+def test_default_contact_uses_only_public_alias_and_does_not_invent_identity(client, monkeypatch):
+    monkeypatch.delenv('VOYAGR_PRIVACY_CONTACT_EMAIL', raising=False)
+    monkeypatch.delenv('VOYAGR_PRIVACY_OPERATOR_NAME', raising=False)
+    body = client.get('/privacy').get_data(as_text=True)
+    assert 'mailto:info@vibevoyager.org' in body
+    assert 'public legal identity has not been' in body
+    assert '@gmail.com' not in body
+    assert '@googlemail.com' not in body
+
+
+def test_explicit_empty_contact_does_not_silently_advertise_an_alias(client, monkeypatch):
+    monkeypatch.setenv('VOYAGR_PRIVACY_CONTACT_EMAIL', '')
+    body = client.get('/privacy').get_data(as_text=True)
+    assert 'mailto:info@vibevoyager.org' not in body
+    assert 'public privacy-contact email has not been configured' in body
