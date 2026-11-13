@@ -229,14 +229,7 @@ class _SingleRouteResp:
 
 
 class RouteCacheFreshnessSmokeTest(unittest.TestCase):
-    """
-    A cached single-route payload must not outlive the preferences it was built for.
-
-    The persistent cache is keyed on preferences, but a coordinate-only fallback
-    used to answer keyed misses, so the first payload stored for a pair of
-    coordinates was replayed no matter what the user changed — which is what made
-    the preview keep showing one route after the variety fixes shipped.
-    """
+    """Same-browser memory hits must preserve preferences and never replay disk rows."""
 
     def setUp(self):
         self.client = vw.app.test_client()
@@ -283,13 +276,31 @@ class RouteCacheFreshnessSmokeTest(unittest.TestCase):
         self.assertGreater(len(second['routes']), 1)
         self.assertIn(QUIET_ROUTE_NAME, [r.get('name') for r in second['routes']])
 
-    def test_same_preferences_still_reuse_the_cached_route(self):
+    def test_same_browser_reuses_memory_without_database_fallback(self):
+        first = self._post(self._body(), _SingleRouteResp)
+        called = []
+        def must_not_route(payload):
+            called.append(payload)
+            raise AssertionError('A same-browser cache hit must not call the provider')
+        again = self._post(self._body(), must_not_route)
+        self.assertEqual(called, [])
+        self.assertEqual(first['routes'][0]['geometry'], again['routes'][0]['geometry'])
+        self.assertNotIn('cache_stats', again)
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM persistent_route_cache').fetchone()[0], 0)
+
+    def test_memory_clear_does_not_replay_legacy_database_route(self):
         self._post(self._body(), _SingleRouteResp)
-        vw.route_cache.clear()  # force the DB tier to answer
+        vw.route_cache.clear()
+        self.conn.execute("INSERT INTO persistent_route_cache(cache_key,route_data) VALUES('legacy','{}')")
+        self.conn.commit()
+        called = []
+        def provider(payload):
+            called.append(payload)
+            return _SingleRouteResp(payload)
+        self._post(self._body(), provider)
+        self.assertTrue(called)
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM persistent_route_cache').fetchone()[0], 1)
 
-        again = self._post(self._body(), _SingleRouteResp)
-
-        self.assertTrue(again.get('cached'))
 
 
 class CalculateRouteSmokeTest(unittest.TestCase):

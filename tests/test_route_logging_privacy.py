@@ -28,17 +28,15 @@ def assert_private(caplog, capsys):
         assert value not in output
 
 
-@pytest.mark.parametrize('tier', ['memory', 'persistent'])
-def test_cache_paths_do_not_log_locations(client, caplog, capsys, tier):
+def test_private_memory_cache_path_does_not_log_locations(client, caplog, capsys):
     caplog.set_level(logging.DEBUG)
     response = {'success': True, 'routes': [{'name': 'Fastest'}]}
-    with patch.object(vw.route_cache, 'get', return_value=response.copy() if tier == 'memory' else None), \
-         patch.object(vw.route_cache, 'set'), \
-         patch.object(vw.cost_calculator, 'get_cached_route_from_db', return_value=response.copy() if tier == 'persistent' else None), \
-         patch.object(vw.cost_calculator, 'get_cached_route_from_db_legacy', return_value=response.copy() if tier == 'legacy' else None):
+    with patch.object(vw.route_cache, 'get', return_value=response.copy()), \
+         patch.object(vw.cost_calculator, 'get_cached_route_from_db', side_effect=AssertionError('retired cache read')):
         rv = client.post('/api/route', json=PAYLOAD)
     assert rv.status_code == 200
-    assert rv.get_json()['cached'] is True
+    assert 'cached' not in rv.get_json()
+    assert 'cache_stats' not in rv.get_json()
     assert_private(caplog, capsys)
     completed = [r for r in caplog.records if getattr(r, 'route_event', '') == 'request_completed']
     assert len(completed) == 1 and completed[0].duration_ms >= 0

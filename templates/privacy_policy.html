@@ -84,9 +84,10 @@
     reports, depending on the features you use.</li>
     <li><strong>Route calculations</strong> &mdash; Start and end coordinates are sent
     to routing services to calculate routes. These are processed
-    for the requested journey and may be cached in memory and in a server-side
-    database for performance. A cache freshness limit does not itself delete stored
-    records.</li>
+    for the requested journey. New temporary route-cache entries use private server
+    memory with expiry configured within 15 minutes; they are not written to the
+    server route-cache database. Older database cache records may remain pending
+    separate deletion. Saved trips and account synchronisation are separate features.</li>
     <li><strong>Saved trips</strong> &mdash; If you save a trip, the route summary
     (distance, duration, cost estimate) is stored in a local database on the server.</li>
     <li><strong>Dashcam recordings (only if you start recording)</strong> &mdash; If you
@@ -249,8 +250,12 @@
     <li>All communication uses HTTPS encryption.</li>
     <li><strong>Retention:</strong> Saved trips and account data remain until deletion
     is performed. Data held only in your browser stays until you clear it. Server-side
-    route caches can retain coordinates and geometry; freshness checks do not guarantee
-    automatic deletion. Dashcam's retention setting determines which recordings its
+    route-cache entries now expire in memory within 15 minutes under normal operation.
+    Older database cache records are not automatically erased by this change; legacy
+    freshness checks do not guarantee their deletion.
+    A secure, short-lived cookie separates your browser's temporary route cache;
+    it is not used for analytics or account identification and expires after 15 minutes.
+    Dashcam's retention setting determines which recordings its
     cleanup operation removes. You can delete individual recordings and saved trips
     using their controls. These controls do not by themselves erase account-provider
     data, operational logs or backups.</li>

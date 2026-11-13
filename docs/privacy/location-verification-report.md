@@ -4,7 +4,51 @@ Date: 2026-11-13. Baseline audited: `bf0b5883` (main, after logging PR #491).
 Scope: local repository and synthetic tests; no production VPS/DB/provider account,
 live user record, infrastructure change, migration, historical purge or deployment.
 
-## Verdict
+## Approved private-memory-cache implementation verification
+
+Subsequent user approval covers R02 only: private memory caching capped at 15
+minutes, preserving existing disk records. The new implementation removes ordinary
+route-cache SQL reads/writes, retires old helper APIs, stops historical route-cost
+blending, and changes invalidation to clear memory without deleting old rows.
+Operator diagnostics can still inspect retained legacy records with admin access.
+No migration, production configuration change, historical deletion or deployment.
+
+Verification for this update:
+
+- Backend CI web selection: **2,304 passed, 1 skipped, 94 subtests passed**.
+- Frontend: **3,529 passed across 176 suites**; test lint passed.
+- Real isolated PostgreSQL session-policy checks: **11 passed**.
+- New private-cache suite: **8 tests** using real in-process cache logic, Flask test
+  clients, synthetic payloads, monotonic fake clocks and one accelerated background
+  timer. Provider/database boundaries are mocked where explicitly labelled; this
+  is not live-engine, production-browser or VPS verification.
+- Routing smoke tests exercise the actual HTTP route handler with synthetic provider
+  responses: same-browser reuse, preference changes, and fresh recalculation after
+  memory clear without database fallback. No `cached`/global counter fields are
+  needed to prove reuse; tests assert provider calls and route geometry instead.
+- Retired cache APIs and the cost estimator never open SQL. Preference invalidation
+  preserves a seeded historical row. Legacy fixture assertions expecting successful
+  disk replay were replaced with these stricter no-disk/no-delete contracts.
+- Existing route integrity tests still verify cached candidates are reassessed.
+  A separate synthetic legacy-envelope reassessment test retains its legacy
+  `cached` flag fixture rather than being weakened to match the new route output.
+
+The cache rejects reads at 840 seconds and removes untouched entries on a <=60s
+normal-running sweep. Tests confirm expiry cannot slide on hits/replacement and
+that returned objects cannot mutate stored bodies. Tests also cover count/byte
+limits, signed scope expiry/tampering, different-browser isolation, exact-coordinate
+and multi-stop/time/cost separation, cookie flags, invalidation namespaces and no
+location/token/key content in logs from the exercised HTTP paths.
+
+**Verdict:** GO for review of this scoped cache change with passing CI; still
+**NO-GO for declaring the entire privacy-first architecture complete**. Cloud
+sync/upload defaults, historical erasure, backup restore safeguards, remaining
+lookup/proxy logs and production/mobile verification remain outstanding. Earlier
+baseline results/experiments below are retained as audit history and do not assert
+that a 24-hour disk cache remains the active implementation.
+
+
+## Baseline audit verdict (before approved cache implementation)
 
 **NO-GO for claiming the proposed privacy-first retention architecture is complete.**
 The small diagnostic-access patch is suitable for review on its own once CI passes.
@@ -13,7 +57,7 @@ persistence, shared private-response caching, cloud-sync/upload defaults, proxy/
 settings and backup erasure/restoration safeguards remain unresolved. The user must
 choose the architecture/retention options before the remaining implementation.
 
-## Implemented scope
+## Baseline diagnostic-access implementation
 
 - Fail-closed existing admin auth for persistent cache statistics, route-cache
   membership diagnostics, and global location-prediction GET/POST access.
@@ -28,7 +72,7 @@ Existing local caches, historical databases, media and backups have not been
 cleared. The new SW policy stops reading these diagnostic paths; it does not
 retroactively wipe old CacheStorage data or activate itself on every open client.
 
-## Executed checks
+## Baseline audit executed checks
 
 Commands run in `/workspace/Voyagr` using `.venv` and the existing npm lockfile.
 No desktop/live-service suite is represented as production verification.
@@ -83,7 +127,7 @@ Reproduction recipe (use a disposable directory only):
    the cost service's DB context to it, call `get_cached_route_from_db`, then count
    the row. This substitutes only the DB connection, not the freshness logic.
 
-## Not executed / not yet implemented
+## Baseline gaps (read with the subsequent cache update above)
 
 - Proposed 15-minute cache isolation/physical-expiry contract: **not implemented
   or claimed tested**. Existing tests use current 1-hour memory/24-hour DB freshness.

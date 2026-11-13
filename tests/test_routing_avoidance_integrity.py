@@ -357,7 +357,7 @@ def test_real_route_cache_cannot_replay_satisfied_claim_for_mandatory_camera():
          patch('voyagr.services.hazards.fetch_hazards_for_route',return_value={}) as acquire:
         rv=vw.app.test_client().post('/api/route',json={'start':'53.52,-1.13','end':'53.53,-1.13',
             'avoid_caz':False,'enable_hazard_avoidance':True,'avoidance_mode':'mandatory'})
-    assert rv.json['cached'] is True
+    assert 'cached' not in rv.json
     assert rv.json['avoidance_status']=='NO_COMPLIANT_ROUTE'
     assert rv.json['avoidance_assessment']['status']=='UNVERIFIED'
     assert rv.json['automatic_selection_allowed'] is False

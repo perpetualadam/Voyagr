@@ -723,199 +723,9 @@ CAZ_PASS_TYPES = [
 # ROUTE CACHING SYSTEM (Phase 3 Optimization)
 # ============================================================================
 
-class RouteCache:
-    """LRU cache for route calculations with TTL support."""
+from voyagr.services.routing.private_route_cache import RouteCache, route_cache, private_route_session, request_cache_key
 
-    def __init__(self, max_size: int = 1000, ttl_seconds: int = 3600) -> None:
-        """Initialize cache with max size and TTL."""
-        self.max_size = max_size
-        self.ttl_seconds = ttl_seconds
-        self.cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
-        self.timestamps: Dict[str, float] = {}
-        self.lock = threading.Lock()
-        self.hits = 0
-        self.misses = 0
-
-    def _make_key(
-        self,
-        start_lat: float,
-        start_lon: float,
-        end_lat: float,
-        end_lon: float,
-        routing_mode: str,
-        vehicle_type: str,
-        enable_hazard_avoidance: bool = False,
-        avoid_traffic_lights: bool = False,
-        avoid_cameras: bool = True,
-        avoid_railway_crossings: bool = False,
-        avoid_caz_zones: bool = False,
-        avoid_tolls: bool = False,
-        avoid_motorways: bool = False,
-        avoid_ferries: bool = False,
-        avoid_unpaved: bool = False,
-        prefer_scenic: bool = False,
-        prefer_quiet: bool = False,
-        route_optimization: str = 'fastest',
-        max_detour: float = 20.0,
-        avoid_points: Optional[List[Dict[str, Any]]] = None,
-        via_points: Optional[List[Dict[str, Any]]] = None,
-        stops: Optional[List[Dict[str, Any]]] = None,
-        departure_time: Optional[str] = None,
-        cost_fingerprint: str = '',
-    ) -> str:
-        """Create cache key from route parameters."""
-        from voyagr.services.routing.route_cache_key import build_route_cache_key
-        return build_route_cache_key(
-            start_lat=start_lat,
-            start_lon=start_lon,
-            end_lat=end_lat,
-            end_lon=end_lon,
-            routing_mode=routing_mode,
-            vehicle_type=vehicle_type,
-            enable_hazard_avoidance=enable_hazard_avoidance,
-            avoid_traffic_lights=avoid_traffic_lights,
-            avoid_cameras=avoid_cameras,
-            avoid_railway_crossings=avoid_railway_crossings,
-            avoid_caz_zones=avoid_caz_zones,
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            avoid_unpaved=avoid_unpaved,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            route_optimization=route_optimization,
-            max_detour=max_detour,
-            avoid_points=avoid_points,
-            via_points=via_points,
-            stops=stops,
-            departure_time=departure_time,
-            cost_fingerprint=cost_fingerprint,
-        )
-
-    def get(
-        self,
-        start_lat: float,
-        start_lon: float,
-        end_lat: float,
-        end_lon: float,
-        routing_mode: str,
-        vehicle_type: str,
-        enable_hazard_avoidance: bool = False,
-        avoid_traffic_lights: bool = False,
-        avoid_cameras: bool = True,
-        avoid_railway_crossings: bool = False,
-        avoid_caz_zones: bool = False,
-        avoid_tolls: bool = False,
-        avoid_motorways: bool = False,
-        avoid_ferries: bool = False,
-        avoid_unpaved: bool = False,
-        prefer_scenic: bool = False,
-        prefer_quiet: bool = False,
-        route_optimization: str = 'fastest',
-        max_detour: float = 20.0,
-        avoid_points: Optional[List[Dict[str, Any]]] = None,
-        via_points: Optional[List[Dict[str, Any]]] = None,
-        stops: Optional[List[Dict[str, Any]]] = None,
-        departure_time: Optional[str] = None,
-        cost_fingerprint: str = '',
-    ) -> Optional[Dict[str, Any]]:
-        """Get cached route if available and not expired."""
-        with self.lock:
-            key = self._make_key(
-                start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
-                avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
-                avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
-                route_optimization, max_detour, avoid_points, via_points, stops, departure_time, cost_fingerprint,
-            )
-
-            if key not in self.cache:
-                self.misses += 1
-                return None
-
-            # Check if expired
-            if time.time() - self.timestamps[key] > self.ttl_seconds:
-                del self.cache[key]
-                del self.timestamps[key]
-                self.misses += 1
-                return None
-
-            # Move to end (most recently used)
-            self.cache.move_to_end(key)
-            self.hits += 1
-            return self.cache[key]
-
-    def set(
-        self,
-        start_lat: float,
-        start_lon: float,
-        end_lat: float,
-        end_lon: float,
-        routing_mode: str,
-        vehicle_type: str,
-        route_data: Dict[str, Any],
-        enable_hazard_avoidance: bool = False,
-        avoid_traffic_lights: bool = False,
-        avoid_cameras: bool = True,
-        avoid_railway_crossings: bool = False,
-        avoid_caz_zones: bool = False,
-        avoid_tolls: bool = False,
-        avoid_motorways: bool = False,
-        avoid_ferries: bool = False,
-        avoid_unpaved: bool = False,
-        prefer_scenic: bool = False,
-        prefer_quiet: bool = False,
-        route_optimization: str = 'fastest',
-        max_detour: float = 20.0,
-        avoid_points: Optional[List[Dict[str, Any]]] = None,
-        via_points: Optional[List[Dict[str, Any]]] = None,
-        stops: Optional[List[Dict[str, Any]]] = None,
-        departure_time: Optional[str] = None,
-        cost_fingerprint: str = '',
-    ) -> None:
-        """Cache a route calculation."""
-        with self.lock:
-            key = self._make_key(
-                start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras,
-                avoid_railway_crossings, avoid_caz_zones, avoid_tolls, avoid_motorways,
-                avoid_ferries, avoid_unpaved, prefer_scenic, prefer_quiet,
-                route_optimization, max_detour, avoid_points, via_points, stops, departure_time, cost_fingerprint,
-            )
-
-            # Remove oldest if at capacity
-            if len(self.cache) >= self.max_size and key not in self.cache:
-                oldest_key = next(iter(self.cache))
-                del self.cache[oldest_key]
-                del self.timestamps[oldest_key]
-
-            # Add or update
-            self.cache[key] = route_data
-            self.timestamps[key] = time.time()
-            self.cache.move_to_end(key)
-
-    def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        with self.lock:
-            total = self.hits + self.misses
-            hit_rate = (self.hits / total * 100) if total > 0 else 0
-            return {
-                'hits': self.hits,
-                'misses': self.misses,
-                'total': total,
-                'hit_rate': f"{hit_rate:.1f}%",
-                'size': len(self.cache),
-                'max_size': self.max_size
-            }
-
-    def clear(self) -> None:
-        """Clear all cached routes."""
-        with self.lock:
-            self.cache.clear()
-            self.timestamps.clear()
-
-# Initialize route cache
-route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
+# Private worker memory only. No route cache is loaded from disk at startup.
 
 # Set route_cache for routing blueprint
 set_route_cache(route_cache)
@@ -1216,6 +1026,7 @@ from voyagr.services.route_fuel_pricing import resolve_fuel_pricing, fuel_pricin
 
 @app.route('/api/route', methods=['POST'])
 @rate_limit(route_limiter)
+@private_route_session
 @fuel_pricing_response
 def calculate_route():
     """
@@ -1300,26 +1111,6 @@ def calculate_route():
         force_refresh = p.force_refresh
         is_reroute = p.is_reroute
 
-        cache_kwargs = dict(
-            cost_fingerprint=price_fingerprint,
-            enable_hazard_avoidance=enable_hazard_avoidance,
-            avoid_traffic_lights=avoid_traffic_lights,
-            avoid_cameras=avoid_cameras,
-            avoid_railway_crossings=avoid_railway_crossings,
-            avoid_caz_zones=apply_caz_routing_avoidance,
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            avoid_unpaved=avoid_unpaved,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            route_optimization=route_optimization,
-            max_detour=max_detour,
-            avoid_points=avoid_points,
-            via_points=via_points,
-            stops=stops,
-            departure_time=departure_time,
-        )
 
         logger.info(f"[ROUTE] Via-points: {len(via_points)}, Stops: {len(stops)}, Total stop time: {total_stop_time} min")
 
@@ -1344,45 +1135,19 @@ def calculate_route():
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
         # ====================================================================
-        from voyagr.services.routing.route_cache_key import should_bypass_route_cache, build_route_cache_key
-        db_cache_key = build_route_cache_key(
-            start_lat=start_lat,
-            start_lon=start_lon,
-            end_lat=end_lat,
-            end_lon=end_lon,
-            routing_mode=routing_mode,
-            vehicle_type=vehicle_type,
-            **cache_kwargs,
-        )
+        from voyagr.services.routing.route_cache_key import should_bypass_route_cache
+        private_key = request_cache_key(data, price_fingerprint, bypass=should_bypass_route_cache(
+            force_refresh=force_refresh, is_reroute=is_reroute, avoid_points=avoid_points,
+        ))
         if not should_bypass_route_cache(
             force_refresh=force_refresh,
             is_reroute=is_reroute,
             avoid_points=avoid_points,
         ):
-            cached_route = route_cache.get(
-                start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, **cache_kwargs,
-            )
+            cached_route = route_cache.get(private_key)
             if cached_route:
-                logger.info("[CACHE] route_hit tier=%s", "memory")
-                cached_route['cached'] = True
-                cached_route['cache_stats'] = route_cache.get_stats()
+                logger.info("[CACHE] route_hit tier=%s", "private_memory")
                 return jsonify(cached_route)
-
-            db_cached_route = cost_calculator.get_cached_route_from_db(db_cache_key)
-            if db_cached_route:
-                logger.info("[CACHE] route_hit tier=%s", "persistent")
-                db_cached_route['cached'] = True
-                db_cached_route['cache_stats'] = route_cache.get_stats()
-                route_cache.set(
-                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                    db_cached_route, **cache_kwargs,
-                )
-                return jsonify(db_cached_route)
-
-            # Pre-migration rows have no preference provenance. A keyed miss
-            # must calculate a fresh route rather than replay unknown constraints.
-        elif is_reroute or force_refresh or avoid_points:
-            logger.info('[CACHE] BYPASS: reroute/force_refresh/avoid_points requires live routing')
 
         # Fetch + assemble hazards (SCDB cameras, TomTom incidents, avoid_points,
         # camera-preference filter, OSM traffic-light/railway overlays). Extracted to
@@ -1750,20 +1515,10 @@ def calculate_route():
                     )
 
                     # Cache the route for future requests
-                    route_cache.set(
-                        start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                        response_data, **cache_kwargs,
-                    )
-                    print(f"[CACHE] STORED: Route cached in memory with hazard_avoidance={enable_hazard_avoidance}")
+                    if route_cache.set(private_key, response_data):
+                        logger.info("[CACHE] route_stored tier=private_memory")
 
-                    # ================================================================
-                    # PHASE 4: Persistent database caching for long-term storage
-                    # ================================================================
-                    cost_calculator.cache_route_to_db(
-                        start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                        response_data, routing_source, cache_key=db_cache_key,
-                    )
-                    print("[CACHE] STORED: Route cached in database")
+                    # Legacy database route-cache writes are disabled; existing rows are untouched.
 
                     return jsonify(response_data)
                 else:
@@ -1925,18 +1680,10 @@ def calculate_route():
                                 )
 
                                 # Cache the route
-                                route_cache.set(
-                                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                                    response_data, **cache_kwargs,
-                                )
-                                print("[CACHE] STORED: Retry route cached in memory")
+                                if route_cache.set(private_key, response_data):
+                                    logger.info("[CACHE] route_stored tier=private_memory")
 
-                                cache_source = 'GraphHopper+Valhalla' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla'
-                                cost_calculator.cache_route_to_db(
-                                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                                    response_data, cache_source, cache_key=db_cache_key,
-                                )
-                                print("[CACHE] STORED: Retry route cached in database")
+                                # Legacy database route-cache writes are disabled; existing rows are untouched.
 
                                 # Return the successful retry response
                                 return jsonify(response_data)
@@ -2124,14 +1871,8 @@ def calculate_route():
                                 'railway-crossing, CAZ and other avoidance preferences are not guaranteed.'
                             ),
                         })
-                        route_cache.set(
-                            start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                            recovery_data, **cache_kwargs,
-                        )
-                        cost_calculator.cache_route_to_db(
-                            start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                            recovery_data, routing_source, cache_key=db_cache_key,
-                        )
+                        route_cache.set(private_key, recovery_data)
+                        # Legacy database route-cache writes are disabled; existing rows are untouched.
                         logger.info(f"[ROUTING] Recovery response: {routing_source}, {len(routes_out)} route(s)")
             except route_transport.RoutingDeadlineExceeded:
                 raise
@@ -2234,14 +1975,7 @@ def calculate_route():
                             **primary_route_api_fields(routes),
                         }
 
-                        # ================================================================
-                        # PHASE 4: Persistent database caching for long-term storage
-                        # ================================================================
-                        cost_calculator.cache_route_to_db(
-                            start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                            response_data, 'OSRM', cache_key=db_cache_key,
-                        )
-                        print("[CACHE] STORED: Route cached in database")
+                        route_cache.set(private_key, response_data)
 
                         return jsonify(response_data)
                     else:

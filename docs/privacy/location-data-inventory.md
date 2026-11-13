@@ -9,6 +9,25 @@ This is the Phase 1 read-only finding set. Subsequent security changes are recor
 separately in the remediation and verification reports; do not mistake a baseline
 finding for the patched behaviour.
 
+## Approved route-cache implementation update
+
+After the baseline audit the user approved private memory-only route caching with a
+15-minute maximum, preserving historical rows. The implementation now lives in
+`voyagr/services/routing/private_route_cache.py`; `voyagr_web.py` uses that singleton.
+It uses signed browser capabilities, process-keyed complete-request digests,
+14-minute non-sliding serving expiry and a <=60s idle sweep. It is capped at 1,000
+entries / 32MiB per worker (4MiB per response). Recalculation is allowed on every
+miss; cache eligibility never restricts route length or navigation.
+
+Old SQLite route-cache read/write helpers now return without SQL. Invalidation
+clears memory only, and historical cost blending no longer queries old route rows.
+Existing legacy rows remain accessible to the already-protected operator diagnostic
+handlers; they are not used by routing and have not been erased. Saved histories,
+Supabase sync, dashcam, backups and public-map caches are separate and unchanged.
+The baseline table below describes what was found at `bf0b5883`, not this update.
+No deployment or historical-data cleanup occurred.
+
+
 ## Verified component boundaries
 
 - The production-facing web entry point is **Flask**, `voyagr_web.py:91`.

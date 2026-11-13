@@ -2,8 +2,41 @@
 
 Date: 2026-11-13. **Design proposal, not an activated production policy.**
 Baseline/current behaviour is in [the inventory](location-data-inventory.md).
-Only the access-control changes listed in the remediation report are implemented.
+The approved cache implementation is recorded below; other design changes remain proposals.
 No existing database rows, recordings, backups or client histories are deleted.
+
+## Approval and implementation update
+
+The user approved **private memory-only route caching capped at 15 minutes, with
+historical records untouched**. Section A is implemented in code, not deployed.
+Sections B–D remain proposals awaiting their own approvals. This does not approve
+cloud-sync/default-upload changes, backup expiry or erasure of historical data.
+
+Implementation: `private_route_cache.py` signs an HTTPS `__Host-` Secure/HttpOnly,
+SameSite=Strict cache cookie, valid for 900 seconds without sliding renewal. A
+cookie is issued only when a successful route is actually cached. It contains a
+random capability and issuance time, no account/location data. Missing, expired,
+invalid or unsupported cookies merely cause cache misses; no sign-in or new
+navigation gate is introduced. Current location precision is unchanged.
+
+Request keys MAC the complete resolved request plus fuel-price fingerprint and a
+cache-generation namespace; exact endpoints, raw fix metadata, via points, stops,
+time windows and preferences remain distinct. Caller account-ID fields are ignored.
+No coordinates, scopes or keys are added to logs/public cache statistics. Entries
+are independent serialized copies, expire after 840 seconds on a monotonic clock,
+and have an idle-removal sweep at most 60 seconds apart during normal execution.
+Count/byte limits make large responses bypass caching, never fail navigation.
+Reroutes, forced refreshes and explicit avoid-point requests bypass reads and writes.
+Multi-drop handlers that return before cache lookup remain uncached.
+
+Workers keep their own memory/secrets: switching/restarting a worker may cause a
+miss, with fresh calculation. Worker-local invalidation does not coordinate remote
+workers; bounded expiry and existing route-response reassessment still apply.
+Paused processes, OS swap and crash dumps are not covered by secure-erasure claims.
+Old disk helpers are retired, memory invalidation no longer deletes legacy rows,
+and optional historical cost blending now uses current inputs instead. Operator
+inspection of legacy records remains admin-protected; no deletion is inferred.
+
 
 ## Responsibilities and boundaries
 

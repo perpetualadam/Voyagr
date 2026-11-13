@@ -149,10 +149,16 @@ def test_real_route_handler_freezes_price_before_multidrop_and_cache(monkeypatch
     cache = web.RouteCache()
     _, _, first = resolve_fuel_pricing({'fuel_price':1.2})
     _, _, second = resolve_fuel_pricing({'fuel_price':1.3})
-    args = (53.536,-1.380,53.517,-1.150,'auto','petrol_diesel')
-    cache.set(*args, expected, cost_fingerprint=first)
-    assert cache.get(*args,cost_fingerprint=first) == expected
-    assert cache.get(*args,cost_fingerprint=second) is None
+    from voyagr.services.routing.private_route_cache import _new_scope, request_cache_key
+    from flask import g
+    with web.app.test_request_context('/api/route'):
+        g.private_route_scope = _new_scope()
+        key_a = request_cache_key(data, first)
+        key_b = request_cache_key(data, second)
+        cache.set(key_a, expected)
+        assert cache.get(key_a) == expected
+        assert cache.get(key_b) is None
+    cache.clear()
 
 
 def test_direct_multistop_handler_prices_response_and_rejects_invalid_selection():

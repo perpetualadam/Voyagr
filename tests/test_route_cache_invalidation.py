@@ -1,13 +1,6 @@
-"""
-The route cache tiers /api/route reads from must be the ones invalidation reaches.
+"""Hazard changes clear active memory without deleting quarantined legacy rows.
 
-Hazard penalties feed route scoring and ordering but are not part of the in-memory
-cache key, so a penalty change has to clear that tier outright or the previous
-option list is replayed until the entry ages out.
-
-Both assertions also guard the singleton wiring: the routing blueprint holds the
-cache reference used for invalidation, and if a second copy of ``voyagr_web`` ever
-registers itself again the reference stops pointing at the cache the endpoint reads.
+The routing blueprint and compatibility exports must share the active cache.
 """
 
 import unittest
@@ -35,13 +28,11 @@ class HazardPreferenceRouteCacheInvalidationTest(unittest.TestCase):
         self.assertIs(routing_api._route_cache, vw.route_cache)
 
     def test_penalty_change_clears_the_in_memory_route_cache(self):
-        vw.route_cache.set(
-            53.536, -1.380, 53.517, -1.150, 'auto', 'petrol_diesel',
-            {'success': True, 'routes': [{'name': 'Fastest'}]},
-        )
-        self.assertIsNotNone(vw.route_cache.get(
-            53.536, -1.380, 53.517, -1.150, 'auto', 'petrol_diesel',
-        ))
+        key = 'synthetic-private-key'
+        vw.route_cache.set(key, {'success': True, 'routes': [{'name': 'Fastest'}]})
+        self.assertIsNotNone(vw.route_cache.get(key))
+        self.conn.execute("INSERT INTO persistent_route_cache(start_lat, end_lat) VALUES(53.536,53.517)")
+        self.conn.commit()
 
         response = self.client.post('/api/hazard-preferences', json={
             'hazard_type': 'camera_speed',
@@ -52,9 +43,9 @@ class HazardPreferenceRouteCacheInvalidationTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json().get('success'))
-        self.assertIsNone(vw.route_cache.get(
-            53.536, -1.380, 53.517, -1.150, 'auto', 'petrol_diesel',
-        ))
+        self.assertIsNone(vw.route_cache.get(key))
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM persistent_route_cache').fetchone()[0], 1)
+
 
 
 if __name__ == '__main__':
