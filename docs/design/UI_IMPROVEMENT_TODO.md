@@ -1605,3 +1605,19 @@ No production deployment; physical-device acceptance remains open.
 Validation: 3,467 frontend tests with coverage/lint; declared backend selection
 2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and four
 real Chromium navigation/GPS/ETA regressions. No production deployment.
+
+### Navigation form explanations behind Info
+
+- [x] Place static arrival/access/onward-connection and parking-fee guidance in a
+  closed Arrival Info disclosure. Preserve original help IDs and link parking
+  controls to their description for assistive technology.
+- [x] Use the same small native Info control for waypoint, GPS-start and voice
+  instructions. Keep field labels, selection summaries, search feedback, recording
+  status and actionable errors visible; fuel controls retain their existing
+  collapsed section and dynamic pricing status.
+- [x] Preserve controls/handlers and arrival summary/selection state; add keyboard
+  and disclosure-state regressions and theme-aware inherited styling.
+
+Validation: 3,469 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks; 16 real
+Chromium arrival/Info viewport/theme/text-scale cases. No deployment.

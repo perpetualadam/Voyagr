@@ -5168,3 +5168,10 @@ html.dark-mode .navigation-entry, body.dark-mode .navigation-entry { background:
 
 /* Technical preview information is available on demand. */
 .preview-route-info-content { padding: 0 4px 12px; overflow-wrap: anywhere; }
+
+/* Optional navigation explanations use the same accessible Info control. */
+.navigation-info { margin: 4px 0 10px; color: inherit; overflow-wrap: anywhere; }
+.navigation-info > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: .875rem; list-style: none; }
+.navigation-info > summary::-webkit-details-marker { display: none; }
+.navigation-info > summary:focus-visible { outline: 3px solid #8b63c6; outline-offset: 2px; }
+.navigation-info > :is(p,small) { display: block; margin: 6px 10px 10px; font-size: .875rem; line-height: 1.5; }

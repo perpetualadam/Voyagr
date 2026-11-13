@@ -3,10 +3,16 @@ const Plan=require('../modules/navigation/journey-plan.js');
 const template=fs.readFileSync(path.join(__dirname,'../../../templates/index.html'),'utf8');
 const markup=template.slice(template.indexOf('<details id="arrivalOptions"'),template.indexOf('<!-- VIA-POINTS'));
 beforeEach(()=>{document.body.innerHTML='<input id="end" value="Doncaster">'+markup;});
-test('optional controls use a closed native disclosure while access and onward-connection notices stay outside',()=>{
+test('optional controls and arrival guidance have separate closed accessible disclosures',()=>{
     const details=document.getElementById('arrivalOptions');
     expect(details.open).toBe(false);
     expect(details.querySelector('#drivingArrival')).not.toBeNull();
+    const info=document.getElementById('navigationArrivalInfo');
+    expect(info.open).toBe(false);
+    expect(info.querySelector('summary').getAttribute('aria-label')).toBe('Arrival and parking information');
+    expect(document.getElementById('arrivalIntentHelp').closest('details')).toBe(info);
+    expect(document.getElementById('drivingArrivalHelp').closest('details')).toBe(info);
+    expect(document.getElementById('arrivalParkingHelp').closest('details')).toBe(info);
     expect(details.querySelector('#arrivalIntentHelp')).toBeNull();
     expect(document.getElementById('arrivalIntentHelp').textContent).toContain('preview only');
     expect(document.getElementById('drivingArrivalHelp').textContent).toContain('onward connection is not included');

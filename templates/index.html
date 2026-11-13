@@ -53,7 +53,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261111previewinfo1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261113forminfo1" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -462,19 +462,23 @@
                         </select>
 
                         <label for="arrivalParkingPrice">Nearby parking price</label>
-                        <select id="arrivalParkingPrice" onchange="VoyagrJourneyPlan.syncArrivalSummary();VoyagrGeocodingOrchestration.searchArrivalParking()">
+                        <select id="arrivalParkingPrice" aria-describedby="arrivalParkingHelp" onchange="VoyagrJourneyPlan.syncArrivalSummary();VoyagrGeocodingOrchestration.searchArrivalParking()">
                             <option value="any">Any price</option>
                             <option value="free">Reported free only</option>
                             <option value="paid">Reported paid only</option>
                         </select>
-                        <small>Based on mapped fee tags. Check signs, time limits and customer restrictions. Missing fee data is not free.</small>
+
                         <small id="arrivalSearchContext" role="status"></small>
 
                         <button type="button" class="btn" onclick="VoyagrJourneyPlan.clearArrival();VoyagrLocationOrchestration.invalidateEndpointRequests('end')">Clear arrival point</button>
                     </div>
                 </details>
-                <small id="arrivalIntentHelp" class="arrival-options-notice">Arrival choices do not verify stopping, property access or an entrance. Roadside and entrance intents are preview only.</small>
-                <small id="drivingArrivalHelp" class="arrival-options-notice">Keep your destination above. After choosing a driving arrival, calculate again. Check vehicle access and opening restrictions. The onward connection is not included.</small>
+                <details id="navigationArrivalInfo" class="navigation-info">
+                    <summary aria-label="Arrival and parking information"><span aria-hidden="true">ⓘ</span> Info</summary>
+                    <small id="arrivalIntentHelp" class="arrival-options-notice">Arrival choices do not verify stopping, property access or an entrance. Roadside and entrance intents are preview only.</small>
+                    <small id="drivingArrivalHelp" class="arrival-options-notice">Keep your destination above. After choosing a driving arrival, calculate again. Check vehicle access and opening restrictions. The onward connection is not included.</small>
+                    <small id="arrivalParkingHelp">Based on mapped fee tags. Check signs, time limits and customer restrictions. Missing fee data is not free.</small>
+                </details>
 
                 <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
                 <details id="waypointOptions" class="waypoint-options" ontoggle="VoyagrWaypointsOrchestration.syncWaypointSummary()">
@@ -519,11 +523,16 @@
                         <div id="waypointsList">
                             <div class="waypoints-empty">No waypoints yet. Enter an address or use the map buttons.</div>
                         </div>
+
+                    </div>
+                </details>
+
+                <details id="navigationWaypointInfo" class="navigation-info">
+                    <summary aria-label="Via-point and stop information"><span aria-hidden="true">ⓘ</span> Info</summary>
                         <p class="waypoints-hint">
                             <strong>Via-points</strong> force the route through a place. <strong>Stops</strong> add dwell time.
                             <strong>Edit route</strong> lets you drag markers on the line.
                         </p>
-                    </div>
                 </details>
 
                 <!-- Vehicle Type Selector -->
@@ -567,9 +576,12 @@
                 <div class="form-group card-settings-inline">
                     <div class="settings-inline-row">
                         <label for="autoGpsToggle" class="settings-inline-label">Use current GPS as start</label>
-                        <input type="checkbox" id="autoGpsToggle" class="input-toggle-checkbox" onchange="toggleAutoGpsLocation()">
+                        <input type="checkbox" id="autoGpsToggle" aria-describedby="gpsStartHelp" class="input-toggle-checkbox" onchange="toggleAutoGpsLocation()">
                     </div>
-                    <p class="settings-inline-help">When on, route calculations use your live position as the start automatically.</p>
+                    <details id="navigationGpsInfo" class="navigation-info">
+                        <summary aria-label="GPS start information"><span aria-hidden="true">ⓘ</span> Info</summary>
+                    <p id="gpsStartHelp" class="settings-inline-help">When on, route calculations use your live position as the start automatically.</p>
+                    </details>
                 </div>
 
                 <!-- Compact routing controls; GPS start remains immediately above. -->
@@ -675,7 +687,7 @@
                 <section class="voice-section" role="region" aria-labelledby="voiceSectionTitle">
                     <div class="voice-card__head">
                         <h3 id="voiceSectionTitle" class="voice-card__title">Voice control</h3>
-                        <p class="voice-card__hint">Tap Listen, speak, then stop and wait for the response. The map microphone uses the same control. Wake phrase is optional and separate.</p>
+
                     </div>
                     <div class="voice-engine-field">
                         <label for="voiceRecognitionProvider">Speech engine</label>
@@ -683,7 +695,11 @@
                             <option value="browser">Browser speech</option>
                             <option value="ai" {% if not voice_ai_available %}disabled{% endif %}>AI speech{% if not voice_ai_available %} (unavailable){% endif %}</option>
                         </select>
+                        <details id="navigationVoiceInfo" class="navigation-info">
+                            <summary aria-label="Voice control information"><span aria-hidden="true">ⓘ</span> Info</summary>
+                        <p class="voice-card__hint">Tap Listen, speak, then stop and wait for the response. The map microphone uses the same control. Wake phrase is optional and separate.</p>
                         <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase.</p>
+                        </details>
                     </div>
                     <div id="voiceStatus" class="voice-status" data-testid="voice-indicator" role="status" aria-live="polite">Ready</div>
                     <div class="voice-controls">
