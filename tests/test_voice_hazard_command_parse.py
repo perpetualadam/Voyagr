@@ -14,6 +14,39 @@ class TestVoiceHazardCommandParse(unittest.TestCase):
         self.lat = 51.5074
         self.lon = -0.1278
 
+    def test_negated_and_ambiguous_commands_do_not_execute(self):
+        commands = (
+            'do not avoid tolls', "don't avoid tolls", 'never avoid tolls',
+            'avoid tolls and do not avoid tolls', 'avoid tolls not now',
+            'can you explain avoid tolls', 'do not report police',
+            'report no police', 'report police and debris',
+            'support police', 'the report mentions police',
+            'do not navigate to barnsley', 'do not recalculate',
+            'do not select fastest route',
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                response = self.client.post('/api/voice/command', json={
+                    'command': command, 'lat': self.lat, 'lon': self.lon,
+                })
+                result = response.get_json()
+                self.assertFalse(result['success'], result)
+                self.assertNotIn('action', result)
+
+    def test_explicit_commands_preserve_supported_actions(self):
+        for command, action in (
+            ('Please avoid tolls.', 'set_preference'),
+            ('Report police ahead, please!', 'report_hazard'),
+            ('report a red light camera here', 'report_hazard'),
+            ('navigate to nottingham', 'navigate'),
+            ('recalculate', 'reroute'),
+            ('fastest route', 'set_preference'),
+        ):
+            with self.subTest(command=command):
+                result = _parse_voice_command(command, self.lat, self.lon)
+                self.assertTrue(result['success'], result)
+                self.assertEqual(result['action'], action)
+
     def test_report_speed_camera(self):
         result = _parse_voice_command('report speed camera', self.lat, self.lon)
         self.assertTrue(result['success'])

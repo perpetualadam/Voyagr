@@ -12,6 +12,7 @@ Contains:
 
 import logging
 import os
+import re
 import threading
 from typing import Any, Dict
 import requests
@@ -846,16 +847,17 @@ def _parse_voice_command(
 ) -> Dict[str, Any]:
     """Parse voice command and return action to execute."""
     try:
-        command = command.lower().strip()
+        command = ' '.join(command.lower().strip().split()).rstrip('.!?')
+        command = re.sub(r'^please\s+|,?\s+please$', '', command)
 
-        if any(cmd in command for cmd in ['navigate to', 'go to', 'take me to']):
+        if any(command.startswith(cmd + ' ') for cmd in ['navigate to', 'go to', 'take me to']):
             for prefix in ['navigate to ', 'go to ', 'take me to ']:
                 if prefix in command:
                     location = command.split(prefix, 1)[1].strip()
                     if location:
                         return {'success': True, 'action': 'navigate', 'location': location, 'message': f'Navigating to {location}'}
 
-        if 'find nearest' in command:
+        if command.startswith('find nearest '):
             location_type = command.split('find nearest', 1)[1].strip()
             search_map = {
                 'gas station': 'gas station', 'petrol station': 'petrol station',
@@ -869,7 +871,7 @@ def _parse_voice_command(
                     break
             return {'success': True, 'action': 'search', 'search_term': search_term, 'message': f'Searching for nearest {search_term}'}
 
-        if any(cmd in command for cmd in ['reroute', 'recalculate', 'find new route']):
+        if command in ('reroute', 'recalculate', 'find new route', 'recalculate route'):
             return {'success': True, 'action': 'reroute', 'message': 'Recalculating route from current location'}
 
         if any(
@@ -921,7 +923,14 @@ def _parse_voice_command(
                 )
             return {'success': True, 'action': 'confirm_speed_display', 'message': msg}
 
-        if 'report' in command:
+        # Accept one explicit report, not negated, quoted or compound speech.
+        report_pattern = (
+            r'report (?:a |an )?(?:speed camera|speeding camera|gatso|mobile camera|'
+            r'traffic light camera|red light camera|road closed|road closure|closure|'
+            r'pothole|police|debris|accident|crash|traffic jam|congestion)'
+            r'(?: ahead| here| at my location)?'
+        )
+        if re.fullmatch(report_pattern, command):
             # Shared classifier with desktop SatNav (canonical community types)
             classified = classify_voice_hazard_report(command, require_report_keyword=True)
             if classified:
@@ -933,11 +942,15 @@ def _parse_voice_command(
                     'message': classified['message'],
                 }
 
-        if 'avoid tolls' in command:
+        if command == 'avoid tolls':
             return {'success': True, 'action': 'set_preference', 'preference': 'tolls', 'value': False, 'message': 'Toll avoidance enabled'}
 
-        if 'fastest' in command:
+        if command in ('fastest', 'fastest route', 'select fastest route'):
             return {'success': True, 'action': 'set_preference', 'preference': 'route_type', 'value': 'fastest', 'message': 'Fastest route selected'}
+
+        if re.search(r'\b(?:report|tolls|fastest)\b', command):
+            return {'success': False, 'error': 'Command not recognized',
+                    'message': 'Please say one command, such as avoid tolls or report police.'}
 
         if any(cmd in command for cmd in ["what's my eta", 'eta', 'estimated time']):
             return {'success': True, 'action': 'get_info', 'info_type': 'eta', 'message': 'Getting estimated time of arrival'}
