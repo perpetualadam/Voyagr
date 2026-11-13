@@ -13,10 +13,25 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from voyagr.config.rates import resolve_route_cost_params
+from voyagr.utils.admin_auth import register_admin_before_request
 
 logger = logging.getLogger(__name__)
 
 costs_bp = Blueprint('costs', __name__)
+
+# These diagnostics expose historical route locations or cache membership.
+# Normal route calculation and cost estimation must remain public.
+_PRIVATE_CACHE_PATHS = {'/cache-statistics', '/alternative-route-cache-info'}
+register_admin_before_request(costs_bp, exact_paths=_PRIVATE_CACHE_PATHS)
+
+
+@costs_bp.after_request
+def private_cache_diagnostics(response):
+    if request.path in {'/api' + path for path in _PRIVATE_CACHE_PATHS}:
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.vary.add('X-Voyagr-Admin-Key')
+    return response
+
 
 # Global reference to cost calculator (set by main app)
 _cost_calculator = None

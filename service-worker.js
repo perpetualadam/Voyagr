@@ -15,6 +15,9 @@ const MAP_PROXY_PATH_PREFIX = '/map/';
 // Sensitive endpoints: do NOT cache responses (privacy)
 const SENSITIVE_API_PATH_PREFIXES = [
   '/api/dashcam',
+  '/api/cache-statistics',
+  '/api/alternative-route-cache-info',
+  '/api/ml-predictions',
   '/api/config',
   '/api/me',
   '/api/route',

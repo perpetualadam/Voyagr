@@ -35,9 +35,9 @@ class TestAdminAuthMissingSecret:
         })
         assert rv.status_code in (200, 400, 500)
 
-    def test_ml_predictions_get_open_without_secret(self, client):
+    def test_ml_predictions_get_disabled_without_secret(self, client):
         rv = client.get('/api/ml-predictions')
-        assert rv.status_code in (200, 500)
+        assert rv.status_code == 503
 
 
 class TestAdminAuthWhenConfigured:
@@ -74,9 +74,9 @@ class TestAdminAuthWhenConfigured:
         assert rv.status_code != 401
 
     @patch.dict('os.environ', {'VOYAGR_ADMIN_SECRET': 'test-admin-secret'}, clear=False)
-    def test_ml_predictions_post_gated_get_open(self, client):
+    def test_ml_predictions_get_and_post_gated(self, client):
         rv_get = client.get('/api/ml-predictions')
-        assert rv_get.status_code != 401
+        assert rv_get.status_code == 401
 
         rv_post = client.post('/api/ml-predictions', json={
             'start_lat': 51.5,
