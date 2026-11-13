@@ -1156,7 +1156,7 @@
                         </div>
                     <div class="preference-item">
                             <span class="preference-label">🚗 Speedometer &amp; limit</span>
-                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map" aria-label="🚗 Speedometer &amp; limit" role="switch" aria-checked="true"></button>
+                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show speed and limit on the map before and during navigation" aria-label="🚗 Speedometer &amp; limit" role="switch" aria-checked="true"></button>
                         </div><p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
                             The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
                         </p></div></div></details>
@@ -1914,6 +1914,8 @@
                     <div id="speedLimitMappedLabel" hidden title="OpenStreetMap observation; check road signs. Legal applicability is unverified." style="font-size: 8px; color: #666;">Mapped</div>
                 </div>
             </div>
+            <div id="speedWidgetState" class="speed-widget-state" role="status">GPS off</div>
+            <button type="button" id="speedWidgetUseGps" class="speed-widget-gps" onclick="VoyagrSpeedWidgetOrchestration.useGpsForSpeedWidget()" aria-label="Use GPS to check the current speed limit">Use GPS</button>
         </div>
 
 
