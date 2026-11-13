@@ -8,6 +8,7 @@
     var runtime = null;
     var _speedLimitFetchState = null;
     var _lastSpeedWidgetVisible = null;
+    var _lastSpeedWidgetUpdateAt = 0;
 
     var speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';
     var currentGpsSpeedMph = 0;
@@ -82,6 +83,7 @@
         const widget = document.getElementById('speedWidget');
         if (!widget) return;
 
+        _lastSpeedWidgetUpdateAt = Date.now();
         setCurrentGpsSpeedMph(currentSpeedInMph);
         setCurrentGpsSpeedKmh(currentSpeedInMph * 1.609344);
 
@@ -148,14 +150,40 @@
         const widget = document.getElementById('speedWidget');
         if (!widget) return;
 
-        const shouldShow = (rt().getIsTrackingActive() || rt().getRouteInProgress())
-            && getSpeedWidgetEnabled();
+        const active = rt().getIsTrackingActive() || rt().getRouteInProgress();
+        const shouldShow = getSpeedWidgetEnabled();
+        const gpsButton = document.getElementById('speedWidgetUseGps');
+        if (gpsButton) gpsButton.hidden = !!active;
+        const state = document.getElementById('speedWidgetState');
+        const unit = rt().call.getSpeedUnit();
+        if (!active) {
+            _lastSpeedWidgetUpdateAt = 0;
+            setCurrentSpeedLimitMph(null);
+            for (const id of ['speedValue','speedLimitValue']) {
+                const el=document.getElementById(id);if(el)el.textContent='—';
+            }
+            for (const id of ['speedUnitDisplay','speedLimitUnit']) {
+                const el=document.getElementById(id);if(el)el.textContent=unit;
+            }
+            const mapped=document.getElementById('speedLimitMappedLabel');if(mapped)mapped.hidden=true;
+            const circle=document.getElementById('speedLimitCircle');if(circle){circle.style.borderColor='#777';circle.title='Enable GPS to check your current location';}
+            widget.style.borderLeft='4px solid #999';
+            if(state)state.textContent='GPS off';
+        } else if(state) {
+            const value=document.getElementById('speedLimitValue')?.textContent;
+            state.textContent=!_lastSpeedWidgetUpdateAt ? 'Waiting for GPS' : value==='—' ? 'Limit unavailable' : '';
+        }
+        if (state) state.hidden = !state.textContent;
         if (shouldShow !== _lastSpeedWidgetVisible) {
             widget.style.display = shouldShow ? 'block' : 'none';
             _lastSpeedWidgetVisible = shouldShow;
-            console.log('[Speed Widget]', shouldShow ? 'Visible' : 'Hidden',
-                '(tracking:', rt().getIsTrackingActive(), 'route:', rt().getRouteInProgress(), ')');
         }
+    }
+
+    function useGpsForSpeedWidget() {
+        // Reuse the existing GPS owner, and never toggle an active watch off.
+        if (!rt().getIsTrackingActive()) root.VoyagrGpsOrchestration?.startGPSTracking();
+        updateSpeedWidgetVisibility();
     }
 
     function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
@@ -350,6 +378,7 @@
         smoothGpsSpeedMph: smoothGpsSpeedMph,
         updateSpeedWidget: updateSpeedWidget,
         updateSpeedWidgetVisibility: updateSpeedWidgetVisibility,
+        useGpsForSpeedWidget: useGpsForSpeedWidget,
         getCurrentRoadType: getCurrentRoadType,
         getManeuverStreetLabel: getManeuverStreetLabel,
         normalizeManeuverSpeedLimitMph: normalizeManeuverSpeedLimitMph,

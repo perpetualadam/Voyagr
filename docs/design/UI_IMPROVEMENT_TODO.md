@@ -1632,3 +1632,22 @@ Chromium arrival/Info viewport/theme/text-scale cases. No deployment.
 - [ ] Accept real cars/headphones on Android Chrome and installed PWA: audible
   directions, exposed/default microphone, wake handoff, disconnect/reconnect,
   calls and speaker echo. See [CAR_HEADPHONE_AUDIO.md](CAR_HEADPHONE_AUDIO.md).
+
+### Speed limit visible before navigation
+
+- [x] Keep the existing map speed widget visible before tracking/navigation when
+  enabled in settings. Show dashes and GPS off rather than a stale speed/limit.
+- [x] Add a 44 px Use GPS action reusing the existing tracker without starting a
+  journey, another watcher or automatic permission request on page load.
+- [x] Keep existing mapped/route observation labels, configured mph/km/h display
+  and legal-alert evidence rules. Display unavailable limits explicitly.
+- [x] Cover idle, tracking, stopped and disabled states in controller/browser
+  checks; retain combined navigation HUD acceptance checks.
+- [ ] Accept on deployed phones with live GPS before starting a journey. Numeric
+  limits still require available data and usable position evidence; stationary
+  or ambiguous road association may remain unavailable. This feature does not
+  infer a road's legal speed from its class or the map viewport.
+
+Reproduce controlled checks: `node scripts/check-map-speed-widget.cjs` and
+`node scripts/check-navigation-overlay-layout.cjs`. Location/evidence fixtures
+verify UI wiring and layout, not physical GPS or live data coverage.
