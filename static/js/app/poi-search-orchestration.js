@@ -40,7 +40,7 @@
         const searchWithPosition = async (lat, lon) => {
             if(generation!==quickSearchGeneration)return;
             const controller=new AbortController();quickSearchController=controller;
-            console.log(`[QuickSearch] Searching at position: ${lat}, ${lon}`);
+            console.log('[QuickSearch] Searching nearby');
             try {
                 const response = await fetch('/api/poi-search', {
                     signal:controller.signal,
@@ -61,7 +61,7 @@
                 if(!data||data.success!==true||candidateSearch&&!Array.isArray(data.results))throw Error('Search temporarily unavailable');
                 if(type==='parking'&&price!=='any'&&(!data.search_context||data.search_context.price_pref!==price||
                     !Array.isArray(data.results)||data.results.some(row=>row.fee_category!==(price==='free_street'?'free':price)||price==='free_street'&&!['street_side','lane','on_street'].includes(row.parking_type))))throw Error('Parking fee-filter response mismatch');
-                console.log('[QuickSearch] Response:', data);
+                console.log('[QuickSearch] Response received');
 
                 if (!data.success || !data.results || data.results.length === 0) {
                     if(type==='parking'||candidateSearch)displayPOIResults([],type,lat,lon,price);
@@ -75,7 +75,7 @@
                 rt().call.showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
             } catch (error) {
                 if(generation!==quickSearchGeneration||error.name==='AbortError')return;
-                console.error('[QuickSearch] Error:', error);
+                console.error('[QuickSearch] Search failed');
                 rt().call.showStatus('Error searching for ' + type + ': ' + error.message, 'error');
             }
         };
@@ -98,7 +98,7 @@
             },
             (error) => {
                 if(generation!==quickSearchGeneration)return;
-                console.error('[QuickSearch] GPS Error:', error);
+                console.error('[QuickSearch] Location unavailable');
                 rt().call.showStatus('Error getting location: ' + error.message, 'error');
             },
             { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }

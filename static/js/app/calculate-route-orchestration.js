@@ -30,7 +30,7 @@
     function decodePolyline(encoded, precision) {
         if (precision === undefined) precision = 6;
         if (!encoded || typeof encoded !== 'string') {
-            console.warn('[decodePolyline] Invalid input:', encoded);
+            console.warn('[decodePolyline] Invalid geometry');
             return [];
         }
         return polylineCodecModule().decodePolyline(encoded, precision);

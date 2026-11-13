@@ -80,7 +80,6 @@
                 if(!autoGpsEnabled)return; // A delayed fix cannot replace a manually selected origin.
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
 
                 const startEl = document.getElementById('start');
                 if (startEl) {
@@ -94,7 +93,7 @@
                 rt().setCurrentLat(lat);
                 rt().setCurrentLon(lon);
 
-                console.log('[Auto GPS] Location updated: ' + lat.toFixed(6) + ', ' + lon.toFixed(6) + ' (accuracy: ' + accuracy.toFixed(0) + 'm)');
+                console.log('[Auto GPS] Location updated');
 
                 if (!window.lastAutoGpsLat ||
                     rt().call.calculateDistanceMeters(window.lastAutoGpsLat, window.lastAutoGpsLon, lat, lon) > 0.05) {
@@ -104,7 +103,7 @@
                 }
             },
             (error) => {
-                console.log('[Auto GPS] Error: ' + error.message);
+                console.log('[Auto GPS] Location unavailable');
             }
         );
     }

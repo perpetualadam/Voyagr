@@ -560,7 +560,7 @@ class SpeedLimitDetector:
         while len(self.speed_limit_cache) >= self.cache_max_size:
             oldest_key = next(iter(self.speed_limit_cache))
             del self.speed_limit_cache[oldest_key]
-            logger.info(f"[Speed Limit Cache] Removed oldest entry: {oldest_key}")
+            logger.info("[Speed Limit Cache] Removed oldest entry")
 
         # Add new entry (or move to end if updating)
         if key in self.speed_limit_cache:
@@ -689,8 +689,7 @@ class SpeedLimitDetector:
                 speed_limit_changed = True
                 self.metrics['speed_limit_changes'] += 1
                 logger.warning(
-                    f"[Speed Limit Change] {self.current_speed_limit} mph → {speed_limit} mph "
-                    f"at ({lat:.4f}, {lon:.4f})"
+                    f"[Speed Limit Change] {self.current_speed_limit} mph → {speed_limit} mph"
                 )
 
             # Update current speed limit
@@ -722,7 +721,7 @@ class SpeedLimitDetector:
         except route_transport.RoutingDeadlineExceeded:
             raise
         except Exception as e:
-            logger.error(f"Error getting speed limit: {e}")
+            logger.error("Error getting speed limit type=%s", type(e).__name__)
             return {
                 'speed_limit_mph': None,
                 'speed_limit_kmh': None,
@@ -777,7 +776,7 @@ class SpeedLimitDetector:
                 # Night - normal speed limit
                 return 70
         except Exception as e:
-            logger.error(f"Error getting smart motorway speed limit: {e}")
+            logger.error("Error getting smart motorway speed limit type=%s", type(e).__name__)
             return 70
 
     def _tomtom_snap_speed_limit_mph(
@@ -869,7 +868,7 @@ class SpeedLimitDetector:
             logger.warning("[Speed Limit] TomTom Snap to Roads API timeout (3s)")
         except Exception as e:
             self.metrics['tomtom_snap_to_roads_failures'] += 1
-            logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
+            logger.error("[Speed Limit] TomTom Snap to Roads failed type=%s", type(e).__name__)
         return None, None
 
     def _maybe_crosscheck_tomtom_vs_osm(self, tomtom_mph: int, lat: float, lon: float, region: str) -> None:
@@ -1126,7 +1125,7 @@ class SpeedLimitDetector:
         except route_transport.RoutingDeadlineExceeded:
             raise
         except Exception as e:
-            logger.error(f"[Speed Limit] Cache check failed: {e}")
+            logger.error("[Speed Limit] Cache check failed type=%s", type(e).__name__)
 
         self.metrics['cache_misses'] += 1
 
@@ -1287,7 +1286,7 @@ class SpeedLimitDetector:
                 'warning_threshold_mph': warning_threshold_mph
             }
         except Exception as e:
-            logger.error(f"Error checking speed violation: {e}")
+            logger.error("Error checking speed violation type=%s", type(e).__name__)
             return {'status': 'unknown', 'error': str(e)}
 
     def get_speed_limit_changed(self) -> bool:
