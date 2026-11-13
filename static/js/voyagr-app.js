@@ -2746,7 +2746,14 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     return VoyagrNavigationLifecycleOrchestration.startTurnByTurnNavigation(routeData, navStartOpts);
 }
 function stopTurnByTurnNavigation() {
-    return VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation();
+    const wasNavigating=VoyagrNavigationLifecycleOrchestration.getRouteInProgress();
+    const result=VoyagrNavigationLifecycleOrchestration.stopTurnByTurnNavigation();
+    // Capture/persist/show the completed summary before clearing the next plan's inputs.
+    // Internal mode switches call the lifecycle owner directly and retain their inputs.
+    if(wasNavigating && !VoyagrNavigationLifecycleOrchestration.getRouteInProgress()) {
+        VoyagrFormClearOrchestration.clearJourneyInputs();
+    }
+    return result;
 }
 function updateTurnGuidance(userLat, userLon) {
     return VoyagrNavigationLifecycleOrchestration.updateTurnGuidance(userLat, userLon);

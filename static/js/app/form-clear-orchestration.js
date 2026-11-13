@@ -14,25 +14,36 @@
         return runtime;
     }
 
+    function clearJourneyInputs() {
+        const navigation=root.VoyagrNavigationLifecycleOrchestration;
+        if(navigation && navigation.getRouteInProgress()) return false;
+        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
+        resetJourneyInputValues();
+        return true;
+    }
+
+    function resetJourneyInputValues() {
+        if(root.VoyagrJourneyPlan)root.VoyagrJourneyPlan.clearArrival();
+        ['start','end','drivingArrival','viaPointAddress','stopAddress'].forEach(function(id){
+            const input=document.getElementById(id);if(!input)return;
+            input.value='';
+            Object.keys(input.dataset).forEach(function(key){
+                if(['lat','lon','displayName'].includes(key)||key.startsWith('journey'))delete input.dataset[key];
+            });
+        });
+        ['autocomplete_start','autocomplete_end','autocomplete_drivingArrival','autocompleteStart','autocompleteEnd'].forEach(function(id){
+            const list=document.getElementById(id);if(list){list.replaceChildren();list.classList.remove('show');}
+        });
+        return true;
+    }
+
     function clearForm() {
         if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
         if(root.VoyagrNavigationLifecycleOrchestration&&root.VoyagrNavigationLifecycleOrchestration.getRouteInProgress()){rt().call.showStatus('End the current journey before clearing its map.','warning');return false;}
-        const startEl = document.getElementById('start');
-        if (startEl) {
-            startEl.value = '';
-            delete startEl.dataset.lat;
-            delete startEl.dataset.lon;
-            delete startEl.dataset.displayName;
-        }
-        document.getElementById('end').value = '';
+        resetJourneyInputValues();
         const resultEl = document.getElementById('result');
         if (resultEl) resultEl.classList.remove('show');
         document.getElementById('status').className = 'status';
-
-        const viaInput = document.getElementById('viaPointAddress');
-        if (viaInput) viaInput.value = '';
-        const stopInput = document.getElementById('stopAddress');
-        if (stopInput) stopInput.value = '';
 
         const startMarker = rt().getStartMarker();
         const endMarker = rt().getEndMarker();
@@ -65,6 +76,7 @@
         endpointIntentReady:function(){return !!runtime;},
         bind: bind,
         clearForm: clearForm,
+        clearJourneyInputs: clearJourneyInputs,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

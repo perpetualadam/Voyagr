@@ -1587,3 +1587,21 @@ Validation: 3,463 frontend tests with coverage/lint; declared backend selection
 Chromium/MapLibre tests deliberately lose and restore WebGL at phone/desktop
 sizes, retain the selected route and journey state, and verify mobile 2x density.
 No production deployment; physical-device acceptance remains open.
+
+### End journey immediately resets planning inputs
+
+- [x] Restore visible start/destination clearing when End finishes stopping an
+  active journey, after the completed summary/history data has been captured.
+  Reset coordinate/search metadata, driving-arrival and typed via/stop inputs,
+  dismiss suggestions and invalidate pending endpoint requests.
+- [x] Reuse one input-values reset from End and the existing Clear/Done path.
+  The End-only reset does not remove map resources, fly to London, restart GPS
+  or change saved preferences/history. Internal mode switches retain their plan.
+- [x] Keep existing Clear cancellation semantics even when active guidance blocks
+  map/form removal. A failed stop or idle End cannot clear newly typed inputs.
+- [x] Regress synchronous summary capture and history persistence with a pending
+  token lookup, preserving completed addresses and fuel/toll/CAZ estimates.
+
+Validation: 3,467 frontend tests with coverage/lint; declared backend selection
+2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks and four
+real Chromium navigation/GPS/ETA regressions. No production deployment.
