@@ -12,7 +12,7 @@ def test_measurement_id_default():
     old_disabled = os.environ.pop("GOOGLE_ANALYTICS_DISABLED", None)
     old_mid = os.environ.pop("GOOGLE_ANALYTICS_MEASUREMENT_ID", None)
     try:
-        assert measurement_id() == "G-8BESWPG747"
+        assert measurement_id() == ""
     finally:
         if old_disabled is not None:
             os.environ["GOOGLE_ANALYTICS_DISABLED"] = old_disabled
@@ -34,17 +34,21 @@ def test_measurement_id_disabled():
             os.environ["GOOGLE_ANALYTICS_DISABLED"] = old
 
 
-def test_head_snippet_contains_gtag_loader():
+def test_head_snippet_loads_only_local_consent_controller(monkeypatch):
+    monkeypatch.setenv("GOOGLE_ANALYTICS_MEASUREMENT_ID", "G-8BESWPG747")
     from voyagr.ga4 import head_snippet
 
     snippet = head_snippet()
-    assert "googletagmanager.com/gtag/js?id=G-8BESWPG747" in snippet
-    assert "gtag('config', 'G-8BESWPG747')" in snippet
-    assert snippet.count("googletagmanager.com/gtag/js") == 1
+    assert '/static/js/app/analytics-consent.js' in snippet
+    assert 'data-voyagr-analytics="G-8BESWPG747"' in snippet
+    assert 'googletagmanager.com' not in snippet
+    assert 'gtag(' not in snippet
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setenv("GOOGLE_ANALYTICS_MEASUREMENT_ID", "G-8BESWPG747")
+    monkeypatch.delenv("GOOGLE_ANALYTICS_DISABLED", raising=False)
     from voyagr_web import app
 
     app.config["TESTING"] = True
@@ -56,11 +60,9 @@ def test_index_includes_ga4_once(client):
     rv = client.get("/")
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert "googletagmanager.com/gtag/js?id=G-8BESWPG747" in body
-    assert body.count("googletagmanager.com/gtag/js?id=G-8BESWPG747") == 1
-    assert "gtag('config', 'G-8BESWPG747')" in body
-    # Snippet must appear immediately after <head> (once per page).
-    assert body.index("<!-- Google tag (gtag.js) -->") < body.index("<meta charset")
+    assert body.count('data-voyagr-analytics="G-8BESWPG747"') == 1
+    assert 'src="https://www.googletagmanager.com/' not in body
+    assert body.index('data-voyagr-analytics=') < body.index('<meta charset')
 
 
 def test_security_config_csp_allows_googletagmanager():
@@ -85,14 +87,17 @@ def test_privacy_includes_ga4_once(client):
     rv = client.get("/privacy")
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert body.count("googletagmanager.com/gtag/js?id=G-8BESWPG747") == 1
+    assert body.count('data-voyagr-analytics="G-8BESWPG747"') == 1
+    assert 'src="https://www.googletagmanager.com/' not in body
 
 
-def test_monitoring_includes_ga4_once(client):
-    rv = client.get("/monitoring")
+def test_monitoring_has_no_optional_analytics(client, monkeypatch):
+    monkeypatch.setenv('VOYAGR_ADMIN_SECRET', 'test-admin-key')
+    rv = client.get('/monitoring', headers={'X-Voyagr-Admin-Key': 'test-admin-key'})
     assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert body.count("googletagmanager.com/gtag/js?id=G-8BESWPG747") == 1
+    body = rv.get_data(as_text=True)
+    assert 'data-voyagr-analytics=' not in body
+    assert 'googletagmanager.com' not in body
 
 
 def test_ga4_omitted_when_disabled(client, monkeypatch):
@@ -100,4 +105,40 @@ def test_ga4_omitted_when_disabled(client, monkeypatch):
     rv = client.get("/")
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert "googletagmanager.com/gtag/js" not in body
+    assert 'data-voyagr-analytics=' not in body
+
+
+def test_privacy_discloses_voice_and_separate_analytics_choice(client):
+    body = client.get('/privacy').get_data(as_text=True)
+    assert 'id="analyticsAllow"' in body and 'id="analyticsDecline"' in body
+    assert 'Browser speech recognition may send audio' in body
+    assert 'recording of up to 15 seconds' in body
+    assert 'does not make analytics anonymous' in body
+    assert 'Capture starts only after you explicitly start a dashcam' not in body
+
+
+def test_disabled_analytics_has_no_misleading_controls(client, monkeypatch):
+    monkeypatch.setenv('GOOGLE_ANALYTICS_DISABLED', '1')
+    body = client.get('/privacy').get_data(as_text=True)
+    assert 'id="analyticsAllow"' not in body
+    assert 'Optional analytics is disabled on this deployment' in body
+
+
+def test_privacy_contact_is_configured_escaped_and_not_invented(client, monkeypatch):
+    monkeypatch.setenv('VOYAGR_PRIVACY_OPERATOR_NAME', '<Operator & Co>')
+    monkeypatch.setenv('VOYAGR_PRIVACY_CONTACT_EMAIL', 'privacy@example.test')
+    body = client.get('/privacy').get_data(as_text=True)
+    assert '&lt;Operator &amp; Co&gt;' in body
+    assert 'mailto:privacy@example.test' in body
+    monkeypatch.setenv('VOYAGR_PRIVACY_CONTACT_EMAIL', 'javascript:alert(1)')
+    body = client.get('/privacy').get_data(as_text=True)
+    assert 'mailto:javascript:' not in body
+    assert 'public privacy-contact email has not been configured' in body
+
+
+def test_policy_does_not_promise_unverified_automatic_deletion(client):
+    body = client.get('/privacy').get_data(as_text=True)
+    assert 'freshness checks do not guarantee' in body
+    assert 'Community reports' in body
+    assert 'not stored on our\n    servers unless' not in body
+    assert 'email address provided in the app' not in body

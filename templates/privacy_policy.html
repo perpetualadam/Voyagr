@@ -45,6 +45,8 @@
   .container { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
   h1 { font-size: 28px; color: #667eea; margin-bottom: 8px; }
   .updated { color: #888; font-size: 14px; margin-bottom: 32px; }
+  button { min-height:44px; padding:10px 14px; margin:4px 8px 4px 0; border:1px solid #64748b; border-radius:8px; background:#fff; color:#26324a; cursor:pointer; }
+  button:focus-visible { outline:3px solid #56328a; outline-offset:2px; }
   h2 { font-size: 20px; color: #333; margin: 28px 0 12px; }
   p, li { margin-bottom: 12px; }
   ul { padding-left: 24px; }
@@ -57,27 +59,34 @@
 <body>
 <div class="container">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: August 2026</p>
+  <p class="updated">Last updated: November 2026</p>
 
   <p>Voyagr Navigation ("Voyagr", "we", "our") is committed to protecting your
   privacy. This policy explains what data we collect, why, and how we handle it.</p>
 
   <h2>Who we are (Data Controller)</h2>
-  <p>Voyagr Navigation is the data controller for personal data processed through this
-  app. If you have any questions, or wish to exercise your data protection rights, you
-  can contact us at the support email address shown in the app's Settings. We will
-  respond to requests in line with UK GDPR and applicable data protection law.</p>
+  <p>{% if privacy_operator_name %}{{ privacy_operator_name }} operates Voyagr Navigation
+  and is the data controller.{% else %}The operator of Voyagr Navigation is responsible
+  for personal data processed through the app. Its public legal identity has not been
+  configured for this deployment.{% endif %}
+  {% if privacy_contact_email %}For privacy questions and rights requests, contact
+  <a href="mailto:{{ privacy_contact_email }}">{{ privacy_contact_email }}</a>.
+  {% else %}A public privacy-contact email has not been configured for this deployment.
+  {% endif %}</p>
 
   <h2>1. Data We Collect</h2>
   <ul>
     <li><strong>Location data</strong> &mdash; When you use GPS tracking or navigation,
     your device's location is used to provide turn-by-turn directions, speed monitoring,
-    and route progress. Location data is processed in real time and is not stored on our
-    servers unless you explicitly save a trip or start a dashcam recording (see Dashcam
-    below).</li>
+    and route progress. Coordinates may be sent to Voyagr and relevant service
+    providers for road-context, routing and nearby-place lookups. Coordinates may
+    also be retained in route caches, saved trips, dashcam metadata and community
+    reports, depending on the features you use.</li>
     <li><strong>Route calculations</strong> &mdash; Start and end coordinates are sent
     to routing services to calculate routes. These are processed
-    transiently and cached locally on the server for performance.</li>
+    for the requested journey and may be cached in memory and in a server-side
+    database for performance. A cache freshness limit does not itself delete stored
+    records.</li>
     <li><strong>Saved trips</strong> &mdash; If you save a trip, the route summary
     (distance, duration, cost estimate) is stored in a local database on the server.</li>
     <li><strong>Dashcam recordings (only if you start recording)</strong> &mdash; If you
@@ -88,6 +97,10 @@
     and file size. Recordings are created only when you press Start Recording, and the
     video file is uploaded and stored when you stop (or when the session ends). Dashcam
     is optional and is not required for navigation.</li>
+    <li><strong>Community reports</strong> &mdash; Reports you submit include a location,
+    hazard type and any description you provide, and may be shown to other users.
+    Active expiry controls display; deletion of expired records depends on cleanup.
+    Do not include names, contact details or other identifying information in reports.</li>
     <li><strong>Account data</strong> &mdash; If you sign in, your email address and
     display name are managed by Supabase (our authentication provider).</li>
     <li><strong>Preferences</strong> &mdash; Settings such as vehicle type, units, and
@@ -100,16 +113,49 @@
     autocomplete remain on the device and are not synced.</li>
   </ul>
 
+  <h2>Voice and audio controls</h2>
+  <p>Browser speech recognition may send audio to the browser vendor's recognition
+  service. If you choose AI speech, a recording of up to 15 seconds is sent through
+  Voyagr to the deployment's configured transcription service. Voyagr's transcription
+  handler processes the recording in memory and does not save an audio file; any
+  upstream provider retention depends on that provider's terms and configuration.
+  Recognised commands, and your current coordinates when available, are sent to
+  Voyagr to carry out the command.</p>
+  <p>If enabled and configured, the wake-word feature listens to microphone audio
+  locally while its browser pipeline is active. It uses Picovoice software and may
+  require vendor licence validation; it is not a promise of entirely offline use.
+  The microphone check opens and releases capture without uploading an audio clip.
+  Device choices stay in page memory. You can stop voice input, disable wake listening,
+  or revoke microphone permission in browser settings. Dashcam audio is separate.</p>
+
+  <h2 id="analytics-controls">Optional analytics</h2>
+  <p>Optional Google Analytics is off until you choose Allow analytics below. Declining
+  does not prevent navigation. Your choice is stored in this browser separately from
+  the safety acknowledgement and account settings. You can change it here at any time.
+  When allowed, Google may process usage events, online identifiers and network data
+  under its own policy. Voyagr's page-view event omits the page query string and
+  fragment and uses a generic page title. This does not make analytics anonymous.</p>
+  {% if optional_analytics_available %}
+  <p id="analyticsConsentStatus" role="status">Optional analytics: off.</p>
+  <button type="button" id="analyticsAllow">Allow analytics</button>
+  <button type="button" id="analyticsDecline">Decline / turn off analytics</button>
+  <p>Turning off removes accessible Google Analytics cookies and disables collection
+  for this site's configured property. This page reloads if analytics was already
+  loaded. Data already sent cannot be recalled by this control.</p>
+  {% else %}
+  <p>Optional analytics is disabled on this deployment.</p>
+  {% endif %}
+
   <h2>2. Data We Do NOT Collect</h2>
   <ul>
     <li>We do not sell or share your personal data with advertisers for their own marketing.</li>
-    <li>We do not use cross-site tracking or device fingerprinting.</li>
+    <li>Advertising or cross-site tracking is not required to navigate. Optional analytics is described above.</li>
     <li>We do not access your contacts, messages, photo library, or other existing files
     on your device. Dashcam creates new recordings only when you choose to record; it
     does not browse or upload unrelated media from your device.</li>
-    <li>We do not continuously record camera or microphone input in the background.
-    Capture starts only after you explicitly start a dashcam recording and grant the
-    relevant browser/device permissions.</li>
+    <li>We do not start microphone or camera capture merely to load the app. Optional
+    voice commands, wake listening, microphone checks and dashcam have separate
+    controls and require the relevant browser/device permissions.</li>
   </ul>
 
   <h2>3. Third-Party Services</h2>
@@ -118,14 +164,18 @@
   <ul>
     <li><strong>TomTom</strong> &mdash; Traffic data and geocoding.
     <a href="https://www.tomtom.com/privacy/" target="_blank">TomTom Privacy Policy</a></li>
+    <li><strong>Esri and imagery contributors</strong> &mdash; Satellite imagery when
+    that map theme is selected. Tile requests reveal the viewed map area and network
+    information to the imagery service.
+    <a href="https://www.esri.com/en-us/privacy/overview" target="_blank" rel="noopener">Esri Privacy Statement</a></li>
     <li><strong>OpenWeatherMap</strong> &mdash; Weather conditions along routes.
     <a href="https://openweather.co.uk/privacy-policy" target="_blank">OpenWeatherMap Privacy Policy</a></li>
     <li><strong>Supabase</strong> &mdash; User authentication (if you sign in).
     <a href="https://supabase.com/privacy" target="_blank">Supabase Privacy Policy</a></li>
     <li><strong>OpenFreeMap / OpenStreetMap</strong> &mdash; Map tiles and geographic data.
     <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank">OSM Privacy Policy</a></li>
-    <li><strong>Google Analytics</strong> &mdash; Anonymous usage statistics (page views, device type,
-    general location at country/region level) to understand how the app is used and improve it.
+    <li><strong>Google Analytics (only if allowed)</strong> &mdash; Optional usage statistics,
+    online identifiers and network data to understand how the app is used.
     <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
   </ul>
   <p>Where these providers process personal data on our behalf (for example our
@@ -149,8 +199,9 @@
   </ul>
 
   <h2>5. Location Permission</h2>
-  <p>Voyagr requests location access only when you actively use GPS tracking or
-  navigation. You can revoke this permission at any time in your device or browser
+  <p>Voyagr uses location access for requested location features such as GPS tracking,
+  navigation and current-location searches, including enabled automatic-location
+  preferences. You can revoke this permission at any time in your device or browser
   settings. The app functions without location access (route planning, cost estimation)
   but real-time navigation features require it. If you record with dashcam while
   location is available, GPS points may be stored with that recording as described
@@ -196,15 +247,16 @@
     metadata are stored on our servers so you can play back, manage, and delete them in
     the app. Transfer uses HTTPS.</li>
     <li>All communication uses HTTPS encryption.</li>
-    <li><strong>Retention:</strong> Saved trips and account data are kept until you delete
-    them or close your account, after which they are removed within a reasonable period.
-    Route requests are processed transiently and only short-term server caching is used
-    for performance; this cache is not used to profile you. Data held only in your browser
-    stays until you clear it. Dashcam recordings are kept according to the retention
-    period you select in Dashcam settings (or until you delete them earlier). Cleanup
-    removes recordings older than that period; you can also delete recordings manually
-    at any time.</li>
-    <li>You can delete your data at any time from within the app, or by contacting us.</li>
+    <li><strong>Retention:</strong> Saved trips and account data remain until deletion
+    is performed. Data held only in your browser stays until you clear it. Server-side
+    route caches can retain coordinates and geometry; freshness checks do not guarantee
+    automatic deletion. Dashcam's retention setting determines which recordings its
+    cleanup operation removes. You can delete individual recordings and saved trips
+    using their controls. These controls do not by themselves erase account-provider
+    data, operational logs or backups.</li>
+    <li>Contact the operator to request access, deletion or details of deployment-specific
+    retention and backup periods. Those periods must be established by the operator;
+    this policy does not promise an unverified automatic purge.</li>
   </ul>
 
   <h2>8. International Data Transfers</h2>
@@ -236,8 +288,10 @@
   page with an updated date.</p>
 
   <h2>12. Contact</h2>
-  <p>If you have questions about this privacy policy or your data, please contact us at
-  the email address provided in the app's settings.</p>
+  <p>{% if privacy_contact_email %}For privacy questions or rights requests, email
+  <a href="mailto:{{ privacy_contact_email }}">{{ privacy_contact_email }}</a>.
+  {% else %}A public privacy-contact email must be supplied by this deployment's operator.
+  {% endif %}</p>
 
   <a href="/" class="back">&larr; Back to Voyagr</a>
 </div>

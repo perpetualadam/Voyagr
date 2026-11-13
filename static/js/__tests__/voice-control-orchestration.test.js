@@ -51,3 +51,10 @@ test('a rapid second tap cancels the pending start instead of starting twice',as
  owner.initVoiceRecognition();const first=owner.toggleVoiceInput();await owner.toggleVoiceInput();await first;
  expect(recognition.start).toHaveBeenCalledTimes(1);expect(recognition.abort).toHaveBeenCalledTimes(1);expect(owner.getIsListening()).toBe(false);
 });
+test('voice transcripts and destination responses remain usable but never enter console logs',async()=>{
+ const privateText='private-address-sentinel';
+ fetch.mockResolvedValue({ok:true,json:async()=>({success:true,action:'navigate',location:privateText,message:'Navigating to '+privateText})});
+ owner.initVoiceRecognition();await owner.toggleVoiceInput();result('navigate to '+privateText);recognition.onend();await settle();
+ expect(document.getElementById('end').value).toBe(privateText);
+ const logs=console.log.mock.calls.map(args=>args.map(value=>String(value)).join(' ')).join('\n');expect(logs).not.toContain(privateText);
+});

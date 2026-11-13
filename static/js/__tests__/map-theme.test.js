@@ -108,3 +108,14 @@ test('dark raster fallback uses the same tiles and attribution with a layer-loca
  expect(dark.layers.find(l=>l.type==='background').paint['background-color']).toBe('#141820');
  expect(dark.layers.find(l=>l.type==='raster').paint).toEqual({'raster-saturation':-1,'raster-brightness-min':.88,'raster-brightness-max':.07,'raster-fade-duration':0});
 });
+test('local OSM styles expose linked data attribution and dark design credits',()=>{
+ const fs=require('fs'),path=require('path');
+ const read=name=>JSON.parse(fs.readFileSync(path.join(__dirname,'../../map/styles',name,'style.json'),'utf8'));
+ for(const [name,source]of [['dark','openmaptiles'],['osm-raster','osm'],['osm-raster-dark','osm']]){
+  expect(read(name).sources[source].attribution).toContain('https://www.openstreetmap.org/copyright');
+ }
+ expect(read('dark').sources.openmaptiles.attribution).toContain('https://openmaptiles.org/');
+ expect(read('dark').sources.openmaptiles.attribution).toContain('/static/map/styles/dark/NOTICE.html');
+ const notice=fs.readFileSync(path.join(__dirname,'../../map/styles/dark/LICENSE.md'),'utf8');
+ expect(notice).toContain('BSD 3-Clause');expect(notice).toContain('CC-BY 4.0');
+});

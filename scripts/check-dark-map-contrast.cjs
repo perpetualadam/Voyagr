@@ -22,7 +22,7 @@ const glyphs = fs.readFileSync(path.join(root, 'static/js/__tests__/fixtures/map
     const style = structuredClone(original);
     delete style.sprite;
     style.glyphs = 'https://dark-contrast.invalid/fonts/{fontstack}/{range}.pbf';
-    style.sources = {openmaptiles: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}};
+    style.sources = {openmaptiles: {type: 'geojson', attribution: original.sources.openmaptiles.attribution, data: {type: 'FeatureCollection', features: []}}};
     for (const l of style.layers) {
      if (l['source-layer']) {
       l.filter = ['all', ['==', 'fixture_layer', l['source-layer']], ...(l.filter ? [l.filter] : [])];
@@ -58,7 +58,7 @@ const glyphs = fs.readFileSync(path.join(root, 'static/js/__tests__/fixtures/map
     const [lon, lat] = coord(w - 50, 690);
     window.marker = H.createMarker(lat, lon, {html: '<div style="width:20px;height:20px;background:red;border-radius:50%"></div>', iconSize: [20,20], iconAnchor: [10,10], popup: 'Camera fixture'}).addTo(map);
    });
-   await page.waitForFunction(() => map.isStyleLoaded() && map.areTilesLoaded() && map.queryRenderedFeatures({layers: ['highway_name_motorway']}).length > 0);
+   await page.waitForFunction(() => map.isStyleLoaded() && map.areTilesLoaded() && map.getLayer(route.id) && map.queryRenderedFeatures({layers: [route.id]}).length > 0 && map.queryRenderedFeatures({layers: ['highway_name_motorway']}).length > 0);
    await page.waitForTimeout(400); // Finish symbol placement before pixel sampling.
    const state = await page.evaluate(() => new Promise(resolve => {
     map.once('render', () => {
@@ -91,6 +91,9 @@ const glyphs = fs.readFileSync(path.join(root, 'static/js/__tests__/fixtures/map
    await page.screenshot({path: `/tmp/voyagr-dark-contrast-${width}-${zoom}.png`});
    await page.evaluate(() => marker.getElement().click());
    await page.waitForFunction(() => !!document.querySelector('.maplibregl-popup-content'));
+   assert.equal(await page.locator('.maplibregl-ctrl-attrib a[href="https://www.openstreetmap.org/copyright"]').count(),1);
+   assert.equal(await page.locator('.maplibregl-ctrl-attrib a[href="https://openmaptiles.org/"]').count(),1);
+   assert.equal(await page.locator('.maplibregl-ctrl-attrib a[href="/static/map/styles/dark/NOTICE.html"]').count(),1);
    console.log(`${width}px zoom ${zoom}: real glyphs at visible zooms, road/path pixels, blue route and camera popup passed`);
    await page.evaluate(() => map.remove()); await page.close();
   }

@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="{{ seo_language|default('en-GB') }}">
 <head>
-    {{ ga4_head_snippet|safe }}
+    {% if optional_analytics_available %}
+    <script defer src="/static/js/app/analytics-consent.js?v=20261113privacy1" data-voyagr-analytics="{{ optional_analytics_measurement_id }}"></script>
+    {% endif %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">
@@ -283,19 +285,23 @@
             <div class="safety-notice-body">
                 <p class="safety-notice-lead">By continuing, you agree that:</p>
                 <ul class="safety-notice-list">
-                    <li>You use Voyagr <strong>at your own risk</strong>. Maps, routes, traffic, speed limits, and voice guidance may be inaccurate, incomplete, or delayed.</li>
+                    <li>Maps, routes, traffic, speed limits, and voice guidance may be inaccurate, incomplete, or delayed.</li>
                     <li>You must <strong>obey all road signs, signals, and applicable traffic laws</strong> at all times. Nothing shown in the app overrides them.</li>
-                    <li>You remain <strong>solely responsible</strong> for safe driving, your vehicle, passengers, and compliance with restrictions (speed, weight, height, emissions zones, and tolls).</li>
+                    <li>You remain responsible for safe driving, your vehicle, passengers, and compliance with restrictions (speed, weight, height, emissions zones, and tolls).</li>
                     <li>You will only use the phone in ways that are <strong>safe and lawful</strong> (e.g. hands-free where required, or when stopped).</li>
                 </ul>
 
+                <p>This notice does not limit your statutory rights or exclude liability that cannot lawfully be excluded.</p>
                 <div class="safety-notice-privacy">
                     <h2>Privacy at a glance</h2>
                     <ul>
                         <li><strong>Location</strong> — used only when you allow it, for navigation, speed help, and your position on the map.</li>
-                        <li><strong>Dashcam (optional)</strong> — camera and microphone are used only if you start recording and grant permission. Video, optional audio, and GPS metadata for that session may be saved on our servers until you delete them or they expire under your retention setting.</li>
+                        <li><strong>Dashcam (optional)</strong> — camera and microphone are used only if you start recording and grant permission. Video, optional audio, and GPS metadata for that session may be saved on our servers and managed using dashcam’s delete and cleanup controls.</li>
+                        <li><strong>Voice (optional)</strong> — browser recognition may use its vendor's service; AI speech sends a short recording to the configured transcription service. Wake listening uses your microphone when enabled.</li>
                         <li><strong>On your device</strong> — settings, recent places, and cached maps stay in your browser unless you sign in.</li>
                         <li><strong>On our servers</strong> — route requests are processed to calculate journeys; saved trips and account data are stored only if you sign in. Optional dashcam recordings you create are also stored so you can play them back. We do not sell your data.</li>
+                        <li><strong>Community reports</strong> — reports you submit are shared with their location. Do not include identifying information.</li>
+                        <li><strong>Analytics (optional)</strong> — off unless you allow it separately in the <a href="/privacy#analytics-controls" target="_blank" rel="noopener">privacy preferences</a>. This acknowledgement does not enable analytics.</li>
                         <li><strong>Partners</strong> — map, traffic, weather, and sign-in providers process data under their own policies.</li>
                     </ul>
                     <p>
@@ -699,7 +705,7 @@
                         <details id="navigationVoiceInfo" class="navigation-info">
                             <summary aria-label="Voice control information"><span aria-hidden="true">ⓘ</span> Info</summary>
                         <p class="voice-card__hint">Tap Listen, speak, then stop and wait for the response. The map microphone uses the same control. Wake phrase is optional and separate.</p>
-                        <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase.</p>
+                        <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase. Hazard reports you submit are shared with their location.</p>
                         </details>
                     </div>
                     <div id="voiceStatus" class="voice-status" data-testid="voice-indicator" role="status" aria-live="polite">Ready</div>
@@ -1391,7 +1397,7 @@
                             How Voyagr handles your data, and your rights under UK GDPR / data protection law.
                         </p>
                         <div class="settings-actions">
-                            <a href="/privacy" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"></path></svg><span>Privacy policy</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
+                            <a href="/privacy#analytics-controls" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"></path></svg><span>Privacy &amp; analytics</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
                             <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice &amp;&amp; voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Review safety notice</span></button>
                         </div>
                     </div><div class="preferences-section">

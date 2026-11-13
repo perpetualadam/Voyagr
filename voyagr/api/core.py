@@ -229,7 +229,7 @@ def llms_full_txt():
 @require_admin_if_configured
 def monitoring_dashboard():
     """Monitoring dashboard for routing engines."""
-    return render_template('monitoring_dashboard.html', **ga4_template_kwargs())
+    return render_template('monitoring_dashboard.html')
 
 
 @core_bp.route('/manifest.json')

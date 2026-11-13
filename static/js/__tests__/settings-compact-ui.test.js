@@ -24,7 +24,7 @@ test('toggle labels and target markup preserve controller class ownership and ha
 test('account, premium visibility, privacy destination and avoidance refusal remain intact',()=>{
  for(const id of ['accountSignedIn','accountSignedOut','supportVoyagrSection','supportStripePremiumBtn','promoCodeFormWrap'])expect(document.getElementById(id).style.display).toBe('none');
  expect(document.getElementById('authPassword').getAttribute('autocomplete')).toBe('current-password');
- const link=document.querySelector('a.settings-action');expect(link.getAttribute('href')).toBe('/privacy');expect(link.rel).toBe('noopener');expect(link.textContent).toContain('new tab');
+ const link=document.querySelector('a.settings-action');expect(link.getAttribute('href')).toBe('/privacy#analytics-controls');expect(link.rel).toBe('noopener');expect(link.textContent).toContain('new tab');
  expect(document.getElementById('avoidanceMode').getAttribute('onchange')).toContain('VoyagrAvoidanceIntegrity.invalidate()');
  expect(document.body.textContent).toContain('Unresolved mandatory requirements prevent navigation');
 });

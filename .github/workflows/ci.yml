@@ -151,6 +151,8 @@ jobs:
           tests/test_graphhopper_camera_areas.py
           tests/test_admin_auth.py
           tests/test_route_logging_privacy.py
+          tests/test_ga4_integration.py
+          tests/test_checkout_redirects.py
           tests/test_speed_limit_fixes.py
           tests/test_dashcam_service.py
           tests/test_dashcam_blueprint.py

@@ -8,6 +8,7 @@ One-off tips: Buy Me a Coffee and Patreon (URLs only in config).
 import logging
 import os
 from typing import Any, Dict, Optional
+from urllib.parse import urlsplit
 
 from flask import Blueprint, jsonify, request
 
@@ -29,6 +30,21 @@ def _subscription_trial_days() -> Optional[int]:
         return None
     n = int(raw)
     return n if n > 0 else None
+
+
+def _checkout_origin(value):
+    """Only operator-configured web origins can receive checkout redirects."""
+    if not isinstance(value, str) or any(ord(c) <= 32 for c in value) or "\\" in value:
+        return None
+    try:
+        url = urlsplit(value)
+        if not url.hostname or url.username or url.password or url.fragment:
+            return None
+        if url.scheme != 'https' and not (url.scheme == 'http' and url.hostname in {'localhost', '127.0.0.1', '::1'}):
+            return None
+        return url.scheme, url.hostname.lower(), url.port or (443 if url.scheme == 'https' else 80)
+    except ValueError:
+        return None
 
 
 @support_bp.route('/support/stripe-checkout', methods=['POST'])
@@ -64,7 +80,14 @@ def create_stripe_checkout_session() -> Any:
     stripe.api_key = secret
 
     default_origin = os.getenv('VOYAGR_PUBLIC_ORIGIN', '').strip().rstrip('/')
-    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict) or any(
+        key in payload and not isinstance(payload[key], str)
+        for key in ('customer_email', 'supabase_user_id', 'success_url', 'cancel_url')
+    ):
+        return jsonify({'success': False, 'error': 'Invalid checkout request.'}), 400
     customer_email = (payload.get('customer_email') or '').strip()
     supabase_user_id = (payload.get('supabase_user_id') or '').strip()
     success_url = (payload.get('success_url') or os.getenv('STRIPE_SUCCESS_URL') or '').strip()
@@ -81,16 +104,19 @@ def create_stripe_checkout_session() -> Any:
             'error': 'Set STRIPE_SUCCESS_URL and STRIPE_CANCEL_URL (https, absolute) or VOYAGR_PUBLIC_ORIGIN.',
         }), 400
 
-    def _allowed_redirect(u: str) -> bool:
-        if u.startswith('https://'):
-            return True
-        return u.startswith('http://localhost') or u.startswith('http://127.0.0.1')
-
-    for u in (success_url, cancel_url):
-        if not _allowed_redirect(u):
+    allowed_origins = {
+        origin for origin in (
+            _checkout_origin(default_origin),
+            _checkout_origin(os.getenv('STRIPE_SUCCESS_URL', '').strip()),
+            _checkout_origin(os.getenv('STRIPE_CANCEL_URL', '').strip()),
+        ) if origin is not None
+    }
+    for url in (success_url, cancel_url):
+        origin = _checkout_origin(url)
+        if origin is None or origin not in allowed_origins:
             return jsonify({
                 'success': False,
-                'error': 'success_url and cancel_url must be https, or http://localhost for dev.',
+                'error': 'Checkout redirects must use an operator-configured HTTPS origin (or exact localhost for development).',
             }), 400
 
     qs = '&' if '?' in success_url else '?'
@@ -120,5 +146,5 @@ def create_stripe_checkout_session() -> Any:
             return jsonify({'success': False, 'error': 'Stripe did not return a checkout URL.'}), 502
         return jsonify({'success': True, 'url': url})
     except Exception as e:
-        logger.warning('[support] Stripe subscription session failed: %s', e)
+        logger.warning('[support] Stripe subscription session failed (%s)', type(e).__name__)
         return jsonify({'success': False, 'error': 'Could not start subscription checkout.'}), 502
