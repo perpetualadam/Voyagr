@@ -186,6 +186,7 @@
     }
 
     async function toggleVoiceInput() {
+        root.VoyagrAudioDevices?.cancelCheck?.();
         const voiceControl = VC();
         if (voiceBusy) return;
         if (starting) { cancelInput(); resumeWake(); return; }

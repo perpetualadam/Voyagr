@@ -112,3 +112,12 @@ test('a new recording does not inherit speech activity from the previous command
  audio.setLevel(0);await r.start();r.onerror=jest.fn();jest.advanceTimersByTime(15000);await settle();
  expect(fetch).not.toHaveBeenCalled();expect(r.onerror).toHaveBeenCalledWith({error:'no-speech'});
 });
+test('capture device module supplies the recorder stream, and losing its track aborts without submitting',async()=>{
+ const track=new EventTarget();track.stop=jest.fn();
+ const selected={getTracks:()=>[track],getAudioTracks:()=>[track]};
+ global.VoyagrAudioDevices={requestStream:async()=>selected};
+ try {
+  const r=new Recognition();r.onerror=jest.fn();await r.start();track.dispatchEvent(new Event('ended'));await settle();
+  expect(r.state).toBe('idle');expect(r.onerror).toHaveBeenCalledWith({error:'audio-capture'});expect(fetch).not.toHaveBeenCalled();
+ } finally {delete global.VoyagrAudioDevices;}
+});

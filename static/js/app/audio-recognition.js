@@ -46,7 +46,7 @@
                 void context.resume().catch(()=>{if(this.endpointContext===context)this.releaseEndpoint();});
             } catch(_){this.releaseEndpoint();}
         }
-        release(){this.releaseEndpoint();clearTimeout(this.recordTimer);clearTimeout(this.requestTimer);if(this.stream)this.stream.getTracks().forEach(t=>t.stop());this.stream=null;}
+        release(){this.releaseEndpoint();clearTimeout(this.recordTimer);clearTimeout(this.requestTimer);if(this.stream)this.stream.getTracks().forEach(t=>{t.removeEventListener?.('ended',this.captureEnded);t.stop();});this.stream=null;}
         end(token,error){
             if(token!==this.generation || this.state==='idle')return;
             this.state='idle';this.release();this.chunks=[];
@@ -57,9 +57,11 @@
             if(this.state!=='idle')throw new Error('Recognition already active');
             const token=++this.generation;this.state='requesting';this.chunks=[];this.bytes=0;
             try {
-                const stream=await root.navigator.mediaDevices.getUserMedia({audio:true});
+                const stream=await (root.VoyagrAudioDevices?.requestStream?.() || root.navigator.mediaDevices.getUserMedia({audio:true}));
                 if(token!==this.generation){stream.getTracks().forEach(t=>t.stop());return;}
                 this.stream=stream;
+                this.captureEnded=()=>{if(token===this.generation && this.state==='recording')this.abort('audio-capture');};
+                stream.getAudioTracks?.().forEach(track=>track.addEventListener?.('ended',this.captureEnded));
                 const mime=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t=>root.MediaRecorder.isTypeSupported(t));
                 if(!mime)throw new Error('format');
                 this.recorder=new root.MediaRecorder(stream,{mimeType:mime});
