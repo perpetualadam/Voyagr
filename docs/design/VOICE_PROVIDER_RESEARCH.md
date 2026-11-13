@@ -126,3 +126,24 @@ Reproduce the real Chromium graph/MediaRecorder check with
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE`). The fixture uses generated tones and a mocked
 transcription response; it checks automatic submission and resource cleanup,
 not British speech accuracy, physical Android permissions or road noise.
+
+## Browser speech and wake handoff
+
+Browser navigation announcements and command responses now hold wake detection
+until their utterance ends, errors, or is explicitly cancelled. Concurrent queued
+utterances retain separate holds. Speech starts only after wake microphone
+cleanup completes; a wake worker created late is discarded while output is held.
+
+The wake prompt uses browser synthesis completion rather than a fixed 450 ms
+sleep, then starts the ordinary voice controller (including provider selection,
+cancellation and generation guards). Cancelling or hiding during that prompt
+prevents late recognition startup. Navigation announcements requested during
+recording wait for input to end, retaining only the latest pending announcement;
+End/cancel discards deferred announcements.
+
+Regression tests exercise real controllers with recognition, wake hardware and
+synthesis event boundaries mocked. They do not establish physical speaker echo,
+Bluetooth behaviour or continuous background microphone access on Android. The
+optional `AndroidTTS.speak(text)` bridge still exposes no completion callback;
+native navigation output cannot claim the browser's completion-based wake gate.
+A bridge completion/cancellation contract is needed before that path has parity.

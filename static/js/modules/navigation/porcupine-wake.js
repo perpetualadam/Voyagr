@@ -171,7 +171,6 @@
             stopPipeline: true,
             speakMessage: 'Say your command',
             speakPriority: 'high',
-            voiceStartDelayMs: 450,
             clearTranscript: true,
             resetFinalTranscript: true,
             startVoiceRecognition: true,

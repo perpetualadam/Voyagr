@@ -106,6 +106,43 @@
         );
     }
 
+    // Shared browser TTS ownership: do not let wake detection hear our output.
+    let wakeCommandPending = false;
+    let wakeCommandEpoch = 0;
+    const speechHolds = new Set();
+    const speechWaiters = new Set();
+    function beginSpeechOutput() {
+        const hold = { active: true };
+        speechHolds.add(hold);
+        if (porcupineWakePipelineRunning || _porcupineWakeStarting) porcupineWakeResumeAfterVoice = true;
+        hold.ready = (porcupineWakePipelineRunning || _porcupineWakeStarting)
+            ? stopPorcupineWakePipeline() : Promise.resolve();
+        hold.finish = () => {
+            if (!hold.active) return;
+            hold.active = false;
+            speechHolds.delete(hold);
+            if (!speechHolds.size) {
+                speechWaiters.forEach(resolve => resolve()); speechWaiters.clear();
+                if (runtime && !document.hidden) maybeResumePorcupineWakeAfterVoice();
+            }
+        };
+        return hold;
+    }
+    function waitForSpeechOutput() {
+        return speechHolds.size ? new Promise(resolve => speechWaiters.add(resolve)) : Promise.resolve();
+    }
+    function cancelWakeCommand() {
+        ++wakeCommandEpoch;
+        if (!wakeCommandPending) return;
+        root.speechSynthesis?.cancel();
+        cancelSpeechOutput();
+        wakeCommandPending = false;
+        if (runtime && !document.hidden) maybeResumePorcupineWakeAfterVoice();
+    }
+    function cancelSpeechOutput(exceptHold) {
+        Array.from(speechHolds).filter(hold => hold !== exceptHold).forEach(hold => hold.finish());
+    }
+
     function collectPorcupineResumeAfterVoiceInput() {
         const PW = pwModule();
         return {
@@ -116,6 +153,7 @@
     }
 
     function maybeResumePorcupineWakeAfterVoice() {
+        if (speechHolds.size || document.hidden || wakeCommandPending || _porcupineWakeStarting || runtime?.getIsListening?.()) return;
         const PW = pwModule();
         const resume = PW.buildPorcupineResumeAfterVoiceEntryOrchestrationPlan(
             collectPorcupineResumeAfterVoiceInput()
@@ -141,7 +179,12 @@
         }
     }
 
-    async function stopPorcupineWakePipeline() {
+    let stopWakePromise = null;
+    function stopPorcupineWakePipeline() {
+        if (!stopWakePromise) stopWakePromise = stopPorcupineWakePipelineOnce().finally(() => { stopWakePromise = null; });
+        return stopWakePromise;
+    }
+    async function stopPorcupineWakePipelineOnce() {
         const PW = pwModule();
         const execute = PW.buildStopPorcupineWakePipelineExecutePlan({
             hasBridgeEngine: !!_porcupineWakeBridgeEngine,
@@ -180,6 +223,7 @@
     }
 
     async function startPorcupineWakePipeline() {
+        if (speechHolds.size || document.hidden) return;
         const PW = pwModule();
         const preflight = PW.buildPorcupinePipelinePreflightPlan(
             PW.buildCollectPorcupinePipelinePreflightInputPlan({
@@ -217,7 +261,7 @@
                     return;
                 }
                 _porcupineWakeLastDetectionMs = now;
-                if (rt().getIsListening()) {
+                if (speechHolds.size || wakeCommandPending || document.hidden || rt().getIsListening()) {
                     return;
                 }
                 console.log('[Porcupine] Wake detected:', detection.label);
@@ -237,6 +281,9 @@
                     }
                 }
             );
+            if (speechHolds.size || document.hidden) {
+                await worker.release();worker.terminate();return;
+            }
             _porcupineWakeWorker = worker;
             WebVoiceProcessor.setOptions({
                 frameLength: worker.frameLength,
@@ -251,6 +298,7 @@
             };
             _porcupineWakeBridgeEngine = bridge;
             await WebVoiceProcessor.subscribe(bridge);
+            if (speechHolds.size || document.hidden) { await stopPorcupineWakePipeline(); return; }
             porcupineWakePipelineRunning = true;
             if (!useCustom) {
                 console.info(startConfig.builtInFallbackLogPrefix, window.VoyagrPicovoiceKeywordPath);
@@ -262,6 +310,7 @@
             await stopPorcupineWakePipeline();
         } finally {
             _porcupineWakeStarting = false;
+            if (porcupineWakeResumeAfterVoice && !porcupineWakePipelineRunning) maybeResumePorcupineWakeAfterVoice();
         }
     }
 
@@ -269,9 +318,22 @@
         const PW = pwModule();
         const execute = PW.buildPorcupineWakeHotwordEntryOrchestrationPlan().execute;
         if (execute.setResumeAfterVoice) porcupineWakeResumeAfterVoice = true;
+        const epoch = ++wakeCommandEpoch;
+        wakeCommandPending = true;
         if (execute.stopPipeline) await stopPorcupineWakePipeline();
-        if (execute.speakMessage) rt().speakMessage(execute.speakMessage, execute.speakPriority);
-        await new Promise((r) => setTimeout(r, execute.voiceStartDelayMs));
+        if (epoch !== wakeCommandEpoch || document.hidden) { wakeCommandPending = false; return; }
+        try {
+            // Browser prompt has completion events; the native bridge exposes none.
+            if (execute.speakMessage && root.VoyagrVoiceControlOrchestration?.speakText) {
+                root.VoyagrVoiceControlOrchestration.speakText(execute.speakMessage);
+            }
+            await waitForSpeechOutput();
+        } finally { wakeCommandPending = false; }
+        if (document.hidden || epoch !== wakeCommandEpoch) return;
+        if (root.VoyagrVoiceControlOrchestration?.toggleVoiceInput) {
+            await root.VoyagrVoiceControlOrchestration.toggleVoiceInput();
+            return;
+        }
         if (!rt().getVoiceRecognition() && !rt().initVoiceRecognition()) {
             maybeResumePorcupineWakeAfterVoice();
             return;
@@ -313,12 +375,25 @@
         }());
     }
 
+    if (root.addEventListener) {
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) return;
+            cancelWakeCommand();
+            root.speechSynthesis?.cancel();
+            cancelSpeechOutput();
+        });
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
 
     var api = {
         bind,
+        beginSpeechOutput,
+        cancelWakeCommand,
+        waitForSpeechOutput,
+        cancelSpeechOutput,
         picovoiceClientConfigured,
         loadPorcupineWakeUi,
         togglePorcupineWakeWord,

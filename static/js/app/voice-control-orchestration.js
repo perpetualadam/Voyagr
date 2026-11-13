@@ -61,11 +61,23 @@
         applyVoiceStatusFromPlan(VC().buildVoiceSetStatusExecutePlan(message));
     }
 
+    const inputIdleWaiters = new Set();
+    function isVoiceInputActive() { return isListening || starting; }
+    function waitForVoiceInputIdle() {
+        return isVoiceInputActive() ? new Promise(resolve => inputIdleWaiters.add(resolve)) : Promise.resolve();
+    }
+    function notifyInputIdle() {
+        if (isVoiceInputActive()) return;
+        inputIdleWaiters.forEach(resolve => resolve());inputIdleWaiters.clear();
+    }
+
     function voyagrVoiceSetListeningUi(listening) {
         applyVoiceListeningUiFromPlan(VC().buildVoiceSetListeningUiExecutePlan(listening));
+        notifyInputIdle();
     }
 
     function setVoiceBusy(value) {
+        notifyInputIdle();
         voiceBusy = value;
         ['voiceBtn','voiceFab'].forEach(id => { const el=document.getElementById(id); if(el){el.disabled=value;el.setAttribute('aria-busy',String(value));} });
         const test=document.getElementById('voiceTestBtn');if(test)test.disabled=value || isListening;
@@ -210,13 +222,14 @@
             voyagrVoiceSetStatus('Requesting microphone…');
             voyagrVoiceSetListeningUi(true);
             window.speechSynthesis?.cancel();
+            root.VoyagrPorcupineOrchestration?.cancelSpeechOutput?.();
             await instance.start();
         } catch (_) {
             recognitionFailed = true; isListening = false;
             voyagrVoiceSetListeningUi(false);
             voyagrVoiceSetStatus('Could not start voice input. Check microphone permissions and try again.');
             resumeWake();
-        } finally { if(ticket === inputGeneration) starting = false; }
+        } finally { if(ticket === inputGeneration) starting = false; notifyInputIdle(); }
     }
 
     function speakText(text) {
@@ -231,8 +244,10 @@
             return;
         }
 
+        const speechHold = root.VoyagrPorcupineOrchestration?.beginSpeechOutput?.();
         if (preflight.cancelExisting) {
             window.speechSynthesis.cancel();
+            root.VoyagrPorcupineOrchestration?.cancelSpeechOutput?.(speechHold);
         }
 
         const utterance = new SpeechSynthesisUtterance(preflight.utterance.text);
@@ -247,18 +262,27 @@
         };
 
         utterance.onend = () => {
+            speechHold?.finish();
             if (isListening || starting) return;
             console.log(preflight.logEndMessage);
             voyagrVoiceSetStatus(preflight.onEndStatus);
         };
 
         utterance.onerror = (event) => {
+            speechHold?.finish();
             if (isListening || starting) return;
             console.log(preflight.logErrorPrefix, event.error);
             voyagrVoiceSetStatus(preflight.onErrorStatusPrefix + event.error);
         };
 
-        window.speechSynthesis.speak(utterance);
+        const speak = () => {
+            if (speechHold && !speechHold.active) return;
+            if (document.hidden || isListening || starting) { speechHold?.finish(); return; }
+            try { window.speechSynthesis.speak(utterance); }
+            catch (_) { speechHold?.finish(); }
+        };
+        if (speechHold) void speechHold.ready.then(speak, () => speechHold.finish());
+        else speak();
     }
 
     function setupVoiceCommandProcessing() {
@@ -453,6 +477,7 @@
     }
 
     function cancelInput() {
+        root.VoyagrPorcupineOrchestration?.cancelWakeCommand?.();
         if (!isListening && !starting && !voiceBusy) return;
         ++commandGeneration; ++inputGeneration;
         if (voiceRecognition && voiceRecognition.abort) {
@@ -482,6 +507,8 @@
         simulateVoiceInput: simulateVoiceInput,
         getVoiceRecognition: getVoiceRecognition,
         getIsListening: getIsListening,
+        isVoiceInputActive: isVoiceInputActive,
+        waitForVoiceInputIdle: waitForVoiceInputIdle,
         setIsListening: setIsListening,
         setVoiceFinalTranscript: setVoiceFinalTranscript,
     };

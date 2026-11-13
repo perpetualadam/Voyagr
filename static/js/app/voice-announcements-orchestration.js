@@ -9,6 +9,7 @@
     var lastVoiceAnnouncementTime = 0;
     var cachedSpeechVoices = [];
     var pendingSpeechRetry = null;
+    var speechRequestEpoch = 0;
     var speechVoicesListenerBound = false;
 
     var announcedTurnThresholds = new Set();
@@ -112,7 +113,16 @@
         var voice = plan.voice || resolveSpeechVoice(voices, plan.utterance.voiceName);
         if (voice) utterance.voice = voice;
 
-        window.speechSynthesis.speak(utterance);
+        var hold = root.VoyagrPorcupineOrchestration?.beginSpeechOutput?.();
+        utterance.onend = utterance.onerror = function () { hold?.finish(); };
+        var speak = function () {
+            if (hold && !hold.active) return;
+            if (document.hidden) { hold?.finish(); return; }
+            try { window.speechSynthesis.speak(utterance); }
+            catch (_) { hold?.finish(); }
+        };
+        if (hold) void hold.ready.then(speak, function () { hold.finish(); });
+        else speak();
         pendingSpeechRetry = null;
         console.log(plan.logLine);
         return true;
@@ -151,6 +161,15 @@
 
     function speakMessage(message, priority) {
         if (priority === undefined) priority = 'normal';
+        var epoch = ++speechRequestEpoch;
+        var control = root.VoyagrVoiceControlOrchestration;
+        if (control?.isVoiceInputActive?.()) {
+            // Keep only the latest direction while the user is speaking.
+            void control.waitForVoiceInputIdle().then(function () {
+                if (epoch === speechRequestEpoch && !document.hidden) speakMessage(message, priority);
+            });
+            return;
+        }
         const now = Date.now();
         const timeSinceLastAnnouncement = now - lastVoiceAnnouncementTime;
         const voiceFrequencyMode = getVoiceFrequencyMode();
@@ -205,8 +224,10 @@
 
     function cancelNavigationSpeech() {
         pendingSpeechRetry=null;
+        ++speechRequestEpoch;
         try {if (root.speechSynthesis && root.speechSynthesis.cancel) root.speechSynthesis.cancel();} catch (_) {}
         try {if (root.AndroidTTS && root.AndroidTTS.stop) root.AndroidTTS.stop();} catch (_) {}
+        root.VoyagrPorcupineOrchestration?.cancelSpeechOutput?.();
     }
 
     function collectVoicePreferencesDomInput() {
