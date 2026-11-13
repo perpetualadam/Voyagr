@@ -1621,3 +1621,14 @@ real Chromium navigation/GPS/ETA regressions. No production deployment.
 Validation: 3,469 frontend tests with coverage/lint; declared backend selection
 2,244 tests plus 74 subtests passed (one skipped); 11 isolated SQL checks; 16 real
 Chromium arrival/Info viewport/theme/text-scale cases. No deployment.
+
+### Car and headphone audio (implemented; physical acceptance pending)
+
+- [x] Add compact audio checks/input selection under Voice & alerts, with setup
+  details collapsed behind Info and no startup microphone permission request.
+- [x] Share the exposed input selection with wake listening and AI recording;
+  keep current system-managed speech output and browser-recognition input.
+- [x] Handle selected-input removal, pending checks and interrupted recordings.
+- [ ] Accept real cars/headphones on Android Chrome and installed PWA: audible
+  directions, exposed/default microphone, wake handoff, disconnect/reconnect,
+  calls and speaker echo. See [CAR_HEADPHONE_AUDIO.md](CAR_HEADPHONE_AUDIO.md).

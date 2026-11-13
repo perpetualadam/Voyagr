@@ -177,6 +177,7 @@
     <script defer src="/static/js/app/parking-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20261109overlays1"></script>
+    <script defer src="/static/js/app/audio-device-controls.js?v=20261113audio1"></script>
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/gps-orchestration.js?v=20261112speedposition1"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
@@ -1165,6 +1166,21 @@
 
                     <div class="settings-group-content">
                     <p class="settings-group-help">Spoken guidance, warning distances, chimes and the wake phrase.</p>
+                    <section aria-labelledby="audioDeviceTitle" class="voice-section">
+                        <div class="voice-card__head"><h3 id="audioDeviceTitle" class="voice-card__title">Car &amp; headphone audio</h3></div>
+                        <div class="voice-controls">
+                            <button type="button" id="audioDeviceCheck" class="btn-voice-secondary"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span>Check microphone</span></button>
+                            <button type="button" id="audioDeviceTest" class="btn-voice-secondary"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m11 5-6 4H2v6h3l6 4V5ZM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>Test directions</span></button>
+                        </div>
+                        <div class="voice-engine-field"><label for="audioInputDevice">Microphone</label>
+                        <select id="audioInputDevice" aria-describedby="audioDeviceStatus" disabled><option value="">System default (recommended)</option></select>
+                        <p id="audioDeviceStatus" role="status" aria-live="polite">Output follows your phone’s audio selection.</p></div>
+                        <details class="navigation-info">
+                            <summary><span aria-hidden="true">ⓘ</span> Audio setup</summary>
+                            <p>Connect your car or headphones in the phone’s Bluetooth settings, enable media audio and select that output. Test directions while parked.</p>
+                            <p>Microphone selection applies to wake listening and AI speech when the browser exposes the device. Browser speech uses its own system microphone selection. The car microphone may be unavailable even when car speakers work. Choices last for this page session.</p>
+                        </details>
+                    </section>
                     <div class="preferences-section">
 
 

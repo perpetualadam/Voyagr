@@ -223,7 +223,7 @@
     }
 
     async function startPorcupineWakePipeline() {
-        if (speechHolds.size || document.hidden) return;
+        if (speechHolds.size || document.hidden || runtime?.getIsListening?.()) return;
         const PW = pwModule();
         const preflight = PW.buildPorcupinePipelinePreflightPlan(
             PW.buildCollectPorcupinePipelinePreflightInputPlan({
@@ -281,13 +281,15 @@
                     }
                 }
             );
-            if (speechHolds.size || document.hidden) {
+            if (speechHolds.size || document.hidden || runtime?.getIsListening?.()) {
+                if(runtime?.getIsListening?.())porcupineWakeResumeAfterVoice=true;
                 await worker.release();worker.terminate();return;
             }
             _porcupineWakeWorker = worker;
             WebVoiceProcessor.setOptions({
                 frameLength: worker.frameLength,
-                outputSampleRate: worker.sampleRate
+                outputSampleRate: worker.sampleRate,
+                deviceId: root.VoyagrAudioDevices?.getInputDeviceId() || null
             }, false);
             const bridge = {
                 onmessage: (e) => {
@@ -298,8 +300,12 @@
             };
             _porcupineWakeBridgeEngine = bridge;
             await WebVoiceProcessor.subscribe(bridge);
-            if (speechHolds.size || document.hidden) { await stopPorcupineWakePipeline(); return; }
+            if (speechHolds.size || document.hidden || runtime?.getIsListening?.()) {
+                if(runtime?.getIsListening?.())porcupineWakeResumeAfterVoice=true;
+                await stopPorcupineWakePipeline();return;
+            }
             porcupineWakePipelineRunning = true;
+            root.VoyagrAudioDevices?.captureStarted?.();
             if (!useCustom) {
                 console.info(startConfig.builtInFallbackLogPrefix, window.VoyagrPicovoiceKeywordPath);
             }

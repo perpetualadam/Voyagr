@@ -96,3 +96,18 @@ test('cancellation during wake cleanup suppresses both the prompt and recording'
  detection({label:'Porcupine'});control.cancelVoiceInput();complete();await settle();
  expect(utterances).toHaveLength(0);expect(control.getVoiceRecognition()).toBeNull();
 });
+test('wake capture uses the same selected microphone as AI capture',async()=>{
+ global.VoyagrAudioDevices={getInputDeviceId:()=> 'headset-microphone'};
+ try {
+  await wake.startPorcupineWakePipeline();
+  expect(wake.isPipelineRunning()).toBe(true);
+  expect(WebVoiceProcessor.setOptions.mock.calls.at(-1)[0]).toMatchObject({deviceId:'headset-microphone',outputSampleRate:16000});
+ } finally {delete global.VoyagrAudioDevices;}
+});
+test('late wake acquisition cannot compete with command recording and resumes after input ends',async()=>{
+ let complete;PorcupineWeb.PorcupineWorker.create.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve;}));
+ const wakeStart=wake.startPorcupineWakePipeline();await settle();
+ control.initVoiceRecognition();await control.toggleVoiceInput();complete(worker);await wakeStart;await settle();
+ expect(wake.isPipelineRunning()).toBe(false);expect(control.getIsListening()).toBe(true);
+ control.getVoiceRecognition().onend();wake.maybeResumePorcupineWakeAfterVoice();await settle();expect(wake.isPipelineRunning()).toBe(true);
+});
