@@ -26,12 +26,14 @@ service scope; applicability elsewhere needs separate assessment.
 These remain work, not presumed compliant. Priority is triage, not a finding that
 an operator has broken a law.
 
-1. **Public operator/contact details — high, confirmed incomplete.** The old policy
-   pointed to a support email not found in Settings. Configure public
-   `VOYAGR_PRIVACY_OPERATOR_NAME` and `VOYAGR_PRIVACY_CONTACT_EMAIL`; the policy
-   escapes the identity, validates the email and discloses missing configuration
-   instead of inventing a contact. Operator details were requested in chat. A real
-   contact/rights-response process and required trading details need confirmation.
+1. **Public operator/contact details — high, incomplete.** The public privacy
+   alias now defaults to `info@vibevoyager.org`, with an environment override via
+   `VOYAGR_PRIVACY_CONTACT_EMAIL`. Forwarding and actual delivery still need account
+   setup and verification; see [public-contact setup](../design/PUBLIC_CONTACT_EMAIL.md).
+   `VOYAGR_PRIVACY_OPERATOR_NAME` remains separately configurable and unfilled;
+   no personal name is invented or published. A forwarding alias does not remove
+   controller/trader identification requirements. Confirm a functioning rights-
+   response process and required trading details.
 2. **Provider terms and data transfers — high, unverified.** Document routing,
    geocoding, traffic, imagery, hosting/auth, voice, analytics and payment recipients,
    roles, retention, countries, processor agreements and applicable transfer

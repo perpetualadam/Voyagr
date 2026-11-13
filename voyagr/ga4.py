@@ -34,7 +34,7 @@ def head_snippet() -> str:
 
 
 def template_kwargs() -> dict:
-    contact = os.getenv("VOYAGR_PRIVACY_CONTACT_EMAIL", "").strip()
+    contact = os.getenv("VOYAGR_PRIVACY_CONTACT_EMAIL", "info@vibevoyager.org").strip()
     if not re.fullmatch(r"[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", contact):
         contact = ""
     return {"ga4_head_snippet": head_snippet(), "optional_analytics_available": bool(measurement_id()),
