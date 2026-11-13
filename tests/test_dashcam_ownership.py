@@ -316,3 +316,22 @@ def test_concurrent_starts_create_only_one_active_recording_per_owner(setup):
     assert results.count(True) == 1
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT count(*) FROM dashcam_recordings WHERE owner_user_id=? AND status='recording'",(A,)).fetchone()[0] == 1
+
+
+@pytest.mark.parametrize('operation', ['delete', 'cleanup'])
+def test_erasure_removes_sqlite_metadata_and_sidecar_for_owner_only(setup, operation):
+    _, a, b, _, _, db, storage = setup
+    arid, brid = make_clip(a), make_clip(b)
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT COUNT(*) FROM dashcam_metadata WHERE recording_id=?', (arid,)).fetchone()[0] > 0
+        conn.execute("UPDATE dashcam_recordings SET start_time='2000-01-01T00:00:00' WHERE recording_id=?", (arid,))
+    if operation == 'delete':
+        assert a.delete(f'/api/dashcam/recordings/{arid}').json['success']
+    else:
+        assert a.post('/api/dashcam/cleanup').json['deleted_count'] == 1
+    with sqlite3.connect(db) as conn:
+        assert conn.execute('SELECT COUNT(*) FROM dashcam_metadata WHERE recording_id=?', (arid,)).fetchone()[0] == 0
+        assert conn.execute('SELECT COUNT(*) FROM dashcam_recordings WHERE recording_id=?', (arid,)).fetchone()[0] == 0
+        assert conn.execute('SELECT COUNT(*) FROM dashcam_metadata WHERE recording_id=?', (brid,)).fetchone()[0] > 0
+    assert not list(storage.rglob(arid + '.*'))
+    assert b.get(f'/api/dashcam/recordings/{brid}/video').status_code == 200

@@ -20,6 +20,15 @@ logger = logging.getLogger(__name__)
 settings_bp = Blueprint('settings', __name__)
 
 
+@settings_bp.after_request
+def private_location_predictions(response):
+    if request.path == '/api/ml-predictions':
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.vary.add('X-Voyagr-Admin-Key')
+    return response
+
+
+
 @settings_bp.route('/app-settings', methods=['GET', 'POST'])
 def manage_app_settings():
     """Manage Phase 3 app settings (gesture, battery, themes, ML)."""
@@ -96,7 +105,7 @@ def log_gesture_event():
 
 
 @settings_bp.route('/ml-predictions', methods=['GET', 'POST'])
-@require_admin_if_configured_methods('POST')
+@require_admin_if_configured_methods('GET', 'POST')
 def manage_ml_predictions():
     """Get ML route predictions based on trip history."""
     try:
