@@ -14,7 +14,7 @@ beforeEach(()=>{
  global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({success:true,text:'find nearest parking'})});
  Recognition=require('../app/audio-recognition').AudioRecognition;
 });
-afterEach(()=>{jest.clearAllTimers();jest.useRealTimers();delete global.MediaRecorder;delete global.fetch;});
+afterEach(()=>{jest.clearAllTimers();jest.useRealTimers();delete global.MediaRecorder;delete global.fetch;delete global.AudioContext;});
 test('records only after start and sends a bounded clip to the same-origin proxy, never a model endpoint',async()=>{
  const r=new Recognition();r.onresult=jest.fn();r.onend=jest.fn();
  expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();await r.start();
@@ -54,4 +54,61 @@ test('upload timeout aborts the request, resets state and leaves no microphone r
  const r=new Recognition();r.onerror=jest.fn();await r.start();r.stop();await settle();
  jest.advanceTimersByTime(25000);await settle();
  expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);expect(r.onerror).toHaveBeenCalledWith({error:'network'});expect(r.state).toBe('idle');expect(stream.getTracks()[0].stop).toHaveBeenCalled();
+});
+
+function installAudioAnalysis(){
+ let level=0;
+ const source={connect:jest.fn(),disconnect:jest.fn()};
+ const analyser={fftSize:2048,getFloatTimeDomainData:data=>data.fill(level),disconnect:jest.fn()};
+ const context={state:'running',createMediaStreamSource:jest.fn(()=>source),createAnalyser:()=>analyser,resume:jest.fn().mockResolvedValue(),close:jest.fn().mockResolvedValue()};
+ global.AudioContext=jest.fn(()=>context);
+ return {context,source,analyser,setLevel:value=>{level=value;}};
+}
+test('speech followed by a sustained pause submits automatically and frees analysis and microphone',async()=>{
+ const audio=installAudioAnalysis();const r=new Recognition();await r.start();
+ audio.setLevel(0.08);jest.advanceTimersByTime(500);
+ audio.setLevel(0);jest.advanceTimersByTime(1000);expect(fetch).not.toHaveBeenCalled();
+ jest.advanceTimersByTime(400);await settle();
+ expect(fetch).toHaveBeenCalledTimes(1);expect(r.state).toBe('idle');
+ expect(audio.source.disconnect).toHaveBeenCalled();expect(audio.analyser.disconnect).toHaveBeenCalled();
+ expect(audio.context.close).toHaveBeenCalledTimes(1);expect(stream.getTracks()[0].stop).toHaveBeenCalled();
+});
+test('a pause within a command resets when speaking resumes',async()=>{
+ const audio=installAudioAnalysis();const r=new Recognition();await r.start();
+ audio.setLevel(0.08);jest.advanceTimersByTime(500);
+ audio.setLevel(0);jest.advanceTimersByTime(1100);
+ audio.setLevel(0.08);jest.advanceTimersByTime(300);
+ audio.setLevel(0);jest.advanceTimersByTime(1100);expect(fetch).not.toHaveBeenCalled();
+ jest.advanceTimersByTime(300);await settle();expect(fetch).toHaveBeenCalledTimes(1);
+});
+test('silence and a brief click do not upload a command at the maximum duration',async()=>{
+ const audio=installAudioAnalysis();const r=new Recognition();r.onerror=jest.fn();await r.start();
+ audio.setLevel(0.08);jest.advanceTimersByTime(50);audio.setLevel(0);jest.advanceTimersByTime(14950);await settle();
+ expect(r.onerror).toHaveBeenCalledWith({error:'no-speech'});expect(fetch).not.toHaveBeenCalled();
+ expect(audio.context.close).toHaveBeenCalled();expect(stream.getTracks()[0].stop).toHaveBeenCalled();
+});
+test('abort cancels endpoint sampling and prevents a late automatic upload',async()=>{
+ const audio=installAudioAnalysis();const r=new Recognition();await r.start();
+ audio.setLevel(0.08);jest.advanceTimersByTime(500);r.abort();audio.setLevel(0);
+ jest.advanceTimersByTime(15000);await settle();expect(fetch).not.toHaveBeenCalled();expect(audio.context.close).toHaveBeenCalledTimes(1);
+});
+test('failed audio analysis retains bounded recording and manual Stop',async()=>{
+ global.AudioContext=jest.fn(()=>{throw new Error('unavailable');});
+ const r=new Recognition();await r.start();r.stop();await settle();expect(fetch).toHaveBeenCalledTimes(1);expect(r.state).toBe('idle');
+});
+test('continuous activity retains the maximum recording duration',async()=>{
+ const audio=installAudioAnalysis();audio.setLevel(0.08);const r=new Recognition();await r.start();
+ jest.advanceTimersByTime(15000);await settle();expect(fetch).toHaveBeenCalledTimes(1);expect(r.state).toBe('idle');
+});
+test('blocked audio-context resume falls back to bounded capture without leaking analysis',async()=>{
+ const audio=installAudioAnalysis();audio.context.resume.mockRejectedValue(new Error('blocked'));
+ const r=new Recognition();await r.start();await settle();
+ expect(audio.context.close).toHaveBeenCalledTimes(1);
+ jest.advanceTimersByTime(15000);await settle();expect(fetch).toHaveBeenCalledTimes(1);expect(r.state).toBe('idle');
+});
+test('a new recording does not inherit speech activity from the previous command',async()=>{
+ const audio=installAudioAnalysis();const r=new Recognition();await r.start();
+ audio.setLevel(0.08);jest.advanceTimersByTime(500);r.abort();
+ audio.setLevel(0);await r.start();r.onerror=jest.fn();jest.advanceTimersByTime(15000);await settle();
+ expect(fetch).not.toHaveBeenCalled();expect(r.onerror).toHaveBeenCalledWith({error:'no-speech'});
 });
