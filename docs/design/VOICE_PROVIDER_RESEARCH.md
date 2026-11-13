@@ -104,3 +104,25 @@ new subscription has been made. Clear All and Save Location styling stay separat
 - [Speaches: OpenAI-compatible transcription and model loading](https://github.com/speaches-ai/speaches)
 - [SYSTRAN faster-whisper: server integrations](https://github.com/SYSTRAN/faster-whisper)
 - [openWakeWord: browser support and code/model licences](https://github.com/dscripka/openWakeWord)
+
+## Automatic recording completion
+
+The AI recording adapter analyses the existing microphone stream locally through
+Web Audio, without connecting it to speakers. Sustained activity (150 ms) followed
+by 1.4 seconds of quiet submits the recording automatically. Short pauses reset
+when activity resumes. Manual Stop, cancellation, recording size and duration
+limits, upload timeout and provider selection retain their existing paths.
+When analysis is running and no sustained activity occurs, the duration limit
+returns `no-speech` without uploading. If Web Audio is unavailable, blocked or
+suspended, bounded recording remains the fallback.
+
+This is energy-based endpointing, not a speech classifier: background noise can
+hold recording open, and a long thinking pause can end a command. It does not
+establish in-car reliability or replace recogniser accuracy testing. No new
+model, microphone permission or speech provider is added.
+
+Reproduce the real Chromium graph/MediaRecorder check with
+`node scripts/check-voice-automatic-endpoint.cjs` (uses `/usr/bin/chromium`, or
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE`). The fixture uses generated tones and a mocked
+transcription response; it checks automatic submission and resource cleanup,
+not British speech accuracy, physical Android permissions or road noise.
