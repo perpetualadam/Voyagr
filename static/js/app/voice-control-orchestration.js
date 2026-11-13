@@ -154,7 +154,7 @@
             const resultPlan = voiceControl.buildVoiceTranscriptCollectPlan(event, _voiceFinalTranscript);
             _voiceFinalTranscript = resultPlan.nextFinalTranscript;
             applyVoiceTranscriptFromPlan(voiceControl.buildVoiceTranscriptUpdateExecutePlan(resultPlan.shown));
-            console.log(resultPlan.logMessage, resultPlan.shown);
+            console.log('[Voice] Transcript updated');
         };
 
         voiceRecognition.onerror = (event) => {
@@ -258,7 +258,7 @@
 
         utterance.onstart = () => {
             if (isListening || starting) return;
-            console.log(preflight.logStartPrefix, text);
+            console.log('[Voice] Speech started');
             voyagrVoiceSetStatus(preflight.onStartStatus);
         };
 
@@ -324,7 +324,7 @@
         }
 
         setVoiceBusy(true);
-        console.log(orch.logMessage, orch.transcript);
+        console.log('[Voice] Processing command');
         voyagrVoiceSetStatus(orch.statusMessage);
 
         fetch(orch.apiPath, {
@@ -341,7 +341,7 @@
             .then(response => response.json())
             .then(data => {
                 if (generation !== commandGeneration || document.hidden) return;
-                console.log('[Voice] Command result:', data);
+                console.log('[Voice] Command response received');
                 const execute = voiceControl.buildVoiceCommandResultExecutePlan(data);
 
                 if (execute.shouldHandleAction) {
@@ -357,7 +357,7 @@
             .catch(error => {
                 if (generation !== commandGeneration || document.hidden) return;
                 const errExecute = voiceControl.buildVoiceCommandErrorExecutePlan(error);
-                console.log(errExecute.logMessage, error);
+                console.log('[Voice] Command request failed');
                 speakText(errExecute.speakMessage);
                 voyagrVoiceSetStatus(errExecute.statusMessage);
             })
@@ -370,11 +370,7 @@
         if (!plan || !plan.shouldApply) return;
 
         if (plan.logMessage) {
-            if (plan.logArgs && plan.logArgs.length) {
-                console.log(plan.logMessage, ...plan.logArgs);
-            } else {
-                console.log(plan.logMessage);
-            }
+            console.log(plan.logMessage);
         }
 
         if (plan.shouldShowStatus) {
@@ -404,7 +400,7 @@
                     const voiceControl = VC();
                     const execute = voiceControl.buildVoiceHazardReportResponseExecutePlan(responseData);
                     if (execute.logMessage) {
-                        console.log(execute.logMessage, ...(execute.logArgs || []));
+                        console.log(execute.logMessage);
                     }
                     if (execute.shouldShowStatus) {
                         rt().call.showStatus(execute.statusMessage, execute.statusType);

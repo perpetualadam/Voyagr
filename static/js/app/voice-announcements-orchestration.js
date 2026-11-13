@@ -124,7 +124,7 @@
         if (hold) void hold.ready.then(speak, function () { hold.finish(); });
         else speak();
         pendingSpeechRetry = null;
-        console.log(plan.logLine);
+        console.log('[Voice] Speech queued');
         return true;
     }
 
@@ -177,19 +177,16 @@
             || getVoiceAnnouncementMinIntervalMs();
 
         if (voiceFrequencyMode === 'minimal' && priority !== 'high') {
-            console.log('[Voice] Skipped (minimal mode): "' + message + '"');
+            console.log('[Voice] Skipped (minimal mode)');
             return;
         }
         if (voiceFrequencyMode === 'important' && priority !== 'high' && priority !== 'normal') {
-            console.log('[Voice] Skipped (important-only mode): "' + message + '"');
+            console.log('[Voice] Skipped (important-only mode)');
             return;
         }
 
         if (priority !== 'high' && timeSinceLastAnnouncement < throttle) {
-            console.log(
-                '[Voice] Throttled: "' + message + '" (' + timeSinceLastAnnouncement
-                + 'ms since last, throttle=' + throttle + 'ms)'
-            );
+            console.log('[Voice] Throttled');
             return;
         }
 
@@ -208,7 +205,7 @@
                 window.AndroidTTS &&
                 typeof window.AndroidTTS.speak === 'function'
             ) {
-                console.log('[NativeTTS] Sending to Android:', speakPlan.utterance.text);
+                console.log('[NativeTTS] Speech requested');
                 window.AndroidTTS.speak(speakPlan.utterance.text);
                 lastVoiceAnnouncementTime = now;
                 return;

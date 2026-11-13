@@ -1651,3 +1651,16 @@ Chromium arrival/Info viewport/theme/text-scale cases. No deployment.
 Reproduce controlled checks: `node scripts/check-map-speed-widget.cjs` and
 `node scripts/check-navigation-overlay-layout.cjs`. Location/evidence fixtures
 verify UI wiring and layout, not physical GPS or live data coverage.
+
+### Privacy, attribution and legal-risk review (first increment)
+
+- [x] Default-off, separately chosen optional analytics with withdrawal controls;
+  preserve navigation without tracking consent.
+- [x] Correct voice/audio disclosures, remove affected raw voice console logs and
+  clarify that cache freshness and dashcam retention settings are not proof of
+  automatic deletion. Preserve statutory rights in the first-run safety notice.
+- [x] Restore linked local OSM/dark-style credits and upstream licence notice.
+- [ ] Supply public operator identity/contact and verify contracts/licences,
+  retention/deletion, paid subscription fulfilment and public-report handling.
+  See [risk review](../audits/LEGAL_AND_PRIVACY_RISK_REVIEW.md) for evidence,
+  remaining technical work and operator/legal inputs. This is not certification.
