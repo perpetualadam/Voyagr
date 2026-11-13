@@ -139,6 +139,9 @@ def test_privacy_contact_is_configured_escaped_and_not_invented(client, monkeypa
 def test_policy_does_not_promise_unverified_automatic_deletion(client):
     body = client.get('/privacy').get_data(as_text=True)
     assert 'freshness checks do not guarantee' in body
+    assert 'New temporary route-cache entries use private server' in body
+    assert 'Older database cache records' in body
+    assert 'short-lived cookie' in body
     assert 'Community reports' in body
     assert 'not stored on our\n    servers unless' not in body
     assert 'email address provided in the app' not in body

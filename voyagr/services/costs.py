@@ -21,87 +21,8 @@ from voyagr.utils import point_in_polygon
 logger = logging.getLogger('voyagr_web')
 
 
-class RouteCache:
-    """LRU cache for route calculations with TTL support."""
-
-    def __init__(self, max_size: int = 1000, ttl_seconds: int = 3600) -> None:
-        """Initialize cache with max size and TTL."""
-        self.max_size = max_size
-        self.ttl_seconds = ttl_seconds
-        self.cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
-        self.timestamps: Dict[str, float] = {}
-        self.lock = threading.Lock()
-        self.hits = 0
-        self.misses = 0
-
-    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, 
-                  routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False) -> str:
-        """Create cache key from route parameters."""
-        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance}"
-
-    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, 
-            routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False) -> Optional[Dict[str, Any]]:
-        """Get cached route if available and not expired."""
-        with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance)
-
-            if key not in self.cache:
-                self.misses += 1
-                return None
-
-            # Check if expired
-            if time.time() - self.timestamps[key] > self.ttl_seconds:
-                del self.cache[key]
-                del self.timestamps[key]
-                self.misses += 1
-                return None
-
-            # Move to end (most recently used)
-            self.cache.move_to_end(key)
-            self.hits += 1
-            return self.cache[key]
-
-    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, 
-            routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], 
-            enable_hazard_avoidance: bool = False) -> None:
-        """Cache a route calculation."""
-        with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance)
-
-            # Remove oldest if at capacity
-            if len(self.cache) >= self.max_size and key not in self.cache:
-                oldest_key = next(iter(self.cache))
-                del self.cache[oldest_key]
-                del self.timestamps[oldest_key]
-
-            # Add or update
-            self.cache[key] = route_data
-            self.timestamps[key] = time.time()
-            self.cache.move_to_end(key)
-
-    def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        with self.lock:
-            total = self.hits + self.misses
-            hit_rate = (self.hits / total * 100) if total > 0 else 0
-            return {
-                'hits': self.hits,
-                'misses': self.misses,
-                'total': total,
-                'hit_rate': f"{hit_rate:.1f}%",
-                'size': len(self.cache),
-                'max_size': self.max_size
-            }
-
-    def clear(self) -> None:
-        """Clear all cached routes."""
-        with self.lock:
-            self.cache.clear()
-            self.timestamps.clear()
-
-
-# Initialize route cache
-route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
+# Compatibility export; the web application owns the active private cache instance.
+from voyagr.services.routing.private_route_cache import RouteCache, route_cache
 
 
 def check_route_in_caz(route_coords: List[Tuple[float, float]], vehicle_caz_pass: str = 'none') -> Dict[str, Any]:
@@ -266,25 +187,9 @@ def invalidate_hazard_cache() -> bool:
 
 
 def invalidate_route_cache() -> bool:
-    """
-    Drop every persistent route cache row.
-
-    Called when hazard/routing preferences change, so every stored ``route_data``
-    was computed under superseded settings. Deleting only rows that had gone
-    untouched for 24 hours left the routes the user actually drives — the ones
-    refreshing ``last_accessed`` on every request — pinned to their old option
-    list, so preference changes appeared to do nothing.
-    """
-    try:
-        with db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM persistent_route_cache')
-            conn.commit()
-        logger.info("Route cache invalidated (all persistent rows dropped)")
-        return True
-    except Exception as e:
-        logger.error(f"Error invalidating route cache: {e}")
-        return False
+    """Invalidate only live memory; never delete quarantined historical cache rows."""
+    from voyagr.api.routing import clear_route_cache
+    return clear_route_cache()
 
 
 class CostCalculator:
@@ -432,59 +337,8 @@ class CostCalculator:
         *,
         cache_key: Optional[str] = None,
     ) -> bool:
-        """Cache a route to the database for long-term storage and analytics."""
-        try:
-            with db_connection() as conn:
-                cursor = conn.cursor()
-
-                distance_km = route_data.get('distance_km', 0)
-                duration_minutes = route_data.get('duration_minutes', 0)
-                fuel_cost = route_data.get('fuel_cost', 0)
-                toll_cost = route_data.get('toll_cost', 0)
-                caz_cost = route_data.get('caz_cost', 0)
-                total_cost = fuel_cost + toll_cost + caz_cost
-
-                if cache_key:
-                    cursor.execute(
-                        'SELECT access_count FROM persistent_route_cache WHERE cache_key = ?',
-                        (cache_key,),
-                    )
-                    prev = cursor.fetchone()
-                    next_access = (int(prev[0]) if prev else 0) + 1
-                    cursor.execute(
-                        'DELETE FROM persistent_route_cache WHERE cache_key = ?',
-                        (cache_key,),
-                    )
-                    cursor.execute('''
-                        INSERT INTO persistent_route_cache
-                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
-                         total_cost, source, cache_key, access_count, last_accessed)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                          json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
-                          caz_cost, total_cost, source, cache_key, next_access))
-                else:
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO persistent_route_cache
-                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
-                         total_cost, source, access_count, last_accessed)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                COALESCE((SELECT access_count FROM persistent_route_cache
-                                         WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                                         AND routing_mode=? AND vehicle_type=?), 0) + 1,
-                                CURRENT_TIMESTAMP)
-                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                          json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
-                          caz_cost, total_cost, source, start_lat, start_lon, end_lat, end_lon,
-                          routing_mode, vehicle_type))
-
-                conn.commit()
-            return True
-        except Exception as e:
-            logger.error(f"[Cache] Error caching route to DB: {e}")
-            return False
+        """Retired persistent cache API: no SQL; historical rows remain untouched."""
+        return False
 
     def get_cached_route_from_db(
         self,
@@ -492,45 +346,8 @@ class CostCalculator:
         *,
         max_age_hours: int = 24,
     ) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve a cached route from the database by full preference-aware cache key.
-
-        Freshness is judged from when the row was written, not from
-        ``last_accessed`` — this method refreshes ``last_accessed`` on every hit,
-        so ages measured against it never elapse for a route the user recalculates
-        regularly, and the row would be served indefinitely (including route
-        option lists produced by superseded app versions).
-        """
-        if not cache_key:
-            return None
-        try:
-            with db_connection() as conn:
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                    SELECT route_data FROM persistent_route_cache
-                    WHERE cache_key=? AND cache_key IS NOT NULL
-                    AND datetime(COALESCE(created_at, last_accessed)) > datetime('now', ?)
-                ''', (cache_key, f'-{max_age_hours} hours'))
-
-                result = cursor.fetchone()
-                if result:
-                    route_data_str = result[0]
-                    cursor.execute('''
-                        UPDATE persistent_route_cache
-                        SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
-                        WHERE cache_key=?
-                    ''', (cache_key,))
-                    conn.commit()
-                    parsed = json.loads(route_data_str)
-                    if isinstance(parsed, dict):
-                        parsed['db_cached'] = True
-                    return parsed
-
-            return None
-        except Exception as e:
-            logger.error(f"[Cache] Error retrieving cached route: {e}")
-            return None
+        """Retired persistent cache API: no SQL; historical rows remain untouched."""
+        return None
 
     def get_cached_route_from_db_legacy(
         self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
@@ -538,44 +355,8 @@ class CostCalculator:
         *,
         max_age_hours: int = 24,
     ) -> Optional[Dict[str, Any]]:
-        """
-        Legacy coord-only DB cache lookup, restricted to pre-migration rows.
-
-        This match ignores route preferences, so it must only ever answer for rows
-        written before ``cache_key`` existed. Without the ``cache_key IS NULL``
-        guard it also matched preference-keyed rows, which made it a coordinate-only
-        back door: a deliberate keyed miss (changed preferences, expired row) fell
-        straight through to whatever was last stored for those coordinates. It is
-        age-bounded like the keyed lookup for the same reason.
-        """
-        try:
-            with db_connection() as conn:
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                    SELECT route_data, access_count FROM persistent_route_cache
-                    WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                    AND routing_mode=? AND vehicle_type=? AND cache_key IS NULL
-                    AND datetime(COALESCE(created_at, last_accessed)) > datetime('now', ?)
-                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                      f'-{max_age_hours} hours'))
-
-                result = cursor.fetchone()
-                if result:
-                    route_data_str = result[0]
-                    cursor.execute('''
-                        UPDATE persistent_route_cache
-                        SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
-                        WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                        AND routing_mode=? AND vehicle_type=? AND cache_key IS NULL
-                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
-                    conn.commit()
-                    return json.loads(route_data_str)
-
-            return None
-        except Exception as e:
-            logger.error(f"[Cache] Error retrieving cached route: {e}")
-            return None
+        """Retired persistent cache API: no SQL; historical rows remain untouched."""
+        return None
 
     def get_cache_statistics(self) -> Dict[str, Any]:
         """Get statistics about the persistent route cache."""
@@ -617,36 +398,16 @@ class CostCalculator:
 
     def predict_cost(self, distance_km: float, vehicle_type: str, fuel_efficiency: float, fuel_price: float,
                     energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool) -> Dict[str, Any]:
-        """Predict cost for a route using historical data and ML-based estimation."""
+        """Estimate using current cost inputs without reading historical route bodies."""
         try:
-            # Get historical average cost per km for similar routes
-            with db_connection() as conn:
-                cursor = conn.cursor()
-
-                cursor.execute('''
-                    SELECT AVG(total_cost / distance_km) as avg_cost_per_km
-                    FROM persistent_route_cache
-                    WHERE vehicle_type = ? AND distance_km > ? AND distance_km < ?
-                ''', (vehicle_type, distance_km * 0.8, distance_km * 1.2))
-
-                result = cursor.fetchone()
-                historical_cost_per_km = result[0] if result and result[0] else None
-
             # Calculate base cost
             base_costs = self.calculate_costs(
                 distance_km, vehicle_type, fuel_efficiency, fuel_price,
                 energy_efficiency, electricity_price, include_tolls, include_caz, False
             )
 
-            # If we have historical data, blend with prediction
-            if historical_cost_per_km:
-                predicted_total = historical_cost_per_km * distance_km
-                # Blend: 70% calculated, 30% historical
-                blended_cost = (base_costs['total_cost'] * 0.7) + (predicted_total * 0.3)
-                confidence = 0.85  # High confidence with historical data
-            else:
-                blended_cost = base_costs['total_cost']
-                confidence = 0.65  # Lower confidence without historical data
+            blended_cost = base_costs['total_cost']
+            confidence = 0.65  # Estimate only; no retained journey history is used.
 
             return {
                 'predicted_cost': round(blended_cost, 2),
@@ -742,55 +503,8 @@ class CostCalculator:
 
     def cache_alternative_routes(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
                                 routing_mode: str, vehicle_type: str, routes_data: List[Dict[str, Any]]) -> bool:
-        """Cache alternative routes with smart TTL and invalidation strategy."""
-        try:
-            with db_connection() as conn:
-                cursor = conn.cursor()
-
-                # Store each alternative route
-                for idx, route in enumerate(routes_data):
-                    distance_km = route.get('distance_km', 0)
-                    duration_minutes = route.get('duration_minutes', 0)
-                    fuel_cost = route.get('fuel_cost', 0)
-                    toll_cost = route.get('toll_cost', 0)
-                    caz_cost = route.get('caz_cost', 0)
-                    total_cost = fuel_cost + toll_cost + caz_cost
-
-                    # Determine TTL based on route characteristics
-                    # Longer routes get longer TTL (more stable)
-                    # Routes with tolls/CAZ get shorter TTL (prices change)
-                    # base_ttl: 3600 seconds = 1 hour (kept for reference, TTL not currently used)
-                    if distance_km > 100:
-                        ttl_multiplier: float = 2  # 2 hours for long routes
-                    elif distance_km > 50:
-                        ttl_multiplier = 1.5  # 1.5 hours for medium routes
-                    else:
-                        ttl_multiplier = 1  # 1 hour for short routes
-
-                    # Reduce TTL if route has tolls or CAZ
-                    if toll_cost > 0 or caz_cost > 0:
-                        ttl_multiplier *= 0.7  # 30% reduction
-
-                    # TTL calculation available for future use: int(base_ttl * ttl_multiplier)
-
-                    # Insert alternative route
-                    cursor.execute('''
-                        INSERT INTO persistent_route_cache
-                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
-                         total_cost, source, access_count, last_accessed)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                        ON CONFLICT(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
-                        DO UPDATE SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
-                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                          json.dumps(route), distance_km, duration_minutes, fuel_cost, toll_cost,
-                          caz_cost, total_cost, f'Alternative-{idx+1}'))
-
-                conn.commit()
-            return True
-        except Exception as e:
-            logger.error(f"[Cache] Error caching alternative routes: {e}")
-            return False
+        """Retired persistent cache API: no SQL; historical rows remain untouched."""
+        return False
 
     def get_alternative_route_cache_info(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
         """Get cache information for alternative routes."""

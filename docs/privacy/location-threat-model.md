@@ -4,6 +4,23 @@ Date: 2026-11-13. Scope and baseline are in [the inventory](location-data-invent
 This model identifies repository-supported possibilities, not evidence of an actual
 breach, malicious administrator or a particular production configuration.
 
+## Approved route-cache remediation update
+
+T02 is addressed for new calculations by signed browser capability isolation and
+process-keyed, complete-request MAC keys. Missing/invalid capabilities miss safely;
+no public hit flag/global cache counters are returned. Fresh requests and cache
+hits still pass through the existing response-assessment boundary. Reroutes and
+forced refreshes do not retain route bodies. Generation changes prevent a late
+in-flight write under an invalidated namespace being used by a subsequent request.
+
+T03/T16 are reduced for the active route-body cache: no SQL cache reads/writes,
+non-sliding 14-minute expiry with <=60s idle sweep, bounded entries/bytes, and no
+mutable payload sharing. Historical rows, other spatial telemetry, backups and
+configuration-dependent logs remain risks; they have not been deleted. T04–T10
+are not declared resolved by this scoped change. Worker-local memory is not a
+promise of secure erasure of RAM/swap or of zero upstream processing.
+
+
 ## Assets and trust boundaries
 
 Assets: exact origins/destinations/via points, route geometry and timing, account
@@ -26,7 +43,7 @@ The browser is an untrusted request producer; client-supplied user IDs, coordina
 resource ownership. Conversely, accurate coordinates are necessary inputs; do not
 break navigation by replacing them with irreversible hashes or coarse guesses.
 
-## Ranked scenarios
+## Ranked baseline scenarios (implementation update above)
 
 | ID / severity | Scenario and evidenced weakness | Consequence | Mitigation / present status |
 |---|---|---|---|

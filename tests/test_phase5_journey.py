@@ -172,7 +172,7 @@ def test_real_cache_reassessment_rejects_first_leg_only_journey_even_avoidance_d
     cached=build(2);cached['routes']=[dict(cached,geometry=cached['legs'][0]['geometry'])]
     with patch.object(vw.route_cache,'get',return_value=cached):
         rv=vw.app.test_client().post('/api/route',json={'start':'53.52,-1.13','end':'53.526,-1.127','avoid_caz':False})
-    assert rv.json['cached']
+    assert 'cached' not in rv.json
     assert rv.json['automatic_selection_allowed'] is False
     assert rv.json['avoidance_assessment']['geometry_valid'] is False
 

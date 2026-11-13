@@ -3,12 +3,37 @@
 Date: 2026-11-13. Read with [inventory](location-data-inventory.md),
 [proposed policy](location-retention-policy.md) and [threat model](location-threat-model.md).
 
+## R02 implementation update — explicitly approved
+
+The user selected private memory-only caching capped at 15 minutes and preservation
+of existing rows. R02 is now implemented in this branch: no route-cache SQL reads
+or writes, no historical route-cost blending, browser-scoped signed capabilities,
+opaque complete-request keys, independent response copies, fixed 14-minute expiry,
+<=60s idle eviction and bounded memory. Normal navigation remains public; cache
+misses, blocked cookies and worker switches cause fresh calculation. Reroute and
+force-refresh bypass storage as well as lookup. Legacy rows are retained untouched,
+including when hazard preferences invalidate the active memory cache.
+
+New tests cover isolation, cap/signature expiry, worker-secret replacement,
+untouched-entry removal, byte/count bounds, precision/waypoint/time-window/cost-key
+separation, non-sliding lifetime, mutation isolation, invalidation namespace races
+and active HTTP no-disk/no-cross-browser behaviour. Existing cached-route safety
+reassessment tests remain in place. Public privacy text now describes the cache
+cookie and distinguishes new memory caching from existing retained legacy records.
+
+This does not authorise or implement R04/R05 cloud/dashcam defaults, historical
+purges, backup policies, a migration or deployment. Those remain separate decisions.
+The older execution/approval sections below record the original audit boundary;
+they should be read with this explicit subsequent approval.
+
+
 ## Execution boundary
 
 The user authorised a read-only audit first, followed by low-risk independent fixes,
 and required a pause for architecture decisions. The baseline was inspected before
-modifying runtime code. Only the discrete disclosure fix below and its tests are
-implemented. The remaining design is **proposed**, not silently activated.
+modifying runtime code. The initial delivery implemented the discrete disclosure fix and its tests.
+The subsequent R02 approval/update below records the next implementation; remaining
+design choices are **proposed**, not silently activated.
 
 No production database connection, historical data deletion, production migration,
 retention configuration change, infrastructure change or deployment is authorised

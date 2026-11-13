@@ -142,6 +142,7 @@ jobs:
           tests/test_voice_hazard_report_parity.py
           tests/test_voice_hazard_docs_contract.py
           tests/test_persistent_route_cache.py
+          tests/test_private_route_cache.py
           tests/test_route_cache_invalidation.py
           tests/test_asset_release.py
           tests/test_deployed_version.py
