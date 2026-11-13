@@ -17,7 +17,10 @@ const markup=template.slice(template.indexOf('<details id="arrivalOptions"'),tem
   });
   const details=page.locator('#arrivalOptions'),summary=details.locator('summary');
   assert.equal(await details.getAttribute('open'),null);assert.equal(await page.locator('#drivingArrival').isVisible(),false);
+  assert.equal(await page.locator('#arrivalIntentHelp').isVisible(),false);assert.equal(await page.locator('#drivingArrivalHelp').isVisible(),false);
+  const info=page.locator('#navigationArrivalInfo > summary');await info.focus();await page.keyboard.press('Enter');
   assert(await page.locator('#arrivalIntentHelp').isVisible());assert(await page.locator('#drivingArrivalHelp').isVisible());
+  await page.keyboard.press('Space');assert.equal(await page.locator('#drivingArrivalHelp').isVisible(),false);
   await summary.focus();await page.keyboard.press('Enter');assert(await page.locator('#drivingArrival').isVisible());
   await page.evaluate(()=>window.VoyagrGeocodingOrchestration.selectAutocompleteResult('drivingArrival',53,-1,'NCP '+('Long parking name ').repeat(12)));
   await page.locator('#arrivalIntent').selectOption('roadside');
