@@ -931,6 +931,9 @@ def search_poi_along_route():
 @require_private_user
 def manage_search_history(_jwt_claims: Any = None):
     """Get, add, or clear search history."""
+    from voyagr.utils.privacy_enforcement import legacy_upload_denied
+    if request.method in ('POST',):
+        return legacy_upload_denied('history')
     conn = None
     try:
         user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
@@ -940,7 +943,7 @@ def manage_search_history(_jwt_claims: Any = None):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if request.method == 'GET':
+        if request.method in {'GET','HEAD'}:
             cursor.execute(
                 'SELECT query, result_name, lat, lon FROM search_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 20',
                 (user_id,)
@@ -992,6 +995,9 @@ def manage_search_history(_jwt_claims: Any = None):
 @require_private_user
 def manage_favorites(_jwt_claims: Any = None):
     """Get, add, update, or remove favorite locations."""
+    from voyagr.utils.privacy_enforcement import legacy_upload_denied
+    if request.method in ('POST', 'PUT'):
+        return legacy_upload_denied('cloudSync')
     conn = None
     try:
         user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
@@ -1001,7 +1007,7 @@ def manage_favorites(_jwt_claims: Any = None):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if request.method == 'GET':
+        if request.method in {'GET','HEAD'}:
             cursor.execute(
                 'SELECT id, name, address, lat, lon, category FROM favorite_locations WHERE user_id = ? ORDER BY timestamp DESC',
                 (user_id,)

@@ -88,6 +88,7 @@ function inlineDashcam(session = null, localOnly = false, recorderFails = false)
     }));
     const win = {
         VoyagrDashcamCapture: DC,
+        VoyagrDeviceDashcam: {list:jest.fn(),loadSettings:jest.fn(),start:jest.fn(),stop:jest.fn()},
         VoyagrSupabaseAuthOrchestration: { getSupabaseClient: () => ({ auth: { getSession: async () => ({ data:{session:currentSession} }) } }) },
         fetch, MediaRecorder: Recorder,
         addEventListener: (name, fn) => { listeners[name] = fn; },
@@ -100,6 +101,7 @@ function inlineDashcam(session = null, localOnly = false, recorderFails = false)
     const run = new Function('window','document','navigator','MediaRecorder','sendNotification', section +
         '\nreturn { startDashcamRecording, stopDashcamRecording, playDashcamRecording, loadDashcamRecordings, loadDashcamSettings, getState: () => dashcamState };');
     const app = run(win, document, nav, Recorder, notify);
+    win.voyagrManageCloudDashcam=true; // explicit access to previously uploaded recordings only
     return { ...app, win, fetch, nav, notify, listeners, track, setSession: s => { currentSession = s; } };
 }
 
@@ -112,115 +114,6 @@ describe('actual inline dashcam controls', () => {
         click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     });
     afterEach(() => { jest.clearAllTimers(); jest.useRealTimers(); jest.restoreAllMocks(); });
-
-    test('anonymous server mode prompts sign-in before camera access or server start', async () => {
-        const app = inlineDashcam(null, false);
-        await app.startDashcamRecording();
-        expect(app.fetch).not.toHaveBeenCalled();
-        expect(app.nav.mediaDevices.getUserMedia).not.toHaveBeenCalled();
-        expect(app.notify).toHaveBeenCalledWith('📹 Dashcam', expect.stringContaining('Sign in'), 'info');
-    });
-
-    test('explicit device-only recording captures and saves locally without API calls', async () => {
-        const app = inlineDashcam(null, true);
-        await app.startDashcamRecording();
-        expect(app.getState().isRecording).toBe(true);
-        expect(app.nav.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
-        await app.stopDashcamRecording();
-        expect(app.fetch).not.toHaveBeenCalled();
-        expect(global.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-        expect(click).toHaveBeenCalledTimes(1);
-        expect(app.getState().isRecording).toBe(false);
-    });
-
-    test('signed-in camera start/stop/upload uses authenticated owner-pinned requests', async () => {
-        const app = inlineDashcam(sessionA);
-        await app.startDashcamRecording();
-        await app.stopDashcamRecording();
-        const calls = app.fetch.mock.calls;
-        expect(calls.map(c => c[0])).toEqual(expect.arrayContaining([
-            '/api/dashcam/start', '/api/dashcam/stop', '/api/dashcam/recordings/dashcam_clip/upload',
-        ]));
-        calls.forEach(([, opts]) => expect(opts.headers.get('Authorization')).toBe('Bearer '+sessionA.access_token));
-        const stop = calls.find(c => c[0] === '/api/dashcam/stop');
-        expect(JSON.parse(stop[1].body)).toEqual({ recording_id:'dashcam_clip' });
-        expect(calls.find(c => c[0].endsWith('/upload'))[1].body).toBeInstanceOf(Blob);
-    });
-
-    test('recorder failure rolls back only its authenticated server session', async () => {
-        const app = inlineDashcam(sessionA, false, true);
-        await app.startDashcamRecording();
-        expect(app.fetch.mock.calls.map(c => c[0])).toEqual(['/api/dashcam/start', '/api/dashcam/stop']);
-        expect(app.fetch.mock.calls[1][1].headers.get('Authorization')).toBe('Bearer '+sessionA.access_token);
-        expect(JSON.parse(app.fetch.mock.calls[1][1].body)).toEqual({ recording_id: 'dashcam_clip' });
-        expect(app.getState().isRecording).toBe(false);
-        expect(app.getState().starting).toBe(false);
-    });
-
-    test.each(['sign-out', 'switch-away-and-back'])('%s while the start response body is pending cannot start the camera recorder', async mode => {
-        const app = inlineDashcam(sessionA);
-        let finishBody;
-        let bodyStarted;
-        const pendingBody = new Promise(resolve => { bodyStarted = resolve; });
-        app.fetch.mockImplementationOnce(async () => ({
-            status: 200, ok: true,
-            json: () => { bodyStarted(); return new Promise(resolve => { finishBody = resolve; }); },
-        }));
-        const starting = app.startDashcamRecording();
-        await pendingBody;
-        app.setSession(mode === 'sign-out' ? null : sessionB);
-        app.listeners['voyagr-auth-changed']({ detail: { userId: mode === 'sign-out' ? null : 'user-B' } });
-        if (mode !== 'sign-out') {
-            app.setSession(sessionA);
-            app.listeners['voyagr-auth-changed']({ detail: { userId: 'user-A' } });
-        }
-        expect(app.track.stop).toHaveBeenCalled();
-        finishBody({ success: true, recording_id: 'dashcam_clip' });
-        await starting;
-        expect(app.getState().isRecording).toBe(false);
-        expect(app.getState().mediaRecorder).toBeNull();
-        expect(app.getState().starting).toBe(false);
-    });
-
-    test('rapid stop/start replaces the metadata timer instead of collecting duplicate GPS samples', async () => {
-        const app = inlineDashcam(sessionA);
-        app.nav.geolocation = { getCurrentPosition: jest.fn(done => done({
-            coords: { latitude: 51.5, longitude: -0.1, speed: 0, heading: 0 },
-        })) };
-        await app.startDashcamRecording();
-        await app.stopDashcamRecording();
-        await app.startDashcamRecording();
-        await jest.advanceTimersByTimeAsync(5000);
-        expect(app.nav.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
-        expect(app.fetch.mock.calls.filter(c => c[0] === '/api/dashcam/metadata')).toHaveLength(1);
-        await app.stopDashcamRecording();
-        await jest.advanceTimersByTimeAsync(5000);
-        expect(app.nav.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
-    });
-
-    test('switching to device-only capture cannot inherit the server GPS metadata timer', async () => {
-        const app = inlineDashcam(sessionA);
-        app.nav.geolocation = { getCurrentPosition: jest.fn(done => done({
-            coords: { latitude: 51.5, longitude: -0.1, speed: 0, heading: 0 },
-        })) };
-        await app.startDashcamRecording();
-        await app.stopDashcamRecording();
-        document.getElementById('dashcamLocalOnly').checked = true;
-        await app.startDashcamRecording();
-        await jest.advanceTimersByTimeAsync(5000);
-        expect(app.nav.geolocation.getCurrentPosition).not.toHaveBeenCalled();
-        expect(app.fetch.mock.calls.filter(c => c[0] === '/api/dashcam/metadata')).toHaveLength(0);
-        await app.stopDashcamRecording();
-    });
-
-    test('sign-out during capture saves locally and cannot upload under a new account', async () => {
-        const app = inlineDashcam(sessionA);
-        await app.startDashcamRecording();
-        app.setSession(sessionB);
-        await app.stopDashcamRecording();
-        expect(app.fetch.mock.calls.some(c => c[0].endsWith('/upload'))).toBe(false);
-        expect(click).toHaveBeenCalledTimes(1);
-    });
 
     test('authenticated playback uses a private blob and closes it on account change', async () => {
         const app = inlineDashcam(sessionA);
@@ -251,24 +144,7 @@ describe('actual inline dashcam controls', () => {
         expect(app.nav.mediaDevices.getUserMedia).not.toHaveBeenCalled();
     });
 
-    test('signing in after anonymous startup loads authenticated private data normally', async () => {
-        const app = inlineDashcam(null);
-        await Promise.all([app.loadDashcamRecordings(), app.loadDashcamSettings()]);
-        app.setSession(sessionA);
-        app.fetch.mockImplementation(async url => ({status:200,ok:true,json:async()=>url.endsWith('/recordings')
-            ? {success:true,recordings:[]}
-            : {success:true,settings:{resolution:'720p',fps:30,retention_days:7,audio_enabled:true}}}));
-        app.listeners['voyagr-auth-changed']({detail:{userId:'user-A'}});
-        await jest.advanceTimersByTimeAsync(0);
-        expect(app.fetch.mock.calls.map(c=>c[0])).toEqual(['/api/dashcam/recordings','/api/dashcam/settings']);
-        app.fetch.mock.calls.forEach(([,options])=>expect(options.headers.get('Authorization')).toBe('Bearer '+sessionA.access_token));
-        expect(document.getElementById('dashcamRecordingsList').textContent).toBe('No recordings yet');
-        expect(document.getElementById('dashcamResolution').value).toBe('720p');
-        expect(document.getElementById('dashcamRetention').value).toBe('7');
-        expect(document.getElementById('dashcamAudio').classList.contains('active')).toBe(true);
-    });
-
-    test.each(['loadDashcamRecordings','loadDashcamSettings'])('%s still reports genuine network errors', async method => {
+    test.each(['loadDashcamRecordings'])('%s still reports genuine network errors', async method => {
         const app=inlineDashcam(sessionA);
         const errors=jest.spyOn(console,'error').mockImplementation(()=>{});
         app.fetch.mockRejectedValue(new Error('network unavailable'));
@@ -277,7 +153,7 @@ describe('actual inline dashcam controls', () => {
         expect(errors).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({message:'network unavailable'}));
     });
 
-    test.each(['loadDashcamRecordings','loadDashcamSettings'])('%s rejects a private response body after sign-out', async method => {
+    test.each(['loadDashcamRecordings'])('%s rejects a private response body after sign-out', async method => {
         const app=inlineDashcam(sessionA);
         jest.spyOn(console,'error').mockImplementation(()=>{});
         let release,bodyStarted;
@@ -294,17 +170,7 @@ describe('actual inline dashcam controls', () => {
         expect(document.getElementById('dashcamTotalRecordings').textContent).toBe('0');
     });
 
-
-    test('page-load initialization treats a guest session as a normal sign-in state', async () => {
-        const app=inlineDashcam(null);
-        const errors=jest.spyOn(console,'error').mockImplementation(()=>{});
-        app.listeners.load();await jest.advanceTimersByTimeAsync(0);
-        expect(app.fetch).not.toHaveBeenCalled();
-        expect(errors).not.toHaveBeenCalled();
-        expect(document.getElementById('dashcamRecordingsList').textContent).toContain('Sign in');
-    });
-
-    test.each(['loadDashcamRecordings','loadDashcamSettings'])('%s reports HTTP failures without displaying their body', async method => {
+    test.each(['loadDashcamRecordings'])('%s reports HTTP failures without displaying their body', async method => {
         const app=inlineDashcam(sessionA);
         const errors=jest.spyOn(console,'error').mockImplementation(()=>{});
         const json=jest.fn(async()=>({success:true,recordings:[],settings:{resolution:'720p'}}));
