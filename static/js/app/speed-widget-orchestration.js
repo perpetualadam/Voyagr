@@ -106,10 +106,11 @@
         const mapped = observation && (observation.evidence_state === 'MAPPED_OBSERVATION' || routeObservation)
             && observation.applicable === false && Number.isFinite(observation.speed_limit_mph)
             && observation.speed_limit_mph > 0 && observation.speed_limit_mph <= 100;
-        const observationTitle = routeObservation ? (observation.position_uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs') : 'Mapped speed; check road signs';
+        const observationTitle = routeObservation ? (observation.position_uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs')
+            : observation && observation.position_uncertain ? 'Nearby mapped speeds agree; road uncertain. Check road signs' : 'Mapped speed; check road signs';
         if (mappedLabel) {
             mappedLabel.hidden = !mapped;
-            mappedLabel.textContent = routeObservation ? (observation.position_uncertain ? 'Route est.' : 'Route') : 'Mapped';
+            mappedLabel.textContent = routeObservation ? (observation.position_uncertain ? 'Route est.' : 'Route') : observation && observation.position_uncertain ? 'Mapped est.' : 'Mapped';
             mappedLabel.title = observationTitle;
         }
         const circle = document.getElementById('speedLimitCircle');
@@ -248,7 +249,7 @@
         const position=gps && gps.getNavigationPositionEvidence ? gps.getNavigationPositionEvidence() : null;
         const fix=gps && gps.getAcceptedOriginFix ? gps.getAcceptedOriginFix() : null;
         const source=known ? 'mapped road' : observation && observation.evidence_state==='ROUTE_OBSERVATION' ? (observation.position_uncertain ? 'route estimate (GPS imprecise)' : 'selected route')
-            : observation ? 'mapped observation' : 'unavailable';
+            : observation ? (observation.position_uncertain ? 'mapped estimate (road uncertain)' : 'mapped observation') : 'unavailable';
         let text='Speed display: '+source+'. Route-section limit: '+(observation && observation.evidence_state==='ROUTE_OBSERVATION' || Number.isFinite(routeLimit) && routeLimit>0 ? 'available' : 'not supplied')+'.';
         text+=' GPS route position: '+(position && position.state || 'waiting')+'.';
         if (position && position.reason && source==='unavailable') text+=' '+position.reason+'.';

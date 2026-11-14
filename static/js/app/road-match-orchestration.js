@@ -2,11 +2,13 @@
 (function(root){
     'use strict';
     var context=null,index=null,snapshot=null,previous=null,line=null,activeRoute=null,generation=0,requestSeq=0,inFlight=false,lastFetch=0,vehicle='car';
+    var lastObservationPosition=null;
     function moduleApi(){return root.VoyagrRoadMatching;}
     function currentVehicle(){var routing=root.VoyagrVehicleRoutingOrchestration;if(routing&&routing.getCurrentRoutingMode&&routing.getCurrentRoutingMode()!=='auto')return routing.getCurrentRoutingMode();var v=document.getElementById('vehicleType'),value=v&&v.value?v.value:'unknown';return value==='petrol_diesel'?'car':value;}
     function inside(c,p){return c&&c.bounds&&p[0]>=c.bounds[0]+.0005&&p[0]<=c.bounds[2]-.0005&&p[1]>=c.bounds[1]+.0008&&p[1]<=c.bounds[3]-.0008;}
     function observe(position,polyline,route){
         var now=Date.now(),v=currentVehicle();
+        lastObservationPosition=position;
         if(polyline!==line || route!==activeRoute || v!==vehicle){line=polyline;activeRoute=route;generation++;requestSeq++;previous=null;snapshot=null;context=null;index=null;inFlight=false;lastFetch=0;vehicle=v;}
         var p=[position.coords.latitude,position.coords.longitude],api=moduleApi();
         if(!api)return null;
@@ -37,12 +39,16 @@
         return snapshot;
     }
     function getAttributes(){return moduleApi().attributes(getSnapshot(),context,vehicle,Date.now());}
-    function getSpeedObservation(){return moduleApi().speedObservation(getSnapshot(),context,vehicle,Date.now());}
+    function getSpeedObservation(){
+        var api=moduleApi(),match=getSnapshot();
+        return api.speedObservation(match,context,vehicle,Date.now()) ||
+            (api.speedObservationWithinUncertainty ? api.speedObservationWithinUncertainty(lastObservationPosition,index,vehicle,Date.now()) : null);
+    }
     function getLaneObservation(){return moduleApi().laneObservation(getSnapshot(),context,vehicle,Date.now());}
     function matchesProviderLaneApproach(step){return moduleApi().providerLaneApproach(getSnapshot(),context,vehicle,Date.now(),line,step);}
     function getGraphHopperLaneGuidance(step){return root.VoyagrLaneConnectivity?root.VoyagrLaneConnectivity.resolve({match:getSnapshot(),context:context,vehicle:vehicle,now:Date.now(),line:line,step:step,route:activeRoute},moduleApi()):null;}
     function classifyHazard(h){return moduleApi().hazardAssociation(getSnapshot(),h,Date.now());}
-    function invalidate(reason){snapshot=Object.assign({},snapshot||{},{evidence_status:'UNMATCHED',osm_way_id:null,graph_edge_id:null,segment_id:null,attributes_allowed:false,reason:reason});previous=null;}
+    function invalidate(reason){lastObservationPosition=null;snapshot=Object.assign({},snapshot||{},{evidence_status:'UNMATCHED',osm_way_id:null,graph_edge_id:null,segment_id:null,attributes_allowed:false,reason:reason});previous=null;}
     var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,getSpeedObservation:getSpeedObservation,getLaneObservation:getLaneObservation,matchesProviderLaneApproach:matchesProviderLaneApproach,getGraphHopperLaneGuidance:getGraphHopperLaneGuidance,classifyHazard:classifyHazard};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     root.VoyagrRoadMatchOrchestration=api;

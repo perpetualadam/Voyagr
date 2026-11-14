@@ -1698,3 +1698,14 @@ limit coverage, dashcam and Bluetooth still require their separate checks.
   Overpass response do not prove a usable road association or speed-tag coverage.
   `/api/road-context` is the normal widget data path; the standalone legacy
   `/api/speed-limit` response is not proof of the current widget's behaviour.
+
+### Mapped-speed display under GPS uncertainty
+
+- [x] Add a display-only `Mapped est.` fallback for fresh GPS up to 35m accuracy
+  when all plausible drivable ways within its uncertainty radius have matching
+  explicit numeric speed tags in both directions. Keep strict road matching,
+  legal-speed alerts, lane guidance and deviation gates unchanged. Missing,
+  conflicting, conditional, stale or restricted candidates remain unknown.
+- [ ] Phone retest with the connected UK Overpass candidate. Partial map coverage
+  can omit roads/sign changes; this is labelled map information, not verified
+  signage or proof that GPS is on a particular road. Browser tests are synthetic.
