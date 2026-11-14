@@ -1686,3 +1686,15 @@ verify UI wiring and layout, not physical GPS or live data coverage.
 
 These findings concern the isolated candidate. Live movement, rerouting, speed
 limit coverage, dashcam and Bluetooth still require their separate checks.
+
+### Active-navigation position initialization
+
+- [x] Seed route-position assessment at Start from the last accepted GPS sample
+  if it remains fresh, keeping its timestamp, accuracy, speed and heading. Start
+  an optional road-context observation and refresh the existing labelled speed
+  display without replaying movement, speech, arrival or history side effects.
+  Regression checks preserve reacquisition/ambiguity rules and unknown limits.
+- [ ] Retest on the private phone candidate. A precise GPS fix and a successful
+  Overpass response do not prove a usable road association or speed-tag coverage.
+  `/api/road-context` is the normal widget data path; the standalone legacy
+  `/api/speed-limit` response is not proof of the current widget's behaviour.
