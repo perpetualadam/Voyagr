@@ -3,7 +3,7 @@ const SL = require('../modules/navigation/speed-limit-widget.js');
 const SG = require('../modules/navigation/speed-gps.js');
 const NOW = 1800000000000;
 function context() {
-    return {schema_version:1,source:'Overpass',revision:'test',acquired_at_ms:NOW,
+    return {schema_version:1,source:'Overpass',source_kind:'OSM_EXTRACT',revision:'test',acquired_at_ms:NOW,
         source_data_at_ms:NOW-86400000,bounds:[53.52,-1.134,53.528,-1.126],
         coverage:'PARTIAL',speed_observations_only:true,restrictions:[],
         roads:[{osm_way_id:'10',node_ids:[1,2],geometry:[[53.52,-1.13],[53.528,-1.13]],
@@ -79,7 +79,7 @@ test('real road owner opts into Overpass observations without pausing navigation
         await new Promise(resolve=>setTimeout(resolve,0));
         expect(JSON.parse(global.fetch.mock.calls[0][1].body).speed_observations).toBe(true);
         clock.mockReturnValue(NOW+1000);owner.observe(fix(1000),line,route);
-        expect(owner.getSpeedObservation()).toBeNull();
+        expect(owner.getSpeedObservation()).toMatchObject({speed_limit_mph:30,position_uncertain:true});
         clock.mockReturnValue(NOW+2000);owner.observe(fix(2000),line,route);
         expect(owner.getSpeedObservation().speed_limit_mph).toBe(30);
         expect(owner.getAttributes()).toBeNull();
@@ -136,4 +136,85 @@ test('mobile Info distinguishes missing route data from unavailable GPS associat
    expect(document.getElementById('routeMapRenderStatus').textContent).toContain(expected);
   }
  } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;window.__voyagrMapGetDiagnostics=oldMap;}
+});
+
+function uncertainFix(extra={}) {
+    return {timestamp:NOW,coords:{latitude:53.524,longitude:-1.13,accuracy:17.7,speed:0,heading:null,...extra}};
+}
+function consensus(c=context(),position=uncertainFix(),now=NOW) {
+    return RM.speedObservationWithinUncertainty(position,RM.createIndex(c),'car',now);
+}
+test('58 ft stationary GPS can show only a labelled same-limit observation without selecting a road',()=>{
+    const c=context(),p=uncertainFix();
+    const m=RM.matchPosition(p,RM.createIndex(c),{now:NOW,vehicle:'car'});
+    expect(m.evidence_status).toBe('AMBIGUOUS');
+    expect(consensus(c)).toMatchObject({speed_limit_mph:30,applicable:false,evidence_state:'MAPPED_OBSERVATION',position_uncertain:true});
+    expect(RM.attributes(m,c,'car',NOW)).toBeNull();
+    expect(RM.supportsDeviation(m,NOW)).toBe(false);
+    expect(RM.laneObservation(m,c,'car',NOW)).toBeNull();
+});
+test.each(['20 mph',undefined])('a conflicting or untagged plausible parallel road prevents the estimate: %s',value=>{
+    const c=context();
+    c.roads.push({osm_way_id:'11',node_ids:[3,4],geometry:[[53.52,-1.1301],[53.528,-1.1301]],tags:{highway:'residential',maxspeed:value}});
+    if(value===undefined)delete c.roads[1].tags.maxspeed;
+    expect(consensus(c)).toBeNull();
+});
+test('parallel roads agreeing in both directions can share a mapped estimate',()=>{
+    const c=context();
+    c.roads.push({osm_way_id:'11',node_ids:[3,4],geometry:[[53.52,-1.1301],[53.528,-1.1301]],tags:{highway:'residential',maxspeed:'30 mph'}});
+    expect(consensus(c)).toMatchObject({speed_limit_mph:30,candidate_way_count:2});
+});
+test.each([
+    {maxspeed:undefined},{maxspeed:'GB:nsl_single'},{maxspeed:'signals'},{maxspeed:'30;50'},
+    {'maxspeed:forward':'20 mph'},{'maxspeed:conditional':'20 @ (school_hours)'},
+    {'maxspeed:hgv':'20 mph'},{access:'private'},{oneway:'reversible'},
+])('unsupported or uncertain legal tags remain unknown in consensus: %j',tags=>{
+    const c=context();Object.assign(c.roads[0].tags,tags);
+    if(tags.maxspeed===undefined && 'maxspeed' in tags)delete c.roads[0].tags.maxspeed;
+    expect(consensus(c)).toBeNull();
+});
+test.each([
+    c=>{c.acquired_at_ms=NOW-60001;},c=>{c.source_data_at_ms=NOW-72*3600000-1;},
+    c=>{c.source_data_at_ms=NOW+1;},c=>{c.bounds[1]=-1.13001;},c=>{c.roads=[];},
+])('stale, incomplete-area or empty contexts cannot provide consensus',change=>{
+    const c=context();change(c);expect(consensus(c)).toBeNull();
+});
+test('stale/inaccurate GPS cannot extend observation lifetime and explicit km/h is converted',()=>{
+    expect(consensus(context(),uncertainFix(),NOW+15001)).toBeNull();
+    expect(consensus(context(),uncertainFix({accuracy:36}))).toBeNull();
+    const c=context();c.roads[0].tags.maxspeed='50';
+    expect(consensus(c).speed_limit_mph).toBe(31.1);
+});
+test('widget clearly labels uncertain mapped observations without enabling legal overspeed state',()=>{
+    const widget=require('../app/speed-widget-orchestration.js');let units='mph';
+    document.body.innerHTML='<div id="speedWidget"><span id="speedValue"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden></span></div></div>';
+    widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=>units,getIsTrackingActive:()=>true,getRouteInProgress:()=>false,call:{getSpeedUnit:()=>units}});
+    const observation=consensus();widget.updateSpeedWidget(0,null,null,observation);
+    expect(document.getElementById('speedLimitValue').textContent).toBe('30');
+    expect(document.getElementById('speedLimitMappedLabel').textContent).toBe('Mapped est.');
+    expect(document.getElementById('speedLimitCircle').title).toContain('road uncertain');
+    expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+    units='km/h';widget.updateSpeedWidget(0,null,null,observation);
+    expect(document.getElementById('speedLimitValue').textContent).toBe('48');
+});
+test('real road owner supplies a stationary consensus and clears it on GPS loss or vehicle switch',async()=>{
+    const clock=jest.spyOn(Date,'now').mockReturnValue(NOW),oldFetch=global.fetch;
+    const oldRoad=window.VoyagrRoadMatchOrchestration,oldMatching=window.VoyagrRoadMatching;
+    document.body.innerHTML='<select id="vehicleType"><option value="petrol_diesel">Car</option><option value="bus">Bus</option></select>';
+    window.VoyagrRoadMatching=RM;jest.resetModules();
+    const owner=require('../app/road-match-orchestration.js');
+    global.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({context:context()})});
+    const line=[[53.52,-1.13],[53.528,-1.13]],route={};
+    try {
+        owner.observe(uncertainFix(),line,route);
+        await new Promise(resolve=>setTimeout(resolve,0));
+        expect(owner.getSpeedObservation()).toMatchObject({speed_limit_mph:30,position_uncertain:true});
+        expect(owner.getSnapshot().evidence_status).toBe('UNMATCHED');
+        expect(owner.getAttributes()).toBeNull();
+        owner.invalidate('GPS unavailable');expect(owner.getSpeedObservation()).toBeNull();
+        owner.observe(uncertainFix(),line,route);
+        expect(owner.getSpeedObservation().speed_limit_mph).toBe(30);
+        document.getElementById('vehicleType').value='bus';
+        expect(owner.getSpeedObservation()).toBeNull();
+    } finally {clock.mockRestore();global.fetch=oldFetch;window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrRoadMatching=oldMatching;}
 });
