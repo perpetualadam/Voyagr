@@ -287,6 +287,8 @@ async function main() {
     })).status);
     check('Routing validation remains reachable when browser storage fails', validation === 400);
     await broken.close();
+    phase = 'full candidate GPS and delayed speed context';
+    await require('./speed-context-browser.cjs')(origin, check);
     console.log(checks + ' full-candidate Chromium checks passed. Synthetic data; not phone or production verification.');
   } catch (error) {
     error.testPhase = phase;

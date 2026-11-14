@@ -270,10 +270,12 @@
         const gps=root.VoyagrGpsOrchestration;
         const fix=gps && gps.getAcceptedOriginFix();
         const position=gps && gps.getNavigationPositionEvidence();
-        if (!fix || !position) return;
+        if (!fix || !rt().getIsTrackingActive() && !rt().getRouteInProgress()) return;
+        const age=Date.now()-fix.timestamp;
+        if (!Number.isFinite(age) || age< -1000 || age>15000) return;
         const speed=getCurrentGpsSpeedMph();
         const steps=rt().getCurrentRouteSteps();
-        const idx=position.state==='RELIABLE' && position.snap
+        const idx=position && position.state==='RELIABLE' && position.snap
             ? SG().getActiveRouteManeuverIndex(steps,position.snap.index) : -1;
         const step=steps && steps[idx];
         const roadType=step && step.road_class || 'unknown';

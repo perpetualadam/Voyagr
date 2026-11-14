@@ -123,3 +123,19 @@ Do not roll back server owner checks or reopen plaintext optional uploads.
 
 **Production readiness remains NO-GO** pending the remaining release gates. Passing
 tests do not establish GDPR compliance or authorize a production deployment.
+
+## Follow-up: delayed speed-context presentation (14 November 2026)
+
+The disposable lab now also runs seven full-candidate speed-flow checks, for
+47 browser assertions alongside the 42 real HTTP assertions. These passed
+locally. GPS is synthetic Chromium geolocation, road-context responses and the
+map style are controlled fixtures, and no production data/services are selected.
+This is browser wiring verification, not physical Android or map-data coverage.
+
+The prior candidate retained a 30mph observation internally but displayed unknown
+after the delayed source response. The new regression fails against that code
+and passes with response-driven presentation refresh, without another GPS
+callback. It checks the Mapped est. label, empty legal-alert state, coherent asset
+loading, GPS-stop clearing and no uncaught page exceptions. This adds no uploads,
+precise-location logs or persistent location records. Production/phone retest
+gates and the NO-GO verdict above remain unchanged.

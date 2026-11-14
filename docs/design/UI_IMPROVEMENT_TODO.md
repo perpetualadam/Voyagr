@@ -1709,3 +1709,20 @@ limit coverage, dashcam and Bluetooth still require their separate checks.
 - [ ] Phone retest with the connected UK Overpass candidate. Partial map coverage
   can omit roads/sign changes; this is labelled map information, not verified
   signage or proof that GPS is on a particular road. Browser tests are synthetic.
+
+### Delayed road context and the visible speed widget
+
+- [x] Refresh the speed display when asynchronously acquired road context becomes
+  available. The full candidate could hold a valid 30mph mapped observation while
+  continuing to display unknown until another GPS callback. The new path uses
+  only a still-fresh accepted fix, without replaying GPS or enabling legal alerts.
+- [x] Add a full-page Chromium regression with real application bootstrap,
+  geolocation callbacks, source ownership and DOM rendering; hold the synthetic
+  road response until the initial unknown is visible. Verify it changes to
+  `30 / Mapped est.` without another GPS callback and clears when GPS stops.
+- [ ] Retest the private phone candidate. Local controlled data/GPS checks do not
+  establish coverage or diagnose every unknown limit on the user's real roads.
+
+Run `python3 scripts/privacy-http-lab/run.py --browser` for the disposable lab.
+The regression also checks coherent asset loading. No cache purge, service-worker
+weakening, server retention change or production deployment is part of this fix.

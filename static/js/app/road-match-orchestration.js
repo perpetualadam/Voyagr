@@ -20,7 +20,16 @@
             var timer=controller?setTimeout(function(){controller.abort();},4000):null;
             fetch('/api/road-context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p[0],lon:p[1],vehicle_type:vehicle,speed_observations:true,lane_observations:true,lane_connectivity:!!(route&&route.source==='GraphHopper')}),signal:controller?controller.signal:undefined})
                 .then(function(r){if(!r.ok)throw new Error('Road context unavailable');return r.json();})
-                .then(function(data){if(seq!==requestSeq||gen!==generation)return;context=data&&data.context||null;index=context?api.createIndex(context):null;previous=null;})
+                .then(function(data){
+                    if(seq!==requestSeq||gen!==generation)return;
+                    context=data&&data.context||null;index=context?api.createIndex(context):null;previous=null;
+                    // Context arrives after the GPS tick which requested it.
+                    // Refresh presentation without inventing/replaying a GPS fix.
+                    var widget=root.VoyagrSpeedWidgetOrchestration;
+                    if(widget&&widget.refreshFromNavigationPosition){
+                        try{widget.refreshFromNavigationPosition();}catch(_){/* Optional presentation cannot invalidate source data. */}
+                    }
+                })
                 .catch(function(){/* Retain a still-fresh bounded context; never invent a replacement. */})
                 .finally(function(){if(timer)clearTimeout(timer);if(seq===requestSeq)inFlight=false;});
         }
