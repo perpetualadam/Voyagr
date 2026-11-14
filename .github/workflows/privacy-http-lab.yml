@@ -1,0 +1,20 @@
+name: Isolated privacy HTTP lab
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/privacy-http-lab/**'
+      - '.github/workflows/privacy-http-lab.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify disposable GoTrue, gateway and private APIs
+        run: python3 scripts/privacy-http-lab/run.py
