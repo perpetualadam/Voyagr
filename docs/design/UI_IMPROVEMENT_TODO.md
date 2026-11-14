@@ -1664,3 +1664,18 @@ verify UI wiring and layout, not physical GPS or live data coverage.
   retention/deletion, paid subscription fulfilment and public-report handling.
   See [risk review](../audits/LEGAL_AND_PRIVACY_RISK_REVIEW.md) for evidence,
   remaining technical work and operator/legal inputs. This is not certification.
+
+### Private phone candidate findings (14 November 2026)
+
+- [x] Keep privacy checkbox indicators at 20px while preserving label touch
+  targets of at least 44px. Generic mobile input minimums and padding caused
+  the oversized controls. CSS fix verified in Chromium at 360, 576 and 1024px
+  in light/dark themes; disabled states preserved. Phone retest pending.
+- [ ] Prevent the speed widget overlapping open Settings and other sheets.
+- [ ] Review stacked startup notices covering the map/instructions and move
+  supplementary route diagnostics behind an information disclosure.
+- [ ] Replace misleading incomplete-route wording when no route is selected;
+  preserve useful errors for actual incomplete route results.
+
+These findings concern the isolated candidate. Live movement, rerouting, speed
+limit coverage, dashcam and Bluetooth still require their separate checks.

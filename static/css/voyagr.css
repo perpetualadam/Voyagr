@@ -5183,3 +5183,17 @@ html.dark-mode .navigation-entry, body.dark-mode .navigation-entry { background:
 .speed-widget-gps[hidden], .speed-widget-state[hidden] { display:none; }
 html.dark-mode .speed-widget-state, body.dark-mode .speed-widget-state { color:#cbd5e1; }
 html.dark-mode .speed-widget-gps, body.dark-mode .speed-widget-gps { background:#20232b; color:#f4f5f8; border-color:#aeb8d6; }
+
+/* Independent privacy choices; native controls retain keyboard and screen-reader support. */
+.privacy-options { border: 0; padding: 0; margin: 0 0 1rem; }
+.privacy-options label, #localDataControls > .privacy-history-option {
+    display: flex; align-items: center; gap: .6rem; min-height: 44px;
+}
+.privacy-options input[type="checkbox"], #localRecordHistory {
+    /* Keep the native indicator compact; its label supplies the touch target.
+       Override the generic input padding and mobile 44px input minimums. */
+    box-sizing: border-box;
+    width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+    padding: 0; margin: 0; flex: 0 0 20px;
+}
+.privacy-options legend { font-weight: 600; }

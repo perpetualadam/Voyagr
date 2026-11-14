@@ -24,9 +24,10 @@ class TestAdminAuthMissingSecret:
         rv = client.get('/api/cache-stats')
         assert rv.status_code == 503
 
-    def test_app_settings_post_open_without_secret(self, client):
+    def test_legacy_app_settings_write_disabled_without_secret(self, client):
         rv = client.post('/api/app-settings', json={'map_theme': 'dark'})
-        assert rv.status_code in (200, 500)
+        assert rv.status_code == 403
+        assert rv.json['code'] == 'CLOUD_UPLOAD_DISABLED'
 
     def test_hazard_preferences_post_open_without_secret(self, client):
         rv = client.post('/api/hazard-preferences', json={
@@ -84,7 +85,7 @@ class TestAdminAuthWhenConfigured:
             'end_lat': 51.6,
             'end_lon': -0.2,
         })
-        assert rv_post.status_code == 401
+        assert rv_post.status_code == 403
 
         rv_post_ok = client.post(
             '/api/ml-predictions',
@@ -96,7 +97,8 @@ class TestAdminAuthWhenConfigured:
             },
             headers={'X-Voyagr-Admin-Key': 'test-admin-secret'},
         )
-        assert rv_post_ok.status_code in (200, 500)
+        assert rv_post_ok.status_code == 403
+        assert rv_post_ok.json['code'] == 'CLOUD_UPLOAD_DISABLED'
 
 
 @pytest.mark.parametrize('secret', ['', '   '])

@@ -186,7 +186,7 @@
         });
         if (!request.shouldSave) return;
 
-        fetch(request.apiPath, {
+        root.VoyagrLocalData.preferenceRequest({
             method: request.method,
             headers: request.headers,
             body: JSON.stringify(request.body),
