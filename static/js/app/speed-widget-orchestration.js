@@ -265,6 +265,21 @@
         }
     }
 
+    function refreshFromNavigationPosition() {
+        const gps=root.VoyagrGpsOrchestration;
+        const fix=gps && gps.getAcceptedOriginFix();
+        const position=gps && gps.getNavigationPositionEvidence();
+        if (!fix || !position) return;
+        const speed=getCurrentGpsSpeedMph();
+        const steps=rt().getCurrentRouteSteps();
+        const idx=position.state==='RELIABLE' && position.snap
+            ? SG().getActiveRouteManeuverIndex(steps,position.snap.index) : -1;
+        const step=steps && steps[idx];
+        const roadType=step && step.road_class || 'unknown';
+        const limit=step ? normalizeManeuverSpeedLimitMph(step.speed_limit,roadType,speed) : null;
+        fetchSpeedLimitThrottled(fix.lat,fix.lon,speed,roadType,limit,null);
+    }
+
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
         if (root.VoyagrRoadMatchOrchestration) {
             var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
@@ -384,6 +399,7 @@
         normalizeManeuverSpeedLimitMph: normalizeManeuverSpeedLimitMph,
         applySpeedLimitFetchOutcomeFromPlan: applySpeedLimitFetchOutcomeFromPlan,
         fetchSpeedLimitThrottled: fetchSpeedLimitThrottled,
+        refreshFromNavigationPosition: refreshFromNavigationPosition,
         applySpeedWidgetToggleUi: applySpeedWidgetToggleUi,
         toggleSpeedWidget: toggleSpeedWidget,
         getSpeedLimitFetchState: getSpeedLimitFetchState,

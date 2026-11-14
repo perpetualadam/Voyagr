@@ -24,6 +24,9 @@ def require_dashcam_identity():
     denial = authenticate_dashcam_request()
     if denial is not None:
         return denial
+    if request.method == 'POST' and (request.endpoint in {'dashcam.start_recording','dashcam.add_metadata','dashcam.upload_recording','dashcam.update_settings'}):
+        from voyagr.utils.privacy_enforcement import legacy_upload_denied
+        return legacy_upload_denied('dashcamBackup')
     g.dashcam_service = current_app.extensions['voyagr_dashcam'].for_owner(g.dashcam_owner_user_id)
 
 

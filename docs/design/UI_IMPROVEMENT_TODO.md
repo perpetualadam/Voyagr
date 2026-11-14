@@ -1664,3 +1664,37 @@ verify UI wiring and layout, not physical GPS or live data coverage.
   retention/deletion, paid subscription fulfilment and public-report handling.
   See [risk review](../audits/LEGAL_AND_PRIVACY_RISK_REVIEW.md) for evidence,
   remaining technical work and operator/legal inputs. This is not certification.
+
+### Private phone candidate findings (14 November 2026)
+
+- [x] Keep privacy checkbox indicators at 20px while preserving label touch
+  targets of at least 44px. Generic mobile input minimums and padding caused
+  the oversized controls. CSS fix verified in Chromium at 360, 576 and 1024px
+  in light/dark themes; disabled states preserved. Phone retest pending.
+- [x] Stack expanded sheets above the speed widget/navigation HUD, preserving
+  the collapsed map layout and disabled-widget preference. Real Chromium hit
+  testing covers phone, tablet, landscape and desktop in light/dark themes;
+  candidate phone retest pending. Reproduce with
+  `node scripts/check-sheet-widget-layering.cjs`.
+- [x] Collapse the startup route-limitations explanation behind a native Info
+  disclosure. Preserve explanatory text, keyboard access and explicit dismissal;
+  do not expire the disclosure while someone is reading it. Phone retest pending.
+- [ ] Review the separate volume reminder and remaining route-preview diagnostics
+  so supplementary information does not cover the map/instructions.
+- [ ] Replace misleading incomplete-route wording when no route is selected;
+  preserve useful errors for actual incomplete route results.
+
+These findings concern the isolated candidate. Live movement, rerouting, speed
+limit coverage, dashcam and Bluetooth still require their separate checks.
+
+### Active-navigation position initialization
+
+- [x] Seed route-position assessment at Start from the last accepted GPS sample
+  if it remains fresh, keeping its timestamp, accuracy, speed and heading. Start
+  an optional road-context observation and refresh the existing labelled speed
+  display without replaying movement, speech, arrival or history side effects.
+  Regression checks preserve reacquisition/ambiguity rules and unknown limits.
+- [ ] Retest on the private phone candidate. A precise GPS fix and a successful
+  Overpass response do not prove a usable road association or speed-tag coverage.
+  `/api/road-context` is the normal widget data path; the standalone legacy
+  `/api/speed-limit` response is not proof of the current widget's behaviour.

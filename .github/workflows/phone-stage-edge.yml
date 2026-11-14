@@ -1,0 +1,18 @@
+name: Private phone-stage edge
+on:
+  pull_request:
+    paths:
+      - 'deploy/phone-stage/**'
+      - 'scripts/test-phone-stage-edge.py'
+      - '.github/workflows/phone-stage-edge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phone-stage-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable HTTPS and authentication boundary
+        run: python3 scripts/test-phone-stage-edge.py

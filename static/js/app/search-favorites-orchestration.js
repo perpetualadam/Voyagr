@@ -17,18 +17,7 @@
     function FAV() { return rt().favorites(); }
 
     function addToSearchHistory(query, resultName, lat, lon) {
-        if (query && lat != null && lon != null) {
-            rt().call.recordRecentDestination(resultName || query, lat, lon, 'search');
-        }
-        rt().call.getSupabaseAccessToken().then((token) => {
-            if (!token) return;
-            const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-            return fetch('/api/search-history', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ query, result_name: resultName, lat, lon }),
-            });
-        }).catch((error) => console.error('Error adding to search history:', error));
+        if(query&&lat!=null&&lon!=null)rt().call.recordRecentDestination(resultName||query,lat,lon,'search');
     }
 
     function mountFavoriteGridItem(grid, fav, handlers) {
@@ -68,130 +57,47 @@
         grid.appendChild(container);
     }
 
-    function loadFavorites() {
-        const favMod = FAV();
-        rt().call.fetchJsonWithAuth('/api/favorites')
-            .then(({ res, data }) => {
-                const section = document.getElementById('favoritesSection');
-                const grid = document.getElementById('favoritesGrid');
-                grid.innerHTML = '';
-
-                if (res.status === 401) {
-                    section.style.display = 'none';
-                    return;
-                }
-
-                const favorites = data.success && data.favorites ? data.favorites : [];
-                if (favMod.shouldShowFavoritesSection(false, favorites.length)) {
-                    favorites.forEach((fav) => {
-                        mountFavoriteGridItem(grid, fav, {
-                            onSelect: (item) => {
-                                if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests('end');
-                                delete document.getElementById('end').dataset.journeyOriginalSource;document.getElementById('end').dataset.journeySource='saved';
-                                document.getElementById('end').value = item.name;
-                                document.getElementById('end').dataset.lat = item.lat;
-                                document.getElementById('end').dataset.lon = item.lon;
-                                document.getElementById('end').dataset.displayName = item.name;
-                                addToSearchHistory(item.name, item.name, item.lat, item.lon);
-                                rt().call.expandBottomSheet();
-                                rt().call.showStatus(favMod.getFavoriteSelectStatusMessage(item.name), 'success');
-                            },
-                            onEdit: editFavorite,
-                            onDelete: deleteFavorite,
-                        });
-                    });
-
-                    section.style.display = 'block';
-                } else {
-                    section.style.display = 'none';
-                }
-            })
-            .catch((error) => console.error('Error loading favorites:', error));
+    async function loadFavorites() {
+        const local=root.VoyagrLocalData;if(!local)return;
+        const c=local.capture(),grid=document.getElementById('favoritesGrid'),section=document.getElementById('favoritesSection');
+        if(!grid||!section)return;grid.textContent='';
+        try{const favourites=await local.read('favourites',c)||[];if(!local.current(c))return;
+            for(const fav of favourites)mountFavoriteGridItem(grid,fav,{
+                onSelect:item=>{if(!local.current(c))return;const input=document.getElementById('end');
+                    root.VoyagrLocationOrchestration?.invalidateEndpointRequests('end');
+                    input.value=item.name;input.dataset.journeySource='saved';input.dataset.lat=item.lat;input.dataset.lon=item.lon;input.dataset.displayName=item.name;
+                    delete input.dataset.journeyOriginalSource;rt().call.expandBottomSheet();},
+                onEdit:editFavorite,onDelete:deleteFavorite});
+            section.style.display=favourites.length?'block':'none';
+        }catch(_){local.report();section.style.display='none';}
     }
 
-    function editFavorite(fav) {
-        const favMod = FAV();
-        const newName = prompt('Edit name:', fav.name);
-        if (!newName || newName === fav.name) return;
-
-        const newCategory = prompt('Edit category:', fav.category);
-
-        rt().call.getSupabaseAccessToken().then((token) => fetch('/api/favorites', {
-            method: 'PUT',
-            headers: favMod.buildFavoriteAuthHeaders(token),
-            body: favMod.buildFavoriteUpdateBody(fav, newName, newCategory),
-        }))
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.success) {
-                    rt().call.showStatus(favMod.getFavoriteUpdatedStatusMessage(newName), 'success');
-                    loadFavorites();
-                } else {
-                    rt().call.showStatus(favMod.getFavoriteApiErrorMessage(data.error), 'error');
-                }
-            })
-            .catch((err) => {
-                console.error('Error updating favorite:', err);
-                rt().call.showStatus(favMod.getFavoriteActionFailedMessage('update'), 'error');
-            });
+    async function editFavorite(fav) {
+        const local=root.VoyagrLocalData;if(!local)return;const c=local.capture();
+        const name=prompt('Edit name:',fav.name);if(!name)return;
+        const category=prompt('Edit category:',fav.category)||'location';
+        try{await local.update('favourites',rows=>(rows||[]).map(x=>x.id===fav.id?{...x,name:name.slice(0,200),category:category.slice(0,50)}:x),c);if(local.current(c))await loadFavorites();}catch(_){local.report();}
     }
 
-    function deleteFavorite(fav) {
-        const favMod = FAV();
-        if (!confirm(favMod.getFavoriteDeleteConfirmMessage(fav.name))) return;
-
-        rt().call.getSupabaseAccessToken().then((token) => fetch('/api/favorites', {
-            method: 'DELETE',
-            headers: favMod.buildFavoriteAuthHeaders(token),
-            body: favMod.buildFavoriteDeleteBody(fav),
-        }))
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.success) {
-                    rt().call.showStatus(favMod.getFavoriteRemovedStatusMessage(fav.name), 'success');
-                    loadFavorites();
-                } else {
-                    rt().call.showStatus(favMod.getFavoriteApiErrorMessage(data.error), 'error');
-                }
-            })
-            .catch((err) => {
-                console.error('Error deleting favorite:', err);
-                rt().call.showStatus(favMod.getFavoriteActionFailedMessage('delete'), 'error');
-            });
+    async function deleteFavorite(fav) {
+        const local=root.VoyagrLocalData;if(!local)return;const c=local.capture();
+        if(!confirm('Delete this saved place from this device profile?'))return;
+        try{await local.update('favourites',rows=>(rows||[]).filter(x=>x.id!==fav.id),c);if(local.current(c))await loadFavorites();}catch(_){local.report();}
     }
 
-    function addCurrentToFavorites() {
-        const favMod = FAV();
-        const name = prompt('Enter name for this location (e.g., Home, Work):');
-        if (!name) return;
-
-        const category = prompt('Enter category (e.g., home, work, shopping):', 'location');
-
-        rt().call.getSupabaseAccessToken().then((token) => fetch('/api/favorites', {
-            method: 'POST',
-            headers: favMod.buildFavoriteAuthHeaders(token),
-            body: favMod.buildFavoriteCreateBody({
-                name: name,
-                address: document.getElementById('end').value,
-                lat: rt().getCurrentLat(),
-                lon: rt().getCurrentLon(),
-                category: category || 'location',
-            }),
-        }))
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.success) {
-                    rt().call.showStatus(favMod.getFavoriteAddedStatusMessage(name), 'success');
-                    loadFavorites();
-                } else {
-                    rt().call.showStatus('Error adding to favorites', 'error');
-                }
-            })
-            .catch((error) => {
-                rt().call.showStatus('Error: ' + error.message, 'error');
-            });
+    async function addCurrentToFavorites() {
+        const local=root.VoyagrLocalData;if(!local)return;const c=local.capture();
+        const name=prompt('Name for this saved place:');if(!name)return;
+        const category=prompt('Category:','location')||'location',input=document.getElementById('end');
+        // Prefer the selected destination; do not silently save GPS as a different place.
+        let lat=Number(input?.dataset.lat),lon=Number(input?.dataset.lon),address=input?.value||'';
+        if(!input?.dataset.lat||!input?.dataset.lon){lat=rt().getCurrentLat?.();lon=rt().getCurrentLon?.();address='';if(!Number.isFinite(lat)||!Number.isFinite(lon)||!confirm('No destination is selected. Save your current location instead?'))return;}
+        if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){rt().call.showStatus('Choose a destination on the map or in search first.','warning');return;}
+        const record={id:root.crypto.randomUUID(),name:name.slice(0,200),category:category.slice(0,50),address:address.slice(0,500),lat,lon};
+        try{await local.update('favourites',rows=>[...(rows||[]),record],c);if(local.current(c)){rt().call.showStatus('Place saved on this device','success');await loadFavorites();}}catch(_){local.report();rt().call.showStatus('Place was not saved. Device storage is unavailable.','error');}
     }
 
+    if(typeof window!=='undefined'){window.addEventListener('voyagr-local-owner-change',()=>{const el=document.getElementById('favoritesGrid');if(el)el.textContent='';});window.addEventListener('voyagr-local-data-changed',()=>{if(runtime)void loadFavorites();});}
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
