@@ -5189,5 +5189,11 @@ html.dark-mode .speed-widget-gps, body.dark-mode .speed-widget-gps { background:
 .privacy-options label, #localDataControls > .privacy-history-option {
     display: flex; align-items: center; gap: .6rem; min-height: 44px;
 }
-.privacy-options input[type="checkbox"], #localRecordHistory { width: 20px; height: 20px; flex-shrink: 0; }
+.privacy-options input[type="checkbox"], #localRecordHistory {
+    /* Keep the native indicator compact; its label supplies the touch target.
+       Override the generic input padding and mobile 44px input minimums. */
+    box-sizing: border-box;
+    width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+    padding: 0; margin: 0; flex: 0 0 20px;
+}
 .privacy-options legend { font-weight: 600; }
