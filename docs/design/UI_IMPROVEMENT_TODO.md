@@ -1671,7 +1671,11 @@ verify UI wiring and layout, not physical GPS or live data coverage.
   targets of at least 44px. Generic mobile input minimums and padding caused
   the oversized controls. CSS fix verified in Chromium at 360, 576 and 1024px
   in light/dark themes; disabled states preserved. Phone retest pending.
-- [ ] Prevent the speed widget overlapping open Settings and other sheets.
+- [x] Stack expanded sheets above the speed widget/navigation HUD, preserving
+  the collapsed map layout and disabled-widget preference. Real Chromium hit
+  testing covers phone, tablet, landscape and desktop in light/dark themes;
+  candidate phone retest pending. Reproduce with
+  `node scripts/check-sheet-widget-layering.cjs`.
 - [ ] Review stacked startup notices covering the map/instructions and move
   supplementary route diagnostics behind an information disclosure.
 - [ ] Replace misleading incomplete-route wording when no route is selected;

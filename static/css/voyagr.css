@@ -506,6 +506,9 @@ html.dark-mode .fab.fab-recenter, body.dark-mode .fab.fab-recenter {
     transform: translateY(0) !important;
     height: 92vh;
     height: 92dvh;
+    /* Open panels cover map widgets (speed: 300; navigation HUD: 250).
+       Collapsed panels keep their existing map/navigation stacking order. */
+    z-index: 310;
 }
 
 .bottom-sheet-content {
