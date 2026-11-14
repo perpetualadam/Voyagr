@@ -267,3 +267,13 @@ in [Phase 3 delivery and verification](phase-3-privacy-settings-report.md). Hist
 permission is checked atomically with each new archive write. Unavailable cloud
 and optional diagnostic services remain disabled, rather than accepting unusable
 grants. Backend consent authority is still Phase 4; production remains NO-GO.
+
+## Phase 4 implementation
+
+Default-deny legacy API/PostgREST writes, strict live-user management and the
+server consent/epoch authority are described in
+[Phase 4 delivery and verification](phase-4-server-enforcement-report.md).
+The additive PostgreSQL migration is prepared and tested on isolated databases
+only. [The rollout/rollback runbook](server-consent-rollout.md) requires separate
+operator authorisation; direct PostgREST is not secured by a code-only rollout.
+Cloud remains unavailable and production remains NO-GO pending those release gates.

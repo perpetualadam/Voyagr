@@ -56,30 +56,23 @@ def _get_bearer_token() -> Optional[str]:
 
 
 def require_private_user(f: F) -> F:
-    """
-    Require a Supabase user for endpoints that read/write private location data.
+    """Strict signed-in identity + live session for all private location resources.
 
-    - Localhost requests are allowed for development (no auth) unless explicitly disabled.
-    - Non-local requests require a valid Supabase Bearer token.
+    No localhost/API-key/admin/query/body owner bypass. Necessary navigation does
+    not use this decorator. Existing cloud data remains readable/deletable when
+    optional new uploads are disabled.
     """
     @wraps(f)
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
-        # Allow local dev calls without auth, unless disabled.
-        if _is_local_request() and os.getenv("ALLOW_LOCAL_UNAUTH", "true").lower() == "true":
-            kwargs["_jwt_claims"] = {"sub": "local", "email": None}
-            return f(*args, **kwargs)
-
-        token = _get_bearer_token()
-        if not token:
-            return jsonify({"success": False, "error": "Missing bearer token"}), 401
-
-        try:
-            claims: Dict[str, Any] = verify_supabase_jwt(token)
-        except Exception as e:
-            return jsonify({"success": False, "error": "Invalid token", "detail": str(e)}), 401
-
-        kwargs["_jwt_claims"] = claims
-        return f(*args, **kwargs)
-
+        from flask import g, make_response
+        from voyagr.utils.dashcam_auth import authenticate_dashcam_request
+        denial = authenticate_dashcam_request()
+        if denial is not None:
+            response = make_response(denial)
+        else:
+            kwargs['_jwt_claims'] = dict(g.private_user_claims)
+            response = make_response(f(*args, **kwargs))
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.vary.add('Authorization')
+        return response
     return decorated_function  # type: ignore
-
