@@ -1924,10 +1924,12 @@
         </div>
 
         <aside id="bestEffortWarning" class="best-effort-warning" aria-label="Route limitations" tabindex="0" role="status" aria-live="polite" aria-atomic="true" hidden>
-            <strong>Route limitations</strong>
+            <details id="routeLimitationsInfo">
+            <summary>ⓘ Info · Route limitations</summary>
             <p>This route may include hazards or restrictions that Voyagr could not avoid or fully verify.</p>
             <p>Follow road signs and traffic laws. Avoidance is not guaranteed.</p>
             <button type="button" id="dismissBestEffortWarning" aria-label="Dismiss hazard warning">Dismiss</button>
+            </details>
         </aside>
         <!-- Current Road Name Bar - Shows road name during navigation -->
         <div id="roadNameBar" style="display: none; position: absolute; bottom: 155px; left: 50%; transform: translateX(-50%); z-index: 250; background: rgba(0,0,0,0.8); color: white; padding: 6px 18px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis; text-align: center; backdrop-filter: blur(10px);">

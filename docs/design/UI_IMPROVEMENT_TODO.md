@@ -1676,8 +1676,11 @@ verify UI wiring and layout, not physical GPS or live data coverage.
   testing covers phone, tablet, landscape and desktop in light/dark themes;
   candidate phone retest pending. Reproduce with
   `node scripts/check-sheet-widget-layering.cjs`.
-- [ ] Review stacked startup notices covering the map/instructions and move
-  supplementary route diagnostics behind an information disclosure.
+- [x] Collapse the startup route-limitations explanation behind a native Info
+  disclosure. Preserve explanatory text, keyboard access and explicit dismissal;
+  do not expire the disclosure while someone is reading it. Phone retest pending.
+- [ ] Review the separate volume reminder and remaining route-preview diagnostics
+  so supplementary information does not cover the map/instructions.
 - [ ] Replace misleading incomplete-route wording when no route is selected;
   preserve useful errors for actual incomplete route results.
 
