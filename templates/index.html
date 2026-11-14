@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="{{ seo_language|default('en-GB') }}">
 <head>
+    <script defer src="/static/js/modules/privacy/consent-policy.js?v=20261114privacy3"></script>
     {% if optional_analytics_available %}
-    <script defer src="/static/js/app/analytics-consent.js?v=20261113privacy1" data-voyagr-analytics="{{ optional_analytics_measurement_id }}"></script>
+    <script defer src="/static/js/app/analytics-consent.js?v=20261114privacy3" data-voyagr-analytics="{{ optional_analytics_measurement_id }}"></script>
     {% endif %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -55,7 +56,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261113forminfo1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261114privacy3" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -176,6 +177,9 @@
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
+    <script defer src="/static/js/modules/privacy/local-store.js?v=20261114privacy3"></script>
+    <script defer src="/static/js/app/local-data.js?v=20261114privacy3"></script>
+    <script defer src="/static/js/app/device-dashcam.js?v=20261114local1"></script>
     <script defer src="/static/js/app/parking-orchestration.js?v=20261113privatelogs1"></script>
     <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/traffic-orchestration.js?v=20261109overlays1"></script>
@@ -183,16 +187,16 @@
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/gps-orchestration.js?v=20261113privatelogs1"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
-    <script defer src="/static/js/app/trip-history-orchestration.js?v=20261108unitrestore1"></script>
-    <script defer src="/static/js/app/route-saving-orchestration.js?v=20261030phase12fd"></script>
-    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261113privatelogs1"></script>
+    <script defer src="/static/js/app/trip-history-orchestration.js?v=20261114privacy3"></script>
+    <script defer src="/static/js/app/route-saving-orchestration.js?v=20261114local2"></script>
+    <script defer src="/static/js/app/geocoding-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261112speedposition1"></script>
     <script defer src="/static/js/app/waypoints-orchestration.js?v=20261107waypointoptions1"></script>
     <script defer src="/static/js/app/route-sharing-orchestration.js?v=20261031phase12fgr7r8"></script>
     <script defer src="/static/js/app/notifications-orchestration.js?v=20260810toast1"></script>
     <script defer src="/static/js/app/route-preferences-orchestration.js?v=20260712ab24"></script>
     <script defer src="/static/js/app/offline-navigation-orchestration.js?v=20261031phase12fgr9"></script>
-    <script defer src="/static/js/app/search-favorites-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/search-favorites-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/poi-search-orchestration.js?v=20261113privatelogs1"></script>
     <script defer src="/static/js/app/best-time-leave-orchestration.js?v=20260712aaen"></script>
     <script defer src="/static/js/app/caz-orchestration.js?v=20260712aaeo"></script>
@@ -209,9 +213,9 @@
     <script defer src="/static/js/app/route-preview-orchestration.js?v=20261110continuous1"></script>
     <script defer src="/static/js/app/bottom-sheet-orchestration.js?v=20260717ffsheet1"></script>
     <script defer src="/static/js/app/nav-menu-orchestration.js?v=20261107mapicons1"></script>
-    <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20261108settingsgroups1"></script>
-    <script defer src="/static/js/app/profile-store-orchestration.js?v=20261108fuelpricing1"></script>
-    <script defer src="/static/js/app/settings-orchestration.js?v=20261108fuelpricing1"></script>
+    <script defer src="/static/js/app/supabase-auth-orchestration.js?v=20261114local2"></script>
+    <script defer src="/static/js/app/profile-store-orchestration.js?v=20261114local2"></script>
+    <script defer src="/static/js/app/settings-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/audio-recognition.js?v=20261109voice1"></script>
     <script defer src="/static/js/app/voice-control-orchestration.js?v=20261109voice1"></script>
     <script defer src="/static/js/app/voice-announcements-orchestration.js?v=20261113privatelogs1"></script>
@@ -219,15 +223,15 @@
     <script defer src="/static/js/app/map-explore-orchestration.js?v=20260712aaf7"></script>
     <script defer src="/static/js/app/battery-monitoring-orchestration.js?v=20260712aaf8"></script>
     <script defer src="/static/js/app/phase3-features-orchestration.js?v=20260712aaf9"></script>
-    <script defer src="/static/js/app/gesture-control-orchestration.js?v=20260811noshake"></script>
-    <script defer src="/static/js/app/battery-saving-orchestration.js?v=20260712aafc"></script>
+    <script defer src="/static/js/app/gesture-control-orchestration.js?v=20261114local2"></script>
+    <script defer src="/static/js/app/battery-saving-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/location-orchestration.js?v=20261103drivingarrival1"></script>
-    <script defer src="/static/js/app/units-preferences-orchestration.js?v=20261111arrivalunits1"></script>
+    <script defer src="/static/js/app/units-preferences-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/smart-zoom-orchestration.js?v=20260827pwa03"></script>
     <script defer src="/static/js/app/center-on-location-orchestration.js?v=20261031phase12fg"></script>
-    <script defer src="/static/js/app/map-theme-orchestration.js?v=20260712maptheme1"></script>
+    <script defer src="/static/js/app/map-theme-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/auto-gps-orchestration.js?v=20261113privatelogs1"></script>
-    <script defer src="/static/js/app/ml-predictions-orchestration.js?v=20261031phase12fgr7r8"></script>
+    <script defer src="/static/js/app/ml-predictions-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/vehicle-routing-orchestration.js?v=20261109routingui1"></script>
     <script defer src="/static/js/app/form-clear-orchestration.js?v=20261113endinputs1"></script>
     <script defer src="/static/js/app/map-hints-orchestration.js?v=20260712ab0a"></script>
@@ -237,7 +241,7 @@
     <script defer src="/static/js/app/pwa-lifecycle-orchestration.js?v=20260712ab0e"></script>
     <script defer src="/static/js/app/tab-navigation-orchestration.js?v=20261109distanceoptions1"></script>
     <script defer src="/static/js/app/driver-camera-orchestration.js?v=20260827pwa03"></script>
-    <script defer src="/static/js/app/recent-destinations-orchestration.js?v=20260712ab10"></script>
+    <script defer src="/static/js/app/recent-destinations-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/map-view-3d-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/ar-navigation-orchestration.js?v=20260712ab49"></script>
     <script defer src="/static/js/app/turn-instruction-widget-orchestration.js?v=20260712dark4"></script>
@@ -247,7 +251,7 @@
     <script defer src="/static/js/app/calculate-route-orchestration.js?v=20261113privatelogs1"></script>
     <script defer src="/static/js/app/journey-overview-orchestration.js?v=20261107mapicons1"></script>
     <script defer src="/static/js/app/map-recenter-orchestration.js?v=20261107mapicons1"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20261113endinputs1"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20261114local2"></script>
     <script defer src="/static/js/app.js?v=20261108unitrestore1"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -1400,6 +1404,28 @@
                             <a href="/privacy#analytics-controls" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"></path></svg><span>Privacy &amp; analytics</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
                             <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice &amp;&amp; voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Review safety notice</span></button>
                         </div>
+                    </div><div class="preferences-section" id="localDataControls">
+                        <h3>Privacy &amp; device data</h3>
+                        <fieldset class="privacy-options"><legend>Optional features</legend>
+                            <label><input id="privacyCloudSync" type="checkbox" disabled aria-describedby="privacyUnavailable"> Cloud synchronisation</label>
+                            <label><input id="privacyDashcamBackup" type="checkbox" disabled aria-describedby="privacyUnavailable"> Dashcam cloud backup</label>
+                            <label><input id="privacyDiagnostics" type="checkbox" disabled aria-describedby="privacyUnavailable"> Optional diagnostics</label>
+                            {% if optional_analytics_available %}
+                            <label><input id="privacyAnalytics" type="checkbox" aria-describedby="analyticsConsentStatus"> Optional analytics</label>
+                            <p id="analyticsConsentStatus" role="status">Optional analytics: off.</p>
+                            {% else %}
+                            <label><input id="privacyAnalytics" type="checkbox" disabled> Optional analytics (unavailable)</label>
+                            {% endif %}
+                            <p id="privacyUnavailable">Cloud sync, cloud backup and optional diagnostics are off and unavailable in this release.</p>
+                        </fieldset>
+                        <p id="localDataStatus" role="status">Opening device storage…</p>
+                        <label class="privacy-history-option"><input type="checkbox" id="localRecordHistory"> Record journeys and recent searches on this device</label>
+                        <details><summary>Privacy information</summary><p>Each optional choice is separate. Signing in, accepting the privacy notice or importing settings does not enable these features. History recording starts off. Turning it off stops new history and recent-search recording; existing entries remain available to export or delete. Necessary navigation requests still work. Policy changes may require a fresh choice.</p></details>
+                        <details><summary>Storage information</summary><p>Saved places, routes and recordings stay in this browser. Cloud uploads are unavailable during this privacy upgrade. Browser storage is not encrypted by this app and may be cleared or evicted. Export important data. Current navigation recovery is separate from journey history.</p></details>
+                        <label for="localDataCategory">Device data</label>
+                        <select id="localDataCategory"><option value="all">All structured data</option><option value="routes">Saved routes</option><option value="favourites">Saved places</option><option value="destinations">Recent searches</option><option value="history">Journey history</option><option value="preferences">Preferences</option><option value="traces">Optional traces</option></select>
+                        <div class="settings-actions"><button type="button" id="localExport">Export</button><button type="button" id="localDelete">Delete selected category</button></div>
+                        <details><summary>Legacy recovery</summary><p>Older unassigned data is kept separately. Copying it is an explicit local action; nothing is uploaded. Existing cloud copies are unchanged.</p><button type="button" id="localRecoverLegacy">Copy unassigned data here</button><button type="button" id="localExportLegacy">Export legacy recovery data</button><button type="button" id="localDeleteLegacy">Delete legacy recovery copies</button></details>
                     </div><div class="preferences-section">
                         <h3>Suggested journeys &amp; battery</h3>
 
@@ -1464,8 +1490,11 @@
                         </div>
 
                         <!-- Live camera preview (shown while recording) -->
-                        <label><input id="dashcamLocalOnly" type="checkbox"> Record on this device only (no upload)</label>
-                        <p>Private server recordings require sign-in. Device-only clips download locally when stopped.</p>
+                        <label><input id="dashcamLocalOnly" type="checkbox" checked disabled> Record on this device only (no upload)</label>
+                        <p>Recordings are stored in this browser. Download important clips; browser storage can be cleared. Cloud backup is unavailable during this privacy upgrade.</p>
+                        <label><input id="dashcamLocalGps" type="checkbox"> Save available GPS fixes with this local recording</label>
+                        <button type="button" onclick="window.voyagrManageCloudDashcam=false; VoyagrDeviceDashcam.list()">Device recordings</button>
+                        <button type="button" onclick="window.voyagrManageCloudDashcam=true; loadDashcamRecordings()">Manage existing cloud recordings</button>
                         <video id="dashcamPreview" muted autoplay playsinline style="display: none; width: 100%; max-height: 220px; border-radius: 8px; margin-bottom: 15px; background: #111; object-fit: cover;"></video>
 
                         <!-- Recording Controls -->
@@ -1895,10 +1924,12 @@
         </div>
 
         <aside id="bestEffortWarning" class="best-effort-warning" aria-label="Route limitations" tabindex="0" role="status" aria-live="polite" aria-atomic="true" hidden>
-            <strong>Route limitations</strong>
+            <details id="routeLimitationsInfo">
+            <summary>ⓘ Info · Route limitations</summary>
             <p>This route may include hazards or restrictions that Voyagr could not avoid or fully verify.</p>
             <p>Follow road signs and traffic laws. Avoidance is not guaranteed.</p>
             <button type="button" id="dismissBestEffortWarning" aria-label="Dismiss hazard warning">Dismiss</button>
+            </details>
         </aside>
         <!-- Current Road Name Bar - Shows road name during navigation -->
         <div id="roadNameBar" style="display: none; position: absolute; bottom: 155px; left: 50%; transform: translateX(-50%); z-index: 250; background: rgba(0,0,0,0.8); color: white; padding: 6px 18px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis; text-align: center; backdrop-filter: blur(10px);">
@@ -2099,7 +2130,7 @@
         let dashcamState = {
             isRecording: false,
             ownerUserId: null,
-            localOnly: false,
+            localOnly: true,
             starting: false,
             startCancelled: false,
             pendingMediaStream: null,
@@ -2144,6 +2175,7 @@
         }
 
         function dashcamFetch(url, options, expectedOwner) {
+            if ((options?.method || 'GET') === 'POST' && (/\/(start|metadata|upload|settings)$/.test(url))) return Promise.reject(new Error('Cloud backup is unavailable during this privacy upgrade'));
             return getDashcamCapture().privateFetch(url, options, {
                 getSession: getDashcamSession,
                 fetch: window.fetch.bind(window),
@@ -2169,6 +2201,8 @@
         window.addEventListener('voyagr-auth-changed', event => {
             clearDashcamPlayback();
             showDashcamSignedOutState();
+            window.voyagrManageCloudDashcam=false;
+            void window.VoyagrDeviceDashcam?.list();
             if (dashcamState.starting && !dashcamState.localOnly &&
                 dashcamState.ownerUserId !== event.detail.userId) {
                 dashcamState.startCancelled = true;
@@ -2307,233 +2341,12 @@
         }
 
         async function startDashcamRecording() {
-            if (dashcamState.isRecording || dashcamState.starting || dashcamState.stopping) return;
-            const DC = getDashcamCapture();
-            if (!DC || !DC.isCaptureSupported({ navigator: navigator, window: window })) {
-                sendNotification('📹 Dashcam', 'Camera recording is not supported in this browser', 'error');
-                return;
-            }
-
-            dashcamState.starting = true;
-            dashcamState.startCancelled = false;
-            let stream = null;
-            let serverSessionStarted = false;
-            let startedRecordingId = null;
-            try {
-                const localOnly = document.getElementById('dashcamLocalOnly').checked;
-                dashcamState.localOnly = localOnly;
-                const session = localOnly ? null : await getDashcamSession();
-                if (!localOnly && !session) {
-                    sendNotification('📹 Dashcam', 'Sign in for private server storage, or select device-only recording', 'info');
-                    return;
-                }
-                dashcamState.ownerUserId = session ? session.user.id : null;
-                if (dashcamState.startCancelled) throw new Error('Account changed during recording startup');
-                const settings = readDashcamCaptureSettings();
-                const constraints = DC.buildMediaConstraints(settings);
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                dashcamState.pendingMediaStream = stream;
-                if (dashcamState.startCancelled) throw new Error('Account changed during recording startup');
-
-                const response = localOnly ? null : await dashcamFetch('/api/dashcam/start', { method: 'POST' }, dashcamState.ownerUserId);
-                const data = localOnly ? { success: true, recording_id: null } : await response.json();
-                if (!data.success) {
-                    DC.stopMediaStreamTracks(stream);
-                    sendNotification('📹 Dashcam', 'Failed to start recording: ' + (data.error || 'unknown'), 'error');
-                    return;
-                }
-                serverSessionStarted = !localOnly;
-                startedRecordingId = data.recording_id;
-                if (!localOnly) await assertDashcamResponseOwner(response);
-                if (dashcamState.startCancelled) throw new Error('Account changed during recording startup');
-
-                const mimeType = DC.pickSupportedMimeType(
-                    window.MediaRecorder.isTypeSupported.bind(window.MediaRecorder)
-                );
-                const chunks = [];
-                const recorderOptions = mimeType ? { mimeType: mimeType } : undefined;
-                const recorder = new MediaRecorder(stream, recorderOptions);
-                recorder.ondataavailable = function (event) {
-                    if (event.data && event.data.size > 0) chunks.push(event.data);
-                };
-                recorder.start(1000);
-
-                dashcamState.isRecording = true;
-                dashcamState.recordingStartTime = Date.now();
-                dashcamState.currentRecordingId = data.recording_id;
-                dashcamState.recordingMetadata = [];
-                dashcamState.mediaStream = stream;
-                dashcamState.pendingMediaStream = null;
-                dashcamState.mediaRecorder = recorder;
-                dashcamState.recordingChunks = chunks;
-                dashcamState.recorderMimeType = mimeType || recorder.mimeType || 'video/webm';
-
-                setDashcamPreviewStream(stream);
-                updateDashcamUI();
-                startRecordingTimer();
-                document.getElementById('dashcamIndicator').style.display = 'block';
-                if (!localOnly) startDashcamMetadataCollection();
-                sendNotification('📹 Dashcam', 'Dashcam recording started', 'success');
-            } catch (error) {
-                console.error('Error starting dashcam:', error);
-                if (stream) {
-                    const capture = getDashcamCapture();
-                    if (capture) capture.stopMediaStreamTracks(stream);
-                }
-                releaseDashcamMedia();
-                // Backend start can succeed before MediaRecorder setup fails; roll back
-                // the server session so the next start is not blocked as "already active".
-                const abortPlan = DC.buildAbortServerSessionPlan
-                    ? DC.buildAbortServerSessionPlan({ serverSessionStarted: serverSessionStarted })
-                    : {
-                        shouldAbort: !!serverSessionStarted,
-                        url: '/api/dashcam/stop',
-                        method: 'POST',
-                    };
-                if (abortPlan.shouldAbort && startedRecordingId) {
-                    try {
-                        await dashcamFetch(abortPlan.url, {
-                            method: abortPlan.method || 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ recording_id: startedRecordingId }),
-                        }, dashcamState.ownerUserId);
-                    } catch (stopError) {
-                        console.error('Error rolling back dashcam session:', stopError);
-                    }
-                }
-                dashcamState.isRecording = false;
-                dashcamState.currentRecordingId = null;
-                // Reset UI if failure happened after recording chrome was shown.
-                clearInterval(dashcamState.recordingDurationInterval);
-                updateDashcamUI();
-                document.getElementById('dashcamIndicator').style.display = 'none';
-                const message = (error && error.name === 'NotAllowedError')
-                    ? 'Camera permission denied'
-                    : 'Error starting dashcam recording';
-                sendNotification('📹 Dashcam', message, 'error');
-            } finally {
-                dashcamState.pendingMediaStream = null;
-                dashcamState.starting = false;
-            }
-        }
+            return window.VoyagrDeviceDashcam.start(readDashcamCaptureSettings());
+    }
 
         async function stopDashcamRecording() {
-            if (!dashcamState.isRecording && !dashcamState.mediaRecorder) {
-                return;
-            }
-
-            if (dashcamState.stopping) return;
-            dashcamState.stopping = true;
-            try {
-            const recordingId = dashcamState.currentRecordingId;
-            const recordingOwner = dashcamState.ownerUserId;
-            const wasLocalOnly = dashcamState.localOnly;
-            const recorder = dashcamState.mediaRecorder;
-            const chunks = dashcamState.recordingChunks;
-            const mimeType = dashcamState.recorderMimeType || 'video/webm';
-            const DC = getDashcamCapture();
-
-            dashcamState.isRecording = false;
-            stopDashcamMetadataCollection();
-            clearInterval(dashcamState.recordingDurationInterval);
-
-            let blob = null;
-            try {
-                blob = await stopMediaRecorderToBlob(recorder, chunks, mimeType);
-            } catch (error) {
-                console.error('Error finalizing dashcam blob:', error);
-                blob = new Blob(chunks || [], { type: mimeType });
-            }
-
-            releaseDashcamMedia();
-            updateDashcamUI();
-            document.getElementById('dashcamIndicator').style.display = 'none';
-
-            if (wasLocalOnly) {
-                saveDashcamOnDevice(blob);
-                sendNotification('📹 Dashcam', 'Device-only recording saved locally; nothing uploaded', 'success');
-                return;
-            }
-
-            let stopSuccess = false;
-            let stopError = '';
-            let serverRecordingId = null;
-            try {
-                const response = await dashcamFetch('/api/dashcam/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recording_id: recordingId }) }, recordingOwner);
-                const data = await response.json();
-                stopSuccess = !!data.success;
-                stopError = data.error || '';
-                serverRecordingId = data.recording_id || null;
-            } catch (error) {
-                console.error('Error stopping dashcam session:', error);
-                stopSuccess = false;
-                stopError = 'Error stopping dashcam recording';
-            }
-
-            const plan = DC && DC.buildFinalizeStopPlan
-                ? DC.buildFinalizeStopPlan({
-                    recordingId: recordingId,
-                    serverRecordingId: serverRecordingId,
-                    blobSize: blob ? blob.size : 0,
-                    stopSuccess: stopSuccess,
-                    stopError: stopError,
-                })
-                : {
-                    shouldUpload: !!(blob && blob.size > 0 && (recordingId || serverRecordingId)),
-                    recordingId: recordingId || serverRecordingId || '',
-                    stopSucceeded: stopSuccess,
-                    hasVideo: !!(blob && blob.size > 0),
-                    stopError: stopError,
-                };
-
-            if (plan.shouldUpload) {
-                try {
-                    const upload = await uploadDashcamBlob(plan.recordingId, blob, mimeType, recordingOwner);
-                    if (upload.success) {
-                        if (plan.stopSucceeded) {
-                            sendNotification('📹 Dashcam', 'Dashcam recording saved', 'success');
-                        } else {
-                            sendNotification(
-                                '📹 Dashcam',
-                                'Recording saved (stop reported failure: ' + (plan.stopError || 'unknown') + ')',
-                                'warning'
-                            );
-                        }
-                    } else if (plan.stopSucceeded) {
-                        saveDashcamOnDevice(blob);
-                        sendNotification('📹 Dashcam', 'Recording stopped but upload failed: ' + (upload.error || 'unknown'), 'error');
-                    } else {
-                        saveDashcamOnDevice(blob);
-                        sendNotification(
-                            '📹 Dashcam',
-                            'Failed to stop recording and upload failed: ' + (upload.error || plan.stopError || 'unknown'),
-                            'error'
-                        );
-                    }
-                } catch (uploadError) {
-                    saveDashcamOnDevice(blob);
-                    console.error('Error uploading dashcam blob:', uploadError);
-                    sendNotification(
-                        '📹 Dashcam',
-                        plan.stopSucceeded
-                            ? 'Recording stopped but upload failed'
-                            : 'Failed to stop recording and upload failed',
-                        'error'
-                    );
-                }
-            } else if (!plan.stopSucceeded) {
-                sendNotification('📹 Dashcam', 'Failed to stop recording: ' + (plan.stopError || 'unknown'), 'error');
-            } else if (!plan.hasVideo) {
-                sendNotification('📹 Dashcam', 'Dashcam recording stopped (no video data)', 'info');
-            } else {
-                sendNotification('📹 Dashcam', 'Dashcam recording stopped (missing recording id)', 'error');
-            }
-
-            loadDashcamRecordings();
-            } finally {
-                dashcamState.stopping = false;
-            }
-        }
+            return window.VoyagrDeviceDashcam.stop();
+    }
 
         function startRecordingTimer() {
             if (dashcamState.recordingDurationInterval) {
@@ -2616,6 +2429,7 @@
         }
 
         async function loadDashcamRecordings() {
+            if (!window.voyagrManageCloudDashcam) return window.VoyagrDeviceDashcam?.list();
             try {
                 if (!await canLoadPrivateDashcamData()) return;
                 const response = await dashcamFetch('/api/dashcam/recordings');
@@ -2718,6 +2532,7 @@
         }
 
         async function cleanupOldDashcamRecordings() {
+            if (!window.voyagrManageCloudDashcam) return window.VoyagrDeviceDashcam.cleanup(Number(document.getElementById('dashcamRetention').value));
             if (!confirm('This will delete all recordings older than the retention period. Continue?')) return;
 
             try {
@@ -2737,6 +2552,7 @@
         }
 
         async function loadDashcamSettings() {
+            return window.VoyagrDeviceDashcam?.loadSettings();
             try {
                 if (!await canLoadPrivateDashcamData()) return;
                 const response = await dashcamFetch('/api/dashcam/settings');
@@ -2763,31 +2579,8 @@
         }
 
         async function updateDashcamSettings() {
-            try {
-                const settings = {
-                    resolution: document.getElementById('dashcamResolution').value,
-                    fps: parseInt(document.getElementById('dashcamFps').value),
-                    audio: document.getElementById('dashcamAudio').classList.contains('active'),
-                    retention_days: parseInt(document.getElementById('dashcamRetention').value)
-                };
-
-                const response = await dashcamFetch('/api/dashcam/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(settings)
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    sendNotification('📹 Dashcam', 'Dashcam settings updated', 'success');
-                } else {
-                    sendNotification('📹 Dashcam', 'Failed to update settings', 'error');
-                }
-            } catch (error) {
-                console.error('Error updating dashcam settings:', error);
-                sendNotification('📹 Dashcam', 'Error updating settings', 'error');
-            }
-        }
+            return window.VoyagrDeviceDashcam?.saveSettings();
+    }
     </script>
     <!-- API Keys injected from server -->
     <script>

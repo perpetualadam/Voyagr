@@ -162,3 +162,33 @@ def test_explicit_empty_contact_does_not_silently_advertise_an_alias(client, mon
     body = client.get('/privacy').get_data(as_text=True)
     assert 'mailto:info@vibevoyager.org' not in body
     assert 'public privacy-contact email has not been configured' in body
+
+
+def test_policy_precedes_controller_in_local_bootstrap(monkeypatch):
+    monkeypatch.setenv("GOOGLE_ANALYTICS_MEASUREMENT_ID", "G-TEST123")
+    from voyagr.ga4 import head_snippet
+    snippet = head_snippet()
+    assert snippet.index("consent-policy.js") < snippet.index("analytics-consent.js")
+
+
+def test_privacy_controls_do_not_offer_unimplemented_cloud_uploads(client):
+    body = client.get("/").get_data(as_text=True)
+    from html.parser import HTMLParser
+    class Inputs(HTMLParser):
+        controls = {}
+        sources = []
+        def handle_starttag(self, tag, attrs):
+            if tag == "script":
+                self.sources.append(dict(attrs).get("src", ""))
+            if tag == "input":
+                item = dict(attrs)
+                if item.get("id", "").startswith("privacy") or item.get("id") == "localRecordHistory":
+                    self.controls[item["id"]] = item
+    parser = Inputs()
+    parser.feed(body)
+    for key in ("privacyCloudSync", "privacyDashcamBackup", "privacyDiagnostics"):
+        assert "disabled" in parser.controls[key]
+        assert "checked" not in parser.controls[key]
+    for key in ("localRecordHistory", "privacyAnalytics"):
+        assert "checked" not in parser.controls[key]
+    assert sum("consent-policy.js" in source for source in parser.sources) == 1
