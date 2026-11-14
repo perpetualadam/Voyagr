@@ -15,11 +15,11 @@
     }
 
     function loadRecentDestinations() {
-        return rt().recentDestinations().loadRecentDestinations();
+        return root.VoyagrLocalData ? root.VoyagrLocalData.getDestinations().catch(()=>[]) : [];
     }
 
     function recordRecentDestination(label, lat, lon, kind) {
-        return rt().recentDestinations().recordRecentDestination(label, lat, lon, kind);
+        if(root.VoyagrLocalData)void root.VoyagrLocalData.recordDestination(label,lat,lon,kind).catch(()=>root.VoyagrLocalData.report());
     }
 
     function bind(nextRuntime) {

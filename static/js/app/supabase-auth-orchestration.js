@@ -451,7 +451,9 @@
         if (emailEl) emailEl.textContent = email || '-';
     }
 
+    let sessionGeneration=0;
     async function handleSupabaseSession(session) {
+        const generation=++sessionGeneration;
         if (session && session.user) {
             syncSoftAuthBannerVisibility(false);
             var userId = session.user.id;
@@ -461,18 +463,24 @@
             var userProfileId = 'sb:' + userId;
             rt().call.ensureProfileExists(userProfileId);
 
-            var store = rt().call.getProfileStore();
-            var guestSnap = store['guest'];
-            var userSnap = store[userProfileId];
-            var guestHasData = !!(guestSnap?.voyagr_all_settings && guestSnap.voyagr_all_settings.length > 10) ||
-                !!(guestSnap?.savedRoutes && guestSnap.savedRoutes !== '[]');
-            var userHasData = !!(userSnap?.voyagr_all_settings && userSnap.voyagr_all_settings.length > 10) ||
-                !!(userSnap?.savedRoutes && userSnap.savedRoutes !== '[]');
+            // Check the actual migrated stores, not a stale shared localStorage index.
+            var guestHasData=false,userHasData=true;
+            if(root.VoyagrLocalData){
+                try{await root.VoyagrLocalData.ready();
+                    const categories=['routes','preferences','favourites'];
+                    const guest=await Promise.all(categories.map(category=>root.VoyagrLocalData.db().read('guest',category)));
+                    const account=await Promise.all(categories.map(category=>root.VoyagrLocalData.db().read(userProfileId,category)));
+                    const populated=values=>values.some(value=>value&&Object.keys(value).length>0);
+                    guestHasData=populated(guest);userHasData=populated(account);
+                }catch(_){root.VoyagrLocalData.report();}
+            }
+            if(generation!==sessionGeneration)return;
 
             if (guestHasData && !userHasData) {
                 var importChoice = confirm('Import your current on-device (guest) profile into this account profile?');
                 if (importChoice) {
-                    rt().call.switchActiveProfile(userProfileId, { importFromProfileId: 'guest' });
+                    await rt().call.switchActiveProfile(userProfileId, { importFromProfileId: 'guest' });
+            if(generation!==sessionGeneration)return;
                     rt().call.showStatus('Imported guest profile into account profile', 'success');
                     rt().call.scheduleSupabaseProfileSync();
                     await refreshPromoCodeSection(session || null);
@@ -481,8 +489,10 @@
                 }
             }
 
-            rt().call.switchActiveProfile(userProfileId);
+            await rt().call.switchActiveProfile(userProfileId);
+            if(generation!==sessionGeneration)return;
             await rt().call.pullProfileSnapshotFromSupabase(userProfileId);
+            if(generation!==sessionGeneration)return;
             rt().call.scheduleSupabaseProfileSync();
             await refreshPromoCodeSection(session || null);
             await showPostAuthStripeGateIfNeeded(session);
@@ -490,7 +500,8 @@
         }
 
         setAccountUIState({ signedIn: false, message: 'Not signed in (guest profile).' });
-        rt().call.switchActiveProfile('guest');
+        await rt().call.switchActiveProfile('guest');
+            if(generation!==sessionGeneration)return;
         await refreshPromoCodeSection(session || null);
         syncAuthRequiredGate('off');
         syncSoftAuthBannerVisibility(!!supabaseClient);

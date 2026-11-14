@@ -17,37 +17,7 @@
     function ML() { return rt().mlPredictions(); }
 
     function loadMLPredictions() {
-        const mlPredictions = ML();
-        const fetchPlan = mlPredictions.buildLoadMlPredictionsFetchPlan();
-        if (!fetchPlan.shouldFetch) return;
-
-        fetch(fetchPlan.url)
-            .then((response) => response.json())
-            .then((data) => {
-                const render = mlPredictions.buildLoadMlPredictionsDomRenderPlan(data);
-                if (!render.shouldRender) return;
-
-                const section = document.getElementById(fetchPlan.sectionId);
-                const list = document.getElementById(fetchPlan.listId);
-                if (!section || !list) return;
-
-                list.innerHTML = '';
-                (render.items || []).forEach((item) => {
-                    const el = document.createElement('div');
-                    el.className = item.className;
-                    el.innerHTML = item.html;
-                    el.onclick = () => {
-                        if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests();
-                        [fetchPlan.startInputId,fetchPlan.endInputId].forEach(id=>{const input=document.getElementById(id);delete input.dataset.lat;delete input.dataset.lon;delete input.dataset.displayName;delete input.dataset.journeyOriginalSource;input.dataset.journeySource='saved';});
-                        document.getElementById(fetchPlan.startInputId).value = item.routeInputs.start;
-                        document.getElementById(fetchPlan.endInputId).value = item.routeInputs.end;
-                        rt().call.calculateRoute();
-                    };
-                    list.appendChild(el);
-                });
-                section.classList.add(render.sectionShowClass);
-            })
-            .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
+        const section=document.getElementById('mlPredictionsSection');if(section)section.classList.remove('show');
     }
 
     function toggleMLPredictions() {
@@ -65,7 +35,7 @@
         toggleUi.applyLabeledToggleButton(button, execute.toggle.enabled);
         localStorage.setItem(execute.storageKey, execute.storageValue);
 
-        fetch('/api/app-settings', {
+        root.VoyagrLocalData.preferenceRequest({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(execute.persistApiBody),

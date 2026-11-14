@@ -88,31 +88,54 @@
     memory with expiry configured within 15 minutes; they are not written to the
     server route-cache database. Older database cache records may remain pending
     separate deletion. Saved trips and account synchronisation are separate features.</li>
-    <li><strong>Saved trips</strong> &mdash; If you save a trip, the route summary
-    (distance, duration, cost estimate) is stored in a local database on the server.</li>
-    <li><strong>Dashcam recordings (only if you start recording)</strong> &mdash; If you
-    use the optional Dashcam feature, we process and may save: (a) video captured from
-    your device camera; (b) audio from your microphone if you leave audio recording
-    enabled; (c) GPS metadata linked to the recording (timestamp, latitude, longitude,
-    speed, and heading); and (d) recording details such as start/end time, duration,
-    and file size. Recordings are created only when you press Start Recording, and the
-    video file is uploaded and stored when you stop (or when the session ends). Dashcam
-    is optional and is not required for navigation.</li>
+    <li><strong>Saved routes, places and history</strong> &mdash; This version stores
+    saved routes and places in this browser's IndexedDB, separated into guest and
+    signed-in device profiles. Journey and recent-search recording starts off and
+    can be enabled in Settings. Current-route recovery is separate from history.
+    Older unassigned device data is preserved for explicit recovery or deletion.</li>
+    <li><strong>Dashcam recordings (only if you start recording)</strong> &mdash;
+    This version commits recording chunks to this browser's IndexedDB. Audio starts
+    off; optional local GPS metadata requires its separate recording control.
+    New recordings are not automatically uploaded when recording stops or you sign
+    in. Interrupted recordings may contain recoverable partial media. Existing
+    recordings previously uploaded remain on the server until separately deleted.</li>
     <li><strong>Community reports</strong> &mdash; Reports you submit include a location,
     hazard type and any description you provide, and may be shown to other users.
     Active expiry controls display; deletion of expired records depends on cleanup.
     Do not include names, contact details or other identifying information in reports.</li>
     <li><strong>Account data</strong> &mdash; If you sign in, your email address and
     display name are managed by Supabase (our authentication provider).</li>
-    <li><strong>Preferences</strong> &mdash; Settings such as vehicle type, units, and
-    theme are stored in your browser's local storage. Dashcam preferences (resolution,
-    frame rate, audio on/off, and retention period) are stored so your chosen settings
-    apply to later recordings.</li>
-    <li><strong>Account sync (only if you sign in)</strong> &mdash; When you are signed
-    in, your settings and saved routes can be synced to your account so they are
-    available on your other signed-in devices. Recent destinations used for search
-    autocomplete remain on the device and are not synced.</li>
+    <li><strong>Preferences</strong> &mdash; Structured preferences are stored in
+    IndexedDB. Existing settings controls also use localStorage as a compatibility
+    projection. Authentication tokens are managed separately by the login SDK.</li>
+    <li><strong>Optional cloud sync</strong> &mdash; New personal-data synchronisation
+    and dashcam backup are unavailable during this privacy upgrade. Signing in does
+    not enable uploads. Necessary routing, traffic and lookup requests are separate
+    from backup and still leave your device when needed. Existing server data is not
+    erased by this change.</li>
   </ul>
+
+  <h2>Privacy choices</h2>
+  <p>Settings &gt; Privacy &amp; device data separates local journey/search recording,
+  browser analytics, cloud sync, dashcam cloud backup and optional diagnostics.
+  Cloud sync, cloud backup and optional diagnostics are off and unavailable in this
+  release. Existing uploaded recordings remain manageable separately. Necessary
+  routing and traffic requests do not require backup permission.</p>
+  <p>Available optional choices are saved with their consent-policy version. Missing,
+  legacy or unknown versions do not grant permission; a changed policy may require
+  you to choose again. History choices apply to the current device profile; analytics
+  choices apply to this browser. Login, policy acknowledgement and imported settings
+  do not grant optional permissions. Turning off history stops new recording without
+  deleting existing history. Already completed processing cannot be recalled.</p>
+
+  <h2>Device storage and recovery</h2>
+  <p>Use Settings &gt; On this device to export structured data or delete a category.
+  Recording media is downloaded separately; the structured export includes its
+  metadata. Exports and browser storage are not encrypted by this app. Browser
+  clearing, eviction, device loss or private-browsing limits can remove device data;
+  keep your own protected copies of important recordings and exports. Local deletion
+  does not erase cloud copies, downloaded files or external backups. There is no
+  automatic restoration of an exported backup in this version.</p>
 
   <h2>Voice and audio controls</h2>
   <p>Browser speech recognition may send audio to the browser vendor's recognition
@@ -216,17 +239,16 @@
     <li><strong>When permissions are requested</strong> &mdash; Camera (and microphone,
     if audio recording is on) access is requested when you start a dashcam recording,
     not merely because the Dashcam tab is open.</li>
-    <li><strong>What is saved</strong> &mdash; If you complete a recording, the video
-    file (and audio if enabled) is uploaded to our servers and stored with recording
-    metadata. GPS points collected during that session may also be saved alongside the
-    recording. If you deny camera permission, recording cannot start and no dashcam
-    video is saved.</li>
+    <li><strong>What is saved</strong> &mdash; New recording media and any enabled
+    GPS metadata stay in this browser. You can play, download and delete device
+    recordings. Managing older uploaded recordings requires authentication and
+    remains separate. Denying camera permission prevents recording.</li>
     <li><strong>Purpose</strong> &mdash; To provide the dashcam service you request
     (reviewing a journey, incident evidence for your own use, and related playback or
     cleanup in the app). We do not use dashcam footage for advertising or sell it to
     third parties.</li>
     <li><strong>Your control</strong> &mdash; You can turn audio recording off in
-    Dashcam settings, choose a retention period (for example 7, 14, 30, or 90 days),
+    Dashcam settings, choose an age for explicit cleanup (for example 7, 14, 30, or 90 days),
     delete individual recordings, or run cleanup of older recordings in the app. You
     can also revoke camera and microphone access at any time in your browser or device
     settings; after revocation, new recordings cannot be created until you grant

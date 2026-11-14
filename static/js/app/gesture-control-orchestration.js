@@ -49,7 +49,7 @@
 
         localStorage.setItem(execute.storageKey, false);
 
-        fetch('/api/app-settings', {
+        root.VoyagrLocalData.preferenceRequest({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(execute.persistApiBody),
@@ -68,7 +68,7 @@
         });
         if (!execute.shouldApply) return;
         gestureSensitivity = execute.sensitivity;
-        fetch('/api/app-settings', {
+        root.VoyagrLocalData.preferenceRequest({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(execute.persistApiBody),
@@ -82,7 +82,7 @@
         });
         if (!execute.shouldApply) return;
         gestureAction = execute.action;
-        fetch('/api/app-settings', {
+        root.VoyagrLocalData.preferenceRequest({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(execute.persistApiBody),
