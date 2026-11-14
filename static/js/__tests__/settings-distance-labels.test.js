@@ -1,3 +1,6 @@
+// Persistence boundary is device-only; conversion assertions below remain unchanged.
+beforeEach(()=>{global.VoyagrLocalData={preferenceRequest:jest.fn(options=>global.fetch('/device-preferences',options))};});
+afterEach(()=>{delete global.VoyagrLocalData;});
 const Tabs=require('../app/tab-navigation-orchestration');
 const fs=require('fs'),path=require('path');
 const Units=require('../modules/navigation/units');
@@ -37,7 +40,7 @@ test('restoring a profile updates labels in collapsed settings groups without ac
  localStorage.setItem('voyagr_all_settings',JSON.stringify({unit_distance:'km'}));expect(Settings.loadAllSettings()).toBe(true);expect(selected('parkingMaxWalkingDistance')).toBe('10 minutes (about 800 m)');
 });
 test('unit selector uses the existing persistence path and immediately refreshes option labels',()=>{
- const requests=[];global.fetch=(url,options)=>{requests.push([url,JSON.parse(options.body)]);return Promise.resolve({ok:true});};el('distanceUnit').value='mi';Function('updateDistanceUnit',el('distanceUnit').getAttribute('onchange'))(()=>Pref.updateDistanceUnit());expect(localStorage.getItem('unit_distance')).toBe('mi');expect(selected('cameraAlertDistance')).toBe('1640 ft');expect(requests).toHaveLength(1);expect(requests[0][0]).toBe('/api/app-settings');expect(el('cameraAlertDistance').value).toBe('500');
+ const requests=[];global.fetch=(url,options)=>{requests.push([url,JSON.parse(options.body)]);return Promise.resolve({ok:true});};el('distanceUnit').value='mi';Function('updateDistanceUnit',el('distanceUnit').getAttribute('onchange'))(()=>Pref.updateDistanceUnit());expect(localStorage.getItem('unit_distance')).toBe('mi');expect(selected('cameraAlertDistance')).toBe('1640 ft');expect(requests).toHaveLength(1);expect(requests[0][0]).toBe('/device-preferences');expect(el('cameraAlertDistance').value).toBe('500');
 });
 
 test('first Settings entry refreshes option labels for the default miles preference without writing preferences',()=>{

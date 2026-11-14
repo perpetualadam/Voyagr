@@ -34,11 +34,7 @@
     }
 
     function saveRawLocalTrips(entries) {
-        try {
-            localStorage.setItem(VOYAGR_LOCAL_TRIPS_KEY, JSON.stringify(entries));
-        } catch (e) {
-            console.warn('[TripHistory] localStorage save failed:', e);
-        }
+        return false; // Legacy storage is recovery input, not a write target.
     }
 
     function buildCompletedTripRecord(route) {
@@ -71,54 +67,12 @@
     }
 
     async function persistCompletedTrip(route) {
-        const base = buildCompletedTripRecord(route);
-        if (!base) {
-            console.warn('[TripHistory] Could not build trip record — not saved');
-            return;
-        }
-
-        const localId = Date.now();
-        const entry = {
-            localId,
-            serverId: null,
-            ...base
-        };
-        const raw = loadRawLocalTrips();
-        raw.unshift(entry);
-        saveRawLocalTrips(raw.slice(0, MAX_LOCAL_TRIPS));
-
-        const token = await rt().call.getSupabaseAccessToken();
-        if (!token) {
-            console.log('[TripHistory] Saved on device only (not signed in)');
-            return;
-        }
-
-        try {
-            const { res, data } = await rt().call.fetchJsonWithAuth('/api/trip-history', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    start_lat: base.start_lat,
-                    start_lon: base.start_lon,
-                    end_lat: base.end_lat,
-                    end_lon: base.end_lon,
-                    start_address: base.start_address,
-                    end_address: base.end_address,
-                    distance_km: base.distance_km,
-                    duration_minutes: base.duration_minutes,
-                    fuel_cost: base.fuel_cost,
-                    toll_cost: base.toll_cost,
-                    caz_cost: base.caz_cost,
-                    routing_mode: base.routing_mode
-                })
-            });
-            if (res.ok && data && data.success && data.trip_id) {
-                updateLocalTripServerId(localId, data.trip_id);
-                console.log('[TripHistory] Synced to account, trip_id:', data.trip_id);
-            }
-        } catch (e) {
-            console.warn('[TripHistory] Server save failed (trip remains on device):', e);
-        }
+        const local=root.VoyagrLocalData;if(!local)return;
+        const c=local.capture(),base=buildCompletedTripRecord(route);if(!base)return;
+        try{if(!await local.historyEnabled(c))return;
+            const entry={localId:Date.now()*1000+Math.floor(Math.random()*1000),serverId:null,...base};
+            await local.record('history',rows=>[entry,...(rows||[])].slice(0,50),c);
+        }catch(_){local.report();}
     }
 
     function removeLocalTripByLocalId(localId) {
@@ -132,24 +86,9 @@
     }
 
     async function loadTripHistory() {
-        const entry = TH().buildLoadTripHistoryEntryOrchestrationPlan();
-        const orch = entry.orch;
-        try {
-            const { res, data } = await rt().call.fetchJsonWithAuth(orch.apiPath);
-            const response = TH().buildLoadTripHistoryResponseExecutePlan(res, data);
-
-            if (response.action === 'auth') {
-                applyLoadTripHistoryAuthOutcomeFromPlan(orch);
-                return;
-            }
-
-            applyLoadTripHistorySuccessOutcomeFromPlan(response.serverTrips);
-        } catch (error) {
-            applyLoadTripHistoryFetchErrorFromPlan(
-                TH().buildLoadTripHistoryFetchErrorExecutePlan(orch),
-                error
-            );
-        }
+        const local=root.VoyagrLocalData;if(!local)return;
+        const c=local.capture();allTrips=[];displayTripHistory([]);
+        try{const rows=await local.read('history',c)||[];if(!local.current(c))return;allTrips=TH().mergeServerAndLocalTrips([],rows.map(x=>({...x,serverId:null})));displayTripHistory(allTrips);}catch(_){local.report();}
     }
 
     function applyTripHistoryAuthBannerFromPlan(auth, orch) {
@@ -291,42 +230,9 @@
     }
 
     async function deleteTripHistory(tripId) {
-        const entry = TH().buildDeleteTripHistoryEntryOrchestrationPlan(tripId);
-        const orch = entry.orch;
-        if (!confirm(orch.confirmMessage)) return;
-
-        const localEntry = TH().buildDeleteTripHistoryLocalEntryOrchestrationPlan(orch, allTrips);
-        if (localEntry.localExecute.shouldDeleteLocal) {
-            removeLocalTripByLocalId(localEntry.localExecute.localId);
-            applyDeleteTripHistoryOutcomeFromPlan(localEntry.apply, localEntry.nextTrips);
-            return;
-        }
-
-        try {
-            const token = await rt().call.getSupabaseAccessToken();
-            const headers = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-            const response = await fetch(orch.apiPath, {
-                method: 'DELETE',
-                headers,
-            });
-            const data = await response.json();
-            const serverEntry = TH().buildDeleteTripHistoryServerResponseEntryOrchestrationPlan(
-                data,
-                tripId,
-                allTrips
-            );
-
-            if (serverEntry.execute.shouldRemove) {
-                removeLocalTripByServerId(tripId);
-            }
-            applyDeleteTripHistoryOutcomeFromPlan(serverEntry.apply, serverEntry.nextTrips);
-        } catch (error) {
-            applyDeleteTripHistoryFetchErrorFromPlan(
-                TH().buildDeleteTripHistoryFetchErrorExecutePlan(),
-                error
-            );
-        }
+        const local=root.VoyagrLocalData;if(!local)return;const c=local.capture();
+        if(!confirm('Delete this journey from this device profile?'))return;
+        try{await local.update('history',rows=>(rows||[]).filter(x=>-x.localId!==tripId),c);if(local.current(c))await loadTripHistory();}catch(_){local.report();}
     }
 
     function collectAnalyticsDisplayFmt(data) {
@@ -385,22 +291,14 @@
         }
     }
 
-    function loadRouteAnalytics() {
-        const entry = TH().buildLoadRouteAnalyticsEntryOrchestrationPlan();
-        const orch = entry.orch;
-
-        rt().call.fetchJsonWithAuth(orch.apiPath)
-            .then(({ res, data }) => {
-                applyLoadRouteAnalyticsResponseFromPlan(
-                    TH().buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch)
-                );
-            })
-            .catch((error) => {
-                applyLoadRouteAnalyticsFetchErrorFromPlan(
-                    TH().buildLoadRouteAnalyticsFetchErrorExecutePlan(orch),
-                    error
-                );
-            });
+    async function loadRouteAnalytics() {
+        const local=root.VoyagrLocalData;if(!local)return;const c=local.capture();
+        try{const rows=await local.read('history',c)||[];if(!local.current(c))return;
+            const sum=key=>rows.reduce((n,r)=>n+(Number.isFinite(+r[key])?+r[key]:0),0),count=rows.length;
+            const distance=sum('distance_km'),minutes=sum('duration_minutes'),fuel=sum('fuel_cost'),tolls=sum('toll_cost'),caz=sum('caz_cost');
+            const groups=new Map();for(const row of rows){const key=JSON.stringify([row.start_address,row.end_address]);let g=groups.get(key);if(!g){g={start:row.start_address,end:row.end_address,count:0,duration:0,cost:0};groups.set(key,g);}g.count++;g.duration+=+row.duration_minutes||0;g.cost+=(+row.fuel_cost||0)+(+row.toll_cost||0)+(+row.caz_cost||0);}
+            displayAnalytics({total_trips:count,total_distance_km:distance,total_time_minutes:minutes,avg_duration:count?minutes/count:0,total_cost:fuel+tolls+caz,total_fuel_cost:fuel,total_toll_cost:tolls,total_caz_cost:caz,avg_speed:minutes?distance/(minutes/60):0,frequent_routes:[...groups.values()].sort((a,b)=>b.count-a.count).slice(0,5).map(g=>({...g,avg_duration:g.duration/g.count,avg_cost:g.cost/g.count}))});
+        }catch(_){local.report();}
     }
 
     function displayAnalytics(data) {
@@ -412,6 +310,7 @@
         );
     }
 
+    if(typeof window!=='undefined'){window.addEventListener('voyagr-local-owner-change',()=>{allTrips=[];const el=document.getElementById('tripHistoryList');if(el)el.textContent='';const frequent=document.getElementById('frequentRoutesList');if(frequent)frequent.textContent='';for(const metric of document.querySelectorAll('#routeAnalyticsTab dd')){metric.textContent='—';for(const attribute of [...metric.attributes])if(attribute.name.startsWith('data-'))metric.removeAttribute(attribute.name);}});window.addEventListener('voyagr-local-data-changed',()=>{if(runtime)void loadTripHistory();});}
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
