@@ -61,8 +61,12 @@ __all__ = [
 ]
 
 
+from voyagr.api.privacy import privacy_bp
+
+
 def register_blueprints(app):
     """Register all API blueprints with the Flask app."""
+    app.register_blueprint(privacy_bp, url_prefix='/api')
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(vehicles_bp, url_prefix='/api')

@@ -1,3 +1,6 @@
+// Persistence boundary is device-only; conversion assertions below remain unchanged.
+beforeEach(()=>{global.VoyagrLocalData={preferenceRequest:jest.fn(options=>global.fetch('/device-preferences',options))};});
+afterEach(()=>{delete global.VoyagrLocalData;});
 const Units=require('../modules/navigation/units.js');
 const Pref=require('../app/units-preferences-orchestration.js');
 const Snapshot=require('../modules/navigation/settings-snapshot.js');
@@ -27,7 +30,7 @@ test('GBP round-trip retains source amounts and never requests rates or recalcul
     change('USD');change('EUR');change('GBP');
     expect(Pref.getCurrencySymbol()).toBe('£');expect(document.getElementById('fuelCost').dataset.value).toBe('12.40');
     expect(status).toHaveBeenLastCalledWith(expect.stringContaining('Cost estimates are in GBP'),'success');
-    expect(global.fetch.mock.calls.map(([url])=>url)).toEqual(['/api/app-settings','/api/app-settings','/api/app-settings']);
+    expect(global.fetch.mock.calls.map(([url])=>url)).toEqual(['/device-preferences','/device-preferences','/device-preferences']);
 });
 test('a restored currency preference stays a preference, not conversion authority',()=>{
     const saved={unit_currency:'USD',unit_distance:'mi'};
