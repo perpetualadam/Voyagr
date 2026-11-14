@@ -167,6 +167,9 @@ Follow-up: [real HTTP integration report](phase-4-http-integration-report.md)
 records 42 passing assertions through disposable GoTrue, Kong, PostgREST and
 Flask services. This adds local gateway/session integration coverage; it does
 not verify or apply the production rollout described below.
+The [full-candidate browser report](phase-4-browser-verification-report.md) adds
+40 passing Chromium assertions and documents fixes for stale withdrawal UI and
+offline account bootstrap. Physical-phone and production release gates remain.
 
 **Production verdict: NO-GO.** Server enforcement is implemented and locally
 verified, but the migration, real gateway and coordinated client/server deployment

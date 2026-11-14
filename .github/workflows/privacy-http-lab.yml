@@ -6,6 +6,12 @@ on:
     paths:
       - 'scripts/privacy-http-lab/**'
       - '.github/workflows/privacy-http-lab.yml'
+      - 'static/js/modules/privacy/**'
+      - 'static/js/app/local-data.js'
+      - 'static/js/app/supabase-auth-orchestration.js'
+      - 'static/js/app/profile-store-orchestration.js'
+      - 'templates/index.html'
+      - 'service-worker.js'
 
 permissions:
   contents: read
@@ -13,8 +19,8 @@ permissions:
 jobs:
   privacy-http:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - name: Verify disposable GoTrue, gateway and private APIs
-        run: python3 scripts/privacy-http-lab/run.py
+      - name: Verify disposable HTTP services and full candidate browser
+        run: python3 scripts/privacy-http-lab/run.py --browser

@@ -40,19 +40,29 @@ def docker(*args, data=None, check=True):
     return result
 
 
-def main(ca_file=None):
+def main(ca_file=None, browser=False):
     if not shutil.which('docker'):
         raise RuntimeError('Docker CLI required')
     name = 'voyagr-privacy-http-' + uuid.uuid4().hex[:12]
     containers = []
     network = None
     image = None
+    browser_image = None
     with tempfile.TemporaryDirectory(prefix=name + '-') as directory:
         temporary = Path(directory)
         temporary.chmod(0o700)
         try:
             print('Preparing isolated lab ' + name, flush=True)
-            for source in IMAGES.values():
+            images = list(IMAGES.values())
+            browser_base = 'mcr.microsoft.com/playwright:v1.58.2-noble'
+            install_chromium = ''
+            if browser:
+                if docker('image', 'inspect', browser_base, check=False).returncode:
+                    browser_base = 'node:24-bookworm-slim'
+                    install_chromium = ('RUN apt-get update && apt-get install -y --no-install-recommends chromium '
+                                        '&& rm -rf /var/lib/apt/lists/*\nENV CHROMIUM_BINARY=/usr/bin/chromium\n')
+                images.append(browser_base)
+            for source in images:
                 if docker('image', 'inspect', source, check=False).returncode:
                     print('Downloading ' + source, flush=True)
                     docker('pull', source)
@@ -81,7 +91,7 @@ def main(ca_file=None):
             secret = secrets.token_hex(32)
             password = secrets.token_hex(24)
 
-            def start(service, source, env=None, mounts=(), command=(), memory='384m'):
+            def start(service, source, env=None, mounts=(), command=(), memory='384m', network_mode=None):
                 # Docker/build environments can inject host proxies. Internal
                 # service traffic must never go through an external proxy.
                 env = {**dict.fromkeys(('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY',
@@ -90,12 +100,14 @@ def main(ca_file=None):
                 envfile = temporary / (service + '.env')
                 envfile.write_text(''.join(k + '=' + v + '\n' for k, v in env.items()))
                 envfile.chmod(0o600)
-                args = ['create', '--pull=never', '--network', network,
-                        '--network-alias', service, '--name', name + '-' + service,
+                args = ['create', '--pull=never', '--network', network_mode or network,
+                        '--name', name + '-' + service,
                         '--label', 'voyagr.privacy-lab=' + name,
                         '--memory', memory, '--memory-swap', memory, '--cpus', '1',
                         '--log-driver', 'local', '--log-opt', 'max-size=1m',
                         '--log-opt', 'max-file=2', '--env-file', str(envfile)]
+                if not network_mode:
+                    args += ['--network-alias', service]
                 for mount in mounts:
                     args += ['--mount', mount]
                 args += [source, *command]
@@ -181,7 +193,8 @@ def main(ca_file=None):
             for relative in filter(None, tracked):
                 path = Path(relative)
                 allowed = (path.parts[0] in {'templates', 'static'} or
-                           path.suffix == '.py' and (len(path.parts) == 1 or path.parts[0] == 'voyagr'))
+                           path.suffix == '.py' and (len(path.parts) == 1 or path.parts[0] == 'voyagr') or
+                           relative in {'service-worker.js', 'manifest.json', 'camera_areas.geojson'})
                 if not allowed:
                     continue
                 original = ROOT / path
@@ -232,6 +245,61 @@ def main(ca_file=None):
             if result.returncode:
                 raise RuntimeError('HTTP privacy integration checks failed')
             print('PASS: isolated HTTP integration. Not production or phone verification.', flush=True)
+            if browser:
+                browser_build = temporary / 'browser-build'
+                browser_build.mkdir()
+                browser_trust = ''
+                if ca_file:
+                    shutil.copyfile(ca_file, browser_build / 'test-ca.pem')
+                    browser_trust = 'COPY test-ca.pem /tmp/test-ca.pem\nENV NODE_EXTRA_CA_CERTS=/tmp/test-ca.pem\n'
+                (browser_build / 'Dockerfile').write_text(
+                    'FROM ' + browser_base + '\n' + browser_trust + install_chromium +
+                    'RUN npm install --prefix /opt/browser-runner --ignore-scripts --no-audit --no-fund playwright@1.58.2\n'
+                    'ENV NODE_PATH=/opt/browser-runner/node_modules\n'
+                    'LABEL voyagr.privacy-lab="' + name + '"\n')
+                print('Preparing isolated Chromium dependencies', flush=True)
+                browser_build_result = docker('build', '--progress=plain', '--iidfile',
+                                             str(temporary / 'browser-image-id'), str(browser_build), check=False)
+                if browser_build_result.returncode:
+                    print(browser_build_result.stderr[-3000:], flush=True)
+                    raise RuntimeError('Public browser dependency build failed')
+                browser_image = (temporary / 'browser-image-id').read_text().strip()
+                if not (source / 'voyagr_web.py').is_file():
+                    raise RuntimeError('Candidate entry point missing before container mount')
+                candidate = start('candidate', image, {
+                    'PYTHONPATH': '/tmp/browser-candidate', 'PYTHONDONTWRITEBYTECODE': '1',
+                    'SUPABASE_URL': 'http://gateway:8000', 'SUPABASE_JWT_SECRET': secret,
+                    'SUPABASE_ANON_KEY': 'synthetic-lab-key', 'API_KEYS': secrets.token_hex(24),
+                    'PYTHON_DOTENV_DISABLED': '1',
+                }, mounts=('type=bind,src=' + str(source) + ',dst=/source,readonly',),
+                    command=('python', '/source/scripts/privacy-http-lab/full_app.py'), memory='1g')
+                for attempt in range(60):
+                    if docker('inspect', '--format', '{{.State.Running}}', candidate).stdout.strip() != 'true':
+                        output = docker('logs', '--tail', '18', candidate, check=False)
+                        diagnostic = (output.stdout + output.stderr).replace(secret, '[JWT secret]').replace(password, '[DB secret]')
+                        print(diagnostic[-3000:], flush=True)
+                        raise RuntimeError('Full candidate startup failed')
+                    response = docker('exec', candidate, 'python', '-c',
+                                      "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:5000/',timeout=3).status)", check=False)
+                    if response.returncode == 0:
+                        break
+                    time.sleep(1)
+                else:
+                    raise RuntimeError('Full candidate readiness timeout')
+                chromium = start('browser', browser_image, {
+                    'NODE_PATH': '/opt/browser-runner/node_modules',
+                }, mounts=('type=bind,src=' + str(source) + ',dst=/source,readonly',),
+                    command=('node', '/source/scripts/privacy-http-lab/browser.cjs'),
+                    memory='1536m', network_mode='container:' + candidate)
+                result = docker('wait', chromium)
+                output = docker('logs', chromium, check=False)
+                print(output.stdout, end='', flush=True)
+                if result.stdout.strip() != '0':
+                    diagnostic = output.stderr.replace(secret, '[JWT secret]').replace(password, '[DB secret]')
+                    diagnostic = re.sub(r'eyJ[\w-]+\.[\w-]+\.[\w-]+', '[token]', diagnostic)
+                    diagnostic = re.sub(r'[\w.+-]+@[\w.-]+', '[test email]', diagnostic)
+                    print(diagnostic[-2000:], flush=True)
+                    raise RuntimeError('Candidate browser privacy checks failed')
         finally:
             for identifier in reversed(containers):
                 docker('rm', '-f', identifier, check=False)
@@ -240,15 +308,18 @@ def main(ca_file=None):
             if image:
                 # Keep downloaded base images, remove only the lab-built dependency image.
                 docker('image', 'rm', image, check=False)
+            if browser_image:
+                docker('image', 'rm', browser_image, check=False)
             print('Lab cleanup attempted; production services were never selected.', flush=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ca-file', type=Path, help='Optional trusted public CA bundle for dependency download')
+    parser.add_argument('--browser', action='store_true', help='Also test the full candidate in isolated Chromium')
     args = parser.parse_args()
     try:
-        main(args.ca_file)
+        main(args.ca_file, args.browser)
     except KeyboardInterrupt:
         raise SystemExit('Interrupted; lab cleanup attempted.')
     except Exception as error:

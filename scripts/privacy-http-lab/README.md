@@ -14,6 +14,49 @@ tracked application source and public assets.
 python3 scripts/privacy-http-lab/run.py
 ```
 
+Add `--browser` to run the complete candidate page in headless Chromium after the
+42 HTTP assertions. This mode needs approximately 6 GiB free memory. It uses the
+installed Playwright v1.58.2 image when available; otherwise it builds a Node 24 /
+Debian Chromium image from public repositories. The exact browser/Node versions
+are printed. Dependency downloads occur before the browser enters the internal
+lab network; no host Node or browser installation is needed.
+
+The full candidate runs from a temporary writable source copy with a fresh SQLite
+database. Its normal templates, scripts, privacy controls, auth callbacks and real
+service worker are retained. No routing monitor is started and no production
+environment file is copied. Browser networking shares only the candidate's
+isolated network namespace, making loopback a secure browser origin without
+publishing a host port. Synthetic map/provider availability is not verified.
+
+The browser mode includes a fixture-only worker-revision endpoint, absent from the
+production app, to change actual service-worker bytes and test update staging.
+The browser profile, exports and synthetic records are discarded with the lab.
+Normal assertions are printed; no screenshots, videos or raw storage dumps are
+uploaded. Physical GPS, camera capture, Bluetooth and screen wake lock still need
+phone testing while parked or with a passenger.
+
+Expected browser result: `40 full-candidate Chromium checks passed`, after
+`42 HTTP integration checks passed`. Both must pass and the process must return
+exit code 0. Each assertion prints a descriptive PASS label; a FAIL is a failure,
+not evidence that a fallback necessarily worked. See
+`docs/privacy/phase-4-browser-verification-report.md` for the verified scope,
+manual checklist and limitations. The harness discards all synthetic local data.
+
+Browser assertions use real UI controls for history, units, export and deletion;
+the actual SDK for login/logout; synthetic saved-place/route fixtures for storage
+isolation; and the actual worker/cache/IndexedDB implementations. A test observer
+records asset-order guard failures without changing the guard's decisions.
+Expected owner-generation cancellations during startup are awaited before user
+actions; unexpected storage errors remain failures. The final storage-failure
+scenario deliberately replaces IndexedDB.open in a new synthetic browser profile.
+
+Account-scoped offline startup now reuses only public login bootstrap configuration
+(origin-bound, versioned, maximum age 24 hours) and an existing SDK session. No
+password, new session token copy, optional consent or personal route payload is
+added to that bootstrap. Missing/expired sessions and stale bootstrap data still
+require reconnection. It does not grant access to server records or bypass live
+session checks. Browser storage remains unencrypted by Voyagr.
+
 Run only from the reviewed candidate checkout. The harness never accepts a DSN,
 existing Docker network, existing volume, API token or production environment file.
 It uses these public images: PostgreSQL 15 (Debian Bookworm), GoTrue v2.158.1,
@@ -67,9 +110,11 @@ this harness rather than replace real HTTP testing.
 
 Not covered: deployed infrastructure, external TLS/reverse proxies, real production
 role grants, storage/backup encryption, backup restore/deletion reconciliation,
-all full-app routing and PWA startup, browser offline upgrades, physical GPS,
-Bluetooth, microphone, wake lock, long recordings or phone storage eviction.
+live routing/map-provider correctness, physical GPS, Bluetooth, microphone, wake
+lock, long recordings or actual phone storage eviction. Full candidate startup,
+offline shell and controlled worker-update staging require `--browser` mode.
 Successful results are not a GDPR compliance certification or deployment approval.
 
-There are no runtime code changes or production migrations in this harness.
-Rollback is to stop using it; no production settings need reversing.
+The harness does not deploy runtime changes or run production migrations. Its
+browser follow-up includes the two coordinator fixes documented in the browser
+report; no production settings need reversing when stopping the harness.

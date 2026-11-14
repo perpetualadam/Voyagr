@@ -13,6 +13,64 @@
     var supabasePublicConfig = null;
     var authGateStripeOffer = null;
     var announcedPrivateUserId = null;
+    var PUBLIC_AUTH_CONFIG_KEY = 'voyagr_public_auth_config_v1';
+    var PUBLIC_AUTH_CONFIG_TTL_MS = 24 * 60 * 60 * 1000;
+
+    function publicAuthConfig(data) {
+        if (!data || typeof data.supabase_url !== 'string' || typeof data.supabase_anon_key !== 'string') return null;
+        var url = data.supabase_url.trim().replace(/\/+$/, '');
+        var key = data.supabase_anon_key.trim();
+        if (!url || url.length > 2048 || !key || key.length > 8192 || /[\x00-\x1f]/.test(key) || key.startsWith('sb_secret_')) return null;
+        try {
+            var parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+        } catch (_) { return null; }
+        return { supabase_url: url, supabase_anon_key: key };
+    }
+
+    function rememberPublicAuthConfig(data) {
+        try {
+            var config = publicAuthConfig(data);
+            if (!config) { localStorage.removeItem(PUBLIC_AUTH_CONFIG_KEY); return; }
+            // Public bootstrap only. Supabase already manages its session storage;
+            // do not copy that session, email, optional grants or other config.
+            localStorage.setItem(PUBLIC_AUTH_CONFIG_KEY, JSON.stringify({
+                version: 1, origin: win.location.origin, fetchedAt: Date.now(), config: config,
+            }));
+        } catch (_) { /* Online navigation does not depend on cache availability. */ }
+    }
+
+    function cachedPublicAuthConfig() {
+        try {
+            var saved = JSON.parse(localStorage.getItem(PUBLIC_AUTH_CONFIG_KEY) || 'null');
+            var age = Date.now() - saved?.fetchedAt;
+            if (saved?.version !== 1 || saved.origin !== win.location.origin ||
+                !Number.isFinite(saved.fetchedAt) || age < 0 || age > PUBLIC_AUTH_CONFIG_TTL_MS) return null;
+            return publicAuthConfig(saved.config);
+        } catch (_) { return null; }
+    }
+
+    async function loadPublicAuthConfig() {
+        var res;
+        try { res = await fetch('/api/config', { cache: 'no-store' }); }
+        catch (error) {
+            var cached = cachedPublicAuthConfig();
+            if (cached) return cached;
+            throw error;
+        }
+        var data = await res.json();
+        // The real service worker returns this explicit network-only offline
+        // response for private config requests. Never cache the HTTP response.
+        if (!res.ok) {
+            if (res.status === 503 && data?.offline === true) {
+                var offline = cachedPublicAuthConfig();
+                if (offline) return offline;
+            }
+            throw new Error('Public account configuration unavailable');
+        }
+        rememberPublicAuthConfig(data);
+        return data;
+    }
 
     function announcePrivateAccount(session) {
         var userId = session && session.user ? session.user.id : null;
@@ -509,8 +567,7 @@
 
     async function initSupabaseAuth() {
         try {
-            var res = await fetch('/api/config', { cache: 'no-store' });
-            var data = await res.json();
+            var data = await loadPublicAuthConfig();
             supabasePublicConfig = data;
             applySupportLinksFromConfig(data);
 

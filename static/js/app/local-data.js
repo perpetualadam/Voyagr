@@ -159,7 +159,10 @@
     }
   }
   async function historyEnabled(c = capture()) {
-    return !historyBlocked(c.owner) && policy()?.allowed((await read('localOptions', c))?.privacy, 'history') === true;
+    const options = await read('localOptions', c);
+    // Withdrawal can arrive while IndexedDB is reading an older receipt. Check
+    // the current OFF marker after that read so stale UI refreshes stay OFF too.
+    return !historyBlocked(c.owner) && policy()?.allowed(options?.privacy, 'history') === true;
   }
   async function record(category, mutate, c = capture()) {
     await ready();

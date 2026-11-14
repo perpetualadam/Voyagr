@@ -68,6 +68,15 @@ test('withdrawal stops delayed history writes immediately and preserves previous
  expect(await pending).toBe(false);await off;expect(await local.historyEnabled()).toBe(false);expect(await local.read('history')).toEqual([{id:'existing'}]);
  expect(await local.record('history',()=>[{id:'forbidden'}])).toBe(false);
 });
+test('a delayed privacy refresh cannot turn the checkbox back on after withdrawal',async()=>{
+ await local.setPrivacyChoice('history',true);
+ const previous=await local.read('localOptions');let release;
+ jest.spyOn(store,'read').mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+ const refreshing=local.refresh();while(!release)await new Promise(resolve=>setImmediate(resolve));
+ await local.setPrivacyChoice('history',false);release(previous);await refreshing;
+ expect(w.document.getElementById('localRecordHistory').checked).toBe(false);
+ expect(await local.historyEnabled()).toBe(false);expect(w.fetch).not.toHaveBeenCalled();
+});
 test('a failed privacy write fails closed and does not enable optional recording',async()=>{
  await local.setPrivacyChoice('history',true);jest.spyOn(store,'update').mockRejectedValueOnce(Error('quota'));
  await expect(local.setPrivacyChoice('history',false)).rejects.toThrow();expect(await local.historyEnabled()).toBe(false);expect(w.fetch).not.toHaveBeenCalled();
