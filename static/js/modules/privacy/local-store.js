@@ -142,6 +142,21 @@
         };
       }, guard);
     }
+    async function recordWithPermission(owner,category,mutate,permitted,guard){
+      check(owner,category);
+      if(!['history','destinations'].includes(category))throw Error('Invalid recording category');
+      return transaction(['data'],'readwrite',(tx,done,current)=>{
+        const data=tx.objectStore('data'),options=data.get([owner,'localOptions']);
+        options.onsuccess=()=>{if(!current())return;if(!permitted(options.result?.value)){done(false);return;}
+          const target=data.get([owner,category]);target.onsuccess=()=>{if(!current())return;
+            try{const next=mutate(target.result?copy(target.result.value):null);
+              if(next&&typeof next.then==='function'||JSON.stringify(next).length>12*1024*1024)throw Error('Invalid recording');
+              data.put({owner,category,version:1,value:copy(next),updatedAt:Date.now()});done(true);
+            }catch(_){tx.abort();}
+          };
+        };
+      },guard);
+    }
     async function migrate(storage) {
       // Capture only application data keys, never SDK tokens or all localStorage.
       const keys = ['voyagr_profiles_v1', 'savedRoutes', 'voyagr_all_settings', 'voyagrLocalTrips', 'voyagrRecentDestinations'];
@@ -437,6 +452,7 @@
       read,
       update,
       migrate,
+      recordWithPermission,
       claimLegacy,
       importGuest,
       listClips,

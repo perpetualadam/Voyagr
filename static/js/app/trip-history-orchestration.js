@@ -71,7 +71,7 @@
         const c=local.capture(),base=buildCompletedTripRecord(route);if(!base)return;
         try{if(!await local.historyEnabled(c))return;
             const entry={localId:Date.now()*1000+Math.floor(Math.random()*1000),serverId:null,...base};
-            await local.update('history',rows=>[entry,...(rows||[])].slice(0,50),c);
+            await local.record('history',rows=>[entry,...(rows||[])].slice(0,50),c);
         }catch(_){local.report();}
     }
 

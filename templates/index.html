@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="{{ seo_language|default('en-GB') }}">
 <head>
+    <script defer src="/static/js/modules/privacy/consent-policy.js?v=20261114privacy3"></script>
     {% if optional_analytics_available %}
-    <script defer src="/static/js/app/analytics-consent.js?v=20261113privacy1" data-voyagr-analytics="{{ optional_analytics_measurement_id }}"></script>
+    <script defer src="/static/js/app/analytics-consent.js?v=20261114privacy3" data-voyagr-analytics="{{ optional_analytics_measurement_id }}"></script>
     {% endif %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -55,7 +56,7 @@
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261113forminfo1" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20261114privacy3" />
     <script>
         window.VOYAGR_JOURNEY_PROTOCOL=1;
     (function () {
@@ -176,8 +177,8 @@
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/modules/privacy/local-store.js?v=20261114local1"></script>
-    <script defer src="/static/js/app/local-data.js?v=20261114local1"></script>
+    <script defer src="/static/js/modules/privacy/local-store.js?v=20261114privacy3"></script>
+    <script defer src="/static/js/app/local-data.js?v=20261114privacy3"></script>
     <script defer src="/static/js/app/device-dashcam.js?v=20261114local1"></script>
     <script defer src="/static/js/app/parking-orchestration.js?v=20261113privatelogs1"></script>
     <script defer src="/static/js/app/reroute-map-orchestration.js?v=20261110continuous1"></script>
@@ -186,7 +187,7 @@
     <script defer src="/static/js/app/porcupine-orchestration.js?v=20260712aaej"></script>
     <script defer src="/static/js/app/gps-orchestration.js?v=20261113privatelogs1"></script>
     <script defer src="/static/js/app/live-data-refresh-orchestration.js?v=20260712ab57"></script>
-    <script defer src="/static/js/app/trip-history-orchestration.js?v=20261114local2"></script>
+    <script defer src="/static/js/app/trip-history-orchestration.js?v=20261114privacy3"></script>
     <script defer src="/static/js/app/route-saving-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/geocoding-orchestration.js?v=20261114local2"></script>
     <script defer src="/static/js/app/speed-widget-orchestration.js?v=20261112speedposition1"></script>
@@ -1404,9 +1405,22 @@
                             <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice &amp;&amp; voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Review safety notice</span></button>
                         </div>
                     </div><div class="preferences-section" id="localDataControls">
-                        <h3>On this device</h3>
+                        <h3>Privacy &amp; device data</h3>
+                        <fieldset class="privacy-options"><legend>Optional features</legend>
+                            <label><input id="privacyCloudSync" type="checkbox" disabled aria-describedby="privacyUnavailable"> Cloud synchronisation</label>
+                            <label><input id="privacyDashcamBackup" type="checkbox" disabled aria-describedby="privacyUnavailable"> Dashcam cloud backup</label>
+                            <label><input id="privacyDiagnostics" type="checkbox" disabled aria-describedby="privacyUnavailable"> Optional diagnostics</label>
+                            {% if optional_analytics_available %}
+                            <label><input id="privacyAnalytics" type="checkbox" aria-describedby="analyticsConsentStatus"> Optional analytics</label>
+                            <p id="analyticsConsentStatus" role="status">Optional analytics: off.</p>
+                            {% else %}
+                            <label><input id="privacyAnalytics" type="checkbox" disabled> Optional analytics (unavailable)</label>
+                            {% endif %}
+                            <p id="privacyUnavailable">Cloud sync, cloud backup and optional diagnostics are off and unavailable in this release.</p>
+                        </fieldset>
                         <p id="localDataStatus" role="status">Opening device storage…</p>
-                        <label><input type="checkbox" id="localRecordHistory"> Record journeys and recent searches on this device</label>
+                        <label class="privacy-history-option"><input type="checkbox" id="localRecordHistory"> Record journeys and recent searches on this device</label>
+                        <details><summary>Privacy information</summary><p>Each optional choice is separate. Signing in, accepting the privacy notice or importing settings does not enable these features. History recording starts off. Turning it off stops new history and recent-search recording; existing entries remain available to export or delete. Necessary navigation requests still work. Policy changes may require a fresh choice.</p></details>
                         <details><summary>Storage information</summary><p>Saved places, routes and recordings stay in this browser. Cloud uploads are unavailable during this privacy upgrade. Browser storage is not encrypted by this app and may be cleared or evicted. Export important data. Current navigation recovery is separate from journey history.</p></details>
                         <label for="localDataCategory">Device data</label>
                         <select id="localDataCategory"><option value="all">All structured data</option><option value="routes">Saved routes</option><option value="favourites">Saved places</option><option value="destinations">Recent searches</option><option value="history">Journey history</option><option value="preferences">Preferences</option><option value="traces">Optional traces</option></select>

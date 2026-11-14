@@ -6,7 +6,23 @@
     epoch = 0,
     store = null,
     migration = null;
-  const copy = x => JSON.parse(JSON.stringify(x));
+  const blockedHistory = new Set();
+  let privacyChannel = null;
+  try {
+    if (root.BroadcastChannel) privacyChannel = new root.BroadcastChannel('voyagr-privacy-v1');
+  } catch (_) {}
+  function policy() {
+    return root.VoyagrConsentPolicy;
+  }
+  const privacyKey = who => 'voyagrHistoryOffV1:' + who;
+  function historyBlocked(who) {
+    if (blockedHistory.has(who)) return true;
+    try {
+      return root.localStorage.getItem(privacyKey(who)) !== null;
+    } catch (_) {
+      return true;
+    }
+  }
   function db() {
     if (!store) store = root.VoyagrLocalStore.create(root.indexedDB);
     return store;
@@ -74,7 +90,7 @@
     const context = capture();
     if (!(await historyEnabled(context))) return;
     if (!label || !Number.isFinite(+lat) || !Number.isFinite(+lon) || Math.abs(+lat) > 90 || Math.abs(+lon) > 180) return;
-    return update('destinations', old => [{
+    return record('destinations', old => [{
       label: String(label).slice(0, 500),
       lat: +lat,
       lon: +lon,
@@ -132,17 +148,81 @@
     try {
       await ready();
       if (!current(c)) return;
-      const options = (await read('localOptions', c)) || {};
+      const enabled = await historyEnabled(c);
+      if (!current(c)) return;
       const toggle = document.getElementById('localRecordHistory');
-      if (toggle) toggle.checked = options.recordHistory === true;
+      if (toggle) toggle.checked = enabled;
       const s = document.getElementById('localDataStatus');
       if (s) s.textContent = 'Data stays on this device. Cloud sync is unavailable until its separate privacy checks are implemented.';
     } catch (_) {
       report();
     }
   }
-  async function historyEnabled(c) {
-    return ((await read('localOptions', c)) || {}).recordHistory === true;
+  async function historyEnabled(c = capture()) {
+    return !historyBlocked(c.owner) && policy()?.allowed((await read('localOptions', c))?.privacy, 'history') === true;
+  }
+  async function record(category, mutate, c = capture()) {
+    await ready();
+    if (!current(c)) throw Error('Device owner changed');
+    if (historyBlocked(c.owner)) return false;
+    try {
+      return await db().recordWithPermission(c.owner, category, mutate, options => !historyBlocked(c.owner) && policy()?.allowed(options?.privacy, 'history') === true, () => current(c) && !historyBlocked(c.owner));
+    } catch (error) {
+      if (current(c) && historyBlocked(c.owner)) return false;
+      throw error;
+    }
+  }
+  async function setPrivacyChoice(category, enabled, c = capture()) {
+    if (!policy()) throw Error('Privacy policy unavailable');
+    // Withdrawal takes effect in this page before any asynchronous storage work.
+    if (category === 'history') blockedHistory.add(c.owner);
+    if (category === 'history' && !enabled) {
+      blockedHistory.add(c.owner);
+      try {
+        root.localStorage.setItem(privacyKey(c.owner), JSON.stringify({
+          policyVersion: policy().VERSION,
+          at: Date.now(),
+          nonce: root.crypto?.randomUUID?.() || String(Math.random())
+        }));
+      } catch (_) {}
+      privacyChannel?.postMessage({
+        owner: c.owner,
+        category: 'history',
+        enabled: false
+      });
+    }
+    let marker;
+    try {
+      marker = root.localStorage.getItem(privacyKey(c.owner));
+    } catch (_) {
+      if (enabled) throw Error('Privacy choice storage unavailable');
+    }
+    await ready();
+    const unchanged = () => {
+      try {
+        return current(c) && (category !== 'history' || !enabled || root.localStorage.getItem(privacyKey(c.owner)) === marker);
+      } catch (_) {
+        return false;
+      }
+    };
+    await db().update(c.owner, 'localOptions', old => ({
+      ...old,
+      privacy: policy().choose(old?.privacy, category, enabled)
+    }), unchanged);
+    if (!current(c)) throw Error('Device owner changed');
+    if (category === 'history' && enabled) {
+      // A withdrawal in another tab while enabling must win over this old callback.
+      if (root.localStorage.getItem(privacyKey(c.owner)) !== marker) throw Error('Privacy choice changed in another tab');
+      root.localStorage.removeItem(privacyKey(c.owner));
+      blockedHistory.delete(c.owner);
+    }
+    privacyChannel?.postMessage({
+      owner: c.owner,
+      category,
+      enabled
+    });
+    root.dispatchEvent?.(new CustomEvent('voyagr-privacy-changed'));
+    return enabled;
   }
   async function recoverLegacy() {
     if (!confirm('Copy unassigned legacy routes and history into this device profile? Nothing will be uploaded. Original data is retained.')) return;
@@ -173,16 +253,29 @@
         report();
       }
     });
-    document.getElementById('localRecordHistory')?.addEventListener('change', event => {
-      const allowed = event.target.checked;
-      void update('localOptions', old => ({
-        ...old,
-        recordHistory: allowed,
-        version: 1
-      })).catch(() => {
-        event.target.checked = false;
-        report();
-      });
+    document.getElementById('localRecordHistory')?.addEventListener('change', async event => {
+      const toggle = event.target,
+        c = capture(),
+        enabled = toggle.checked;
+      toggle.disabled = true;
+      let failed = false;
+      try {
+        await setPrivacyChoice('history', enabled, c);
+      } catch (_) {
+        if (current(c)) {
+          toggle.checked = false;
+          failed = true;
+        }
+      } finally {
+        if (current(c)) {
+          toggle.disabled = false;
+          await refresh();
+          if (failed && current(c)) {
+            const status = document.getElementById('localDataStatus');
+            if (status) status.textContent = 'Recording is off on this page. Could not save the privacy choice; retry.';
+          }
+        }
+      }
     });
     document.getElementById('localExportLegacy')?.addEventListener('click', () => exportLegacy().then(x => download(x, 'voyagr-legacy-recovery.json')).catch(report));
     document.getElementById('localDeleteLegacy')?.addEventListener('click', async () => {
@@ -200,7 +293,24 @@
       }
     });
     document.getElementById('localRecoverLegacy')?.addEventListener('click', () => recoverLegacy().then(() => root.location.reload()).catch(report));
-    root.addEventListener('voyagr-local-owner-change', refresh);
+    root.addEventListener('voyagr-local-owner-change', () => {
+      const toggle = document.getElementById('localRecordHistory');
+      if (toggle) {
+        toggle.checked = false;
+        toggle.disabled = false;
+      }
+      void refresh();
+    });
+    root.addEventListener('voyagr-privacy-changed', refresh);
+    root.addEventListener('storage', event => {
+      if (event.key === null || event.key?.startsWith('voyagrHistoryOffV1:')) void refresh();
+    });
+    if (privacyChannel) privacyChannel.onmessage = event => {
+      const message = event.data;
+      if (!message || message.category !== 'history' || !root.VoyagrLocalStore.validOwner(message.owner)) return;
+      if (message.enabled === false) blockedHistory.add(message.owner);else if (message.enabled === true) blockedHistory.delete(message.owner);
+      void refresh();
+    };
     void refresh();
     void ready().then(() => root.VoyagrProfileStoreOrchestration?.switchActiveProfile(root.VoyagrProfileStoreOrchestration.getActiveProfileId())).catch(report);
   }
@@ -221,6 +331,8 @@
     exportLegacy,
     recoverLegacy,
     historyEnabled,
+    record,
+    setPrivacyChoice,
     download,
     report,
     refresh,

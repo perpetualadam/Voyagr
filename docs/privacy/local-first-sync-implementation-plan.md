@@ -259,3 +259,11 @@ The device-store and durable-media changes are documented in
 This is an additive local schema, not a production PostgreSQL/SQLite migration.
 Cloud consent authority and optional encrypted sync remain later phases; a local
 OFF control does not establish backend enforcement. Production remains NO-GO.
+
+## Phase 3 implementation
+
+Independent, default-OFF local choices and policy-versioned records are documented
+in [Phase 3 delivery and verification](phase-3-privacy-settings-report.md). History
+permission is checked atomically with each new archive write. Unavailable cloud
+and optional diagnostic services remain disabled, rather than accepting unusable
+grants. Backend consent authority is still Phase 4; production remains NO-GO.

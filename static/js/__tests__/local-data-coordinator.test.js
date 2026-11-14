@@ -4,7 +4,7 @@ global.IDBKeyRange=IDBKeyRange;const Store=require('../modules/privacy/local-sto
 let dom,w,local,store;
 beforeEach(async()=>{
  dom=new JSDOM('<p id="localDataStatus"></p><input id="localRecordHistory" type="checkbox"><div id="savedRoutesList"></div>',{url:'https://device.test',runScripts:'outside-only'});w=dom.window;w.crypto.randomUUID=()=>crypto.randomUUID();
- store=Store.create(indexedDB,{name:'coordinator-'+crypto.randomUUID()});w.VoyagrLocalStore={...Store,create:()=>store};w.fetch=jest.fn(()=>{throw Error('Unexpected cloud request');});
+ store=Store.create(indexedDB,{name:'coordinator-'+crypto.randomUUID()});w.VoyagrLocalStore={...Store,create:()=>store};w.VoyagrConsentPolicy=require('../modules/privacy/consent-policy');w.fetch=jest.fn(()=>{throw Error('Unexpected cloud request');});
  w.eval(fs.readFileSync(require.resolve('../app/local-data'),'utf8'));local=w.VoyagrLocalData;await local.ready();await new Promise(resolve=>setImmediate(resolve));
 });
 afterEach(()=>{store.close();dom.window.close();});
@@ -14,13 +14,13 @@ test('fresh history defaults OFF, optional preference writes remain local and lo
  local.switchOwner('sb:A');expect(await local.historyEnabled()).toBe(false);expect(w.fetch).not.toHaveBeenCalled();
 });
 test('explicit history is scoped to owner; stale reads and writes cannot move private data between accounts',async()=>{
- await local.update('localOptions',()=>({recordHistory:true}));await local.recordDestination('Private A',53,-1,'search');expect(await local.getDestinations()).toHaveLength(1);
+ await local.setPrivacyChoice('history',true);await local.recordDestination('Private A',53,-1,'search');expect(await local.getDestinations()).toHaveLength(1);
  const a=local.capture();local.switchOwner('sb:B');expect(await local.getDestinations()).toEqual([]);
  await expect(local.update('routes',()=>[{id:'A'}],a)).rejects.toThrow();await expect(local.read('destinations',a)).rejects.toThrow();expect(await local.getRoutes()).toEqual([]);
  expect(w.fetch).not.toHaveBeenCalled();
 });
 test('account switching during history permission lookup cannot save a destination to the new owner',async()=>{
- await local.update('localOptions',()=>({recordHistory:true}));const pending=local.recordDestination('A only',53,-1);local.switchOwner('sb:B');await expect(pending).rejects.toThrow();expect(await local.getDestinations()).toEqual([]);
+ await local.setPrivacyChoice('history',true);const pending=local.recordDestination('A only',53,-1);local.switchOwner('sb:B');await expect(pending).rejects.toThrow();expect(await local.getDestinations()).toEqual([]);
 });
 test('export has versioned current-owner data without credentials, media metadata is separate and deletion persists',async()=>{
  await local.update('routes',()=>[{id:'A'}]);local.switchOwner('sb:B');await local.update('routes',()=>[{id:'B'}]);w.localStorage.setItem('sb-token','secret');
@@ -55,5 +55,35 @@ test('history OFF does not archive a completed route; enabled history writes onl
  w.eval(fs.readFileSync(require.resolve('../app/trip-history-orchestration'),'utf8'));const history=w.VoyagrTripHistoryOrchestration;
  history.bind({tripHistory:()=>require('../modules/navigation/trip-history'),getRoutePolyline:()=>[[53,-1],[53.1,-1]],getCurrentRoutingMode:()=> 'auto'});
  const route={distance_km:10,duration_minutes:20,fuel_cost:2};await history.persistCompletedTrip(route);expect(await local.read('history')).toBeNull();
- await local.update('localOptions',()=>({recordHistory:true}));await history.persistCompletedTrip(route);expect(await local.read('history')).toEqual([expect.objectContaining({start_address:'Start',end_address:'Finish',serverId:null})]);expect(w.fetch).not.toHaveBeenCalled();
+ await local.setPrivacyChoice('history',true);await history.persistCompletedTrip(route);expect(await local.read('history')).toEqual([expect.objectContaining({start_address:'Start',end_address:'Finish',serverId:null})]);expect(w.fetch).not.toHaveBeenCalled();
+});
+test('legacy history flag is not imported consent; explicit choices carry the current policy version',async()=>{
+ await local.update('localOptions',()=>({recordHistory:true,version:1}));expect(await local.historyEnabled()).toBe(false);
+ await local.setPrivacyChoice('history',true);const options=await local.read('localOptions');expect(options.privacy.policyVersion).toBe(w.VoyagrConsentPolicy.VERSION);expect(await local.historyEnabled()).toBe(true);
+ for(const category of ['cloudSync','dashcamBackup','diagnostics'])await expect(local.setPrivacyChoice(category,true)).rejects.toThrow();expect(w.fetch).not.toHaveBeenCalled();
+});
+test('withdrawal stops delayed history writes immediately and preserves previously saved history',async()=>{
+ await local.setPrivacyChoice('history',true);await local.record('history',()=>[{id:'existing'}]);
+ const pending=local.record('history',rows=>[...rows,{id:'late'}]);const off=local.setPrivacyChoice('history',false);
+ expect(await pending).toBe(false);await off;expect(await local.historyEnabled()).toBe(false);expect(await local.read('history')).toEqual([{id:'existing'}]);
+ expect(await local.record('history',()=>[{id:'forbidden'}])).toBe(false);
+});
+test('a failed privacy write fails closed and does not enable optional recording',async()=>{
+ await local.setPrivacyChoice('history',true);jest.spyOn(store,'update').mockRejectedValueOnce(Error('quota'));
+ await expect(local.setPrivacyChoice('history',false)).rejects.toThrow();expect(await local.historyEnabled()).toBe(false);expect(w.fetch).not.toHaveBeenCalled();
+});
+test('account changes and importing settings do not copy history consent',async()=>{
+ await local.setPrivacyChoice('history',true);local.switchOwner('sb:B');await local.update('preferences',()=>({recordHistory:true,cloudSync:true}));expect(await local.historyEnabled()).toBe(false);
+ local.switchOwner('guest');expect(await local.historyEnabled()).toBe(true);
+});
+test('an older enable cannot commit over a newer cross-tab withdrawal marker',async()=>{
+ await local.setPrivacyChoice('history',false);let release;const ready=local.db().update.bind(store);
+ jest.spyOn(store,'update').mockImplementationOnce(async(...args)=>{await new Promise(resolve=>{release=resolve;});return ready(...args);});
+ const enabling=local.setPrivacyChoice('history',true);while(!release)await new Promise(resolve=>setImmediate(resolve));
+ w.localStorage.setItem('voyagrHistoryOffV1:guest','newer-withdrawal');release();await expect(enabling).rejects.toThrow();
+ expect(await local.historyEnabled()).toBe(false);expect(w.VoyagrConsentPolicy.allowed((await local.read('localOptions')).privacy,'history')).toBe(false);
+});
+test('an account change during a checkbox save does not leave the next profile control disabled',async()=>{
+ const toggle=w.document.getElementById('localRecordHistory');toggle.checked=true;toggle.dispatchEvent(new w.Event('change'));local.switchOwner('sb:B');
+ await new Promise(resolve=>setTimeout(resolve,20));expect(toggle.disabled).toBe(false);expect(toggle.checked).toBe(false);expect(await local.historyEnabled()).toBe(false);
 });
