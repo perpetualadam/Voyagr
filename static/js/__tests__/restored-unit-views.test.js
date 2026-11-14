@@ -1,3 +1,6 @@
+// Persistence boundary is device-only; conversion assertions below remain unchanged.
+beforeEach(()=>{global.VoyagrLocalData={preferenceRequest:jest.fn(options=>global.fetch('/device-preferences',options))};});
+afterEach(()=>{delete global.VoyagrLocalData;});
 const Units=require('../modules/navigation/units.js');
 const Pref=require('../app/units-preferences-orchestration.js');
 const Settings=require('../app/settings-orchestration.js');
@@ -19,7 +22,7 @@ beforeEach(()=>{
     document.body.innerHTML='<select id="distanceUnit"><option>km</option><option>mi</option></select><select id="currencyUnit"><option>GBP</option><option>USD</option><option>EUR</option></select><select id="speedUnit"><option>kmh</option><option>mph</option></select><select id="temperatureUnit"><option>celsius</option><option>fahrenheit</option></select><div id="totalDistance" data-distance-meters="16093.44" data-distance-style="route">16.09 km</div><div id="avgSpeed" data-speed-kmh="100">100.0 km/h</div><input id="end" value="Original destination">';
     Pref.bind({units:()=>Units,speedGps:()=>SG,speedLimitWidget:()=>SL,getCurrentSpeedLimitMph:()=>null,getLastDetectedRoadType:()=> 'residential',getLastSpeedLimitRegion:()=> 'uk',getCurrentGpsSpeedMph:()=>30,call:{getCurrentRoadType:()=> 'residential',updateSpeedWidget:widget,saveAllSettings:jest.fn(),showStatus:jest.fn()}});
     refresh=jest.fn(()=>Pref.refreshUnitDisplays());
-    Settings.bind({settingsSnapshot:()=>Snapshot,getRouteInProgress:()=>false,setDistanceUnit:Pref.setDistanceUnitValue,setCurrencyUnit:Pref.setCurrencyUnitValue,setSpeedUnit:Pref.setSpeedUnitValue,setTemperatureUnit:Pref.setTemperatureUnitValue,call:{refreshUnitDisplays:refresh}});
+    Settings.bind({settingsSnapshot:()=>Snapshot,getRouteInProgress:()=>false,setCurrentVehicleType:jest.fn(),setCurrentRoutingMode:jest.fn(),setDistanceUnit:Pref.setDistanceUnitValue,setCurrencyUnit:Pref.setCurrencyUnitValue,setSpeedUnit:Pref.setSpeedUnitValue,setTemperatureUnit:Pref.setTemperatureUnitValue,call:{refreshUnitDisplays:refresh}});
     jest.spyOn(console,'log').mockImplementation(()=>{});
 });
 afterEach(()=>{global.fetch=oldFetch;localStorage.clear();Pref.setDistanceUnitValue('mi');Pref.setCurrencyUnitValue('GBP');Pref.setSpeedUnitValue('mph');Pref.setTemperatureUnitValue('celsius');jest.restoreAllMocks();});
@@ -65,12 +68,13 @@ test('display refresh cannot infer a posted speed limit from road class',()=>{
     const plan=SL.buildUpdateAllSpeedDisplaysExecutePlan({apiSpeedLimitMph:null,valhallaSpeedLimitMph:null,roadType:'motorway',region:'uk',gpsSpeedMph:40,speedUnit:'mph'});
     expect(plan.shownLimitMph).toBeNull();expect(plan.gpsSpeedMph).toBe(40);
 });
-test('a real local profile switch invokes restoration and updates existing labels',()=>{
+test('a real local profile switch invokes restoration and updates existing labels',async()=>{
     const Profile=require('../app/profile-store-orchestration.js');
     localStorage.setItem('voyagr_all_settings',JSON.stringify(metric));
     localStorage.setItem('voyagr_profiles_v1',JSON.stringify({guest:{voyagr_all_settings:JSON.stringify(metric),savedRoutes:'[]'},metricTest:{voyagr_all_settings:JSON.stringify(imperial),savedRoutes:'[]'}}));
     Profile.bind({getSupabaseClient:()=>null,call:{loadAllSettings:()=>Settings.loadAllSettings(),applySettingsToUI:()=>{},loadSavedRoutes:()=>{}}});
-    Profile.switchActiveProfile('metricTest');
+    global.VoyagrLocalData={capture:()=>({owner:'guest',epoch:1}),switchOwner:()=>({owner:'sb:metricTest',epoch:2}),current:()=>true,ready:async()=>{},read:async()=>imperial,report:jest.fn()};
+    await Profile.switchActiveProfile('sb:metricTest');
     expect(document.getElementById('totalDistance').textContent).toBe('10.00 mi');expect(Pref.getTemperatureUnitValue()).toBe('fahrenheit');
     expect(global.fetch).not.toHaveBeenCalled();
 });

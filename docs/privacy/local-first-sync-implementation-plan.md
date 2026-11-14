@@ -251,3 +251,11 @@ existing web CI selection.
 audited implementation plan only. Leave the audit PR open with auto-merge off;
 no application changes should be merged/deployed as if future privacy acceptance
 criteria had passed. Approval to start Phase 2 is a separate step.
+
+## Phase 2 implementation
+
+The device-store and durable-media changes are documented in
+[Phase 2 delivery and verification](phase-2-device-storage-report.md).
+This is an additive local schema, not a production PostgreSQL/SQLite migration.
+Cloud consent authority and optional encrypted sync remain later phases; a local
+OFF control does not establish backend enforcement. Production remains NO-GO.

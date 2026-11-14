@@ -28,12 +28,11 @@ test('input-only reset refuses an active journey and does not need map or GPS ru
 });
 
 test('completed history captures addresses and estimates before inputs clear even when sign-in lookup is pending',async()=>{
- const History=require('../app/trip-history-orchestration');let releaseToken,pending;
- localStorage.removeItem('voyagrLocalTrips');
- History.bind({tripHistory:()=>require('../modules/navigation/trip-history'),getRoutePolyline:()=>[[53,-1],[53.1,-1]],getCurrentRoutingMode:()=> 'auto',call:{getSupabaseAccessToken:()=>new Promise(resolve=>{releaseToken=resolve;})}});
+ const History=require('../app/trip-history-orchestration');let allow,pending,rows=[];
+ global.VoyagrLocalData={capture:()=>({owner:'guest',epoch:1}),historyEnabled:()=>new Promise(resolve=>{allow=resolve;}),update:async(category,fn)=>{rows=fn(rows);},report:jest.fn()};
+ History.bind({tripHistory:()=>require('../modules/navigation/trip-history'),getRoutePolyline:()=>[[53,-1],[53.1,-1]],getCurrentRoutingMode:()=> 'auto',call:{getSupabaseAccessToken:()=>{throw Error('No cloud lookup');}}});
  Nav.stopTurnByTurnNavigation.mockImplementation(()=>{pending=History.persistCompletedTrip({distance_km:10,duration_minutes:20,fuel_cost:4.5,toll_cost:2,caz_cost:10});live=false;});
- end();expect(document.getElementById('start').value).toBe('');
- const saved=JSON.parse(localStorage.getItem('voyagrLocalTrips'))[0];
- expect(saved).toMatchObject({start_address:'Origin',end_address:'Destination',fuel_cost:4.5,toll_cost:2,caz_cost:10});
- releaseToken(null);await pending;localStorage.removeItem('voyagrLocalTrips');
+ end();expect(document.getElementById('start').value).toBe('');allow(true);await pending;
+ expect(rows[0]).toMatchObject({start_address:'Origin',end_address:'Destination',fuel_cost:4.5,toll_cost:2,caz_cost:10});
+ delete global.VoyagrLocalData;
 });
