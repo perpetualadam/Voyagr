@@ -89,3 +89,14 @@ no logs, uploads, caches or backend API schemas change.
 Tests cover each primary reason, conflicting parallel ways in either order,
 legacy output behaviour, and acquisition-to-Info propagation. The private phone's
 unknown speed remains unverified until this diagnostic contract is observed there.
+
+## Third increment: isolate fallback producers
+
+`resolveSpeedSources` owns lazy legal → mapped → route evaluation. Each producer
+failure is isolated so it cannot abort a usable lower-priority source. Stable
+`SOURCE_ERROR` attempt codes omit exception messages, coordinates and URLs. Missing
+or rejected values continue through the same display resolver; all failures yield
+unknown and never retain a prior value. No GPS eligibility, evidence acceptance,
+provider wiring or legal-alert rules change. The normal widget still does not
+invoke the older speed API or TomTom. Producer exceptions are a demonstrated
+fallback failure mode, not a verified cause of the physical-phone symptom.

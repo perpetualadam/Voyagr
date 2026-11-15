@@ -46,6 +46,28 @@
             observation: null, badge: '', title: '', reason: 'No usable matched, mapped or route limit'};
     }
 
+    // Evaluate sources lazily and isolate producer failures from lower-priority sources.
+    // Error text may contain source details; only stable codes leave this boundary.
+    function resolveSpeedSources(sources) {
+        sources=sources||{};
+        var attempts=[], selection=resolveSpeedDisplay();
+        ['legal','mapped','route'].some(function(name){
+            var producer=sources[name];
+            if(typeof producer!=='function'){
+                attempts.push({source:name,reasonCode:'SOURCE_UNAVAILABLE'});return false;
+            }
+            var candidate;
+            try { candidate=producer(); }
+            catch(error){attempts.push({source:name,reasonCode:'SOURCE_ERROR'});return false;}
+            var options=name==='legal'?{legalEvidence:candidate,legalLimitMph:candidate&&candidate.speed_limit_mph}
+                :name==='mapped'?{mappedObservation:candidate}:{routeObservation:candidate};
+            selection=resolveSpeedDisplay(options);
+            attempts.push({source:name,reasonCode:selection.reasonCode});
+            return selection.kind!=='UNKNOWN';
+        });
+        return Object.assign({},selection,{attempts:attempts});
+    }
+
     /**
      * @param {object|null} state
      * @returns {object}
@@ -572,6 +594,7 @@
 
     var api = {
         resolveSpeedDisplay: resolveSpeedDisplay,
+        resolveSpeedSources: resolveSpeedSources,
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
         shouldFetchSpeedLimit: shouldFetchSpeedLimit,

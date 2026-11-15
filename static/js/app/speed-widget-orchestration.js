@@ -284,17 +284,21 @@
 
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
         if (root.VoyagrRoadMatchOrchestration) {
-            var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
-            var legal=bundle && bundle.speed;
-            var selection=SL().resolveSpeedDisplay({legalEvidence:legal,legalLimitMph:legal && legal.speed_limit_mph});
-            var mapped=selection.kind==='UNKNOWN' && root.VoyagrRoadMatchOrchestration.getSpeedObservation
-                ? root.VoyagrRoadMatchOrchestration.getSpeedObservation() : null;
-            if(selection.kind==='UNKNOWN')selection=SL().resolveSpeedDisplay({mappedObservation:mapped});
-            var route=null;
-            if(selection.kind==='UNKNOWN' && root.VoyagrGpsOrchestration && root.VoyagrGpsOrchestration.getRouteSpeedObservation){
-                route=root.VoyagrGpsOrchestration.getRouteSpeedObservation(valhallaSpeedLimit);
-                selection=SL().resolveSpeedDisplay({routeObservation:route});
-            }
+            var legal=null;
+            var selection=SL().resolveSpeedSources({
+                legal:function(){
+                    var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
+                    legal=bundle && bundle.speed;return legal;
+                },
+                mapped:function(){
+                    var owner=root.VoyagrRoadMatchOrchestration;
+                    return owner.getSpeedObservation ? owner.getSpeedObservation() : null;
+                },
+                route:function(){
+                    var gps=root.VoyagrGpsOrchestration;
+                    return gps && gps.getRouteSpeedObservation ? gps.getRouteSpeedObservation(valhallaSpeedLimit) : null;
+                }
+            });
             var known=selection.kind==='LEGAL';
             applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
                 speedObservation:selection.observation,

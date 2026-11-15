@@ -108,6 +108,14 @@ test('road enrichment falls back to a labelled route value without legal alerts,
         tick();expect(value()).toBe('30');expect(badge.textContent).toBe('Route');expect(badge.hidden).toBe(false);
         expect(window.VoyagrGpsOrchestration.getRouteSpeedObservation).toHaveBeenCalledWith(30);
         expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+        const attributes=window.VoyagrRoadMatchOrchestration.getAttributes;
+        const observation=window.VoyagrRoadMatchOrchestration.getSpeedObservation;
+        window.VoyagrRoadMatchOrchestration.getAttributes=()=>{throw new Error('source failed');};
+        window.VoyagrRoadMatchOrchestration.getSpeedObservation=()=>{throw new Error('source failed');};
+        tick();expect(value()).toBe('30');expect(badge.textContent).toBe('Route');
+        expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+        window.VoyagrRoadMatchOrchestration.getAttributes=attributes;
+        window.VoyagrRoadMatchOrchestration.getSpeedObservation=observation;
         unit='km/h';tick();expect(value()).toBe('48');expect(document.getElementById('speedLimitUnit').textContent).toBe('km/h');
         mapped={evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:20};
         tick();expect(value()).toBe('32');expect(badge.textContent).toBe('Mapped');expect(widget.getCurrentSpeedLimitMph()).toBeNull();
