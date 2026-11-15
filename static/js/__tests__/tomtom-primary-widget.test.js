@@ -101,3 +101,33 @@ test('a pending refresh cannot extend expired data',async()=>{
  now+=6000;position.timestamp=now;fix.timestamp=now;owner.observe(position,null,route);
  now+=4001;position.timestamp=now;fix.timestamp=now;render();expect(value()).toBe('40');
 });
+
+test('a brief hand sweep from a stopped anchor does not turn heading into road movement',async()=>{
+ release({ok:true,json:async()=>observation()});await settle();
+ now+=1000;position.timestamp=now;fix.timestamp=now;
+ position.coords.latitude+=1.5/111195;fix.lat=position.coords.latitude;
+ position.coords.heading=180;position.coords.speed=1.5;
+ owner.observe(position,null,route);render();
+ expect(value()).toBe('30');expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+});
+test.each(['travel','fast','unknown anchor','unknown speed','accuracy','precise fix','expiry'])('hand-sweep tolerance does not cover %s',async kind=>{
+ if(kind==='unknown anchor'){owner.invalidate('different anchor');position.coords.speed=null;owner.observe(position,null,route);}
+ release({ok:true,json:async()=>observation()});await settle();
+ now+=1000;position.timestamp=now;fix.timestamp=now;
+ position.coords.latitude+=(kind==='travel'?6:1.5)/111195;fix.lat=position.coords.latitude;
+ position.coords.heading=180;position.coords.speed=kind==='fast'?10:kind==='unknown speed'?null:1.5;
+ if(kind==='accuracy'){position.coords.accuracy=50;fix.accuracy=50;}
+ if(kind==='precise fix'){position.coords.accuracy=1;fix.accuracy=1;}
+ if(kind==='expiry'){now+=10000;position.timestamp=now;fix.timestamp=now;}
+ owner.observe(position,null,route);render();
+ expect(owner.getPrimarySpeedObservation()).toBeNull();expect(value()).not.toBe('30');
+});
+test('hand-sweep samples cannot incrementally move the retained anchor',async()=>{
+ release({ok:true,json:async()=>observation()});await settle();
+ for(const offset of [1,2,2.5,4]){
+  now+=500;position.timestamp=now;fix.timestamp=now;position.coords.latitude=53.524+offset/111195;fix.lat=position.coords.latitude;
+  position.coords.heading=180;position.coords.speed=1.5;owner.observe(position,null,route);render();
+  if(offset<3)expect(value()).toBe('30');
+ }
+ expect(owner.getPrimarySpeedObservation()).toBeNull();expect(value()).not.toBe('30');
+});

@@ -17,9 +17,16 @@
         return Math.hypot((a.latitude-b.latitude)*111195,(a.longitude-b.longitude)*111195*Math.cos(lat));
     }
     function samePrimaryPosition(a,b){
-        if(!a||!b||primaryDistance(a,b)>35)return false;
+        if(!a||!b)return false;
+        var displacement=primaryDistance(a,b);
+        if(displacement>35)return false;
         var stopped=Number.isFinite(a.speed)&&a.speed>=0&&a.speed<1&&Number.isFinite(b.speed)&&b.speed>=0&&b.speed<1;
-        if(!stopped&&Number.isFinite(a.heading)&&Number.isFinite(b.heading)){
+        // A short sweep from a stopped anchor can report hand velocity/course.
+        // Keep the original anchor, age and uncertainty bounds; never follow it.
+        var handSweep=Number.isFinite(a.speed)&&a.speed>=0&&a.speed<1&&
+            Number.isFinite(b.speed)&&b.speed>=0&&b.speed<3&&
+            displacement<=Math.min(3,a.accuracy,b.accuracy);
+        if(!stopped&&!handSweep&&Number.isFinite(a.heading)&&Number.isFinite(b.heading)){
             var d=Math.abs(a.heading-b.heading)%360;
             if(Math.min(d,360-d)>45)return false;
         }
