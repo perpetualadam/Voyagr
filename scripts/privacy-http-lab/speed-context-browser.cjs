@@ -35,7 +35,11 @@ module.exports = async function speedContextBrowser(origin, check) {
       const target = new URL(route.request().url());
       if (target.origin !== origin) return route.abort();
       if (target.pathname === '/api/speed-limit/observation') {
-        primaryRequests++; await primaryGate;
+        primaryRequests++;
+        const body=route.request().postDataJSON();
+        check('Actual native GPS creates a complete primary request',
+          body.lat===53.524&&body.lon===-1.13&&body.accuracy===17.7&&body.vehicle_type==='car');
+        await primaryGate;
         return route.fulfill({contentType:'application/json',body:JSON.stringify({status:'AVAILABLE',observation:{
           source:'TomTom',evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:40,
           position_uncertain:true,acquired_at_ms:Date.now()}})});

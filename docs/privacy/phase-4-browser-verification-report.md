@@ -217,3 +217,20 @@ disposable containers/networks cleaned up. Backend CI selection: 2,383 passed,
 one skipped, 94 subtests. JavaScript: 190 suites / 3,698 tests. No production or
 private-phone deployment was performed. Actual phone behavior remains pending;
 no optional cloud capability or privacy production-readiness claim changes.
+
+## Native GPS serialization regression
+
+The primary provider's first integration used `Object.assign` on native GPS
+coordinates. Inherited getters are omitted, so request fields could be missing
+even though hand-written server probes worked. Required fields are now copied
+explicitly. The new inherited-getter regression fails against the original code
+and passes after correction. The real Chromium provider fixture now validates
+latitude, longitude, accuracy and vehicle in the outgoing request before returning
+its controlled observation; it previously supplied success without checking the
+request body. Freshness, movement, priority and legal-alert policies are unchanged.
+
+Validation: 190 JavaScript suites / 3,699 tests; backend selection 2,383 passed,
+one skipped and 94 subtests; disposable lab 42 HTTP and 67 full-candidate Chromium
+checks passed. This establishes the native request fix under controlled conditions,
+not actual-phone resolution or the cause of the earlier Overpass-only symptom.
+No production deployment was performed.

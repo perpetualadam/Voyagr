@@ -180,3 +180,23 @@ a GPS replay, stale/moved/heading/route/stop rejection, unit changes and legal-a
 isolation. Browser provider responses are controlled fixtures, not live credentials
 or moving-phone evidence. This work must be deployed and checked on the actual
 phone before claiming resolution of its persistent unknown display.
+
+## Native GPS request correction
+
+The first primary integration copied `GeolocationCoordinates` with `Object.assign`.
+Native browser fields can be inherited getters, so that copy omits latitude,
+longitude and accuracy. JSON then drops those undefined fields, the primary
+endpoint rejects the request, and the widget remains on fallback. It also loses
+the coordinate snapshot used to reject responses after movement.
+
+Copy the required latitude/longitude/accuracy/heading fields explicitly, as the
+accepted-GPS owner already does. A regression using inherited enumerable getters
+with zero own keys fails on the old code (missing request fields) and passes on
+the correction, including asynchronous widget repaint. The full-page browser
+fixture now validates the actual request body before returning provider data;
+its earlier unconditional success response masked the malformed request.
+
+No source priority, provider endpoint, freshness limit, GPS threshold or alert
+policy changes. This is a proven primary-provider request bug, not evidence that
+it caused the older Overpass-only symptom. Actual-phone verification remains
+necessary after deployment.

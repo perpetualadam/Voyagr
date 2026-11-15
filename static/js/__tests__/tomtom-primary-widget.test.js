@@ -65,3 +65,20 @@ test('vehicle change rejects a cached primary value before another GPS sample',a
  document.getElementById('vehicleType').innerHTML='<option value="truck">Truck</option>';
  expect(owner.getPrimarySpeedObservation()).toBeNull();
 });
+
+test('native-style inherited GPS getters produce a complete request and a usable snapshot',async()=>{
+ owner.invalidate('replace fixture with native coordinates');
+ const prototype={};
+ for(const [key,value]of Object.entries({latitude:53.524,longitude:-1.13,accuracy:10,heading:0,speed:0})){
+   Object.defineProperty(prototype,key,{get:()=>value,enumerable:true});
+ }
+ const coords=Object.create(prototype);
+ expect(Object.keys(coords)).toEqual([]);
+ position={timestamp:now,coords};owner.observe(position,null,route);
+ const requests=fetchMock.mock.calls.filter(([url])=>url==='/api/speed-limit/observation');
+ const body=JSON.parse(requests[requests.length-1][1].body);
+ expect(body).toMatchObject({lat:53.524,lon:-1.13,accuracy:10,heading:0,vehicle_type:'car'});
+ release({ok:true,json:async()=>observation()});await settle();
+ expect(value()).toBe('30');expect(owner.getPrimarySpeedObservation()).toMatchObject({speed_limit_mph:30,applicable:false});
+ expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+});
