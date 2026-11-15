@@ -44,3 +44,22 @@ test('optional renderer failure leaves acquired road data usable',async()=>{
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(owner.getSpeedObservation()).toMatchObject({speed_limit_mph:30,applicable:false});
 });
+test('read-only context status reports acquisition state and freshness without coordinates',async()=>{
+    expect(owner.getSpeedContextStatus()).toMatchObject({state:'loading',roadCount:0});
+    await finish();
+    const status=owner.getSpeedContextStatus();
+    expect(status).toMatchObject({state:'available',roadCount:1});
+    expect(Object.keys(status).sort()).toEqual(['matchReason','matchState','roadCount','state']);
+    expect(JSON.stringify(status)).not.toMatch(/53\.524|-1\.13|\/api\/|GraphHopper|Valhalla|TomTom/);
+    clock.mockReturnValue(NOW+60001);
+    expect(owner.getSpeedContextStatus().state).toBe('stale');
+});
+test('optional Info diagnostics cannot interrupt a valid mapped display',async()=>{
+    document.body.insertAdjacentHTML('beforeend','<p id="routeSpeedLimitStatus"></p><p id="routeSpeedDataStatus"></p>');
+    const status=jest.spyOn(owner,'getSpeedContextStatus').mockImplementation(()=>{throw Error('Optional diagnostic unavailable');});
+    try {
+        await finish();
+        expect(document.getElementById('speedLimitValue').textContent).toBe('30');
+        expect(document.getElementById('routeSpeedDataStatus').textContent).toBe('Speed details unavailable.');
+    } finally {status.mockRestore();}
+});

@@ -1726,3 +1726,16 @@ limit coverage, dashcam and Bluetooth still require their separate checks.
 Run `python3 scripts/privacy-http-lab/run.py --browser` for the disposable lab.
 The regression also checks coherent asset loading. No cache purge, service-worker
 weakening, server retention change or production deployment is part of this fix.
+
+### Route-speed selection investigation
+
+- [x] Verify the full browser GPS pipeline with a controlled GraphHopper-shaped
+  route and unavailable Overpass: after reacquisition, display 30 → 20 → unknown
+  on an untagged section → 40, retaining the Route label and no legal-alert state.
+  This tests runtime wiring, not a real engine response or physical phone.
+- [x] Extend the existing collapsed route Info with coordinate-free selected-route
+  step counts, GPS-derived step and road-context/match status. Keep provider names,
+  coordinates, source URLs and tokens out of this presentation. No priority or
+  matching changes are justified by the passing controlled route test.
+- [ ] Inspect these details on the private phone candidate to identify its actual
+  failure stage. The user's persistent unknown display remains unresolved.

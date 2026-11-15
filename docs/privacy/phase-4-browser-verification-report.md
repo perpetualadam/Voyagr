@@ -139,3 +139,34 @@ callback. It checks the Mapped est. label, empty legal-alert state, coherent ass
 loading, GPS-stop clearing and no uncaught page exceptions. This adds no uploads,
 precise-location logs or persistent location records. Production/phone retest
 gates and the NO-GO verdict above remain unchanged.
+
+## Follow-up: selected-route speed investigation
+
+Nine additional full-candidate checks exercise the actual GPS/controller/widget
+pipeline with a GraphHopper-shaped synthetic route and unavailable Overpass.
+Lifecycle setters seed the selected navigation state; this does not verify the
+Start transaction or make live GraphHopper requests. The displayed sequence is
+unknown during reacquisition, then 30, 20, unknown on an untagged section, and 40.
+Route labelling and the empty legal-alert state are preserved.
+
+The existing collapsed route Info now reports only navigation-active state,
+counts of route steps carrying numeric limits, GPS-derived step number, and
+road-context/match status. It does not expose coordinates, provider names,
+source URLs or credentials, and adds no logging/uploads. This is on-device
+diagnostic presentation, not analytics. The user's persistent unknown display
+remains unresolved pending private phone observation; no source-priority or
+matching change is justified by this passing controlled route test.
+
+Two repeated combined runs timed out during the added cold browser's bootstrap,
+before route assertions. A local load test confirmed immutable-asset request 501
+returns HTTP 429 and reproduces the same incomplete-page state. The harness now
+spaces the extra cold-browser scenario across the existing 60s asset-rate window;
+it does not disable rate limits, retry failed assertions or bypass integrity
+checks. Bootstrap failures report module/asset state and failed asset statuses.
+This controlled rate-limit reproduction does not establish the cause of any
+real-phone bootstrap or speed failure.
+
+Final paced run: 42 HTTP and 56 full-candidate Chromium assertions passed.
+JavaScript regression suite: 184 suites / 3,623 tests passed. Backend selection:
+2,349 passed, one skipped, 94 subtests passed; asset-release checks also passed.
+The private phone candidate and production remain unchanged by this work.

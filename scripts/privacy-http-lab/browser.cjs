@@ -289,6 +289,13 @@ async function main() {
     await broken.close();
     phase = 'full candidate GPS and delayed speed context';
     await require('./speed-context-browser.cjs')(origin, check);
+    // Each fresh browser downloads the complete immutable release. Give the
+    // unchanged 500/min asset endpoint budget its window before another cold
+    // client, rather than disabling rate limits or bypassing integrity checks.
+    console.log('INFO: Allowing the 60s asset-rate window before another cold browser; application limits unchanged.');
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    phase = 'full candidate route speed without Overpass';
+    await require('./route-speed-browser.cjs')(origin, check);
     console.log(checks + ' full-candidate Chromium checks passed. Synthetic data; not phone or production verification.');
   } catch (error) {
     error.testPhase = phase;

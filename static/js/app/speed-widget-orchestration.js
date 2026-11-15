@@ -257,6 +257,20 @@
             text+=' GPS accuracy: '+root.VoyagrUnits.formatPreferredDistanceMeters(fix.accuracy)+'.';
         }
         el.textContent=text;
+        const dataStatus=document.getElementById('routeSpeedDataStatus');
+        if(dataStatus)try{
+            const suppliedSteps=typeof rt().getCurrentRouteSteps==='function' ? rt().getCurrentRouteSteps() : null;
+            const steps=Array.isArray(suppliedSteps)?suppliedSteps:[];
+            const count=steps.filter(step=>step&&Number.isFinite(step.speed_limit)&&step.speed_limit>0&&step.speed_limit<=100).length;
+            const shape=position&&position.snap&&position.snap.index;
+            const idx=Number.isInteger(shape)&&shape>=0 ? SG().getActiveRouteManeuverIndex(steps,shape) : -1;
+            const owner=root.VoyagrRoadMatchOrchestration;
+            const context=owner&&owner.getSpeedContextStatus ? owner.getSpeedContextStatus() : null;
+            let detail='Navigation active: '+(rt().getRouteInProgress()?'yes':'no')+'. Route steps carrying limits: '+count+'/'+steps.length+'.';
+            detail+=' GPS-derived step: '+(idx>=0?String(idx+1):'unavailable')+'.';
+            if(context)detail+=' Road data: '+context.state+' ('+context.roadCount+' ways). Road match: '+context.matchState+'. '+context.matchReason+'.';
+            dataStatus.textContent=detail;
+        }catch(_){dataStatus.textContent='Speed details unavailable.';}
         const mapStatus=document.getElementById('routeMapRenderStatus');
         if(mapStatus && typeof root.__voyagrMapGetDiagnostics==='function') {
             try {

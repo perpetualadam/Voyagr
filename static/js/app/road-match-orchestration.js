@@ -53,12 +53,22 @@
         return api.speedObservation(match,context,vehicle,Date.now()) ||
             (api.speedObservationWithinUncertainty ? api.speedObservationWithinUncertainty(lastObservationPosition,index,vehicle,Date.now()) : null);
     }
+    function getSpeedContextStatus(){
+        var match=getSnapshot(),now=Date.now();
+        var state=context?'available':'unavailable';
+        if(context && (!Number.isFinite(context.acquired_at_ms)||now-context.acquired_at_ms<0||now-context.acquired_at_ms>(context.speed_observations_only?60000:86400000)))state='stale';
+        if(context&&context.speed_observations_only&&(!Number.isFinite(context.source_data_at_ms)||now-context.source_data_at_ms<0||now-context.source_data_at_ms>72*3600000))state='outdated map data';
+        if(index&&index.invalid)state='invalid geometry';
+        if(inFlight&&!context)state='loading';
+        return {state:state,roadCount:context&&Array.isArray(context.roads)?context.roads.length:0,
+            matchState:match&&match.evidence_status||'waiting',matchReason:match&&match.reason||'No road match yet'};
+    }
     function getLaneObservation(){return moduleApi().laneObservation(getSnapshot(),context,vehicle,Date.now());}
     function matchesProviderLaneApproach(step){return moduleApi().providerLaneApproach(getSnapshot(),context,vehicle,Date.now(),line,step);}
     function getGraphHopperLaneGuidance(step){return root.VoyagrLaneConnectivity?root.VoyagrLaneConnectivity.resolve({match:getSnapshot(),context:context,vehicle:vehicle,now:Date.now(),line:line,step:step,route:activeRoute},moduleApi()):null;}
     function classifyHazard(h){return moduleApi().hazardAssociation(getSnapshot(),h,Date.now());}
     function invalidate(reason){lastObservationPosition=null;snapshot=Object.assign({},snapshot||{},{evidence_status:'UNMATCHED',osm_way_id:null,graph_edge_id:null,segment_id:null,attributes_allowed:false,reason:reason});previous=null;}
-    var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,getSpeedObservation:getSpeedObservation,getLaneObservation:getLaneObservation,matchesProviderLaneApproach:matchesProviderLaneApproach,getGraphHopperLaneGuidance:getGraphHopperLaneGuidance,classifyHazard:classifyHazard};
+    var api={invalidate:invalidate,observe:observe,getSnapshot:getSnapshot,getAttributes:getAttributes,getSpeedObservation:getSpeedObservation,getSpeedContextStatus:getSpeedContextStatus,getLaneObservation:getLaneObservation,matchesProviderLaneApproach:matchesProviderLaneApproach,getGraphHopperLaneGuidance:getGraphHopperLaneGuidance,classifyHazard:classifyHazard};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     root.VoyagrRoadMatchOrchestration=api;
 })(typeof window!=='undefined'?window:globalThis);
