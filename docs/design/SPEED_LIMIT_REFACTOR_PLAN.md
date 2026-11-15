@@ -16,9 +16,10 @@ is not a claim that a refactor fixes missing map tags or the physical-device iss
 | Fresh source-based unit refresh, with startup/legacy fallback | `static/js/app/units-preferences-orchestration.js` |
 | Separate older speed API with provider-specific logic | `voyagr/api/navigation.py`, `speed_limit_detector.py` |
 
-The normal browser path uses road-context observations with selected-route fallback.
-It returns before calling the older speed endpoint. Having TomTom logic in that
-endpoint does not establish TomTom participation in the current widget.
+The normal browser path now requests a direct primary-provider observation and
+selects TomTom before Overpass observations and selected-route fallback. The older
+GET endpoint remains a compatibility interface; its combined response is not used
+as a primary observation. See the sixth increment for the new wiring and limits.
 
 ## First increment: one display resolver and renderer
 
@@ -139,3 +140,43 @@ Explicitly integrating TomTom as an advisory normal-widget fallback would requir
 freshness, road/direction association, uncertainty and provider-access policies.
 This increment does not silently enable new requests or reuse a cached candidate
 as current road evidence. The physical-phone issue remains unresolved.
+
+## Sixth increment: wire the primary provider into the normal widget
+
+This supersedes the earlier audited omission of TomTom from the normal path. The
+existing road owner now requests POST `/api/speed-limit/observation` using a fresh
+GPS sample. This calls TomTom directly with the corrected speed-only fields and
+never runs server-side Overpass, inferred road defaults or the ten-minute candidate
+cache. Missing key, HTTP failure, timeout, malformed tags or incompatible context
+return an unavailable outcome, so they cannot masquerade as primary successes.
+
+The shared resolver evaluates primary TomTom → applicable road evidence/Overpass
+observation → selected-route observation → unknown. Road context still acquires
+independently because lanes and hazards use it too; source priority is a display
+policy, not a sequential delay before loading fallback data. No second widget,
+provider SDK, script loader or extra local persistence is introduced. Legacy GET
+callers and exported compatibility helpers remain supported.
+
+Primary observations are PassengerCar-only (other vehicles keep fallback), accept
+GPS accuracy up to 35m and fixes at most 15s old, and are reused for at most 10s
+within 35m and 45° heading agreement when both headings exist. Acquisition is
+throttled to one request per 10s, with a four-second client abort and existing
+three-second provider timeout. Route/vehicle changes and GPS invalidation clear
+primary data and invalidate delayed responses. Simulation cannot use it. It is
+a provisional mapped estimate, not proof of road identity, current signage,
+conditional applicability or lane/route identity. The renderer labels it Provider
+est.; it never sets the legal-alert limit or changes navigation eligibility.
+Current GPS-derived local-road plausibility still rejects motorway-sized values.
+
+The API response is no-store; there is no new candidate database/cache. Coordinates
+travel to the configured primary provider as part of the authorized lookup; the
+server key stays server-side. Existing upstream logging/terms remain outside this
+code test. Info gives coordinate-free primary availability. Unsupported units or
+non-maximum speed types fall through instead of being guessed.
+
+Tests cover the actual Flask-to-detector request, failure/no-key/no-OSM behavior,
+priority through the real road owner/coordinator/DOM, asynchronous repaint without
+a GPS replay, stale/moved/heading/route/stop rejection, unit changes and legal-alert
+isolation. Browser provider responses are controlled fixtures, not live credentials
+or moving-phone evidence. This work must be deployed and checked on the actual
+phone before claiming resolution of its persistent unknown display.

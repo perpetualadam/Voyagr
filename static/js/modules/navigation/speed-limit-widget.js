@@ -34,12 +34,12 @@
             var expected = i === 0 ? 'MAPPED_OBSERVATION' : 'ROUTE_OBSERVATION';
             if (!observation || observation.evidence_state !== expected
                     || observation.applicable !== false || !valid(observation.speed_limit_mph)) continue;
-            var route = i === 1, uncertain = observation.position_uncertain === true;
+            var route = i === 1, uncertain = observation.position_uncertain === true, primary=observation.source==='TomTom';
             var title = route ? (uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs')
-                : uncertain ? 'Nearby mapped speeds agree; road uncertain. Check road signs' : 'Mapped speed; check road signs';
+                : primary ? 'Provider map estimate; road/direction uncertain. Check road signs' : uncertain ? 'Nearby mapped speeds agree; road uncertain. Check road signs' : 'Mapped speed; check road signs';
             return {status:'AVAILABLE',reasonCode:route?'ROUTE_SPEED_OBSERVATION':'MAPPED_SPEED_OBSERVATION',kind: route ? 'ROUTE' : 'MAPPED', limitMph: observation.speed_limit_mph,
                 legalLimitMph: null, observation: observation,
-                badge: route ? (uncertain ? 'Route est.' : 'Route') : (uncertain ? 'Mapped est.' : 'Mapped'),
+                badge: route ? (uncertain ? 'Route est.' : 'Route') : (primary ? 'Provider est.' : uncertain ? 'Mapped est.' : 'Mapped'),
                 title: title, reason: title};
         }
         return {status:'UNAVAILABLE',reasonCode:'NO_USABLE_SPEED',kind: 'UNKNOWN', limitMph: null, legalLimitMph: null,
@@ -77,7 +77,7 @@
     function resolveSpeedSources(sources) {
         sources=sources||{};
         var attempts=[], selection=resolveSpeedDisplay();
-        ['legal','mapped','route'].some(function(name){
+        ['primary','legal','mapped','route'].some(function(name){
             var producer=sources[name];
             if(typeof producer!=='function'){
                 attempts.push({source:name,reasonCode:'SOURCE_UNAVAILABLE'});return false;
@@ -86,7 +86,7 @@
             try { candidate=producer(); }
             catch(error){attempts.push({source:name,reasonCode:'SOURCE_ERROR'});return false;}
             var options=name==='legal'?{legalEvidence:candidate,legalLimitMph:candidate&&candidate.speed_limit_mph}
-                :name==='mapped'?{mappedObservation:candidate}:{routeObservation:candidate};
+                :name==='mapped'||name==='primary'?{mappedObservation:candidate}:{routeObservation:candidate};
             selection=resolveSpeedDisplay(options);
             attempts.push({source:name,reasonCode:selection.reasonCode});
             return selection.kind!=='UNKNOWN';

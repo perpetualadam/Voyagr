@@ -1759,3 +1759,7 @@ weakening, server retention change or production deployment is part of this fix.
 See [speed-limit refactor audit and plan](SPEED_LIMIT_REFACTOR_PLAN.md). No rebuild,
 production deployment, source-priority change or new retention is part of the
 first increment.
+
+- [x] Wire the normal speed widget to direct TomTom primary observations, with
+  Overpass/route fallback and bounded freshness, while keeping advisory values
+  outside legal-alert state. Physical-phone verification remains pending.

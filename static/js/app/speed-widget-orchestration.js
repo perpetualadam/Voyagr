@@ -232,7 +232,7 @@
         const position=gps && gps.getNavigationPositionEvidence ? gps.getNavigationPositionEvidence() : null;
         const fix=gps && gps.getAcceptedOriginFix ? gps.getAcceptedOriginFix() : null;
         const source=known ? 'mapped road' : observation && observation.evidence_state==='ROUTE_OBSERVATION' ? (observation.position_uncertain ? 'route estimate (GPS imprecise)' : 'selected route')
-            : observation ? (observation.position_uncertain ? 'mapped estimate (road uncertain)' : 'mapped observation') : 'unavailable';
+            : observation ? (observation.source==='TomTom' ? 'primary provider estimate (road uncertain)' : observation.position_uncertain ? 'mapped estimate (road uncertain)' : 'mapped observation') : 'unavailable';
         let text='Speed display: '+source+'. Route-section limit: '+(observation && observation.evidence_state==='ROUTE_OBSERVATION' || Number.isFinite(routeLimit) && routeLimit>0 ? 'available' : 'not supplied')+'.';
         text+=' GPS route position: '+(position && position.state || 'waiting')+'.';
         if (position && position.reason && source==='unavailable') text+=' '+position.reason+'.';
@@ -252,6 +252,7 @@
             let detail='Navigation active: '+(rt().getRouteInProgress()?'yes':'no')+'. Route steps carrying limits: '+count+'/'+steps.length+'.';
             detail+=' GPS-derived step: '+(idx>=0?String(idx+1):'unavailable')+'.';
             if(context)detail+=' Road data: '+context.state+' ('+context.roadCount+' ways). Road match: '+context.matchState+'. '+context.matchReason+'.';
+            if(owner&&owner.getPrimarySpeedStatus)detail+=' Primary provider: '+owner.getPrimarySpeedStatus()+'.';
             if(context&&context.speedReasonCode)detail+=' Mapped observation: '+context.speedReason+' ('+context.speedReasonCode+').';
             dataStatus.textContent=detail;
         }catch(_){dataStatus.textContent='Speed details unavailable.';}
@@ -286,6 +287,12 @@
         if (root.VoyagrRoadMatchOrchestration) {
             var legal=null;
             var selection=SL().resolveSpeedSources({
+                primary:function(){
+                    var owner=root.VoyagrRoadMatchOrchestration;
+                    var observation=owner.getPrimarySpeedObservation ? owner.getPrimarySpeedObservation() : null;
+                    if(observation&&SG().isPlausibleEdgeSpeedLimitMph&&!SG().isPlausibleEdgeSpeedLimitMph(observation.speed_limit_mph,roadType,currentSpeedMph))return null;
+                    return observation;
+                },
                 legal:function(){
                     var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
                     legal=bundle && bundle.speed;return legal;

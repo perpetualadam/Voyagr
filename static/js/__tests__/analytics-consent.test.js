@@ -1,5 +1,7 @@
 const KEY='voyagrAnalyticsConsentV1';let analytics,listeners;
 beforeEach(()=>{
+ // Freeze timestamps so seconds like 53.577 cannot mimic the GPS marker 53.5.
+ jest.useFakeTimers({now:new Date('2026-01-01T00:00:00Z')});
  jest.resetModules();localStorage.clear();listeners=[];global.VoyagrConsentPolicy=require('../modules/privacy/consent-policy');
  document.head.innerHTML='<script data-voyagr-analytics="G-TEST123"></script>';
  document.body.innerHTML='<button id="analyticsAllow"></button><button id="analyticsDecline"></button><p id="analyticsConsentStatus"></p>';
@@ -7,7 +9,7 @@ beforeEach(()=>{
  for(const part of document.cookie.split(';'))document.cookie=part.trim().split('=')[0]+'=; Max-Age=0; Path=/';
  const add=window.addEventListener.bind(window);jest.spyOn(window,'addEventListener').mockImplementation((name,fn,...rest)=>{listeners.push([name,fn]);return add(name,fn,...rest);});
 });
-afterEach(()=>{for(const [name,fn]of listeners)window.removeEventListener(name,fn);jest.restoreAllMocks();for(const key of ['VoyagrAnalyticsConsent','gtag','dataLayer','ga-disable-G-TEST123'])delete window[key];history.replaceState(null,'','/');});
+afterEach(()=>{jest.useRealTimers();for(const [name,fn]of listeners)window.removeEventListener(name,fn);jest.restoreAllMocks();for(const key of ['VoyagrAnalyticsConsent','gtag','dataLayer','ga-disable-G-TEST123'])delete window[key];history.replaceState(null,'','/');});
 function load(){analytics=require('../app/analytics-consent');document.dispatchEvent(new Event('DOMContentLoaded'));}
 test.each([null,'denied','yes','true','granted'])('no remote script or analytics queue without explicit consent %p',value=>{
  if(value!==null)localStorage.setItem(KEY,value);load();

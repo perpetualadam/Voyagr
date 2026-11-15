@@ -17,6 +17,9 @@ module.exports = async function speedContextBrowser(origin, check) {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.name));
+    let primaryRelease;
+    const primaryGate=new Promise(resolve=>{primaryRelease=resolve;});
+    let primaryRequests=0;
     let release;
     const responseGate = new Promise(resolve => { release = resolve; });
     let requested;
@@ -31,6 +34,12 @@ module.exports = async function speedContextBrowser(origin, check) {
     await page.route('**/*', async route => {
       const target = new URL(route.request().url());
       if (target.origin !== origin) return route.abort();
+      if (target.pathname === '/api/speed-limit/observation') {
+        primaryRequests++; await primaryGate;
+        return route.fulfill({contentType:'application/json',body:JSON.stringify({status:'AVAILABLE',observation:{
+          source:'TomTom',evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:40,
+          position_uncertain:true,acquired_at_ms:Date.now()}})});
+      }
       if (target.pathname === '/api/road-context') {
         requested(); await responseGate;
         const now = Date.now();
@@ -70,6 +79,12 @@ module.exports = async function speedContextBrowser(origin, check) {
     await page.evaluate(() => { const select=document.getElementById('speedUnit'); select.value='mph'; select.dispatchEvent(new Event('change',{bubbles:true})); });
     check('Actual unit control restores mapped mph without another GPS callback', await page.textContent('#speedLimitValue')==='30' && await page.evaluate(n=>window.__speedWatchCallbacks===n,callbacks));
     check('Unit changes do not promote mapped estimates into legal alert state', await page.evaluate(()=>VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph()===null));
+    primaryRelease();
+    await page.waitForFunction(()=>document.getElementById('speedLimitValue').textContent==='40');
+    check('Actual primary request replaces the Overpass fallback without another GPS callback',primaryRequests===1&&await page.evaluate(n=>window.__speedWatchCallbacks===n,callbacks));
+    check('Primary value has an estimate label and cannot authorize legal alerts',await page.textContent('#speedLimitMappedLabel')==='Provider est.'&&await page.evaluate(()=>VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph()===null));
+    await page.evaluate(()=>{const select=document.getElementById('speedUnit');select.value='kmh';select.dispatchEvent(new Event('change',{bubbles:true}));});
+    check('Primary estimate survives unit conversion through the shared renderer',await page.textContent('#speedLimitValue')==='64'&&await page.textContent('#speedLimitMappedLabel')==='Provider est.');
     check('Candidate uses coherent immutable assets without an asset error', await page.evaluate(() => !!window.VoyagrAssetRelease && !document.getElementById('voyagr-asset-error')));
     await page.evaluate(() => VoyagrGpsOrchestration.stopGPSTracking());
     check('Stopping GPS clears the mapped display', await page.textContent('#speedLimitValue') === '—');

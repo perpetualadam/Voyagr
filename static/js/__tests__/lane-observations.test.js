@@ -175,7 +175,8 @@ test('actual road owner shares a single bounded context for speed and lane obser
         expect(owner.getSpeedObservation().speed_limit_mph).toBe(30);
         expect(owner.getAttributes()).toBeNull();
         expect(RM.shouldPauseNavigation(owner.getSnapshot())).toBe(false);
-        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls.filter(([url])=>url==='/api/road-context')).toHaveLength(1);
+        expect(global.fetch.mock.calls.filter(([url])=>url==='/api/speed-limit/observation')).toHaveLength(1);
         document.getElementById('vehicleType').value='';
         expect(owner.getLaneObservation()).toBeNull();
     } finally {

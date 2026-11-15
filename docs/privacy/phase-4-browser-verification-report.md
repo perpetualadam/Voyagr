@@ -201,3 +201,19 @@ one skipped and 94 subtests passed; 42 HTTP and 63 full-candidate Chromium check
 passed. Browser inputs are synthetic, not physical-phone or production evidence.
 The persistent phone speed-display issue remains unresolved, and neither the
 private phone candidate nor production was updated by this work.
+
+## Normal-widget primary-provider integration
+
+The real GPS/road-owner/coordinator/renderer flow now issues a direct primary
+provider observation request. The full-page test first displays its Overpass
+fallback, then a delayed controlled TomTom response replaces it without a new
+GPS callback; Provider est. labeling, unit conversion and null legal-alert state
+are checked. A separate real GPS route flow keeps route values usable when both
+primary and Overpass fixtures are unavailable. These are controlled provider
+responses, not live key, road-sign or physical-phone validation.
+
+Validation: 42 HTTP checks and 66 full-candidate Chromium checks passed, with
+disposable containers/networks cleaned up. Backend CI selection: 2,383 passed,
+one skipped, 94 subtests. JavaScript: 190 suites / 3,698 tests. No production or
+private-phone deployment was performed. Actual phone behavior remains pending;
+no optional cloud capability or privacy production-readiness claim changes.

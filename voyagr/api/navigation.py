@@ -48,7 +48,7 @@ _road_evidence_limiter=RateLimiter(max_requests=120,window_seconds=60,key_prefix
 
 @navigation_bp.before_request
 def limit_road_evidence_requests():
-    if request.path in ('/api/road-context','/api/road-match') and not _road_evidence_limiter.is_allowed(request.remote_addr or 'unknown'):
+    if request.path in ('/api/road-context','/api/road-match','/api/speed-limit/observation') and not _road_evidence_limiter.is_allowed(request.remote_addr or 'unknown'):
         return jsonify(success=False,error='Road evidence rate limit exceeded'),429
 
 
@@ -283,6 +283,59 @@ def get_speed_warnings():
             message='Applicable legal speed limit unknown; follow road signs',warning_threshold_mph=5)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+@navigation_bp.route('/speed-limit/observation', methods=['POST'])
+def get_primary_speed_observation():
+    """Direct primary-provider observation; never run OSM/inference or grant authority."""
+    import math
+    import time
+    from voyagr.utils.validation import validate_coordinates
+
+    def outcome(code, observation=None, status=200):
+        response = jsonify(success=True, status='AVAILABLE' if observation else 'UNAVAILABLE',
+                           reasonCode=code, observation=observation)
+        response.headers['Cache-Control'] = 'no-store'
+        return response, status
+
+    if request.content_length is None or request.content_length > 2048:
+        return outcome('INVALID_REQUEST', status=400)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return outcome('INVALID_REQUEST', status=400)
+    coords = validate_coordinates(f"{data.get('lat', '')},{data.get('lon', '')}")
+    if not coords:
+        return outcome('INVALID_REQUEST', status=400)
+    # Current upstream request uses PassengerCar. Other vehicles retain fallback.
+    if data.get('vehicle_type') != 'car':
+        return outcome('UNSUPPORTED_VEHICLE')
+    accuracy = data.get('accuracy')
+    if type(accuracy) not in (int, float) or not math.isfinite(accuracy) or not 0 <= accuracy <= 35:
+        return outcome('GPS_INVALID')
+    heading = data.get('heading')
+    if heading is not None and (type(heading) not in (int, float) or not math.isfinite(heading) or not 0 <= heading < 360):
+        return outcome('INVALID_REQUEST', status=400)
+    road_type = data.get('road_type', 'unknown')
+    if not isinstance(road_type, str):
+        return outcome('INVALID_REQUEST', status=400)
+    if not speed_limit_detector or not os.getenv('TOMTOM_API_KEY'):
+        return outcome('SOURCE_UNAVAILABLE')
+    try:
+        from speed_limit_detector import _region_from_lat_lon, _is_plausible_limit_for_road_type
+        limit, _ = speed_limit_detector._tomtom_snap_speed_limit_mph(
+            *coords, _region_from_lat_lon(*coords), heading_deg=heading)
+        if type(limit) not in (int, float) or not math.isfinite(limit) or not 0 < limit <= 100:
+            return outcome('SOURCE_UNAVAILABLE')
+        if not _is_plausible_limit_for_road_type(limit, road_type):
+            return outcome('ROAD_CONTEXT_CONFLICT')
+        return outcome('PRIMARY_MAPPED_OBSERVATION', dict(
+            evidence_state='MAPPED_OBSERVATION', applicable=False, speed_limit_mph=limit,
+            position_uncertain=True, source='TomTom', acquired_at_ms=time.time()*1000,
+            reason='Provider map estimate; road/direction uncertain. Check road signs.'))
+    except route_transport.RoutingDeadlineExceeded:
+        raise
+    except Exception:
+        return outcome('SOURCE_UNAVAILABLE')
 
 
 @navigation_bp.route('/speed-limit', methods=['GET'])
