@@ -292,3 +292,53 @@ class TestOsmMaxspeedUnits(unittest.TestCase):
         for value in ('signals', 'variable', 'none', ''):
             with self.subTest(value=value):
                 self.assertIsNone(_parse_osm_maxspeed_to_mph(value, 'uk'))
+
+class TestTomTomDirectParser(unittest.TestCase):
+    def test_direct_snap_success_does_not_require_overpass(self):
+        from unittest.mock import Mock
+        response = Mock(status_code=200)
+        response.json.return_value = {'route': [{'properties': {'speedLimits': {'value': 48, 'unit': 'km/h'}, 'roadNumbers': ['A1']}}]}
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'synthetic-test-key'}), patch('speed_limit_detector.requests.get', return_value=response) as get:
+            detector = SpeedLimitDetector()
+            self.assertEqual(detector._tomtom_snap_speed_limit_mph(53.5535683, -1.4823286, 'uk'), (30, 'primary'))
+            self.assertEqual(get.call_count, 1)
+            self.assertEqual(get.call_args.args[0], 'https://api.tomtom.com/snapToRoads/1')
+            self.assertEqual(detector.metrics['tomtom_snap_to_roads_success'], 1)
+
+    def test_direct_snap_http_failure_is_not_a_success(self):
+        from unittest.mock import Mock
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'synthetic-test-key'}), patch('speed_limit_detector.requests.get', return_value=Mock(status_code=403)):
+            detector = SpeedLimitDetector()
+            self.assertEqual(detector._tomtom_snap_speed_limit_mph(53.5535683, -1.4823286, 'uk'), (None, None))
+            self.assertEqual(detector.metrics['tomtom_snap_to_roads_success'], 0)
+            self.assertEqual(detector.metrics['tomtom_snap_to_roads_failures'], 1)
+
+class TestTomTomProbe(unittest.TestCase):
+    def test_probe_reports_http_status_without_response_body_or_key(self):
+        import importlib.util
+        import io
+        from contextlib import redirect_stdout
+        from pathlib import Path
+        from unittest.mock import Mock
+        path = Path(__file__).resolve().parents[1] / 'scripts/probe-tomtom-speed.py'
+        spec = importlib.util.spec_from_file_location('tomtom_probe', path)
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)
+        output = io.StringIO()
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'secret-test-key'}), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get', return_value=Mock(status_code=403, text='secret-test-key')), redirect_stdout(output):
+            self.assertEqual(probe.main(), 1)
+        self.assertIn('HTTP status: 403', output.getvalue())
+        self.assertNotIn('secret-test-key', output.getvalue())
+
+    def test_probe_missing_key_makes_no_request(self):
+        import importlib.util
+        import io
+        from contextlib import redirect_stdout
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[1] / 'scripts/probe-tomtom-speed.py'
+        spec = importlib.util.spec_from_file_location('tomtom_probe', path)
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)
+        with patch.dict('os.environ', {}, clear=True), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get') as get, redirect_stdout(io.StringIO()):
+            self.assertEqual(probe.main(), 2)
+            get.assert_not_called()
