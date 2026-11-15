@@ -46,6 +46,21 @@
             observation: null, badge: '', title: '', reason: 'No usable matched, mapped or route limit'};
     }
 
+    // Translate a resolved selection into the existing application boundary.
+    // Re-resolve supplied evidence so callers cannot promote an advisory number.
+    function buildSpeedSelectionApplyPlan(selection, legalEvidence, displaySpeedMph) {
+        var resolved=resolveSpeedDisplay({
+            legalEvidence:selection && selection.kind==='LEGAL'?legalEvidence:null,
+            legalLimitMph:selection && selection.legalLimitMph,
+            mappedObservation:selection && selection.kind==='MAPPED'?selection.observation:null,
+            routeObservation:selection && selection.kind==='ROUTE'?selection.observation:null
+        });
+        return {action:'apply',legalEvidence:resolved.kind==='LEGAL'?legalEvidence:null,
+            speedObservation:resolved.observation,
+            statePatch:{currentLimitMph:resolved.legalLimitMph,currentSpeedLimitMph:resolved.legalLimitMph},
+            widgetUpdate:{displaySpeedMph:displaySpeedMph,shownLimit:resolved.legalLimitMph}};
+    }
+
     // Evaluate sources lazily and isolate producer failures from lower-priority sources.
     // Error text may contain source details; only stable codes leave this boundary.
     function resolveSpeedSources(sources) {
@@ -595,6 +610,7 @@
     var api = {
         resolveSpeedDisplay: resolveSpeedDisplay,
         resolveSpeedSources: resolveSpeedSources,
+        buildSpeedSelectionApplyPlan: buildSpeedSelectionApplyPlan,
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
         shouldFetchSpeedLimit: shouldFetchSpeedLimit,

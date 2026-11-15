@@ -300,10 +300,7 @@
                 }
             });
             var known=selection.kind==='LEGAL';
-            applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
-                speedObservation:selection.observation,
-                statePatch:{currentLimitMph:selection.legalLimitMph,currentSpeedLimitMph:selection.legalLimitMph},
-                widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:selection.legalLimitMph}});
+            applySpeedLimitFetchOutcomeFromPlan(SL().buildSpeedSelectionApplyPlan(selection,legal,currentSpeedMph));
             updateSpeedLimitStatus(known,selection.observation,valhallaSpeedLimit);
             return;
         }
@@ -361,14 +358,10 @@
             .then((data) => {
                 const p=data && data.success && data.data;
                 const selection=SL().resolveSpeedDisplay({legalEvidence:p,legalLimitMph:p && p.speed_limit_mph});
-                const known=selection.kind==='LEGAL';
-                acceptIfFresh({action:'apply',legalEvidence:known ? p : null,
-                    statePatch:{currentLimitMph:selection.legalLimitMph,currentSpeedLimitMph:selection.legalLimitMph},
-                    widgetUpdate:{displaySpeedMph:ctx.currentGpsSpeedMph,shownLimit:selection.legalLimitMph}});
+                acceptIfFresh(SL().buildSpeedSelectionApplyPlan(selection,p,ctx.currentGpsSpeedMph));
             })
             .catch(() => {
-                acceptIfFresh({action:'apply',legalEvidence:null,statePatch:{currentLimitMph:null,currentSpeedLimitMph:null},
-                    widgetUpdate:{displaySpeedMph:ctx.currentGpsSpeedMph,shownLimit:null}});
+                acceptIfFresh(SL().buildSpeedSelectionApplyPlan(null,null,ctx.currentGpsSpeedMph));
             })
             .finally(() => {
                 state.inFlight = false;
