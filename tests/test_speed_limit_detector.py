@@ -303,6 +303,7 @@ class TestTomTomDirectParser(unittest.TestCase):
             self.assertEqual(detector._tomtom_snap_speed_limit_mph(53.5535683, -1.4823286, 'uk'), (30, 'primary'))
             self.assertEqual(get.call_count, 1)
             self.assertEqual(get.call_args.args[0], 'https://api.tomtom.com/snapToRoads/1')
+            self.assertEqual(get.call_args.kwargs['params']['fields'], '{route{properties{speedLimits{value,unit,type},streetName}}}')
             self.assertEqual(detector.metrics['tomtom_snap_to_roads_success'], 1)
 
     def test_direct_snap_http_failure_is_not_a_success(self):
@@ -325,8 +326,9 @@ class TestTomTomProbe(unittest.TestCase):
         probe = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(probe)
         output = io.StringIO()
-        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'secret-test-key'}), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get', return_value=Mock(status_code=403, text='secret-test-key')), redirect_stdout(output):
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'secret-test-key'}), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get', return_value=Mock(status_code=403, text='secret-test-key')) as get, redirect_stdout(output):
             self.assertEqual(probe.main(), 1)
+        self.assertEqual(get.call_args.kwargs['params']['fields'], '{route{properties{speedLimits{value,unit,type},streetName}}}')
         self.assertIn('HTTP status: 403', output.getvalue())
         self.assertNotIn('secret-test-key', output.getvalue())
 
@@ -342,3 +344,11 @@ class TestTomTomProbe(unittest.TestCase):
         with patch.dict('os.environ', {}, clear=True), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get') as get, redirect_stdout(io.StringIO()):
             self.assertEqual(probe.main(), 2)
             get.assert_not_called()
+
+    def test_direct_snap_without_road_numbers_does_not_invent_road_class(self):
+        from unittest.mock import Mock
+        response = Mock(status_code=200)
+        response.json.return_value = {'route': [{'properties': {'speedLimits': {'value': 48, 'unit': 'kmph'}}}]}
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'synthetic-test-key'}), patch('speed_limit_detector.requests.get', return_value=response):
+            detector = SpeedLimitDetector()
+            self.assertEqual(detector._tomtom_snap_speed_limit_mph(53.5535683, -1.4823286, 'uk'), (30, None))

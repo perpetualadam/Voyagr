@@ -23,7 +23,7 @@ def main():
     # Public Shambles Street test point, not device/user GPS.
     params = {'key': key, 'points': '-1.4823286,53.5535683;-1.4818786,53.5540183',
               'headings': '0;0', 'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
-              'fields': '{route{properties{speedLimits{value,unit,type},streetName,roadNumbers}}}',
+              'fields': '{route{properties{speedLimits{value,unit,type},streetName}}}',
               'vehicleType': 'PassengerCar', 'measurementSystem': 'metric'}
     try:
         response = requests.get('https://api.tomtom.com/snapToRoads/1', params=params, timeout=15)

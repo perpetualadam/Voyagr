@@ -26,3 +26,13 @@ Local mocked detector tests cover a compatible 48 km/h response becoming 30 mph
 and an HTTP 403 remaining a failure. There was no live key in the development
 workspace; live provider functionality remains unverified until this probe runs
 on the configured host. Do not paste an API key into chat or diagnostic output.
+
+## Confirmed request failure
+
+The configured VPS returned HTTP 400 / INVALID_REQUEST identifying
+`{route.properties.roadNumbers}` as an unknown requested field. Both detector and
+probe now omit that field. The parser still tolerates road numbers in older
+responses, but an absent value yields no provider road classification; no class
+is guessed from the numeric limit. Client-edge plausibility checks remain. A
+new live request is required to establish whether the corrected request succeeds;
+this correction does not integrate TomTom into the normal widget.
