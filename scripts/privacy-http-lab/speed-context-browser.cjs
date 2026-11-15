@@ -28,6 +28,10 @@ module.exports = async function speedContextBrowser(origin, check) {
       window.__speedWatchCallbacks = 0;
       const watch = navigator.geolocation.watchPosition.bind(navigator.geolocation);
       navigator.geolocation.watchPosition = function(success, failure, options) {
+        window.__emitStationarySpeedFixture=(offset,speed)=>{
+          window.__speedWatchCallbacks++;
+          success({timestamp:Date.now(),coords:{latitude:53.524+offset/111195,longitude:-1.13,accuracy:17.7,heading:0,speed}});
+        };
         return watch(position => { window.__speedWatchCallbacks++; success(position); }, failure, options);
       };
     });
@@ -38,7 +42,7 @@ module.exports = async function speedContextBrowser(origin, check) {
         primaryRequests++;
         const body=route.request().postDataJSON();
         check('Actual native GPS creates a complete primary request',
-          body.lat===53.524&&body.lon===-1.13&&body.accuracy===17.7&&body.vehicle_type==='car');
+          Number.isFinite(body.lat)&&Math.abs(body.lat-53.524)<.0002&&body.lon===-1.13&&body.accuracy===17.7&&body.vehicle_type==='car');
         await primaryGate;
         return route.fulfill({contentType:'application/json',body:JSON.stringify({status:'AVAILABLE',observation:{
           source:'TomTom',evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:40,
@@ -89,6 +93,12 @@ module.exports = async function speedContextBrowser(origin, check) {
     check('Primary value has an estimate label and cannot authorize legal alerts',await page.textContent('#speedLimitMappedLabel')==='Provider est.'&&await page.evaluate(()=>VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph()===null));
     await page.evaluate(()=>{const select=document.getElementById('speedUnit');select.value='kmh';select.dispatchEvent(new Event('change',{bubbles:true}));});
     check('Primary estimate survives unit conversion through the shared renderer',await page.textContent('#speedLimitValue')==='64'&&await page.textContent('#speedLimitMappedLabel')==='Provider est.');
+    for(const [offset,speed] of [[9,8.5],[0,0],[9,8.5],[0,0]]){
+      await page.waitForTimeout(250);
+      await page.evaluate(([offset,speed])=>__emitStationarySpeedFixture(offset,speed),[offset,speed]);
+      check('Stationary GPS noise does not become a displayed driving speed',await page.textContent('#speedValue')==='0');
+    }
+    check('Stationary GPS updates retain a fresh primary limit',await page.textContent('#speedLimitValue')==='64'&&await page.textContent('#speedLimitMappedLabel')==='Provider est.');
     check('Candidate uses coherent immutable assets without an asset error', await page.evaluate(() => !!window.VoyagrAssetRelease && !document.getElementById('voyagr-asset-error')));
     await page.evaluate(() => VoyagrGpsOrchestration.stopGPSTracking());
     check('Stopping GPS clears the mapped display', await page.textContent('#speedLimitValue') === '—');

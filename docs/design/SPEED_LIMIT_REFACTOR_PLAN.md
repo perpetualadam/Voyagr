@@ -200,3 +200,28 @@ No source priority, provider endpoint, freshness limit, GPS threshold or alert
 policy changes. This is a proven primary-provider request bug, not evidence that
 it caused the older Overpass-only symptom. Actual-phone verification remains
 necessary after deployment.
+
+## Stationary jitter and primary refresh continuity
+
+The stationary report is reproducible with a false 8.5m/s device reading while
+positions remain only 9m apart inside their 12m uncertainty radii: the old raw
+picker emits 19.0145mph. Before movement is established, fixes remaining inside
+the combined uncertainty envelope now cannot promote themselves into speed.
+The guard considers up to five recent samples (at most five seconds); established
+motion or travel out of that envelope still displays normally. An explicit zero
+inside overlapping uncertainty clears moving state. Missing accuracy does not
+establish a stopped position. GPS noise below the display deadband resets the
+movement counter rather than gradually lowering its own noise threshold.
+
+Primary refresh formerly began at the same ten-second boundary as expiry. Refresh
+now starts after six seconds while an estimate is usable, preserving the old valid
+value during the request without extending its ten-second freshness or movement
+bounds. Failed/unavailable acquisition keeps the ten-second retry cadence; healthy
+lookups can rise from six to ten per minute. Expired values still fall through.
+Heading changes alone do not invalidate an estimate when both device samples
+report below 1m/s; moving/unknown-speed heading checks remain.
+
+Regression tests fail on the previous code for the false stationary speed,
+stationary heading changes and lack of early refresh. Moving-start/established
+travel, stale-response rejection, expired pending refresh and no legal-alert
+authority remain covered. Real-phone behavior needs rechecking after deployment.

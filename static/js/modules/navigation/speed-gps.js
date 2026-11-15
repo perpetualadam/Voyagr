@@ -1169,6 +1169,24 @@
     // function is a pure tick that returns { value, state }.
     // ======================================================================
 
+    // Before motion is established, overlapping GPS uncertainty is not speed evidence.
+    function fixesRemainInsideUncertainty(history) {
+        if(!Array.isArray(history)||history.length<2)return false;
+        var current=history[history.length-1],first=current;
+        if(!current||!Number.isFinite(current.accuracy)||current.accuracy<=0)return false;
+        for(var i=history.length-2;i>=Math.max(0,history.length-5);i--){
+            var candidate=history[i],dt=(+current.timestamp-+(candidate&&candidate.timestamp))/1000;
+            if(!Number.isFinite(dt)||dt<=0||dt>5)break;
+            first=candidate;
+        }
+        if(first===current||!Number.isFinite(first.accuracy)||first.accuracy<=0)return false;
+        if(![first.lat,first.lon,current.lat,current.lon].every(Number.isFinite))return false;
+        var lat=(current.lat-first.lat)*Math.PI/180,lon=(current.lon-first.lon)*Math.PI/180;
+        var h=Math.sin(lat/2)**2+Math.cos(first.lat*Math.PI/180)*Math.cos(current.lat*Math.PI/180)*Math.sin(lon/2)**2;
+        var distance=12742000*Math.asin(Math.sqrt(Math.min(1,h)));
+        return distance<=Math.max(8,first.accuracy+current.accuracy);
+    }
+
     /**
      * Pick the best GPS-speed estimate for this tick (device m/s or displacement).
      *
@@ -1189,12 +1207,17 @@
 
         function finish(mph) {
             var x = (Number.isFinite(mph) && mph >= 0) ? Math.min(mph, c.MAX_DISPLAY_GPS_SPEED_MPH) : 0;
+            if(x<0.5)consecutiveDisplacementMoves=0;
             return {
                 value: x,
                 state: { lastGoodRawPickMph: x, consecutiveDisplacementMoves: consecutiveDisplacementMoves }
             };
         }
 
+        if((lastGoodRawPickMph<2||coordsSpeed===0)&&fixesRemainInsideUncertainty(history)){
+            consecutiveDisplacementMoves=0;
+            return finish(0);
+        }
         var deviceReportsStopped = !Number.isFinite(coordsSpeed) || coordsSpeed <= 0;
 
         if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
