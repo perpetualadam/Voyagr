@@ -39,7 +39,7 @@ test.each(['stale','moved','heading','invalidated','new route','stopped'])('late
  const oldRelease=release;
  if(kind==='stale'){now+=16000;fix.timestamp=NOW;}
  if(kind==='moved'){position.coords.longitude+=.01;fix.lon+=.01;}
- if(kind==='heading')position.coords.heading=180;
+ if(kind==='heading'){position.coords.heading=180;position.coords.speed=10;}
  if(kind==='invalidated')owner.invalidate('GPS ended');
  if(kind==='new route')owner.observe(position,null,{id:'replacement'});
  if(kind==='stopped'){tracking=false;owner.invalidate('GPS ended');}
@@ -81,4 +81,23 @@ test('native-style inherited GPS getters produce a complete request and a usable
  release({ok:true,json:async()=>observation()});await settle();
  expect(value()).toBe('30');expect(owner.getPrimarySpeedObservation()).toMatchObject({speed_limit_mph:30,applicable:false});
  expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+});
+
+test('stationary heading jitter does not discard a fresh primary observation',async()=>{
+ release({ok:true,json:async()=>observation()});await settle();
+ position.coords.heading=180;render();expect(value()).toBe('30');
+ expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+});
+test('refresh begins before expiry and the valid estimate stays visible while it completes',async()=>{
+ release({ok:true,json:async()=>observation()});await settle();
+ now+=6000;position.timestamp=now;fix.timestamp=now;owner.observe(position,null,route);render();
+ expect(fetchMock.mock.calls.filter(([url])=>url==='/api/speed-limit/observation')).toHaveLength(2);
+ expect(value()).toBe('30');
+ now+=3000;position.timestamp=now;fix.timestamp=now;owner.observe(position,null,route);render();expect(value()).toBe('30');
+ release({ok:true,json:async()=>observation()});await settle();expect(value()).toBe('30');
+});
+test('a pending refresh cannot extend expired data',async()=>{
+ release({ok:true,json:async()=>observation()});await settle();
+ now+=6000;position.timestamp=now;fix.timestamp=now;owner.observe(position,null,route);
+ now+=4001;position.timestamp=now;fix.timestamp=now;render();expect(value()).toBe('40');
 });

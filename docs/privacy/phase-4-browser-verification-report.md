@@ -234,3 +234,21 @@ one skipped and 94 subtests; disposable lab 42 HTTP and 67 full-candidate Chromi
 checks passed. This establishes the native request fix under controlled conditions,
 not actual-phone resolution or the cause of the earlier Overpass-only symptom.
 No production deployment was performed.
+
+## Stationary speed and refresh continuity
+
+A controlled stationary trace reproduces 19.0145mph on the old raw picker from
+a false 8.5m/s sensor value despite only 9m of displacement within 12m accuracy
+radii. New tests verify rejection before movement is established, repeated-jitter
+stability, explicit-stop reset, and preservation of established/confirmed travel.
+The real GPS/controller/DOM browser trace remains at zero for four controlled
+jitter samples and keeps a fresh primary estimate visible. No live GPS recording
+was captured; these are deterministic inputs rather than proof of phone resolution.
+
+Valid primary acquisition refreshes at six seconds while retaining the existing
+ten-second expiry; pending/failed refresh cannot prolong stale data. Stationary
+heading changes do not clear valid data, while moving-heading guards remain.
+
+Validation: 191 JavaScript suites / 3,710 tests; backend selection 2,383 passed,
+one skipped, 94 subtests; 42 HTTP and 72 full-candidate Chromium checks passed.
+Disposable lab cleanup completed. No production deployment occurred.

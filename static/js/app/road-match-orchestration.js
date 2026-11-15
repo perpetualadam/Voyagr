@@ -18,7 +18,8 @@
     }
     function samePrimaryPosition(a,b){
         if(!a||!b||primaryDistance(a,b)>35)return false;
-        if(Number.isFinite(a.heading)&&Number.isFinite(b.heading)){
+        var stopped=Number.isFinite(a.speed)&&a.speed>=0&&a.speed<1&&Number.isFinite(b.speed)&&b.speed>=0&&b.speed<1;
+        if(!stopped&&Number.isFinite(a.heading)&&Number.isFinite(b.heading)){
             var d=Math.abs(a.heading-b.heading)%360;
             if(Math.min(d,360-d)>45)return false;
         }
@@ -44,10 +45,12 @@
         if(!primaryPositionUsable(position))return;
         if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isSimulating())return;
         var now=Date.now();
-        if(primaryRequest||now-primaryLastFetch<10000)return;
+        // Refresh early only while a usable estimate exists; failures retain the slower retry.
+        var interval=getPrimarySpeedObservation()?6000:10000;
+        if(primaryRequest||now-primaryLastFetch<interval)return;
         // GeolocationCoordinates fields may be inherited getters, not own enumerable keys.
         var c=position.coords;
-        var coords={latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,heading:c.heading};
+        var coords={latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,heading:c.heading,speed:c.speed};
         var seq=++primarySeq,gen=generation,timestamp=position.timestamp;
         var controller=typeof AbortController!=='undefined'?new AbortController():null;
         primaryRequest={controller:controller};primaryLastFetch=now;
