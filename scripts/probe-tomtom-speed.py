@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+from urllib.parse import quote, quote_plus
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -23,12 +24,23 @@ def main():
     # Public Shambles Street test point, not device/user GPS.
     params = {'key': key, 'points': '-1.4823286,53.5535683;-1.4818786,53.5540183',
               'headings': '0;0', 'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
-              'fields': '{route{properties{speedLimits{value,unit,type},streetName}}}',
+              'fields': '{route{properties{speedLimits{value,unit,type}}}}',
               'vehicleType': 'PassengerCar', 'measurementSystem': 'metric'}
     try:
         response = requests.get('https://api.tomtom.com/snapToRoads/1', params=params, timeout=15)
         print('HTTP status:', response.status_code)
         if response.status_code != 200:
+            try:
+                error_payload = response.json()
+                error = error_payload.get('detailedError', {}) if isinstance(error_payload, dict) else {}
+                for field in ('code', 'message'):
+                    value = error.get(field) if isinstance(error, dict) else None
+                    if isinstance(value, str):
+                        for secret in (key, quote(key, safe=''), quote_plus(key)):
+                            value = value.replace(secret, '[REDACTED]')
+                        print('TomTom error ' + field + ':', value[:1000])
+            except (ValueError, TypeError):
+                pass
             print('Direct Snap request failed; no other provider was used.')
             return 1
         payload = response.json()

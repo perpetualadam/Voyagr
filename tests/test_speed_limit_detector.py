@@ -303,7 +303,7 @@ class TestTomTomDirectParser(unittest.TestCase):
             self.assertEqual(detector._tomtom_snap_speed_limit_mph(53.5535683, -1.4823286, 'uk'), (30, 'primary'))
             self.assertEqual(get.call_count, 1)
             self.assertEqual(get.call_args.args[0], 'https://api.tomtom.com/snapToRoads/1')
-            self.assertEqual(get.call_args.kwargs['params']['fields'], '{route{properties{speedLimits{value,unit,type},streetName}}}')
+            self.assertEqual(get.call_args.kwargs['params']['fields'], '{route{properties{speedLimits{value,unit,type}}}}')
             self.assertEqual(detector.metrics['tomtom_snap_to_roads_success'], 1)
 
     def test_direct_snap_http_failure_is_not_a_success(self):
@@ -315,7 +315,7 @@ class TestTomTomDirectParser(unittest.TestCase):
             self.assertEqual(detector.metrics['tomtom_snap_to_roads_failures'], 1)
 
 class TestTomTomProbe(unittest.TestCase):
-    def test_probe_reports_http_status_without_response_body_or_key(self):
+    def test_probe_reports_redacted_provider_error_without_other_body_fields(self):
         import importlib.util
         import io
         from contextlib import redirect_stdout
@@ -326,10 +326,14 @@ class TestTomTomProbe(unittest.TestCase):
         probe = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(probe)
         output = io.StringIO()
-        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'secret-test-key'}), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get', return_value=Mock(status_code=403, text='secret-test-key')) as get, redirect_stdout(output):
+        response = Mock(status_code=400)
+        response.json.return_value = {'detailedError': {'code': 'INVALID_REQUEST', 'message': 'Unknown field streetName secret-test-key'}, 'other': 'must-not-print'}
+        with patch.dict('os.environ', {'TOMTOM_API_KEY': 'secret-test-key'}), patch('sys.argv', ['probe']), patch.object(probe.requests, 'get', return_value=response) as get, redirect_stdout(output):
             self.assertEqual(probe.main(), 1)
-        self.assertEqual(get.call_args.kwargs['params']['fields'], '{route{properties{speedLimits{value,unit,type},streetName}}}')
-        self.assertIn('HTTP status: 403', output.getvalue())
+        self.assertEqual(get.call_args.kwargs['params']['fields'], '{route{properties{speedLimits{value,unit,type}}}}')
+        self.assertIn('HTTP status: 400', output.getvalue())
+        self.assertIn('Unknown field streetName [REDACTED]', output.getvalue())
+        self.assertNotIn('must-not-print', output.getvalue())
         self.assertNotIn('secret-test-key', output.getvalue())
 
     def test_probe_missing_key_makes_no_request(self):
