@@ -24,7 +24,7 @@
         var legal = options.legalEvidence;
         if (legal && legal.applicable === true && legal.evidence_state === 'MAPPED_POSTED'
                 && valid(options.legalLimitMph)) {
-            return {kind: 'LEGAL', limitMph: options.legalLimitMph,
+            return {status:'AVAILABLE',reasonCode:'APPLICABLE_MATCHED_SPEED',kind: 'LEGAL', limitMph: options.legalLimitMph,
                 legalLimitMph: options.legalLimitMph, observation: null,
                 badge: '', title: '', reason: 'Applicable matched speed evidence'};
         }
@@ -37,12 +37,12 @@
             var route = i === 1, uncertain = observation.position_uncertain === true;
             var title = route ? (uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs')
                 : uncertain ? 'Nearby mapped speeds agree; road uncertain. Check road signs' : 'Mapped speed; check road signs';
-            return {kind: route ? 'ROUTE' : 'MAPPED', limitMph: observation.speed_limit_mph,
+            return {status:'AVAILABLE',reasonCode:route?'ROUTE_SPEED_OBSERVATION':'MAPPED_SPEED_OBSERVATION',kind: route ? 'ROUTE' : 'MAPPED', limitMph: observation.speed_limit_mph,
                 legalLimitMph: null, observation: observation,
                 badge: route ? (uncertain ? 'Route est.' : 'Route') : (uncertain ? 'Mapped est.' : 'Mapped'),
                 title: title, reason: title};
         }
-        return {kind: 'UNKNOWN', limitMph: null, legalLimitMph: null,
+        return {status:'UNAVAILABLE',reasonCode:'NO_USABLE_SPEED',kind: 'UNKNOWN', limitMph: null, legalLimitMph: null,
             observation: null, badge: '', title: '', reason: 'No usable matched, mapped or route limit'};
     }
 

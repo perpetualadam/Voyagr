@@ -186,3 +186,18 @@ advisory alert number. Startup, stale-GPS and legacy formatting fallbacks remain
 These controlled checks do not establish the cause or resolution of the user's
 physical-phone failure. See `docs/design/SPEED_LIMIT_REFACTOR_PLAN.md` for scope
 and remaining review work. Production readiness remains NO-GO.
+
+## Explicit speed outcomes
+
+The next increment exposes stable, coordinate-free reason codes for unavailable
+mapped observations in the existing collapsed Info. Compatibility getters still
+return an observation or null; source priority and acceptance rules remain intact.
+An unavailable map source retains its diagnostic reason while a usable selected
+route value still displays. No new logging, retention or provider requests were
+introduced.
+
+Validation: 186 JavaScript suites / 3,664 tests; backend web selection 2,349 passed,
+one skipped and 94 subtests passed; 42 HTTP and 63 full-candidate Chromium checks
+passed. Browser inputs are synthetic, not physical-phone or production evidence.
+The persistent phone speed-display issue remains unresolved, and neither the
+private phone candidate nor production was updated by this work.

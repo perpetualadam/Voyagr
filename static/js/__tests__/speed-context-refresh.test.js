@@ -20,8 +20,8 @@ beforeEach(()=>{
     expect(document.getElementById('speedLimitValue').textContent).toBe('—');
 });
 afterEach(()=>{clock.mockRestore();for(const key of Object.keys(old))global[key]=old[key];});
-async function finish(){
-    release({ok:true,json:async()=>({context:{schema_version:1,source:'Overpass',source_kind:'OSM_EXTRACT',revision:'delayed',acquired_at_ms:NOW,source_data_at_ms:NOW-86400000,served_at_ms:NOW,bounds:[53.52,-1.134,53.528,-1.126],coverage:'PARTIAL',speed_observations_only:true,restrictions:[],roads:[{osm_way_id:'10',node_ids:[1,2],geometry:[[53.52,-1.13],[53.528,-1.13]],tags:{highway:'residential',maxspeed:'30 mph'}}]}})});
+async function finish(speedTags){
+    release({ok:true,json:async()=>({context:{schema_version:1,source:'Overpass',source_kind:'OSM_EXTRACT',revision:'delayed',acquired_at_ms:NOW,source_data_at_ms:NOW-86400000,served_at_ms:NOW,bounds:[53.52,-1.134,53.528,-1.126],coverage:'PARTIAL',speed_observations_only:true,restrictions:[],roads:[{osm_way_id:'10',node_ids:[1,2],geometry:[[53.52,-1.13],[53.528,-1.13]],tags:speedTags||{highway:'residential',maxspeed:'30 mph'}}]}})});
     await new Promise(resolve=>setTimeout(resolve,0));
 }
 test('delayed road acquisition renders its mapped estimate without replaying GPS',async()=>{
@@ -49,7 +49,7 @@ test('read-only context status reports acquisition state and freshness without c
     await finish();
     const status=owner.getSpeedContextStatus();
     expect(status).toMatchObject({state:'available',roadCount:1});
-    expect(Object.keys(status).sort()).toEqual(['matchReason','matchState','roadCount','state']);
+    expect(Object.keys(status).sort()).toEqual(['matchReason','matchState','roadCount','speedReason','speedReasonCode','speedStatus','state']);
     expect(JSON.stringify(status)).not.toMatch(/53\.524|-1\.13|\/api\/|GraphHopper|Valhalla|TomTom/);
     clock.mockReturnValue(NOW+60001);
     expect(owner.getSpeedContextStatus().state).toBe('stale');
@@ -62,4 +62,14 @@ test('optional Info diagnostics cannot interrupt a valid mapped display',async()
         expect(document.getElementById('speedLimitValue').textContent).toBe('30');
         expect(document.getElementById('routeSpeedDataStatus').textContent).toBe('Speed details unavailable.');
     } finally {status.mockRestore();}
+});
+test('missing mapped tags retain a coordinate-free reason through acquisition and Info rendering',async()=>{
+    document.body.insertAdjacentHTML('beforeend','<p id="routeSpeedLimitStatus"></p><p id="routeSpeedDataStatus"></p>');
+    await finish({highway:'residential'});
+    expect(owner.getSpeedObservationResult()).toMatchObject({status:'UNAVAILABLE',reasonCode:'SPEED_TAG_MISSING',observation:null});
+    expect(owner.getSpeedObservation()).toBeNull();
+    expect(document.getElementById('speedLimitValue').textContent).toBe('—');
+    const info=document.getElementById('routeSpeedDataStatus').textContent;
+    expect(info).toContain('SPEED_TAG_MISSING');
+    expect(info).not.toMatch(/53\.524|-1\.13|\/api\/|GraphHopper|Valhalla|TomTom/);
 });

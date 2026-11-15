@@ -252,6 +252,7 @@
             let detail='Navigation active: '+(rt().getRouteInProgress()?'yes':'no')+'. Route steps carrying limits: '+count+'/'+steps.length+'.';
             detail+=' GPS-derived step: '+(idx>=0?String(idx+1):'unavailable')+'.';
             if(context)detail+=' Road data: '+context.state+' ('+context.roadCount+' ways). Road match: '+context.matchState+'. '+context.matchReason+'.';
+            if(context&&context.speedReasonCode)detail+=' Mapped observation: '+context.speedReason+' ('+context.speedReasonCode+').';
             dataStatus.textContent=detail;
         }catch(_){dataStatus.textContent='Speed details unavailable.';}
         const mapStatus=document.getElementById('routeMapRenderStatus');

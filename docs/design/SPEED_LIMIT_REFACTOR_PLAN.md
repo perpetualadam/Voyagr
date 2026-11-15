@@ -45,8 +45,8 @@ extra provider requests for unit changes.
 
 ## Further independently reviewable increments
 
-1. Give acquisition, matching and display a shared diagnostic outcome contract;
-   inspect the private phone's selected-route Info before changing matching rules.
+1. Inspect the private phone's selected-route Info using the shared outcome
+   contract described below before changing matching rules.
 2. Decide whether the older API/TomTom path is supported, wired explicitly or
    retired after checking actual callers/configuration and regression coverage.
    Do not claim a provider is integrated merely because its functions exist.
@@ -57,3 +57,35 @@ GPS/Overpass and route-section browser checks, including unknown gaps, freshness
 source precedence and legal-alert isolation. Retest on the private phone origin;
 no production deployment or merge is authorized by this document. Rollback this
 increment by reverting the resolver/coordinator/renderer changes together.
+
+## Second increment: explicit speed outcomes
+
+Mapped-observation acquisition/assessment and display resolution share
+`status` (`AVAILABLE` or `UNAVAILABLE`), `reasonCode` and a coordinate-free
+`reason`. Existing observation-or-null methods remain compatibility wrappers.
+The detailed assessment returns its existing observation when available; it does
+not relax source freshness, GPS uncertainty, geometry, vehicle or tag rules.
+
+| Unavailable reason | Meaning |
+| --- | --- |
+| `SOURCE_UNAVAILABLE` / `SOURCE_INVALID` | No usable context, or an unsupported source envelope |
+| `SOURCE_STALE` / `DATASET_STALE` | Acquisition or map snapshot fails the existing age policy |
+| `GPS_UNAVAILABLE` / `GPS_INVALID` / `GPS_STALE` | Missing, unusable or out-of-age accepted sample |
+| `UNSUPPORTED_VEHICLE` | The observation policy does not support this vehicle context |
+| `INVALID_GEOMETRY` / `SOURCE_EDGE` | Invalid road index or uncertainty extending beyond source bounds |
+| `NO_CANDIDATES` | No plausible drivable way found |
+| `ROAD_RESTRICTIONS` | Unsupported restrictions or incomplete source identity |
+| `SPEED_TAG_MISSING` / `SPEED_TAG_UNSUPPORTED` | A candidate lacks a numeric tag or requires interpretation |
+| `SPEED_CONFLICT` | Plausible ways/directions disagree |
+
+When several candidate issues coexist, the assessment reports a deterministic
+primary code; it does not claim that code lists every issue. These are per-source
+outcomes: an unavailable mapped observation does not prevent a valid route value.
+The display resolver has its own available source codes and `NO_USABLE_SPEED`
+when none qualifies. Only the existing collapsed Info prints mapped outcome
+reasons. No coordinates, raw tags, provider URLs or credentials enter that text;
+no logs, uploads, caches or backend API schemas change.
+
+Tests cover each primary reason, conflicting parallel ways in either order,
+legacy output behaviour, and acquisition-to-Info propagation. The private phone's
+unknown speed remains unverified until this diagnostic contract is observed there.

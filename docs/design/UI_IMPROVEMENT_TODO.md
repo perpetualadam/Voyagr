@@ -1749,6 +1749,9 @@ weakening, server retention change or production deployment is part of this fix.
 - [x] Move unit changes onto fresh local-source resolution, preserving advisory
   labels and mph/km/h values without promoting them into legal-alert state.
   Keep startup/stale-GPS and legacy formatting fallbacks.
+- [x] Add a common available/unavailable outcome with stable, coordinate-free
+  reason codes for mapped acquisition/assessment and display, retaining legacy
+  observation-or-null wrappers and the existing acceptance rules.
 - [ ] Review actual older speed API/TomTom callers before integrating or retiring
   those paths. Do not infer integration from the existence of provider functions.
 - [ ] Retest on the private candidate; the user's phone issue remains unresolved.
