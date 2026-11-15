@@ -89,7 +89,7 @@
         rt().call.showStatus(execute.statusMessage, execute.statusType);
         if (execute.saveAllSettings) rt().call.saveAllSettings();
 
-        fetch('/api/app-settings', {
+        root.VoyagrLocalData.preferenceRequest({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(execute.persistApiBody),

@@ -28,7 +28,8 @@ def head_snippet() -> str:
     if not mid:
         return ""
     return (
-        '<script defer src="/static/js/app/analytics-consent.js?v=20261113privacy1" '
+        '<script defer src="/static/js/modules/privacy/consent-policy.js?v=20261114privacy3"></script>'
+        '<script defer src="/static/js/app/analytics-consent.js?v=20261114privacy3" '
         f'data-voyagr-analytics="{mid}"></script>'
     )
 

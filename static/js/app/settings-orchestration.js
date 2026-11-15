@@ -72,7 +72,7 @@
         localStorage.setItem(execute.storageKey, execute.storageValue);
         console.log(execute.logMessage, execute.snapshot);
 
-        if (execute.persistActiveProfile) rt().call.persistActiveProfile();
+        if (execute.persistActiveProfile) rt().call.persistActiveProfile(execute.snapshot);
     }
 
     function saveAllSettings() {
@@ -342,9 +342,10 @@
         }
     }
 
-    function applyResetAllSettingsFromPlan(execute) {
+    async function applyResetAllSettingsFromPlan(execute) {
         if (!execute || !execute.shouldReset) return false;
         if (!confirm(execute.confirmMessage)) return false;
+        if(root.VoyagrLocalData){try{await root.VoyagrLocalData.update('preferences',()=>({}));root.VoyagrProfileStoreOrchestration?.resetLocalPreferences();}catch(_){root.VoyagrLocalData.report();return false;}}
 
         (execute.localStorageKeys || []).forEach((key) => {
             localStorage.removeItem(key);
@@ -361,7 +362,7 @@
     }
 
     function resetAllSettings() {
-        applyResetAllSettingsFromPlan(
+        return applyResetAllSettingsFromPlan(
             SS().buildResetAllSettingsEntryOrchestrationPlan().execute
         );
     }
@@ -405,6 +406,7 @@
         }
         if (plan.restoreSettings) loadAllSettings();
         if (plan.applySettingsUi) applySettingsToUI();
+        if(plan.writeStorage&&root.VoyagrLocalData){try{void root.VoyagrLocalData.update('preferences',()=>JSON.parse(plan.storageValue)).catch(()=>root.VoyagrLocalData.report());}catch(_){root.VoyagrLocalData.report();}}
         rt().call.showStatus(plan.statusMessage, plan.statusType);
         return true;
     }

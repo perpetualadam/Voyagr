@@ -102,11 +102,24 @@ test('warning expires at six seconds, remains in details, and does not repeat on
     expect(warning.hidden).toBe(true);
 });
 test('warning is keyboard dismissible; timeout returns focus without trapping it',()=>{
-    UX.committed(route());const close=document.getElementById('dismissBestEffortWarning');close.focus();
+    UX.committed(route());const close=document.getElementById('dismissBestEffortWarning');
+    document.querySelector('#routeLimitationsInfo summary').focus();
     jest.advanceTimersByTime(6000);
     expect(document.activeElement).toBe(document.querySelector('#map canvas'));
-    UX.committed(route('traffic_lights'));close.focus();close.click();
+    UX.committed(route('traffic_lights'));document.getElementById('routeLimitationsInfo').open=true;close.focus();close.click();
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
+});
+test('limitations start collapsed and remain readable past the timer after explicit opening',()=>{
+    UX.committed(route());const info=document.getElementById('routeLimitationsInfo');
+    expect(info.open).toBe(false);
+    info.open=true;
+    jest.advanceTimersByTime(6000);
+    expect(document.getElementById('bestEffortWarning').hidden).toBe(false);
+    expect(info.textContent).toContain('Avoidance is not guaranteed');
+    document.getElementById('dismissBestEffortWarning').click();
+    expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
+    UX.committed(route('traffic_lights'));
+    expect(info.open).toBe(false);
 });
 test('actual reroute changes warnings only after a verified replacement commits',()=>{
     const previous=route();const context=bindTransition();bindStart(context);

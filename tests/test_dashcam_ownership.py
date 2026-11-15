@@ -62,14 +62,14 @@ def setup(tmp_path, monkeypatch):
 
 
 def make_clip(client, data=b'owner-video', *, stop=True):
-    rv = client.post('/api/dashcam/start', json={'user_id': B, 'owner_user_id': B})
-    assert rv.status_code == 200 and rv.json['success']
-    rid = rv.json['recording_id']
-    rv = client.post('/api/dashcam/metadata', json=dict(recording_id=rid, lat=51.5, lon=-0.1, speed=2, heading=90))
-    assert rv.status_code == 200 and rv.json['success']
-    if stop:
-        assert client.post('/api/dashcam/stop', json={'recording_id':rid}).json['success']
-    assert client.post(f'/api/dashcam/recordings/{rid}/upload', data=data, content_type='video/webm').json['success']
+    # Seed pre-existing cloud clips through the real owner-bound service. New
+    # plaintext capture/upload APIs are deliberately retired, not mocked open.
+    claims=jwt.decode(client.environ_base['HTTP_AUTHORIZATION'][7:],KEY,algorithms=['HS256'],audience='authenticated',issuer=ISSUER)
+    service=client.application.extensions['voyagr_dashcam'].for_owner(claims['sub'])
+    rid=service.start_recording()['recording_id']
+    assert service.add_metadata(51.5,-0.1,2,90,recording_id=rid)
+    if stop:assert service.stop_recording(recording_id=rid)['success']
+    assert service.save_recording_file(rid,data,'video/webm')['success']
     return rid
 
 
@@ -164,8 +164,8 @@ def test_two_owners_cannot_enumerate_or_change_others_resources(setup):
             rv = attacker.get(f'/api/dashcam/recordings/{foreign}'+suffix, headers={'Range':'bytes=0-2'})
             assert rv.status_code == 404
         assert attacker.delete(f'/api/dashcam/recordings/{foreign}').status_code == 404
-        assert attacker.post(f'/api/dashcam/recordings/{foreign}/upload', data=b'overwrite').status_code == 404
-        assert attacker.post('/api/dashcam/metadata', json=dict(recording_id=foreign, lat=0,lon=0,speed=0,heading=0)).status_code == 404
+        assert attacker.post(f'/api/dashcam/recordings/{foreign}/upload', data=b'overwrite').status_code == 403
+        assert attacker.post('/api/dashcam/metadata', json=dict(recording_id=foreign, lat=0,lon=0,speed=0,heading=0)).status_code == 403
         assert attacker.post('/api/dashcam/stop', json={'recording_id':foreign}).status_code == 404
         # No thumbnail/sharing route exists, so no derivative resource can bypass auth.
         assert attacker.get(f'/api/dashcam/recordings/{foreign}/thumbnail').status_code == 404
@@ -178,9 +178,9 @@ def test_two_owners_cannot_enumerate_or_change_others_resources(setup):
 
 def test_legitimate_playback_range_multipart_download_and_delete(setup):
     app, a, _, _, _, db, storage = setup
-    rid = make_clip(a)
+    rid = make_clip(a,b'0123456789')
     rv = a.post(f'/api/dashcam/recordings/{rid}/upload', data={'file':(io.BytesIO(b'0123456789'), 'clip.webm')})
-    assert rv.status_code == 200 and 'file_path' not in rv.json
+    assert rv.status_code == 403 and 'file_path' not in rv.json
     rv = a.get(f'/api/dashcam/recordings/{rid}/video?download=1')
     assert rv.data == b'0123456789' and rv.headers['Content-Disposition'].startswith('attachment;')
     assert rv.headers['Cache-Control'] == 'private, no-store'
@@ -192,10 +192,11 @@ def test_legitimate_playback_range_multipart_download_and_delete(setup):
 
 
 def test_cleanup_and_settings_are_owner_scoped(setup):
-    _, a, b, *_ = setup
+    app, a, b, *_ = setup
     arid = make_clip(a)
     brid = make_clip(b)
-    assert a.post('/api/dashcam/settings', json={'retention_days':0, 'owner_user_id':B}).json['success']
+    assert a.post('/api/dashcam/settings', json={'retention_days':0, 'owner_user_id':B}).status_code == 403
+    app.extensions['voyagr_dashcam'].for_owner(A).update_settings({'retention_days':0})
     assert b.get('/api/dashcam/settings').json['settings']['retention_days'] == 7
     assert a.post('/api/dashcam/cleanup').json['deleted_count'] == 1
     assert a.get('/api/dashcam/recordings').json['recordings'] == []
@@ -274,17 +275,19 @@ def test_file_path_and_symlink_cannot_cross_owner_directory(setup, tmp_path):
     afile = Path(app.extensions['voyagr_dashcam'].for_owner(A).get_recording_file(arid)['file_path'])
     afile.unlink(); afile.symlink_to(bfile)
     assert a.get(f'/api/dashcam/recordings/{arid}/video').status_code == 404
-    assert a.post(f'/api/dashcam/recordings/{arid}/upload',data=b'hack').status_code == 500
+    assert a.post(f'/api/dashcam/recordings/{arid}/upload',data=b'hack').status_code == 403
     assert Path(bfile).read_bytes() == b'owner-video'
 
 
 def test_trip_association_requires_same_owner(setup):
-    _, a, b, _, _, db, _ = setup
+    app, a, b, _, _, db, _ = setup
     with sqlite3.connect(db) as conn:
         conn.execute('CREATE TABLE trips(id INTEGER PRIMARY KEY, user_id TEXT)')
         conn.execute('INSERT INTO trips(id,user_id) VALUES(1,?)',(B,))
-    assert a.post('/api/dashcam/start', json={'trip_id':1}).json['success'] is False
-    assert b.post('/api/dashcam/start', json={'trip_id':1}).json['success'] is True
+    assert a.post('/api/dashcam/start', json={'trip_id':1}).status_code == 403
+    assert b.post('/api/dashcam/start', json={'trip_id':1}).status_code == 403
+    assert app.extensions['voyagr_dashcam'].for_owner(A).start_recording(trip_id=1)['success'] is False
+    assert app.extensions['voyagr_dashcam'].for_owner(B).start_recording(trip_id=1)['success'] is True
 
 
 def test_refuse_storage_under_public_static_directory(tmp_path):

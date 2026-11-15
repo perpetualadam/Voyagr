@@ -33,7 +33,7 @@
         if (execute.restoreBodyAnimation) document.body.style.animation = '';
         if (execute.storageKey) localStorage.setItem(execute.storageKey, execute.storageValue);
         if (execute.persistApiBody) {
-            fetch('/api/app-settings', {
+            root.VoyagrLocalData.preferenceRequest({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(execute.persistApiBody),

@@ -28,7 +28,7 @@ test.each(['GET', 'POST', 'DELETE'])('dashcam %s bypasses cache and offline repl
     }
 });
 
-test.each(['/api/cache-statistics', '/api/alternative-route-cache-info', '/api/ml-predictions'])('%s never replays cached historical locations', async path => {
+test.each(['/api/cache-statistics', '/api/alternative-route-cache-info', '/api/ml-predictions', '/api/privacy/consent', '/api/app-settings', '/api/traffic-patterns', '/api/trip-analytics'])('%s never replays cached historical locations', async path => {
     const listeners = {};
     const originalSelf = Object.getOwnPropertyDescriptor(global, 'self');
     const originals = {caches: global.caches, fetch: global.fetch, Response: global.Response};

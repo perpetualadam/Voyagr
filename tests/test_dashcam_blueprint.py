@@ -1,309 +1,78 @@
-#!/usr/bin/env python3
-"""
-Integration Tests for Dashcam Blueprint
-Tests API endpoints and Flask integration
-"""
+"""Temporary SQLite/file integration: manage legacy media, deny new cloud writes.
 
-import unittest
-import tempfile
-import os
-import json
+JWT/session boundaries are mocked here; the ownership suite verifies real JWTs.
+"""
 import sqlite3
+from unittest.mock import Mock
+import pytest
 from flask import Flask
-from unittest.mock import patch, Mock
-from dashcam_blueprint import dashcam_bp, init_dashcam_blueprint
+from dashcam_blueprint import init_dashcam_blueprint
+
+OWNER='11111111-1111-4111-8111-111111111111'
 
 
-class TestDashcamBlueprint(unittest.TestCase):
-    """Integration tests for dashcam API endpoints"""
-    
-    def setUp(self):
-        """Set up test Flask app and database"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.temp_dir, 'test.db')
-        
-        # Create Flask app
-        self.app = Flask(__name__)
-        self.app.config['TESTING'] = True
-        
-        # Create database
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS dashcam_recordings (
-                id INTEGER PRIMARY KEY,
-                recording_id TEXT UNIQUE NOT NULL,
-                trip_id TEXT,
-                start_time DATETIME NOT NULL,
-                end_time DATETIME,
-                duration_seconds REAL,
-                status TEXT DEFAULT 'recording',
-                metadata_points INTEGER DEFAULT 0,
-                file_path TEXT,
-                file_size_mb REAL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
-        conn.close()
-        
-        # Initialize dashcam blueprint with isolated storage
-        self.storage_dir = os.path.join(self.temp_dir, 'recordings')
-        init_dashcam_blueprint(
-            self.app,
-            db_path=self.db_path,
-            storage_dir=self.storage_dir,
-        )
-        self.client = self.app.test_client()
-        self.owner = '11111111-1111-4111-8111-111111111111'
-        self.client.environ_base['HTTP_AUTHORIZATION'] = 'Bearer test-token'
-        for patcher in [
-            patch.dict(os.environ, {'SUPABASE_URL': 'https://auth.example.test', 'SUPABASE_ANON_KEY': 'public-test-key'}),
-            patch('voyagr.utils.dashcam_auth.verify_supabase_jwt', return_value={
-                'sub': self.owner, 'session_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'role': 'authenticated'}),
-            patch('voyagr.utils.dashcam_auth.requests.post', return_value=Mock(status_code=200, json=lambda: True)),
-        ]:
-            patcher.start()
-            self.addCleanup(patcher.stop)
-
-    
-    def tearDown(self):
-        """Clean up test fixtures"""
-        import shutil
-        if os.path.exists(self.temp_dir):
-            shutil.rmtree(self.temp_dir)
-    
-    def test_start_recording_endpoint(self):
-        """Test POST /api/dashcam/start"""
-        response = self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 200)
-
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-        self.assertIn('recording_id', data)
-    
-    def test_stop_recording_endpoint(self):
-        """Test POST /api/dashcam/stop"""
-        # Start recording first
-        self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-
-        # Stop recording
-        response = self.client.post(
-            '/api/dashcam/stop',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 200)
-
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-    
-    def test_status_endpoint(self):
-        """Test GET /api/dashcam/status"""
-        self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-
-        response = self.client.get('/api/dashcam/status')
-        self.assertEqual(response.status_code, 200)
-
-        data = json.loads(response.data)
-        self.assertTrue(data['recording'])
-        self.assertIn('recording_id', data)
-    
-    def test_metadata_endpoint(self):
-        """Test POST /api/dashcam/metadata"""
-        start_response = self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-        start_data = json.loads(start_response.data)
-        recording_id = start_data['recording_id']
-
-        metadata = {
-            'lat': 51.5074,
-            'lon': -0.1278,
-            'speed': 45.5,
-            'heading': 90.0
-        }
-
-        response = self.client.post(
-            '/api/dashcam/metadata',
-            data=json.dumps(metadata),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 200)
-
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-
-        stop = json.loads(self.client.post('/api/dashcam/stop').data)
-        self.assertEqual(stop['metadata_points'], 1)
-
-        get_meta = self.client.get(f'/api/dashcam/recordings/{recording_id}/metadata')
-        self.assertEqual(get_meta.status_code, 200)
-        body = json.loads(get_meta.data)
-        self.assertTrue(body['success'])
-        self.assertEqual(body['metadata_points'], 1)
-        self.assertEqual(body['points'][0]['lat'], 51.5074)
-    
-    def test_recordings_list_endpoint(self):
-        """Test GET /api/dashcam/recordings"""
-        # Create a recording
-        self.client.post('/api/dashcam/start')
-        self.client.post('/api/dashcam/stop')
-        
-        response = self.client.get('/api/dashcam/recordings')
-        self.assertEqual(response.status_code, 200)
-        
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-        self.assertIn('recordings', data)
-        self.assertIsInstance(data['recordings'], list)
-    
-    def test_upload_recording_endpoint(self):
-        """Test POST /api/dashcam/recordings/<id>/upload stores video bytes."""
-        start_response = self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json',
-        )
-        recording_id = json.loads(start_response.data)['recording_id']
-        self.client.post('/api/dashcam/stop', data=json.dumps({}), content_type='application/json')
-
-        payload = b'\x1aE\xdf\xa3uploaded-webm'
-        response = self.client.post(
-            f'/api/dashcam/recordings/{recording_id}/upload',
-            data=payload,
-            content_type='video/webm',
-        )
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-        self.assertNotIn('file_path', data)
-        private = self.app.extensions['voyagr_dashcam'].for_owner(self.owner).get_recording_file(recording_id)
-        self.assertTrue(os.path.isfile(private['file_path']))
-        with open(private['file_path'], 'rb') as f:
-            self.assertEqual(f.read(), payload)
-
-        listing = json.loads(self.client.get('/api/dashcam/recordings').data)
-        match = next(r for r in listing['recordings'] if r['recording_id'] == recording_id)
-        self.assertTrue(match['has_video'])
-        self.assertNotIn('file_path', match)
-        self.assertNotIn('owner_user_id', match)
-        self.assertGreater(match['file_size_mb'], 0)
-
-    def test_upload_recording_endpoint_missing_file(self):
-        start_response = self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json',
-        )
-        recording_id = json.loads(start_response.data)['recording_id']
-        self.client.post('/api/dashcam/stop')
-        response = self.client.post(
-            f'/api/dashcam/recordings/{recording_id}/upload',
-            data=b'',
-            content_type='video/webm',
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(json.loads(response.data)['success'])
-
-    def test_get_recording_video_endpoint(self):
-        start_response = self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json',
-        )
-        recording_id = json.loads(start_response.data)['recording_id']
-        self.client.post('/api/dashcam/stop')
-        payload = b'\x1aE\xdf\xa3playable'
-        self.client.post(
-            f'/api/dashcam/recordings/{recording_id}/upload',
-            data=payload,
-            content_type='video/webm',
-        )
-
-        response = self.client.get(f'/api/dashcam/recordings/{recording_id}/video')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, payload)
-        self.assertIn('video/webm', response.content_type)
-
-        missing = self.client.get('/api/dashcam/recordings/dashcam_missing/video')
-        self.assertEqual(missing.status_code, 404)
-
-    def test_delete_recording_endpoint(self):
-        """Test DELETE /api/dashcam/recordings/<id>"""
-        # Create a recording
-        start_response = self.client.post(
-            '/api/dashcam/start',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-        start_data = json.loads(start_response.data)
-        recording_id = start_data['recording_id']
-        self.client.post(
-            '/api/dashcam/stop',
-            data=json.dumps({}),
-            content_type='application/json'
-        )
-
-        # Delete it
-        response = self.client.delete(f'/api/dashcam/recordings/{recording_id}')
-        self.assertEqual(response.status_code, 200)
-
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-    
-    def test_cleanup_endpoint(self):
-        """Test POST /api/dashcam/cleanup"""
-        response = self.client.post('/api/dashcam/cleanup')
-        self.assertEqual(response.status_code, 200)
-        
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-        self.assertIn('deleted_count', data)
-    
-    def test_settings_get_endpoint(self):
-        """Test GET /api/dashcam/settings"""
-        response = self.client.get('/api/dashcam/settings')
-        self.assertEqual(response.status_code, 200)
-        
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
-        self.assertIn('settings', data)
-    
-    def test_settings_post_endpoint(self):
-        """Test POST /api/dashcam/settings"""
-        settings = {
-            'resolution': '720p',
-            'fps': 24,
-            'audio': False,
-            'retention_days': 7
-        }
-        
-        response = self.client.post(
-            '/api/dashcam/settings',
-            data=json.dumps(settings),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 200)
-        
-        data = json.loads(response.data)
-        self.assertTrue(data['success'])
+@pytest.fixture
+def app(tmp_path,monkeypatch):
+    monkeypatch.setenv('SUPABASE_URL','https://auth.example.test')
+    monkeypatch.setenv('SUPABASE_ANON_KEY','public-test-key')
+    monkeypatch.setattr('voyagr.utils.dashcam_auth.verify_supabase_jwt',lambda _:dict(sub=OWNER,session_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',role='authenticated'))
+    monkeypatch.setattr('voyagr.utils.dashcam_auth.requests.post',Mock(return_value=Mock(status_code=200,json=lambda:True)))
+    app=Flask(__name__);app.config['TESTING']=True
+    init_dashcam_blueprint(app,str(tmp_path/'media.db'),str(tmp_path/'private'))
+    return app
 
 
-if __name__ == '__main__':
-    unittest.main()
+@pytest.fixture
+def client(app):
+    client=app.test_client();client.environ_base['HTTP_AUTHORIZATION']='Bearer test-token';return client
 
+
+@pytest.fixture
+def legacy(app):
+    store=app.extensions['voyagr_dashcam'].for_owner(OWNER)
+    rid=store.start_recording()['recording_id'];assert store.add_metadata(51.5,-.1,2,90,recording_id=rid)
+    assert store.stop_recording(recording_id=rid)['success'];assert store.save_recording_file(rid,b'0123456789','video/webm')['success']
+    return store,rid
+
+
+@pytest.mark.parametrize('path',['/start','/metadata','/settings','/recordings/guessed/upload'])
+def test_optional_writes_denied_before_body_or_private_storage(app,client,monkeypatch,path):
+    factory=Mock(side_effect=AssertionError('must not open private storage'))
+    monkeypatch.setattr(app.extensions['voyagr_dashcam'],'for_owner',factory)
+    response=client.post('/api/dashcam'+path,data=b'invalid body 53.123456,-1.234567',content_type='application/json')
+    assert response.status_code==403 and response.json['code']=='CLOUD_UPLOAD_DISABLED';factory.assert_not_called()
+    assert response.headers['Cache-Control']=='private, no-store'
+
+
+def test_legacy_list_and_metadata_remain_available(client,legacy):
+    _,rid=legacy;rows=client.get('/api/dashcam/recordings').json['recordings'];assert len(rows)==1
+    assert rows[0]['recording_id']==rid and rows[0]['has_video'];assert 'file_path' not in rows[0] and 'owner_user_id' not in rows[0]
+    metadata=client.get(f'/api/dashcam/recordings/{rid}/metadata');assert metadata.status_code==200
+    assert metadata.json['metadata_points']==1 and metadata.json['points'][0]['lat']==51.5
+
+
+def test_legacy_playback_download_range_and_delete(client,legacy):
+    store,rid=legacy
+    assert client.post(f'/api/dashcam/recordings/{rid}/upload',data=b'overwrite').status_code==403
+    response=client.get(f'/api/dashcam/recordings/{rid}/video');assert response.data==b'0123456789'
+    assert client.get(f'/api/dashcam/recordings/{rid}/video',headers={'Range':'bytes=2-4'}).data==b'234'
+    assert client.get(f'/api/dashcam/recordings/{rid}/video?download=1').headers['Content-Disposition'].startswith('attachment;')
+    assert client.delete(f'/api/dashcam/recordings/{rid}').json['success']
+    assert client.get(f'/api/dashcam/recordings/{rid}/video').status_code==404
+    assert not store.get_recording_metadata(rid)['success']
+
+
+def test_existing_active_session_can_be_stopped_without_new_upload(client,app):
+    store=app.extensions['voyagr_dashcam'].for_owner(OWNER);rid=store.start_recording()['recording_id']
+    assert client.get('/api/dashcam/status').json['recording_id']==rid
+    assert client.post('/api/dashcam/stop',json={'recording_id':rid}).json['success']
+    assert client.get('/api/dashcam/status').json['recording'] is False
+
+
+def test_existing_settings_read_and_explicit_cleanup_remain_available(client,legacy):
+    store,rid=legacy;assert client.get('/api/dashcam/settings').status_code==200
+    assert client.post('/api/dashcam/settings',json={'retention_days':0}).status_code==403
+    assert client.get('/api/dashcam/settings').json['settings']['retention_days']==7
+    store.update_settings({'retention_days':0})  # Synthetic fixture only, not a production retention change.
+    assert client.post('/api/dashcam/cleanup').json['deleted_count']==1
+    assert client.get(f'/api/dashcam/recordings/{rid}/video').status_code==404

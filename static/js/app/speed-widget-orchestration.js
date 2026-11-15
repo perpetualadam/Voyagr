@@ -102,45 +102,29 @@
         const limitValueEl = document.getElementById('speedLimitValue');
         const limitUnitEl = document.getElementById('speedLimitUnit');
         const mappedLabel = document.getElementById('speedLimitMappedLabel');
-        const routeObservation = observation && observation.evidence_state === 'ROUTE_OBSERVATION';
-        const mapped = observation && (observation.evidence_state === 'MAPPED_OBSERVATION' || routeObservation)
-            && observation.applicable === false && Number.isFinite(observation.speed_limit_mph)
-            && observation.speed_limit_mph > 0 && observation.speed_limit_mph <= 100;
-        const observationTitle = routeObservation ? (observation.position_uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs') : 'Mapped speed; check road signs';
+        const resolution = speedLimit.resolveSpeedDisplay({
+            legalEvidence: evidence, legalLimitMph: speedLimitInMph,
+            mappedObservation: observation && observation.evidence_state === 'MAPPED_OBSERVATION' ? observation : null,
+            routeObservation: observation && observation.evidence_state === 'ROUTE_OBSERVATION' ? observation : null,
+        });
         if (mappedLabel) {
-            mappedLabel.hidden = !mapped;
-            mappedLabel.textContent = routeObservation ? (observation.position_uncertain ? 'Route est.' : 'Route') : 'Mapped';
-            mappedLabel.title = observationTitle;
+            mappedLabel.hidden = !resolution.badge;
+            mappedLabel.textContent = resolution.badge;
+            mappedLabel.title = resolution.title;
         }
         const circle = document.getElementById('speedLimitCircle');
         if (circle) {
-            circle.style.borderColor = mapped ? '#777' : '#E53935';
-            circle.title = mapped ? observationTitle : '';
+            circle.style.borderColor = resolution.badge ? '#777' : '#E53935';
+            circle.title = resolution.title;
         }
+        // Display-only observations never populate the limit used by alerts.
+        setCurrentSpeedLimitMph(resolution.legalLimitMph);
         if (limitValueEl && limitUnitEl) {
-            const resolvedLimit = (evidence && evidence.applicable===true && evidence.evidence_state==='MAPPED_POSTED' && speedLimitInMph !== null && speedLimitInMph > 0)
-                ? speedLimitInMph
-                : null;
-
-            if (resolvedLimit !== null && resolvedLimit > 0) {
-                setCurrentSpeedLimitMph(resolvedLimit);
-                const limitDisplay = speedLimit.formatSpeedForWidget(resolvedLimit, rt().getSpeedUnit(), speedGps);
-                limitValueEl.textContent = String(speedLimit.sanitizeWidgetDisplayNumber(limitDisplay.value));
-                limitUnitEl.textContent = limitDisplay.unitLabel;
-                widget.style.borderLeft = '4px solid #4285F4';
-            } else if (mapped) {
-                // Display only: do not populate the legal limit used by alerts.
-                setCurrentSpeedLimitMph(null);
-                const display = speedLimit.formatSpeedForWidget(observation.speed_limit_mph, rt().getSpeedUnit(), speedGps);
-                limitValueEl.textContent = String(speedLimit.sanitizeWidgetDisplayNumber(display.value));
-                limitUnitEl.textContent = display.unitLabel;
-                widget.style.borderLeft = '4px solid #999';
-            } else {
-                setCurrentSpeedLimitMph(null);
-                limitValueEl.textContent = '—';
-                limitUnitEl.textContent = displaySpeedUnit;
-                widget.style.borderLeft = '4px solid #999';
-            }
+            const display = resolution.limitMph === null ? null
+                : speedLimit.formatSpeedForWidget(resolution.limitMph, rt().getSpeedUnit(), speedGps);
+            limitValueEl.textContent = display ? String(speedLimit.sanitizeWidgetDisplayNumber(display.value)) : '—';
+            limitUnitEl.textContent = display ? display.unitLabel : displaySpeedUnit;
+            widget.style.borderLeft = resolution.kind === 'LEGAL' ? '4px solid #4285F4' : '4px solid #999';
         }
 
         updateSpeedWidgetVisibility();
@@ -248,7 +232,7 @@
         const position=gps && gps.getNavigationPositionEvidence ? gps.getNavigationPositionEvidence() : null;
         const fix=gps && gps.getAcceptedOriginFix ? gps.getAcceptedOriginFix() : null;
         const source=known ? 'mapped road' : observation && observation.evidence_state==='ROUTE_OBSERVATION' ? (observation.position_uncertain ? 'route estimate (GPS imprecise)' : 'selected route')
-            : observation ? 'mapped observation' : 'unavailable';
+            : observation ? (observation.position_uncertain ? 'mapped estimate (road uncertain)' : 'mapped observation') : 'unavailable';
         let text='Speed display: '+source+'. Route-section limit: '+(observation && observation.evidence_state==='ROUTE_OBSERVATION' || Number.isFinite(routeLimit) && routeLimit>0 ? 'available' : 'not supplied')+'.';
         text+=' GPS route position: '+(position && position.state || 'waiting')+'.';
         if (position && position.reason && source==='unavailable') text+=' '+position.reason+'.';
@@ -256,6 +240,21 @@
             text+=' GPS accuracy: '+root.VoyagrUnits.formatPreferredDistanceMeters(fix.accuracy)+'.';
         }
         el.textContent=text;
+        const dataStatus=document.getElementById('routeSpeedDataStatus');
+        if(dataStatus)try{
+            const suppliedSteps=typeof rt().getCurrentRouteSteps==='function' ? rt().getCurrentRouteSteps() : null;
+            const steps=Array.isArray(suppliedSteps)?suppliedSteps:[];
+            const count=steps.filter(step=>step&&Number.isFinite(step.speed_limit)&&step.speed_limit>0&&step.speed_limit<=100).length;
+            const shape=position&&position.snap&&position.snap.index;
+            const idx=Number.isInteger(shape)&&shape>=0 ? SG().getActiveRouteManeuverIndex(steps,shape) : -1;
+            const owner=root.VoyagrRoadMatchOrchestration;
+            const context=owner&&owner.getSpeedContextStatus ? owner.getSpeedContextStatus() : null;
+            let detail='Navigation active: '+(rt().getRouteInProgress()?'yes':'no')+'. Route steps carrying limits: '+count+'/'+steps.length+'.';
+            detail+=' GPS-derived step: '+(idx>=0?String(idx+1):'unavailable')+'.';
+            if(context)detail+=' Road data: '+context.state+' ('+context.roadCount+' ways). Road match: '+context.matchState+'. '+context.matchReason+'.';
+            if(context&&context.speedReasonCode)detail+=' Mapped observation: '+context.speedReason+' ('+context.speedReasonCode+').';
+            dataStatus.textContent=detail;
+        }catch(_){dataStatus.textContent='Speed details unavailable.';}
         const mapStatus=document.getElementById('routeMapRenderStatus');
         if(mapStatus && typeof root.__voyagrMapGetDiagnostics==='function') {
             try {
@@ -265,22 +264,47 @@
         }
     }
 
+    function refreshFromNavigationPosition() {
+        const gps=root.VoyagrGpsOrchestration;
+        const fix=gps && gps.getAcceptedOriginFix();
+        const position=gps && gps.getNavigationPositionEvidence();
+        if (!fix || !rt().getIsTrackingActive() && !rt().getRouteInProgress()) return false;
+        const age=Date.now()-fix.timestamp;
+        if (!Number.isFinite(age) || age< -1000 || age>15000) return false;
+        const speed=getCurrentGpsSpeedMph();
+        const steps=rt().getCurrentRouteSteps();
+        const idx=position && position.state==='RELIABLE' && position.snap
+            ? SG().getActiveRouteManeuverIndex(steps,position.snap.index) : -1;
+        const step=steps && steps[idx];
+        const roadType=step && step.road_class || 'unknown';
+        const limit=step ? normalizeManeuverSpeedLimitMph(step.speed_limit,roadType,speed) : null;
+        fetchSpeedLimitThrottled(fix.lat,fix.lon,speed,roadType,limit,null);
+        return !!root.VoyagrRoadMatchOrchestration;
+    }
+
     function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
         if (root.VoyagrRoadMatchOrchestration) {
-            var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
-            var legal=bundle && bundle.speed;
-            var known=legal && legal.applicable===true && legal.evidence_state==='MAPPED_POSTED';
-            var observation=!known && root.VoyagrRoadMatchOrchestration.getSpeedObservation
-                ? root.VoyagrRoadMatchOrchestration.getSpeedObservation() : null;
-            if (!known && !observation && root.VoyagrGpsOrchestration
-                && root.VoyagrGpsOrchestration.getRouteSpeedObservation) {
-                observation=root.VoyagrGpsOrchestration.getRouteSpeedObservation(valhallaSpeedLimit);
-            }
+            var legal=null;
+            var selection=SL().resolveSpeedSources({
+                legal:function(){
+                    var bundle=root.VoyagrRoadMatchOrchestration.getAttributes();
+                    legal=bundle && bundle.speed;return legal;
+                },
+                mapped:function(){
+                    var owner=root.VoyagrRoadMatchOrchestration;
+                    return owner.getSpeedObservation ? owner.getSpeedObservation() : null;
+                },
+                route:function(){
+                    var gps=root.VoyagrGpsOrchestration;
+                    return gps && gps.getRouteSpeedObservation ? gps.getRouteSpeedObservation(valhallaSpeedLimit) : null;
+                }
+            });
+            var known=selection.kind==='LEGAL';
             applySpeedLimitFetchOutcomeFromPlan({action:'apply',legalEvidence:known ? legal : null,
-                speedObservation:observation,
-                statePatch:{currentLimitMph:known ? legal.speed_limit_mph : null,currentSpeedLimitMph:known ? legal.speed_limit_mph : null},
-                widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:known ? legal.speed_limit_mph : null}});
-            updateSpeedLimitStatus(known,observation,valhallaSpeedLimit);
+                speedObservation:selection.observation,
+                statePatch:{currentLimitMph:selection.legalLimitMph,currentSpeedLimitMph:selection.legalLimitMph},
+                widgetUpdate:{displaySpeedMph:currentSpeedMph,shownLimit:selection.legalLimitMph}});
+            updateSpeedLimitStatus(known,selection.observation,valhallaSpeedLimit);
             return;
         }
         if (roadType === undefined) roadType = 'residential';
@@ -336,10 +360,11 @@
             })
             .then((data) => {
                 const p=data && data.success && data.data;
-                const known=p && p.applicable===true && p.evidence_state==='MAPPED_POSTED' && Number.isFinite(p.speed_limit_mph) && p.speed_limit_mph>0;
+                const selection=SL().resolveSpeedDisplay({legalEvidence:p,legalLimitMph:p && p.speed_limit_mph});
+                const known=selection.kind==='LEGAL';
                 acceptIfFresh({action:'apply',legalEvidence:known ? p : null,
-                    statePatch:{currentLimitMph:known ? p.speed_limit_mph : null,currentSpeedLimitMph:known ? p.speed_limit_mph : null},
-                    widgetUpdate:{displaySpeedMph:ctx.currentGpsSpeedMph,shownLimit:known ? p.speed_limit_mph : null}});
+                    statePatch:{currentLimitMph:selection.legalLimitMph,currentSpeedLimitMph:selection.legalLimitMph},
+                    widgetUpdate:{displaySpeedMph:ctx.currentGpsSpeedMph,shownLimit:selection.legalLimitMph}});
             })
             .catch(() => {
                 acceptIfFresh({action:'apply',legalEvidence:null,statePatch:{currentLimitMph:null,currentSpeedLimitMph:null},
@@ -384,6 +409,7 @@
         normalizeManeuverSpeedLimitMph: normalizeManeuverSpeedLimitMph,
         applySpeedLimitFetchOutcomeFromPlan: applySpeedLimitFetchOutcomeFromPlan,
         fetchSpeedLimitThrottled: fetchSpeedLimitThrottled,
+        refreshFromNavigationPosition: refreshFromNavigationPosition,
         applySpeedWidgetToggleUi: applySpeedWidgetToggleUi,
         toggleSpeedWidget: toggleSpeedWidget,
         getSpeedLimitFetchState: getSpeedLimitFetchState,

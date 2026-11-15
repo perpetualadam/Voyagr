@@ -27,26 +27,15 @@
         });
     }
 
-    function applySaveCurrentRouteFromPlan(execute) {
-        if (!execute || !execute.shouldSave) {
-            if (execute && execute.errorStatusMessage) {
-                rt().call.showStatus(execute.errorStatusMessage, 'error');
-            }
-            return;
-        }
-
-        let savedRoutes = JSON.parse(localStorage.getItem(execute.storageKey) || '[]');
-        savedRoutes.push(execute.savedRoute);
-        localStorage.setItem(execute.storageKey, JSON.stringify(savedRoutes));
-        if (execute.persistProfile) rt().call.persistActiveProfile();
-
-        if (execute.clearRouteNameInput) {
-            const routeNameInput = document.getElementById(execute.routeNameInputId);
-            if (routeNameInput) routeNameInput.value = '';
-        }
-
-        rt().call.showStatus(execute.successStatusMessage, 'success');
-        if (execute.reloadList) loadSavedRoutes();
+    async function applySaveCurrentRouteFromPlan(execute) {
+        if(!execute||!execute.shouldSave){if(execute?.errorStatusMessage)rt().call.showStatus(execute.errorStatusMessage,'error');return;}
+        const local=root.VoyagrLocalData;if(!local){rt().call.showStatus('Device storage unavailable','error');return;}
+        const c=local.capture();
+        try{await local.update('routes',rows=>[...(rows||[]),execute.savedRoute],c);
+            if(!local.current(c))return;
+            const input=document.getElementById(execute.routeNameInputId);if(input&&execute.clearRouteNameInput)input.value='';
+            rt().call.showStatus(execute.successStatusMessage,'success');await loadSavedRoutes();
+        }catch(_){local.report();rt().call.showStatus('Route was not saved. Existing device data is retained.','error');}
     }
 
     function saveCurrentRoute() {
@@ -70,11 +59,9 @@
         savedRoutesList.innerHTML = execute.listHtml;
     }
 
-    function loadSavedRoutes() {
-        const savedRoutes = JSON.parse(localStorage.getItem(RS().SAVED_ROUTES_STORAGE_KEY) || '[]');
-        applyLoadSavedRoutesFromPlan(
-            RS().buildLoadSavedRoutesEntryOrchestrationPlan(savedRoutes, collectLoadSavedRoutesFmt()).execute
-        );
+    async function loadSavedRoutes() {
+        const local=root.VoyagrLocalData;if(!local)return;
+        const c=local.capture();try{const rows=await local.getRoutes(c);if(local.current(c))applyLoadSavedRoutesFromPlan(RS().buildLoadSavedRoutesEntryOrchestrationPlan(rows,collectLoadSavedRoutesFmt()).execute);}catch(_){local.report();}
     }
 
     function applyUseSavedRouteFromPlan(plan) {
@@ -87,29 +74,24 @@
         return rt().call.showRestoredRoutePreview(plan.lastCalculatedRoutePatch);
     }
 
-    function useSavedRoute(routeId) {
-        const savedRoutes = JSON.parse(localStorage.getItem(RS().SAVED_ROUTES_STORAGE_KEY) || '[]');
-        return applyUseSavedRouteFromPlan(
-            RS().buildUseSavedRouteEntryOrchestrationPlan(routeId, savedRoutes).plan
-        );
+    async function useSavedRoute(routeId) {
+        const local=root.VoyagrLocalData;if(!local)return false;
+        const c=local.capture();try{const rows=await local.getRoutes(c);if(!local.current(c))return false;return applyUseSavedRouteFromPlan(RS().buildUseSavedRouteEntryOrchestrationPlan(routeId,rows).plan);}catch(_){local.report();return false;}
     }
 
     function applyDeleteSavedRouteFromPlan(execute) {
-        if (!execute || !execute.shouldPersist) return;
-
-        localStorage.setItem(execute.storageKey, JSON.stringify(execute.nextRoutes));
-        if (execute.persistProfile) rt().call.persistActiveProfile();
-        rt().call.showStatus(execute.successStatusMessage, 'success');
-        if (execute.reloadList) loadSavedRoutes();
+        return false; // Deletes use a scoped transactional mutation in deleteSavedRoute().
     }
 
-    function deleteSavedRoute(routeId) {
-        const savedRoutes = JSON.parse(localStorage.getItem(RS().SAVED_ROUTES_STORAGE_KEY) || '[]');
-        const entry = RS().buildDeleteSavedRouteEntryOrchestrationPlan(routeId, savedRoutes);
-        if (!confirm(entry.deletePlan.confirmMessage)) return;
-        applyDeleteSavedRouteFromPlan(entry.execute);
+    async function deleteSavedRoute(routeId) {
+        const local=root.VoyagrLocalData;if(!local)return;
+        const c=local.capture();try{const rows=await local.getRoutes(c),entry=RS().buildDeleteSavedRouteEntryOrchestrationPlan(routeId,rows);
+            if(!local.current(c)||!confirm(entry.deletePlan.confirmMessage))return;
+            await local.update('routes',values=>(values||[]).filter(x=>x.id!==routeId),c);if(local.current(c))await loadSavedRoutes();
+        }catch(_){local.report();}
     }
 
+    if(typeof window!=='undefined'){window.addEventListener('voyagr-local-owner-change',()=>{const el=document.getElementById('savedRoutesList');if(el)el.textContent='';});window.addEventListener('voyagr-local-data-changed',()=>{if(runtime)void loadSavedRoutes();});}
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }

@@ -20,9 +20,19 @@ logger = logging.getLogger(__name__)
 settings_bp = Blueprint('settings', __name__)
 
 
+# Settings are device-local. These legacy global writes cannot be made private by
+# trusting a browser checkbox, API key or an unrelated admin credential.
+from voyagr.utils.privacy_enforcement import block_legacy_writes
+block_legacy_writes(settings_bp, [
+    ('/api/app-settings', {'POST'}, 'cloudSync'),
+    ('/api/gesture-event', {'POST'}, 'diagnostics'),
+    ('/api/ml-predictions', {'POST'}, 'history'),
+    ('/api/traffic-patterns', {'POST'}, 'diagnostics'),
+])
+
 @settings_bp.after_request
 def private_location_predictions(response):
-    if request.path == '/api/ml-predictions':
+    if request.path in {'/api/ml-predictions','/api/app-settings','/api/gesture-event','/api/traffic-patterns'}:
         response.headers['Cache-Control'] = 'private, no-store'
         response.vary.add('X-Voyagr-Admin-Key')
     return response
@@ -30,13 +40,14 @@ def private_location_predictions(response):
 
 
 @settings_bp.route('/app-settings', methods=['GET', 'POST'])
+@require_admin_if_configured_methods('GET','HEAD')
 def manage_app_settings():
     """Manage Phase 3 app settings (gesture, battery, themes, ML)."""
     try:
         with db_connection() as conn:
             cursor = conn.cursor()
 
-            if request.method == 'GET':
+            if request.method in {'GET','HEAD'}:
                 cursor.execute('SELECT * FROM app_settings LIMIT 1')
                 row = cursor.fetchone()
                 if row:
@@ -105,14 +116,14 @@ def log_gesture_event():
 
 
 @settings_bp.route('/ml-predictions', methods=['GET', 'POST'])
-@require_admin_if_configured_methods('GET', 'POST')
+@require_admin_if_configured_methods('GET', 'HEAD', 'POST')
 def manage_ml_predictions():
     """Get ML route predictions based on trip history."""
     try:
         with db_connection() as conn:
             cursor = conn.cursor()
 
-            if request.method == 'GET':
+            if request.method in {'GET','HEAD'}:
                 now = datetime.now()
                 day_of_week = now.weekday()
                 hour_of_day = now.hour
@@ -162,14 +173,14 @@ def manage_ml_predictions():
 
 
 @settings_bp.route('/traffic-patterns', methods=['GET', 'POST'])
-@require_admin_if_configured_methods('POST')
+@require_admin_if_configured_methods('GET','HEAD','POST')
 def manage_traffic_patterns():
     """Manage ML traffic pattern data."""
     try:
         with db_connection() as conn:
             cursor = conn.cursor()
 
-            if request.method == 'GET':
+            if request.method in {'GET','HEAD'}:
                 lat = request.args.get('lat', type=float)
                 lon = request.args.get('lon', type=float)
 

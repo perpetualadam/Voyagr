@@ -14,6 +14,60 @@
         CACHE_MAX_AGE_MS: 24 * 60 * 60 * 1000
     };
 
+    /** Pure display resolution. Only applicable legal evidence may feed alerts.
+     * Candidate freshness/road association remains owned by its producer. */
+    function resolveSpeedDisplay(options) {
+        options = options || {};
+        function valid(value) {
+            return Number.isFinite(value) && value > 0 && value <= 100;
+        }
+        var legal = options.legalEvidence;
+        if (legal && legal.applicable === true && legal.evidence_state === 'MAPPED_POSTED'
+                && valid(options.legalLimitMph)) {
+            return {status:'AVAILABLE',reasonCode:'APPLICABLE_MATCHED_SPEED',kind: 'LEGAL', limitMph: options.legalLimitMph,
+                legalLimitMph: options.legalLimitMph, observation: null,
+                badge: '', title: '', reason: 'Applicable matched speed evidence'};
+        }
+        var candidates = [options.mappedObservation, options.routeObservation];
+        for (var i = 0; i < candidates.length; i++) {
+            var observation = candidates[i];
+            var expected = i === 0 ? 'MAPPED_OBSERVATION' : 'ROUTE_OBSERVATION';
+            if (!observation || observation.evidence_state !== expected
+                    || observation.applicable !== false || !valid(observation.speed_limit_mph)) continue;
+            var route = i === 1, uncertain = observation.position_uncertain === true;
+            var title = route ? (uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs')
+                : uncertain ? 'Nearby mapped speeds agree; road uncertain. Check road signs' : 'Mapped speed; check road signs';
+            return {status:'AVAILABLE',reasonCode:route?'ROUTE_SPEED_OBSERVATION':'MAPPED_SPEED_OBSERVATION',kind: route ? 'ROUTE' : 'MAPPED', limitMph: observation.speed_limit_mph,
+                legalLimitMph: null, observation: observation,
+                badge: route ? (uncertain ? 'Route est.' : 'Route') : (uncertain ? 'Mapped est.' : 'Mapped'),
+                title: title, reason: title};
+        }
+        return {status:'UNAVAILABLE',reasonCode:'NO_USABLE_SPEED',kind: 'UNKNOWN', limitMph: null, legalLimitMph: null,
+            observation: null, badge: '', title: '', reason: 'No usable matched, mapped or route limit'};
+    }
+
+    // Evaluate sources lazily and isolate producer failures from lower-priority sources.
+    // Error text may contain source details; only stable codes leave this boundary.
+    function resolveSpeedSources(sources) {
+        sources=sources||{};
+        var attempts=[], selection=resolveSpeedDisplay();
+        ['legal','mapped','route'].some(function(name){
+            var producer=sources[name];
+            if(typeof producer!=='function'){
+                attempts.push({source:name,reasonCode:'SOURCE_UNAVAILABLE'});return false;
+            }
+            var candidate;
+            try { candidate=producer(); }
+            catch(error){attempts.push({source:name,reasonCode:'SOURCE_ERROR'});return false;}
+            var options=name==='legal'?{legalEvidence:candidate,legalLimitMph:candidate&&candidate.speed_limit_mph}
+                :name==='mapped'?{mappedObservation:candidate}:{routeObservation:candidate};
+            selection=resolveSpeedDisplay(options);
+            attempts.push({source:name,reasonCode:selection.reasonCode});
+            return selection.kind!=='UNKNOWN';
+        });
+        return Object.assign({},selection,{attempts:attempts});
+    }
+
     /**
      * @param {object|null} state
      * @returns {object}
@@ -539,6 +593,8 @@
     }
 
     var api = {
+        resolveSpeedDisplay: resolveSpeedDisplay,
+        resolveSpeedSources: resolveSpeedSources,
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
         shouldFetchSpeedLimit: shouldFetchSpeedLimit,

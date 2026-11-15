@@ -143,6 +143,67 @@
             osm_way_id:road.osm_way_id,direction:match.direction,source:'OpenStreetMap',source_data_at_ms:context.source_data_at_ms,
             reason:'Mapped speed; check road signs. Legal applicability is unverified.'};
     }
+    var SPEED_OUTCOME_REASONS={
+        SOURCE_UNAVAILABLE:'Road data unavailable',INVALID_GEOMETRY:'Road geometry is invalid',
+        UNSUPPORTED_VEHICLE:'Vehicle context is unsupported',GPS_UNAVAILABLE:'No accepted GPS sample',
+        GPS_INVALID:'GPS coordinates or accuracy are unusable',GPS_STALE:'GPS sample is stale or future-dated',
+        SOURCE_INVALID:'Road source context is invalid',SOURCE_STALE:'Road acquisition is stale or future-dated',
+        DATASET_STALE:'Map snapshot is stale or future-dated',SOURCE_EDGE:'GPS uncertainty reaches beyond source bounds',
+        ROAD_RESTRICTIONS:'A candidate has unsupported restrictions or incomplete identity',
+        SPEED_TAG_MISSING:'A candidate has no numeric mapped speed',SPEED_TAG_UNSUPPORTED:'A candidate speed tag needs interpretation',
+        SPEED_CONFLICT:'Plausible roads or directions have conflicting limits',NO_CANDIDATES:'No plausible drivable road found'
+    };
+    function assessSpeedObservationWithinUncertainty(position,index,vehicle,now){
+        // Display-only consensus; never select a road or grant legal/lane authority.
+        var context=index&&index.dataset,c=position&&position.coords,stamp=position&&position.timestamp;
+        function unavailable(code){return {status:'UNAVAILABLE',reasonCode:code,reason:SPEED_OUTCOME_REASONS[code],observation:null};}
+        if(!context)return unavailable('SOURCE_UNAVAILABLE');
+        if(index.invalid)return unavailable('INVALID_GEOMETRY');
+        if(!['car','motorcycle'].includes(vehicle))return unavailable('UNSUPPORTED_VEHICLE');
+        if(!c)return unavailable('GPS_UNAVAILABLE');
+        if(![c.latitude,c.longitude,c.accuracy,stamp,now].every(finite)||Math.abs(c.latitude)>90||Math.abs(c.longitude)>180||c.accuracy<0||c.accuracy>35)return unavailable('GPS_INVALID');
+        if(now-stamp<0||now-stamp>FIX_TTL_MS)return unavailable('GPS_STALE');
+        if(context.schema_version!==1||context.source!=='Overpass'||context.source_kind!=='OSM_EXTRACT'||context.speed_observations_only!==true||context.coverage!=='PARTIAL'||!context.revision)return unavailable('SOURCE_INVALID');
+        if(!finite(context.acquired_at_ms)||now-context.acquired_at_ms<0||now-context.acquired_at_ms>60000)return unavailable('SOURCE_STALE');
+        if(!finite(context.source_data_at_ms)||now-context.source_data_at_ms<0||now-context.source_data_at_ms>72*3600000)return unavailable('DATASET_STALE');
+        var p=[c.latitude,c.longitude],bounds=context.bounds,radius=Math.max(12,c.accuracy);
+        if(!Array.isArray(bounds)||bounds.length!==4||!bounds.every(finite)||p[0]<bounds[0]||p[0]>bounds[2]||p[1]<bounds[1]||p[1]>bounds[3]||
+            [bounds[1],bounds[3]].some(function(v){return distance(p,[p[0],v])<=radius;})||
+            [bounds[0],bounds[2]].some(function(v){return distance(p,[v,p[1]])<=radius;}))return unavailable('SOURCE_EDGE');
+        var roads=new Set(),limit=null,issues=new Set();
+        var drivable=['motorway','motorway_link','trunk','trunk_link','primary','primary_link','secondary','secondary_link',
+            'tertiary','tertiary_link','residential','unclassified','service','living_street','road'];
+        function numeric(raw){
+            var m=typeof raw==='string'&&/^\s*(\d+(?:\.\d+)?)\s*(mph|km\/h|kmh)?\s*$/i.exec(raw);
+            if(!m)return null;
+            var value=Number(m[1])/(m[2]&&m[2].toLowerCase()==='mph'?1:1.609344);
+            return finite(value)&&value>0&&value<=100?value:null;
+        }
+        nearby(index,p,radius).forEach(function(segment){
+            if(project(p,segment.a,segment.b).distance>radius||roads.has(segment.road_index))return;
+            var road=segment.road,tags=road.tags||{};
+            if(!drivable.includes(tags.highway))return;
+            roads.add(segment.road_index);
+            if(road.osm_way_id==null||!Array.isArray(road.node_ids)||road.node_ids.length!==road.geometry.length||
+                ['access','vehicle','motor_vehicle',vehicle==='car'?'motorcar':'motorcycle'].some(function(k){return ['no','private'].includes(tags[k]);})||
+                Object.keys(tags).some(function(k){return k.includes('conditional')||k.startsWith('maxspeed:')&&!['maxspeed:forward','maxspeed:backward','maxspeed:type'].includes(k);})||
+                ['reversible','alternating'].includes(tags.oneway)){issues.add('ROAD_RESTRICTIONS');return;}
+            var forwardRaw=tags['maxspeed:forward']||tags.maxspeed,backwardRaw=tags['maxspeed:backward']||tags.maxspeed;
+            var forward=numeric(forwardRaw),backward=numeric(backwardRaw);
+            if(forward===null||backward===null){issues.add(forwardRaw==null||backwardRaw==null?'SPEED_TAG_MISSING':'SPEED_TAG_UNSUPPORTED');return;}
+            if(Math.abs(forward-backward)>.01||limit!==null&&Math.abs(limit-forward)>.01){issues.add('SPEED_CONFLICT');return;}
+            limit=forward;
+        });
+        if(issues.size)return unavailable(Array.from(issues).sort()[0]);
+        if(!roads.size||limit===null)return unavailable('NO_CANDIDATES');
+        var observation={evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:Math.round(limit*10)/10,
+            position_uncertain:true,candidate_way_count:roads.size,source:'OpenStreetMap',source_data_at_ms:context.source_data_at_ms,
+            reason:'Nearby mapped speeds agree; road/direction uncertain. Check road signs.'};
+        return {status:'AVAILABLE',reasonCode:'MAPPED_SPEED_CONSENSUS',reason:observation.reason,observation:observation};
+    }
+    function speedObservationWithinUncertainty(position,index,vehicle,now){
+        return assessSpeedObservationWithinUncertainty(position,index,vehicle,now).observation;
+    }
     function laneObservation(match,context,vehicle,now){
         var road=observationRoad(match,context,vehicle,now);
         if(!road||context.lane_observations_only!==true||!['MATCHED','GEOMETRY_COMPATIBLE'].includes(match.route_relation))return null;
@@ -221,7 +282,7 @@
         if(['forward','backward'].includes(hazard.direction)&&['forward','backward'].includes(match.direction)&&hazard.direction!==match.direction)return 'UNRELATED';
         return hazard.direction==='both'||hazard.direction===match.direction?'APPLICABLE':'POSSIBLE';
     }
-    var api={createIndex:createIndex,nearby:nearby,matchPosition:matchPosition,attributes:attributes,speedObservation:speedObservation,laneObservation:laneObservation,providerLaneApproach:providerLaneApproach,junctionApproach:junctionApproach,hazardAssociation:hazardAssociation,usable:usable,sameRoad:sameRoad,bindRoute:bindRoute,shouldPauseNavigation:shouldPauseNavigation,supportsDeviation:supportsDeviation};
+    var api={createIndex:createIndex,nearby:nearby,matchPosition:matchPosition,attributes:attributes,speedObservation:speedObservation,speedObservationWithinUncertainty:speedObservationWithinUncertainty,assessSpeedObservationWithinUncertainty:assessSpeedObservationWithinUncertainty,laneObservation:laneObservation,providerLaneApproach:providerLaneApproach,junctionApproach:junctionApproach,hazardAssociation:hazardAssociation,usable:usable,sameRoad:sameRoad,bindRoute:bindRoute,shouldPauseNavigation:shouldPauseNavigation,supportsDeviation:supportsDeviation};
     if(typeof module!=='undefined'&&module.exports)module.exports=api;
     root.VoyagrRoadMatching=api;
 })(typeof window!=='undefined'?window:globalThis);

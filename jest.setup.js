@@ -50,7 +50,7 @@ global.console = {
 };
 
 // Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
+if (typeof window !== 'undefined') Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: jest.fn().mockImplementation(query => ({
         matches: false,
@@ -69,7 +69,7 @@ const mockGeolocation = {
     getCurrentPosition: jest.fn(),
     watchPosition: jest.fn(),
 };
-Object.defineProperty(global.navigator, 'geolocation', {
+if (typeof window !== 'undefined') Object.defineProperty(global.navigator, 'geolocation', {
     value: mockGeolocation,
 });
 

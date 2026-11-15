@@ -506,6 +506,9 @@ html.dark-mode .fab.fab-recenter, body.dark-mode .fab.fab-recenter {
     transform: translateY(0) !important;
     height: 92vh;
     height: 92dvh;
+    /* Open panels cover map widgets (speed: 300; navigation HUD: 250).
+       Collapsed panels keep their existing map/navigation stacking order. */
+    z-index: 310;
 }
 
 .bottom-sheet-content {
@@ -4804,6 +4807,13 @@ body.voyagr-has-offline-banner .navigation-overlay-layout { --nav-top: max(72px,
 #navigationOverlayLayout #bestEffortWarning[hidden] { display: none; }
 #navigationOverlayLayout #bestEffortWarning > strong { display: block; line-height: 1.1; }
 #navigationOverlayLayout #bestEffortWarning button { min-height: 48px; }
+#navigationOverlayLayout #bestEffortWarning summary {
+    min-height: 44px; display: flex; align-items: center; cursor: pointer;
+    font-size: .875rem; font-weight: 600;
+}
+#navigationOverlayLayout #bestEffortWarning summary:focus-visible {
+    outline: 3px solid currentColor; outline-offset: -3px;
+}
 #navigationOverlayLayout #speedWidget {
     position: relative !important; top: auto !important; right: auto !important; min-width: 0 !important;
     width: 100%; max-height: 100%; padding: 6px !important; box-sizing: border-box;
@@ -5183,3 +5193,17 @@ html.dark-mode .navigation-entry, body.dark-mode .navigation-entry { background:
 .speed-widget-gps[hidden], .speed-widget-state[hidden] { display:none; }
 html.dark-mode .speed-widget-state, body.dark-mode .speed-widget-state { color:#cbd5e1; }
 html.dark-mode .speed-widget-gps, body.dark-mode .speed-widget-gps { background:#20232b; color:#f4f5f8; border-color:#aeb8d6; }
+
+/* Independent privacy choices; native controls retain keyboard and screen-reader support. */
+.privacy-options { border: 0; padding: 0; margin: 0 0 1rem; }
+.privacy-options label, #localDataControls > .privacy-history-option {
+    display: flex; align-items: center; gap: .6rem; min-height: 44px;
+}
+.privacy-options input[type="checkbox"], #localRecordHistory {
+    /* Keep the native indicator compact; its label supplies the touch target.
+       Override the generic input padding and mobile 44px input minimums. */
+    box-sizing: border-box;
+    width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+    padding: 0; margin: 0; flex: 0 0 20px;
+}
+.privacy-options legend { font-weight: 600; }

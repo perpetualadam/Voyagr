@@ -31,6 +31,7 @@ function state() {
         active: Life.getRouteInProgress(), started: Life.getRouteStarted()});
 }
 beforeEach(() => {
+    global.VoyagrLocalData={capture:()=>({owner:'guest',epoch:1}),current:()=>true,report:jest.fn(),getRoutes:async()=>JSON.parse(localStorage.getItem('savedRoutes')||'[]')};
     localStorage.clear(); global.VoyagrAvoidanceIntegrity = AI;
     delete global.VoyagrGpsOrchestration;
     document.body.innerHTML = '<input id="start"><input id="end"><div id="routeComparisonList"></div>' +
@@ -65,7 +66,7 @@ beforeEach(() => {
     Saving.bind({routeSharing: () => Sharing, getRouteInProgress: () => Life.getRouteInProgress(),
         call: {showStatus: status, switchTab: jest.fn(), showRestoredRoutePreview: Preview.showRestoredRoutePreview}});
 });
-afterEach(() => { jest.restoreAllMocks(); });
+afterEach(() => { delete global.VoyagrLocalData; jest.restoreAllMocks(); });
 function unchanged(before) {
     expect(state()).toBe(before);
     expect(bootstrap).not.toHaveBeenCalled(); expect(mapMutation).not.toHaveBeenCalled();
@@ -125,7 +126,7 @@ describe.each(['selectRoute', 'useRoute'])('F2 %s', entry => {
 const scenarios = ['different', 'matching', 'destination', 'geometry', 'identity', 'multiple', 'none',
     'stale_saved', 'missing_saved', 'malformed_saved', 'stale_preview', 'mandatory_changed', 'offline', 'missing_verifier', 'reinjected_options'];
 describe.each(['lifecycle', 'startNavigation', 'startNavigationFromPreview'])('F3 %s', entry => {
-    test.each(scenarios)('localStorage restore %s is inspection only and cannot borrow a preview', scenario => {
+    test.each(scenarios)('localStorage restore %s is inspection only and cannot borrow a preview', async scenario => {
         localStorage.setItem('pref_avoidance_mode', 'mandatory');
         const a = route(), saved = {id: 'SAVED_B', name: 'Saved synthetic journey', start: 'SYNTHETIC_START', end: 'DEST_B',
             geometry: codec.encode([[53, -1], [53.02, -1]], 6), distance_km: 2, duration_minutes: 3};
@@ -139,7 +140,7 @@ describe.each(['lifecycle', 'startNavigation', 'startNavigationFromPreview'])('F
         Compare.setRouteOptions(scenario === 'none' ? [] : scenario === 'multiple' ? [route('OTHER'), a] : [a]);
         Compare.setSelectedRouteIndex(scenario === 'multiple' ? 1 : 0); window.lastCalculatedRoute = a;
         localStorage.setItem('savedRoutes', JSON.stringify([saved]));
-        Saving.useSavedRoute(saved.id);
+        await Saving.useSavedRoute(saved.id);
         if (scenario === 'reinjected_options') Compare.setRouteOptions([a]);
         if (scenario === 'mandatory_changed') localStorage.setItem('pref_avoidance_requirements', JSON.stringify([{category: 'motorways', enabled: true, mode: 'mandatory'}]));
         if (scenario === 'offline') jest.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
@@ -156,9 +157,9 @@ describe.each(['lifecycle', 'startNavigation', 'startNavigationFromPreview'])('F
         expect(Compare.getRouteOptions()).toEqual(scenario === 'reinjected_options' ? [a] : [window.lastCalculatedRoute]);
         expect(document.getElementById('end').value).toBe(saved.end);
     });
-    test('new separately assessed route remains usable after inspecting a saved journey', () => {
+    test('new separately assessed route remains usable after inspecting a saved journey', async () => {
         const saved = {id: 'B', start: 'START_B', end: 'DEST_B', geometry: route('B').geometry};
-        localStorage.setItem('savedRoutes', JSON.stringify([saved])); Saving.useSavedRoute('B');
+        localStorage.setItem('savedRoutes', JSON.stringify([saved])); await Saving.useSavedRoute('B');
         const fresh = route('NEW'); Compare.setRouteOptions([fresh]); window.lastCalculatedRoute = fresh;
         const context=bindTransition({status});bindStart(context);
         const started=entry === 'lifecycle' ? Life.startTurnByTurnNavigation(fresh) : Preview[entry]();
@@ -168,10 +169,10 @@ describe.each(['lifecycle', 'startNavigation', 'startNavigationFromPreview'])('F
         expect(confirm).not.toHaveBeenCalled();
     });
 });
-test('saved inspection cannot replace an active navigation context', () => {
+test('saved inspection cannot replace an active navigation context', async () => {
     const active = route(); Compare.setRouteOptions([active]); window.lastCalculatedRoute = active;
     Life.setRouteInProgress(true); localStorage.setItem('savedRoutes', JSON.stringify([{id: 'B', geometry: route('B').geometry}]));
-    const before = state(); expect(Saving.useSavedRoute('B')).toBe(false); unchanged(before);
+    const before = state(); expect(await Saving.useSavedRoute('B')).toBe(false); unchanged(before);
 });
 test('selection helper cannot transfer permission into a restored candidate', () => {
     const saved = Sharing.buildUseSavedRoutePlan('B', [{id: 'B', end: 'DEST_B', geometry: route('B').geometry}]).lastCalculatedRoutePatch;
@@ -194,10 +195,10 @@ test('pure navigation and preview merges use the selected identity and endpoints
         expect(AI.gate(candidate)).toBe(true);
     }
 });
-test('saved inspection also discards the unrelated API envelope used by preview cards', () => {
+test('saved inspection also discards the unrelated API envelope used by preview cards', async () => {
     window.lastRouteApiResponse = {routes: [route('A')], avoidance_assessment: route('A').avoidance_assessment};
     localStorage.setItem('savedRoutes', JSON.stringify([{id: 'B', end: 'DEST_B', geometry: route('B').geometry}]));
-    expect(Saving.useSavedRoute('B')).toBe(true);
+    expect(await Saving.useSavedRoute('B')).toBe(true);
     expect(window.lastRouteApiResponse).toBeNull();
     expect(document.getElementById('routeAvoidanceNotice').textContent).toContain('Start follows its selected geometry');
 });

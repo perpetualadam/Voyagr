@@ -21,6 +21,7 @@ describe('fuel price selection and saved provenance', () => {
     test('legacy saved price remains manual until explicitly opting into automatic', () => {
         localStorage.setItem('fuelPrice', '1.99');
         expect(prefs.getRouteCostParams('petrol_diesel', localStorage)).toMatchObject({fuel_price:1.99, fuel_price_mode:'manual'});
+        delete global.VoyagrLocalData;
         localStorage.setItem('fuelPricing', JSON.stringify({mode:'automatic', category:'petrol', manualPrice:1.99}));
         expect(prefs.getRouteCostParams('petrol_diesel', localStorage)).not.toHaveProperty('fuel_price');
         expect(localStorage.getItem('fuelPrice')).toBe('1.99');
@@ -28,6 +29,7 @@ describe('fuel price selection and saved provenance', () => {
     test.each(['NaN', 'Infinity', '-1', 'abc', '', '1000'])('invalid legacy manual price %s is not turned into a default', value => {
         localStorage.setItem('fuelPrice', value);
         expect(prefs.getRouteCostParams('petrol_diesel', localStorage)).toMatchObject({fuel_price:null, fuel_price_mode:'manual'});
+        delete global.VoyagrLocalData;
     });
     test('settings serialize and restore the selection and preserved manual price', () => {
         const selection = {mode:'automatic', category:'diesel', manualPrice:1.88};
@@ -76,13 +78,15 @@ describe('fuel price selection and saved provenance', () => {
         expect(controls.quoteText({price_gbp_per_l:'<img src=x onerror=alert(1)>'})).toContain('source unavailable');
         expect(document.querySelector('img')).toBeNull();
     });
-    test('switching profiles isolates selections and migrates outgoing legacy price', () => {
+    test('switching profiles isolates selections and preserves owner-scoped manual price', async () => {
         global.VoyagrRoutePrefs = prefs;
         profiles.bind({getSupabaseClient:()=>null, call:{loadAllSettings:()=>{}, applySettingsToUI:()=>{}, loadSavedRoutes:()=>{}}});
-        localStorage.setItem('fuelPrice', '1.77');
-        profiles.switchActiveProfile('sb:another');
+        let owner='guest';const snapshots={guest:{fuelPricing:{mode:'manual',category:'',manualPrice:1.77}}};
+        global.VoyagrLocalData={capture:()=>({owner}),switchOwner:id=>{owner=id;return {owner:id};},current:c=>c.owner===owner,ready:async()=>{},read:async()=>snapshots[owner]||{},update:async(_category,fn,c)=>{snapshots[c.owner]=fn(snapshots[c.owner]);},report:jest.fn()};
+        await profiles.switchActiveProfile('sb:another');
         expect(prefs.getFuelPricingSettings(localStorage)).toEqual({mode:'automatic', category:'', manualPrice:null});
-        profiles.switchActiveProfile('guest');
+        await profiles.switchActiveProfile('guest');
         expect(prefs.getRouteCostParams('petrol_diesel', localStorage)).toMatchObject({fuel_price:1.77, fuel_price_mode:'manual'});
+        delete global.VoyagrLocalData;
     });
 });

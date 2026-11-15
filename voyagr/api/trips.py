@@ -24,6 +24,9 @@ trips_bp = Blueprint('trips', __name__)
 @require_private_user
 def trip_history(trip_id: Optional[int] = None, _jwt_claims: Any = None) -> Any:
     """Get, save, or delete trip history."""
+    from voyagr.utils.privacy_enforcement import legacy_upload_denied
+    if request.method in ('POST',):
+        return legacy_upload_denied('history')
     conn = None
     try:
         user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
@@ -33,7 +36,7 @@ def trip_history(trip_id: Optional[int] = None, _jwt_claims: Any = None) -> Any:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if request.method == 'GET':
+        if request.method in {'GET','HEAD'}:
             cursor.execute('''
                 SELECT
                     id,

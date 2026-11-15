@@ -82,10 +82,15 @@
         var warning=document.getElementById('bestEffortWarning');
         if (!warning) return true;
         previousFocus=document.activeElement;
+        var info=document.getElementById('routeLimitationsInfo');
+        if (info) info.open=false;
         warning.hidden=false;
         var close=document.getElementById('dismissBestEffortWarning');
         if (close) close.onclick=dismiss;
-        clearTimeout(warningTimer); warningTimer=setTimeout(dismiss,WARNING_MS);
+        clearTimeout(warningTimer); warningTimer=setTimeout(function() {
+            // Do not remove information while the user is reading it.
+            if (!info || !info.open) dismiss();
+        },WARNING_MS);
         return true;
     }
     function reset() {

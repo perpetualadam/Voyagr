@@ -253,6 +253,17 @@
         const epoch = startEpoch;
         const lifecycle = services.lifecycle || {};
         if (lifecycle.startGpsIfInactive) rt().call.startGPSTracking();
+        // A watch may already be active before Start. Use its still-fresh fix
+        // for initial route association without waiting for movement/new GPS.
+        const gps=root.VoyagrGpsOrchestration;
+        if (gps && gps.seedNavigationPositionFromAcceptedFix) {
+            try {
+                if (gps.seedNavigationPositionFromAcceptedFix() && root.VoyagrSpeedWidgetOrchestration && root.VoyagrSpeedWidgetOrchestration.refreshFromNavigationPosition) {
+                    root.VoyagrSpeedWidgetOrchestration.refreshFromNavigationPosition();
+                }
+            }
+            catch (_) { /* Enrichment must not interrupt navigation startup. */ }
+        }
 
         const driverViewSchedule = services.driverViewSchedule;
         if (driverViewSchedule && driverViewSchedule.shouldSchedule) {

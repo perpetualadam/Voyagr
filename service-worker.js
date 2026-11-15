@@ -15,6 +15,10 @@ const MAP_PROXY_PATH_PREFIX = '/map/';
 // Sensitive endpoints: do NOT cache responses (privacy)
 const SENSITIVE_API_PATH_PREFIXES = [
   '/api/dashcam',
+  '/api/privacy/consent',
+  '/api/app-settings',
+  '/api/traffic-patterns',
+  '/api/trip-analytics',
   '/api/cache-statistics',
   '/api/alternative-route-cache-info',
   '/api/ml-predictions',
@@ -398,58 +402,10 @@ self.addEventListener('sync', event => {
   }
 });
 
-async function syncTrips() {
-  console.log('[SW] Syncing trips...');
-  try {
-    // Get queued trips from IndexedDB
-    const trips = await getQueuedItems('pending_trips');
-
-    for (const trip of trips) {
-      try {
-        const response = await fetch('/api/save-trip', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(trip.data)
-        });
-
-        if (response.ok) {
-          await removeQueuedItem('pending_trips', trip.id);
-          console.log('[SW] Synced trip:', trip.id);
-        }
-      } catch (err) {
-        console.log('[SW] Failed to sync trip:', err);
-      }
-    }
-  } catch (err) {
-    console.log('[SW] Sync trips error:', err);
-  }
-}
-
-async function syncRoutes() {
-  console.log('[SW] Syncing saved routes...');
-  try {
-    const routes = await getQueuedItems('pending_routes');
-
-    for (const route of routes) {
-      try {
-        const response = await fetch('/api/save-route', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(route.data)
-        });
-
-        if (response.ok) {
-          await removeQueuedItem('pending_routes', route.id);
-          console.log('[SW] Synced route:', route.id);
-        }
-      } catch (err) {
-        console.log('[SW] Failed to sync route:', err);
-      }
-    }
-  } catch (err) {
-    console.log('[SW] Sync routes error:', err);
-  }
-}
+// Optional personal-data sync is unavailable until category consent is enforced.
+// Do not read, transmit or delete old queued personal data on background events.
+async function syncTrips() { return false; }
+async function syncRoutes() { return false; }
 
 async function syncHazardReports() {
   console.log('[SW] Syncing hazard reports...');

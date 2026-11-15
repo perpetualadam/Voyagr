@@ -111,6 +111,13 @@
 
     function updateAllSpeedDisplays() {
         refreshSpeedLabels();
+        // Advisory observations intentionally leave the legal-alert limit empty.
+        // Resolve fresh local sources instead of redrawing from that empty number.
+        const display=root.VoyagrSpeedWidgetOrchestration;
+        if(root.VoyagrRoadMatchOrchestration && display && display.refreshFromNavigationPosition){
+            try{if(display.refreshFromNavigationPosition()===true)return;}
+            catch(_){/* Preserve startup/legacy formatting while modules bind. */}
+        }
         const execute = SLW().buildUpdateAllSpeedDisplaysExecutePlan({
             apiSpeedLimitMph: rt().getCurrentSpeedLimitMph(),
             valhallaSpeedLimitMph: null,
@@ -186,7 +193,7 @@
         });
         if (!request.shouldSave) return;
 
-        fetch(request.apiPath, {
+        root.VoyagrLocalData.preferenceRequest({
             method: request.method,
             headers: request.headers,
             body: JSON.stringify(request.body),

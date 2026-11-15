@@ -1664,3 +1664,98 @@ verify UI wiring and layout, not physical GPS or live data coverage.
   retention/deletion, paid subscription fulfilment and public-report handling.
   See [risk review](../audits/LEGAL_AND_PRIVACY_RISK_REVIEW.md) for evidence,
   remaining technical work and operator/legal inputs. This is not certification.
+
+### Private phone candidate findings (14 November 2026)
+
+- [x] Keep privacy checkbox indicators at 20px while preserving label touch
+  targets of at least 44px. Generic mobile input minimums and padding caused
+  the oversized controls. CSS fix verified in Chromium at 360, 576 and 1024px
+  in light/dark themes; disabled states preserved. Phone retest pending.
+- [x] Stack expanded sheets above the speed widget/navigation HUD, preserving
+  the collapsed map layout and disabled-widget preference. Real Chromium hit
+  testing covers phone, tablet, landscape and desktop in light/dark themes;
+  candidate phone retest pending. Reproduce with
+  `node scripts/check-sheet-widget-layering.cjs`.
+- [x] Collapse the startup route-limitations explanation behind a native Info
+  disclosure. Preserve explanatory text, keyboard access and explicit dismissal;
+  do not expire the disclosure while someone is reading it. Phone retest pending.
+- [ ] Review the separate volume reminder and remaining route-preview diagnostics
+  so supplementary information does not cover the map/instructions.
+- [ ] Replace misleading incomplete-route wording when no route is selected;
+  preserve useful errors for actual incomplete route results.
+
+These findings concern the isolated candidate. Live movement, rerouting, speed
+limit coverage, dashcam and Bluetooth still require their separate checks.
+
+### Active-navigation position initialization
+
+- [x] Seed route-position assessment at Start from the last accepted GPS sample
+  if it remains fresh, keeping its timestamp, accuracy, speed and heading. Start
+  an optional road-context observation and refresh the existing labelled speed
+  display without replaying movement, speech, arrival or history side effects.
+  Regression checks preserve reacquisition/ambiguity rules and unknown limits.
+- [ ] Retest on the private phone candidate. A precise GPS fix and a successful
+  Overpass response do not prove a usable road association or speed-tag coverage.
+  `/api/road-context` is the normal widget data path; the standalone legacy
+  `/api/speed-limit` response is not proof of the current widget's behaviour.
+
+### Mapped-speed display under GPS uncertainty
+
+- [x] Add a display-only `Mapped est.` fallback for fresh GPS up to 35m accuracy
+  when all plausible drivable ways within its uncertainty radius have matching
+  explicit numeric speed tags in both directions. Keep strict road matching,
+  legal-speed alerts, lane guidance and deviation gates unchanged. Missing,
+  conflicting, conditional, stale or restricted candidates remain unknown.
+- [ ] Phone retest with the connected UK Overpass candidate. Partial map coverage
+  can omit roads/sign changes; this is labelled map information, not verified
+  signage or proof that GPS is on a particular road. Browser tests are synthetic.
+
+### Delayed road context and the visible speed widget
+
+- [x] Refresh the speed display when asynchronously acquired road context becomes
+  available. The full candidate could hold a valid 30mph mapped observation while
+  continuing to display unknown until another GPS callback. The new path uses
+  only a still-fresh accepted fix, without replaying GPS or enabling legal alerts.
+- [x] Add a full-page Chromium regression with real application bootstrap,
+  geolocation callbacks, source ownership and DOM rendering; hold the synthetic
+  road response until the initial unknown is visible. Verify it changes to
+  `30 / Mapped est.` without another GPS callback and clears when GPS stops.
+- [ ] Retest the private phone candidate. Local controlled data/GPS checks do not
+  establish coverage or diagnose every unknown limit on the user's real roads.
+
+Run `python3 scripts/privacy-http-lab/run.py --browser` for the disposable lab.
+The regression also checks coherent asset loading. No cache purge, service-worker
+weakening, server retention change or production deployment is part of this fix.
+
+### Route-speed selection investigation
+
+- [x] Verify the full browser GPS pipeline with a controlled GraphHopper-shaped
+  route and unavailable Overpass: after reacquisition, display 30 → 20 → unknown
+  on an untagged section → 40, retaining the Route label and no legal-alert state.
+  This tests runtime wiring, not a real engine response or physical phone.
+- [x] Extend the existing collapsed route Info with coordinate-free selected-route
+  step counts, GPS-derived step and road-context/match status. Keep provider names,
+  coordinates, source URLs and tokens out of this presentation. No priority or
+  matching changes are justified by the passing controlled route test.
+- [ ] Inspect these details on the private phone candidate to identify its actual
+  failure stage. The user's persistent unknown display remains unresolved.
+
+### Speed-display refactor (incremental)
+
+- [x] Consolidate source/value/label validation into a pure display resolver and
+  render its selected result through the existing single widget renderer.
+  Preserve applicable evidence → mapped observation → route observation priority,
+  alert isolation, unit formatting and existing producer freshness/matching gates.
+- [x] Move unit changes onto fresh local-source resolution, preserving advisory
+  labels and mph/km/h values without promoting them into legal-alert state.
+  Keep startup/stale-GPS and legacy formatting fallbacks.
+- [x] Add a common available/unavailable outcome with stable, coordinate-free
+  reason codes for mapped acquisition/assessment and display, retaining legacy
+  observation-or-null wrappers and the existing acceptance rules.
+- [ ] Review actual older speed API/TomTom callers before integrating or retiring
+  those paths. Do not infer integration from the existence of provider functions.
+- [ ] Retest on the private candidate; the user's phone issue remains unresolved.
+
+See [speed-limit refactor audit and plan](SPEED_LIMIT_REFACTOR_PLAN.md). No rebuild,
+production deployment, source-priority change or new retention is part of the
+first increment.

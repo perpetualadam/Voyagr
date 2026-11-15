@@ -45,17 +45,8 @@
     function SA() { return rt().searchAutocomplete(); }
 
     function initGeocodeCache() {
-    try {
-        const cached = localStorage.getItem(GEOCODING_CACHE_KEY);
-        if (cached) {
-            geocodingCache = JSON.parse(cached);
-            console.log('[Geocoding] Cache loaded with', Object.keys(geocodingCache).length, 'entries');
-        }
-    } catch (e) {
-        console.log('[Geocoding] Cache load error:');
-        geocodingCache = {};
+        geocodingCache = {}; // Tab-local lookup cache; legacy disk copy remains recovery input.
     }
-}
 
 /**
  * saveGeocodeCache function
@@ -63,11 +54,7 @@
  * @returns {*} Return value description
  */
 function saveGeocodeCache() {
-    try {
-        localStorage.setItem(GEOCODING_CACHE_KEY, JSON.stringify(geocodingCache));
-    } catch (e) {
-        console.log('[Geocoding] Cache save error:');
-    }
+        // Lookup cache stays in memory; it is not a personal history archive.
     }
 
     function getAutocompleteDropdown(fieldId) {
@@ -569,7 +556,9 @@ function applyGeocodePairOutcomeFromPlan(apply) {
     if (!dropdown) return;
 
     const mod = SA();
-    const recent = rt().call.loadRecentDestinations();
+    const scope=root.VoyagrLocalData?.capture();
+    const recent = await rt().call.loadRecentDestinations();
+    if(scope&&!root.VoyagrLocalData.current(scope))return;
     dropdown.innerHTML = '';
 
     const appendSectionTitle = (text) => {
@@ -587,34 +576,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
         });
     }
 
-    let serverCount = 0;
-    try {
-        const { res, data } = await rt().call.fetchJsonWithAuth('/api/search-history');
-        if (res.status !== 401 && data.success && data.history && data.history.length > 0) {
-            appendSectionTitle('Saved searches');
-            data.history.forEach((item) => {
-                const built = mod.buildServerSearchHistoryItemHtml(item, { escapeHtml: rt().call.escapeHtml });
-                const div = document.createElement('div');
-                div.className = 'autocomplete-item';
-                div.innerHTML = built.html;
-                if (built.hasCoords) {
-                    div.onclick = () => selectAutocompleteResult(fieldId, built.lat, built.lon, item.result_name || item.query, 'saved');
-                } else {
-                    div.onclick = () => {
-                        const fieldInput = document.getElementById(fieldId);
-                        if (fieldInput) {if(root.VoyagrLocationOrchestration)root.VoyagrLocationOrchestration.invalidateEndpointRequests(fieldId);delete fieldInput.dataset.lat;delete fieldInput.dataset.lon;delete fieldInput.dataset.displayName;delete fieldInput.dataset.journeyOriginalSource;fieldInput.dataset.journeySource='saved';fieldInput.value=item.query||'';}
-                        dropdown.classList.remove('show');
-                    };
-                }
-                dropdown.appendChild(div);
-                serverCount++;
-            });
-        }
-    } catch (e) {
-        console.error('[Search history]');
-    }
-
-    if (!recent.length && serverCount === 0) {
+    if (!recent.length) {
         dropdown.innerHTML = mod.buildAutocompleteNoResultsHtml();
     }
     dropdown.classList.add('show');
@@ -625,6 +587,7 @@ function showSearchHistory() {
     if (!dropdown) return;
     renderEndDestinationSuggestions(dropdown).catch((e) => console.error('Error loading search history'));
 }
+    root.addEventListener?.('voyagr-local-owner-change',()=>{geocodingCache={};autocompleteCache={};autocompleteGeneration++;autocompleteController?.abort();for(const id of ['autocompleteStart','autocompleteEnd','autocompleteViaPoint','autocompleteStop']){const el=document.getElementById(id);if(el){el.textContent='';el.classList.remove('show');}}});
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }

@@ -1,3 +1,6 @@
+// Persistence boundary is device-only; conversion assertions below remain unchanged.
+beforeEach(()=>{global.VoyagrLocalData={preferenceRequest:jest.fn(options=>global.fetch('/device-preferences',options))};});
+afterEach(()=>{delete global.VoyagrLocalData;});
 const U=require('../modules/navigation/units.js');
 const Pref=require('../app/units-preferences-orchestration.js');
 const RS=require('../modules/navigation/route-selection.js');
@@ -30,7 +33,7 @@ test('actual comparison table starts in miles and refreshes metric/imperial in p
     distance('mi');expect(header.textContent).toBe('Cost/mi');expect(rate.textContent).toBe('£0.32');
     expect(rate.isConnected).toBe(true);expect(rate.dataset.costPerKm).toBe('0.2');
     expect(JSON.stringify(route)).toBe(original);expect(document.querySelector('tbody').textContent).toContain('£20.00');
-    expect(global.fetch.mock.calls.every(([url])=>url==='/api/app-settings')).toBe(true);
+    expect(global.fetch.mock.calls.every(([url])=>url==='/device-preferences')).toBe(true);
 });
 test('unknown cost rate stays unknown on either side of a distance change',()=>{
     document.getElementById('report').innerHTML=RS.buildRouteComparisonTableHtml([{...route,cost_per_km:null}],{distUnit:'km',distanceText:'100.00',currencySymbol:'£'});
@@ -60,5 +63,5 @@ test('temperature setting round-trip persists without weather tile/provider call
     expect(localStorage.getItem('unit_temperature')).toBe('fahrenheit');expect(Pref.convertTemperature(0)).toBe('32.0');
     const restore=Snapshot.buildSettingsRestorePlan({unit_temperature:'celsius'});Pref.setTemperatureUnitValue(restore.runtime.temperatureUnit);
     expect(Pref.convertTemperature(0)).toBe('0.0');expect(JSON.stringify(route)).toBe(before);
-    expect(global.fetch.mock.calls.map(([url])=>url)).toEqual(['/api/app-settings']);
+    expect(global.fetch.mock.calls.map(([url])=>url)).toEqual(['/device-preferences']);
 });

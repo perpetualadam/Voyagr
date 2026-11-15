@@ -43,3 +43,4 @@ def authenticate_dashcam_request():
     except (requests.RequestException, ValueError):
         return jsonify(success=False, error='Session verification unavailable'), 503
     g.dashcam_owner_user_id = owner
+    g.private_user_claims = dict(claims,sub=owner)

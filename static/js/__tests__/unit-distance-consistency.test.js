@@ -1,3 +1,6 @@
+// Persistence boundary is device-only; conversion assertions below remain unchanged.
+beforeEach(()=>{global.VoyagrLocalData={preferenceRequest:jest.fn(options=>global.fetch('/device-preferences',options))};});
+afterEach(()=>{delete global.VoyagrLocalData;});
 const U=require('../modules/navigation/units.js');
 const Pref=require('../app/units-preferences-orchestration.js');
 const POI=require('../modules/navigation/poi-search.js');
@@ -35,7 +38,7 @@ test('real settings action refreshes POI rows, popup and distance elements witho
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).distance_unit).toBe('mi');
     change('km');change('mi');
     expect([...document.querySelectorAll('[data-distance-meters]')].map(e=>e.dataset.distanceMeters)).toEqual(canonical);
-    expect(item.distance_m).toBe(1609.344);expect(global.fetch.mock.calls.every(([url])=>url==='/api/app-settings')).toBe(true);
+    expect(item.distance_m).toBe(1609.344);expect(global.fetch.mock.calls.every(([url])=>url==='/device-preferences')).toBe(true);
 });
 test('distance labels update even when main route totals are absent',()=>{
     document.body.insertAdjacentHTML('beforeend','<p data-distance-meters="2000" data-distance-prefix="Within " data-distance-suffix=" of destination">Within 2.0 km of destination</p>');

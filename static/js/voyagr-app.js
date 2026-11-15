@@ -197,8 +197,8 @@ function getProfileStore() {
     return VoyagrProfileStoreOrchestration.getProfileStore();
 }
 
-function persistActiveProfile() {
-    return VoyagrProfileStoreOrchestration.persistActiveProfile();
+function persistActiveProfile(snapshot) {
+    return VoyagrProfileStoreOrchestration.persistActiveProfile(snapshot);
 }
 
 function ensureProfileExists(profileId) {

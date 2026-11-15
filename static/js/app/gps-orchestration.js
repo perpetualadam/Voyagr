@@ -23,6 +23,7 @@
     var gpsWatchId = null;
     var lastGpsFixAtMs = 0;
     var lastAcceptedOriginFix = null;
+    var lastAcceptedNavigationPosition = null;
     var gpsWatchStartedAtMs = 0;
     var gpsEnsureRetryTimer = null;
     var currentUserMarker = null;
@@ -831,6 +832,36 @@
         if (nl && nl.resetNavigationArrivalState) nl.resetNavigationArrivalState();
     }
 
+    function rememberAcceptedPosition(position) {
+        const c=position.coords;
+        lastAcceptedOriginFix={lat:c.latitude,lon:c.longitude,accuracy:c.accuracy,timestamp:position.timestamp};
+        // Browser coordinate properties need not be enumerable. Copy only fields
+        // used by matching, preserving the original timestamp and uncertainty.
+        lastAcceptedNavigationPosition={timestamp:position.timestamp,coords:{
+            latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,
+            heading:c.heading,speed:c.speed,headingAccuracy:c.headingAccuracy
+        }};
+    }
+
+    function seedNavigationPositionFromAcceptedFix() {
+        if (!rt().g('routeInProgress') || root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) return false;
+        const line=rt().g('routePolyline');
+        if (line!==evidencePolyline) {navigationPositionEvidence=null;navigationAnchor=null;evidencePolyline=line;}
+        const position=lastAcceptedNavigationPosition;
+        if (!position || !sgModule().validateNavigationGpsFix(position,Date.now(),0).accepted) return false;
+        // Never replay a watch tick, movement, speech, arrival or history write.
+        // Only initialize missing route-position evidence for this fresh fix.
+        if (navigationPositionEvidence && navigationPositionEvidence.timestamp>=position.timestamp) return false;
+        const geometry=rgModule();
+        if (!geometry || !geometry.assessNavigationPosition) return false;
+        navigationPositionEvidence=geometry.assessNavigationPosition(position,line,navigationAnchor,Date.now());
+        if (navigationPositionEvidence && ['RELIABLE','REACQUIRING'].includes(navigationPositionEvidence.state)) navigationAnchor=navigationPositionEvidence;
+        try {
+            if (root.VoyagrRoadMatchOrchestration) root.VoyagrRoadMatchOrchestration.observe(position,line,window.lastCalculatedRoute);
+        } catch (_) { /* Optional road observations cannot block navigation. */ }
+        return true;
+    }
+
     function applyGpsTrackingTick(position) {
         if (root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating()) return;
         var line=rt().g('routePolyline');
@@ -844,7 +875,8 @@
             var knownDeviation=!!(roadMatch && root.VoyagrRoadMatching && root.VoyagrRoadMatching.supportsDeviation(roadMatch,Date.now()));
             // Missing Overpass/road identity must not veto route-geometry progress
             // or deviation detection. Keep that richer evidence as metadata only.
-            navigationPositionEvidence=rgModule().assessNavigationPosition
+            navigationPositionEvidence=navigationPositionEvidence && navigationPositionEvidence.timestamp===position.timestamp
+                ? navigationPositionEvidence : rgModule().assessNavigationPosition
                 ? rgModule().assessNavigationPosition(position,line,navigationAnchor,Date.now())
                 : {state:'UNKNOWN',reason:'Route association unavailable'};
             if(knownDeviation)navigationPositionEvidence={state:'OFF_ROUTE',reason:roadMatch.reason,road_match:roadMatch};
@@ -926,7 +958,7 @@
                     return;
                 }
                 if(getLastGpsFixAtMs()>0&&Date.now()-getLastGpsFixAtMs()>15000)resetDeviationConfirmation();
-                lastAcceptedOriginFix = {lat:position.coords.latitude,lon:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:fix.timestamp};
+                rememberAcceptedPosition(position);
                 setLastGpsFixAtMs(fix.timestamp);
                 applyGpsTrackingTick(position);
                 resumeOfflineReroute();
@@ -2117,9 +2149,10 @@
         acceptOriginPosition:function(position){
             var check=sgModule().validateNavigationGpsFix(position,Date.now(),0);
             if(!check.accepted || lastAcceptedOriginFix && position.timestamp<lastAcceptedOriginFix.timestamp)return false;
-            lastAcceptedOriginFix={lat:position.coords.latitude,lon:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp};
+            rememberAcceptedPosition(position);
             return true;
         },
+        seedNavigationPositionFromAcceptedFix:seedNavigationPositionFromAcceptedFix,
         getNavigationPositionEvidence:function(){return navigationPositionEvidence;},
         // Display evidence only; never authorizes alerts or changes navigation eligibility.
         getRouteSpeedObservation:function(limitMph){

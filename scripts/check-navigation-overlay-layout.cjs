@@ -58,8 +58,14 @@ const overlaps=(a,b)=>a.x<b.x+b.width-1&&a.x+a.width>b.x+1&&a.y<b.y+b.height-1&&
                 }
                 const end=page.locator('#endNavigationBtn');assert.equal(await end.evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2).closest('button')===el;}),true,'End control obstructed');
             };
+            assert.equal(await page.locator('#routeLimitationsInfo').getAttribute('open'),null,'Limitations unexpectedly expanded');
+            assert.equal(await page.locator('#dismissBestEffortWarning').isVisible(),false,'Supplementary text/actions visible before opening Info');
             await check();
             if(process.env.NAVIGATION_LAYOUT_SCREENSHOT_DIR){fs.mkdirSync(process.env.NAVIGATION_LAYOUT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.NAVIGATION_LAYOUT_SCREENSHOT_DIR,`navigation-${width}-${theme}-${scale}.png`)});}
+            const infoSummary=page.locator('#routeLimitationsInfo summary');
+            await infoSummary.focus();await page.keyboard.press('Enter');
+            assert.equal(await page.locator('#routeLimitationsInfo').evaluate(el=>el.open),true,'Keyboard cannot open Info');
+            await check();
             const warning=page.locator('#bestEffortWarning');await warning.focus();
             assert.equal(await warning.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');
             await page.keyboard.press('End');await page.waitForTimeout(150);assert.equal(await warning.evaluate(el=>el.scrollHeight<=el.clientHeight||el.scrollTop>0),true,'Long limitations cannot be scrolled');

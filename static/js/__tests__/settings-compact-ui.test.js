@@ -1,3 +1,6 @@
+// Persistence boundary is device-only; conversion assertions below remain unchanged.
+beforeEach(()=>{global.VoyagrLocalData={preferenceRequest:jest.fn(options=>global.fetch('/device-preferences',options))};});
+afterEach(()=>{delete global.VoyagrLocalData;});
 const Account=require('../app/supabase-auth-orchestration');
 const Units=require('../modules/navigation/units');
 const Preferences=require('../app/units-preferences-orchestration');
