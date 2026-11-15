@@ -110,3 +110,32 @@ legal values for advisory or unknown results, and forwards advisory observations
 without granting alert authority. API acquisition, throttling, source order and
 GPS eligibility are unchanged. The older API remains a compatibility path rather
 than an additional provider fallback in the normal widget. No phone fix is claimed.
+
+## Fifth increment: legacy API caller/provider audit
+
+The normal widget uses the road coordinator and returns before the legacy fetch.
+The compatibility branch in `speed-widget-orchestration.js` remains a real caller
+when that coordinator is absent. Deployment smoke scripts and tests also call the
+GET endpoint. The batch dispatcher has a speed-limit placeholder returning a success message
+without speed data; it does not invoke the detector or supply the normal widget. These callers prevent retiring the endpoint now.
+
+Within `SpeedLimitDetector`, a ten-minute coordinate/context-keyed candidate cache
+precedes TomTom Snap (only with `TOMTOM_API_KEY`), then Overpass, then optional
+road-class inference. Optional TomTom/OSM cross-checks collect diagnostics rather
+than changing TomTom priority. These are candidate-source rules, not evidence of
+legal applicability. The public GET does not supply trusted road evidence;
+`get_speed_limit_for_location` separates its candidate estimate from the applicable
+legal result. No live credentials, quota usage or provider freshness was verified
+by this repository audit. Candidate cache age is not a proof of current signage.
+
+`resolveSpeedApiResponse` now defines the frontend compatibility boundary with
+`API_UNAVAILABLE`, `API_INVALID_RESPONSE`, and `API_EVIDENCE_UNVERIFIED` outcomes.
+Only applicable evidence accepted by the shared resolver can yield a value here;
+source strings, estimated mph and alternate km/h fields cannot grant authority.
+Existing signatures and backend responses remain unchanged. Legacy parser/cache
+helpers retain tests and exports; removing them is a separate compatibility task.
+
+Explicitly integrating TomTom as an advisory normal-widget fallback would require
+freshness, road/direction association, uncertainty and provider-access policies.
+This increment does not silently enable new requests or reuse a cached candidate
+as current road evidence. The physical-phone issue remains unresolved.
