@@ -36,3 +36,10 @@ responses, but an absent value yields no provider road classification; no class
 is guessed from the numeric limit. Client-edge plausibility checks remain. A
 new live request is required to establish whether the corrected request succeeds;
 this correction does not integrate TomTom into the normal widget.
+
+A second live VPS response identified `{route.properties.streetName}` as unknown
+too. Requests now select only `{route{properties{speedLimits{value,unit,type}}}}`.
+The probe prints only bounded `detailedError.code`/`message` strings on rejection,
+redacting raw and URL-encoded keys. This avoids repeating the diagnostic wrapper.
+The reduced field selection still requires live validation; no successful TomTom
+response or widget integration is claimed.
