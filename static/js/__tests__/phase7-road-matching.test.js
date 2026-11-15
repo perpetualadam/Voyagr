@@ -78,10 +78,11 @@ describe('actual road owner lifecycle',()=>{
         expect(owner.getAttributes().lanes.straight.recommended_lanes).toEqual([1]);
         expect(owner.classifyHazard({osm_way_id:'200',observed_at_ms:NOW})).toBe('UNRELATED');
         owner.invalidate('GPS lost');expect(owner.getAttributes()).toBeNull();
-        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls.filter(([url])=>url==='/api/road-context')).toHaveLength(1);
+        expect(global.fetch.mock.calls.filter(([url])=>url==='/api/speed-limit/observation')).toHaveLength(1);
     });
     test('a late context cannot overwrite a newer route or vehicle',async()=>{
-        let resolve;global.fetch=jest.fn(()=>new Promise(r=>{resolve=r;}));
+        let resolve;global.fetch=jest.fn(url=>url==='/api/speed-limit/observation'?Promise.resolve({ok:true,json:async()=>({status:'UNAVAILABLE',observation:null})}):new Promise(r=>{resolve=r;}));
         owner.observe(fix(),line,route);const old=resolve;
         clock.mockReturnValue(NOW+1000);owner.observe(fix(1000),line.slice(),route);
         old({ok:true,json:async()=>({context:single()})});await flush();const middle=resolve;
@@ -89,7 +90,7 @@ describe('actual road owner lifecycle',()=>{
         document.getElementById('vehicleType').value='truck';
         clock.mockReturnValue(NOW+2000);owner.observe(fix(2000),line,route);
         expect(owner.getSnapshot().attributes_allowed).toBe(false);
-        expect(JSON.parse(global.fetch.mock.calls[2][1].body).vehicle_type).toBe('truck');
+        expect(JSON.parse(global.fetch.mock.calls.filter(([url])=>url==='/api/road-context')[2][1].body).vehicle_type).toBe('truck');
         // Resolve remaining requests to dispose timers without discarding stale-response guards.
         middle({ok:true,json:async()=>({context:null})});resolve({ok:true,json:async()=>({context:null})});await flush();
     });
@@ -97,7 +98,8 @@ describe('actual road owner lifecycle',()=>{
         global.fetch=jest.fn().mockRejectedValue(new Error('offline'));
         owner.observe(fix(),line,route);await flush();
         for(let i=1;i<10;i++){clock.mockReturnValue(NOW+i*1000);owner.observe(fix(i*1000),line,route);}
-        expect(owner.getAttributes()).toBeNull();expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(owner.getAttributes()).toBeNull();expect(global.fetch.mock.calls.filter(([url])=>url==='/api/road-context')).toHaveLength(1);
+        expect(global.fetch.mock.calls.filter(([url])=>url==='/api/speed-limit/observation')).toHaveLength(1);
     });
 });
 

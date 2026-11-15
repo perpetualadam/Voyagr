@@ -844,7 +844,11 @@ class SpeedLimitDetector:
                             if isinstance(speed_limit_data, dict):
                                 speed_limit_kmh = speed_limit_data.get('value', 0)
 
-                                if speed_limit_kmh > 0:
+                                unit = speed_limit_data.get('unit')
+                                kind = speed_limit_data.get('type')
+                                if (type(speed_limit_kmh) in (int, float) and math.isfinite(speed_limit_kmh)
+                                        and 0 < speed_limit_kmh <= 200 and unit in ('kmph', 'km/h', 'kph')
+                                        and kind in (None, 'Maximum')):
                                     speed_limit = _snap_tomtom_kmh_to_mph(float(speed_limit_kmh), region)
 
                                     self.metrics['tomtom_snap_to_roads_success'] += 1

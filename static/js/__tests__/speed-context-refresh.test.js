@@ -10,7 +10,7 @@ beforeEach(()=>{
     tracking=true;fix={lat:53.524,lon:-1.13,accuracy:17.7,timestamp:NOW};
     document.body.innerHTML='<select id="vehicleType"><option value="petrol_diesel">Car</option></select><div id="speedWidget"><span id="speedValue"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden></span></div></div>';
     global.VoyagrRoadMatching=RM;
-    global.fetch=jest.fn(()=>new Promise(resolve=>{release=resolve;}));
+    global.fetch=jest.fn(url=>url==='/api/speed-limit/observation'?Promise.resolve({ok:true,json:async()=>({status:'UNAVAILABLE',observation:null})}):new Promise(resolve=>{release=resolve;}));
     global.VoyagrGpsOrchestration={getAcceptedOriginFix:()=>fix,getNavigationPositionEvidence:()=>null,getRouteSpeedObservation:()=>null};
     widget=require('../app/speed-widget-orchestration.js');
     widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>tracking,getRouteInProgress:()=>false,getCurrentRouteSteps:()=>[],call:{getSpeedUnit:()=> 'mph'}});
@@ -29,7 +29,8 @@ test('delayed road acquisition renders its mapped estimate without replaying GPS
     expect(document.getElementById('speedLimitValue').textContent).toBe('30');
     expect(document.getElementById('speedLimitMappedLabel').textContent).toBe('Mapped est.');
     expect(widget.getCurrentSpeedLimitMph()).toBeNull();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([url])=>url==='/api/road-context')).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([url])=>url==='/api/speed-limit/observation')).toHaveLength(1);
 });
 test.each(['stopped GPS','stale fix','missing fix'])('late source response cannot publish after %s',async kind=>{
     if(kind==='stopped GPS')tracking=false;
