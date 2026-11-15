@@ -45,7 +45,10 @@
         if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isSimulating())return;
         var now=Date.now();
         if(primaryRequest||now-primaryLastFetch<10000)return;
-        var seq=++primarySeq,gen=generation,coords=Object.assign({},position.coords),timestamp=position.timestamp;
+        // GeolocationCoordinates fields may be inherited getters, not own enumerable keys.
+        var c=position.coords;
+        var coords={latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,heading:c.heading};
+        var seq=++primarySeq,gen=generation,timestamp=position.timestamp;
         var controller=typeof AbortController!=='undefined'?new AbortController():null;
         primaryRequest={controller:controller};primaryLastFetch=now;
         var timer=controller?setTimeout(function(){controller.abort();},4000):null;
