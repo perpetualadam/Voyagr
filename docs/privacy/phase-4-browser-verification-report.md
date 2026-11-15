@@ -170,3 +170,19 @@ Final paced run: 42 HTTP and 56 full-candidate Chromium assertions passed.
 JavaScript regression suite: 184 suites / 3,623 tests passed. Backend selection:
 2,349 passed, one skipped, 94 subtests passed; asset-release checks also passed.
 The private phone candidate and production remain unchanged by this work.
+
+## Speed-display resolver refactor
+
+Source selection and widget rendering now share a pure resolver with a separate
+legal-alert value. Source freshness/association stays in the existing producers;
+priority remains applicable matched evidence, mapped observation, then route
+observation. No acquisition endpoint, source permission, logging or retention
+policy changes. The older provider-specific speed API is not newly integrated.
+
+Actual unit-control browser tests preserve mapped/route source labels through
+30mph → 48km/h → 30mph without another GPS callback or legal-alert authority.
+The refresh reads fresh local source state rather than the intentionally empty
+advisory alert number. Startup, stale-GPS and legacy formatting fallbacks remain.
+These controlled checks do not establish the cause or resolution of the user's
+physical-phone failure. See `docs/design/SPEED_LIMIT_REFACTOR_PLAN.md` for scope
+and remaining review work. Production readiness remains NO-GO.

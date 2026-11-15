@@ -218,3 +218,17 @@ test('real road owner supplies a stationary consensus and clears it on GPS loss 
         expect(owner.getSpeedObservation()).toBeNull();
     } finally {clock.mockRestore();global.fetch=oldFetch;window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrRoadMatching=oldMatching;}
 });
+test('invalid mapped observation does not suppress a valid selected-route fallback',()=>{
+    const widget=require('../app/speed-widget-orchestration.js');
+    const oldRoad=window.VoyagrRoadMatchOrchestration,oldGps=window.VoyagrGpsOrchestration;
+    document.body.innerHTML='<div id="speedWidget"><span id="speedValue"></span><div id="speedLimitCircle"><span id="speedLimitValue"></span><span id="speedLimitUnit"></span><span id="speedLimitMappedLabel" hidden></span></div></div>';
+    window.VoyagrRoadMatchOrchestration={getAttributes:()=>null,getSpeedObservation:()=>({evidence_state:'MAPPED_OBSERVATION',applicable:false,speed_limit_mph:NaN})};
+    window.VoyagrGpsOrchestration={getRouteSpeedObservation:()=>({evidence_state:'ROUTE_OBSERVATION',applicable:false,speed_limit_mph:30})};
+    widget.bind({speedGps:()=>SG,speedLimitWidget:()=>SL,getSpeedUnit:()=> 'mph',getIsTrackingActive:()=>true,getRouteInProgress:()=>true,call:{getSpeedUnit:()=> 'mph'}});
+    try {
+        widget.fetchSpeedLimitThrottled(53.524,-1.13,25,'residential',30,0);
+        expect(document.getElementById('speedLimitValue').textContent).toBe('30');
+        expect(document.getElementById('speedLimitMappedLabel').textContent).toBe('Route');
+        expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+    } finally {window.VoyagrRoadMatchOrchestration=oldRoad;window.VoyagrGpsOrchestration=oldGps;}
+});

@@ -1739,3 +1739,20 @@ weakening, server retention change or production deployment is part of this fix.
   matching changes are justified by the passing controlled route test.
 - [ ] Inspect these details on the private phone candidate to identify its actual
   failure stage. The user's persistent unknown display remains unresolved.
+
+### Speed-display refactor (incremental)
+
+- [x] Consolidate source/value/label validation into a pure display resolver and
+  render its selected result through the existing single widget renderer.
+  Preserve applicable evidence → mapped observation → route observation priority,
+  alert isolation, unit formatting and existing producer freshness/matching gates.
+- [x] Move unit changes onto fresh local-source resolution, preserving advisory
+  labels and mph/km/h values without promoting them into legal-alert state.
+  Keep startup/stale-GPS and legacy formatting fallbacks.
+- [ ] Review actual older speed API/TomTom callers before integrating or retiring
+  those paths. Do not infer integration from the existence of provider functions.
+- [ ] Retest on the private candidate; the user's phone issue remains unresolved.
+
+See [speed-limit refactor audit and plan](SPEED_LIMIT_REFACTOR_PLAN.md). No rebuild,
+production deployment, source-priority change or new retention is part of the
+first increment.

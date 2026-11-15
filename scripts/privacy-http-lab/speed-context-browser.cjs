@@ -64,6 +64,11 @@ module.exports = async function speedContextBrowser(origin, check) {
     check('Delayed road context updates the actual widget without another GPS callback', await page.evaluate(n => window.__speedWatchCallbacks === n, callbacks));
     check('Actual widget identifies the uncertain value as Mapped est.', await page.locator('#speedLimitMappedLabel').isVisible() && await page.textContent('#speedLimitMappedLabel') === 'Mapped est.');
     check('Mapped observation never populates legal overspeed state', await page.evaluate(() => VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph() === null));
+    await page.evaluate(() => { const select=document.getElementById('speedUnit'); select.value='kmh'; select.dispatchEvent(new Event('change',{bubbles:true})); });
+    check('Actual unit control converts mapped observation to km/h without losing its label', await page.textContent('#speedLimitValue')==='48' && await page.textContent('#speedLimitMappedLabel')==='Mapped est.');
+    await page.evaluate(() => { const select=document.getElementById('speedUnit'); select.value='mph'; select.dispatchEvent(new Event('change',{bubbles:true})); });
+    check('Actual unit control restores mapped mph without another GPS callback', await page.textContent('#speedLimitValue')==='30' && await page.evaluate(n=>window.__speedWatchCallbacks===n,callbacks));
+    check('Unit changes do not promote mapped estimates into legal alert state', await page.evaluate(()=>VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph()===null));
     check('Candidate uses coherent immutable assets without an asset error', await page.evaluate(() => !!window.VoyagrAssetRelease && !document.getElementById('voyagr-asset-error')));
     await page.evaluate(() => VoyagrGpsOrchestration.stopGPSTracking());
     check('Stopping GPS clears the mapped display', await page.textContent('#speedLimitValue') === '—');

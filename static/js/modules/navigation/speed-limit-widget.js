@@ -14,6 +14,38 @@
         CACHE_MAX_AGE_MS: 24 * 60 * 60 * 1000
     };
 
+    /** Pure display resolution. Only applicable legal evidence may feed alerts.
+     * Candidate freshness/road association remains owned by its producer. */
+    function resolveSpeedDisplay(options) {
+        options = options || {};
+        function valid(value) {
+            return Number.isFinite(value) && value > 0 && value <= 100;
+        }
+        var legal = options.legalEvidence;
+        if (legal && legal.applicable === true && legal.evidence_state === 'MAPPED_POSTED'
+                && valid(options.legalLimitMph)) {
+            return {kind: 'LEGAL', limitMph: options.legalLimitMph,
+                legalLimitMph: options.legalLimitMph, observation: null,
+                badge: '', title: '', reason: 'Applicable matched speed evidence'};
+        }
+        var candidates = [options.mappedObservation, options.routeObservation];
+        for (var i = 0; i < candidates.length; i++) {
+            var observation = candidates[i];
+            var expected = i === 0 ? 'MAPPED_OBSERVATION' : 'ROUTE_OBSERVATION';
+            if (!observation || observation.evidence_state !== expected
+                    || observation.applicable !== false || !valid(observation.speed_limit_mph)) continue;
+            var route = i === 1, uncertain = observation.position_uncertain === true;
+            var title = route ? (uncertain ? 'Route estimate; GPS imprecise. Check road signs' : 'From the selected route; check road signs')
+                : uncertain ? 'Nearby mapped speeds agree; road uncertain. Check road signs' : 'Mapped speed; check road signs';
+            return {kind: route ? 'ROUTE' : 'MAPPED', limitMph: observation.speed_limit_mph,
+                legalLimitMph: null, observation: observation,
+                badge: route ? (uncertain ? 'Route est.' : 'Route') : (uncertain ? 'Mapped est.' : 'Mapped'),
+                title: title, reason: title};
+        }
+        return {kind: 'UNKNOWN', limitMph: null, legalLimitMph: null,
+            observation: null, badge: '', title: '', reason: 'No usable matched, mapped or route limit'};
+    }
+
     /**
      * @param {object|null} state
      * @returns {object}
@@ -539,6 +571,7 @@
     }
 
     var api = {
+        resolveSpeedDisplay: resolveSpeedDisplay,
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
         shouldFetchSpeedLimit: shouldFetchSpeedLimit,

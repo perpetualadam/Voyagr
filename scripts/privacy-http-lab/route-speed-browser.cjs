@@ -45,6 +45,10 @@ const b=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EX
    check('Route limit retains its source label and no legal-alert state',result.badge==='Route'&&result.legal===null);
    check('Speed details distinguish selected route data and unavailable map data',result.details.includes('Route steps carrying limits: 3/4')&&result.details.includes('Road data: unavailable'));
    check('Speed details are collapsed and omit coordinates and provider names',result.collapsed&&!/53\.52|-1\.13|GraphHopper|Valhalla|TomTom/.test(result.details));
+   await page.evaluate(()=>{const select=document.getElementById('speedUnit');select.value='kmh';select.dispatchEvent(new Event('change',{bubbles:true}));});
+   check('Unit control converts the selected-route observation and preserves Route label',await page.textContent('#speedLimitValue')==='48'&&await page.textContent('#speedLimitMappedLabel')==='Route');
+   await page.evaluate(()=>{const select=document.getElementById('speedUnit');select.value='mph';select.dispatchEvent(new Event('change',{bubbles:true}));});
+   check('Unit control restores selected-route mph without legal alert authority',await page.textContent('#speedLimitValue')==='30'&&await page.evaluate(()=>VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph()===null));
   }
   i++;
  }
