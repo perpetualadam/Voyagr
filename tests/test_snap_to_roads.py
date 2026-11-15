@@ -228,11 +228,10 @@ class TestSnapToRoadsResponseParsing(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # Call the method
-        result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
+        speed_limit, _ = self.detector._tomtom_snap_speed_limit_mph(51.5074, -0.1278, 'uk')
 
         # Should successfully parse and return speed limit
-        self.assertIsNotNone(result, "Should return result")
-        speed_limit = result.get('speed_limit_mph') if isinstance(result, dict) else result
+        self.assertIsNotNone(speed_limit, "Should parse the provider candidate")
 
         # 70 km/h = ~43 mph, rounds to 40 mph
         self.assertEqual(speed_limit, 40, "Should convert 70 km/h to 40 mph")
@@ -273,8 +272,7 @@ class TestSnapToRoadsResponseParsing(unittest.TestCase):
             # Call with different coordinates to avoid cache
             lat = 51.5074 + (i * 0.01)
             lon = -0.1278 + (i * 0.01)
-            result = self.detector.get_speed_limit_for_location(lat, lon)
-            speed_limit = result.get('speed_limit_mph') if isinstance(result, dict) else result
+            speed_limit, _ = self.detector._tomtom_snap_speed_limit_mph(lat, lon, 'uk')
 
             self.assertEqual(speed_limit, expected_mph,
                            f"Should convert {kmh} km/h to {expected_mph} mph")

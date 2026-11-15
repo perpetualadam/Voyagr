@@ -813,7 +813,7 @@ class SpeedLimitDetector:
                 'points': points_str,
                 'headings': heading_str,
                 'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
-                'fields': '{route{properties{speedLimits{value,unit,type},streetName,roadNumbers}}}',
+                'fields': '{route{properties{speedLimits{value,unit,type},streetName}}}',
                 'vehicleType': 'PassengerCar',
                 'measurementSystem': 'metric'
             }
