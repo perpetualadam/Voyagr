@@ -100,3 +100,13 @@ unknown and never retain a prior value. No GPS eligibility, evidence acceptance,
 provider wiring or legal-alert rules change. The normal widget still does not
 invoke the older speed API or TomTom. Producer exceptions are a demonstrated
 fallback failure mode, not a verified cause of the physical-phone symptom.
+
+## Fourth increment: one selection-to-state adapter
+
+The normal source chain and legacy API success/error paths now use
+`buildSpeedSelectionApplyPlan` to construct the existing widget/state update.
+The adapter revalidates selected evidence with the display resolver, clears stale
+legal values for advisory or unknown results, and forwards advisory observations
+without granting alert authority. API acquisition, throttling, source order and
+GPS eligibility are unchanged. The older API remains a compatibility path rather
+than an additional provider fallback in the normal widget. No phone fix is claimed.
