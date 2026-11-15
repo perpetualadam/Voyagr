@@ -225,3 +225,24 @@ Regression tests fail on the previous code for the false stationary speed,
 stationary heading changes and lack of early refresh. Moving-start/established
 travel, stale-response rejection, expired pending refresh and no legal-alert
 authority remain covered. Real-phone behavior needs rechecking after deployment.
+
+## Bounded handset-sweep heading tolerance
+
+A reproducible follow-up case starts with a primary snapshot reporting stopped,
+then moves 1.5m with a temporary 1.5m/s reading and reversed heading. The old
+one-metre-per-second stopped rule rejects the estimate as a course change.
+This is a plausible handset-sweep rejection path, not captured phone telemetry
+or proof that accuracy/expiry never caused the reported dropout.
+
+A narrow heading-only exception now requires the original snapshot speed below
+1m/s, current finite speed below 3m/s, and displacement within both reported
+accuracy radii and an absolute three-metre bound. It does not move the anchor or
+reset observation time; repeated sweeps cannot incrementally carry an estimate
+along a road. Unknown speeds, larger/faster travel, precise fixes outside that
+uncertainty, poor accuracy and expiry retain rejection. The general movement,
+route/vehicle, source and legal-alert rules are unchanged. No device orientation
+sensors, new permissions, logging or provider requests are introduced.
+
+A regression fails on the old heading check, then passes with the exception.
+Guard tests and the real GPS/controller/DOM browser sequence verify the limited
+case while keeping the estimate advisory. Physical-phone retesting is pending.

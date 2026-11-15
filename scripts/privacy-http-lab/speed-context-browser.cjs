@@ -28,9 +28,9 @@ module.exports = async function speedContextBrowser(origin, check) {
       window.__speedWatchCallbacks = 0;
       const watch = navigator.geolocation.watchPosition.bind(navigator.geolocation);
       navigator.geolocation.watchPosition = function(success, failure, options) {
-        window.__emitStationarySpeedFixture=(offset,speed)=>{
+        window.__emitStationarySpeedFixture=(offset,speed,heading=0)=>{
           window.__speedWatchCallbacks++;
-          success({timestamp:Date.now(),coords:{latitude:53.524+offset/111195,longitude:-1.13,accuracy:17.7,heading:0,speed}});
+          success({timestamp:Date.now(),coords:{latitude:53.524+offset/111195,longitude:-1.13,accuracy:17.7,heading,speed}});
         };
         return watch(position => { window.__speedWatchCallbacks++; success(position); }, failure, options);
       };
@@ -99,6 +99,14 @@ module.exports = async function speedContextBrowser(origin, check) {
       check('Stationary GPS noise does not become a displayed driving speed',await page.textContent('#speedValue')==='0');
     }
     check('Stationary GPS updates retain a fresh primary limit',await page.textContent('#speedLimitValue')==='64'&&await page.textContent('#speedLimitMappedLabel')==='Provider est.');
+    const previousPrimary=await page.evaluate(()=>VoyagrRoadMatchOrchestration.getPrimarySpeedObservation().acquired_at_ms);
+    await page.waitForTimeout(6000);
+    await page.evaluate(()=>__emitStationarySpeedFixture(0,0));
+    await page.waitForFunction(previous=>VoyagrRoadMatchOrchestration.getPrimarySpeedObservation()?.acquired_at_ms>previous,previousPrimary);
+    await page.waitForTimeout(250);
+    await page.evaluate(()=>__emitStationarySpeedFixture(1.5,1.5,180));
+    check('A bounded handset sweep from a stopped primary anchor retains the limit',await page.textContent('#speedLimitValue')==='64'&&await page.textContent('#speedLimitMappedLabel')==='Provider est.');
+    check('Handset sweep remains stopped on the display and grants no legal alert authority',await page.textContent('#speedValue')==='0'&&await page.evaluate(()=>VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph()===null));
     check('Candidate uses coherent immutable assets without an asset error', await page.evaluate(() => !!window.VoyagrAssetRelease && !document.getElementById('voyagr-asset-error')));
     await page.evaluate(() => VoyagrGpsOrchestration.stopGPSTracking());
     check('Stopping GPS clears the mapped display', await page.textContent('#speedLimitValue') === '—');

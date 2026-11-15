@@ -252,3 +252,22 @@ heading changes do not clear valid data, while moving-heading guards remain.
 Validation: 191 JavaScript suites / 3,710 tests; backend selection 2,383 passed,
 one skipped, 94 subtests; 42 HTTP and 72 full-candidate Chromium checks passed.
 Disposable lab cleanup completed. No production deployment occurred.
+
+## Bounded hand-sweep heading regression
+
+A controlled sequence starts a fresh primary snapshot at zero speed, then moves
+1.5m with 1.5m/s and reversed heading. The original association check rejects it;
+the narrow heading-only tolerance now retains the advisory value. Tests reject
+larger/faster movement, unknown speeds, insufficient uncertainty, poor accuracy
+and expiry, and prove the original anchor cannot be walked along by repeated
+small sweeps. No age/GPS limits, provider priority or navigation course changes.
+
+The full browser sequence obtains a new primary snapshot at a stopped fix and
+then emits the sweep through the actual GPS/controller/DOM pipeline. It retains
+the provider value, displays zero speed and leaves legal-alert state null. This
+is deterministic evidence for that case, not actual handset telemetry or proof
+that the user's dropout had no other cause.
+
+Validation: 191 JavaScript suites / 3,719 tests; backend selection 2,383 passed,
+one skipped and 94 subtests; disposable lab 42 HTTP and 75 Chromium checks passed.
+Lab resources cleaned up; no production deployment. Phone retesting is pending.
