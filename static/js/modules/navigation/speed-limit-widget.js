@@ -46,6 +46,17 @@
             observation: null, badge: '', title: '', reason: 'No usable matched, mapped or route limit'};
     }
 
+    // Compatibility API boundary: provider labels/estimates never establish applicability.
+    function resolveSpeedApiResponse(data) {
+        var selection=resolveSpeedDisplay(),payload=data&&data.data;
+        if(!data || data.success!==true) return Object.assign(selection,{reasonCode:'API_UNAVAILABLE'});
+        if(!payload || typeof payload!=='object' || Array.isArray(payload))
+            return Object.assign(selection,{reasonCode:'API_INVALID_RESPONSE'});
+        selection=resolveSpeedDisplay({legalEvidence:payload,legalLimitMph:payload.speed_limit_mph});
+        if(selection.kind==='UNKNOWN')selection.reasonCode='API_EVIDENCE_UNVERIFIED';
+        return selection;
+    }
+
     // Translate a resolved selection into the existing application boundary.
     // Re-resolve supplied evidence so callers cannot promote an advisory number.
     function buildSpeedSelectionApplyPlan(selection, legalEvidence, displaySpeedMph) {
@@ -609,6 +620,7 @@
 
     var api = {
         resolveSpeedDisplay: resolveSpeedDisplay,
+        resolveSpeedApiResponse: resolveSpeedApiResponse,
         resolveSpeedSources: resolveSpeedSources,
         buildSpeedSelectionApplyPlan: buildSpeedSelectionApplyPlan,
         DEFAULTS: DEFAULTS,

@@ -357,7 +357,7 @@
             })
             .then((data) => {
                 const p=data && data.success && data.data;
-                const selection=SL().resolveSpeedDisplay({legalEvidence:p,legalLimitMph:p && p.speed_limit_mph});
+                const selection=SL().resolveSpeedApiResponse(data);
                 acceptIfFresh(SL().buildSpeedSelectionApplyPlan(selection,p,ctx.currentGpsSpeedMph));
             })
             .catch(() => {
