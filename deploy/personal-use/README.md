@@ -71,3 +71,38 @@ the password file and backup; neither needs deletion to restore the old sites.
 wrong-password denial, owner access, upstream password stripping and preserved
 HTTP redirect/domain-proof paths using disposable Nginx and synthetic credentials.
 It exposes no host ports and never reads production configuration/passwords.
+
+## Account-free application mode
+
+Set `VOYAGR_PERSONAL_MODE=1` in the application's service environment and restart
+Voyagr after deploying the release containing this setting. It defaults off;
+merging code alone does not enable it. Keep the Nginx password protection enabled:
+this flag is not authentication.
+
+Personal mode omits sign-in, sign-up and Premium controls and the account SDK.
+It ignores cached account bootstrap settings, prevents app account/coupon/checkout
+requests, disables analytics and search indexing, and retains the local guest
+profile. Routing, map and search requests still use configured services. Existing
+account records and tokens are not deleted, revoked or imported into guest data.
+Externally hosted auth services, subscriptions, shared reports and server storage
+are separate retirement decisions; this flag does not decommission them.
+
+To roll back this application mode, remove its service environment setting and
+restart the app. Keep Nginx protection and browser storage intact.
+
+### Operator verification recorded 16 November 2026
+
+The operator reported anonymous 401 responses for root, config, service worker,
+JavaScript and map paths on canonical, www and DuckDNS hosts (15 checks), owner
+access 200, and successful Certbot renewal dry-runs for both certificates. The
+access-change backup is `/root/voyagr-personal-backup-1rz6q7zh`.
+
+Account-free mode has not yet been deployed or accepted on the physical phone.
+Local validation passed 2,405 backend tests (one skip), 3,730 JavaScript tests,
+42 disposable HTTP checks, 75 existing full-candidate Chromium checks and 12
+personal-mode Chromium checks. The latter verify old account configuration cannot
+restore login/billing, no account SDK or analytics bootstrap occurs, and guest
+records survive reinitialization and reload. All browser data is synthetic.
+The GPS fixture now waits through the existing unavailable-source retry interval
+to establish a fresh stopped anchor when Chromium initially supplies a cached fix;
+production freshness checks are unchanged.

@@ -1808,10 +1808,12 @@ public-product work; existing functional and phone acceptance items remain open.
   operator created a bcrypt access-password file; Gunicorn is loopback-only.
 - [x] Prepare a backed-up, validated Nginx access change for both existing sites,
   preserving HTTP renewal paths and stripping the private password upstream.
-- [ ] Apply and verify production anonymity denial, owner access, aliases, static
+- [x] Apply and verify production anonymity denial, owner access, aliases, static
   assets, worker, API, maps and certificate renewal. See `deploy/personal-use`.
-- [ ] Retire account/sign-up/Premium prompts and unused auth/billing integration
-  after the private boundary works. Preserve the on-device guest profile.
+- [x] Implement opt-in account-free mode: omit account/Premium UI and SDK, block
+  app billing/account actions, preserve the local guest profile.
+- [ ] Deploy personal mode and verify it on the phone. External auth services and
+  existing subscriptions remain separate retirement decisions.
 - [ ] Review shared-report/analytics and remaining server storage for retirement.
 - [ ] Decide retention/export/deletion of existing account data separately; do
   not delete records or relabel another profile as guest automatically.

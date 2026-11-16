@@ -565,9 +565,22 @@
         syncSoftAuthBannerVisibility(!!supabaseClient);
     }
 
+    function usePersonalMode() {
+        supabaseClient=null;win.supabaseClient=null;
+        supabasePublicConfig={personal_mode:true,require_login:false};
+        // Retire only the public endpoint cache, never tokens or device/account records.
+        try{localStorage.removeItem(PUBLIC_AUTH_CONFIG_KEY);}catch(_){}
+        syncAuthRequiredGate('off');syncSoftAuthBannerVisibility(false);
+        for(const id of ['accountSection','supportVoyagrSection']){
+            const section=document.getElementById(id);if(section)section.hidden=true;
+        }
+    }
     async function initSupabaseAuth() {
+        if(document.documentElement.dataset.personalMode==='true'){usePersonalMode();return;}
+
         try {
             var data = await loadPublicAuthConfig();
+            if(data.personal_mode===true){usePersonalMode();return;}
             supabasePublicConfig = data;
             applySupportLinksFromConfig(data);
 

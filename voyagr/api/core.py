@@ -166,6 +166,10 @@ def get_config():
         in ('1', 'true', 'yes'),
         'success': True
     })
+    from voyagr.personal_use import enabled, public_config
+    config = response.get_json()
+    config.update(public_config() if enabled() else {'personal_mode': False})
+    response = jsonify(config)
     # Prevent caching
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'

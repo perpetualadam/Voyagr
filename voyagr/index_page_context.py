@@ -16,6 +16,7 @@ from voyagr.discoverability import (
     block_search_indexing,
 )
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
+from voyagr.personal_use import enabled as personal_mode_enabled
 from voyagr.seo import (
     APP_DESCRIPTION,
     APP_LANGUAGE,
@@ -94,6 +95,7 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     return {
         # Token lists (same for every request) — JS tests navigator.userAgent.
         # Do not bake a per-UA boolean or a regex-with-\\b into the HTML.
+        "personal_mode": personal_mode_enabled(),
         "search_crawler_ua_tokens": list(SEARCH_CRAWLER_UA_TOKENS),
         "search_crawler_ua_word_tokens": sorted(SEARCH_CRAWLER_UA_WORD_TOKENS),
         "tomtom_api_key": _tt_key,
@@ -121,6 +123,6 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "seo_json_ld": seo_json_ld,
         "seo_llms_txt_url": llms_txt_url(),
         "seo_llms_full_txt_url": llms_full_txt_url(),
-        "seo_faq": FAQ,
+        "seo_faq": [] if personal_mode_enabled() else FAQ,
         **ga4_template_kwargs(),
     }
