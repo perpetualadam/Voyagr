@@ -95,3 +95,54 @@ def test_install_failure_restores_both_sites_and_removes_only_new_snippet(tmp_pa
 def test_other_authorization_forwarding_requires_review():
     with pytest.raises(ValueError):
         module.protect(TLS.replace('proxy_set_header Host $host;', 'proxy_set_header X-Old-Auth $http_authorization;'))
+
+
+repair = __import__('runpy').run_path(str(ROOT / 'deploy/personal-use/repair-private-prompts.py'))
+
+
+def test_prompt_repair_accepts_only_existing_gated_tls_servers():
+    protected, _ = module.protect(HTTP + TLS)
+    assert repair['validate_sites'](protected) == 1
+    for invalid in (HTTP + TLS, protected.replace('location /map/', 'auth_request off;\n    location /map/'),
+                    protected.replace('location /map/', 'error_page 401 /other;\n    location /map/')):
+        with pytest.raises(ValueError):
+            repair['validate_sites'](invalid)
+
+
+@pytest.mark.parametrize('failure', ['validation', 'reload'])
+def test_prompt_repair_rolls_back_without_touching_password_or_site_files(tmp_path, monkeypatch, failure):
+    import subprocess
+    snippet = tmp_path / 'access.conf'
+    snippet.write_text(repair['LEGACY'])
+    verifier = tmp_path / 'verifier.conf'
+    backup = tmp_path / 'backup'
+    backup.mkdir()
+    failed = False
+    def run(command, **kwargs):
+        nonlocal failed
+        expected = ['nginx', '-t'] if failure == 'validation' else ['systemctl', 'reload', 'nginx']
+        if command == expected and not failed:
+            failed = True
+            raise subprocess.CalledProcessError(1, command)
+    monkeypatch.setattr(subprocess, 'run', run)
+    with pytest.raises(subprocess.CalledProcessError):
+        repair['install_repair'](snippet, verifier, backup)
+    assert snippet.read_text() == repair['LEGACY']
+    assert not verifier.exists()
+    assert (backup / snippet.name).read_text() == repair['LEGACY']
+
+
+def test_prompt_repair_installs_only_verifier_and_replacement_snippet(tmp_path, monkeypatch):
+    import subprocess
+    snippet = tmp_path / 'access.conf'
+    snippet.write_text(repair['LEGACY'])
+    verifier = tmp_path / 'verifier.conf'
+    backup = tmp_path / 'backup'
+    backup.mkdir()
+    calls = []
+    monkeypatch.setattr(subprocess, 'run', lambda command, **kwargs: calls.append(command))
+    repair['install_repair'](snippet, verifier, backup)
+    assert snippet.read_text() == repair['ACCESS']
+    assert verifier.read_text() == repair['VERIFIER']
+    assert (backup / snippet.name).read_text() == repair['LEGACY']
+    assert calls == [['nginx', '-t'], ['systemctl', 'reload', 'nginx']]

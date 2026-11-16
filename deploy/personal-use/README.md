@@ -109,3 +109,44 @@ records survive reinitialization and reload. All browser data is synthetic.
 The GPS fixture now waits through the existing unavailable-source retry interval
 to establish a fresh stopped anchor when Chromium initially supplies a cached fix;
 production freshness checks are unchanged.
+
+## Repair interrupted browser password prompts
+
+An already cached app can keep making map-layer requests before the browser has
+finished the private login. Each unauthenticated request previously returned a
+Basic challenge, allowing concurrent prompts to interrupt password entry.
+The operator's logs showed repeated camera, traffic-light and crossing 401s.
+
+Run the standalone repair first as a dry-run, then apply:
+
+```sh
+python3 deploy/personal-use/repair-private-prompts.py
+python3 deploy/personal-use/repair-private-prompts.py --apply
+```
+
+It requires the original access snippet, the existing protected TLS sites and
+Nginx's auth_request module. It changes only the access snippet and adds
+`/etc/nginx/conf.d/voyagr-private-auth.conf`. A Unix-socket-only Nginx verifier
+checks the same password file; there is no additional public port or app account.
+Document requests still receive 401 with a Basic challenge. Fetch modes `cors`,
+`no-cors` and `same-origin` receive 403 without a challenge when credentials are
+missing or wrong. This request-mode distinction controls prompting only: every
+request still requires valid credentials. Requests without Fetch Metadata retain
+the original challenge behavior. Site proxies still strip credentials before
+contacting application/map upstreams. Authenticated requests continue normally.
+
+The repair creates `/root/voyagr-prompt-backup-*`, validates Nginx and reloads it.
+Validation or reload failure restores the snippet and removes its verifier file.
+It refuses unexpected access/error overrides instead of guessing. It does not
+change the password, certificates, HTTP renewal paths or browser data.
+
+Verify anonymous root 401, anonymous API with `Sec-Fetch-Mode: cors` 403 and no
+`WWW-Authenticate`, and owner-authenticated root/API 200. Close existing Voyagr
+tabs, open the canonical HTTPS site and finish the owner login once. Check the
+map layers and GPS on the phone; do not clear device storage. The repair prevents
+background prompts; it does not turn an unauthenticated request into successful
+map data, or prove the physical phone has retained credentials.
+
+Manual rollback: restore `voyagr-personal-access.conf` from the printed repair
+backup, remove only `/etc/nginx/conf.d/voyagr-private-auth.conf`, then `nginx -t`
+and reload. The original private password gate remains in place.
