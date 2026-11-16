@@ -1679,8 +1679,10 @@ verify UI wiring and layout, not physical GPS or live data coverage.
 - [x] Collapse the startup route-limitations explanation behind a native Info
   disclosure. Preserve explanatory text, keyboard access and explicit dismissal;
   do not expire the disclosure while someone is reading it. Phone retest pending.
-- [ ] Review the separate volume reminder and remaining route-preview diagnostics
-  so supplementary information does not cover the map/instructions.
+- [x] Review the separate volume reminder and remaining route-preview diagnostics:
+  compact reminder with on-demand Info, paused expiry while reading/focused, and
+  a Voice-control reopen action. Preview diagnostics already use closed Info.
+  Controlled browser checks passed; deployed phone acceptance remains pending.
 - [ ] Replace misleading incomplete-route wording when no route is selected;
   preserve useful errors for actual incomplete route results.
 
@@ -1763,3 +1765,21 @@ first increment.
 - [x] Wire the normal speed widget to direct TomTom primary observations, with
   Overpass/route fallback and bounded freshness, while keeping advisory values
   outside legal-alert state. Physical-phone verification remains pending.
+
+### Compact volume reminder and preview diagnostic review (16 November 2026)
+
+- [x] Replace the large default volume card with a compact Check volume / Info /
+  dismiss row; retain full copy and Got it inside the native disclosure.
+- [x] Preserve idle auto-dismiss (14 seconds), speech/notification behavior and
+  scheduling. Pause expiry during disclosure reading, focus or pointer hover;
+  resume the idle interval when interaction ends. Return focus to the opener
+  on manual dismissal, and reopen from Voice controls without new permissions.
+- [x] Verify existing preview diagnostics stay behind closed Info and can be
+  opened/closed by keyboard; no new diagnostics panel or data-flow change.
+- [ ] Accept the deployed reminder and reopening action on the phone.
+
+Validation: `node scripts/check-volume-reminder.cjs` exercises production markup,
+CSS and reminder owner in 16 Chromium viewport/theme/text-scale cases; native
+expiry/pause/focus/replacement behavior has regression coverage. Routing, GPS,
+provider selection, audio permissions and the separate incomplete-route wording
+are unchanged. The next code item remains that misleading no-route wording.

@@ -279,8 +279,24 @@
             chip.classList.add('is-visible');
         });
 
+        var expiryTimer=null,hovered=false;
+        const opener=document.activeElement;
+        const info=chip.querySelector('details');
+        function pauseExpiry(){if(expiryTimer)clearTimeout(expiryTimer);expiryTimer=null;}
+        function resumeExpiry(){
+            pauseExpiry();
+            if(!chip.isConnected||chip.dataset.leaving==='1'||hovered||(info&&info.open)||chip.contains(document.activeElement))return;
+            expiryTimer=setTimeout(removeChip,execute.autoDismissMs);
+        }
+        chip.addEventListener('pointerenter',function(){hovered=true;pauseExpiry();});
+        chip.addEventListener('pointerleave',function(){hovered=false;resumeExpiry();});
+        chip.addEventListener('focusin',pauseExpiry);
+        chip.addEventListener('focusout',function(){setTimeout(resumeExpiry,0);});
+        if(info)info.addEventListener('toggle',resumeExpiry);
         function removeChip() {
+            pauseExpiry();
             if (!chip || !chip.parentElement || chip.dataset.leaving === '1') return;
+            if(chip.contains(document.activeElement)&&opener&&opener!==document.body&&opener.isConnected)opener.focus();
             chip.dataset.leaving = '1';
             chip.classList.remove('is-visible');
             chip.classList.add('is-leaving');
@@ -296,7 +312,7 @@
         const ok = chip.querySelector('#' + execute.okButtonId);
         if (ok) ok.onclick = removeChip;
 
-        setTimeout(removeChip, execute.autoDismissMs);
+        resumeExpiry();
 
         if (execute.showNotification && 'Notification' in window && Notification.permission === 'granted') {
             try {

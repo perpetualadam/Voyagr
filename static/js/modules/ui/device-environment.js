@@ -123,20 +123,18 @@
     function buildVolumeHintBannerHtml(line, detail) {
         return (
             '<div class="voyagr-volume-hint__toolbar">' +
-                '<button type="button" id="volumeHintDismiss" class="voyagr-volume-hint__dismiss" ' +
-                    'aria-label="Dismiss" title="Dismiss">×</button>' +
+                '<strong class="voyagr-volume-hint__title">Check volume</strong>' +
+                '<button type="button" id="volumeHintDismiss" class="voyagr-volume-hint__dismiss" aria-label="Dismiss volume reminder" title="Dismiss">×</button>' +
             '</div>' +
-            '<div class="voyagr-volume-hint__row">' +
-                '<span class="voyagr-volume-hint__icon" aria-hidden="true">🔊</span>' +
-                '<div class="voyagr-volume-hint__copy">' +
-                    '<strong class="voyagr-volume-hint__title">Check volume</strong>' +
-                    '<span class="voyagr-volume-hint__line">' + escapeHtml(line) + '</span>' +
-                    '<span class="voyagr-volume-hint__detail">' + escapeHtml(detail) + '</span>' +
+            '<details class="voyagr-volume-hint__info">' +
+                '<summary aria-label="Volume reminder information">Info</summary>' +
+                '<div class="voyagr-volume-hint__body">' +
+                    '<p class="voyagr-volume-hint__line">' + escapeHtml(line) + '</p>' +
+                    '<p class="voyagr-volume-hint__detail">' + escapeHtml(detail) + '</p>' +
+                    '<div class="voyagr-volume-hint__actions"><button type="button" id="volumeHintOk" class="voyagr-volume-hint__ok">Got it</button></div>' +
                 '</div>' +
-            '</div>' +
-            '<div class="voyagr-volume-hint__actions">' +
-                '<button type="button" id="volumeHintOk" class="voyagr-volume-hint__ok">Got it</button>' +
-            '</div>'
+            '</details>'
+
         );
     }
 

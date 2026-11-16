@@ -109,4 +109,34 @@ describe('notifications-orchestration leave animationend', () => {
         dispatchAnimationEnd(chip, 'voyagrVolumeOut', false);
         expect(document.body.contains(chip)).toBe(false);
     });
+    test('volume reminder is compact and expires normally while idle',()=>{
+        Notifications.showVolumeHintForNavigation();
+        const chip=document.getElementById('volumeHintBanner');
+        expect(chip.querySelector('details').open).toBe(false);
+        jest.advanceTimersByTime(14000+320);
+        expect(document.getElementById('volumeHintBanner')).toBeNull();
+    });
+    test('reading Info pauses expiry and restarting it never alters disclosure state',()=>{
+        Notifications.showVolumeHintForNavigation();
+        const chip=document.getElementById('volumeHintBanner'),info=chip.querySelector('details');
+        info.open=true;info.dispatchEvent(new Event('toggle'));
+        jest.advanceTimersByTime(60000);expect(chip.isConnected).toBe(true);expect(info.open).toBe(true);
+        info.open=false;info.dispatchEvent(new Event('toggle'));
+        jest.advanceTimersByTime(13999);expect(chip.dataset.leaving).not.toBe('1');
+        jest.advanceTimersByTime(321);expect(chip.isConnected).toBe(false);
+    });
+    test('keyboard focus pauses expiry and dismissal returns focus to its opener',()=>{
+        const opener=document.createElement('button');document.body.appendChild(opener);opener.focus();
+        Notifications.showVolumeHintForNavigation();
+        const chip=document.getElementById('volumeHintBanner'),close=chip.querySelector('#volumeHintDismiss');
+        close.focus();jest.advanceTimersByTime(60000);expect(chip.isConnected).toBe(true);
+        close.click();expect(document.activeElement).toBe(opener);jest.advanceTimersByTime(320);expect(chip.isConnected).toBe(false);
+    });
+    test('hover pauses expiry and reopening replaces only the previous reminder',()=>{
+        Notifications.showVolumeHintForNavigation();const old=document.getElementById('volumeHintBanner');
+        old.dispatchEvent(new Event('pointerenter'));jest.advanceTimersByTime(60000);expect(old.isConnected).toBe(true);
+        Notifications.showVolumeHintForNavigation();expect(document.querySelectorAll('#volumeHintBanner')).toHaveLength(1);
+        expect(old.isConnected).toBe(false);
+    });
+
 });
