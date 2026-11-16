@@ -1797,3 +1797,22 @@ are unchanged. The next code item remains that misleading no-route wording.
 This is a presentation classification change only. It does not calculate, restore,
 select or start a route, or alter routing/provider/GPS behavior. Regression tests
 cover empty, cleared, malformed and valid selections plus real failure precedence.
+
+## Personal-use direction (16 November 2026)
+
+The owner now wants the app for personal use only, without an app account. This
+explicit direction prioritises private access/account retirement ahead of more
+public-product work; existing functional and phone acceptance items remain open.
+
+- [x] Audit existing local guest profile and the two production hostnames. The
+  operator created a bcrypt access-password file; Gunicorn is loopback-only.
+- [x] Prepare a backed-up, validated Nginx access change for both existing sites,
+  preserving HTTP renewal paths and stripping the private password upstream.
+- [ ] Apply and verify production anonymity denial, owner access, aliases, static
+  assets, worker, API, maps and certificate renewal. See `deploy/personal-use`.
+- [ ] Retire account/sign-up/Premium prompts and unused auth/billing integration
+  after the private boundary works. Preserve the on-device guest profile.
+- [ ] Review shared-report/analytics and remaining server storage for retirement.
+- [ ] Decide retention/export/deletion of existing account data separately; do
+  not delete records or relabel another profile as guest automatically.
+- [ ] Recheck map, GPS, navigation and local data on the protected phone origin.
