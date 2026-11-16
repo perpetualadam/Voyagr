@@ -1820,3 +1820,15 @@ public-product work; existing functional and phone acceptance items remain open.
 - [ ] Decide retention/export/deletion of existing account data separately; do
   not delete records or relabel another profile as guest automatically.
 - [ ] Recheck map, GPS, navigation and local data on the protected phone origin.
+
+### Private password prompt repair (16 November 2026)
+
+- [x] Reproduce repeated background 401 challenges from the operator's map-layer
+  logs and prepare a backed-up Nginx repair. Keep authentication on every request;
+  background failures must not carry a browser challenge.
+- [x] Verify document challenges, anonymous/wrong-password background denials,
+  owner access, credential stripping and HTTP renewal paths in disposable Nginx.
+- [ ] Apply the repair on VPS1 and verify uninterrupted owner login on the phone.
+
+The repair reloads Nginx only; it does not change app data, account retention,
+passwords or certificates. See `deploy/personal-use/repair-private-prompts.py`.

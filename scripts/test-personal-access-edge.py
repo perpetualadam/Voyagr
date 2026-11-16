@@ -15,6 +15,7 @@ docker = runpy.run_path(str(ROOT / 'scripts/test-phone-stage-edge.py'))['docker'
 spec = importlib.util.spec_from_file_location('access', ROOT / 'deploy/personal-use/enable-private-access.py')
 access = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(access)
+repair = runpy.run_path(str(ROOT / 'deploy/personal-use/repair-private-prompts.py'))
 HOSTS = ('vibevoyager.org', 'vibevoyagr.duckdns.org')
 
 
@@ -38,7 +39,7 @@ def main():
                                     input=password+'\n', text=True, capture_output=True, check=True).stdout.strip()
             (lab / 'password').write_text('owner:' + hashed + '\n')
             (lab / 'password').chmod(0o644)
-            (lab / 'access.conf').write_text(access.ACCESS.replace(str(access.PASSWORD), '/lab/password'))
+            (lab / 'access.conf').write_text(repair['ACCESS'].replace(str(access.PASSWORD), '/lab/password'))
             config = '''server {
     listen 80;
     server_name _;
@@ -64,6 +65,7 @@ def main():
 '''
             config, count = access.protect(config, '/lab/access.conf')
             assert count == 2
+            config += repair['VERIFIER'].replace(str(access.PASSWORD), '/lab/password')
             config += 'server { listen 8081; location / { return 200 "$http_authorization"; } }\n'
             (lab / 'nginx.conf').write_text('worker_processes 1; events {} http { access_log off;\n' + config + '\n}')
             mount = 'type=bind,src=' + str(lab) + ',dst=/lab,readonly'
@@ -77,17 +79,32 @@ def main():
             authorization = 'Basic ' + base64.b64encode(('owner:' + password).encode()).decode()
             client = '''import http.client,socket,ssl
 context=ssl.create_default_context(cafile='/lab/cert.pem')
-def request(host,path,authorization=None):
+def request(host,path,authorization=None,mode=None,method="GET"):
  c=http.client.HTTPSConnection(host,context=context,timeout=5)
  c.sock=context.wrap_socket(socket.create_connection(('127.0.0.1',443),timeout=5),server_hostname=host)
- c.request('GET',path,headers={'Host':host,**({'Authorization':authorization} if authorization else {})})
- r=c.getresponse();status=r.status;body=r.read();c.close();return status,body
+ c.request(method,path,headers={'Host':host,**({'Authorization':authorization} if authorization else {}),**({'Sec-Fetch-Mode':mode} if mode else {})})
+ r=c.getresponse();status=r.status;body=r.read();challenge=r.getheader('WWW-Authenticate');c.close();return status,body,challenge
 for host in ''' + repr(HOSTS) + ''':
  for path in ('/','/api/config','/service-worker.js','/static/js/app.js','/map/styles/basic/style.json'):
-  assert request(host,path)[0]==401, (host,path,'anonymous access')
-  status,body=request(host,path,''' + repr(authorization) + ''')
+  assert request(host,path)[0]==401, (host,path,'anonymous access',request(host,path))
+  status,body,challenge=request(host,path,''' + repr(authorization) + ''')
   assert status==200 and body==b'', (host,path,'credential stripping')
   print('PASS: private TLS resource and stripped upstream credentials:',host,path)
+ for mode in ('cors','no-cors','same-origin'):
+  for path in ('/api/cameras/area','/api/traffic-lights/area','/api/railway-crossings/area','/service-worker.js'):
+   status,body,challenge=request(host,path,mode=mode)
+   assert status==403 and not challenge,(mode,path,status,challenge)
+   wrong=request(host,path,'Basic d3Jvbmc6d3Jvbmc=',mode=mode)
+   assert wrong[0]==403 and not wrong[2],wrong
+   status,body,challenge=request(host,path,''' + repr(authorization) + ''',mode=mode)
+   assert status==200 and body==b'' and not challenge,(mode,path,status,challenge)
+   print('PASS: background denial has no challenge; authenticated resource works:',host,mode,path)
+ assert request(host,'/api/speed-limit/observation',mode='cors',method='POST')[0]==403
+ assert request(host,'/api/speed-limit/observation',''' + repr(authorization) + ''',mode='cors',method='POST')[0]==200
+ print('PASS: authenticated POST works and anonymous POST remains denied:',host)
+ assert request(host,'/__voyagr_private_auth')[0] in (403,404)
+ assert request(host,'/',mode='navigate')[0]==401
+ assert request(host,'/',mode='navigate')[2]
  assert request(host,'/','Basic d3Jvbmc6d3Jvbmc=')[0]==401
  print('PASS: incorrect credentials denied:',host)
 c=http.client.HTTPConnection('127.0.0.1',80,timeout=5)
@@ -103,7 +120,7 @@ print('PASS: HTTP redirects without a plaintext password challenge')
             print(result.stdout, end='')
             if result.returncode:
                 raise RuntimeError('Private edge validation failed: ' + result.stderr[-1000:])
-            print('14 disposable Nginx checks passed; not production verification.')
+            print('44 disposable Nginx checks passed; not production verification.')
         finally:
             if container:
                 docker('rm', '-f', container, check=False)
