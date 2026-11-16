@@ -4,6 +4,8 @@ on:
     paths:
       - 'deploy/phone-stage/**'
       - 'scripts/test-phone-stage-edge.py'
+      - 'deploy/personal-use/**'
+      - 'scripts/test-personal-access-edge.py'
       - '.github/workflows/phone-stage-edge.yml'
   workflow_dispatch:
 permissions:
@@ -16,3 +18,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify disposable HTTPS and authentication boundary
         run: python3 scripts/test-phone-stage-edge.py
+      - name: Verify existing-site personal access transformation
+        run: python3 scripts/test-personal-access-edge.py
