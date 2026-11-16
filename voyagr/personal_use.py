@@ -18,7 +18,7 @@ def install(app):
     @app.before_request
     def deny_retired_account_actions():
         if enabled() and (request.path == '/api/me' or request.path.startswith('/api/coupons/')
-                          or request.path == '/api/support/stripe-checkout'):
-            response = jsonify(success=False, code='PERSONAL_MODE', error='Accounts and subscriptions are unavailable in personal mode')
+                          or request.path in ('/api/support/stripe-checkout', '/api/hazards/report')):
+            response = jsonify(success=False, code='PERSONAL_MODE', error='This action is unavailable in personal mode')
             response.headers['Cache-Control'] = 'no-store'
             return response, 403

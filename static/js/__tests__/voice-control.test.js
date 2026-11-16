@@ -261,3 +261,13 @@ describe('buildVoiceActionDispatchPlan', () => {
         expect(VC.buildSimulateVoiceInputPlan(null).shouldProcess).toBe(false);
     });
 });
+
+
+test('personal mode refuses voice reports before constructing a network action', () => {
+    document.documentElement.dataset.personalMode='true';
+    try {
+        const plan=VC.buildVoiceActionDispatchPlan({action:'report_hazard',hazard_type:'debris'}, {currentLat:1,currentLon:2});
+        expect(plan.fetchHazardReport).toBe(false);
+        expect(plan.statusMessage).toContain('personal mode');
+    } finally { delete document.documentElement.dataset.personalMode; }
+});

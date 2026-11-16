@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 import requests
 from flask import Blueprint, jsonify, request
 
+from voyagr.personal_use import enabled as personal_mode_enabled
 from voyagr.utils import overpass_audit as audit
 from voyagr.utils import request_budget as route_transport
 from voyagr.utils.hazard_matching import HazardList
@@ -288,16 +289,17 @@ def get_nearby_hazards():
                 'description': row[3], 'distance_meters': distance
             })
 
-        cursor.execute(
-            'SELECT lat, lon, hazard_type, description, severity FROM community_hazard_reports WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status = "active" AND expiry_timestamp > ?',
-            (south, north, west, east, int(time.time()))
-        )
-        for row in cursor.fetchall():
-            distance = get_distance_between_points(lat, lon, row[0], row[1])
-            hazards['reports'].append({
-                'lat': row[0], 'lon': row[1], 'type': row[2],
-                'description': row[3], 'severity': row[4], 'distance_meters': distance
-            })
+        if not personal_mode_enabled():
+            cursor.execute(
+                'SELECT lat, lon, hazard_type, description, severity FROM community_hazard_reports WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status = "active" AND expiry_timestamp > ?',
+                (south, north, west, east, int(time.time()))
+            )
+            for row in cursor.fetchall():
+                distance = get_distance_between_points(lat, lon, row[0], row[1])
+                hazards['reports'].append({
+                    'lat': row[0], 'lon': row[1], 'type': row[2],
+                    'description': row[3], 'severity': row[4], 'distance_meters': distance
+                })
 
         return jsonify({'success': True, 'hazards': hazards})
     except Exception as e:
