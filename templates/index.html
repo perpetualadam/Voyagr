@@ -304,7 +304,7 @@
                         <li><strong>Voice (optional)</strong> — browser recognition may use its vendor's service; AI speech sends a short recording to the configured transcription service. Wake listening uses your microphone when enabled.</li>
                         {% if personal_mode %}<li><strong>On your device</strong> — settings, routes, favourites and locally enabled history stay in your browser. No app account or cloud sync is used.</li>{% else %}<li><strong>On your device</strong> — settings, recent places, and cached maps stay in your browser unless you sign in.</li>{% endif %}
                         {% if personal_mode %}<li><strong>Network services</strong> — route calculations, search and map/location lookups still use the configured server and providers. Personal mode does not make these requests device-only.</li>{% else %}<li><strong>On our servers</strong> — route requests are processed to calculate journeys; saved trips and account data are stored only if you sign in. Optional dashcam recordings you create are also stored so you can play them back. We do not sell your data.</li>{% endif %}
-                        <li><strong>Community reports</strong> — reports you submit are shared with their location. Do not include identifying information.</li>
+                        {% if not personal_mode %}<li><strong>Community reports</strong> — reports you submit are shared with their location. Do not include identifying information.</li>{% endif %}
                         <li><strong>Analytics (optional)</strong> — off unless you allow it separately in the <a href="/privacy#analytics-controls" target="_blank" rel="noopener">privacy preferences</a>. This acknowledgement does not enable analytics.</li>
                         <li><strong>Partners</strong> — map, traffic, weather, and sign-in providers process data under their own policies.</li>
                     </ul>
@@ -715,7 +715,7 @@
                         <details id="navigationVoiceInfo" class="navigation-info">
                             <summary aria-label="Voice control information"><span aria-hidden="true">ⓘ</span> Info</summary>
                         <p class="voice-card__hint">Tap Listen, speak, then stop and wait for the response. The map microphone uses the same control. Wake phrase is optional and separate.</p>
-                        <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase. Hazard reports you submit are shared with their location.</p>
+                        <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase.{% if not personal_mode %} Hazard reports you submit are shared with their location.{% endif %}</p>
                         </details>
                     </div>
                     <button type="button" id="reviewVolumeReminder" class="btn-voice-secondary" onclick="VoyagrNotificationsOrchestration.showVolumeHintForNavigation()">Check device volume</button>
@@ -737,7 +737,7 @@
                             <li>Navigate to … / Go to … / Take me to …</li>
                             <li>Find nearest petrol station, parking, or food</li>
                             <li>Reroute, recalculate, or find new route</li>
-                            <li>Report speed camera, traffic light camera, police, pothole, debris, or accident</li>
+                            {% if not personal_mode %}<li>Report speed camera, traffic light camera, police, pothole, debris, or accident</li>{% endif %}
                         </ul>
                     </details>
                 </section>
@@ -2058,7 +2058,9 @@
                 <button type="button" id="currentLocationFab" class="fab map-action-button" title="Current location" aria-label="Current location" onclick="getCurrentLocation()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="map-action-label">My location</span></button>
                 <button type="button" id="voiceFab" class="fab map-action-button" title="Voice control" aria-label="Voice control" onclick="toggleVoiceInput()" aria-pressed="false"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span class="map-action-label">Voice</span></button>
                 <button type="button" id="showCamerasFab" class="fab map-action-button active" title="Show speed cameras on map" aria-label="Show speed cameras on map" onclick="toggleShowCameras()" aria-pressed="true"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="m8 6 2-3h4l2 3"/><circle cx="12" cy="13" r="4"/></svg><span class="map-action-label">Cameras</span></button>
+                {% if not personal_mode %}
                 <button type="button" id="roadReportFab" class="fab map-action-button" title="Report road issue" aria-label="Report road issue" onclick="openRoadReportModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4 2 19a1 1 0 0 0 1 2h18a1 1 0 0 0 1-2L14 4a2 2 0 0 0-4 0Z"/><path d="M12 9v5M12 17h.01"/></svg><span class="map-action-label">Report</span></button>
+                {% endif %}
                 <button type="button" id="mapControlsHintFab" class="fab map-action-button" title="Map button guide" aria-label="Map button guide" onclick="openMapControlsHintModal()"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span class="map-action-label">Help</span></button>
             </div>
                 <button type="button" id="startNavBtn" class="fab nav-start-nav-fab" title="Start navigation" aria-label="Start navigation" aria-controls="navigationEntry" onclick="startNavigationFromPreview()" data-journey-choose style="display: none;"><svg data-map-action-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8 18-8-4-8 4Z"/></svg><span class="map-action-label">Start</span></button>
@@ -2078,6 +2080,7 @@
             </div>
         </div>
 
+        {% if not personal_mode %}
         <div id="roadReportModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="roadReportModalTitle">
             <div class="road-report-modal-backdrop" onclick="closeRoadReportModal()"></div>
             <div class="road-report-modal-panel">
@@ -2105,6 +2108,7 @@
         </div>
 
 
+        {% endif %}
         <!-- Journey Summary Bar - Shows remaining distance, ETA, and time during navigation -->
         <div id="journeySummaryBar" class="journey-summary-bar" role="group" aria-label="Journey progress" style="display: none;">
             <div class="journey-summary-item">

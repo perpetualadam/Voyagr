@@ -363,6 +363,10 @@
             };
         }
         if (action === 'report_hazard') {
+            if(typeof document!=='undefined' && document.documentElement.dataset.personalMode==='true'){
+                return {action:action,shouldApply:true,fetchHazardReport:false,shouldShowStatus:true,
+                    statusMessage:'Community reporting is unavailable in personal mode.',statusType:'info'};
+            }
             var hazardType = data.hazard_type;
             var lat = runtime.currentLat;
             var lon = runtime.currentLon;

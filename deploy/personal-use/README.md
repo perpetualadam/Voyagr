@@ -84,8 +84,11 @@ It ignores cached account bootstrap settings, prevents app account/coupon/checko
 requests, disables analytics and search indexing, and retains the local guest
 profile. Routing, map and search requests still use configured services. Existing
 account records and tokens are not deleted, revoked or imported into guest data.
-Externally hosted auth services, subscriptions, shared reports and server storage
-are separate retirement decisions; this flag does not decommission them.
+Personal mode hides community-report controls, refuses report submissions (including
+voice actions), and excludes community reports from nearby alerts while retaining
+mapped cameras. Existing report rows are preserved. Externally hosted auth services,
+subscriptions and remaining server storage are separate retirement decisions; this
+flag does not decommission them.
 
 To roll back this application mode, remove its service environment setting and
 restart the app. Keep Nginx protection and browser storage intact.

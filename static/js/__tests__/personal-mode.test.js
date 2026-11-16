@@ -21,3 +21,15 @@ test('an online personal config also retires auth on an older shell',async()=>{
  fetchMock.mockResolvedValue({ok:true,json:async()=>({personal_mode:true,require_login:false,supabase_url:'',supabase_anon_key:''})});
  await Auth.initSupabaseAuth();expect(fetchMock).toHaveBeenCalledTimes(1);expect(createClient).not.toHaveBeenCalled();
 });
+
+test('personal mode blocks modal reporting even when called directly', async () => {
+    document.documentElement.dataset.personalMode='true';
+    const reports=require('../app/road-report-orchestration.js');
+    const planner=jest.fn();
+    reports.bind({roadReport:planner});
+    try {
+        expect(reports.openRoadReportModal()).toBe(false);
+        expect(await reports.submitRoadReport()).toBe(false);
+        expect(planner).not.toHaveBeenCalled();
+    } finally { delete document.documentElement.dataset.personalMode; }
+});

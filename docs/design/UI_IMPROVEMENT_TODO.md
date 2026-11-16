@@ -1814,7 +1814,9 @@ public-product work; existing functional and phone acceptance items remain open.
   app billing/account actions, preserve the local guest profile.
 - [ ] Deploy personal mode and verify it on the phone. External auth services and
   existing subscriptions remain separate retirement decisions.
-- [ ] Review shared-report/analytics and remaining server storage for retirement.
+- [x] Retire community report submission and nearby report consumption in personal
+  mode; retain mapped cameras and existing stored reports. Analytics is disabled.
+- [ ] Review remaining server storage and external services for retirement.
 - [ ] Decide retention/export/deletion of existing account data separately; do
   not delete records or relabel another profile as guest automatically.
 - [ ] Recheck map, GPS, navigation and local data on the protected phone origin.
