@@ -1832,3 +1832,13 @@ public-product work; existing functional and phone acceptance items remain open.
 
 The repair reloads Nginx only; it does not change app data, account retention,
 passwords or certificates. See `deploy/personal-use/repair-private-prompts.py`.
+
+### Private-access recovery action (16 November 2026)
+
+- [x] Confirm on the phone that a fresh privacy-page login restores map access.
+- [x] Show an explicit Unlock private access action on confirmed 401/403 in a
+  personal shell, without automatic navigation, focus stealing or storage resets.
+- [x] Test cached-worker restart, fresh login recovery, bounded request lifecycle,
+  small screens and 200% text. Preserve offline handling and public-mode behavior.
+- [ ] Deploy the updated shell and accept the action on the phone. Keep the
+  recovery link for older cached app releases until they update coherently.

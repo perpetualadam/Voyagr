@@ -7,7 +7,7 @@ const {chromium}=require('playwright');
  const check=(label,condition)=>{assert.ok(condition,label);checks++;console.log('PASS: '+label);};
  try{
   const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage();
-  const forbidden=[],errors=[];
+  const forbidden=[],errors=[];let denyPrivateConfig=false;
   page.on('pageerror',e=>errors.push(e.name));
   await page.addInitScript(()=>{
    localStorage.setItem('voyagr_public_auth_config_v1',JSON.stringify({version:1,origin:location.origin,fetchedAt:Date.now(),config:{supabase_url:'https://old-account.invalid',supabase_anon_key:'synthetic-public-key',require_login:true}}));
@@ -19,6 +19,7 @@ const {chromium}=require('playwright');
     if(/old-account|supabase|stripe|google-analytics|googletagmanager/.test(u.hostname))forbidden.push('external-account-or-analytics');
     return r.abort();
    }
+   if(u.pathname==='/api/config'&&denyPrivateConfig)return r.fulfill({status:403,body:'Private'});
    if(u.pathname==='/api/me'||u.pathname.startsWith('/api/coupons/')||u.pathname==='/api/support/stripe-checkout')forbidden.push('account-action');
    if(u.pathname.startsWith('/map/'))return r.fulfill({contentType:'application/json',body:JSON.stringify({version:8,sources:{},layers:[{id:'bg',type:'background',paint:{'background-color':'#eee'}}]})});
    return r.continue();
@@ -34,6 +35,12 @@ const {chromium}=require('playwright');
   check('Old server account configuration cannot require login',config.personal_mode===true&&config.require_login===false&&config.supabase_url===''&&config.supabase_anon_key==='');
   check('Billing configuration remains unavailable',config.stripe_subscription_checkout_available===false&&config.stripe_payment_link_url==='');
   check('Device owner remains guest',await page.evaluate(()=>VoyagrLocalData.getOwner()==='guest'));
+  denyPrivateConfig=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await page.locator('#privateAccessNotice').waitFor({state:'visible'});
+  check('Actual personal shell exposes a fresh private-login action after gate denial',await page.locator('#privateAccessNotice a').getAttribute('href').then(h=>h.startsWith('/privacy?private-login=')));
+  denyPrivateConfig=false;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await page.locator('#privateAccessNotice').waitFor({state:'hidden'});
+  check('Actual personal shell clears the notice after successful network access',await page.locator('#privateAccessNotice').isHidden());
   await page.evaluate(()=>VoyagrLocalData.update('favourites',()=>[{id:'personal-fixture',name:'Local fixture'}]));
   await page.evaluate(()=>VoyagrSupabaseAuthOrchestration.initSupabaseAuth());
   check('Reinitializing personal mode preserves device records',await page.evaluate(async()=> (await VoyagrLocalData.read('favourites'))[0].name==='Local fixture'));
@@ -44,4 +51,4 @@ const {chromium}=require('playwright');
   check('Actual personal page has no uncaught exceptions',errors.length===0);
   console.log(checks+' personal-mode Chromium checks passed. Synthetic local data; not production verification.');
  }finally{await browser.close();}
-})().catch(e=>{console.error(e.message);process.exitCode=1});
+})().then(()=>require('node:child_process').execFileSync(process.execPath,[require('node:path').join(__dirname,'private-access-browser.cjs')],{stdio:'inherit'})).catch(e=>{console.error(e.message);process.exitCode=1});
