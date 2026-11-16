@@ -89,6 +89,7 @@
     <script defer src="/static/vendor/maplibre-gl.js"></script>
     <script defer src="/static/js/maplibre-helpers.js?v=20261030phase12fdmapownership"></script>
     {% if not personal_mode %}<script defer src="/static/vendor/supabase.min.js"></script>{% endif %}
+    {% if personal_mode %}<script defer src="/static/js/app/private-access.js?v=20261116unlock1"></script>{% endif %}
     <!-- Google Plus Codes Service -->
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
@@ -387,6 +388,14 @@
             </div>
         </div>
     </div>
+    {% endif %}
+    {% if personal_mode %}
+    <section id="privateAccessNotice" class="private-access-notice" role="status" aria-live="polite" aria-labelledby="privateAccessTitle" hidden>
+        <h2 id="privateAccessTitle">Private access is locked</h2>
+        <p>The website needs your owner login before maps and online features can load. Your saved device data is still here.</p>
+        <a href="/privacy?private-login=1">Unlock private access</a>
+        <p>Enter your website credentials, then return to Voyagr.</p>
+    </section>
     {% endif %}
     <div class="app-container">
         <h1 class="voyagr-seo-brand">{{ seo_site_name }}</h1>

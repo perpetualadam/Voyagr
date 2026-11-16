@@ -8,6 +8,7 @@ on:
       - '.github/workflows/privacy-http-lab.yml'
       - 'static/js/modules/privacy/**'
       - 'static/js/app/local-data.js'
+      - 'static/js/app/private-access.js'
       - 'static/js/app/road-match-orchestration.js'
       - 'static/js/app/speed-widget-orchestration.js'
       - 'static/js/app/units-preferences-orchestration.js'

@@ -5110,3 +5110,22 @@ html.dark-mode .speed-widget-gps, body.dark-mode .speed-widget-gps { background:
     padding: 0; margin: 0; flex: 0 0 20px;
 }
 .privacy-options legend { font-weight: 600; }
+
+/* A cached personal shell may open before HTTP authentication has completed. */
+.private-access-notice {
+    position: fixed; z-index: 12000; top: 22vh; left: 12px; right: 12px;
+    box-sizing: border-box; width: calc(100% - 24px); max-width: 420px;
+    max-height: 65vh; overflow: auto; margin: 0 auto; padding: 20px;
+    border: 2px solid #593286; border-radius: 16px; background: #fff; color: #202124;
+    box-shadow: 0 6px 24px #0003;
+}
+.private-access-notice[hidden] { display: none; }
+.private-access-notice h2 { font-size: 1.25rem; margin: 0 0 12px; }
+.private-access-notice p { font-size: 1rem; line-height: 1.5; }
+.private-access-notice a {
+    display: inline-flex; align-items: center; min-height: 44px;
+    padding: 4px 12px; border-radius: 8px; background: #593286; color: #fff;
+    font-weight: 600; text-decoration: underline;
+}
+.private-access-notice a:focus-visible { outline: 3px solid #005fcc; outline-offset: 3px; }
+html[data-private-access-locked] #mapLoadingOverlay { visibility: hidden; }

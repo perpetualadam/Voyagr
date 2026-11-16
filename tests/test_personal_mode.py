@@ -27,7 +27,7 @@ def test_personal_shell_omits_account_sdk_and_sales_controls_but_keeps_device_fe
     assert 'openVoyagerPremiumSection()' not in html
     assert 'Sign in to sync your profile' not in html
     assert 'App &amp; device' in html
-    for element in ('localDataControls', 'speedWidget', 'voiceBtn', 'previewRouteInfo'):
+    for element in ('localDataControls', 'speedWidget', 'voiceBtn', 'previewRouteInfo', 'privateAccessNotice'):
         assert 'id="'+element+'"' in html
     # Includes content-addressed runtime names; the account SDK must be absent.
     assert '/supabase.min.js' not in html
@@ -64,6 +64,7 @@ def test_private_mode_disables_discoverability_and_analytics_without_withdrawing
 def test_public_mode_remains_explicitly_compatible(monkeypatch,client):
     monkeypatch.delenv('VOYAGR_PERSONAL_MODE')
     assert enabled() is False
+    assert 'id="privateAccessNotice"' not in client.get('/').get_data(as_text=True)
     data=client.get('/api/config').get_json()
     assert data['personal_mode'] is False
     assert data['supabase_url']=='https://accounts.example.invalid'

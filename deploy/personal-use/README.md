@@ -100,7 +100,9 @@ JavaScript and map paths on canonical, www and DuckDNS hosts (15 checks), owner
 access 200, and successful Certbot renewal dry-runs for both certificates. The
 access-change backup is `/root/voyagr-personal-backup-1rz6q7zh`.
 
-Account-free mode has not yet been deployed or accepted on the physical phone.
+The operator enabled account-free mode on VPS1 and confirmed personal_mode true,
+require_login false, no account provider and no checkout. Full phone acceptance
+of navigation and retained local records remains open.
 Local validation passed 2,405 backend tests (one skip), 3,730 JavaScript tests,
 42 disposable HTTP checks, 75 existing full-candidate Chromium checks and 12
 personal-mode Chromium checks. The latter verify old account configuration cannot
@@ -150,3 +152,30 @@ map data, or prove the physical phone has retained credentials.
 Manual rollback: restore `voyagr-personal-access.conf` from the printed repair
 backup, remove only `/etc/nginx/conf.d/voyagr-private-auth.conf`, then `nginx -t`
 and reload. The original private password gate remains in place.
+
+The operator applied the prompt repair with backup
+`/root/voyagr-prompt-backup-v96kayw9`. A fresh privacy-page owner login restored
+the map on the phone after the cached app had opened without network access.
+
+## Unlocking a cached personal app
+
+The personal shell now checks the network-only `/api/config` on opening,
+returning to the app, coming online and every 30 seconds while visible. Confirmed
+401/403 responses show **Unlock private access** in place of the map loading
+message. The link opens a fresh same-origin privacy-page URL, using the browser's
+website password prompt, then lets the owner return to the app. It does not
+collect credentials, redirect automatically, clear storage or change map/provider
+logic. Requests are deduplicated and abort after eight seconds. Offline and server
+errors do not create an expired-login notice; a successful check clears it.
+
+This requires deployment of the updated app shell; an older cached release does
+not acquire new UI until a coherent update completes. Keep the fresh privacy-page
+recovery link available for existing installations. The prompt repair remains a
+separate Nginx configuration change.
+
+`node scripts/privacy-http-lab/private-access-browser.cjs` restarts a real Chromium
+profile with a cached fixture worker and production unlock markup/CSS/JavaScript,
+verifies the locked state and fresh Basic-login navigation, checks three handset
+widths at normal and 200% text, and retains a synthetic device-storage marker.
+The fixture worker models cached-shell fallback; this does not replace the full
+candidate HTTP/browser lab or physical-phone acceptance.
