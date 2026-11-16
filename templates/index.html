@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ seo_language|default('en-GB') }}">
+<html lang="{{ seo_language|default('en-GB') }}" data-personal-mode="{{ 'true' if personal_mode else 'false' }}">
 <head>
     <script defer src="/static/js/modules/privacy/consent-policy.js?v=20261114privacy3"></script>
     {% if optional_analytics_available %}
@@ -88,7 +88,7 @@
        home-screen splash, which is shown from launch until first paint. #}
     <script defer src="/static/vendor/maplibre-gl.js"></script>
     <script defer src="/static/js/maplibre-helpers.js?v=20261030phase12fdmapownership"></script>
-    <script defer src="/static/vendor/supabase.min.js"></script>
+    {% if not personal_mode %}<script defer src="/static/vendor/supabase.min.js"></script>{% endif %}
     <!-- Google Plus Codes Service -->
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
@@ -300,10 +300,10 @@
                     <h2>Privacy at a glance</h2>
                     <ul>
                         <li><strong>Location</strong> — used only when you allow it, for navigation, speed help, and your position on the map.</li>
-                        <li><strong>Dashcam (optional)</strong> — camera and microphone are used only if you start recording and grant permission. Video, optional audio, and GPS metadata for that session may be saved on our servers and managed using dashcam’s delete and cleanup controls.</li>
+                        {% if personal_mode %}<li><strong>Dashcam (optional)</strong> — recordings and optional GPS metadata stay in this browser. Download important clips; browser storage can be cleared.</li>{% else %}<li><strong>Dashcam (optional)</strong> — camera and microphone are used only if you start recording and grant permission. Video, optional audio, and GPS metadata for that session may be saved on our servers and managed using dashcam’s delete and cleanup controls.</li>{% endif %}
                         <li><strong>Voice (optional)</strong> — browser recognition may use its vendor's service; AI speech sends a short recording to the configured transcription service. Wake listening uses your microphone when enabled.</li>
-                        <li><strong>On your device</strong> — settings, recent places, and cached maps stay in your browser unless you sign in.</li>
-                        <li><strong>On our servers</strong> — route requests are processed to calculate journeys; saved trips and account data are stored only if you sign in. Optional dashcam recordings you create are also stored so you can play them back. We do not sell your data.</li>
+                        {% if personal_mode %}<li><strong>On your device</strong> — settings, routes, favourites and locally enabled history stay in your browser. No app account or cloud sync is used.</li>{% else %}<li><strong>On your device</strong> — settings, recent places, and cached maps stay in your browser unless you sign in.</li>{% endif %}
+                        {% if personal_mode %}<li><strong>Network services</strong> — route calculations, search and map/location lookups still use the configured server and providers. Personal mode does not make these requests device-only.</li>{% else %}<li><strong>On our servers</strong> — route requests are processed to calculate journeys; saved trips and account data are stored only if you sign in. Optional dashcam recordings you create are also stored so you can play them back. We do not sell your data.</li>{% endif %}
                         <li><strong>Community reports</strong> — reports you submit are shared with their location. Do not include identifying information.</li>
                         <li><strong>Analytics (optional)</strong> — off unless you allow it separately in the <a href="/privacy#analytics-controls" target="_blank" rel="noopener">privacy preferences</a>. This acknowledgement does not enable analytics.</li>
                         <li><strong>Partners</strong> — map, traffic, weather, and sign-in providers process data under their own policies.</li>
@@ -356,6 +356,7 @@
         </div>
     </div>
 
+    {% if not personal_mode %}
     <div id="authRequiredGate" class="auth-required-gate" style="display: none;" aria-hidden="true">
         <div class="auth-required-gate__panel" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
             <h2 id="authGateTitle" class="auth-required-gate__title">Sign in to Voyagr</h2>
@@ -386,8 +387,10 @@
             </div>
         </div>
     </div>
+    {% endif %}
     <div class="app-container">
         <h1 class="voyagr-seo-brand">{{ seo_site_name }}</h1>
+        {% if not personal_mode %}
         <div id="softAuthBanner" class="voyagr-soft-auth-banner" style="display: none;" role="region" aria-label="Sign in prompt">
             <div class="voyagr-soft-auth-banner__inner">
                 <span class="voyagr-soft-auth-banner__text">Sign in to sync your profile, saved routes, and your Voyager Premium trial.</span>
@@ -395,6 +398,7 @@
                 <button type="button" class="voyagr-soft-auth-banner__btn voyagr-soft-auth-banner__btn--dismiss" onclick="voyagrDismissSoftAuthBanner()" title="Dismiss for this session" aria-label="Dismiss">×</button>
             </div>
         </div>
+        {% endif %}
         <!-- Full-screen map -->
         <div id="map"></div>
 
@@ -412,7 +416,9 @@
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" aria-label="Route Options" onclick="switchTab('routeComparison')" data-sheet-tab="routeComparison" aria-controls="routeComparisonTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V7a3 3 0 0 1 6 0v10a3 3 0 0 0 6 0V4M13 7l3-3 3 3"/></svg><span class="sheet-tool-label">Routes</span></button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" aria-label="Trip History" onclick="switchTab('tripHistory')" data-sheet-tab="tripHistory" aria-controls="tripHistoryTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6M12 7v6l4 2"/></svg><span class="sheet-tool-label">History</span></button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" aria-label="Dashcam" onclick="switchTab('dashcam')" data-sheet-tab="dashcam" aria-controls="dashcamTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 9 6-4v14l-6-4"/></svg><span class="sheet-tool-label">Dashcam</span></button>
+                        {% if not personal_mode %}
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--premium" title="Voyager Premium — subscribe &amp; tips" aria-label="Voyager Premium — subscribe &amp; tips" onclick="openVoyagerPremiumSection()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m13 2-9 12h7l-1 8 10-13h-7Z"/></svg><span class="sheet-tool-label">Premium</span></button>
+                        {% endif %}
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" aria-label="Settings" onclick="switchTab('settings')" data-sheet-tab="settings" aria-controls="settingsTab"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span class="sheet-tool-label">Settings</span></button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" aria-label="Collapse" onclick="collapseBottomSheet()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 7 7 7-7"/></svg><span class="sheet-tool-label">Collapse</span></button>
                     </nav>
@@ -1322,9 +1328,12 @@
                     </div></div></details>
 
                     <details class="settings-group" id="settingsAccountApp">
-                    <summary>Account &amp; app</summary>
+                    <summary>{{ 'App & device' if personal_mode else 'Account & app' }}</summary>
 
                     <div class="settings-group-content">
+                    {% if personal_mode %}
+                    <p class="settings-group-help">Personal use. Routes, favourites and history stay on this device. No app account is needed.</p>
+                    {% else %}
                     <p class="settings-group-help">Account, Premium, privacy, suggested journeys, battery saving and app updates.</p><div class="preferences-section" id="accountSection">
                         <h3>👤 Account</h3>
                         <div id="accountStatus" style="font-size: 12px; color: #666; margin-bottom: 10px;">
@@ -1396,7 +1405,9 @@
                             <button type="button" id="supportBmcBtn" style="display: none; padding: 12px; background: #ffdd00; color: #0d0d0d; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">☕ Tip — Buy Me a Coffee</button>
                             <button type="button" id="supportPatreonBtn" style="display: none; padding: 12px; background: #ff424d; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">🎭 Tip / patron — Patreon</button>
                         </div>
-                    </div><div class="preferences-section">
+                    </div>
+                    {% endif %}
+                    <div class="preferences-section">
                         <h3>🔒 Privacy &amp; your rights</h3>
                         <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
                             How Voyagr handles your data, and your rights under UK GDPR / data protection law.
@@ -1495,7 +1506,7 @@
                         <p>Recordings are stored in this browser. Download important clips; browser storage can be cleared. Cloud backup is unavailable during this privacy upgrade.</p>
                         <label><input id="dashcamLocalGps" type="checkbox"> Save available GPS fixes with this local recording</label>
                         <button type="button" onclick="window.voyagrManageCloudDashcam=false; VoyagrDeviceDashcam.list()">Device recordings</button>
-                        <button type="button" onclick="window.voyagrManageCloudDashcam=true; loadDashcamRecordings()">Manage existing cloud recordings</button>
+                        {% if not personal_mode %}<button type="button" onclick="window.voyagrManageCloudDashcam=true; loadDashcamRecordings()">Manage existing cloud recordings</button>{% endif %}
                         <video id="dashcamPreview" muted autoplay playsinline style="display: none; width: 100%; max-height: 220px; border-radius: 8px; margin-bottom: 15px; background: #111; object-fit: cover;"></video>
 
                         <!-- Recording Controls -->

@@ -47,7 +47,8 @@ _WORD_TOKEN_RE = {
 
 
 def block_search_indexing() -> bool:
-    return os.getenv('VOYAGR_BLOCK_SEARCH_INDEXING', '').strip().lower() in (
+    from voyagr.personal_use import enabled
+    return enabled() or os.getenv('VOYAGR_BLOCK_SEARCH_INDEXING', '').strip().lower() in (
         '1',
         'true',
         'yes',

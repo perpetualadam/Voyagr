@@ -100,7 +100,10 @@ module.exports = async function speedContextBrowser(origin, check) {
     }
     check('Stationary GPS updates retain a fresh primary limit',await page.textContent('#speedLimitValue')==='64'&&await page.textContent('#speedLimitMappedLabel')==='Provider est.');
     const previousPrimary=await page.evaluate(()=>VoyagrRoadMatchOrchestration.getPrimarySpeedObservation().acquired_at_ms);
-    await page.waitForTimeout(6000);
+    // The initial native fix may be cached/older; establish this test's stopped
+    // anchor after the full unavailable-source retry interval, independently of
+    // primary early-refresh timing (covered by the coordinator regressions).
+    await page.waitForTimeout(10050);
     await page.evaluate(()=>__emitStationarySpeedFixture(0,0));
     await page.waitForFunction(previous=>VoyagrRoadMatchOrchestration.getPrimarySpeedObservation()?.acquired_at_ms>previous,previousPrimary);
     await page.waitForTimeout(250);

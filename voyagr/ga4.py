@@ -14,6 +14,9 @@ _MEASUREMENT_ID_RE = re.compile(r"^G-[A-Z0-9]+$")
 
 def measurement_id() -> str:
     """Return the GA4 measurement ID, or '' when analytics is disabled or invalid."""
+    from voyagr.personal_use import enabled
+    if enabled():
+        return ""
     if os.getenv("GOOGLE_ANALYTICS_DISABLED", "").strip().lower() in ("1", "true", "yes", "on"):
         return ""
     raw = (os.getenv("GOOGLE_ANALYTICS_MEASUREMENT_ID") or "").strip()

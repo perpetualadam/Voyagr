@@ -300,6 +300,34 @@ def main(ca_file=None, browser=False):
                     diagnostic = re.sub(r'[\w.+-]+@[\w.-]+', '[test email]', diagnostic)
                     print(diagnostic[-2000:], flush=True)
                     raise RuntimeError('Candidate browser privacy checks failed')
+                # Separate fresh process/cache: personal mode must not inherit account fixtures.
+                personal = start('personal', image, {
+                    'PYTHONPATH': '/tmp/browser-candidate', 'PYTHONDONTWRITEBYTECODE': '1',
+                    'SUPABASE_URL': 'http://gateway:8000', 'SUPABASE_ANON_KEY': 'synthetic-lab-key',
+                    'SUPABASE_JWT_SECRET': secret, 'API_KEYS': secrets.token_hex(24),
+                    'PYTHON_DOTENV_DISABLED': '1', 'VOYAGR_PERSONAL_MODE': '1', 'REQUIRE_LOGIN': 'true',
+                    'STRIPE_SECRET_KEY': 'synthetic-unusable', 'STRIPE_SUBSCRIPTION_PRICE_ID': 'synthetic-price',
+                    'GOOGLE_ANALYTICS_MEASUREMENT_ID': 'G-PERSONALTEST',
+                }, mounts=('type=bind,src=' + str(source) + ',dst=/source,readonly',),
+                    command=('python', '/source/scripts/privacy-http-lab/full_app.py'), memory='1g')
+                for attempt in range(60):
+                    response = docker('exec', personal, 'python', '-c',
+                                      "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:5000/',timeout=3).status)", check=False)
+                    if response.returncode == 0:
+                        break
+                    time.sleep(1)
+                else:
+                    raise RuntimeError('Personal candidate readiness timeout')
+                personal_browser = start('personal-browser', browser_image, {'NODE_PATH': '/opt/browser-runner/node_modules'},
+                    mounts=('type=bind,src=' + str(source) + ',dst=/source,readonly',),
+                    command=('node', '/source/scripts/privacy-http-lab/personal-mode-browser.cjs'),
+                    memory='1536m', network_mode='container:' + personal)
+                result = docker('wait', personal_browser)
+                output = docker('logs', personal_browser, check=False)
+                print(output.stdout, end='', flush=True)
+                if result.stdout.strip() != '0':
+                    print(output.stderr[-1500:], flush=True)
+                    raise RuntimeError('Personal mode browser verification failed')
         finally:
             for identifier in reversed(containers):
                 docker('rm', '-f', identifier, check=False)
