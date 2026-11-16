@@ -3462,127 +3462,30 @@ body.voyagr-has-offline-banner #speedWidget {
 }
 
 /* Volume hint banner — same visual language as toasts */
+/* Compact by default; full explanation is explicitly opened by the reader. */
 .voyagr-volume-hint {
-    position: fixed;
-    left: 50%;
+    position: fixed; left: 50%;
     bottom: max(108px, calc(env(safe-area-inset-bottom, 0px) + 88px));
-    transform: translateX(-50%) translateY(12px) scale(0.98);
-    z-index: 10001;
-    width: min(420px, 92vw);
-    max-width: min(420px, 92vw);
-    padding: 12px 14px 14px;
-    background: var(--voyagr-surface, rgba(255, 255, 255, 0.97));
-    border: 1px solid rgba(92, 107, 192, 0.28);
-    border-radius: var(--voyagr-radius, 14px);
-    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.2);
+    transform: translateX(-50%) translateY(12px) scale(.98);
+    z-index: 10001; box-sizing: border-box;
+    width: min(360px, 92vw); padding: 8px;
+    background: var(--voyagr-surface, rgba(255,255,255,.97));
     color: var(--voyagr-text, #111827);
-    opacity: 0;
-    pointer-events: auto;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(92,107,192,.28); border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(15,23,42,.2); opacity: 0;
 }
-
-.voyagr-volume-hint.is-visible {
-    animation: voyagrVolumeIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.voyagr-volume-hint.is-leaving {
-    animation: voyagrVolumeOut 0.28s cubic-bezier(0.4, 0, 1, 1) forwards;
-}
-
-.voyagr-volume-hint__toolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin: -2px -4px 2px 0;
-}
-
-.voyagr-volume-hint__dismiss {
-    border: none;
-    background: transparent;
-    color: var(--voyagr-muted, #6b7280);
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 8px;
-}
-
-.voyagr-volume-hint__dismiss:hover {
-    background: rgba(15, 23, 42, 0.06);
-    color: var(--voyagr-text, #111827);
-}
-
-.voyagr-volume-hint__row {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    text-align: left;
-}
-
-.voyagr-volume-hint__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: rgba(92, 107, 192, 0.14);
-    flex-shrink: 0;
-    font-size: 18px;
-}
-
-.voyagr-volume-hint__copy {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-}
-
-.voyagr-volume-hint__title {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-}
-
-.voyagr-volume-hint__line {
-    font-size: 14px;
-    line-height: 1.4;
-    color: var(--voyagr-text, #111827);
-}
-
-.voyagr-volume-hint__detail {
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--voyagr-muted, #6b7280);
-}
-
-.voyagr-volume-hint__actions {
-    margin-top: 12px;
-    display: flex;
-    justify-content: flex-end;
-}
-
-.voyagr-volume-hint__ok {
-    border: none;
-    border-radius: 10px;
-    padding: 9px 18px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: #fff;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.15s ease;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.voyagr-volume-hint__ok:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.38);
-}
-
-.voyagr-volume-hint__ok:active {
-    transform: scale(0.97);
-}
+.voyagr-volume-hint.is-visible { animation: voyagrVolumeIn .36s ease forwards; }
+.voyagr-volume-hint.is-leaving { animation: voyagrVolumeOut .28s ease forwards; }
+.voyagr-volume-hint__toolbar { display:flex; align-items:center; gap:8px; min-height:44px; }
+.voyagr-volume-hint__title { flex:1; min-width:0; padding-inline-end:4rem; font-size:1rem; overflow-wrap:anywhere; }
+.voyagr-volume-hint__dismiss { flex:none; width:44px; min-height:44px; border:0; border-radius:8px; background:transparent; color:inherit; font-size:1.5rem; cursor:pointer; }
+.voyagr-volume-hint__info > summary { position:absolute; top:8px; right:60px; box-sizing:border-box; min-height:44px; padding:10px; cursor:pointer; font-size:1rem; }
+.voyagr-volume-hint__body { max-height:min(40vh,16rem); overflow:auto; padding:4px 8px; overflow-wrap:anywhere; }
+.voyagr-volume-hint__line { font-size:1rem; line-height:1.4; color:inherit; }
+.voyagr-volume-hint__detail { font-size:.875rem; line-height:1.4; color:var(--voyagr-muted,#4b5563); }
+.voyagr-volume-hint__actions { display:flex; justify-content:flex-end; }
+.voyagr-volume-hint__ok { min-height:44px; padding:8px 16px; border:0; border-radius:8px; background:#5b3684; color:#fff; font-size:1rem; cursor:pointer; }
+.voyagr-volume-hint :is(button,summary):focus-visible { outline:3px solid #7560b1; outline-offset:2px; }
 
 @keyframes voyagrVolumeIn {
     from {

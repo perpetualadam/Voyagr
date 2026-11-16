@@ -712,6 +712,7 @@
                         <p id="voiceEngineHelp">Browser speech may use your browser’s online service. AI sends a recording of up to 15 seconds to the configured speech service. Neither requires a Picovoice wake phrase. Hazard reports you submit are shared with their location.</p>
                         </details>
                     </div>
+                    <button type="button" id="reviewVolumeReminder" class="btn-voice-secondary" onclick="VoyagrNotificationsOrchestration.showVolumeHintForNavigation()">Check device volume</button>
                     <div id="voiceStatus" class="voice-status" data-testid="voice-indicator" role="status" aria-live="polite">Ready</div>
                     <div class="voice-controls">
                         <button type="button" id="voiceBtn" class="btn-voice" data-testid="voice-button" onclick="toggleVoiceInput()" aria-pressed="false">
