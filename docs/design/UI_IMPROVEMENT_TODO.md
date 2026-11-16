@@ -1683,8 +1683,9 @@ verify UI wiring and layout, not physical GPS or live data coverage.
   compact reminder with on-demand Info, paused expiry while reading/focused, and
   a Voice-control reopen action. Preview diagnostics already use closed Info.
   Controlled browser checks passed; deployed phone acceptance remains pending.
-- [ ] Replace misleading incomplete-route wording when no route is selected;
-  preserve useful errors for actual incomplete route results.
+- [x] Replace misleading incomplete-route wording when no route is selected:
+  show Calculate and select a route to start navigation, retaining disabled Start
+  controls and useful errors for actual incomplete routes. Phone acceptance pending.
 
 These findings concern the isolated candidate. Live movement, rerouting, speed
 limit coverage, dashcam and Bluetooth still require their separate checks.
@@ -1783,3 +1784,16 @@ CSS and reminder owner in 16 Chromium viewport/theme/text-scale cases; native
 expiry/pause/focus/replacement behavior has regression coverage. Routing, GPS,
 provider selection, audio permissions and the separate incomplete-route wording
 are unchanged. The next code item remains that misleading no-route wording.
+
+### Empty route-selection guidance (16 November 2026)
+
+- [x] Distinguish null/undefined selection from selected-but-incomplete route data
+  in the existing route-status presenter. Empty selection asks the user to
+  calculate/select a route; it never grants permission or reports safety success.
+- [x] Retain incomplete-route errors, actual navigation-failure warnings, disabled
+  Start controls, reset behavior and all existing geometry/start checks.
+- [ ] Confirm the deployed empty Navigation view and route clearing on the phone.
+
+This is a presentation classification change only. It does not calculate, restore,
+select or start a route, or alter routing/provider/GPS behavior. Regression tests
+cover empty, cleared, malformed and valid selections plus real failure precedence.

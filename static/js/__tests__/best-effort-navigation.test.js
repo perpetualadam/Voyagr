@@ -174,7 +174,7 @@ test('clearing the presentation cannot leave start controls enabled without a ro
     expect(document.getElementById('startVerifiedHere').disabled).toBe(false);
     UX.reset();
     expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
-    expect(document.getElementById('navigationStartExplanation').textContent).toContain('geometry or instructions are incomplete');
+    expect(document.getElementById('navigationStartExplanation').textContent).toBe('Calculate and select a route to start navigation.');
     expect(document.getElementById('bestEffortWarning').hidden).toBe(true);
 });
 
@@ -183,4 +183,36 @@ test('endpoint-only 8 m/7 m snapping keeps Start enabled without a hazard warnin
  expect(UX.present(r)).toMatchObject({allowed:true,outcome:'ADVISORY'});expect(document.getElementById('startVerifiedHere').disabled).toBe(false);expect(UX.committed(r)).toBe(true);
  expect(document.getElementById('bestEffortWarning').hidden).toBe(true);expect(document.getElementById('routeAvoidanceNotice').textContent).toBe('Route information is advisory.');
  expect(r.avoidance_assessment.origin_integrity.navigation_allowed).toBe(false);
+});
+
+
+test.each([null,undefined])('empty selection gives route-entry guidance without granting navigation: %p',candidate=>{
+    const prepare=jest.spyOn(AI,'prepareGuidanceCandidate');
+    expect(UX.present(candidate)).toMatchObject({allowed:false,outcome:'REFUSED',reasonCode:'NO_ROUTE'});
+    expect(document.getElementById('navigationStartExplanation').textContent).toBe('Calculate and select a route to start navigation.');
+    expect(document.getElementById('routeAvoidanceNotice').textContent).not.toMatch(/incomplete|passed|recalculate/i);
+    for(const button of document.querySelectorAll('[data-navigation-start]')){
+        expect(button.disabled).toBe(true);expect(button.getAttribute('aria-disabled')).toBe('true');
+    }
+    expect(prepare).not.toHaveBeenCalled();
+    prepare.mockRestore();
+});
+test('clearing a selected route restores empty guidance and a malformed selection keeps its error',()=>{
+    expect(UX.present(makeRoute()).allowed).toBe(true);
+    UX.present(null);expect(document.getElementById('navigationStartExplanation').textContent).toContain('Calculate and select');
+    expect(UX.present({})).toMatchObject({allowed:false,outcome:'REFUSED'});
+    expect(document.getElementById('navigationStartExplanation').textContent).toContain('geometry or instructions are incomplete');
+});
+test('reset restores empty guidance without starting or restoring a journey',()=>{
+    UX.present(makeRoute());UX.reset();
+    expect(document.getElementById('navigationStartExplanation').textContent).toContain('Calculate and select');
+    expect(Life.getRouteInProgress()).toBe(false);
+    expect(window.lastCalculatedRoute).toBeNull();
+});
+
+test('an actual navigation failure is not hidden by empty-selection guidance',()=>{
+    const failure=jest.spyOn(Life,'getNavigationFailure').mockReturnValue({reason:'map failure'});
+    expect(UX.present(null).message).toContain('initialization or map failure');
+    expect(document.getElementById('startVerifiedHere').disabled).toBe(true);
+    failure.mockRestore();
 });

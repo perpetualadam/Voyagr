@@ -11,6 +11,9 @@
         if (lifecycle && lifecycle.getNavigationFailure && lifecycle.getNavigationFailure()) {
             return {allowed:false,outcome:'REFUSED',message:'Navigation stopped after an initialization or map failure. Recover the map and recalculate.'};
         }
+        if(candidate==null){
+            return {allowed:false,outcome:'REFUSED',reasonCode:'NO_ROUTE',message:'Calculate and select a route to start navigation.'};
+        }
         var integrity = root.VoyagrAvoidanceIntegrity;
         if (!integrity || typeof integrity.currentDecision!=='function') {
             return {allowed:false,outcome:'REFUSED',message:'Safety verification unavailable. Reload and recalculate before navigation.'};
