@@ -151,6 +151,7 @@
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20261110publicsources1"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20261110continuous1"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20261027phase7a"></script>
+    <script defer src="/static/js/app/route-warnings.js?v=20261117corridor1"></script>
     <script defer src="/static/js/modules/navigation/road-report.js?v=20260711zzzk"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20261108unitrestore1"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260711zzzn"></script>
@@ -1750,6 +1751,7 @@
                                 <p id="routePlanningNotice" class="preview-notice" role="status"></p>
                                 <p id="routeMapRenderStatus" class="preview-notice">Map renderer: waiting for status.</p>
                                 <p id="routeSpeedLimitStatus" class="preview-notice">Speed display: waiting for a live GPS update.</p>
+                                <button type="button" class="route-warning-refresh" onclick="VoyagrRouteWarnings.refresh(window.lastCalculatedRoute)">Refresh mapped warning data</button>
                                 <p id="routeHazardDataStatus" class="preview-notice">Mapped hazard warning coverage: waiting for status.</p>
                                 <p id="routeSpeedDataStatus" class="preview-notice">Route speed data: waiting for status.</p>
                                 <p id="routeTrafficLightStatus" class="preview-notice" role="status"></p>

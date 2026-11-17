@@ -1,4 +1,4 @@
-test.each([['POST','road-context'],['POST','road-match']])('road evidence %s %s bypasses cache and replay', async (method,path) => {
+test.each([['POST','road-context'],['POST','road-match'],['POST','route-warning-observations']])('road evidence %s %s bypasses cache and replay', async (method,path) => {
     const listeners = {};
     const originalSelf = Object.getOwnPropertyDescriptor(global, 'self');
     const originalCaches = global.caches;

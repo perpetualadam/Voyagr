@@ -49,6 +49,7 @@
     function setNextManeuverDistance(val) { nextManeuverDistance = val; }
     function getRoutePolyline() { return routePolyline; }
     function setRoutePolyline(val) {
+        if(root.VoyagrRouteWarnings)root.VoyagrRouteWarnings.invalidate();
         routePolyline = val;
         var poi = root.VoyagrPoiSearchOrchestration;
         if(poi&&typeof poi.invalidateAlongRouteForGeometry==='function'){

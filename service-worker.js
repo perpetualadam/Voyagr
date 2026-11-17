@@ -232,7 +232,7 @@ self.addEventListener('fetch', event => {
   }
 
   // GPS evidence must never be cached, queued or replayed across navigation fixes.
-  if (url.pathname === '/api/road-context' || url.pathname === '/api/road-match') {
+  if (url.pathname === '/api/road-context' || url.pathname === '/api/road-match' || url.pathname === '/api/route-warning-observations') {
     event.respondWith(fetch(request).catch(() => new Response(
       JSON.stringify({ success: false, error: 'Road evidence unavailable offline' }),
       { status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }

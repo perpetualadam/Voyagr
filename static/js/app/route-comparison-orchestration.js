@@ -940,6 +940,7 @@ function syncLastCalculatedRouteFromSelection(index) {
         window.lastCalculatedRoute,
         getRouteOptions()[index]
     );
+    if(window.VoyagrRouteWarnings)void window.VoyagrRouteWarnings.observe(window.lastCalculatedRoute);
     const warningStatus=document.getElementById('routeHazardDataStatus');
     if(warningStatus&&window.VoyagrHazardAlerts&&typeof window.VoyagrHazardAlerts.describeWarningCoverage==='function')warningStatus.textContent=window.VoyagrHazardAlerts.describeWarningCoverage(window.lastCalculatedRoute);
 }
