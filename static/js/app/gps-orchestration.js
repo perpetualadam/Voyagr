@@ -2072,6 +2072,8 @@
     function processNavigationHazardAlerts(lat, lon) {
         if(root.VoyagrJourneyModes && root.VoyagrJourneyModes.isSimulating())return;
         const HA = haModule();
+        const warningStatus=document.getElementById('routeHazardDataStatus');
+        if(warningStatus&&typeof HA.describeWarningCoverage==='function')warningStatus.textContent=HA.describeWarningCoverage(window.lastCalculatedRoute);
         const tick = HA.buildNavigationHazardAlertsTickPlan({
             routeInProgress: rt().g('routeInProgress'),
             isTrackingActive: getIsTrackingActive(),

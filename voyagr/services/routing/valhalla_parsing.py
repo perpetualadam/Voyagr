@@ -29,6 +29,7 @@ except ImportError:  # pragma: no cover - optional dependency guard mirrors voya
 
 from voyagr.utils.geometry import decode_route_geometry
 from voyagr.services.hazards import get_hazards_on_route, score_route_by_hazards
+from voyagr.services.routing.warning_observations import coverage as warning_coverage
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
 from voyagr.services.routing.engines import get_traffic_duration_multiplier
 
@@ -96,7 +97,7 @@ def valhalla_route_json_to_standard_routes(
     hazard_penalty = 0
     hazard_count = 0
     hazards_list: List[Dict[str, Any]] = []
-    if hazards:
+    if hazards or getattr(hazards,'warning_observations',None):
         hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
         hazards_list = get_hazards_on_route(route_geometry, hazards)
 
@@ -120,6 +121,7 @@ def valhalla_route_json_to_standard_routes(
         'hazard_penalty_seconds': round(hazard_penalty, 0),
         'hazard_count': hazard_count,
         'hazards': hazards_list,
+        'warning_coverage': warning_coverage(hazards),
         'maneuvers': maneuvers,
         'source': 'Valhalla',
     })
@@ -158,7 +160,7 @@ def valhalla_route_json_to_standard_routes(
             alt_hazard_penalty = 0
             alt_hazard_count = 0
             alt_hazards_list: List[Dict[str, Any]] = []
-            if hazards:
+            if hazards or getattr(hazards,'warning_observations',None):
                 alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
                 alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
 
@@ -181,6 +183,7 @@ def valhalla_route_json_to_standard_routes(
                 'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
                 'hazard_count': alt_hazard_count,
                 'hazards': alt_hazards_list,
+                'warning_coverage': warning_coverage(hazards),
                 'maneuvers': alt_maneuvers,
                 'source': 'Valhalla',
             })
@@ -257,6 +260,7 @@ def valhalla_trip_json_to_std_route_entry(
         'hazard_penalty_seconds': round(penalty, 0),
         'hazard_count': haz_count,
         'hazards': hazards_list,
+        'warning_coverage': warning_coverage(hazards),
         'maneuvers': route_maneuvers,
         'source': 'Valhalla',
     }

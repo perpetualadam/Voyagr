@@ -849,9 +849,20 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
     try:
         hazards_on_route = []
 
-        with db_connection() as conn:
-            cursor = conn.cursor()
-            preferences = _load_hazard_proximity_preferences(cursor)
+        observations = getattr(hazards, 'warning_observations', None)
+        try:
+            with db_connection() as conn:
+                cursor = conn.cursor()
+                preferences = _load_hazard_proximity_preferences(cursor)
+        except Exception:
+            if observations is None:
+                raise
+            preferences = _default_hazard_proximity_preferences()
+        if observations is not None:
+            from voyagr.services.routing.warning_observations import is_mapped_warning_kind, WARNING_CORRIDOR_M
+            hazards = {key:rows for key,rows in hazards.items() if not is_mapped_warning_kind(key)}
+            hazards.update(observations)
+            preferences.update({key:{'threshold':WARNING_CORRIDOR_M} for key in observations})
 
         try:
             if isinstance(route_points, str):
@@ -884,6 +895,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
                 if min_distance <= threshold:
                     display_type = _hazard_marker_display_type(hazard_type, hazard)
                     hazards_on_route.append({
+                        **{key:hazard[key] for key in ('id','source','observed_at_ms','position_uncertainty_m','osm_way_id','graph_edge_id','graph_provider','carriageway_id','direction','average_speed_section_id','valid_until') if key in hazard},
                         'lat': hazard_lat, 'lon': hazard_lon,
                         'type': display_type,
                         'description': hazard.get('description', 'Hazard detected'),

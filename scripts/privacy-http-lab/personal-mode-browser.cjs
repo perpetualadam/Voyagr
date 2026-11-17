@@ -35,6 +35,16 @@ const {chromium}=require('playwright');
   check('Old server account configuration cannot require login',config.personal_mode===true&&config.require_login===false&&config.supabase_url===''&&config.supabase_anon_key==='');
   check('Billing configuration remains unavailable',config.stripe_subscription_checkout_available===false&&config.stripe_payment_link_url==='');
   check('Device owner remains guest',await page.evaluate(()=>VoyagrLocalData.getOwner()==='guest'));
+  const warningText=await page.evaluate(()=>{
+   const previous=window.lastCalculatedRoute;
+   try{
+    window.lastCalculatedRoute=VoyagrRouteSelection.normalizeRouteOption({hazards:[{type:'camera_speed',lat:53.501,lon:-1.2}],warning_coverage:{traffic_light:{status:'PARTIAL'},railway_crossing:{status:'UNKNOWN'}}},{decodePolyline:()=>[[53.5,-1.2],[53.502,-1.2]]});
+    VoyagrGpsOrchestration.processNavigationHazardAlerts(53.5,-1.2);
+    return document.getElementById('routeHazardDataStatus').textContent;
+   }finally{window.lastCalculatedRoute=previous;}
+  });
+  check('Personal route Info retains partial and unknown warning coverage',warningText.includes('partial mapped coverage')&&warningText.includes('coverage unknown'));
+
   denyPrivateConfig=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await page.locator('#privateAccessNotice').waitFor({state:'visible'});
   check('Actual personal shell exposes a fresh private-login action after gate denial',await page.locator('#privateAccessNotice a').getAttribute('href').then(h=>h.startsWith('/privacy?private-login=')));

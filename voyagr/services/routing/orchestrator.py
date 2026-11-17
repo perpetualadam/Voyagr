@@ -521,6 +521,7 @@ def build_route_success_response(
         'hazard_count': primary.get('hazard_count', 0),
         'hazard_penalty_seconds': primary.get('hazard_penalty_seconds', 0),
         'hazards': primary.get('hazards', []),
+        'warning_coverage': primary.get('warning_coverage', {}),
         'camera_avoidance_engine': camera_avoidance_engine,
         'start_lat': start_lat,
         'start_lon': start_lon,

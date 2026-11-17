@@ -1015,7 +1015,14 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
     md_incident_for_gh = None
     md_avoid_points = list(params.avoid_points) if params.avoid_points else None
     bbox_md = None
+    from voyagr.services.routing.warning_observations import collect as collect_warnings, attach as attach_warnings
+    from voyagr.services.hazards import fetch_hazards_for_route as fetch_warning_cameras
+    warning_points = [(start_lat,start_lon)] + [(s['lat'],s['lon']) for s in md_stops] + [(end_lat,end_lon)]
+    warning_cameras = warning_observations = None
     if enable_hazard_avoidance:
+        warning_cameras = fetch_warning_cameras(min(p[0] for p in warning_points), min(p[1] for p in warning_points),
+                                               max(p[0] for p in warning_points), max(p[1] for p in warning_points))
+        warning_observations = collect_warnings(warning_points, warning_cameras)
         try:
             import voyagr_web as vw
             from voyagr.services.hazards import (
@@ -1026,7 +1033,7 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
             all_lats = [start_lat, end_lat] + [s['lat'] for s in md_stops]
             all_lons = [start_lon, end_lon] + [s['lon'] for s in md_stops]
             import copy
-            hazards_md = copy.deepcopy(fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons)))
+            hazards_md = copy.deepcopy(warning_cameras)
             verification_cameras = {k:copy.deepcopy(v) for k,v in hazards_md.items() if k=='camera' or k.startswith('camera_')}
             if not params.avoid_cameras:
                 vw.clear_camera_hazard_buckets(hazards_md)
@@ -1048,20 +1055,10 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
                 avoid_cameras=params.avoid_cameras,
                 enable_hazard_avoidance=enable_hazard_avoidance,
             )
-            if params.avoid_traffic_lights:
-                from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
-                hazards_md['traffic_light'] = fetch_traffic_lights_osm_bbox(
-                    bbox_md['min_lat'], bbox_md['max_lat'], bbox_md['min_lon'], bbox_md['max_lon'])
-                md_tl_for_gh = hazards_md.get('traffic_light')
-            else:
-                hazards_md['traffic_light'] = []
-            if params.avoid_railway_crossings:
-                from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
-                hazards_md['railway_crossing'] = fetch_railway_crossings_osm_bbox(
-                    bbox_md['min_lat'], bbox_md['max_lat'], bbox_md['min_lon'], bbox_md['max_lon'])
-                md_rx_for_gh = hazards_md.get('railway_crossing')
-            else:
-                hazards_md['railway_crossing'] = []
+            hazards_md['traffic_light'] = warning_observations['traffic_light'] if params.avoid_traffic_lights else []
+            hazards_md['railway_crossing'] = warning_observations['railway_crossing'] if params.avoid_railway_crossings else []
+            md_tl_for_gh = hazards_md['traffic_light']
+            md_rx_for_gh = hazards_md['railway_crossing']
             from voyagr.services.routing.integrity_api import capture_hazard_snapshot
             from voyagr.utils.hazard_matching import HazardDataset
             capture_hazard_snapshot(HazardDataset({**hazards_md, **verification_cameras}))
@@ -1115,6 +1112,34 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
         logger.warning("[MULTI-DROP] Optimization failed, falling through to standard routing")
         return md_result if md_result.get('error_code') == 'INCOMPLETE_ROUTE' else None
 
+    # Warning serialization does not feed observations back into avoidance engines.
+    from voyagr.services.hazards import get_hazards_on_route
+    from voyagr.services.routing.journey_geometry import decode_geometry
+    if warning_observations is None:
+        try:
+            warning_points = decode_geometry(md_result.get('geometry'), md_result.get('geometry_precision',6))
+        except ValueError:
+            warning_points = []
+        if warning_points:
+            warning_cameras = fetch_warning_cameras(min(p[0] for p in warning_points),min(p[1] for p in warning_points),
+                                                   max(p[0] for p in warning_points),max(p[1] for p in warning_points))
+            warning_observations = collect_warnings(warning_points,warning_cameras)
+        else:
+            warning_observations = {}
+    warning_dataset = attach_warnings({}, warning_observations)
+    def set_warnings(route):
+        if not isinstance(route,dict): return
+        try:
+            coords = decode_geometry(route.get('geometry'), route.get('geometry_precision',6))
+        except ValueError:
+            return
+        route['hazards'] = get_hazards_on_route(coords, warning_dataset)
+        route['warning_coverage'] = {kind:dict(getattr(rows,'coverage',{'status':'UNKNOWN'}))
+                                     for kind,rows in warning_observations.items() if kind in ('traffic_light','railway_crossing')}
+    set_warnings(md_result)
+    for leg in md_result.get('legs') or []:
+        set_warnings(leg)
+
     md_result['distance'] = f"{md_result['total_distance_km']:.2f} km"
     md_result['time'] = f"{md_result['total_duration_minutes']:.0f} minutes"
     md_result['total_time_with_stops'] = f"{md_result['total_duration_minutes']:.0f} minutes"
@@ -1145,6 +1170,8 @@ def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
         'caz_cost': 0,
         'hazard_count': 0,
         'hazard_penalty_seconds': 0,
+        'hazards': md_result.get('hazards',[]),
+        'warning_coverage': md_result.get('warning_coverage',{}),
         'geometry': journey_geometry,
         'geometry_precision': journey_precision,
         'leg_geometry_ranges': md_result.get('leg_geometry_ranges', []),

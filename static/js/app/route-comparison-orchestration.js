@@ -940,6 +940,8 @@ function syncLastCalculatedRouteFromSelection(index) {
         window.lastCalculatedRoute,
         getRouteOptions()[index]
     );
+    const warningStatus=document.getElementById('routeHazardDataStatus');
+    if(warningStatus&&window.VoyagrHazardAlerts&&typeof window.VoyagrHazardAlerts.describeWarningCoverage==='function')warningStatus.textContent=window.VoyagrHazardAlerts.describeWarningCoverage(window.lastCalculatedRoute);
 }
 // Record only a successfully mounted preview. Clearing/replacing it revokes this
 // intent; style recovery never selects a route, updates costs, fits the camera,
