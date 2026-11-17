@@ -14,6 +14,8 @@ pattern used by the other routing service modules.
 
 from __future__ import annotations
 
+from voyagr.services.routing.warning_observations import coverage as warning_coverage
+
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List
@@ -101,7 +103,7 @@ def build_osrm_routes(
         hazard_penalty = 0
         hazard_count = 0
         hazards_list: List[Dict[str, Any]] = []
-        if ctx.hazards:
+        if ctx.hazards or getattr(ctx.hazards,'warning_observations',None):
             hazard_penalty, hazard_count = vw.score_route_by_hazards(route_coords, ctx.hazards)
             hazards_list = vw.get_hazards_on_route(route_coords, ctx.hazards)
             logger.info(
@@ -125,6 +127,7 @@ def build_osrm_routes(
             'hazard_penalty_seconds': round(hazard_penalty, 0),
             'hazard_count': hazard_count,
             'hazards': hazards_list,
+            'warning_coverage': warning_coverage(ctx.hazards),
             'maneuvers': osrm_maneuvers,
             'source': 'OSRM',
         })

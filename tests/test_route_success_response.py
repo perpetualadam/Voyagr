@@ -15,6 +15,7 @@ def _routes():
         'geometry': 'abc', 'geometry_precision': 6,
         'hazard_penalty_seconds': 120, 'hazard_count': 2,
         'hazards': [{'type': 'camera_speed'}],
+        'warning_coverage': {'traffic_light': {'status':'PARTIAL'}},
         'maneuvers': [{'type': 1}],
     }]
 
@@ -48,6 +49,7 @@ class BuildRouteSuccessResponseTest(unittest.TestCase):
         self.assertEqual(r['hazard_count'], 2)
         self.assertEqual(r['hazard_penalty_seconds'], 120)
         self.assertEqual(len(r['hazards']), 1)
+        self.assertEqual(r['warning_coverage'], {'traffic_light': {'status':'PARTIAL'}})
         # Endpoints
         self.assertEqual((r['start_lat'], r['start_lon'], r['end_lat'], r['end_lon']),
                          (53.5, -1.4, 53.4, -1.1))
@@ -63,7 +65,7 @@ class BuildRouteSuccessResponseTest(unittest.TestCase):
             'total_time_with_stops', 'total_stop_time', 'via_points_count', 'stops_count',
             'geometry', 'geometry_precision', 'fuel_cost', 'fuel_litres', 'toll_cost',
             'caz_cost', 'caz_details', 'maneuvers', 'cached',
-            'hazard_count', 'hazard_penalty_seconds', 'hazards',
+            'hazard_count', 'hazard_penalty_seconds', 'hazards', 'warning_coverage',
             'camera_avoidance_engine', 'start_lat', 'start_lon', 'end_lat', 'end_lon',
         }
         self.assertEqual(keys, expected)

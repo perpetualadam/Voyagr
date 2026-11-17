@@ -26,6 +26,7 @@ from voyagr.utils.lane_maneuvers import (
 )
 from voyagr.utils.osrm import infer_road_class_from_names
 from voyagr.services.hazards import get_hazards_on_route, score_route_by_hazards
+from voyagr.services.routing.warning_observations import coverage as warning_coverage
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers
 
 logger = logging.getLogger('voyagr_web')
@@ -247,7 +248,7 @@ def build_valhalla_route_entry(
     hazard_penalty = 0
     hazard_count = 0
     hazards_list = []
-    if hazards:
+    if hazards or getattr(hazards,'warning_observations',None):
         hazard_penalty, hazard_count = score_route_by_hazards(geometry, hazards)
         hazards_list = get_hazards_on_route(geometry, hazards)
 
@@ -268,6 +269,7 @@ def build_valhalla_route_entry(
         'hazard_penalty_seconds': round(hazard_penalty, 0),
         'hazard_count': hazard_count,
         'hazards': hazards_list,
+        'warning_coverage': warning_coverage(hazards),
         'maneuvers': maneuvers,
         'source': 'Valhalla',
     }
@@ -408,6 +410,7 @@ def build_graphhopper_optimised_route_entry(
             'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
             'hazard_count': gh_hazard_count,
             'hazards': gh_hazards_list,
+            'warning_coverage': warning_coverage(hazards),
             'maneuvers': gh_maneuvers,
             'source': 'GraphHopper',
         }

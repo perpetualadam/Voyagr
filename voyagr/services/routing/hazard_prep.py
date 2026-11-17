@@ -1,14 +1,8 @@
-"""
-Hazard preparation for /api/route.
+"""Prepare independent mapped warnings and preference-filtered engine hazards.
 
-Fetches and assembles the ``hazards`` dict used for both route scoring and
-Valhalla/GraphHopper avoidance: SCDB cameras, TomTom real-time incidents,
-explicit avoid_points, camera-preference filtering, and OSM traffic-light /
-railway-crossing overlays.
-
-Extracted verbatim from ``voyagr_web.calculate_route`` so the assembly order and
-logging are unchanged. Monolith-only helpers are reached via a lazy
-``import voyagr_web`` to avoid an import cycle at module load.
+Mapped cameras, signals and crossings are retained for route warning serialization.
+Avoidance/scoring still receives only its existing preference-filtered dictionary;
+warning observations are attached separately and never iterated as engine hazards.
 """
 
 from __future__ import annotations
@@ -24,7 +18,7 @@ logger = logging.getLogger('voyagr_web')
 
 @dataclass
 class HazardPrefs:
-    """Client-driven hazard toggles that shape the assembled hazard set."""
+    """Client-driven avoidance toggles; these do not disable mapped warnings."""
 
     avoid_points: List[Dict[str, float]]
     avoid_cameras: bool
@@ -41,8 +35,7 @@ def prepare_route_hazards(
     prefs: HazardPrefs,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
-    Assemble the hazard dict for a route request (always fetched, for scoring even
-    when avoidance is off). Mirrors the previous inline logic exactly.
+    Assemble filtered avoidance inputs with a separate mapped-warning snapshot.
     """
     import voyagr_web as vw
     from voyagr.utils.hazard_matching import HazardDataset
@@ -94,48 +87,14 @@ def prepare_route_hazards(
             hazards['avoid_point'].append({'lat': ap['lat'], 'lon': ap['lon'], 'severity': 'high'})
         logger.info(f"[ROUTE] {len(prefs.avoid_points)} explicit avoid_points added to hazards")
 
+    from voyagr.services.routing.warning_observations import collect, attach
+    observations = collect([(start_lat,start_lon),(end_lat,end_lon)], hazards)
     if not prefs.avoid_cameras:
         vw.clear_camera_hazard_buckets(hazards)
     else:
         vw.filter_camera_hazards_by_preferences(hazards)
-
-    if prefs.avoid_traffic_lights:
-        try:
-            from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
-            _south = min(start_lat, end_lat) - 0.1
-            _north = max(start_lat, end_lat) + 0.1
-            _west = min(start_lon, end_lon) - 0.1
-            _east = max(start_lon, end_lon) + 0.1
-            hazards['traffic_light'] = fetch_traffic_lights_osm_bbox(_south, _north, _west, _east)
-            logger.info(
-                f"[TRAFFIC_LIGHTS] Merged {len(hazards.get('traffic_light', []))} OSM traffic signals for routing"
-            )
-        except route_transport.RoutingDeadlineExceeded:
-            raise
-        except Exception as e:
-            logger.warning(f"[TRAFFIC_LIGHTS] Could not load OSM traffic lights: {type(e).__name__}")
-            hazards['traffic_light'] = []
-    else:
-        hazards['traffic_light'] = []
-
-    if prefs.avoid_railway_crossings:
-        try:
-            from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
-            _rs = min(start_lat, end_lat) - 0.1
-            _rn = max(start_lat, end_lat) + 0.1
-            _rw = min(start_lon, end_lon) - 0.1
-            _re = max(start_lon, end_lon) + 0.1
-            hazards['railway_crossing'] = fetch_railway_crossings_osm_bbox(_rs, _rn, _rw, _re)
-            logger.info(
-                f"[RAILWAY_CROSSINGS] Merged {len(hazards.get('railway_crossing', []))} OSM level crossings for routing"
-            )
-        except route_transport.RoutingDeadlineExceeded:
-            raise
-        except Exception as e:
-            logger.warning(f"[RAILWAY_CROSSINGS] Could not load OSM railway crossings: {type(e).__name__}")
-            hazards['railway_crossing'] = []
-    else:
-        hazards['railway_crossing'] = []
+    hazards['traffic_light'] = observations['traffic_light'] if prefs.avoid_traffic_lights else []
+    hazards['railway_crossing'] = observations['railway_crossing'] if prefs.avoid_railway_crossings else []
 
     if prefs.enable_hazard_avoidance:
         logger.info("[HAZARDS] Hazard avoidance ENABLED - will use exclude_locations")
@@ -147,4 +106,4 @@ def prepare_route_hazards(
                                    'retrieved_at':time.time(),'source':'explicit_geographic_avoid_points'}
     # Ranking/display preferences must not erase evidence for an enabled contract category.
     capture_hazard_snapshot(HazardDataset({**hazards, **verification_cameras}, coverage=coverage))
-    return hazards
+    return attach(hazards, observations)

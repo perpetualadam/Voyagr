@@ -685,7 +685,19 @@
         };
     }
 
+    function describeWarningCoverage(route) {
+        var c=route&&route.warning_coverage;
+        if(!c)return 'Mapped hazard warning coverage was not supplied.';
+        return ['traffic_light','railway_crossing'].map(function(kind){
+            var label=kind==='traffic_light'?'Traffic-light':'Level-crossing';
+            var state=c[kind]&&c[kind].status;
+            var detail=state==='PARTIAL'?'partial mapped coverage':state==='AVAILABLE'?'mapped-area data available; road association unverified':state==='STALE'?'stale mapped data':'coverage unknown';
+            return label+' warning observations: '+detail+'.';
+        }).join(' ')+' Missing observations do not establish that no hazards exist.';
+    }
+
     var api = {
+        describeWarningCoverage: describeWarningCoverage,
         HAZARD_ANNOUNCEMENT_DEBOUNCE_MS: HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
         NEARBY_HAZARDS_RADIUS_KM: NEARBY_HAZARDS_RADIUS_KM,
         buildHazardEvaluationParams: buildHazardEvaluationParams,

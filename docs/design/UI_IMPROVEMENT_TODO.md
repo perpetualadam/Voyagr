@@ -1854,3 +1854,17 @@ passwords or certificates. See `deploy/personal-use/repair-private-prompts.py`.
 - [ ] Deploy and verify real local results and selection on the phone.
 
 See [camping POIs](CAMPING_POIS.md) for category tags, bounds and validation.
+
+### Independent mapped hazard warnings (17 November 2026)
+
+- [x] Retain mapped warning observations when avoidance or camera-subtype avoidance
+  preferences are off, without feeding them back into engine exclusions/scores.
+- [x] Replace the oversized signal/crossing planning box with bounded small-area
+  acquisition; retain partial/unknown/stale coverage and parent deadline checks.
+- [x] Preserve warning data through engine response, multi-drop legs, selection and
+  the existing Info disclosure. Test the actual GPS owner using synthetic fixes.
+- [ ] Deploy and perform the physical-phone hazard/audio acceptance checks.
+- [ ] Address remaining audit controls, nearby-radius and rolling coverage gaps.
+
+See [independent hazard warnings](INDEPENDENT_HAZARD_WARNINGS.md). The original
+hazard audit remains a historical snapshot, not a claim these phone checks passed.
