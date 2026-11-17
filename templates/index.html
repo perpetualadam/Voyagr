@@ -656,6 +656,20 @@
                         <span>Groceries</span>
                     </button>
                 </div>
+                <details class="camping-poi-search">
+                    <summary>Van life &amp; camping</summary>
+                    <p>Find mapped sites and facilities nearby. Parking does not imply overnight permission.</p>
+                    <div class="quick-search">
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('camping')">⛺ Campsites</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('motorhome')">🚐 Motorhome / caravan sites</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('drinking_water')">🚰 Drinking water</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('toilets')">🚻 Toilets</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('showers')">🚿 Showers</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('waste_disposal')">♻️ Waste disposal</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('laundry')">🧺 Laundry</button>
+                        <button type="button" class="quick-search-btn" onclick="quickSearch('parking')">🅿️ Parking</button>
+                    </div>
+                </details>
                 <div id="alongRouteSearch" style="display: none; margin-top: 8px;">
                     <button onclick="searchAlongRoute()" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
                         🔍 Search Along Route
@@ -667,6 +681,14 @@
                             <button class="quick-search-btn" onclick="searchAlongRouteByType('charging')">🔌 EV</button>
                             <button class="quick-search-btn" onclick="searchAlongRouteByType('parking')">🅿️ Park</button>
                             <button class="quick-search-btn" onclick="searchAlongRouteByType('groceries')">🛒 Groceries</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('camping')">⛺ Campsites</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('motorhome')">🚐 Motorhome / caravan sites</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('drinking_water')">🚰 Drinking water</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('toilets')">🚻 Toilets</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('showers')">🚿 Showers</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('waste_disposal')">♻️ Waste disposal</button>
+                            <button type="button" class="quick-search-btn" onclick="searchAlongRouteByType('laundry')">🧺 Laundry</button>
+
                         </div>
                     </div>
                 </div>

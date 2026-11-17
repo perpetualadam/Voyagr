@@ -803,6 +803,15 @@ def search_poi():
     """Search for points of interest. Tries TomTom first, falls back to Overpass/Nominatim."""
     try:
         data = request.get_json(silent=True)
+        from voyagr.services import camping_poi
+        if isinstance(data, dict) and isinstance(data.get('type'), str) and data['type'] in camping_poi.CATEGORIES:
+            try:
+                payload, status = camping_poi.nearby(data)
+            except ValueError as error:
+                payload, status = {'success': False, 'error': str(error)}, 400
+            response = jsonify(payload)
+            response.headers['Cache-Control'] = 'no-store'
+            return response, status
         if isinstance(data, dict) and data.get('type', 'fuel') in ('fuel', 'food', 'charging', 'pharmacy', 'hospital', 'groceries'):
             return _candidate_poi_response(data, data.get('type', 'fuel'))
         data = data or {}

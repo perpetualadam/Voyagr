@@ -1842,3 +1842,15 @@ passwords or certificates. See `deploy/personal-use/repair-private-prompts.py`.
   small screens and 200% text. Preserve offline handling and public-mode behavior.
 - [ ] Deploy the updated shell and accept the action on the phone. Keep the
   recovery link for older cached app releases until they update coherently.
+
+### Van life and camping POIs (17 November 2026)
+
+- [x] Add nearby and along-route filters for campsites, motorhome/caravan sites,
+  drinking water, toilets, showers, waste disposal and laundry; reuse parking.
+- [x] Show mapped facilities, access, fees, seasonal hours and vehicle restrictions
+  without treating parking or a map tag as verified overnight permission.
+- [x] Keep new categories bounded and Overpass-specific; retain existing providers
+  for other POIs. Test empty/failure, malformed data, XSS and route planning.
+- [ ] Deploy and verify real local results and selection on the phone.
+
+See [camping POIs](CAMPING_POIS.md) for category tags, bounds and validation.
