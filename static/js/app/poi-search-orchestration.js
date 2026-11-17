@@ -21,8 +21,9 @@
     function POI() { return rt().poiSearch(); }
 
     function quickSearch(type) {
+        const label=POI().isCampingType&&POI().isCampingType(type)?POI().formatPoiTypeTitle(type):type;
         alongSearchKey=null;
-        const candidateSearch=type==='fuel'||type==='food'||type==='charging'||type==='pharmacy'||type==='hospital'||type==='groceries';
+        const candidateSearch=type==='fuel'||type==='food'||type==='charging'||type==='pharmacy'||type==='hospital'||type==='groceries'||(POI().isCampingType&&POI().isCampingType(type));
         const generation=++quickSearchGeneration;
         if(quickSearchController)quickSearchController.abort();
         quickSearchController=null;
@@ -34,8 +35,8 @@
             return;
         }
 
-        console.log(`[QuickSearch] Starting search for ${type}`);
-        rt().call.showStatus(`🔍 Searching for ${type}...`, 'info');
+        console.log(`[QuickSearch] Starting search for ${label}`);
+        rt().call.showStatus(`🔍 Searching for ${label}...`, 'info');
 
         const searchWithPosition = async (lat, lon) => {
             if(generation!==quickSearchGeneration)return;
@@ -65,14 +66,14 @@
 
                 if (!data.success || !data.results || data.results.length === 0) {
                     if(type==='parking'||candidateSearch)displayPOIResults([],type,lat,lon,price);
-                    if(candidateSearch){rt().call.showStatus(`No ${type} candidates returned. Coverage may be incomplete.`, 'warning');return;}
-                    rt().call.showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
+                    if(candidateSearch){rt().call.showStatus(`No ${label} candidates returned. Coverage may be incomplete.`, 'warning');return;}
+                    rt().call.showStatus(`No ${label} found nearby. Try a different location.`, 'warning');
                     return;
                 }
 
                 console.log(`[QuickSearch] Displaying ${data.results.length} results`);
                 displayPOIResults(data.results, type, lat, lon,price);
-                rt().call.showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
+                rt().call.showStatus(`✅ Found ${data.results.length} ${label} options`, 'success');
             } catch (error) {
                 if(generation!==quickSearchGeneration||error.name==='AbortError')return;
                 console.error('[QuickSearch] Search failed');

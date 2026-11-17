@@ -2,6 +2,7 @@
 import bisect
 import math
 
+from voyagr.services import camping_poi
 from voyagr.services.arrival_map_evidence import point
 from voyagr.services.arrival_parking import reported_access, reported_fee
 from voyagr.services.charging_poi import reported_connectors
@@ -23,6 +24,9 @@ CATEGORIES = {
     'atm': ('amenity', ('atm', 'bank')),
     'supermarket': ('shop', ('supermarket',)),
 }
+
+# Camping categories use compound selectors, shared with nearby search.
+CATEGORIES.update(camping_poi.CATEGORIES)
 
 
 def text(record, key, default=''):
@@ -68,6 +72,8 @@ def prepare(data):
 
 
 def query_for(kind, samples, radius):
+    if kind in camping_poi.CATEGORIES:
+        return camping_poi.query_for(kind, samples, radius)
     key, values = CATEGORIES[kind]
     selector = f'["{key}"~"^({"|".join(values)})$"]'
     parts = [f'nwr{selector}(around:{radius},{lat},{lon});' for lat, lon in samples]
@@ -75,6 +81,8 @@ def query_for(kind, samples, radius):
 
 
 def parse_elements(elements, kind):
+    if kind in camping_poi.CATEGORIES:
+        return camping_poi.parse_elements(elements, kind)
     key, values = CATEGORIES[kind]
     found, seen = [], set()
     for element in elements[:200]:
@@ -155,7 +163,7 @@ def search(data, primary, last_resort):
         gathered, attempted = [], []
         try:
             with rb.use_budget(rb.WorkBudget(5,parent=whole)):
-                for sample in samples:
+                for sample in ([] if kind in camping_poi.CATEGORIES else samples):
                     rb.check_budget()
                     attempted.append(sample)
                     rows = primary(*sample,kind,radius,budgeted=True)
@@ -182,6 +190,9 @@ def search(data, primary, last_resort):
             rows=normalize(parse_elements(mapped['elements'],kind),kind,samples,radius,coords,cumulative,'Overpass')
             whole.check()
             return {'success':True,'type':kind,'results':rows,'source':'Overpass','search_context':context},200
+        if kind in camping_poi.CATEGORIES:
+            return {'success':False,'type':kind,'error':'Camping map search temporarily unavailable',
+                    'search_context':{**context,'coverage':'UNKNOWN'}},503
         try:
             with rb.use_budget(rb.WorkBudget(3,parent=whole)):
                 rb.check_budget()

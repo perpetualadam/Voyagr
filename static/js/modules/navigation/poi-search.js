@@ -7,8 +7,10 @@
 
     function escapeText(value){return String(value==null?'':value).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
     function safeCoordinate(value,bound){return typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<=bound;}
+    var CAMPING_LABELS={camping:'Campsites',motorhome:'Motorhome / caravan sites',drinking_water:'Drinking water',toilets:'Toilets',showers:'Showers',waste_disposal:'Waste disposal',laundry:'Laundry'};
+    function isCampingType(type){return Object.prototype.hasOwnProperty.call(CAMPING_LABELS,type);}
     function feeDetails(poi){
-        if(poi.type!=='parking')return '';
+        if(poi.type!=='parking'&&!isCampingType(poi.type))return '';
         var labels={free:'Reported free — check signs and eligibility',paid:'Reported paid — check current tariff',conditional:'Conditional fee — check rules',unknown:'Fee unknown — check signs'};
         var text=labels[poi.fee_category]||labels.unknown;
         if(poi.access_category==='customers')text+=' · Customers only — check eligibility';
@@ -26,6 +28,7 @@
         hospital: '🏥',
         pharmacy: '💊',
         groceries: '🛒',
+        camping:'⛺',motorhome:'🚐',drinking_water:'🚰',toilets:'🚻',showers:'🚿',waste_disposal:'♻️',laundry:'🧺',
     };
 
     /** Map marker icons (food uses burger emoji, not the modal plate icon). */
@@ -37,6 +40,7 @@
         pharmacy: '💊',
         hospital: '🏥',
         groceries: '🛒',
+        camping:'⛺',motorhome:'🚐',drinking_water:'🚰',toilets:'🚻',showers:'🚿',waste_disposal:'♻️',laundry:'🧺',
     };
 
     /**
@@ -90,6 +94,7 @@
      * @returns {string}
      */
     function formatPoiTypeTitle(type) {
+        if (isCampingType(type)) return CAMPING_LABELS[type];
         if (type === 'groceries') return 'Groceries';
         if (!type) return 'Places';
         return type.charAt(0).toUpperCase() + type.slice(1);
@@ -120,7 +125,7 @@
             html += '<div style="font-size: 11px; color: #666; margin-bottom: 6px;">' + escapeText(poi.address) + '</div>';
         }
         if (poi.opening_hours) {
-            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
+            html += '<div style="font-size: 11px; color: #888;">🕒 ' + ((poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries'||isCampingType(poi.type))?'Reported hours: ':'') + escapeText(poi.opening_hours) + '</div>';
         }
         if(poi.type==='fuel'&&Array.isArray(poi.reported_fuels)&&poi.reported_fuels.length)html+='<div style="font-size:12px;">Reported fuels: '+escapeText(poi.reported_fuels.join(', '))+'</div>';
         if(poi.type==='food'&&poi.cuisine)html+='<div style="font-size:12px;">Reported cuisine: '+escapeText(poi.cuisine)+'</div>';
@@ -141,11 +146,22 @@
                     (connector.output?' · reported output '+escapeText(connector.output):'')+'</div>';
             });
         }
+        if(isCampingType(poi.type)){
+            html+='<div>Mapped type: '+escapeText(poi.camping_kind_label||CAMPING_LABELS[poi.type])+'</div>';
+            if(poi.operator)html+='<div>Reported operator: '+escapeText(poi.operator)+'</div>';
+            if(Array.isArray(poi.reported_details)&&poi.reported_details.length){
+                html+='<details><summary>Facilities &amp; access</summary>';
+                poi.reported_details.slice(0,40).forEach(function(detail){
+                    if(detail&&typeof detail.label==='string'&&typeof detail.value==='string')html+='<div>'+escapeText(detail.label)+': '+escapeText(detail.value)+'</div>';
+                });
+                html+='</details>';
+            }
+        }
         html += feeDetails(poi);
         html += (
             '<button '+(handler?'onclick="'+escapeText(handler)+'"':'disabled')+
                 ' style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">' +
-                ((opts.alongRoute||poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries')?'Plan route here':'🚗 Navigate Here') +
+                ((opts.alongRoute||poi.type==='fuel'||poi.type==='food'||poi.type==='charging'||poi.type==='pharmacy'||poi.type==='hospital'||poi.type==='groceries'||isCampingType(poi.type))?'Plan route here':'🚗 Navigate Here') +
             '</button></div>'
         );
         return html;
@@ -175,6 +191,10 @@
                     '<div style="max-height: 50vh; overflow-y: auto; padding: 12px;">'
         );
         if(opts.alongRoute)html+='<p>Limited search near sampled points across the full planned route, including places already passed. Distances are straight-line offsets from the route, not driving detours. Access and entrances are unverified. Plan route here replaces the destination using this plan’s start; it does not add a stop.</p>';
+        if(isCampingType(type)){
+            html+='<p>Mapped locations and reported facilities; coverage may be incomplete. Check access, fees, vehicle restrictions and current facilities before arrival. A map point may not be an entrance. Parking alone does not grant permission to camp or stay overnight.</p>';
+            if(!results.length)html+='<p>No mapped candidates returned for this search.</p>';
+        }
         if(type==='fuel'){
             html+='<p>Fuel locations from provider/map data. Distance is straight-line. Check current opening hours, fuel availability and vehicle access; the map point may not be an entrance.</p>';
             if(!results.length)html+='<p>No fuel candidates returned. Coverage may be incomplete.</p>';
@@ -264,7 +284,7 @@
      * @returns {string}
      */
     function getAlongRouteSearchingMessage(type) {
-        return 'Searching for ' + type + ' along route...';
+        return 'Searching for ' + (isCampingType(type)?formatPoiTypeTitle(type):type) + ' along route...';
     }
 
     /**
@@ -273,7 +293,7 @@
      * @returns {string}
      */
     function getAlongRouteResultsMessage(type, count) {
-        return 'Found ' + count + ' ' + type + ' along route';
+        return 'Found ' + count + ' ' + (isCampingType(type)?formatPoiTypeTitle(type):type) + ' along route';
     }
 
     /**
@@ -281,7 +301,7 @@
      * @returns {string}
      */
     function getAlongRouteNoResultsMessage(type) {
-        return 'No ' + type + ' found along route';
+        return 'No ' + (isCampingType(type)?formatPoiTypeTitle(type):type) + ' found along route';
     }
 
     /**
@@ -320,6 +340,7 @@
     }
 
     var api = {
+        isCampingType: isCampingType,
         POI_TYPE_ICONS: POI_TYPE_ICONS,
         POI_MAP_MARKER_ICONS: POI_MAP_MARKER_ICONS,
         getPoiTypeIcon: getPoiTypeIcon,

@@ -5129,3 +5129,7 @@ html.dark-mode .speed-widget-gps, body.dark-mode .speed-widget-gps { background:
 }
 .private-access-notice a:focus-visible { outline: 3px solid #005fcc; outline-offset: 3px; }
 html[data-private-access-locked] #mapLoadingOverlay { visibility: hidden; }
+
+.camping-poi-search { margin-top: 12px; padding: 8px; border: 1px solid var(--border-color, #ddd); border-radius: 12px; }
+.camping-poi-search > summary { box-sizing: border-box; min-height: 44px; padding: 12px; font-weight: 600; cursor: pointer; }
+.camping-poi-search .quick-search-btn { min-height: 48px; }
