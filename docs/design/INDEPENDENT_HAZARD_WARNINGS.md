@@ -74,3 +74,11 @@ and broader freshness/rolling coverage tests. This change does not create an
 independent GPS-nearby acquisition source for every crossing/signal along a very
 long journey. Refresh an older selected/cached plan after deploying the new code;
 an old offline route cannot gain observations it never acquired.
+
+## Follow-up: selected-route geometry
+
+The bounded planning samples above remain the initial observations. The optional
+[selected-route corridor scan](ROUTE_CORRIDOR_WARNING_COVERAGE.md) subsequently
+queries the actual route and reports geometric query coverage separately from
+source completeness. This improves warning acquisition for long and bent routes;
+it does not expand engine avoidance coverage or establish live hazard state.

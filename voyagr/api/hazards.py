@@ -467,3 +467,23 @@ def get_traffic_lights():
         logger.error(f"[Traffic Lights] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
+
+
+@hazards_bp.route('/route-warning-observations', methods=['POST'])
+def route_warning_observations():
+    """Optional selected-route lookup; failure never invalidates a calculated route."""
+    from voyagr.services.routing.route_warning_scan import prepare,scan
+    if request.content_length is not None and request.content_length>1048576:
+        return jsonify(success=False,error='Route request is too large'),413
+    try:
+        points,binding=prepare(request.get_json(silent=True))
+    except (ValueError,TypeError,KeyError):
+        return jsonify(success=False,error='Invalid route geometry'),400
+    try:
+        payload=_run_osm_area_fetch(scan,points,binding)
+        if not isinstance(payload,dict):payload={'success':False,'error':'Warning lookup busy'}
+    except route_transport.RoutingDeadlineExceeded:
+        payload={'success':False,'error':'Warning lookup timed out'}
+    response=jsonify(payload)
+    response.headers['Cache-Control']='no-store'
+    return response,200 if payload.get('success') is True else 503

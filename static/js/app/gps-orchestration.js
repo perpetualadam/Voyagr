@@ -2084,6 +2084,7 @@
             nearbyRadiusKm: HA.NEARBY_HAZARDS_RADIUS_KM,
         });
         if (tick.action === 'skip') return;
+        if(root.VoyagrRouteWarnings)void root.VoyagrRouteWarnings.observe(window.lastCalculatedRoute);
 
         if (tick.evaluateEmbedded) {
             evaluateAndAnnounceHazards(lat, lon, null, false);

@@ -1868,3 +1868,15 @@ See [camping POIs](CAMPING_POIS.md) for category tags, bounds and validation.
 
 See [independent hazard warnings](INDEPENDENT_HAZARD_WARNINGS.md). The original
 hazard audit remains a historical snapshot, not a claim these phone checks passed.
+
+### Selected-route warning corridor (17 November 2026)
+
+- [x] Query actual selected-route geometry after planning, including bends and
+  intermediate sections; split bounded Overpass requests without dropping chunks.
+- [x] Separate all-sections-queried status from map completeness; retain stale,
+  partial and unavailable evidence and provide a manual refresh action.
+- [x] Preserve warnings on failure and across selection, reject late results and
+  keep optional acquisition independent of navigation authority.
+- [ ] Deploy after CI and complete long-route, offline and physical-phone audio checks.
+
+See [selected-route warning coverage](ROUTE_CORRIDOR_WARNING_COVERAGE.md).

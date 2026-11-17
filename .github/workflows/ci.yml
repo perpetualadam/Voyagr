@@ -136,6 +136,7 @@ jobs:
           tests/test_osrm_maneuvers.py
           tests/test_route_entries.py
           tests/test_route_warning_observations.py
+          tests/test_route_warning_scan.py
           tests/test_route_success_response.py
           tests/test_route_enrichment.py
           tests/test_osrm_fallback.py

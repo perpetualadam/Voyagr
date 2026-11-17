@@ -28,7 +28,9 @@ class SegmentIndex:
     """Small geographic grid; wide segments have a bounded-storage fallback."""
     CELL = .002
 
-    def __init__(self, coords, road_segments=()):
+    def __init__(self, coords, road_segments=(), max_cells=None, check=None):
+        self.check = check
+        cells = 0
         self.coords = coords
         self.grid = {}
         self.wide = []
@@ -40,11 +42,14 @@ class SegmentIndex:
                 for i in range(max(0, begin), min(len(coords)-1, end)):
                     self.attributes[i] = evidence
         for i, (a, b) in enumerate(zip(coords, coords[1:])):
+            if check and i % 256 == 0: check()
             x0, x1 = sorted((math.floor(a[1]/self.CELL), math.floor(b[1]/self.CELL)))
             y0, y1 = sorted((math.floor(a[0]/self.CELL), math.floor(b[0]/self.CELL)))
-            if (x1-x0+1)*(y1-y0+1) > 1000:
+            size = (x1-x0+1)*(y1-y0+1)
+            if size > 1000 or max_cells is not None and cells + size > max_cells:
                 self.wide.append(i)
                 continue
+            cells += size
             for x in range(x0, x1+1):
                 for y in range(y0, y1+1):
                     self.grid.setdefault((x, y), []).append(i)
@@ -56,7 +61,11 @@ class SegmentIndex:
         for x in range(math.floor((lon-dx)/self.CELL), math.floor((lon+dx)/self.CELL)+1):
             for y in range(math.floor((lat-dy)/self.CELL), math.floor((lat+dy)/self.CELL)+1):
                 candidates.update(self.grid.get((x, y), ()))
-        return [(segment_distance(lat, lon, self.coords[i], self.coords[i+1]), i) for i in candidates]
+        result = []
+        for number, i in enumerate(candidates):
+            if self.check and number % 256 == 0: self.check()
+            result.append((segment_distance(lat, lon, self.coords[i], self.coords[i+1]), i))
+        return result
 
     def match(self, hazard, category, now):
         """MATCH / POSSIBLE / CLEAR, with road/direction uncertainty retained."""

@@ -247,6 +247,13 @@
 
         merged.forEach(function (hazard) {
             if (hazard.lat == null || hazard.lon == null) return;
+            // Whole-route lists can be large. Distant observations cannot enter
+            // the alert corridor; avoid scanning the route for every distant POI.
+            if(hazard.route_corridor_observation===true){
+                var limit=alertDistanceForHazard(hazard,params.cameraAlertDistanceM,params.generalHazardDistanceM);
+                var direct=typeof params.calculateDistance==='function'?params.calculateDistance(params.lat,params.lon,hazard.lat,hazard.lon):haversineMeters(params.lat,params.lon,hazard.lat,hazard.lon);
+                if(Number.isFinite(direct)&&direct>limit+250)return;
+            }
             var preferAlong = !!(hazard.fromRoute || params.preferAlongRouteForRouteHazards);
             var distanceM = resolveHazardDistanceMeters({
                 lat: params.lat,
@@ -686,14 +693,27 @@
     }
 
     function describeWarningCoverage(route) {
+        var owner=root.VoyagrRouteWarnings;
+        if(owner&&typeof owner.isPending==='function'&&owner.isPending(route))return 'Checking mapped warnings along the selected route…';
         var c=route&&route.warning_coverage;
-        if(!c)return 'Mapped hazard warning coverage was not supplied.';
-        return ['traffic_light','railway_crossing'].map(function(kind){
-            var label=kind==='traffic_light'?'Traffic-light':'Level-crossing';
-            var state=c[kind]&&c[kind].status;
+        var failure=owner&&typeof owner.isUnavailable==='function'&&owner.isUnavailable(route)?'Route-wide lookup unavailable; earlier observations retained. ':'';
+        if(!c)return failure+'Mapped hazard warning coverage was not supplied.';
+        var kinds=['traffic_light','railway_crossing'];
+        if(c.cameras&&c.cameras.query_scope==='SELECTED_ROUTE_CORRIDOR')kinds.push('cameras');
+        return failure+kinds.map(function(kind){
+            var label=kind==='traffic_light'?'Traffic lights':kind==='cameras'?'Cameras':'Level crossings';
+            var data=c[kind]||{},state=data.status;
+            if(data.query_scope==='SELECTED_ROUTE_CORRIDOR'){
+                var age=Number.isFinite(data.retrieved_at)?Date.now()/1000-data.retrieved_at:null;
+                if(state==='STALE'||age!==null&&age>300)return label+': stored route lookup is stale; refresh when online.';
+                if(data.route_scan==='ALL_SEGMENTS_QUERIED'&&state==='AVAILABLE')return label+': all selected-route sections queried.'+(kind==='cameras'?' Camera dataset age is unverified.':'');
+                if(data.reason==='result_limit')return label+': mapped result limit reached; some observations may be missing.';
+                if(data.reason==='geometry_limit')return label+': route detail exceeds this lookup’s limit.';
+                return label+': route lookup incomplete or unavailable; refresh when online.';
+            }
             var detail=state==='PARTIAL'?'partial mapped coverage':state==='AVAILABLE'?'mapped-area data available; road association unverified':state==='STALE'?'stale mapped data':'coverage unknown';
             return label+' warning observations: '+detail+'.';
-        }).join(' ')+' Missing observations do not establish that no hazards exist.';
+        }).join(' ')+' Missing observations do not establish that no hazards exist. Road association and live signal/barrier state remain unverified.';
     }
 
     var api = {
