@@ -131,3 +131,32 @@ test('hand-sweep samples cannot incrementally move the retained anchor',async()=
  }
  expect(owner.getPrimarySpeedObservation()).toBeNull();expect(value()).not.toBe('30');
 });
+
+
+test('moving fixes refresh before spatial expiry and remain visible across repeated replacements',async()=>{
+ position.coords.speed=10;
+ release({ok:true,json:async()=>observation()});await settle();
+ for(let tick=1;tick<=12;tick++){
+  now+=1000;position.timestamp=now;fix.timestamp=now;
+  position.coords.latitude=53.524+tick*10/111195;fix.lat=position.coords.latitude;
+  const before=fetchMock.mock.calls.filter(([url])=>url==='/api/speed-limit/observation').length;
+  owner.observe(position,null,route);render();expect(value()).toBe('30');
+  const after=fetchMock.mock.calls.filter(([url])=>url==='/api/speed-limit/observation').length;
+  if(after>before){release({ok:true,json:async()=>observation()});await settle();}
+ }
+ expect(fetchMock.mock.calls.filter(([url])=>url==='/api/speed-limit/observation').length).toBeGreaterThan(3);
+ expect(widget.getCurrentSpeedLimitMph()).toBeNull();
+});
+test('moving refresh is bounded and cannot mask a failed spatially expired estimate',async()=>{
+ position.coords.speed=20;release({ok:true,json:async()=>observation()});await settle();
+ now+=1000;position.timestamp=now;fix.timestamp=now;
+ position.coords.latitude+=20/111195;fix.lat=position.coords.latitude;
+ owner.observe(position,null,route);render();expect(value()).toBe('30');
+ const count=fetchMock.mock.calls.length;
+ for(let i=0;i<10;i++)owner.observe(position,null,route);
+ expect(fetchMock.mock.calls).toHaveLength(count);
+ now+=1000;position.timestamp=now;fix.timestamp=now;
+ position.coords.latitude+=20/111195;fix.lat=position.coords.latitude;
+ owner.observe(position,null,route);render();expect(value()).toBe('40');
+ release({ok:false});await settle();expect(owner.getPrimarySpeedObservation()).toBeNull();
+});
