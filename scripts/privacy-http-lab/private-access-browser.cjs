@@ -8,7 +8,7 @@ const root=path.resolve(__dirname,'../..'),read=p=>fs.readFileSync(path.join(roo
 (async()=>{
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'voyagr-private-access-'));
  const markup=read('templates/index.html').match(/<section id="privateAccessNotice"[\s\S]*?<\/section>/)[0];
- const shell='<!doctype html><html data-personal-mode="true"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="mapLoadingOverlay">Loading map…</div>'+markup+'<script src="/access.js"></script><script>navigator.serviceWorker.register("/worker.js")</script></body></html>';
+ const shell='<!doctype html><html data-personal-mode="true"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="mapLoadingOverlay">Loading map…</div>'+markup+'<button id="fixtureStop">Stop</button><div id="journeySummaryModal" style="display:none"><button id="fixtureDone">Done</button></div><script>window.fixtureActive=false;window.VoyagrNavigationLifecycleOrchestration={getRouteInProgress:()=>window.fixtureActive};document.getElementById("fixtureStop").onclick=()=>{window.fixtureActive=false;window.dispatchEvent(new Event("voyagr:journey-state-change"));document.getElementById("journeySummaryModal").style.display="block";};document.getElementById("fixtureDone").onclick=()=>{document.getElementById("journeySummaryModal").style.display="none";};</script><script src="/access.js"></script><script>navigator.serviceWorker.register("/worker.js")</script></body></html>';
  const worker=`self.addEventListener('install',e=>e.waitUntil(caches.open('fixture').then(c=>c.addAll(['/','/style.css','/access.js']))));self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>{const p=new URL(e.request.url).pathname;if(p==='/')e.respondWith(fetch(e.request).then(r=>{if(!r.ok)throw Error('denied');return r}).catch(()=>caches.match('/')));else if(p==='/access.js'||p==='/style.css')e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));else e.respondWith(fetch(e.request));});`;
  let locked=false,context;
  const credentials='Basic '+Buffer.from('owner:synthetic-password').toString('base64');
@@ -47,6 +47,15 @@ const root=path.resolve(__dirname,'../..'),read=p=>fs.readFileSync(path.join(roo
    assert.ok((await page.locator('#privateAccessNotice a').boundingBox()).height>=44);
   }
   console.log('PASS: unlock card fits three handset widths and 200% text with a usable touch target');
+  await page.evaluate(()=>{window.fixtureActive=true;window.dispatchEvent(new Event('voyagr:journey-state-change'));});
+  await page.locator('#privateAccessNotice').waitFor({state:'hidden'});
+  await page.getByRole('button',{name:'Stop',exact:true}).click();
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#privateAccessNotice').isVisible(),false);
+  await page.getByRole('button',{name:'Done',exact:true}).click();
+  await page.locator('#privateAccessNotice').waitFor({state:'visible'});
+  assert.equal(await page.evaluate(()=>localStorage.getItem('retained-device-fixture')),'keep');
+  console.log('PASS: deferred authentication card leaves Stop and Done usable and appears only after summary dismissal');
   await context.setHTTPCredentials({username:'owner',password:'synthetic-password'});
   await page.locator('#privateAccessNotice a').click();await page.waitForURL(u=>u.pathname==='/privacy'&&u.searchParams.has('private-login'),{waitUntil:'domcontentloaded',timeout:10000});
   await page.getByText('Return to Voyagr').click();await page.waitForURL(origin+'/');

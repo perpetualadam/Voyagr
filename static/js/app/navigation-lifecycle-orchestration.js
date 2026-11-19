@@ -40,6 +40,7 @@
     function setRouteInProgress(val) {
         if (routeInProgress!==!!val) { wakeEpoch++; wakeRequest=null; clearWakeRetry(); wakeRetries=0; }
         routeInProgress = !!val;
+        root.dispatchEvent(new Event('voyagr:journey-state-change'));
     }
     function getCurrentRouteSteps() { return currentRouteSteps; }
     function setCurrentRouteSteps(val) { currentRouteSteps = val; }

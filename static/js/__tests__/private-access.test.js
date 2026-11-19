@@ -9,6 +9,7 @@ beforeEach(() => {
 afterEach(() => {
     access?.destroy(); access=null;
     delete global.fetch;
+    delete window.VoyagrNavigationLifecycleOrchestration;
     delete document.documentElement.dataset.personalMode;
     document.documentElement.removeAttribute('data-private-access-locked');
     jest.useRealTimers();
@@ -56,4 +57,55 @@ test('the probe times out instead of accumulating background requests',async()=>
     jest.advanceTimersByTime(8000);await request;
     expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
     expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+});
+
+
+test.each([401,403])('denial %s during navigation waits through Stop summary until Done without erasing data',async status=>{
+ let active=true;
+ window.VoyagrNavigationLifecycleOrchestration={getRouteInProgress:()=>active,getNavigationStarting:()=>false};
+ document.body.insertAdjacentHTML('beforeend','<div id="journeySummaryModal" style="display:none"></div><button id="stop">Stop</button>');
+ localStorage.setItem('journey-retained','keep');
+ fetch.mockResolvedValue({status,ok:false});access=install(window);await access.check();
+ const card=document.getElementById('privateAccessNotice'),summary=document.getElementById('journeySummaryModal');
+ expect(card.hidden).toBe(true);expect(document.documentElement.hasAttribute('data-private-access-locked')).toBe(false);
+ document.getElementById('stop').focus();
+ active=false;window.dispatchEvent(new Event('voyagr:journey-state-change'));summary.style.display='block';
+ await Promise.resolve();jest.advanceTimersByTime(0);
+ expect(card.hidden).toBe(true);expect(document.activeElement.id).toBe('stop');
+ summary.style.display='none';await Promise.resolve();jest.advanceTimersByTime(0);
+ expect(card.hidden).toBe(false);expect(localStorage.getItem('journey-retained')).toBe('keep');
+ expect(location.pathname).toBe('/');
+});
+test('Stop without a summary exposes the deferred action, and a new journey hides it',async()=>{
+ let active=true;
+ window.VoyagrNavigationLifecycleOrchestration={getRouteInProgress:()=>active};
+ fetch.mockResolvedValue({status:403,ok:false});access=install(window);await access.check();
+ active=false;window.dispatchEvent(new Event('voyagr:journey-state-change'));jest.advanceTimersByTime(0);
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(false);
+ active=true;window.dispatchEvent(new Event('voyagr:journey-state-change'));jest.advanceTimersByTime(0);
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+ fetch.mockResolvedValue({status:200,ok:true});await access.check();
+ active=false;window.dispatchEvent(new Event('voyagr:journey-state-change'));jest.advanceTimersByTime(0);
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+});
+test('navigation startup and delayed denial response cannot interrupt the journey',async()=>{
+ let starting=true,active=false,resolve;
+ window.VoyagrNavigationLifecycleOrchestration={getRouteInProgress:()=>active,getNavigationStarting:()=>starting};
+ fetch.mockImplementation(()=>new Promise(r=>{resolve=r;}));access=install(window);const p=access.check();
+ starting=false;active=true;resolve({status:401,ok:false});await p;
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+});
+
+test('real navigation state setter schedules presentation after the synchronous summary is built',async()=>{
+ jest.resetModules();
+ const lifecycle=require('../app/navigation-lifecycle-orchestration');
+ lifecycle.setRouteInProgress(true);
+ document.body.insertAdjacentHTML('beforeend','<div id="journeySummaryModal" style="display:none"></div>');
+ fetch.mockResolvedValue({status:403,ok:false});access=install(window);await access.check();
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+ lifecycle.setRouteInProgress(false);document.getElementById('journeySummaryModal').style.display='block';
+ await Promise.resolve();jest.advanceTimersByTime(0);
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+ document.getElementById('journeySummaryModal').style.display='none';await Promise.resolve();jest.advanceTimersByTime(0);
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(false);
 });
