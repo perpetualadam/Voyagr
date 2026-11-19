@@ -1880,3 +1880,24 @@ hazard audit remains a historical snapshot, not a claim these phone checks passe
 - [ ] Deploy after CI and complete long-route, offline and physical-phone audio checks.
 
 See [selected-route warning coverage](ROUTE_CORRIDOR_WARNING_COVERAGE.md).
+
+### Moving speed refresh and journey-safe private recovery (19 November 2026)
+
+- [x] Refresh the primary mapped estimate before its 35 m position bound is
+  exhausted, including GPS samples with no native speed. Keep the 10 s age,
+  accuracy, heading, vehicle and generation checks; never extend expired data.
+- [x] Keep requests single-flight with a 1 s minimum during movement. Preserve
+  TomTom-first source order and existing Overpass/selected-route fallbacks.
+- [x] Defer a confirmed private-access recovery card during navigation startup,
+  active navigation and the journey summary. Expose it after Stop without a
+  summary or after Done; successful authentication clears the pending action.
+- [x] Cover moving GPS sequences, spatial expiry, late denial responses, real
+  lifecycle state events, Stop/Done interaction and retained local storage.
+- [ ] Deploy after green CI and owner approval; verify on the physical phone.
+
+The former six-second refresh cadence could outlast a 35 m estimate while driving.
+Earlier refresh reduces that avoidable gap; slow/failed providers, materially
+changed position, poor GPS or expired website credentials can still correctly
+produce an unknown limit. Deferring the card does not restore denied network
+requests or weaken private website authentication. No production configuration,
+credentials or device storage are changed by this fix.

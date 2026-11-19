@@ -179,3 +179,23 @@ verifies the locked state and fresh Basic-login navigation, checks three handset
 widths at normal and 200% text, and retains a synthetic device-storage marker.
 The fixture worker models cached-shell fallback; this does not replace the full
 candidate HTTP/browser lab or physical-phone acceptance.
+
+
+### Recovery presentation during a journey
+
+The recovery card is deferred while navigation is starting or active, and while
+the completed-journey summary is open. A confirmed denial is remembered, but it
+does not cover Stop or Done. After Stop without a summary, or after dismissing the
+summary with Done, the existing unlock action becomes visible if access remains
+denied. Successful rechecks clear the pending action. This only changes shell
+presentation: Nginx authentication still protects every request. Expired access
+can still prevent new maps, provider data or rerouting until the owner unlocks it.
+No automatic login navigation, credential change, storage reset or page reload
+is performed. These changes require deployment and a coherent shell update.
+
+Synthetic acceptance covers delayed 401/403 during navigation, the real lifecycle
+state event, Stop/summary/Done ordering, cached-worker login recovery and retained
+local storage. Physical-phone acceptance remains pending: as a passenger, verify
+Stop remains usable after an access denial, the summary is usable before Done,
+and the unlock action then recovers the map without losing a saved local item.
+Do not change the password or clear browser storage to force this while driving.

@@ -52,8 +52,16 @@
         if(!primaryPositionUsable(position))return;
         if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isSimulating())return;
         var now=Date.now();
-        // Refresh early only while a usable estimate exists; failures retain the slower retry.
+        // Refresh before the 35 m spatial validity boundary, not only by age.
+        // Keep at most one request and a 1 s minimum; failures without a valid
+        // observation retain the slower retry. Never extend the old evidence.
         var interval=getPrimarySpeedObservation()?6000:10000;
+        if(primary&&now-primary.receivedAt<=10000){
+            var distance=primaryDistance(primary.coords,position.coords);
+            var speed=Number.isFinite(position.coords.speed)&&position.coords.speed>0?position.coords.speed:0;
+            var lead=Math.max(10,Math.min(15,35-speed*2));
+            if(distance>=lead||!samePrimaryPosition(primary.coords,position.coords))interval=1000;
+        }
         if(primaryRequest||now-primaryLastFetch<interval)return;
         // GeolocationCoordinates fields may be inherited getters, not own enumerable keys.
         var c=position.coords;
