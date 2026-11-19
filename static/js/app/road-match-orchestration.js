@@ -59,7 +59,7 @@
         if(primary&&now-primary.receivedAt<=10000){
             var distance=primaryDistance(primary.coords,position.coords);
             var speed=Number.isFinite(position.coords.speed)&&position.coords.speed>0?position.coords.speed:0;
-            var lead=Math.max(10,35-speed*2);
+            var lead=Math.max(10,Math.min(15,35-speed*2));
             if(distance>=lead||!samePrimaryPosition(primary.coords,position.coords))interval=1000;
         }
         if(primaryRequest||now-primaryLastFetch<interval)return;

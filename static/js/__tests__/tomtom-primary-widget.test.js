@@ -133,8 +133,8 @@ test('hand-sweep samples cannot incrementally move the retained anchor',async()=
 });
 
 
-test('moving fixes refresh before spatial expiry and remain visible across repeated replacements',async()=>{
- position.coords.speed=10;
+test.each([10,null])('moving fixes with speed %s refresh before spatial expiry and remain visible across repeated replacements',async speed=>{
+ position.coords.speed=speed;
  release({ok:true,json:async()=>observation()});await settle();
  for(let tick=1;tick<=12;tick++){
   now+=1000;position.timestamp=now;fix.timestamp=now;
