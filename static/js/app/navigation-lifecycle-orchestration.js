@@ -90,11 +90,11 @@
     function failNavigation(reason) {
         try{if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.retainLiveJourney)root.VoyagrJourneyModes.retainLiveJourney();}catch(_){/* Never delay a safety stop. */}
         navigationFailure = reason || 'navigation_initialization_failed';
-        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         startEpoch++; navigationStarting = false;
         setRouteInProgress(false); setRouteStarted(false);
         setCurrentRouteSteps([]); setCurrentStepIndex(0); setNextManeuverDistance(0);
         resetNavigationArrivalState();
+        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         const call = runtime && runtime.call;
         for (const name of ['stopLiveDataRefresh','stopAutoTrafficUpdates','stopRouteTrafficUpdates',
             'clearInitialETAAnnouncement','clearRerouteFailureRetries','hideTurnInstructionWidget',

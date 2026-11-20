@@ -719,6 +719,11 @@
 
                 <!-- Go Now / Start Navigation Button -->
                 <p id="navigationStartExplanation" role="status"></p>
+                <div class="navigation-recovery-actions" aria-label="Navigation recovery">
+                    <button id="navigationRecoverMap" type="button" hidden onclick="VoyagrNavigationSafetyUX.recoverMap()">Check map recovery</button>
+                    <button type="button" data-journey-abandon hidden onclick="VoyagrJourneyModes.abandonJourney()">End previous journey</button>
+                </div>
+                <p id="navigationRecoveryFeedback" role="status" hidden></p>
                 <button id="startNavBtnSheet" data-journey-choose class="btn-calculate" onclick="startNavigation()" style="background: #34A853; margin-top: 10px; display: none;">Start navigation</button>
 
                 <!-- Add to Favorites Button (Phase 2) -->

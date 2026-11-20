@@ -42,6 +42,12 @@
         try { result=classify(route); }
         catch (_) { result={allowed:false,outcome:'REFUSED',message:'Safety verification unavailable. Recalculate before navigation.'}; }
         var lifecycle=root.VoyagrNavigationLifecycleOrchestration;
+        var recover=document.getElementById('navigationRecoverMap');
+        if(recover){
+            recover.hidden=!(lifecycle&&lifecycle.getNavigationFailure&&lifecycle.getNavigationFailure());
+            recover.disabled=!(lifecycle&&typeof lifecycle.getRouteInProgress==='function'&&lifecycle.getRouteInProgress()===false&&
+                typeof lifecycle.getNavigationStarting==='function'&&lifecycle.getNavigationStarting()===false);
+        }
         // Preserve the committed route information while displaying moving GPS.
         // Presentation alone never starts a journey.
         var details=route===activeRoute && committedDetails && lifecycle && lifecycle.getRouteInProgress() ? committedDetails : result;
@@ -64,7 +70,25 @@
         if (route) refreshTimer=setTimeout(refresh,1000);
         return result;
     }
-    function present(candidate) { route=candidate; return refresh(); }
+    function recoverMap() {
+        var feedback=document.getElementById('navigationRecoveryFeedback');
+        var lifecycle=root.VoyagrNavigationLifecycleOrchestration,ok=false;
+        try {
+            if(lifecycle&&lifecycle.getRouteInProgress&&lifecycle.getRouteInProgress()===false&&
+                    lifecycle.getNavigationStarting&&lifecycle.getNavigationStarting()===false&&
+                    lifecycle.getNavigationFailure&&lifecycle.getNavigationFailure()&&
+                    typeof lifecycle.recoverNavigationMap==='function')ok=lifecycle.recoverNavigationMap()===true;
+        }catch(_){/* Failed checks cannot grant navigation permission. */}
+        if(ok)reset();else refresh();
+        if(feedback){feedback.hidden=false;feedback.textContent=ok?
+            'Map resources recovered. Calculate again. Any previous journey remains retained until you explicitly end it.':
+            'Map recovery checks did not pass. The previous journey has not been ended.';}
+        return ok;
+    }
+    function present(candidate) {
+        if(candidate&&candidate!==route){var feedback=document.getElementById('navigationRecoveryFeedback');if(feedback){feedback.hidden=true;feedback.textContent='';}}
+        route=candidate; return refresh();
+    }
     function committed(candidate) {
         var result=classify(candidate);
         // Called only after the production start/replacement transaction commits.
@@ -98,6 +122,7 @@
     }
     function reset() {
         clearTimeout(refreshTimer); refreshTimer=null; route=null; activeRoute=null; committedDetails=null; warningKey=null; dismiss();
+        var feedback=document.getElementById('navigationRecoveryFeedback');if(feedback){feedback.hidden=true;feedback.textContent='';}
         refresh();
     }
     if (typeof window!=='undefined') {
@@ -105,7 +130,7 @@
         window.addEventListener('offline',function() { if (route) refresh(); });
         window.addEventListener('storage',function() { if (route) refresh(); });
     }
-    var api={present:present,refresh:refresh,committed:committed,reset:reset,dismiss:dismiss};
+    var api={present:present,refresh:refresh,committed:committed,reset:reset,dismiss:dismiss,recoverMap:recoverMap};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrNavigationSafetyUX=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

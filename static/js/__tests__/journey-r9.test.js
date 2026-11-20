@@ -147,3 +147,18 @@ test('observed durable ownership keeps abandonment visible and retains identity 
  expect(await Modes.abandonJourney()).toBe(false);expect(await Off.loadActiveRouteRecord(idb)).toEqual(record);
  expect(Modes.getState()).toBe('RECOVERY_REQUIRED');
 });
+
+test('stopped retained journey can be explicitly ended from Navigation with the chooser hidden',async()=>{
+ await stored();Modes.getContinuation(old);Life.stopTurnByTurnNavigation({preservePersistedJourney:true});
+ const template=require('fs').readFileSync(require('path').join(__dirname,'../../../templates/index.html'),'utf8');
+ document.body.insertAdjacentHTML('beforeend',template.match(/<div class="navigation-recovery-actions"[\s\S]*?<\/div>/)[0]);
+ expect(Modes.beforePlanning()).toBe(true);
+ const button=document.querySelector('.navigation-recovery-actions [data-journey-abandon]');
+ expect(document.getElementById('journeyModeChooser').hidden).toBe(true);expect(button.hidden).toBe(false);
+ const before=await Off.loadActiveRouteRecord(idb);
+ rt.confirmPlanReplacement.mockReturnValue(false);
+ expect(await Modes.abandonJourney()).toBe(false);expect(await Off.loadActiveRouteRecord(idb)).toEqual(before);
+ rt.confirmPlanReplacement.mockReturnValue(true);
+ expect(await Modes.abandonJourney()).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();
+ expect(Modes.getContinuation(old)).toBeNull();expect(Life.getRouteInProgress()).toBe(false);
+});
