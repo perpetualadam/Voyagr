@@ -5135,3 +5135,7 @@ html[data-private-access-locked] #mapLoadingOverlay { visibility: hidden; }
 .camping-poi-search .quick-search-btn { min-height: 48px; }
 
 .route-warning-refresh { min-height: 44px; max-width: 100%; box-sizing: border-box; white-space: normal; padding: 8px 12px; font: inherit; color: inherit; background: transparent; border: 1px solid #aaa; border-radius: 8px; }
+
+.navigation-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.navigation-recovery-actions button { min-height: 44px; max-width: 100%; padding: 8px 12px; font: inherit; color: var(--text-color, #333); background: var(--card-bg, #fff); border: 1px solid #777; border-radius: 8px; }
+.navigation-recovery-actions button[hidden] { display: none; }

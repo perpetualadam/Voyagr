@@ -1929,3 +1929,15 @@ See [independent warning details and acceptance](INDEPENDENT_HAZARD_WARNINGS.md#
 See [graphics recovery evidence and limits](MAP_GRAPHICS_FOREGROUND_RECOVERY.md).
 The original seven-minute map failure remains unconfirmed; this fixes a reproduced
 recovery gap rather than claiming its initial cause is known.
+
+### Retained-journey recovery controls (20 November 2026)
+
+- [x] Trace calculation refusal after a stopped journey without inferring a new
+  graphics failure or silently discarding remaining stops.
+- [x] Expose existing map reconciliation and confirmed End previous journey on
+  Navigation, outside the hidden legacy chooser, with persistent feedback.
+- [x] Keep lifecycle/ownership/mandatory-refusal gates and require recalculation;
+  verify confirmation cancellation, retained visits and phone-width controls.
+- [ ] Deploy after green CI and explicit approval; accept on the parked phone.
+
+See [recovery actions and acceptance](NAVIGATION_RECOVERY_ACTIONS.md).

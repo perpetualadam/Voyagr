@@ -88,18 +88,23 @@
     function getNavigationStarting() { return navigationStarting; }
     function getNavigationFailure() { return navigationFailure; }
     function failNavigation(reason) {
-        try{if(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.retainLiveJourney)root.VoyagrJourneyModes.retainLiveJourney();}catch(_){/* Never delay a safety stop. */}
+        var retainedJourney=false;
+        try{
+            const modes=root.VoyagrJourneyModes;
+            if(modes&&modes.retainLiveJourney)modes.retainLiveJourney();
+            retainedJourney=!!(modes&&modes.getContinuation&&modes.getContinuation(window.lastCalculatedRoute));
+        }catch(_){/* Never delay a safety stop. */}
         navigationFailure = reason || 'navigation_initialization_failed';
-        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         startEpoch++; navigationStarting = false;
         setRouteInProgress(false); setRouteStarted(false);
         setCurrentRouteSteps([]); setCurrentStepIndex(0); setNextManeuverDistance(0);
         resetNavigationArrivalState();
+        if (root.VoyagrNavigationSafetyUX) root.VoyagrNavigationSafetyUX.reset();
         const call = runtime && runtime.call;
         for (const name of ['stopLiveDataRefresh','stopAutoTrafficUpdates','stopRouteTrafficUpdates',
             'clearInitialETAAnnouncement','clearRerouteFailureRetries','hideTurnInstructionWidget',
             'hideJourneySummaryBar','updateNavigationFabVisibility','cancelNavigationSpeech','clearPersistedRoute']) {
-            try { if(name==='clearPersistedRoute'&&root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isJourneyCommitPending&&root.VoyagrJourneyModes.isJourneyCommitPending())continue; if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
+            try { if(name==='clearPersistedRoute'&&(retainedJourney||root.VoyagrJourneyModes&&root.VoyagrJourneyModes.isJourneyCommitPending&&root.VoyagrJourneyModes.isJourneyCommitPending()))continue; if (call && typeof call[name] === 'function') call[name](); } catch (_) { /* bounded best effort after synchronous guidance stop */ }
         }
         try { if (root.VoyagrVoiceAnnouncementsOrchestration) root.VoyagrVoiceAnnouncementsOrchestration.cancelNavigationSpeech(); } catch (_) { /* state already stopped */ }
         try { if (call && call.showStatus) call.showStatus('Navigation stopped: initialization or map recovery failed. Recover the map and recalculate.', 'error'); } catch (_) { /* unavailable UI */ }
