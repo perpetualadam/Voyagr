@@ -958,7 +958,8 @@ function initializeMap() {
                 console.warn('[MapLibre] WebGL context lost; requesting graphics recovery');
                 recoveryMessage('Restoring map… Navigation continues.');
             },
-            unavailable:()=>recoveryMessage('Map rendering interrupted. Navigation continues.'),
+            retrying:()=>recoveryMessage('Retrying map graphics… Navigation continues.'),
+            unavailable:()=>recoveryMessage('Map rendering interrupted. If it stays blank, reopen the app when safely stopped.'),
             restored:()=>{
                 window.__voyagrMapWebGLLastLostAt=0;
                 hideMapLoadingOverlay();
