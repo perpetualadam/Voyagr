@@ -285,7 +285,8 @@ def get_nearby_hazards():
         for row in cursor.fetchall():
             distance = get_distance_between_points(lat, lon, row[0], row[1])
             hazards['cameras'].append({
-                'lat': row[0], 'lon': row[1], 'type': row[2],
+                # These rows come from cameras, including legacy traffic_light labels.
+                'lat': row[0], 'lon': row[1], 'type': normalize_camera_hazard_bucket(row[2]),
                 'description': row[3], 'distance_meters': distance
             })
 

@@ -100,3 +100,18 @@ def test_public_nearby_still_reads_shared_reports(client, monkeypatch):
     assert data['success'] is True
     assert len(data['hazards']['reports']) == 1
     assert cursor.execute.call_count == 2
+
+
+@pytest.mark.parametrize('raw,expected', [('traffic_light','camera_red_light'), ('traffic_light_camera','camera_red_light'), ('camera_red_light','camera_red_light'), ('speed_camera','camera_speed')])
+def test_nearby_camera_table_normalizes_legacy_types_without_reclassifying_signals(client, monkeypatch, raw, expected):
+    from unittest.mock import MagicMock
+    import voyagr.api.hazards as hazards
+    monkeypatch.setenv('VOYAGR_PERSONAL_MODE','1')
+    db=MagicMock()
+    db.cursor.return_value.fetchall.return_value=[(53.55,-1.48,raw,'Mapped enforcement camera')]
+    monkeypatch.setattr(hazards,'get_db_connection',lambda:db)
+    monkeypatch.setattr(hazards,'return_db_connection',lambda conn:None)
+    response=client.get('/api/hazards/nearby?lat=53.55&lon=-1.48')
+    assert response.status_code==200
+    assert response.get_json()['hazards']['cameras'][0]['type']==expected
+    assert 'FROM cameras' in db.cursor.return_value.execute.call_args.args[0]

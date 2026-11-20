@@ -272,3 +272,34 @@ describe('navigation hazard tick helpers', () => {
         expect(fetch.url).toContain('nearby');
     });
 });
+
+
+describe('ordinary signals are independent of camera alert controls',()=>{
+ test.each(['traffic_light','railway_crossing'])('%s uses general warning distance and voice with Camera Off',type=>{
+  expect(HA.isCameraHazardType(type)).toBe(false);
+  expect(HA.alertDistanceForHazard({type},100,500)).toBe(500);
+  for(const voice of [false,true]){
+   const plan=HA.buildHazardAnnouncementPlan({type,lat:53.5,lon:-1.2},250,{now:100000,cameraAlertType:'off',voiceAnnouncementsEnabled:voice});
+   expect(plan.action).toBe('announce');expect(plan.speak).toBe(voice);expect(plan.playChime).toBe(false);
+   expect(plan.notification.message).not.toContain('camera');
+  }
+ });
+ test.each(['camera_speed','camera_red_light','traffic_light_camera','camera_average_speed','camera_bus_lane','camera_mobile','camera_other','speed_camera','camera'])('%s remains camera controlled',type=>{
+  expect(HA.isCameraHazardType(type)).toBe(true);expect(HA.alertDistanceForHazard({type},100,500)).toBe(100);
+  expect(HA.buildHazardAnnouncementPlan({type},50,{now:100000,cameraAlertType:'off',voiceAnnouncementsEnabled:true})).toMatchObject({action:'skip',reason:'camera-alerts-off'});
+  for(const mode of ['voice','chime','both']){
+   const plan=HA.buildHazardAnnouncementPlan({type},50,{now:100000,cameraAlertType:mode,voiceAnnouncementsEnabled:false});
+   expect(plan.action).toBe('announce');expect(plan.speak).toBe(mode!=='chime');expect(plan.playChime).toBe(mode!=='voice');
+  }
+ });
+ test('co-located signal and red-light camera stay distinct, and only the camera is route-camera labelled',()=>{
+  const hazards=['traffic_light','camera_red_light','railway_crossing'].map(type=>({type,lat:53.501,lon:-1.2,distance_meters:50}));
+  const alerts=HA.collectHazardsToAnnounce({lat:53.5,lon:-1.2,route:{hazards},includeNearby:true,nearbyPayload:{cameras:hazards},cameraAlertDistanceM:100,generalHazardDistanceM:500});
+  expect(alerts.map(a=>[a.hazard.type,a.unavoidableRouteCamera])).toEqual([['traffic_light',false],['camera_red_light',true],['railway_crossing',false]]);
+  expect(new Set(alerts.map(a=>HA.buildHazardAnnouncementDebounceKey(a.hazard,a.unavoidableRouteCamera))).size).toBe(3);
+ });
+ test('camera distance cannot exclude a signal inside the general warning distance',()=>{
+  const rows=['traffic_light','camera_red_light','railway_crossing'].map(type=>({type,lat:53.501,lon:-1.2,distance_meters:250}));
+  expect(HA.collectHazardsToAnnounce({route:{hazards:rows},cameraAlertDistanceM:100,generalHazardDistanceM:500}).map(a=>a.hazard.type)).toEqual(['traffic_light','railway_crossing']);
+ });
+});

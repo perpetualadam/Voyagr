@@ -8,9 +8,10 @@
 (function (root) {
     'use strict';
 
+    // Ordinary traffic signals use general-hazard voice/distance preferences.
+    // Enforcement cameras retain their explicit camera types.
     var CAMERA_HAZARD_TYPES = [
         'camera',
-        'traffic_light',
         'speed_camera',
         'camera_speed',
         'camera_red_light',

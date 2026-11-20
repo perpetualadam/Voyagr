@@ -1901,3 +1901,16 @@ changed position, poor GPS or expired website credentials can still correctly
 produce an unknown limit. Deferring the card does not restore denied network
 requests or weaken private website authentication. No production configuration,
 credentials or device storage are changed by this fix.
+
+
+### Separate ordinary traffic signals from enforcement cameras (20 November 2026)
+
+- [x] Remove ordinary `traffic_light` from camera alert classification; use existing
+  general voice/distance handling and preserve real red-light camera controls.
+- [x] Normalize legacy types only for nearby records read from the camera table.
+- [x] Regress route/nearby dispatch, avoidance On/Off, camera controls, general voice,
+  permission gating, debounce, uncertainty, unrelated roads and simulation.
+- [ ] Deploy after review, green CI and explicit owner approval; perform physical
+  phone acceptance without clearing browser data.
+
+See [independent warning details and acceptance](INDEPENDENT_HAZARD_WARNINGS.md#ordinary-signals-and-camera-alert-controls-20-november-2026).
