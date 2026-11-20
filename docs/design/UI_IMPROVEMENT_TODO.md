@@ -1914,3 +1914,18 @@ credentials or device storage are changed by this fix.
   phone acceptance without clearing browser data.
 
 See [independent warning details and acceptance](INDEPENDENT_HAZARD_WARNINGS.md#ordinary-signals-and-camera-alert-controls-20-november-2026).
+
+### Bounded graphics recovery after unlock (20 November 2026)
+
+- [x] Reproduce the exhausted WebGL retry budget remaining exhausted after the
+  app returns from hidden state; allow one bounded foreground retry burst.
+- [x] Keep duplicate events idempotent, refresh extensions after restoration and
+  retain current-map ownership, route resources, navigation and device data.
+- [x] Test real MapLibre GPU loss and controlled restore refusal at phone/desktop
+  widths, plus synthetic visibility, retry caps and retired maps.
+- [ ] Deploy only after review, green CI and explicit owner approval; perform
+  parked phone lock/unlock acceptance and diagnose any recurring initial loss.
+
+See [graphics recovery evidence and limits](MAP_GRAPHICS_FOREGROUND_RECOVERY.md).
+The original seven-minute map failure remains unconfirmed; this fixes a reproduced
+recovery gap rather than claiming its initial cause is known.
