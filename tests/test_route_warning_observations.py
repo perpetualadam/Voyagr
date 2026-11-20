@@ -14,6 +14,7 @@ from voyagr.utils import request_budget as rb
 
 LINE = [[53.5,-1.2],[53.502,-1.2]]
 CAMERA = {'lat':53.501,'lon':-1.2,'type':'camera_speed'}
+RED_CAMERA = {'lat':53.501,'lon':-1.2,'type':'camera_red_light'}
 
 
 @contextmanager
@@ -33,7 +34,7 @@ def test_preparation_retains_warnings_without_reintroducing_engine_exclusions(av
     import voyagr_web as web
     monkeypatch.setenv('VOYAGR_PERSONAL_MODE','1')
     app=Flask(__name__)
-    with app.test_request_context('/api/route'),patch.object(web,'fetch_hazards_for_route',return_value={'camera_speed':[CAMERA]}), \
+    with app.test_request_context('/api/route'),patch.object(web,'fetch_hazards_for_route',return_value={'camera_speed':[CAMERA],'camera_red_light':[RED_CAMERA]}), \
             patch.object(web,'fetch_tomtom_incidents',return_value={}), \
             patch.object(web,'filter_camera_hazards_by_preferences',side_effect=web.clear_camera_hazard_buckets), \
             patch.object(hz,'fetch_traffic_lights_osm_bbox',side_effect=observations), \
@@ -42,11 +43,12 @@ def test_preparation_retains_warnings_without_reintroducing_engine_exclusions(av
         dataset=prepare_route_hazards(*LINE[0],*LINE[-1],HazardPrefs([],avoid,avoid,avoid,avoid))
         # Camera subtype preferences are off in this fixture regardless of master.
         assert dataset['camera_speed']==[]
+        assert dataset['camera_red_light']==[]
         assert bool(dataset['traffic_light']) is avoid
         assert bool(dataset['railway_crossing']) is avoid
         rows=hz.get_hazards_on_route(LINE,dataset)
-        assert {r['type'] for r in rows}=={'camera_speed','traffic_light','railway_crossing'}
-        assert all(r['source']=='Overpass OSM' for r in rows if r['type']!='camera_speed')
+        assert {r['type'] for r in rows}=={'camera_speed','camera_red_light','traffic_light','railway_crossing'}
+        assert all(r['source']=='Overpass OSM' for r in rows if not r['type'].startswith('camera_'))
         if not avoid:
             assert hz.score_route_by_hazards(LINE,dataset)==(0,0)
             assert hz.build_valhalla_exclude_locations(dataset)==[]
