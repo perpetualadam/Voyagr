@@ -20,6 +20,13 @@ inside `journeyModeChooser`. The newer direct-start flow hides that panel. A
 stopped journey could thus leave a visible recovery instruction without a direct
 map-check action and without an accessible explicit end action on Navigation.
 
+A further real-IndexedDB regression found that terminal failure could retain
+remaining intent in memory while clearing the active durable record needed for
+explicit retirement. Failure now preserves an existing retained journey's durable
+record, without writing a new record or adopting any other session's ownership.
+This does not reconstruct records already cleared by an older deployed release;
+missing/changed ownership still refuses retirement rather than guessing.
+
 ## Source changes
 
 - `templates/index.html`: put Check map recovery and End previous journey beside
@@ -32,7 +39,9 @@ map-check action and without an accessible explicit end action on Navigation.
   leaves Start refused until a new route is presented, and never starts guidance.
 - `navigation-lifecycle-orchestration.js`: update recovery presentation after the
   synchronous stop flags are set, so the displayed action reflects the stopped
-  lifecycle rather than the former active state. No stop/ownership gate is removed.
+  lifecycle rather than the former active state. Preserve the durable record when
+  the current journey has retained continuation; otherwise existing cleanup applies.
+  No stop/ownership gate is removed.
 - `voyagr.css`: wrapping 44 px minimum touch targets for the two recovery controls.
 
 Map reconciliation still checks the current style and route-resource cleanup.

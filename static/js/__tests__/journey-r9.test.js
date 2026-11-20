@@ -162,3 +162,15 @@ test('stopped retained journey can be explicitly ended from Navigation with the 
  expect(await Modes.abandonJourney()).toBe(true);expect(await Off.loadActiveRouteRecord(idb)).toBeNull();
  expect(Modes.getContinuation(old)).toBeNull();expect(Life.getRouteInProgress()).toBe(false);
 });
+
+test('terminal failure retains real durable ownership so the explicit end action can complete',async()=>{
+ await stored();const before=await Off.loadActiveRouteRecord(idb);
+ const clear=jest.spyOn(OffApp,'clearPersistedRoute');calls.clearPersistedRoute=clear;
+ Life.failNavigation('inconsistent_map');
+ for(const result of clear.mock.results)if(result.type==='return')await result.value;
+ expect(await Off.loadActiveRouteRecord(idb)).toEqual(before);
+ expect(OffApp.getJourneyOwnership()).toEqual(ownership(before));
+ expect(Modes.getContinuation(old).intent.stops.map(s=>s.name)).toEqual(['pending']);
+ expect(await Modes.abandonJourney()).toBe(true);
+ expect(await Off.loadActiveRouteRecord(idb)).toBeNull();expect(Life.getRouteInProgress()).toBe(false);
+});
