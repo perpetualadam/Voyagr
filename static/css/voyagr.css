@@ -5142,3 +5142,15 @@ html[data-private-access-locked] #mapLoadingOverlay { visibility: hidden; }
 
 .private-access-info-unlock { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; box-sizing: border-box; padding: 8px; color: inherit; text-decoration: underline; overflow-wrap: anywhere; }
 .private-access-info-unlock[hidden] { display: none; }
+
+/* Settings explanations are opt-in, with native keyboard/touch disclosure. */
+#settingsTab .settings-info { min-width:0; max-width:100%; margin:4px 0 8px; }
+#settingsTab .settings-info > summary { display:flex; align-items:center; justify-content:center; box-sizing:border-box; width:44px; min-height:44px; padding:8px; cursor:pointer; list-style:none; color:var(--settings-accent); border-radius:8px; }
+#settingsTab .settings-info > summary::-webkit-details-marker { display:none; }
+#settingsTab .settings-info > summary > span { display:flex; align-items:center; justify-content:center; width:24px; height:24px; border:2px solid currentColor; border-radius:50%; font:600 1rem/1 Georgia,serif; }
+#settingsTab .settings-info > summary:focus-visible { outline:3px solid var(--settings-accent); outline-offset:2px; }
+#settingsTab .settings-info[open] > summary { background:var(--settings-surface); }
+#settingsTab .settings-info-content { padding:8px 12px; border-left:3px solid var(--settings-accent); overflow-wrap:anywhere; color:var(--settings-ink); }
+#settingsTab .settings-info-content :is(p,div) { font-size:1rem !important; line-height:1.5 !important; color:inherit !important; margin:0 !important; }
+#settingsTab .preference-item > .settings-info { flex-basis:100%; }
+#settingsTab :is(#costCurrencyHelp,#porcupineWakeHelp) { font-size:1rem !important; line-height:1.5 !important; color:var(--settings-ink) !important; }

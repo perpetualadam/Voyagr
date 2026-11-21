@@ -791,7 +791,7 @@
                     <summary>Units &amp; currency</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Choose how measurements are displayed. Feature-specific distances remain with their controls.</p>
+                    <details class="settings-info"><summary aria-label="Information about Units &amp; currency"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Choose how measurements are displayed. Feature-specific distances remain with their controls.</p></div></details>
                     <div class="preferences-section">
 
 
@@ -821,7 +821,7 @@
                                 <option value="fahrenheit">Fahrenheit (°F)</option>
                             </select>
                         </div>
-                        <p id="temperatureUnitHelp" style="font-size:12px;line-height:1.45;">The current weather view is a map overlay; its provider-supplied colours do not change with this preference.</p>
+                        <details class="settings-info"><summary aria-label="Information about 🌡️ Temperature"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p id="temperatureUnitHelp" style="font-size:12px;line-height:1.45;">The current weather view is a map overlay; its provider-supplied colours do not change with this preference.</p></div></details>
 
                         <div class="preference-item">
                             <label class="preference-label" for="currencyUnit">💱 Preferred currency</label>
@@ -838,16 +838,16 @@
                     <summary>Smart routing</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Routing around mapped hazards and charge zones. These preferences do not control map markers or spoken alerts.</p>
+                    <details class="settings-info"><summary aria-label="Information about Smart routing"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Routing around mapped hazards and charge zones. These preferences do not control map markers or spoken alerts.</p></div></details>
                     <div class="preferences-section">
 
-                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0; line-height: 1.45;">
+                        <details class="settings-info"><summary aria-label="Information about Smart routing"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin: 0 0 12px 0; line-height: 1.45;">
                             Choose what your routes should favour or steer clear of. You remain responsible for following road signs and local rules.
-                        </p>
+                        </p></div></details>
 
                         <div class="preferences-subsection">
                             <h4 class="preferences-subsection-title">Route around</h4>
-                            <p class="preferences-subsection-help">Prefer paths that skip these areas or features when a practical alternative exists.</p>
+                            <details class="settings-info"><summary aria-label="Information about Route around"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="preferences-subsection-help">Prefer paths that skip these areas or features when a practical alternative exists.</p></div></details>
 
                             <div class="preference-item">
                                 <span class="preference-label">Emissions charge zones</span>
@@ -867,7 +867,7 @@
 
                         <div class="preferences-subsection">
                             <h4 class="preferences-subsection-title">Smarter routing</h4>
-                            <p class="preferences-subsection-help">When calculating routes, prefer practical alternatives informed by your selected map data.</p>
+                            <details class="settings-info"><summary aria-label="Information about Smarter routing"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="preferences-subsection-help">When calculating routes, prefer practical alternatives informed by your selected map data.</p></div></details>
 
                             <div class="preference-item">
                                 <span class="preference-label">Use map data in routing</span>
@@ -877,7 +877,7 @@
 
                         <div class="preferences-subsection">
                             <h4 class="preferences-subsection-title">Map data filters</h4>
-                            <p class="preferences-subsection-help">These camera and mapped-point filters apply when map-based routing is enabled. Map visibility and spoken alerts are controlled separately.</p>
+                            <details class="settings-info"><summary aria-label="Information about Map data filters"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="preferences-subsection-help">These camera and mapped-point filters apply when map-based routing is enabled. Map visibility and spoken alerts are controlled separately.</p></div></details>
 
                             <div class="preference-item">
                                 <span class="preference-label">Speed cameras</span>
@@ -905,7 +905,7 @@
                             </div>
                         </div>
 
-                    <p class="settings-group-help">Avoidance enforcement applies to selected avoidances here and road-type avoidances under Route preferences.</p>
+                    <details class="settings-info"><summary aria-label="Information about avoidance enforcement"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Avoidance enforcement applies to selected avoidances here and road-type avoidances under Route preferences.</p></div></details>
                         <label>Avoidance enforcement
                             <select id="avoidanceMode" onchange="localStorage.setItem('pref_avoidance_mode', this.value); window.VoyagrAvoidanceIntegrity.invalidate();">
                                 <option value="preference">Best effort (existing preferences)</option>
@@ -913,7 +913,7 @@
                             </select>
                         </label><p>Available map data cannot guarantee hazard-free travel. Unresolved mandatory requirements prevent navigation. Refused routes remain available as previews for inspection.</p><script>window.addEventListener('load', function () { document.getElementById('avoidanceMode').value = localStorage.getItem('pref_avoidance_mode') || 'preference'; });</script></div><div class="preferences-section">
                         <h3>🌿 Emissions charge zones</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK zones with daily charges, passes, and vehicle exemptions</p>
+                        <details class="settings-info"><summary aria-label="Information about 🌿 Emissions charge zones"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK zones with daily charges, passes, and vehicle exemptions</p></div></details>
 
                         <button type="button" class="settings-action" onclick="showCAZInfo()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Zone charges &amp; passes</span></button>
 
@@ -924,14 +924,14 @@
                     <summary>Route preferences</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Choose route style, road types and your maximum detour.</p>
+                    <details class="settings-info"><summary aria-label="Information about Route preferences"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Choose route style, road types and your maximum detour.</p></div></details>
                     <div class="preferences-section">
 
 
 
 
 
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Road types and how routes are calculated</p>
+                        <details class="settings-info"><summary aria-label="Information about Route preferences"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin-bottom: 10px;">Road types and how routes are calculated</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">Prefer routes without tolls</span>
@@ -947,7 +947,7 @@
                             <span class="preference-label">Prefer routes without ferries</span>
                             <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries" type="button" aria-label="Prefer routes without ferries" role="switch" aria-checked="false"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes, including multi-stop legs.</p>
+                        <details class="settings-info"><summary aria-label="Information about road-type preferences"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes, including multi-stop legs.</p></div></details>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -989,22 +989,22 @@
                     <summary>Traffic &amp; navigation</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Traffic-aware planning, reported closures and incidents, and automatic updates while navigating.</p>
+                    <details class="settings-info"><summary aria-label="Information about Traffic &amp; navigation"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Traffic-aware planning, reported closures and incidents, and automatic updates while navigating.</p></div></details>
                     <div class="preferences-section">
 
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic traffic checks and rerouting during a trip</p>
+                        <details class="settings-info"><summary aria-label="Information about Traffic &amp; navigation"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic traffic checks and rerouting during a trip</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">Live traffic updates</span>
                             <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Live traffic updates" role="switch" aria-checked="true"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p>
+                        <details class="settings-info"><summary aria-label="Information about Live traffic updates"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">Reroute when off course</span>
                             <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Reroute when off course" role="switch" aria-checked="true"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p>
+                        <details class="settings-info"><summary aria-label="Information about Reroute when off course"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">Traffic check now</span>
@@ -1014,46 +1014,46 @@
                                 <input type="checkbox" id="trafficAwareRouting" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
                                     <span style="font-size: 13px; font-weight: 500;">Traffic-Aware Routing</span>
-                                    <div style="font-size: 11px; color: #888;">Use real-time traffic data for route calculation and ETAs</div>
+
                                 </div>
-                            </label><label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            </label><details class="settings-info"><summary aria-label="Information about Traffic-Aware Routing"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888;">Use real-time traffic data for route calculation and ETAs</div></div></details><label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="avoidRoadClosures" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
                                     <span style="font-size: 13px; font-weight: 500;">Route around closures</span>
-                                    <div style="font-size: 11px; color: #888;">Skips reported road closures when possible</div>
+
                                 </div>
-                            </label><label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            </label><details class="settings-info"><summary aria-label="Information about Route around closures"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888;">Skips reported road closures when possible</div></div></details><label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="avoidIncidents" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
                                     <span style="font-size: 13px; font-weight: 500;">Route around incidents</span>
-                                    <div style="font-size: 11px; color: #888;">Skips accidents, roadworks, and similar reports when possible</div>
+
                                 </div>
-                            </label></div></div></details>
+                            </label><details class="settings-info"><summary aria-label="Information about Route around incidents"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888;">Skips accidents, roadworks, and similar reports when possible</div></div></details></div></div></details>
 
                     <details class="settings-group" id="settingsStopsDeparture">
                     <summary>Stops &amp; departure</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Stop order, round trips and departure planning.</p>
+                    <details class="settings-info"><summary aria-label="Information about Stops &amp; departure"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Stop order, round trips and departure planning.</p></div></details>
                     <div class="preferences-section">
 
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Configure multi-stop delivery and route optimization</p>
+                        <details class="settings-info"><summary aria-label="Information about Stops &amp; departure"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin-bottom: 10px;">Configure multi-stop delivery and route optimization</p></div></details>
 
                         <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="optimizeStopOrder" checked="" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
                                     <span style="font-size: 13px; font-weight: 500;">Optimize Stop Order</span>
-                                    <div style="font-size: 11px; color: #888;">Automatically find the most efficient route through all stops</div>
+
                                 </div>
-                            </label>
+                            </label><details class="settings-info"><summary aria-label="Information about Optimize Stop Order"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888;">Automatically find the most efficient route through all stops</div></div></details>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="roundTrip" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
                                     <span style="font-size: 13px; font-weight: 500;">Round Trip</span>
-                                    <div style="font-size: 11px; color: #888;">Return to starting point after all stops</div>
+
                                 </div>
-                            </label>
+                            </label><details class="settings-info"><summary aria-label="Information about Round Trip"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888;">Return to starting point after all stops</div></div></details>
 
 
 
@@ -1065,7 +1065,7 @@
                                 <input type="datetime-local" id="departureTime" onchange="saveMultiDropPreferences()" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <button type="button" class="settings-action" onclick="clearDepartureTime()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8v4l3 2 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Now</span></button>
                             </div>
-                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Set departure time for accurate ETAs. Leave empty to use current time.</div>
+                            <details class="settings-info"><summary aria-label="Information about Now"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888; margin-top: 4px;">Set departure time for accurate ETAs. Leave empty to use current time.</div></div></details>
                         </div>
 
                         <div class="preference-item">
@@ -1082,7 +1082,7 @@
                     <summary>Map &amp; display</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Appearance, map layers, speedometer visibility, location and 3D views.</p>
+                    <details class="settings-info"><summary aria-label="Information about Map &amp; display"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Appearance, map layers, speedometer visibility, location and 3D views.</p></div></details>
                     <div class="preferences-section">
 
 
@@ -1128,9 +1128,9 @@
                             <span class="preference-label">📍 Center on my location</span>
                             <button type="button" class="toggle-switch" id="centerOnLocationToggle" onclick="toggleCenterOnLocation()" title="Move the map to your GPS position when location is available" aria-label="📍 Center on my location" role="switch" aria-checked="false"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0; line-height: 1.45;">
+                        <details class="settings-info"><summary aria-label="Information about 📍 Center on my location"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0; line-height: 1.45;">
                             When on, the map moves from the default view to your GPS position when location is available. Turn off to keep the map on the default area.
-                        </p>
+                        </p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">Mapped points on map</span>
@@ -1152,7 +1152,7 @@
                             <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="Level crossings (map)" role="switch" aria-checked="true"></button>
                         </div>
                         <p id="osmRailwayCrossingDataStatus" role="status">Level-crossing coverage has not been checked.</p>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Map overlays for traffic signals and level crossings. Separate from the routing toggles above.</p>
+                        <details class="settings-info"><summary aria-label="Information about Level crossings (map)"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Map overlays for traffic signals and level crossings. Separate from the routing toggles above.</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Show Traffic Flow</span>
@@ -1166,31 +1166,31 @@
                             </span>
                             <button class="toggle-switch active" type="button" aria-label="Show Traffic Lights" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;" role="switch" aria-checked="true"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Vertical traffic-light icon (red → amber → green) shown along your route.</p>
+                        <details class="settings-info"><summary aria-label="Information about Show Traffic Lights"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Vertical traffic-light icon (red → amber → green) shown along your route.</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">🛤️ Route Traffic Edges</span>
                             <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛤️ Route Traffic Edges" role="switch" aria-checked="true"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Highlight congestion along your route (orange/red/black only — free-flow green is hidden so the route line stays visible)</p>
+                        <details class="settings-info"><summary aria-label="Information about 🛤️ Route Traffic Edges"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Highlight congestion along your route (orange/red/black only — free-flow green is hidden so the route line stays visible)</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">🛣️ Road Name Labels</span>
                             <button class="toggle-switch active" id="roadLabelsToggle" onclick="toggleRoadLabels()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🛣️ Road Name Labels" role="switch" aria-checked="true"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display motorway, A-road, and street names on the map</p>
+                        <details class="settings-info"><summary aria-label="Information about 🛣️ Road Name Labels"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display motorway, A-road, and street names on the map</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">🏢 3D Buildings</span>
                             <button class="toggle-switch active" id="buildings3DToggle" onclick="toggle3DBuildings()" style="background: #4CAF50; border-color: #4CAF50;" type="button" aria-label="🏢 3D Buildings" role="switch" aria-checked="true"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show 3D building extrusions on the map</p>
+                        <details class="settings-info"><summary aria-label="Information about 🏢 3D Buildings"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show 3D building extrusions on the map</p></div></details>
 
                         <div class="preference-item">
                             <span class="preference-label">📍 Google Plus Codes</span>
                             <button class="toggle-switch" id="googlePlusCodesToggle" onclick="toggleGooglePlusCodes()" type="button" aria-label="📍 Google Plus Codes" role="switch" aria-checked="false"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Enable Plus Code input for destination search (free, offline-capable)</p>
+                        <details class="settings-info"><summary aria-label="Information about 📍 Google Plus Codes"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Enable Plus Code input for destination search (free, offline-capable)</p></div></details>
 
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR &amp; 3D View</h4>
@@ -1198,7 +1198,7 @@
                                 <span class="preference-label">🗺️ 3D Map View</span>
                                 <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()" type="button" aria-label="🗺️ 3D Map View" role="switch" aria-checked="false"></button>
                             </div>
-                            <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D and tilted 3D (perspective + 3D buildings). Applies while browsing and during navigation — 2D navigation still follows heading-up, just flat.</p>
+                            <details class="settings-info"><summary aria-label="Information about 🗺️ 3D Map View"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D and tilted 3D (perspective + 3D buildings). Applies while browsing and during navigation — 2D navigation still follows heading-up, just flat.</p></div></details>
                             <div class="preference-item">
                                 <span class="preference-label">👓 AR Navigation</span>
                                 <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()" type="button" aria-label="👓 AR Navigation" role="switch" aria-checked="false"></button>
@@ -1211,15 +1211,15 @@
                     <div class="preference-item">
                             <span class="preference-label">🚗 Speedometer &amp; limit</span>
                             <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show speed and limit on the map before and during navigation" aria-label="🚗 Speedometer &amp; limit" role="switch" aria-checked="true"></button>
-                        </div><p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
+                        </div><details class="settings-info"><summary aria-label="Information about 🚗 Speedometer &amp; limit"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
                             The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
-                        </p></div></div></details>
+                        </p></div></details></div></div></details>
 
                     <details class="settings-group" id="settingsVoiceAlerts">
                     <summary>Voice &amp; alerts</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Spoken guidance, warning distances, chimes and the wake phrase.</p>
+                    <details class="settings-info"><summary aria-label="Information about Voice &amp; alerts"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Spoken guidance, warning distances, chimes and the wake phrase.</p></div></details>
                     <section aria-labelledby="audioDeviceTitle" class="voice-section">
                         <div class="voice-card__head"><h3 id="audioDeviceTitle" class="voice-card__title">Car &amp; headphone audio</h3></div>
                         <div class="voice-controls">
@@ -1311,7 +1311,7 @@
                                 <option value="chime">Chime only</option>
                                 <option value="both">Voice + chime</option>
                             </select>
-                            <div style="font-size: 11px; color: #888; margin-top: 4px;">When approaching mapped roadside points along your route</div>
+                            <details class="settings-info"><summary aria-label="Information about Roadside alert style"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><div style="font-size: 11px; color: #888; margin-top: 4px;">When approaching mapped roadside points along your route</div></div></details>
                         </div>
 
                         <div class="preference-item">
@@ -1330,7 +1330,7 @@
                     <summary>Parking</summary>
 
                     <div class="settings-group-content">
-                    <p class="settings-group-help">Walking allowance, parking type and reported prices.</p>
+                    <details class="settings-info"><summary aria-label="Information about Parking"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Walking allowance, parking type and reported prices.</p></div></details>
                     <div class="preferences-section">
 
 
@@ -1369,9 +1369,9 @@
 
                     <div class="settings-group-content">
                     {% if personal_mode %}
-                    <p class="settings-group-help">Personal use. Routes, favourites and history stay on this device. No app account is needed.</p>
+                    <details class="settings-info"><summary aria-label="Information about app and device settings"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Personal use. Routes, favourites and history stay on this device. No app account is needed.</p></div></details>
                     {% else %}
-                    <p class="settings-group-help">Account, Premium, privacy, suggested journeys, battery saving and app updates.</p><div class="preferences-section" id="accountSection">
+                    <details class="settings-info"><summary aria-label="Information about app and device settings"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p class="settings-group-help">Account, Premium, privacy, suggested journeys, battery saving and app updates.</p></div></details><div class="preferences-section" id="accountSection">
                         <h3>👤 Account</h3>
                         <div id="accountStatus" style="font-size: 12px; color: #666; margin-bottom: 10px;">
                             Loading account status...
@@ -1419,7 +1419,7 @@
 
                         <div id="promoCodeBlock" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee;">
                             <h4 style="margin: 0 0 6px 0; font-size: 14px; color: #333;">Promo code</h4>
-                            <p style="font-size: 11px; color: #888; margin: 0 0 8px 0;">Trial or lifetime codes. Some codes only work for the account they were issued to.</p>
+                            <details class="settings-info"><summary aria-label="Information about Promo code"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: 0 0 8px 0;">Trial or lifetime codes. Some codes only work for the account they were issued to.</p></div></details>
                             <div id="promoCodeGuestNote" style="display: none; font-size: 12px; color: #888;">Sign in to apply a promo code.</div>
                             <div id="promoCodeFormWrap" style="display: none;">
                                 <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -1432,9 +1432,9 @@
                         </div>
                     </div><div class="preferences-section" id="supportVoyagrSection" style="display: none;">
                         <h3>⚡ Voyager Premium</h3>
-                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
+                        <details class="settings-info"><summary aria-label="Information about ⚡ Voyager Premium"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
                             <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features.
-                        </p>
+                        </p></div></details>
                         <p id="serviceRegionNote" style="display: none; font-size: 12px; color: #5d4037; margin: 0 0 10px 0; padding: 8px 10px; background: #fff8e1; border-radius: 6px; border-left: 3px solid #ff8f00;"></p>
                         <p id="supportStripeTrialNote" style="display: none; font-size: 12px; color: #1565c0; margin: 0 0 10px 0;"></p>
                         <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
@@ -1446,9 +1446,9 @@
                     {% endif %}
                     <div class="preferences-section">
                         <h3>🔒 Privacy &amp; your rights</h3>
-                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
+                        <details class="settings-info"><summary aria-label="Information about 🔒 Privacy &amp; your rights"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
                             How Voyagr handles your data, and your rights under UK GDPR / data protection law.
-                        </p>
+                        </p></div></details>
                         <div class="settings-actions">
                             <a href="/privacy#analytics-controls" target="_blank" rel="noopener" class="settings-action"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM9 12l2 2 4-4"></path></svg><span>Privacy &amp; analytics</span><span class="settings-sr-only"> (opens in a new tab)</span></a>
                             <button type="button" class="settings-action" onclick="voyagrShowSafetyNotice &amp;&amp; voyagrShowSafetyNotice()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"></path></svg><span>Review safety notice</span></button>
@@ -1495,7 +1495,7 @@
                             <button type="button" class="settings-action" onclick="refreshApp()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"></path></svg><span>Refresh app</span></button>
                             <button type="button" class="settings-action" onclick="checkForUpdates()"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"></path></svg><span>Check updates</span></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Refresh to reload the app. Check Updates to get the latest version.</p>
+                        <details class="settings-info"><summary aria-label="Information about Check updates"><span aria-hidden="true">i</span></summary><div class="settings-info-content"><p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Refresh to reload the app. Check Updates to get the latest version.</p></div></details>
 
                         <div id="pwaStatus" style="padding: 10px; background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #666;">
                             <span id="pwaVersionText">App version: Loading...</span>
