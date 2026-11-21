@@ -97,6 +97,11 @@ def test_mixed_camera_osm_caz_keeps_hard_rules_and_reports_toll_limit(toll):
          patch('voyagr.services.routing.engines.route_transport.post',side_effect=provider) as post, \
          patch('voyagr.services.routing.engines.route_transport.get') as get:
         route=route_with_graphhopper(53.51,-1.49,53.59,-1.41,avoid_tolls=True,avoid_caz_zones=True,camera_hazards={'camera_speed':[{'lat':53.54,'lon':-1.46}]},route_bbox={'min_lat':53.5,'max_lat':53.6,'min_lon':-1.5,'max_lon':-1.4},traffic_light_hazards=[{'lat':53.55,'lon':-1.45}])
+    if toll is None:
+        assert route is None
+        post.assert_not_called()
+        get.assert_not_called()
+        return
     assert route and route['custom_model_applied'] and route['camera_avoidance']
     rules=post.call_args.kwargs['json']['custom_model']['priority']
     assert [r['multiply_by'] for r in rules[:4]]==['0','0','0','0.02']
@@ -110,7 +115,7 @@ def test_profile_absent_returns_failure_and_metadata_rejection_invalidates():
     with patch('voyagr.services.routing.engines.get_graphhopper_capabilities',return_value=snapshot),patch('voyagr.services.routing.engines.route_transport.get') as get,patch('voyagr.services.routing.engines.route_transport.post') as post:
         assert route_with_graphhopper(53,-1,54,-2) is None
         get.assert_not_called();post.assert_not_called()
-    with patch('voyagr.services.routing.engines.get_graphhopper_capabilities',return_value=observed()),patch('voyagr.services.routing.engines.invalidate_graphhopper_capabilities') as invalidate,patch('voyagr.services.routing.engines.USE_GRAPHHOPPER_CAMERA_AVOIDANCE',True),patch('voyagr.services.hazards.build_graphhopper_combined_camera_model',return_value={'priority':[{'if':'in_camera_area_0','multiply_by':'0'}]}),patch('voyagr.services.routing.engines.route_transport.post',return_value=response({'message':'Cannot compile expression: toll not available'},400)),patch('voyagr.services.routing.engines.route_transport.get') as get:
+    with patch('voyagr.services.routing.engines.get_graphhopper_capabilities',return_value=observed(['NO','ALL'])),patch('voyagr.services.routing.engines.invalidate_graphhopper_capabilities') as invalidate,patch('voyagr.services.routing.engines.USE_GRAPHHOPPER_CAMERA_AVOIDANCE',True),patch('voyagr.services.hazards.build_graphhopper_combined_camera_model',return_value={'priority':[{'if':'in_camera_area_0','multiply_by':'0'}]}),patch('voyagr.services.routing.engines.route_transport.post',return_value=response({'message':'Cannot compile expression: toll not available'},400)),patch('voyagr.services.routing.engines.route_transport.get') as get:
         assert route_with_graphhopper(53,-1,54,-2,avoid_tolls=True) is None
         invalidate.assert_called_once();get.assert_not_called()
 

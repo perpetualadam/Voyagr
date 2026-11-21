@@ -138,6 +138,7 @@ jobs:
           tests/test_route_warning_observations.py
           tests/test_route_warning_scan.py
           tests/test_route_success_response.py
+          tests/test_selected_route_settings.py
           tests/test_route_enrichment.py
           tests/test_osrm_fallback.py
           tests/test_hazards_dedup.py

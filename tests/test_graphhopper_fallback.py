@@ -47,9 +47,9 @@ def test_refuse_unfiltered_when_server_side_camera_model_post_failed():
     assert should_refuse_graphhopper_unfiltered_fallback(model, custom_model_applied=False) is True
 
 
-def test_allow_unfiltered_when_costing_only_and_post_failed():
+def test_refuse_unfiltered_when_soft_selected_costing_and_post_failed():
     model = {'priority': [{'if': 'true', 'multiply_by': '0.5'}]}
-    assert should_refuse_graphhopper_unfiltered_fallback(model, custom_model_applied=False) is False
+    assert should_refuse_graphhopper_unfiltered_fallback(model, custom_model_applied=False) is True
 
 
 def test_refuse_unfiltered_when_hard_costing_avoid_and_post_failed():

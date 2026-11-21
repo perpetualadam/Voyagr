@@ -393,7 +393,7 @@ class CalculateRouteSmokeTest(unittest.TestCase):
              patch.object(vw.requests, 'get', return_value=_OsrmResp()):
             r = self._post({
                 'start': '53.536,-1.380', 'end': '53.517,-1.150',
-                'routing_mode': 'auto', 'enable_hazard_avoidance': False,
+                'routing_mode': 'auto', 'enable_hazard_avoidance': False, 'avoid_caz': False,
                 'force_refresh': True,
             })
         self.assertNotEqual(r.status_code, 408, r.get_data(as_text=True)[:500])
