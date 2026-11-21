@@ -269,3 +269,11 @@ access and were not submitted by this change. Public repository links, third-par
 copies, DNS/certificate records and previously collected AI data cannot be erased
 by changing this application. No claim of completed internet removal or production
 verification is made.
+
+### Investigating another private-access or blank-map incident
+
+Use [the private-access/map diagnostic runbook](PRIVATE_ACCESS_MAP_DIAGNOSTICS.md)
+before refreshing, signing in or attempting recovery. It separates confirmed
+request denial from the unexplained original map loss, gives passive phone
+observations and bounded sanitized log commands, and documents what each HTTP /
+renderer / GPS result can establish. It changes no production settings or data.
