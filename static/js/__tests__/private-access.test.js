@@ -3,7 +3,7 @@ let access;
 beforeEach(() => {
     jest.useFakeTimers();
     document.documentElement.dataset.personalMode='true';
-    document.body.innerHTML='<section id="privateAccessNotice" hidden><a href="/privacy">Unlock</a></section>';
+    document.body.innerHTML='<section id="privateAccessNotice" hidden><a href="/privacy">Unlock</a></section><p id="privateAccessStatus"></p><a id="privateAccessUnlock" target="_blank" rel="noopener" hidden></a>';
     global.fetch=jest.fn();
 });
 afterEach(() => {
@@ -108,4 +108,41 @@ test('real navigation state setter schedules presentation after the synchronous 
  expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
  document.getElementById('journeySummaryModal').style.display='none';await Promise.resolve();jest.advanceTimersByTime(0);
  expect(document.getElementById('privateAccessNotice').hidden).toBe(false);
+});
+
+
+test('Info separates confirmed website denial from unavailable provider data and offers explicit stationary recovery',async()=>{
+ fetch.mockResolvedValue({status:403,ok:false});access=install(window);await access.check();
+ expect(document.getElementById('privateAccessStatus').textContent).toContain('owner login required');
+ const link=document.getElementById('privateAccessUnlock');expect(link.hidden).toBe(false);
+ expect(link.getAttribute('href')).toMatch(/^\/privacy\?private-login=\d+$/);
+ expect(link.target).toBe('_blank');expect(link.rel).toBe('noopener');expect(location.pathname).toBe('/');
+ fetch.mockResolvedValue({status:200,ok:true});await access.check();
+ expect(link.hidden).toBe(true);expect(document.getElementById('privateAccessStatus').textContent).toContain('last check passed');
+});
+test('navigation defers both unlock actions while Info gives a passive reason, and Stop makes recovery available',async()=>{
+ let active=true;window.VoyagrNavigationLifecycleOrchestration={getRouteInProgress:()=>active};
+ fetch.mockResolvedValue({status:403,ok:false});access=install(window);await access.check();
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);expect(document.getElementById('privateAccessUnlock').hidden).toBe(true);
+ expect(document.getElementById('privateAccessStatus').textContent).toContain('until navigation stops');
+ expect(document.activeElement).toBe(document.body);
+ active=false;window.dispatchEvent(new Event('voyagr:journey-state-change'));jest.advanceTimersByTime(0);
+ expect(document.getElementById('privateAccessUnlock').hidden).toBe(false);
+});
+test('a pending summary defers only the overlay, with an explicit Info recovery link and no automatic navigation',async()=>{
+ document.body.insertAdjacentHTML('beforeend','<div id="journeySummaryModal" style="display:block"></div>');
+ fetch.mockResolvedValue({status:401,ok:false});access=install(window);await access.check();
+ expect(document.getElementById('privateAccessNotice').hidden).toBe(true);
+ expect(document.getElementById('privateAccessStatus').textContent).toContain('until the journey summary closes');
+ expect(document.getElementById('privateAccessUnlock').hidden).toBe(false);expect(location.pathname).toBe('/');
+});
+test('offline and server errors never manufacture denial or success, and a previous denial remains explicit',async()=>{
+ fetch.mockRejectedValue(new Error('offline'));access=install(window);await access.check();
+ expect(document.getElementById('privateAccessStatus').textContent).toContain('not yet verified');
+ expect(document.getElementById('privateAccessUnlock').hidden).toBe(true);
+ fetch.mockResolvedValue({status:403,ok:false});await access.check();
+ fetch.mockResolvedValue({status:503,ok:false});await access.check();
+ expect(document.getElementById('privateAccessStatus').textContent).toContain('owner login required');
+ expect(document.getElementById('privateAccessStatus').textContent).toContain('could not complete');
+ expect(document.getElementById('privateAccessUnlock').hidden).toBe(false);
 });

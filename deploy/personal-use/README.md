@@ -199,3 +199,31 @@ local storage. Physical-phone acceptance remains pending: as a passenger, verify
 Stop remains usable after an access denial, the summary is usable before Done,
 and the unlock action then recovers the map without losing a saved local item.
 Do not change the password or clear browser storage to force this while driving.
+
+### Passive access status in Route Info
+
+In personal mode, Info shows the last network-only private-access check separately
+from GPS, road matching and provider availability. Confirmed 401/403 responses show
+that owner login is required. During active navigation the text explains why the
+unlock card is deferred; it does not cover controls or move focus. An open summary
+also defers the card. While stationary, an explicit Info link opens the existing
+protected privacy page in a new tab, preserving the original tab's in-memory
+journey. Return to that tab after owner login; its focus/visibility check rechecks
+access. No credentials are stored by this feature and no device data is reset.
+Offline, timeout and server errors retain the last confirmed access state and
+say the latest check could not complete; they do not establish login failure.
+
+User-supplied logs on 21 November showed background 403 responses followed by
+configuration and speed/road-context 200 responses after fresh owner login; the
+user confirmed the speed-limit display returned. Those logs do not establish
+whether an earlier valid login was lost or a cached shell opened without current
+credentials. No fifteen-minute login timeout was found in the repository Nginx
+repair. The original map disappearance remains unexplained by this evidence.
+
+This UI requires application deployment and a coherent shell update, independently
+of the previously applied Nginx repair. Production and physical-phone acceptance
+of this additional UI remain unverified. Without clearing storage, check a saved
+synthetic local item before and after explicit unlock, confirm map loading and
+fresh GPS/provider requests, and check Stop/Done remain usable during deferred
+recovery. Perform driving checks as a passenger. A successful configuration check
+alone does not prove map tiles, GPS fixes or provider data are current.
