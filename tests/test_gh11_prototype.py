@@ -2,7 +2,9 @@
 import copy
 import importlib.util
 import os
+import json
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -168,3 +170,68 @@ def test_unverified_journey_cannot_be_promoted(failure):
         rules["coverage"] = "PARTIAL"
     with pytest.raises(UnverifiedRoute):
         validate_journey(legs, **rules)
+
+
+@pytest.mark.skipif(not os.environ.get("GH11_PROTOTYPE_JAR"), reason="Pinned local GH11.1 artifact not supplied")
+def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp_path, monkeypatch):
+    runner = load_runner(monkeypatch)
+    jar = Path(os.environ["GH11_PROTOTYPE_JAR"]).resolve()
+    assert runner.digest(jar) == runner.JAR_SHA256
+    osm = tmp_path / "fixture.osm"
+    osm.write_text('''<osm version="0.6">
+      <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.02"/>
+      <node id="3" lat="0" lon="0.01"/><node id="4" lat="0.003" lon="0.01"/>
+      <node id="5" lat="-0.003" lon="0.01"/>
+      <way id="10"><nd ref="1"/><nd ref="3"/><nd ref="2"/>
+        <tag k="highway" v="motorway"/></way>
+      <way id="11"><nd ref="1"/><nd ref="4"/><nd ref="2"/>
+        <tag k="highway" v="residential"/></way>
+      <way id="12"><nd ref="1"/><nd ref="5"/><nd ref="2"/>
+        <tag k="highway" v="residential"/></way>
+    </osm>''')
+    graph = tmp_path / "graph"
+    config = tmp_path / "config.yml"
+    config.write_text(f'''graphhopper:
+  datareader.file: {osm}
+  graph.location: {graph}
+  graph.dataaccess.default_type: MMAP
+  prepare.min_network_size: 0
+  import.osm.ignored_highways: footway,construction,cycleway,path,steps
+  graph.encoded_values: car_access,car_average_speed,road_access,max_speed,road_class
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+      turn_costs:
+        vehicle_types: [motorcar, motor_vehicle]
+        u_turn_costs: 60
+  profiles_ch: []
+  profiles_lm: []
+''')
+    subprocess.run(["java", "-Xmx512m", "-jar", str(jar), "import", str(config)],
+                   cwd=tmp_path, check=True, capture_output=True, timeout=90)
+    before = {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
+    cases = tmp_path / "cases.json"
+    cases.write_text(json.dumps({"cases": [
+        {"id": "primary", "points": [[0, 0], [0, .02]]},
+        {"id": "alternatives", "points": [[0, 0], [0, .02]], "alternatives": True},
+        {"id": "no_motorway", "points": [[0, 0], [0, .02]], "no_motorways": True},
+        {"id": "continuous_via", "points": [[0, 0], [0, .01], [0, .02]]},
+    ]}))
+    source = Path(__file__).resolve().parents[1] / "prototypes/graphhopper11/ReadOnlyRouteRegression.java"
+    command = ["java", "-Xmx512m", "--class-path", str(jar), str(source), str(config), str(graph), str(cases)]
+    completed = subprocess.run(command, cwd=tmp_path, check=True, capture_output=True, text=True, timeout=90)
+    report = json.loads(next(line.split(" ", 1)[1] for line in completed.stdout.splitlines()
+                             if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    assert report["all_available_graph_checks_passed"] is True
+    assert report["production_migration"] == "NO_GO"
+    assert len(report["cases"]) == 4
+    primary, _, avoided, via = report["cases"]
+    assert avoided["candidates"][0]["distance_km"] > primary["candidates"][0]["distance_km"]
+    assert via["requested_points"] == 3
+    assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
+    # A prohibited contract (native alternatives plus a via) must fail, not downgrade.
+    cases.write_text(json.dumps({"cases": [{"id": "unsupported", "points": [[0, 0], [.003, .01], [0, .02]], "alternatives": True}]}))
+    failed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert failed.returncode != 0
+    assert '"all_available_graph_checks_passed":false' in failed.stdout
+    assert "native alternatives support two points only" in failed.stdout

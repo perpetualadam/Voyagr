@@ -111,3 +111,51 @@ hazards, compiler and validator together; and perform measured imports. Any
 future service, dataset download, production selection or infrastructure change
 requires separate approval. Preserve the GH8 service, JDK, graph and configuration
 as a complete rollback bundle. This prototype provides no production switch.
+
+## Existing-graph read-only regression
+
+`ReadOnlyRouteRegression.java` loads an **already imported** matching graph using
+`setAllowWrites(false)` and MMAP. It calls `load()`, never `importOrLoad()`, and
+clears the OSM input path. Mount the graph read-only as an independent filesystem
+barrier. No listener is created. Do not substitute a GH8 graph.
+
+Arguments are the import configuration, existing graph directory and fixture JSON:
+
+```sh
+java -Xmx4g --class-path /path/to/graphhopper-web-11.1.jar \
+  ReadOnlyRouteRegression.java /path/to/config.yml /path/to/graph uk-public-cases.json
+```
+
+`uk-public-cases.json` contains seven fixed public samples: forward/reverse
+Sheffield–Leeds, native alternatives, a motorway exclusion, a continuous journey
+via Barnsley, Birmingham–Coventry and Bristol–Bath. No personal location history
+is used. These UK cases have not been run locally; the real UK execution requires
+the separate VPS2 graph.
+
+The runner checks every returned candidate's directed trace, vehicle access,
+stored turn prohibitions, unique edge sequence and ordered visits (75m tolerance).
+The motorway-exclusion case uses priority zero and independently rejects every
+MOTORWAY edge. Native alternatives return up to three, not necessarily three.
+Native alternatives plus intermediate visits are refused rather than downgraded.
+Continuous-via tests do not establish general stop/parking semantics.
+
+Each request is limited to 250,000 visited nodes and a 20-second routing timeout.
+Query wall time excludes source compilation and graph loading; graph loading is
+reported separately. These few sequential cases are not a capacity benchmark.
+Failed, unsupported or incomplete cases are reported and cause nonzero exit.
+Success is only `PASS_AVAILABLE_GRAPH_CHECKS`; production migration remains NO-GO.
+Real camera/crossing association, missing restrictions and general hazard coverage
+are still unverified. The directed-exclusion Java extension is not installed by
+this runner.
+
+The opt-in regression test imports a tiny synthetic graph, proves that motorway
+exclusion forces a longer route, exercises alternatives and a continuous via,
+and checks all graph file hashes are unchanged by the read-only run. It also
+requires an unsupported native multi-point alternative request to fail closed.
+
+Local validation for this addition: 36 prototype tests passed with the pinned
+GH11.1 artifact on Java 21, including the real read-only import/query test.
+The broader backend selection passed 2,582 tests and 94 subtests with three
+skips (two opt-in real-engine tests, separately run above); JavaScript passed
+3,829 tests across 198 suites, and test lint passed. Java 17 runs in the dedicated
+CI job; use its latest result rather than an earlier commit's result.
