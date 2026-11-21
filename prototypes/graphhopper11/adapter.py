@@ -4,6 +4,7 @@ Compliance here means directed-edge exclusion in a known synthetic fixture,
 not verified legal routing, hazard association, or navigation readiness.
 """
 import math
+import re
 
 
 class UnverifiedRoute(ValueError):
@@ -82,3 +83,54 @@ def validate_paths(response, blocked_keys, *, coverage="UNKNOWN", max_paths=3):
             "navigation_allowed": False,
         })
     return result
+
+
+def validate_journey(legs, blocked_keys, *, visits, forbidden_turn_pairs,
+                     graph_version, coverage="UNKNOWN"):
+    """Validate one synthetic continuous journey, including turns across leg seams.
+
+    The caller supplies fixture-authoritative directed turn pairs, not geometry
+    inferred turns. General stop/parking/U-turn semantics remain out of scope.
+    """
+    if not isinstance(graph_version, str) or not re.fullmatch(r"[0-9a-f]{64}", graph_version):
+        raise UnverifiedRoute("graph_version_missing")
+    if not isinstance(legs, list) or not 1 <= len(legs) <= 25 or not isinstance(visits, list) or len(visits) != len(legs) + 1:
+        raise UnverifiedRoute("missing_or_extra_leg")
+    for visit in visits:
+        if not isinstance(visit, list) or len(visit) != 2 or not all(number(x) for x in visit) or abs(visit[0]) > 180 or abs(visit[1]) > 90:
+            raise UnverifiedRoute("invalid_visit")
+    if not isinstance(forbidden_turn_pairs, list):
+        raise UnverifiedRoute("turn_evidence_missing")
+    forbidden = set()
+    for pair in forbidden_turn_pairs:
+        if not isinstance(pair, list) or len(pair) != 2 or any(type(key) is not int or key < 0 for key in pair):
+            raise UnverifiedRoute("invalid_turn_evidence")
+        forbidden.add(tuple(pair))
+    keys, coordinates = [], []
+    distance, duration = 0, 0
+    for index, leg in enumerate(legs):
+        if not isinstance(leg, dict) or leg.get("graph_version") != graph_version:
+            raise UnverifiedRoute("graph_version_mismatch")
+        rows = validate_paths(leg, blocked_keys, coverage=coverage, max_paths=1)
+        if len(rows) != 1:
+            raise UnverifiedRoute("missing_leg_route")
+        row = rows[0]
+        for actual, expected in ((row["coordinates"][0], visits[index]),
+                                 (row["coordinates"][-1], visits[index + 1])):
+            if any(abs(a - b) > 1e-7 for a, b in zip(actual, expected)):
+                raise UnverifiedRoute("visit_order_or_endpoint_mismatch")
+        if coordinates and any(abs(a - b) > 1e-7 for a, b in zip(coordinates[-1], row["coordinates"][0])):
+            raise UnverifiedRoute("disconnected_legs")
+        coordinates.extend(row["coordinates"] if not coordinates else row["coordinates"][1:])
+        keys.extend(row["directed_edge_keys"])
+        distance += row["distance_km"]
+        duration += row["duration_seconds"]
+    if any(pair in forbidden for pair in zip(keys, keys[1:])):
+        raise UnverifiedRoute("mandatory_turn_violation")
+    if not number(distance) or not number(duration):
+        raise UnverifiedRoute("invalid_journey_metrics")
+    return {"coordinates": coordinates, "directed_edge_keys": keys,
+            "distance_km": distance, "duration_seconds": duration,
+            "leg_count": len(legs), "graph_version": graph_version,
+            "compliance_scope": "synthetic_continuity_and_turns_only",
+            "navigation_allowed": False}

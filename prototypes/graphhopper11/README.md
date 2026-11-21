@@ -2,8 +2,8 @@
 
 This is a local experiment, not a routing service or migration switch. Nothing
 in the UK Flask application imports it. It opens no listener, has no provider
-URL, downloads no map data, and imports only a generated five-node OSM XML
-fixture in a fresh temporary directory. The runner has no network code.
+URL, downloads no map data, and imports only two generated five-node OSM XML
+fixtures in a fresh temporary directory. The runner has no network code.
 
 ## Pinned runtime
 
@@ -55,6 +55,21 @@ Incomplete evidence or any forbidden traversal rejects the response. Every
 adapted result has `navigation_allowed=False`: no production or legal claim is
 made from synthetic proof. No UI Start policy is changed.
 
+The second fixture imports an actual OSM `no_left_turn` relation. The Java probe
+checks that the relation exists in GH's turn storage. The complete route takes
+the legal detour, while the reverse journey remains possible. Two independently
+routed legs meet at the via node but form the forbidden turn when concatenated;
+`validate_journey` rejects that join. A fixture-specific continuation with the
+forbidden exit excluded passes the same validator. This demonstrates a validation
+gate, **not** a general multi-stop planning or turn-aware leg-repair algorithm.
+
+Journey validation checks every leg's directed trace, requested visit order,
+endpoint continuity, synthetic graph version, internal turns and turns across
+seams. The fixture's authoritative forbidden directed pairs are checked outside
+the Java weighting implementation. Missing legs, graph-version mismatches,
+missing turn evidence and partial coverage are refused. This assumes continuous
+travel through the synthetic via; parking, stopping and U-turn policy are unverified.
+
 The report records runtime, artifact, source and synthetic OSM checksums. Graph
 files and raw import logs remain temporary. This is not a performance benchmark.
 
@@ -66,14 +81,17 @@ files and raw import logs remain temporary. This is not a performance benchmark.
   virtual endpoint query returns no route. Every emitted trace is checked again
   by the independent Python adapter.
 - Twelve interleaved restricted/unrestricted requests on two Java threads pass.
-- Prototype regression suite: 25 passed, including the actual import/routing run.
-- Existing CI backend selection plus pure prototype tests: 2,572 passed,
+- Prototype regression suite: 35 passed, including both actual import/routing fixtures.
+- Imported turn restriction, legal detour/reverse route and rejected illegal
+  independent-leg join pass; the legal fixture continuation has two validated legs.
+- Existing CI backend selection plus pure prototype tests: 2,582 passed,
   two skips, 94 subtests passed. One skip is the intentionally opt-in real-engine
   test, separately executed above; the other is the pre-existing selected-suite skip.
 - JavaScript: 198 suites / 3,829 tests passed; test lint passed.
 
-Java 17 is configured in the separate CI job; its result must be checked before
-claiming that runtime has been exercised. Heap cap and tiny-fixture timing are
+The initial directed-exclusion prototype passed Java 17 CI in PR #540. The
+expanded turn/journey fixture must pass that job again before its Java 17
+compatibility is claimed. Heap cap and tiny-fixture timing are
 not UK/US capacity measurements. No browser or physical-phone test was performed.
 
 ## What remains blocked
@@ -81,8 +99,8 @@ not UK/US capacity measurements. No browser or physical-phone test was performed
 Production migration remains **NO-GO**. This experiment does not establish:
 
 - Real camera/signal/crossing association, coverage, freshness or licensing.
-- Turn-restriction relation correctness (the fixture has no restriction relation).
-- Multi-stop seam legality, stop ordering, reroutes or application cache binding.
+- General turn-restriction coverage (via-way, conditional and vehicle exceptions).
+- General multi-stop planning/repair, stop optimization, reroutes or application cache binding.
 - Parallel carriageways, intersection approaches or graph-region boundaries.
 - Endpoint access/snap-gap acceptance, instruction/UI parity or physical-phone behavior.
 - CH/LM compatibility, UK/US imports, realistic latency or server capacity.

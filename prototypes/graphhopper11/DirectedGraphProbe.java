@@ -38,7 +38,11 @@ public class DirectedGraphProbe {
     }
 
     static GHRequest request(double fromLon, double toLon, Set<Integer> blocked, boolean alternatives) {
-        GHRequest req = new GHRequest(0, fromLon, 0, toLon).setProfile("car")
+        return configure(new GHRequest(0, fromLon, 0, toLon),blocked,alternatives);
+    }
+
+    static GHRequest configure(GHRequest request, Set<Integer> blocked, boolean alternatives) {
+        GHRequest req = request.setProfile("car")
             .setPathDetails(List.of("edge_key", "max_speed", "road_class"));
         req.putHint("ch.disable", true).putHint("lm.disable", true)
             .putHint("way_point_max_distance", 0).putHint(BLOCKS, Set.copyOf(blocked));
@@ -47,6 +51,79 @@ public class DirectedGraphProbe {
             .putHint("alternative_route.max_weight_factor", 4)
             .putHint("alternative_route.max_share_factor", 0.95);
         return req;
+    }
+
+    static GraphHopper importFixture(Path osm, Path graph) {
+        require(!Files.exists(graph),"refusing existing graph");
+        GraphHopper hopper=new IsolatedHopper();
+        try {
+            hopper.setOSMFile(osm.toString()).setGraphHopperLocation(graph.toString());
+            hopper.setMinNetworkSize(0);
+            hopper.setEncodedValuesString("car_access,car_average_speed,road_access,max_speed,road_class");
+            hopper.setProfiles(new Profile("car").setCustomModel(GHUtility.loadCustomModelFromJar("car.json"))
+                .setTurnCostsConfig(new TurnCostsConfig(List.of("motorcar","motor_vehicle"))));
+            hopper.importOrLoad();
+            return hopper;
+        } catch(RuntimeException error) { hopper.close(); throw error; }
+    }
+
+    static Map<String,Object> turnFixture(Path root) throws Exception {
+        Path osm=root.resolve("synthetic-turn.osm");
+        Files.writeString(osm,"""
+            <osm version="0.6" generator="Voyagr synthetic turn fixture">
+              <node id="1" lat="0" lon="-0.01"/>
+              <node id="2" lat="0" lon="0"/>
+              <node id="3" lat="0.01" lon="0"/>
+              <node id="4" lat="0" lon="0.01"/>
+              <node id="5" lat="0.01" lon="0.01"/>
+              <way id="100"><nd ref="1"/><nd ref="2"/>
+                <tag k="highway" v="residential"/><tag k="name" v="approach"/></way>
+              <way id="101"><nd ref="2"/><nd ref="3"/>
+                <tag k="highway" v="residential"/><tag k="name" v="restricted_exit"/></way>
+              <way id="102"><nd ref="2"/><nd ref="4"/><nd ref="5"/><nd ref="3"/>
+                <tag k="highway" v="residential"/><tag k="name" v="legal_detour"/></way>
+              <relation id="200">
+                <member type="way" ref="100" role="from"/>
+                <member type="node" ref="2" role="via"/>
+                <member type="way" ref="101" role="to"/>
+                <tag k="type" v="restriction"/><tag k="restriction" v="no_left_turn"/>
+              </relation>
+            </osm>
+            """,StandardOpenOption.CREATE_NEW);
+        GraphHopper hopper=importFixture(osm,root.resolve("synthetic-turn-graph"));
+        try {
+            var first=paths(hopper.route(configure(new GHRequest(0,-.01,0,0),Set.of(),false)),Set.of());
+            var second=paths(hopper.route(configure(new GHRequest(0,0,.01,0),Set.of(),false)),Set.of());
+            require(first.size()==1 && second.size()==1,"both independent legs must exist");
+            int incoming=lastKey(first.get(0)), outgoing=firstKey(second.get(0));
+            var in=hopper.getBaseGraph().getEdgeIteratorStateForKey(incoming);
+            var out=hopper.getBaseGraph().getEdgeIteratorStateForKey(outgoing);
+            require(in.getAdjNode()==out.getBaseNode(),"fixture edges must share via node");
+            var turn=hopper.getEncodingManager().getTurnBooleanEncodedValue(
+                com.graphhopper.routing.ev.TurnRestriction.key("car"));
+            require(hopper.getBaseGraph().getTurnCostStorage().get(turn,incoming/2,in.getAdjNode(),outgoing/2),
+                "OSM relation must be present in imported turn storage");
+            var complete=paths(hopper.route(configure(new GHRequest(0,-.01,.01,0),Set.of(),false)),Set.of());
+            require(complete.size()==1,"complete route must use legal detour");
+            var reverse=paths(hopper.route(configure(new GHRequest(.01,0,0,-.01),Set.of(),false)),Set.of());
+            require(reverse.size()==1,"opposite turn direction must remain usable");
+            Set<Integer> continuationExclusions=Set.of(outgoing);
+            var repaired=paths(hopper.route(configure(new GHRequest(0,0,.01,0),continuationExclusions,false)),continuationExclusions);
+            require(repaired.size()==1,"fixture continuation detour must exist");
+            return Map.of("forbidden_turn_pairs",List.of(List.of(incoming,outgoing)),
+                "complete",complete,"reverse",reverse,"first_leg",first,"independent_second_leg",second,
+                "continuation_second_leg",repaired,
+                "visits",List.of(List.of(-.01,0),List.of(0,0),List.of(0,.01)));
+        } finally { hopper.close(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static List<List<Object>> trace(Map<String,Object> path) {
+        return ((Map<String,List<List<Object>>>)path.get("details")).get("edge_key");
+    }
+    static int firstKey(Map<String,Object> path) { return ((Number)trace(path).get(0).get(2)).intValue(); }
+    static int lastKey(Map<String,Object> path) {
+        var trace=trace(path);return ((Number)trace.get(trace.size()-1).get(2)).intValue();
     }
 
     static List<Map<String,Object>> paths(GHResponse response, Set<Integer> blocked) {
@@ -120,14 +197,8 @@ public class DirectedGraphProbe {
         for(int i=0;i<3;i++) xml.append("<way id='"+(i+10)+"'><nd ref='1'/><nd ref='"+(i+3)+"'/><nd ref='2'/>"
             +"<tag k='highway' v='residential'/><tag k='maxspeed' v='30 mph'/><tag k='name' v='"+names[i]+"'/></way>");
         xml.append("</osm>"); Files.writeString(osm,xml,StandardOpenOption.CREATE_NEW);
-        GraphHopper hopper=new IsolatedHopper();
+        GraphHopper hopper=importFixture(osm,graph);
         try {
-            hopper.setOSMFile(osm.toString()).setGraphHopperLocation(graph.toString());
-            hopper.setMinNetworkSize(0);
-            hopper.setEncodedValuesString("car_access,car_average_speed,road_access,max_speed,road_class");
-            hopper.setProfiles(new Profile("car").setCustomModel(GHUtility.loadCustomModelFromJar("car.json"))
-                .setTurnCostsConfig(new TurnCostsConfig(List.of("motorcar","motor_vehicle"))));
-            hopper.importOrLoad();
             Map<String,Set<Integer>> forwards=new TreeMap<>(); Set<Integer> all=new HashSet<>();
             var edges=hopper.getBaseGraph().getAllEdges();
             while(edges.next()) {
@@ -175,7 +246,8 @@ public class DirectedGraphProbe {
             } finally { pool.shutdownNow(); }
             System.out.println("VOYAGR_GH11_RESULT "+Jackson.newObjectMapper().writeValueAsString(
                 Map.of("engine_version",Constants.VERSION,"java_runtime",System.getProperty("java.version"),
-                    "cases",cases,"concurrent_checks",12,"scope","synthetic_flexible_only")));
+                    "cases",cases,"concurrent_checks",12,"turn_fixture",turnFixture(root),
+                    "scope","synthetic_flexible_only")));
         } finally { hopper.close(); }
     }
 }

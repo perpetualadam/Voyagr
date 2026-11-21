@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from prototypes.graphhopper11.adapter import UnverifiedRoute, validate_paths
+from prototypes.graphhopper11.adapter import UnverifiedRoute, validate_journey, validate_paths
 
 
 def path(key=2):
@@ -105,3 +105,66 @@ def test_real_gh11_import_and_directed_exclusion_search(monkeypatch):
         "virtual_all_blocked": 0, "isolation": 1,
     }
     assert report["concurrent_checks"] == 12
+    assert report["turn_fixture"]["imported_restriction"] is True
+    assert report["turn_fixture"]["whole_route_and_reverse"] == "PASS"
+    assert report["turn_fixture"]["illegal_independent_leg_join"] == "REFUSED"
+    assert report["turn_fixture"]["legal_continuation_leg_count"] == 2
+
+
+def journey():
+    first, second = path(2), path(6)
+    second["points"]["coordinates"] = [[.02, 0], [.03, 0], [.04, 0]]
+    legs = [{"paths": [p], "graph_version": "a" * 64} for p in (first, second)]
+    rules = dict(blocked_keys=[], visits=[[0, 0], [.02, 0], [.04, 0]],
+                 forbidden_turn_pairs=[[2, 4]], graph_version="a" * 64, coverage="SYNTHETIC_COMPLETE")
+    return legs, rules
+
+
+def test_legal_journey_preserves_order_metrics_and_refuses_navigation():
+    legs, rules = journey()
+    result = validate_journey(legs, **rules)
+    assert result["coordinates"] == [[0, 0], [.01, 0], [.02, 0], [.03, 0], [.04, 0]]
+    assert result["directed_edge_keys"] == [2, 6]
+    assert result["distance_km"] == 2 and result["duration_seconds"] == 240
+    assert result["leg_count"] == 2 and result["navigation_allowed"] is False
+
+
+def test_individually_legal_legs_cannot_bypass_prohibited_turn_at_seam():
+    legs, rules = journey()
+    legs[1]["paths"][0]["details"]["edge_key"] = [[0, 2, 4]]
+    assert all(validate_paths(leg, [], coverage="SYNTHETIC_COMPLETE") for leg in legs)
+    with pytest.raises(UnverifiedRoute, match="mandatory_turn_violation"):
+        validate_journey(legs, **rules)
+
+
+def test_internal_turn_and_second_leg_hazard_are_checked():
+    legs, rules = journey()
+    legs[0]["paths"][0]["details"]["edge_key"] = [[0, 1, 2], [1, 2, 4]]
+    with pytest.raises(UnverifiedRoute, match="mandatory_turn_violation"):
+        validate_journey(legs, **rules)
+    legs, rules = journey()
+    rules["blocked_keys"] = [6]
+    with pytest.raises(UnverifiedRoute, match="mandatory_edge_violation"):
+        validate_journey(legs, **rules)
+
+
+@pytest.mark.parametrize("failure", ["missing_leg", "empty_leg", "reordered_visits", "disconnected",
+                                    "graph_version", "no_turn_evidence", "partial_coverage"])
+def test_unverified_journey_cannot_be_promoted(failure):
+    legs, rules = journey()
+    if failure == "missing_leg":
+        legs.pop()
+    elif failure == "empty_leg":
+        legs[1]["paths"] = []
+    elif failure == "reordered_visits":
+        rules["visits"].reverse()
+    elif failure == "disconnected":
+        legs[1]["paths"][0]["points"]["coordinates"][0] = [.021, 0]
+    elif failure == "graph_version":
+        legs[1]["graph_version"] = "b" * 64
+    elif failure == "no_turn_evidence":
+        rules["forbidden_turn_pairs"] = None
+    elif failure == "partial_coverage":
+        rules["coverage"] = "PARTIAL"
+    with pytest.raises(UnverifiedRoute):
+        validate_journey(legs, **rules)
