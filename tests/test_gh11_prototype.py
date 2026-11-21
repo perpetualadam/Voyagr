@@ -183,7 +183,7 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
       <node id="3" lat="0" lon="0.01"/><node id="4" lat="0.003" lon="0.01"/>
       <node id="5" lat="-0.003" lon="0.01"/>
       <way id="10"><nd ref="1"/><nd ref="3"/><nd ref="2"/>
-        <tag k="highway" v="motorway"/></way>
+        <tag k="highway" v="motorway"/><tag k="oneway" v="no"/></way>
       <way id="11"><nd ref="1"/><nd ref="4"/><nd ref="2"/>
         <tag k="highway" v="residential"/></way>
       <way id="12"><nd ref="1"/><nd ref="5"/><nd ref="2"/>
@@ -264,3 +264,48 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert "OSM way association mismatch" in failed.stdout
     assert "invalid expected OSM ways" in failed.stdout
     assert "snap tolerance outside" in failed.stdout
+
+    # Derive exclusions on this loaded graph; never trust static graph edge IDs.
+    associations = [
+        {"id": "forward", "points": [[0, 0], [0, .02]], "expected_osm_way_ids": [10], "max_snap_distance_m": 1},
+        {"id": "reverse", "points": [[0, .02], [0, 0]], "expected_osm_way_ids": [10], "max_snap_distance_m": 1},
+    ]
+    trials = [
+        {"id": "forward_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "alternatives": True},
+        {"id": "reverse_control", "points": [[0, .02], [0, 0]], "blocked_associations": ["forward"], "required_association": "reverse", "expected_osm_way_ids": [10]},
+        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True},
+        {"id": "virtual_direction", "points": [[0, .002], [0, .018]], "blocked_associations": ["forward"]},
+    ]
+    for case in trials:
+        case.update(max_snap_distance_m=1, max_visited_nodes=1000000)
+    cases.write_text(json.dumps({"associations": associations, "cases": trials}))
+    completed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    exclusion_report = json.loads(next(line.split(" ", 1)[1] for line in completed.stdout.splitlines()
+                                       if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    assert exclusion_report["all_available_graph_checks_passed"] is True
+    forward_key = exclusion_report["associations"][0]["candidates"][0]["directed_edge_keys"][0]
+    reverse_key = exclusion_report["associations"][1]["candidates"][0]["directed_edge_keys"][0]
+    assert forward_key ^ 1 == reverse_key
+    for case in exclusion_report["cases"]:
+        assert case["blocked_edge_keys"]
+        for candidate in case["candidates"]:
+            assert set(candidate["directed_edge_keys"]).isdisjoint(case["blocked_edge_keys"])
+            assert candidate["forbidden_traversals"] == 0
+    assert exclusion_report["cases"][0]["baseline_exercises_exclusion"] is True
+    assert exclusion_report["cases"][1]["candidates"][0]["directed_edge_keys"] == [reverse_key]
+    assert set(exclusion_report["cases"][2]["blocked_edge_keys"]) == {forward_key, reverse_key}
+    assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
+    # Reject unknown evidence and endpoint re-snapping; neither proves no route exists.
+    cases.write_text(json.dumps({"associations": associations, "cases": [
+        {"id": "unknown", "points": [[0, 0], [0, .02]], "blocked_associations": ["missing"]},
+        {"id": "virtual_both", "points": [[0, .002], [0, .018]], "blocked_associations": ["forward"], "block_both_directions": True, "max_snap_distance_m": 1},
+    ]}))
+    failed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert failed.returncode != 0
+    refusal = json.loads(next(line.split(" ", 1)[1] for line in failed.stdout.splitlines()
+                             if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    assert all(row["status"] == "UNVERIFIED_OR_FAILED" for row in refusal["cases"])
+    assert "unverified association" in refusal["cases"][0]["reason"]
+    assert all(not row.get("route_absence_proven", False) for row in refusal["cases"])
+    assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}

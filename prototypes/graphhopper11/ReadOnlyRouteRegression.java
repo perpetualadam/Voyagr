@@ -1,6 +1,9 @@
 import com.graphhopper.*;
 import com.graphhopper.jackson.Jackson;
 import com.graphhopper.routing.ev.*;
+import com.graphhopper.routing.WeightingFactory;
+import com.graphhopper.routing.querygraph.VirtualEdgeIteratorState;
+import com.graphhopper.routing.weighting.AbstractAdjustedWeighting;
 import com.graphhopper.util.*;
 import com.graphhopper.util.details.PathDetail;
 import com.fasterxml.jackson.databind.*;
@@ -12,11 +15,32 @@ import static com.graphhopper.json.Statement.Op.MULTIPLY;
 
 /** Offline existing-graph checks only. No listener, import fallback or application wiring. */
 public class ReadOnlyRouteRegression {
+    static final String BLOCKS="voyagr_blocked_keys";
+    static class ExclusionHopper extends GraphHopper {
+        @Override protected WeightingFactory createWeightingFactory() {
+            var original=super.createWeightingFactory();
+            return (profile,hints,disableTurns)-> {
+                var delegate=original.createWeighting(profile,hints,disableTurns);
+                Set<Integer> blocked=Set.copyOf(hints.getObject(BLOCKS,Set.<Integer>of()));
+                if(blocked.isEmpty()) return delegate;
+                return new AbstractAdjustedWeighting(delegate) {
+                    @Override public double calcEdgeWeight(EdgeIteratorState edge,boolean reverse) {
+                        var state=edge.detach(false);
+                        int key=state instanceof VirtualEdgeIteratorState
+                            ? ((VirtualEdgeIteratorState)state).getOriginalEdgeKey():state.getEdgeKey();
+                        if(reverse) key^=1;
+                        return blocked.contains(key)?Double.POSITIVE_INFINITY:super.calcEdgeWeight(edge,reverse);
+                    }
+                    @Override public String getName() { return delegate.getName(); }
+                };
+            };
+        }
+    }
     static void require(boolean ok,String reason) {
         if(!ok) throw new IllegalStateException(reason);
     }
 
-    static List<Integer> validate(GraphHopper hopper,ResponsePath path,boolean noMotorways) {
+    static List<Integer> validate(GraphHopper hopper,ResponsePath path,boolean noMotorways,Set<Integer> blocked) {
         var points=path.getPoints();
         require(path.getDistance()>0 && points.size()>=2,"invalid geometry");
         for(int i=0;i<points.size();i++)
@@ -35,6 +59,7 @@ public class ReadOnlyRouteRegression {
                 && detail.getLast()<points.size(),"incomplete directed trace");
             int key=((Number)detail.getValue()).intValue();
             require(key>=0,"invalid directed key");
+            require(!blocked.contains(key),"mandatory directed exclusion violated");
             var edge=hopper.getBaseGraph().getEdgeIteratorStateForKey(key);
             require(edge.get(access),"vehicle access conflict");
             require(!noMotorways || edge.get(roadClass)!=RoadClass.MOTORWAY,"mandatory motorway exclusion violated");
@@ -56,12 +81,30 @@ public class ReadOnlyRouteRegression {
         return keys;
     }
 
-    static Map<String,Object> runCase(GraphHopper hopper,JsonNode test) {
+    static List<Integer> associated(Map<String,List<Integer>> associations,String id) {
+        require(associations.containsKey(id),"unverified association: "+id);
+        return associations.get(id);
+    }
+
+    static Map<String,Object> runCase(GraphHopper hopper,JsonNode test,Map<String,List<Integer>> associations) {
         String name=test.path("id").asText();
         Map<String,Object> result=new LinkedHashMap<>();
         result.put("id",name);
         result.put("status","UNVERIFIED_OR_FAILED");
         try {
+            Set<Integer> blocked=new TreeSet<>();
+            if(test.has("blocked_associations")) {
+                var references=test.get("blocked_associations");
+                require(references.isArray() && !references.isEmpty() && references.size()<=10,"invalid blocked associations");
+                for(var reference:references) {
+                    require(reference.isTextual(),"invalid association reference");
+                    for(int key:associated(associations,reference.asText())) {
+                        blocked.add(key);
+                        if(test.path("block_both_directions").asBoolean(false)) blocked.add(key^1);
+                    }
+                }
+            }
+            result.put("blocked_edge_keys",blocked);
             int nodeBudget=250000;
             if(test.has("max_visited_nodes")) {
                 var value=test.get("max_visited_nodes");
@@ -88,7 +131,19 @@ public class ReadOnlyRouteRegression {
                 }
                 require(hopper.getEncodingManager().hasEncodedValue("osm_way_id"),"OSM way evidence missing from graph");
             }
-            var visits=test.path("points");
+            JsonNode visits=test.path("points");
+            int anchorStart=-1,anchorEnd=-1;
+            if(test.has("anchors_from_association")) {
+                var keys=associated(associations,test.get("anchors_from_association").asText());
+                anchorStart=hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(0)).getBaseNode();
+                anchorEnd=hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(keys.size()-1)).getAdjNode();
+                if(test.path("reverse_anchors").asBoolean(false)) {int swap=anchorStart;anchorStart=anchorEnd;anchorEnd=swap;}
+                var nodes=hopper.getBaseGraph().getNodeAccess();
+                visits=Jackson.newObjectMapper().valueToTree(List.of(
+                    List.of(nodes.getLat(anchorStart),nodes.getLon(anchorStart)),
+                    List.of(nodes.getLat(anchorEnd),nodes.getLon(anchorEnd))));
+                result.put("anchor_scope","original_graph_nodes_of_associated_edges");
+            }
             require(visits.isArray() && visits.size()>=2 && visits.size()<=5,"invalid public fixture visits");
             GHRequest request=new GHRequest().setProfile("car").setPathDetails(List.of("edge_key","max_speed"));
             for(var point:visits) {
@@ -110,15 +165,36 @@ public class ReadOnlyRouteRegression {
             if(noMotorways) request.setCustomModel(new CustomModel()
                 .addToPriority(If("road_class == MOTORWAY",MULTIPLY,"0")));
             if(visits.size()>2) request.putHint("pass_through",true);
+            if(anchorStart>=0 && !blocked.isEmpty()) {
+                long baselineStart=System.nanoTime();
+                var baseline=hopper.route(request);
+                result.put("baseline_query_ms",(System.nanoTime()-baselineStart)/1e6);
+                require(!baseline.hasErrors() && !baseline.getAll().isEmpty(),"anchor baseline unavailable");
+                var keys=validate(hopper,baseline.getBest(),noMotorways,Set.of());
+                require(!Collections.disjoint(keys,blocked),"baseline does not exercise selected exclusion");
+                result.put("baseline_exercises_exclusion",true);
+            }
+            request.putHint(BLOCKS,Set.copyOf(blocked));
             long start=System.nanoTime();
             GHResponse response;
             try { response=hopper.route(request); }
             finally { result.put("query_ms",(System.nanoTime()-start)/1e6); }
+            if(response.hasErrors()) {
+                result.put("provider_error_types",response.getErrors().stream().map(e->e.getClass().getSimpleName()).toList());
+                result.put("route_absence_proven",false);
+            }
             require(!response.hasErrors(),"provider error: "+response.getErrors());
             require(!response.getAll().isEmpty() && response.getAll().size()<=(alternatives?3:1),"invalid candidate count");
             List<Map<String,Object>> candidates=new ArrayList<>(); Set<List<Integer>> seen=new HashSet<>();
             for(ResponsePath path:response.getAll()) {
-                List<Integer> keys=validate(hopper,path,noMotorways);
+                List<Integer> keys=validate(hopper,path,noMotorways,blocked);
+                if(anchorStart>=0) {
+                    require(hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(0)).getBaseNode()==anchorStart
+                        && hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(keys.size()-1)).getAdjNode()==anchorEnd,
+                        "ambiguous or displaced graph-node anchor");
+                }
+                if(test.has("required_association")) require(keys.containsAll(associated(associations,
+                    test.get("required_association").asText())),"directional control did not retain its associated traversal");
                 require(seen.add(keys),"duplicate alternative");
                 var geometry=path.getPoints();
                 var first=visits.get(0);var last=visits.get(visits.size()-1);
@@ -151,6 +227,10 @@ public class ReadOnlyRouteRegression {
                     candidate.put("directed_edge_keys",keys);
                     candidate.put("edge_key_scope","current_loaded_graph_only");
                 }
+                if(!blocked.isEmpty()) {
+                    candidate.put("directed_edge_keys",keys);
+                    candidate.put("forbidden_traversals",0);
+                }
                 candidates.add(candidate);
             }
             result.put("status","PASS_AVAILABLE_GRAPH_CHECKS");
@@ -168,25 +248,52 @@ public class ReadOnlyRouteRegression {
         var config=Jackson.newObjectMapper().treeToValue(root.get("graphhopper"),GraphHopperConfig.class);
         config.putObject("graph.location",args[1]).putObject("graph.dataaccess.default_type","MMAP")
             .putObject("datareader.file","");
-        var tests=Jackson.newObjectMapper().readTree(new File(args[2])).path("cases");
+        var fixture=Jackson.newObjectMapper().readTree(new File(args[2]));
+        var tests=fixture.path("cases");
         require(tests.isArray() && tests.size()>0 && tests.size()<=10,"fixture count limit");
-        GraphHopper hopper=new GraphHopper();
+        if(fixture.has("associations")) require(config.getCHProfiles().isEmpty() && config.getLMProfiles().isEmpty(),
+            "directed exclusions require unaccelerated prototype configuration");
+        GraphHopper hopper=new ExclusionHopper();
         try {
             hopper.init(config).setAllowWrites(false);
             long start=System.nanoTime();
             require(hopper.load(),"existing graph unavailable; import forbidden");
             double loadMs=(System.nanoTime()-start)/1e6;
+            Map<String,List<Integer>> associations=new LinkedHashMap<>();
+            List<Map<String,Object>> evidence=new ArrayList<>();
+            if(fixture.has("associations")) {
+                var sources=fixture.get("associations");
+                require(sources.isArray() && sources.size()>0 && sources.size()<=10,"association count limit");
+                for(var source:sources) {
+                    require(source.has("expected_osm_way_ids") && source.path("max_snap_distance_m").asDouble(75)<=1
+                        && !source.has("blocked_associations"),"association evidence must use source ways and <=1m tolerance");
+                    var row=runCase(hopper,source,Map.of());evidence.add(row);
+                    require(row.get("status").equals("PASS_AVAILABLE_GRAPH_CHECKS"),"association baseline unverified: "+row);
+                    String id=source.path("id").asText();
+                    require(!id.isEmpty() && !associations.containsKey(id),"duplicate or empty association ID");
+                    associations.put(id,evidenceKeys(row));
+                }
+            }
             List<Map<String,Object>> results=new ArrayList<>();
-            for(var test:tests) results.add(runCase(hopper,test));
+            for(var test:tests) results.add(runCase(hopper,test,associations));
             boolean allPassed=results.stream().allMatch(row->row.get("status").equals("PASS_AVAILABLE_GRAPH_CHECKS"));
             System.out.println("VOYAGR_GH11_REGRESSION "+Jackson.newObjectMapper().writeValueAsString(Map.of(
                 "engine_version",Constants.VERSION,"java_runtime",System.getProperty("java.version"),
                 "nodes",hopper.getBaseGraph().getNodes(),"edges",hopper.getBaseGraph().getEdges(),
-                "graph_load_ms",loadMs,"cases",results,
+                "graph_load_ms",loadMs,"associations",evidence,"cases",results,
                 "all_available_graph_checks_passed",allPassed,"production_migration","NO_GO",
-                "unverified",List.of("camera and crossing association","hazard coverage and freshness",
+                "unverified",List.of("general camera and crossing association","hazard coverage and freshness","application exclusion integration",
                     "general turn and multi-stop correctness","phone behavior","capacity under concurrency"))));
             if(!allPassed) throw new IllegalStateException("Some bounded checks failed or remain unverified; see report");
         } finally { hopper.close(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static List<Integer> evidenceKeys(Map<String,Object> row) {
+        var candidates=(List<Map<String,Object>>)row.get("candidates");
+        require(candidates.size()==1,"association must have exactly one source traversal");
+        var keys=(List<Integer>)candidates.get(0).get("directed_edge_keys");
+        require(keys!=null && !keys.isEmpty(),"association directed evidence missing");
+        return List.copyOf(keys);
     }
 }

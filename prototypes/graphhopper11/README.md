@@ -211,3 +211,44 @@ GH11.1 stores `osm_way_id` as a 31-bit integer. This fixture is within range;
 future source IDs exceeding that range need explicit importer review rather
 than truncation. Opt-in tests verify exact way matching and reject wrong/empty
 way evidence and invalid snap tolerances without enabling navigation.
+
+The operator-supplied VPS2 association report passed all five traversals within
+one metre. The Ecclesfield relations matched opposite directions of the same
+loaded edge (keys 5375353 and 5375352). These observed IDs are not trusted as
+inputs to another run or graph build.
+
+## Controlled selected-record exclusion
+
+`uk-exclusion-cases.json` first repeats the five associations on the loaded graph.
+Only successful source-way/one-metre validations yield exclusion keys. Any missing
+association aborts before exclusion queries. The Java extension then installs an
+immutable per-request key set using the same virtual-edge-aware weighting technique
+as the synthetic prototype. The graph and other requests are not mutated; CH/LM
+must be unprepared. This does not add a stock GraphHopper REST exclusion parameter.
+
+Camera tests exclude the selected direction, including a native-alternatives case
+whose every returned candidate is validated. The Ecclesfield reverse control
+must still traverse the opposite associated direction. **Only one camera record
+is excluded in that control**: the opposing camera exists and is intentionally
+not selected, so this is not a claim of avoiding all cameras.
+
+Crossing trials exclude both directions of every associated edge and test both
+journey directions. Queries use original graph nodes bounding the associated
+edge spans, not points inside forbidden segments. An unrestricted baseline must
+actually encounter the selected exclusion. Returned routes must start/end at the
+exact graph-node anchors, stay within the one-metre coordinate tolerance, preserve
+turn restrictions and contain zero blocked directed keys. Whole-edge closure can
+be more conservative than the physical hazard extent.
+
+Each experiment keeps 1,000,000 visited nodes, a 20-second timeout and existing
+container resource limits. A provider error records its class and timing and stays
+UNVERIFIED_OR_FAILED. ConnectionNotFound, search exhaustion or displaced snapping
+are not promoted to proof that no compliant route exists; `route_absence_proven`
+is false on provider refusal. Refusal is fail-closed, not a passing detour result.
+
+These UK exclusions remain unverified until VPS2 executes the fixture. Opt-in
+synthetic tests exercise this actual loaded-graph wrapper for directional and
+bidirectional exclusion, opposite-direction control, native alternatives and
+virtual endpoints. Unknown references and displaced endpoint snapping are refused;
+graph file hashes remain unchanged. The application, GH8 and production selection
+remain untouched, and production migration remains NO-GO.
