@@ -48,6 +48,7 @@ const {chromium}=require('playwright');
   denyPrivateConfig=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await page.locator('#privateAccessNotice').waitFor({state:'visible'});
   check('Actual personal shell exposes a fresh private-login action after gate denial',await page.locator('#privateAccessNotice a').getAttribute('href').then(h=>h.startsWith('/privacy?private-login=')));
+  check('Info explains confirmed access denial and offers stationary recovery',await page.locator('#privateAccessStatus').textContent().then(t=>t.includes('owner login required'))&&await page.locator('#privateAccessUnlock').getAttribute('hidden')===null);
   denyPrivateConfig=false;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await page.locator('#privateAccessNotice').waitFor({state:'hidden'});
   check('Actual personal shell clears the notice after successful network access',await page.locator('#privateAccessNotice').isHidden());

@@ -1755,6 +1755,12 @@
                             <div class="preview-route-info-content">
                                 <p id="routePlanningNotice" class="preview-notice" role="status"></p>
                                 <p id="routeMapRenderStatus" class="preview-notice">Map renderer: waiting for status.</p>
+                                {% if personal_mode %}
+                                <div class="private-access-info">
+                                    <p id="privateAccessStatus">Private website access: not yet verified.</p>
+                                    <a id="privateAccessUnlock" class="private-access-info-unlock" href="/privacy?private-login=1" target="_blank" rel="noopener" hidden>Unlock private access in a new tab</a>
+                                </div>
+                                {% endif %}
                                 <p id="routeSpeedLimitStatus" class="preview-notice">Speed display: waiting for a live GPS update.</p>
                                 <button type="button" class="route-warning-refresh" onclick="VoyagrRouteWarnings.refresh(window.lastCalculatedRoute)">Refresh mapped warning data</button>
                                 <p id="routeHazardDataStatus" class="preview-notice">Mapped hazard warning coverage: waiting for status.</p>

@@ -10,16 +10,31 @@
         let stopped = false;
         let controller = null;
         let accessDenied = false;
+        let accessChecked = false;
+        let checkUnavailable = false;
         let renderTimer = null;
         const summary = doc.getElementById('journeySummaryModal');
-        function journeyBusy() {
+        function deferralReason() {
             const nav = win.VoyagrNavigationLifecycleOrchestration;
-            return !!(nav && ((nav.getRouteInProgress && nav.getRouteInProgress()) ||
-                (nav.getNavigationStarting && nav.getNavigationStarting()))) ||
-                !!(summary && !summary.hidden && win.getComputedStyle(summary).display !== 'none');
+            if(nav && ((nav.getRouteInProgress && nav.getRouteInProgress()) ||
+                (nav.getNavigationStarting && nav.getNavigationStarting())))return 'navigation';
+            return summary && !summary.hidden && win.getComputedStyle(summary).display !== 'none' ? 'summary' : null;
         }
         function reconcile() {
-            if (!stopped) render(accessDenied && !journeyBusy());
+            if(stopped)return;
+            const deferred=deferralReason();
+            render(accessDenied && !deferred);
+            const status=doc.getElementById('privateAccessStatus');
+            let text=accessDenied ? 'Private website access: owner login required. Fresh online map and lookup requests are blocked.' :
+                accessChecked ? 'Private website access: last check passed.' : 'Private website access: not yet verified.';
+            if(accessDenied&&deferred)text+=deferred==='navigation'?' The unlock card is deferred until navigation stops.':' The unlock card is deferred until the journey summary closes.';
+            if(checkUnavailable)text+=' Latest access check could not complete.';
+            if(status&&status.textContent!==text)status.textContent=text;
+            const unlock=doc.getElementById('privateAccessUnlock');
+            if(unlock){
+                unlock.hidden=!accessDenied||deferred==='navigation';
+                if(!unlock.hidden)unlock.href='/privacy?private-login='+Date.now();
+            }
         }
         function scheduleRender() {
             // Stop builds the summary in the same turn. Wait until that work is done.
@@ -41,15 +56,17 @@
                     cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
                 });
                 if (!stopped) {
-                    if (response.status === 401 || response.status === 403) accessDenied = true;
-                    else if (response.ok) accessDenied = false;
-                    reconcile();
+                    if (response.status === 401 || response.status === 403) {accessDenied = true;accessChecked=true;checkUnavailable=false;}
+                    else if (response.ok) {accessDenied = false;accessChecked=true;checkUnavailable=false;}
+                    else checkUnavailable=true;
                 }
             } catch (_) {
                 // Offline/timeouts/server failures are not proof of an expired login.
+                if(!stopped)checkUnavailable=true;
             } finally {
                 win.clearTimeout(timeout);
                 controller = null;
+                reconcile();
             }
         }
         function check() {
