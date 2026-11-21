@@ -13,6 +13,7 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   document.getElementById('settingsTab').style.display='block';window.calls=[];window.requests=[];
   window.fetch=(url,options)=>{requests.push([url,options]);return Promise.resolve({ok:true,json:()=>Promise.resolve({})});};
   for(const name of ['goBackToPreviousTab','manualTrafficUpdate','showCAZInfo','clearDepartureTime','analysebestTimeToLeave','refreshApp','checkForUpdates','recalculateRouteWithPreferences','switchTab','voyagrShowSafetyNotice'])window[name]=(...args)=>calls.push([name,...args]);
+  window.VoyagrLocalData={preferenceRequest:options=>window.fetch('/api/app-settings',options)};
   const u=VoyagrUnitsPreferencesOrchestration;u.bind({units:()=>VoyagrUnits,call:{saveAllSettings:()=>calls.push(['saveAllSettings']),showStatus:()=>{}}});
   VoyagrTabNavigationOrchestration.bind({units:()=>VoyagrUnits,getDistanceUnit:()=>u.getDistanceUnitValue(),getCurrencyUnit:()=>u.getCurrencyUnitValue(),getSpeedUnit:()=>u.getSpeedUnitValue(),getTemperatureUnit:()=>u.getTemperatureUnitValue(),call:{applyDomSelectsFromPlan:items=>items.forEach(({id,value})=>{const el=document.getElementById(id);if(el)el.value=value;}),updateAllDistanceDisplays:()=>u.updateAllDistanceDisplays()}});
   u.setDistanceUnitValue('mi');VoyagrTabNavigationOrchestration.loadUnitPreferences();
@@ -20,6 +21,17 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
   u.setDistanceUnitValue('km');VoyagrTabNavigationOrchestration.loadUnitPreferences();
   window.updateDistanceUnit=()=>u.updateDistanceUnit();window.updateCurrencyUnit=()=>u.updateCurrencyUnit();
  });
+ // Supporting notes start collapsed; native help never changes settings.
+ const infos=page.locator('details.settings-info');assert.ok(await infos.count()>30);
+ assert.equal(await page.locator('details.settings-info[open]').count(),0);
+ const info=page.locator('#settingsUnits .settings-info').first();
+ const help=info.locator('.settings-info-content');assert.equal(await help.isVisible(),false);
+ const beforeHelp=await page.locator('#distanceUnit').inputValue();
+ await info.locator('summary').focus();await page.keyboard.press('Enter');
+ assert.equal(await help.isVisible(),true);
+ assert.ok(await help.locator('p').first().evaluate(n=>parseFloat(getComputedStyle(n).fontSize)>=16));
+ await page.keyboard.press('Space');assert.equal(await help.isVisible(),false);
+ assert.equal(await page.locator('#distanceUnit').inputValue(),beforeHelp);
  // Native disclosures work with keyboard and keep mounted preferences unchanged.
  assert.equal(await page.locator('details.settings-group').count(),9);
  assert.equal(await page.locator('details.settings-group[open]').count(),1);
@@ -28,7 +40,12 @@ for(const [width,height] of [[320,640],[390,844],[844,390],[1280,800]])for(const
  await page.keyboard.press('Space');assert.equal(await page.locator('#settingsSmartRouting').getAttribute('open'),null);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Collapsed overflow');
  if(width===390&&scale===1){await page.locator('.settings-heading').scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/voyagr-settings-groups-'+(dark?'dark':'light')+'.png'});}
- await page.evaluate(()=>document.querySelectorAll('details.settings-group').forEach(d=>{d.open=true;}));
+ await page.evaluate(()=>document.querySelectorAll('details.settings-group,details.settings-info').forEach(d=>{d.open=true;}));
+ for(const el of await page.locator('.settings-info > summary').all()){
+  if(!await el.isVisible())continue;const b=await el.boundingBox();assert(b.width>=44&&b.height>=44);
+ }
+ assert.equal(await page.locator('.settings-info label,.settings-info input,.settings-info select,.settings-info button').count(),0);
+ assert.equal(await page.locator('label .settings-info').count(),0);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Horizontal overflow');
  if(dark)assert.equal(await page.locator('#accountStatus').evaluate(n=>getComputedStyle(n).color),'rgb(204, 209, 223)');
  for(const el of await page.locator('#settingsTab .settings-action, #settingsTab select, #settingsTab .toggle-switch, #settingsTab details.settings-group > summary').all()){

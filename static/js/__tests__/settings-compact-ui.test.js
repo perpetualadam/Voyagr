@@ -79,3 +79,23 @@ test('sign-in and configured Premium shortcuts reveal the closed account group b
   group.open=false;premium.style.display='none';Account.openVoyagerPremiumSection();jest.runAllTimers();expect(group.open).toBe(false);
  } finally {jest.useRealTimers();}
 });
+
+test('supporting help is initially collapsed without hiding controls, live status or mandatory warnings',()=>{
+ const help=[...document.querySelectorAll('details.settings-info')];
+ expect(help.length).toBeGreaterThan(30);
+ for(const item of help){
+  expect(item.open).toBe(false);
+  expect(item.firstElementChild.tagName).toBe('SUMMARY');
+  expect(item.firstElementChild.getAttribute('aria-label')).toMatch(/^Information about .+/);
+  expect(item.querySelector('input,select,button,label')).toBeNull();
+  expect(item.closest('label')).toBeNull();
+ }
+ expect(document.getElementById('temperatureUnitHelp').closest('.settings-info')).not.toBeNull();
+ for(const id of ['costCurrencyHelp','porcupineWakeHelp','localDataStatus','privacyUnavailable','pwaStatus']){
+  expect(document.getElementById(id).closest('.settings-info')).toBeNull();
+ }
+ const critical=[...document.querySelectorAll('p')].find(p=>p.textContent.includes('Unresolved mandatory requirements prevent navigation'));
+ expect(critical.closest('.settings-info')).toBeNull();
+ expect(document.getElementById('trafficAwareRouting').labels[0].textContent.trim()).toBe('Traffic-Aware Routing');
+ expect(document.getElementById('roundTrip').labels[0].textContent.trim()).toBe('Round Trip');
+});
