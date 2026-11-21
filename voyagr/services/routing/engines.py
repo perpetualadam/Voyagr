@@ -352,6 +352,10 @@ def route_with_graphhopper(
                 limitations=provider_limitations,
             ) or None
 
+            if provider_limitations:
+                logger.warning('[GRAPHHOPPER] Selected settings lack supported attributes; trying another engine')
+                return None
+
             custom_model = merge_graphhopper_custom_model_parts(
                 cam_model, tl_rx_model, caz_model, costing_model,
             )

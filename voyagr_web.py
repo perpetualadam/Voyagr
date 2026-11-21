@@ -920,6 +920,7 @@ from voyagr.services.routing.costing import (
     build_auto_costing_options as _build_auto_costing_options,
 )
 from voyagr.services.routing.request_params import parse_route_request
+from voyagr.services.routing.selected_settings import retain_valhalla_settings, needs_settings_capable_engine
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
 from voyagr.services.routing.route_variety import dedupe_similar_routes
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
@@ -1364,6 +1365,8 @@ def calculate_route():
                 exclude_locations=exclude_locations,
             )
 
+            enrich_ctx.selected_payload = payload
+
             # Calculate distance to determine appropriate timeout
             # Longer routes need more time (Valhalla can take 30+ seconds for 500+ km routes)
             straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111  # ~111 km per degree
@@ -1456,6 +1459,7 @@ def calculate_route():
                     # ================================================================
                     routes = append_distinct_valhalla_route_types(
                         routes,
+                        selected_payload=payload,
                         valhalla_costing=valhalla_costing,
                         enable_hazard_avoidance=enable_hazard_avoidance,
                         url=url, headers=headers,
@@ -1544,156 +1548,6 @@ def calculate_route():
             print(f"[Valhalla] Failed: {valhalla_error}")
 
             # ================================================================
-            # RETRY WITH FEWER EXCLUSIONS IF ROUTE NOT FOUND
-            # ================================================================
-            # If Valhalla failed because it couldn't find a route with all exclusions,
-            # retry with progressively fewer exclusions (some hazards may be unavoidable)
-            if enable_hazard_avoidance and exclude_locations and len(exclude_locations) > 10:
-                retry_limits = [50, 20, 10]  # Try with 50, then 20, then 10 exclusions
-                for retry_limit in retry_limits:
-                    route_transport.check_budget()
-                    if retry_limit >= len(exclude_locations):
-                        continue  # Skip if we already tried this many
-
-                    logger.warning(f"[VALHALLA] Retrying with {retry_limit} exclude_locations (reduced from {len(exclude_locations)})")
-                    print(f"[Valhalla] RETRY: Reducing exclusions to {retry_limit} locations")
-
-                    try:
-                        # Rebuild with fewer exclusions (prioritized by distance to route)
-                        retry_locations = build_valhalla_exclude_locations(
-                            hazards,
-                            route_bbox=route_bbox,
-                            max_hazards=retry_limit,
-                            start_lat=start_lat,
-                            start_lon=start_lon,
-                            end_lat=end_lat,
-                            end_lon=end_lon,
-                        )
-
-                        # Build retry payload (use same costing as initial request).
-                        # Extracted to orchestrator.build_valhalla_retry_payload.
-                        retry_payload = build_valhalla_retry_payload(
-                            start_lat=start_lat, start_lon=start_lon,
-                            end_lat=end_lat, end_lon=end_lon,
-                            valhalla_costing=valhalla_costing,
-                            exclude_locations=retry_locations,
-                            avoid_tolls=avoid_tolls,
-                            avoid_motorways=avoid_motorways,
-                            avoid_ferries=avoid_ferries,
-                            prefer_scenic=prefer_scenic,
-                            prefer_quiet=prefer_quiet,
-                            avoid_unpaved=avoid_unpaved,
-                            route_optimization=route_optimization,
-                        )
-
-                        with route_transport.stage('valhalla'):
-                            retry_response = route_transport.post(url, json=retry_payload, timeout=10, headers=headers)
-
-                        if retry_response.status_code == 200:
-                            retry_data = retry_response.json()
-                            if 'trip' in retry_data and 'legs' in retry_data['trip']:
-                                logger.info(f"[VALHALLA] RETRY SUCCESS with {retry_limit} exclusions!")
-                                print(f"[Valhalla] RETRY SUCCESS: Route found with {retry_limit} exclusions")
-
-                                # Process the retry response via the shared route-entry
-                                # builder (maneuver lengths in metres, matching the
-                                # previous inline retry behaviour).
-                                retry_multiplier, retry_traffic_level = traffic_factors()
-                                routes = [build_valhalla_route_entry(
-                                    trip=retry_data['trip'], name='Fastest', route_id=1,
-                                    traffic_multiplier=retry_multiplier,
-                                    traffic_level=retry_traffic_level,
-                                    include_traffic_fields=True,
-                                    maneuver_length_in_meters=True,
-                                    hazards=hazards, cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price, include_tolls=include_tolls,
-                                    include_caz=include_caz, caz_exempt=caz_exempt,
-                                )]
-                                logger.info(f"[VALHALLA] Retry route has {len(routes[0].get('maneuvers') or [])} maneuvers")
-                                # The retry payload asks for alternates too; offer them
-                                # instead of leaving the preview with a lone Fastest.
-                                routes.extend(build_valhalla_alternate_route_entries(
-                                    retry_data,
-                                    first_route_id=2,
-                                    traffic_multiplier=retry_multiplier,
-                                    traffic_level=retry_traffic_level,
-                                    maneuver_length_in_meters=True,
-                                    hazards=hazards, cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price, include_tolls=include_tolls,
-                                    include_caz=include_caz, caz_exempt=caz_exempt,
-                                ))
-
-                                retry_enrich = RouteEnrichmentContext(
-                                    url=url, headers=headers, route_locations=route_locations,
-                                    has_waypoints=has_waypoints, start_lat=start_lat, start_lon=start_lon,
-                                    end_lat=end_lat, end_lon=end_lon, route_bbox=route_bbox, hazards=hazards,
-                                    enable_hazard_avoidance=enable_hazard_avoidance, avoid_cameras=avoid_cameras,
-                                    graphhopper_route=graphhopper_route, cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price, include_tolls=include_tolls,
-                                    include_caz=include_caz, caz_exempt=caz_exempt,
-                                    traffic_multiplier=retry_multiplier,
-                                    traffic_level=retry_traffic_level,
-                                    max_detour=max_detour,
-                                    valhalla_costing=valhalla_costing,
-                                    prefer_scenic=prefer_scenic,
-                                    prefer_quiet=prefer_quiet,
-                                    avoid_tolls=avoid_tolls,
-                                    avoid_motorways=avoid_motorways,
-                                    avoid_ferries=avoid_ferries,
-                                    avoid_unpaved=avoid_unpaved,
-                                    route_optimization=route_optimization,
-                                )
-                                routes = apply_valhalla_route_enrichment(
-                                    routes, retry_enrich, log_label='retry',
-                                )
-
-                                print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
-
-                                # Record success
-                                valhalla_elapsed = (time.monotonic() - valhalla_start_time) * 1000
-                                fallback_optimizer.record_success('valhalla', valhalla_elapsed)
-
-                                # Determine source
-                                retry_source = 'Valhalla ✅ (Retry)'
-                                if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
-                                    retry_source = 'GraphHopper+Valhalla ✅'
-
-                                # Build response (shared shape with primary/recovery paths)
-                                response_data = build_route_success_response(
-                                    routes,
-                                    source=retry_source,
-                                    camera_avoidance_engine=(
-                                        'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
-                                        else 'Valhalla'
-                                    ),
-                                    total_stop_time=total_stop_time,
-                                    via_points_count=len(via_points),
-                                    stops_count=len(stops),
-                                    start_lat=start_lat, start_lon=start_lon,
-                                    end_lat=end_lat, end_lon=end_lon,
-                                )
-
-                                # Cache the route
-                                if route_cache.set(private_key, response_data):
-                                    logger.info("[CACHE] route_stored tier=private_memory")
-
-                                # Legacy database route-cache writes are disabled; existing rows are untouched.
-
-                                # Return the successful retry response
-                                return jsonify(response_data)
-                    except route_transport.RoutingDeadlineExceeded:
-                        raise
-                    except Exception as retry_e:
-                        logger.warning(f"[VALHALLA] Retry with {retry_limit} exclusions failed: {type(retry_e).__name__}")
-                        continue  # Try next retry limit
-
-            # ================================================================
             # PHASE 5: Record failure in fallback chain optimizer
             # ================================================================
             if valhalla_error:  # Only record if all retries failed
@@ -1706,8 +1560,8 @@ def calculate_route():
         else:
             # ----------------------------------------------------------------
             # Valhalla often rejects hazard-heavy / over-specified payloads (HTTP 400).
-            # Retry a baseline request (no exclude_locations) even when GraphHopper failed,
-            # then a stripped locations+costing payload, before giving up to OSRM.
+            # Retry without optional metadata, retaining the selected exclusions,
+            # travel mode, waypoints and costing preferences on every attempt.
             # ----------------------------------------------------------------
             recovery_data: Optional[Dict[str, Any]] = None
             _ve = str(valhalla_error or '')
@@ -1769,8 +1623,8 @@ def calculate_route():
                     valhalla_baseline_ok = False
                     if not skip_valhalla_retry:
                         for rec_label, rec_payload in (
-                            ('baseline Valhalla (no exclude_locations)', baseline_payload),
-                            ('minimal Valhalla (locations+costing)', minimal_payload),
+                            ('Valhalla with selected settings', retain_valhalla_settings(baseline_payload, payload)),
+                            ('minimal Valhalla with selected settings', retain_valhalla_settings(minimal_payload, payload)),
                         ):
                             logger.info(f"[ROUTING] Recovery: requesting {rec_label}")
                             with route_transport.stage('valhalla'):
@@ -1821,6 +1675,7 @@ def calculate_route():
                             traffic_multiplier=tr_mult,
                             traffic_level=tr_level,
                             max_detour=max_detour,
+                            selected_payload=payload,
                             valhalla_costing=valhalla_costing,
                             prefer_scenic=prefer_scenic,
                             prefer_quiet=prefer_quiet,
@@ -1862,13 +1717,11 @@ def calculate_route():
                             start_lat=start_lat, start_lon=start_lon,
                             end_lat=end_lat, end_lon=end_lon,
                         )
-                        # Recovery omits exclusions and may omit costing preferences.
-                        # Scoring a route is not evidence that constraints were enforced.
+                        # Recovery retains intent; provider acceptance is not proof of compliance.
                         recovery_data.update({
                             'routing_degraded': True,
                             'routing_warning': (
-                                'Routing recovery used reduced constraints. Camera, traffic-light, '
-                                'railway-crossing, CAZ and other avoidance preferences are not guaranteed.'
+                                'Routing recovery retained selected settings; avoidance remains subject to independent verification.'
                             ),
                         })
                         route_cache.set(private_key, recovery_data)
@@ -1881,6 +1734,11 @@ def calculate_route():
 
             if recovery_data is not None:
                 return jsonify(recovery_data)
+
+            if needs_settings_capable_engine(dict(vars(p), avoid_caz=apply_caz_routing_avoidance)):
+                return jsonify(success=False, error_code='ROUTING_SETTINGS_UNSUPPORTED',
+                               error='Routing engines could not produce a route with the selected settings. Current journey retained; retry without silently changing preferences.',
+                               automatic_selection_allowed=False, avoidance_status='UNSUPPORTED', routing_degraded=True)
 
             # Fallback to OSRM (public service); use profile matching routing mode
             osrm_profile = 'driving' if valhalla_costing == 'auto' else ('foot' if valhalla_costing == 'pedestrian' else 'bike')

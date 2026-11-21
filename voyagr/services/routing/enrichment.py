@@ -61,6 +61,7 @@ class RouteEnrichmentContext:
     avoid_ferries: bool = False
     avoid_unpaved: bool = False
     route_optimization: str = 'fastest'
+    selected_payload: Optional[Dict[str, Any]] = None
 
 
 def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
@@ -74,6 +75,7 @@ def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
     ``ensure_optimised_camera_avoiding_route`` accepts it (scenic/quiet do not).
     """
     return {
+        'selected_payload': ctx.selected_payload,
         'traffic_multiplier': ctx.traffic_multiplier,
         'traffic_level': ctx.traffic_level,
         'url': ctx.url,

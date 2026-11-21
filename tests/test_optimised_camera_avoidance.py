@@ -42,7 +42,7 @@ class TestGraphhopperQualifiesAsOptimised:
 
 
 class TestFetchValhallaAutoJson:
-    def test_tries_with_exclusions_before_bare_request(self):
+    def test_failed_selected_exclusions_do_not_retry_a_bare_route(self):
         trip = {'trip': {'legs': [{'shape': 'x'}]}}
         resp_ok = MagicMock(status_code=200)
         resp_ok.json.return_value = trip
@@ -54,9 +54,9 @@ class TestFetchValhallaAutoJson:
                 exclude_locations=[{'lat': 1.5, 'lon': 2.5}],
             )
 
-        assert result == trip
-        assert mock_post.call_count == 2
-        assert 'exclude_locations' in mock_post.call_args_list[0].kwargs['json']
+        assert result is None
+        assert mock_post.call_count == 1
+        assert mock_post.call_args.kwargs['json']['exclude_locations'] == [{'lat': 1.5, 'lon': 2.5}]
 
     def test_require_exclusions_skips_bare_fallback(self):
         resp_fail = MagicMock(status_code=400)

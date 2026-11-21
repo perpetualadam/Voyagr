@@ -427,6 +427,7 @@ def build_multidrop_route(
             waypoints[i], waypoints[i + 1],
             valhalla_costing, exclude_locations, departure_time,
             use_graphhopper=use_graphhopper_avoidance,
+            enable_hazard_avoidance=enable_hazard_avoidance,
             route_bbox=route_bbox,
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
@@ -551,6 +552,7 @@ def _route_leg(
     camera_hazards: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     incident_hazards: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     avoid_points: Optional[List[Dict[str, Any]]] = None,
+    enable_hazard_avoidance: bool = False,
 ) -> Dict[str, Any]:
     """Route a single leg. Tries GraphHopper (if enabled), then Valhalla, then OSRM."""
     if use_graphhopper and costing == "auto" and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
@@ -582,9 +584,16 @@ def _route_leg(
     if result:
         return result
 
-    result = _osrm_leg(from_loc, to_loc, costing)
-    if result:
-        return result
+    from voyagr.services.routing.selected_settings import needs_settings_capable_engine
+    constrained = needs_settings_capable_engine(dict(
+        enable_hazard_avoidance=enable_hazard_avoidance or bool(exclude_locations),
+        avoid_tolls=avoid_tolls, avoid_motorways=avoid_motorways, avoid_ferries=avoid_ferries,
+        avoid_unpaved=avoid_unpaved, avoid_caz=avoid_caz_zones, prefer_scenic=prefer_scenic,
+        prefer_quiet=prefer_quiet, route_optimization=route_optimization, avoid_points=avoid_points))
+    if not constrained:
+        result = _osrm_leg(from_loc, to_loc, costing)
+        if result:
+            return result
 
     dist = haversine_km(from_loc["lat"], from_loc["lon"],
                         to_loc["lat"], to_loc["lon"])
@@ -892,6 +901,7 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
         exclude_locations = []
         camera_hazards_md = None
         incident_hazards_md = None
+        traffic_lights_md = crossings_md = None
         if enable_hazard_avoidance:
             try:
                 from voyagr.services.hazards import (
@@ -903,14 +913,30 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
                 max_lat = max(start_loc['lat'], *(s['lat'] for s in all_stops))
                 min_lon = min(start_loc['lon'], *(s['lon'] for s in all_stops))
                 max_lon = max(start_loc['lon'], *(s['lon'] for s in all_stops))
-                hazards = fetch_hazards_for_route(min_lat, min_lon, max_lat, max_lon)
+                import copy
+                hazards = copy.deepcopy(fetch_hazards_for_route(min_lat, min_lon, max_lat, max_lon))
                 bbox = {
                     'min_lat': min_lat, 'max_lat': max_lat,
                     'min_lon': min_lon, 'max_lon': max_lon,
                 }
                 hazards = _merge_tomtom_incidents_for_bbox(hazards, bbox)
                 from voyagr.services.routing.integrity_api import capture_hazard_snapshot
-                capture_hazard_snapshot(hazards)
+                # Keep independent evidence before filtering engine inputs.
+                from voyagr.services.routing.warning_observations import collect
+                observations = collect([(start_loc['lat'], start_loc['lon'])] +
+                                       [(s['lat'], s['lon']) for s in all_stops], hazards)
+                hazards['traffic_light'] = observations['traffic_light']
+                hazards['railway_crossing'] = observations['railway_crossing']
+                capture_hazard_snapshot(copy.deepcopy(hazards))
+                import voyagr_web as vw
+                if not data.get('avoid_cameras', True):
+                    vw.clear_camera_hazard_buckets(hazards)
+                else:
+                    vw.filter_camera_hazards_by_preferences(hazards)
+                traffic_lights_md = observations['traffic_light'] if data.get('avoid_traffic_lights', True) else []
+                crossings_md = observations['railway_crossing'] if data.get('avoid_railway_crossings', True) else []
+                hazards['traffic_light'] = traffic_lights_md
+                hazards['railway_crossing'] = crossings_md
                 camera_hazards_md, incident_hazards_md = _graphhopper_hazard_slices(
                     hazards,
                     avoid_cameras=data.get('avoid_cameras', True),
@@ -953,6 +979,8 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
             avoid_caz_zones=apply_caz_ms,
             camera_hazards=camera_hazards_md,
             incident_hazards=incident_hazards_md,
+            traffic_light_hazards=traffic_lights_md,
+            railway_crossing_hazards=crossings_md,
         )
 
         if not result.get('success'):

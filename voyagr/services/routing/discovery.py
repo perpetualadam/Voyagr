@@ -35,6 +35,8 @@ from voyagr.services.routing.optimised_route import (
     routes_are_distinct,
 )
 
+from voyagr.services.routing.selected_settings import retain_valhalla_settings
+
 logger = logging.getLogger('voyagr_web')
 
 
@@ -73,6 +75,7 @@ def append_distinct_valhalla_route_types(
     avoid_unpaved: bool = False,
     traffic_multiplier: float = 1.0,
     traffic_level: str = 'N/A',
+    selected_payload: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Add 🌿 Scenic, 🛤️ Quiet, and ⚡ Optimised Discovery routes (auto + hazard avoidance).
@@ -116,6 +119,7 @@ def append_distinct_valhalla_route_types(
             routes = _append_preference_route_if_distinct(
                 routes,
                 name=name,
+                selected_payload=selected_payload,
                 prefer_scenic=p_scenic,
                 prefer_quiet=p_quiet,
                 url=url,
@@ -157,7 +161,7 @@ def append_distinct_valhalla_route_types(
                     end_lat=end_lat, end_lon=end_lon,
                     exclude_locations=baseline_cameras[:50],
                 )
-                disc_response = route_transport.post(url, json=disc_payload, timeout=10, headers=headers)
+                disc_response = route_transport.post(url, json=retain_valhalla_settings(disc_payload, selected_payload), timeout=10, headers=headers)
                 if disc_response.status_code == 200:
                     disc_data = disc_response.json()
                     if 'trip' in disc_data and 'legs' in disc_data['trip']:

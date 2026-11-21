@@ -17,6 +17,8 @@ from voyagr.services.hazards import (
 )
 from voyagr.services.routing.valhalla_parsing import valhalla_trip_json_to_std_route_entry
 
+from voyagr.services.routing.selected_settings import retain_valhalla_settings
+
 logger = logging.getLogger(__name__)
 
 PRIMARY_OPTIMISED_NAME = '⚡ Optimised'
@@ -192,11 +194,12 @@ def fetch_valhalla_auto_json(
     timeout: int = 10,
     *,
     require_exclusions: bool = False,
+    selected_payload: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Valhalla auto (time-focused). If exclude_locations is non-empty, try that first;
-    on non-success, retry without exclusions so routing still succeeds when avoids
-    over-constrain the graph — unless require_exclusions is True (Optimised ensure path).
+    never remove supplied exclusions after failure. An unconstrained request is
+    allowed only when no exclusions were selected.
     """
     base_payload: Dict[str, Any] = {
         'locations': locations,
@@ -213,11 +216,11 @@ def fetch_valhalla_auto_json(
         attempts.append(w)
     elif require_exclusions:
         return None
-    if not require_exclusions:
+    if not require_exclusions and not exclude_locations:
         attempts.append(base_payload)
     for payload in attempts:
         try:
-            resp = route_transport.post(url, json=payload, timeout=timeout, headers=headers)
+            resp = route_transport.post(url, json=retain_valhalla_settings(payload, selected_payload), timeout=timeout, headers=headers)
             if resp.status_code != 200:
                 continue
             data = resp.json()
@@ -244,6 +247,7 @@ def fetch_valhalla_auto_costing_preference_json(
     route_optimization: str = 'balanced',
     exclude_locations: Optional[List[Dict[str, Any]]] = None,
     timeout: int = 10,
+    selected_payload: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Valhalla auto with explicit scenic/quiet costing preferences.
@@ -278,11 +282,12 @@ def fetch_valhalla_auto_costing_preference_json(
         with_excl = dict(payload)
         with_excl['exclude_locations'] = exclude_locations
         attempts.append(with_excl)
-    attempts.append(payload)
+    if not exclude_locations:
+        attempts.append(payload)
 
     for attempt_payload in attempts:
         try:
-            resp = route_transport.post(url, json=attempt_payload, timeout=timeout, headers=headers)
+            resp = route_transport.post(url, json=retain_valhalla_settings(attempt_payload, selected_payload), timeout=timeout, headers=headers)
             if resp.status_code != 200:
                 continue
             data = resp.json()
@@ -350,6 +355,7 @@ def ensure_costing_preference_variety_routes(
     min_distinct: int = MIN_PREFERENCE_VARIETY_DISTINCT,
     traffic_multiplier: float = 1.0,
     traffic_level: str = 'N/A',
+    selected_payload: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Ensure 🛤️ Quiet and 🌿 Scenic costing-preference routes are offered when possible.
@@ -383,6 +389,7 @@ def ensure_costing_preference_variety_routes(
         routes = _append_preference_route_if_distinct(
             routes,
             name=name,
+            selected_payload=selected_payload,
             prefer_scenic=p_scenic,
             prefer_quiet=p_quiet,
             url=url,
@@ -438,6 +445,7 @@ def _append_preference_route_if_distinct(
     caz_exempt: bool,
     traffic_multiplier: float = 1.0,
     traffic_level: str = 'N/A',
+    selected_payload: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Fetch one Scenic/Quiet route and append when distinct from existing options."""
     if any((r.get('name') or '').strip() == name for r in routes):
@@ -452,6 +460,7 @@ def _append_preference_route_if_distinct(
         avoid_ferries=avoid_ferries,
         avoid_unpaved=avoid_unpaved,
         route_optimization='balanced',
+        selected_payload=selected_payload,
         exclude_locations=exclude if exclude else None,
     )
     if not pref_data:
@@ -746,6 +755,7 @@ def ensure_optimised_camera_avoiding_route(
     caz_exempt: bool,
     traffic_multiplier: float = 1.0,
     traffic_level: str = 'N/A',
+    selected_payload: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Ensure a ⚡ Optimised route exists that avoids cameras like Fast/Short routes.
@@ -789,6 +799,7 @@ def ensure_optimised_camera_avoiding_route(
         url, headers, locs,
         exclude_locations=ensure_exclude,
         require_exclusions=True,
+        selected_payload=selected_payload,
     )
     if not opt_data:
         logger.warning('[VALHALLA] ensure Optimised: Valhalla could not route with camera exclusions')

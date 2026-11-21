@@ -9,7 +9,7 @@ def graphhopper_model_has_avoidance_areas(custom_model: Optional[Dict[str, Any]]
     """
     True when the custom model includes hazard/camera/CAZ polygon areas.
 
-    Costing-only models (priority rules without areas) may safely fall back to GET.
+    Costing-only models have no areas; they still carry selected preferences.
     """
     if not custom_model:
         return False
@@ -76,13 +76,10 @@ def should_refuse_graphhopper_unfiltered_fallback(
     custom_model_applied: bool,
 ) -> bool:
     """
-    When POST with camera/hazard avoidance failed, refuse GET/POST-without-model so the
-    caller can fall back to Valhalla exclude_locations instead of a silent no-avoidance route.
+    Refuse GET/POST-without-model after any selected custom model fails.
+    The caller can try Valhalla while retaining the selected settings.
     """
     if custom_model_applied or not custom_model:
         return False
-    return (
-        graphhopper_model_has_hazard_blocks(custom_model)
-        or graphhopper_model_has_avoidance_areas(custom_model)
-        or graphhopper_model_has_hard_costing_avoids(custom_model)
-    )
+    # Even soft selected scenic/eco settings must not silently disappear.
+    return True
