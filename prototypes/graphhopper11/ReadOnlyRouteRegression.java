@@ -58,7 +58,19 @@ public class ReadOnlyRouteRegression {
 
     static Map<String,Object> runCase(GraphHopper hopper,JsonNode test) {
         String name=test.path("id").asText();
+        Map<String,Object> result=new LinkedHashMap<>();
+        result.put("id",name);
+        result.put("status","UNVERIFIED_OR_FAILED");
         try {
+            int nodeBudget=250000;
+            if(test.has("max_visited_nodes")) {
+                var value=test.get("max_visited_nodes");
+                require(value.isIntegralNumber() && value.canConvertToInt(),"node budget must be an integer");
+                nodeBudget=value.intValue();
+            }
+            require(nodeBudget>=1000 && nodeBudget<=1000000,"node budget outside 1000..1000000");
+            result.put("max_visited_nodes",nodeBudget);
+            result.put("timeout_ms",20000);
             var visits=test.path("points");
             require(visits.isArray() && visits.size()>=2 && visits.size()<=5,"invalid public fixture visits");
             GHRequest request=new GHRequest().setProfile("car").setPathDetails(List.of("edge_key","max_speed"));
@@ -68,10 +80,12 @@ public class ReadOnlyRouteRegression {
                 request.addPoint(new com.graphhopper.util.shapes.GHPoint(point.get(0).asDouble(),point.get(1).asDouble()));
             }
             request.putHint("ch.disable",true).putHint("lm.disable",true)
-                .putHint("way_point_max_distance",0).putHint("max_visited_nodes",250000)
+                .putHint("way_point_max_distance",0).putHint("max_visited_nodes",nodeBudget)
                 .putHint("timeout_ms",20000);
             boolean alternatives=test.path("alternatives").asBoolean(false);
             boolean noMotorways=test.path("no_motorways").asBoolean(false);
+            result.put("no_motorways",noMotorways);
+            result.put("alternatives",alternatives);
             if(alternatives) {
                 require(visits.size()==2,"native alternatives support two points only");
                 request.setAlgorithm("alternative_route").putHint("alternative_route.max_paths",3);
@@ -80,8 +94,9 @@ public class ReadOnlyRouteRegression {
                 .addToPriority(If("road_class == MOTORWAY",MULTIPLY,"0")));
             if(visits.size()>2) request.putHint("pass_through",true);
             long start=System.nanoTime();
-            GHResponse response=hopper.route(request);
-            double queryMs=(System.nanoTime()-start)/1e6;
+            GHResponse response;
+            try { response=hopper.route(request); }
+            finally { result.put("query_ms",(System.nanoTime()-start)/1e6); }
             require(!response.hasErrors(),"provider error: "+response.getErrors());
             require(!response.getAll().isEmpty() && response.getAll().size()<=(alternatives?3:1),"invalid candidate count");
             List<Map<String,Object>> candidates=new ArrayList<>(); Set<List<Integer>> seen=new HashSet<>();
@@ -103,11 +118,13 @@ public class ReadOnlyRouteRegression {
                     "duration_minutes",path.getTime()/60000.0,"directed_edges",keys.size(),
                     "instructions",path.getInstructions().size()));
             }
-            return Map.of("id",name,"status","PASS_AVAILABLE_GRAPH_CHECKS","query_ms",queryMs,
-                "requested_points",visits.size(),"no_motorways",noMotorways,"candidates",candidates);
+            result.put("status","PASS_AVAILABLE_GRAPH_CHECKS");
+            result.put("requested_points",visits.size());
+            result.put("candidates",candidates);
         } catch(Exception error) {
-            return Map.of("id",name,"status","UNVERIFIED_OR_FAILED","reason",String.valueOf(error.getMessage()));
+            result.put("reason",String.valueOf(error.getMessage()));
         }
+        return result;
     }
 
     public static void main(String[] args) throws Exception {

@@ -1,0 +1,7 @@
+{
+  "scope": "Retry only the two limited public UK searches. No relaxed exclusions or validators.",
+  "cases": [
+    {"id": "sheffield_leeds_alternatives_1m", "points": [[53.3813, -1.4701], [53.8008, -1.5491]], "alternatives": true, "max_visited_nodes": 1000000},
+    {"id": "sheffield_leeds_no_motorways_1m", "points": [[53.3813, -1.4701], [53.8008, -1.5491]], "no_motorways": true, "max_visited_nodes": 1000000}
+  ]
+}

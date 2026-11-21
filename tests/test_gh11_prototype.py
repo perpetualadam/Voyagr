@@ -213,8 +213,8 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     cases = tmp_path / "cases.json"
     cases.write_text(json.dumps({"cases": [
         {"id": "primary", "points": [[0, 0], [0, .02]]},
-        {"id": "alternatives", "points": [[0, 0], [0, .02]], "alternatives": True},
-        {"id": "no_motorway", "points": [[0, 0], [0, .02]], "no_motorways": True},
+        {"id": "alternatives", "points": [[0, 0], [0, .02]], "alternatives": True, "max_visited_nodes": 1000000},
+        {"id": "no_motorway", "points": [[0, 0], [0, .02]], "no_motorways": True, "max_visited_nodes": 1000000},
         {"id": "continuous_via", "points": [[0, 0], [0, .01], [0, .02]]},
     ]}))
     source = Path(__file__).resolve().parents[1] / "prototypes/graphhopper11/ReadOnlyRouteRegression.java"
@@ -228,6 +228,9 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     primary, _, avoided, via = report["cases"]
     assert avoided["candidates"][0]["distance_km"] > primary["candidates"][0]["distance_km"]
     assert via["requested_points"] == 3
+    assert primary["max_visited_nodes"] == 250000
+    assert avoided["max_visited_nodes"] == 1000000 and avoided["no_motorways"] is True
+    assert all(row["query_ms"] >= 0 and row["timeout_ms"] == 20000 for row in report["cases"])
     assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
     # A prohibited contract (native alternatives plus a via) must fail, not downgrade.
     cases.write_text(json.dumps({"cases": [{"id": "unsupported", "points": [[0, 0], [.003, .01], [0, .02]], "alternatives": True}]}))
@@ -235,3 +238,16 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert failed.returncode != 0
     assert '"all_available_graph_checks_passed":false' in failed.stdout
     assert "native alternatives support two points only" in failed.stdout
+    cases.write_text(json.dumps({"cases": [
+        {"id": "budget_too_big", "points": [[0, 0], [0, .02]], "max_visited_nodes": 1000001},
+        {"id": "budget_wrong_type", "points": [[0, 0], [0, .02]], "max_visited_nodes": "1000000"},
+        {"id": "route_error_timed", "points": [[90, 0], [90, .02]]},
+    ]}))
+    failed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert failed.returncode != 0
+    failure_report = json.loads(next(line.split(" ", 1)[1] for line in failed.stdout.splitlines()
+                                     if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    oversized, wrong_type, timed = failure_report["cases"]
+    assert "outside 1000..1000000" in oversized["reason"] and "query_ms" not in oversized
+    assert "must be an integer" in wrong_type["reason"] and "query_ms" not in wrong_type
+    assert timed["status"] == "UNVERIFIED_OR_FAILED" and timed["query_ms"] >= 0

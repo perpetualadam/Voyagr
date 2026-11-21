@@ -139,7 +139,10 @@ MOTORWAY edge. Native alternatives return up to three, not necessarily three.
 Native alternatives plus intermediate visits are refused rather than downgraded.
 Continuous-via tests do not establish general stop/parking semantics.
 
-Each request is limited to 250,000 visited nodes and a 20-second routing timeout.
+Each request defaults to 250,000 visited nodes and a 20-second routing timeout.
+An explicit integer `max_visited_nodes` may select 1,000..1,000,000 nodes; values
+outside that range or of the wrong type are refused before routing. Limits and
+query timing are reported for provider errors as well as successes.
 Query wall time excludes source compilation and graph loading; graph loading is
 reported separately. These few sequential cases are not a capacity benchmark.
 Failed, unsupported or incomplete cases are reported and cause nonzero exit.
@@ -159,3 +162,10 @@ The broader backend selection passed 2,582 tests and 94 subtests with three
 skips (two opt-in real-engine tests, separately run above); JavaScript passed
 3,829 tests across 198 suites, and test lint passed. Java 17 runs in the dedicated
 CI job; use its latest result rather than an earlier commit's result.
+
+VPS2's first seven public samples passed five cases; native alternatives and
+motorway exclusion both exhausted 250,000 nodes. `uk-retry-cases.json` retries
+only those two with 1,000,000 nodes and the unchanged 20-second timeout. Neither
+mandatory motorway exclusion nor candidate/turn/visit validation is relaxed.
+Their UK results remain unverified until that explicit retry is executed. The
+graph remains read-only and no rebuild, app switch or listening server is needed.
