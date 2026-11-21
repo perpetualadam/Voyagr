@@ -87,6 +87,9 @@ jobs:
           tests/test_tomtom_widget_primary.py
           tests/test_personal_access_config.py
           tests/test_personal_mode.py
+          tests/test_search_indexing.py
+          tests/test_llmo_integration.py
+          tests/test_pwa_index_and_sherpa_static.py
           tests/test_route_request_params.py
           tests/test_valhalla_acceptance.py
           tests/test_valhalla_payload.py

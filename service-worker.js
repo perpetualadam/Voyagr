@@ -222,6 +222,18 @@ self.addEventListener('fetch', event => {
   }
 
 
+  // Never replay previously cached discovery/context documents after withdrawal.
+  if (request.method === 'GET' && url.origin === self.location.origin &&
+      ['/robots.txt', '/sitemap.xml', '/llms.txt', '/llms-full.txt'].includes(url.pathname)) {
+    event.respondWith(fetch(request, {cache:'no-store'}).catch(() => new Response(
+      'Discovery policy unavailable offline.', {status:503, headers:{
+        'Content-Type':'text/plain', 'Cache-Control':'no-store',
+        'X-Robots-Tag':'noindex, nofollow, noarchive, nosnippet, noimageindex'
+      }}
+    )));
+    return;
+  }
+
   // Private media is network-only for every method, never queued or replayed.
   if (url.pathname.startsWith('/api/dashcam/')) {
     event.respondWith(fetch(request).catch(() => new Response(

@@ -4107,7 +4107,7 @@ html.dark-mode .settings-inline-help, body.dark-mode .settings-inline-help {
 /* ============================================
    SEO / AEO — brand landmark + visible FAQ
    ============================================ */
-.voyagr-seo-brand {
+.voyagr-app-brand {
     position: absolute;
     width: 1px;
     height: 1px;

@@ -4,7 +4,6 @@ Shared context for the main PWA HTML template (index).
 Used by voyagr.api.core (/) so kwargs stay in sync with voyagr_web.HTML_TEMPLATE.
 """
 
-import json
 import os
 from typing import Any, Dict, Tuple
 
@@ -23,9 +22,7 @@ from voyagr.seo import (
     APP_LOCALE_OG,
     APP_META_DESCRIPTION,
     APP_NAME,
-    FAQ,
     canonical_url,
-    json_ld_document,
     llms_full_txt_url,
     llms_txt_url,
     og_image_alt,
@@ -79,11 +76,8 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     _wake_b = (os.getenv("VOYAGR_WAKE_BACKEND") or "picovoice").strip().lower()
     wake_backend_default = _wake_b if _wake_b == "picovoice" else "picovoice"
     block_indexing = block_search_indexing()
-    # Pre-serialise JSON-LD once per request so the template only needs to {{ safe }} it.
-    # Using compact separators keeps the inline <script> payload small.
-    seo_json_ld = "" if block_indexing else json.dumps(
-        json_ld_document(), separators=(",", ":"), ensure_ascii=False
-    )
+    # Discovery is retired; never construct structured search/answer content.
+    seo_json_ld = ""
     _tt_key, _tt_proxy = tomtom_client_surface()
     # Firefox recommendation banner is off by default (Chrome/other browsers are
     # the common working path). Opt in with VOYAGR_SHOW_FIREFOX_BROWSER_HINT=1.
@@ -123,6 +117,6 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "seo_json_ld": seo_json_ld,
         "seo_llms_txt_url": llms_txt_url(),
         "seo_llms_full_txt_url": llms_full_txt_url(),
-        "seo_faq": [] if personal_mode_enabled() else FAQ,
+        "seo_faq": [],
         **ga4_template_kwargs(),
     }

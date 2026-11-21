@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for LLMO integration alongside SEO / GEO / AEO (voyagr.seo single source)."""
+"""Discovery withdrawal at HTTP boundaries; legacy internal metadata helpers."""
 
 import json
 
@@ -15,137 +15,43 @@ def client():
         yield c
 
 
-def test_llms_txt_includes_llmo_file_links(client):
-    rv = client.get("/llms.txt")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "LLM context files" in body
-    assert "/llms.txt" in body
-    assert "/llms-full.txt" in body
-    assert "Voyagr Navigation" in body
-    assert "United Kingdom" in body
-    assert "## Optional" in body
+@pytest.mark.parametrize('personal', ['0', '1'])
+@pytest.mark.parametrize('legacy_flag', ['', 'false', 'true'])
+def test_discovery_stays_disabled_in_every_mode(client, monkeypatch, personal, legacy_flag):
+    monkeypatch.setenv('VOYAGR_PERSONAL_MODE', personal)
+    monkeypatch.setenv('VOYAGR_BLOCK_SEARCH_INDEXING', legacy_flag)
+    assert client.get('/api/config').json['block_search_indexing'] is True
+    robots = client.get('/robots.txt')
+    assert robots.status_code == 200
+    assert robots.text == 'User-agent: *\nDisallow: /\n'
+    assert robots.headers['Cache-Control'] == 'no-store'
+    sitemap = client.get('/sitemap.xml')
+    assert sitemap.status_code == 200 and '<urlset' in sitemap.text
+    assert '<loc>' not in sitemap.text and '<lastmod>' not in sitemap.text
+    for path in ('/llms.txt', '/llms-full.txt'):
+        response = client.get(path)
+        assert response.status_code == 410
+        assert response.headers['Cache-Control'] == 'no-store'
+        assert '##' not in response.text and 'https://' not in response.text
+    for path in ('/', '/privacy'):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert 'noindex' in response.headers['X-Robots-Tag']
+        for marker in ('rel="canonical"', 'hreflang=', 'property="og:', 'name="twitter:',
+                       'application/ld+json', 'llms.txt', 'llms-full.txt', 'voyagr-aeo-faq'):
+            assert marker not in response.text
+        assert 'name="robots" content="noindex' in response.text
+        assert 'name="googlebot" content="noindex' in response.text
+    assert 'id="speedWidget"' in client.get('/').text
 
 
-def test_llms_full_txt_has_llmo_sections(client):
-    rv = client.get("/llms-full.txt")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "extended LLM context" in body
-    assert "## About" in body
-    assert "## Primary use cases" in body
-    assert "## Citation guidance" in body
-    assert "## Preferred sources" in body
-    assert "## Frequently asked questions" in body
-    # Shared FAQ must match llms.txt (same source arrays).
-    assert "What does Voyagr Navigation cost?" in body
-
-
-def test_index_head_has_llm_alternate_links_once(client):
-    rv = client.get("/")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert body.count('rel="alternate" type="text/markdown"') == 2
-    assert 'href="/llms.txt"' in body or "llms.txt" in body
-    assert "llms-full.txt" in body
-    # Alternate links sit in head before body content.
-    assert body.index('rel="alternate"') < body.index("<body")
-
-
-def test_index_has_hreflang_and_lang(client):
-    rv = client.get("/")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert 'lang="en-GB"' in body
-    assert 'hreflang="en-GB"' in body
-    assert 'hreflang="x-default"' in body
-    assert 'property="og:image:alt"' in body
-
-
-def test_index_json_ld_graph_types(client):
-    rv = client.get("/")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert 'type="application/ld+json"' in body
-    start = body.index('type="application/ld+json"')
-    script_start = body.index(">", start) + 1
-    script_end = body.index("</script>", script_start)
-    payload = json.loads(body[script_start:script_end])
-    assert payload.get("@context") == "https://schema.org"
-    types = {node.get("@type") for node in payload.get("@graph", [])}
-    assert "WebSite" in types
-    assert "Organization" in types
-    assert "WebApplication" in types
-    assert "WebPage" in types
-    assert "FAQPage" in types
-
-
-def test_index_json_ld_primary_image_has_dimensions(client):
-    from voyagr.seo import og_image_dimensions, og_image_url
-
-    rv = client.get("/")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    start = body.index('type="application/ld+json"')
-    script_start = body.index(">", start) + 1
-    script_end = body.index("</script>", script_start)
-    payload = json.loads(body[script_start:script_end])
-    webpage = next(
-        n
-        for n in payload["@graph"]
-        if n.get("@type") == "WebPage" and "speakable" in n
-    )
-    image = webpage["primaryImageOfPage"]
-    dims = og_image_dimensions()
-    assert image["@type"] == "ImageObject"
-    assert image["url"] == og_image_url()
-    assert image["width"] == int(dims["width"])
-    assert image["height"] == int(dims["height"])
-    assert image.get("caption")
-
-
-def test_index_has_visible_aeo_faq(client):
-    rv = client.get("/")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "voyagr-aeo-faq" in body
-    assert "Does Voyagr work offline?" in body
-    assert "<noscript>" in body
-    assert "voyagr-seo-brand" in body
-
-
-def test_robots_txt_advertises_llm_context_files(client):
-    rv = client.get("/robots.txt")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "llms.txt" in body
-    assert "llms-full.txt" in body
-    assert "User-agent: GPTBot" in body
-    assert "User-agent: OAI-SearchBot" in body
-    assert "User-agent: Applebot-Extended" in body
-    assert "Sitemap:" in body
-
-
-def test_sitemap_includes_lastmod(client):
-    rv = client.get("/sitemap.xml")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "<lastmod>" in body
-    assert "/privacy" in body
-
-
-def test_privacy_page_has_seo_meta(client):
-    rv = client.get("/privacy")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert 'lang="en-GB"' in body
-    assert '<meta name="description"' in body
-    assert 'rel="canonical"' in body
-    assert 'property="og:title"' in body
-    assert 'property="og:image:alt"' in body
-    assert 'name="twitter:image:alt"' in body
-    assert 'type="application/ld+json"' in body
-    assert "BreadcrumbList" in body or "Privacy Policy" in body
+@pytest.mark.parametrize('path,status', [('/api/config',200),('/service-worker.js',200),
+    ('/static/css/voyagr.css',200),('/privacy/',301),('/does-not-exist',404)])
+def test_opt_out_header_covers_app_assets_errors_and_redirects(client, path, status):
+    response = client.get(path)
+    assert response.status_code == status
+    assert set(response.headers['X-Robots-Tag'].split(', ')) == {
+        'noindex','nofollow','noarchive','nosnippet','noimageindex'}
 
 
 def test_manifest_description_aligned_with_seo(client):
@@ -183,18 +89,11 @@ def test_llmo_shared_faq_consistency():
     assert "PWA" not in full
 
 
-def test_llmo_opt_out_when_indexing_blocked(client, monkeypatch):
-    monkeypatch.setenv("VOYAGR_BLOCK_SEARCH_INDEXING", "1")
-    rv = client.get("/llms-full.txt")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "opts out of AI indexing" in body
-    assert "## Primary use cases" not in body
+def test_legacy_opt_out_flag_cannot_restore_ai_context(client, monkeypatch):
+    monkeypatch.setenv('VOYAGR_BLOCK_SEARCH_INDEXING', 'false')
+    assert client.get('/llms-full.txt').status_code == 410
+    assert '## Citation guidance' not in client.get('/llms-full.txt').text
 
-    rv_index = client.get("/")
-    body_index = rv_index.data.decode("utf-8", errors="replace")
-    assert 'rel="alternate" type="text/markdown"' not in body_index
-    assert "voyagr-aeo-faq" not in body_index
 
 
 def _write_minimal_png(path, width: int, height: int) -> None:
@@ -251,39 +150,19 @@ def test_seo_title_fits_serp_length():
     assert 30 <= len(title) <= 60
 
 
-def test_privacy_description_fits_serp_length(client):
-    from voyagr.seo import privacy_description
-
-    desc = privacy_description()
-    assert 120 <= len(desc) <= 160
-    assert "GDPR" in desc
-
-    rv = client.get("/privacy")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert f'content="{desc}"' in body
+def test_privacy_page_keeps_information_without_search_description(client):
+    response=client.get('/privacy')
+    assert response.status_code == 200
+    assert 'Privacy Policy' in response.text
+    assert '<meta name="description"' not in response.text
 
 
-def test_seo_meta_description_fits_serp_length(client):
-    """Home meta/og/twitter description should stay within ~150–160 chars."""
-    from voyagr.seo import APP_DESCRIPTION, APP_META_DESCRIPTION
+def test_noscript_is_operational_help_without_marketing_context(client):
+    body = client.get('/').text
+    assert 'JavaScript is required' in body
+    assert 'LLM context' not in body
+    assert 'Extended LLM context' not in body
 
-    assert 120 <= len(APP_META_DESCRIPTION) <= 160
-    # Longer entity copy remains available for JSON-LD / llms.txt / noscript.
-    assert len(APP_DESCRIPTION) > len(APP_META_DESCRIPTION)
-    assert "PWA" not in APP_DESCRIPTION
-    assert "PWA" not in APP_META_DESCRIPTION
-
-    rv = client.get("/")
-    assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert f'content="{APP_META_DESCRIPTION}"' in body
-    assert f'<meta name="description" content="{APP_META_DESCRIPTION}">' in body
-    # Noscript product blurb keeps the fuller description.
-    assert APP_DESCRIPTION in body
-    assert "navigation web app (PWA)" not in body
-    assert "UK GPS navigation PWA" not in body
-    assert "Voyagr base (PWA)" not in body
 
 
 def test_og_image_dimensions_default_icon(monkeypatch):
@@ -348,23 +227,6 @@ def test_og_image_dimensions_remote_custom_avoids_square_default(monkeypatch):
     assert og_image_dimensions() == {"width": "1200", "height": "630"}
 
 
-def test_index_and_privacy_advertise_probed_og_dimensions(client, monkeypatch, tmp_path):
-    from voyagr import seo
-
-    root = tmp_path / "repo"
-    card = root / "static" / "images" / "social" / "og-card.png"
-    card.parent.mkdir(parents=True)
-    _write_minimal_png(str(card), 1200, 630)
-
-    monkeypatch.setattr(seo, "_project_root", lambda: str(root))
-    monkeypatch.setenv("VOYAGR_OG_IMAGE_PATH", "/static/images/social/og-card.png")
-    monkeypatch.delenv("VOYAGR_OG_IMAGE_WIDTH", raising=False)
-    monkeypatch.delenv("VOYAGR_OG_IMAGE_HEIGHT", raising=False)
-
-    for path in ("/", "/privacy"):
-        rv = client.get(path)
-        assert rv.status_code == 200
-        body = rv.data.decode("utf-8", errors="replace")
-        assert 'property="og:image:width" content="1200"' in body
-        assert 'property="og:image:height" content="630"' in body
-        assert 'property="og:image:width" content="512"' not in body
+def test_social_card_metadata_is_not_published(client):
+    for path in ('/', '/privacy'):
+        assert 'property="og:image' not in client.get(path).text
