@@ -252,3 +252,31 @@ bidirectional exclusion, opposite-direction control, native alternatives and
 virtual endpoints. Unknown references and displaced endpoint snapping are refused;
 graph file hashes remain unchanged. The application, GH8 and production selection
 remain untouched, and production migration remains NO-GO.
+
+## Red Lane anchor diagnostics (no acceptance change)
+
+The operator-supplied VPS2 exclusion report passed the selected Ecclesfield
+camera detour, its opposite-direction control and both Castleford detours with
+zero forbidden traversals. The slip-road query reported ConnectionNotFound;
+Red Lane returned routes rejected by the original-node anchor comparison.
+Neither refusal establishes an absence of compliant routes.
+
+`uk-red-lane-diagnostics.json` repeats only Red Lane and its source association.
+The one-metre tolerance, blocked keys, exact-node requirement and resource
+budgets are unchanged. `diagnose_anchors` records both unrestricted baseline
+and excluded-route evidence **before** applying the same anchor refusal:
+
+- Expected graph nodes and first/last original-edge nodes, including coordinates.
+- Route endpoint coordinate errors and distance to original-edge endpoints.
+- At most 12 incident edges per inspected node, including way IDs, encoded car
+  access, lengths and directional block flags.
+- An independent nearest eligible-edge snap using the same profile, model and
+  exclusion weighting. Its EDGE/PILLAR/TOWER position and pre-QueryGraph node
+  are diagnostic only, not an attestation of Router's actual QueryGraph choice.
+
+Original-edge endpoints need not be the endpoints of a clipped virtual route
+edge. This is a hypothesis for Red Lane, not a confirmed explanation or a reason
+to weaken acceptance. Coincident or genuinely displaced graph nodes are also
+possible. Diagnostic failures are reported separately and cannot approve a route.
+The synthetic test checks metadata generation and unchanged graph hashes. Red
+Lane's actual topology remains unverified until the VPS2 report is inspected.

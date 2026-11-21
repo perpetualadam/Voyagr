@@ -273,7 +273,7 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     trials = [
         {"id": "forward_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "alternatives": True},
         {"id": "reverse_control", "points": [[0, .02], [0, 0]], "blocked_associations": ["forward"], "required_association": "reverse", "expected_osm_way_ids": [10]},
-        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True},
+        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True, "diagnose_anchors": True},
         {"id": "virtual_direction", "points": [[0, .002], [0, .018]], "blocked_associations": ["forward"]},
     ]
     for case in trials:
@@ -295,6 +295,15 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert exclusion_report["cases"][0]["baseline_exercises_exclusion"] is True
     assert exclusion_report["cases"][1]["candidates"][0]["directed_edge_keys"] == [reverse_key]
     assert set(exclusion_report["cases"][2]["blocked_edge_keys"]) == {forward_key, reverse_key}
+    for label in ("baseline_anchor_diagnostics", "anchor_diagnostics"):
+        diagnostic = exclusion_report["cases"][2][label]
+        assert "diagnostic_error" not in diagnostic
+        assert diagnostic["original_node_identity_matches"] is True
+        assert diagnostic["start_coordinate_error_m"] <= 1
+        assert diagnostic["end_coordinate_error_m"] <= 1
+        assert diagnostic["independent_start_snap"]["valid"] is True
+        assert len(diagnostic["expected_start"]["neighbors"]) <= 12
+        assert all("osm_way_id" in n for n in diagnostic["expected_start"]["neighbors"])
     assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
     # Reject unknown evidence and endpoint re-snapping; neither proves no route exists.
     cases.write_text(json.dumps({"associations": associations, "cases": [

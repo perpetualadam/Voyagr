@@ -86,6 +86,73 @@ public class ReadOnlyRouteRegression {
         return associations.get(id);
     }
 
+    static Map<String,Object> nodeDiagnostic(GraphHopper hopper,int node,Set<Integer> blocked) {
+        var access=hopper.getEncodingManager().getBooleanEncodedValue("car_access");
+        var way=hopper.getEncodingManager().hasEncodedValue("osm_way_id")
+            ? hopper.getEncodingManager().getIntEncodedValue("osm_way_id"):null;
+        var nodes=hopper.getBaseGraph().getNodeAccess();
+        List<Map<String,Object>> neighbors=new ArrayList<>();
+        var edges=hopper.getBaseGraph().createEdgeExplorer().setBaseNode(node);
+        boolean truncated=false;
+        while(edges.next()) {
+            if(neighbors.size()>=12) { truncated=true;break; }
+            Map<String,Object> row=new LinkedHashMap<>();
+            row.put("edge_key",edges.getEdgeKey());row.put("adjacent_node",edges.getAdjNode());
+            row.put("distance_m",edges.getDistance());row.put("car_forward",edges.get(access));
+            row.put("car_reverse",edges.getReverse(access));
+            row.put("forward_blocked",blocked.contains(edges.getEdgeKey()));
+            row.put("reverse_blocked",blocked.contains(edges.getEdgeKey()^1));
+            if(way!=null) row.put("osm_way_id",edges.get(way));
+            neighbors.add(row);
+        }
+        return Map.of("node_id",node,"lat",nodes.getLat(node),"lon",nodes.getLon(node),
+            "neighbors",neighbors,"neighbors_truncated",truncated);
+    }
+
+    static Map<String,Object> independentSnap(GraphHopper hopper,GHRequest request,double lat,double lon) {
+        var hints=new PMap();hints.putAll(request.getHints());
+        if(request.getCustomModel()!=null) hints.putObject(CustomModel.KEY,request.getCustomModel());
+        var weighting=hopper.createWeighting(hopper.getProfile("car"),hints);
+        var subnet=hopper.getEncodingManager().getBooleanEncodedValue(Subnetwork.key("car"));
+        var snap=hopper.getLocationIndex().findClosest(lat,lon,
+            new com.graphhopper.routing.util.DefaultSnapFilter(weighting,subnet));
+        if(!snap.isValid()) return Map.of("valid",false);
+        return Map.of("valid",true,"position",snap.getSnappedPosition().name(),
+            "distance_m",snap.getQueryDistance(),"closest_node_before_query_graph",snap.getClosestNode(),
+            "closest_edge_key",snap.getClosestEdge().getEdgeKey(),
+            "lat",snap.getSnappedPoint().getLat(),"lon",snap.getSnappedPoint().getLon());
+    }
+
+    static Map<String,Object> anchorDiagnostic(GraphHopper hopper,GHRequest request,ResponsePath path,
+                                               List<Integer> keys,int start,int end,Set<Integer> blocked) {
+        Map<String,Object> result=new LinkedHashMap<>();
+        try {
+            int first=hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(0)).getBaseNode();
+            int last=hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(keys.size()-1)).getAdjNode();
+            var geometry=path.getPoints();var nodes=hopper.getBaseGraph().getNodeAccess();
+            result.put("expected_start",nodeDiagnostic(hopper,start,blocked));
+            result.put("expected_end",nodeDiagnostic(hopper,end,blocked));
+            result.put("first_original_base",nodeDiagnostic(hopper,first,blocked));
+            result.put("last_original_adjacent",nodeDiagnostic(hopper,last,blocked));
+            result.put("first_directed_key",keys.get(0));result.put("last_directed_key",keys.get(keys.size()-1));
+            result.put("original_node_identity_matches",first==start && last==end);
+            result.put("route_start",List.of(geometry.getLat(0),geometry.getLon(0)));
+            result.put("route_end",List.of(geometry.getLat(geometry.size()-1),geometry.getLon(geometry.size()-1)));
+            result.put("start_coordinate_error_m",DistanceCalcEarth.DIST_EARTH.calcDist(
+                nodes.getLat(start),nodes.getLon(start),geometry.getLat(0),geometry.getLon(0)));
+            result.put("end_coordinate_error_m",DistanceCalcEarth.DIST_EARTH.calcDist(
+                nodes.getLat(end),nodes.getLon(end),geometry.getLat(geometry.size()-1),geometry.getLon(geometry.size()-1)));
+            result.put("start_to_first_original_base_m",DistanceCalcEarth.DIST_EARTH.calcDist(
+                geometry.getLat(0),geometry.getLon(0),nodes.getLat(first),nodes.getLon(first)));
+            result.put("end_to_last_original_adjacent_m",DistanceCalcEarth.DIST_EARTH.calcDist(
+                geometry.getLat(geometry.size()-1),geometry.getLon(geometry.size()-1),nodes.getLat(last),nodes.getLon(last)));
+            result.put("independent_start_snap",independentSnap(hopper,request,nodes.getLat(start),nodes.getLon(start)));
+            result.put("independent_end_snap",independentSnap(hopper,request,nodes.getLat(end),nodes.getLon(end)));
+            result.put("snap_scope","independent eligible-edge lookup; not Router QueryGraph attestation");
+        } catch(Exception error) { result.put("diagnostic_error",error.getClass().getSimpleName()+": "+error.getMessage()); }
+        return result;
+    }
+
     static Map<String,Object> runCase(GraphHopper hopper,JsonNode test,Map<String,List<Integer>> associations) {
         String name=test.path("id").asText();
         Map<String,Object> result=new LinkedHashMap<>();
@@ -171,6 +238,8 @@ public class ReadOnlyRouteRegression {
                 result.put("baseline_query_ms",(System.nanoTime()-baselineStart)/1e6);
                 require(!baseline.hasErrors() && !baseline.getAll().isEmpty(),"anchor baseline unavailable");
                 var keys=validate(hopper,baseline.getBest(),noMotorways,Set.of());
+                if(test.path("diagnose_anchors").asBoolean(false)) result.put("baseline_anchor_diagnostics",
+                    anchorDiagnostic(hopper,request,baseline.getBest(),keys,anchorStart,anchorEnd,Set.of()));
                 require(!Collections.disjoint(keys,blocked),"baseline does not exercise selected exclusion");
                 result.put("baseline_exercises_exclusion",true);
             }
@@ -189,6 +258,8 @@ public class ReadOnlyRouteRegression {
             for(ResponsePath path:response.getAll()) {
                 List<Integer> keys=validate(hopper,path,noMotorways,blocked);
                 if(anchorStart>=0) {
+                    if(test.path("diagnose_anchors").asBoolean(false)) result.put("anchor_diagnostics",
+                        anchorDiagnostic(hopper,request,path,keys,anchorStart,anchorEnd,blocked));
                     require(hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(0)).getBaseNode()==anchorStart
                         && hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(keys.size()-1)).getAdjNode()==anchorEnd,
                         "ambiguous or displaced graph-node anchor");
