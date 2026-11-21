@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Google Search Console: pages must stay eligible to be indexed.
+"""Private app crawler exclusions and unchanged safety-notice handling.
 
 Covers the public HTML surfaces (/ and /privacy) plus crawler handling for
 the first-run safety overlay, which otherwise covers the homepage after JS
@@ -150,21 +150,21 @@ def test_is_search_crawler_does_not_match_similar_product_names():
     assert is_search_crawler("Mozilla/5.0 (compatible; YandexBot/3.0)") is True
 
 
-def test_home_indexable_for_googlebot(client):
+def test_home_not_indexable_for_googlebot(client):
     rv = client.get("/", headers={"User-Agent": GOOGLEBOT_UA})
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert 'content="noindex' not in body
-    assert 'name="robots" content="index, follow' in body
-    assert (rv.headers.get("X-Robots-Tag") or "").lower().find("noindex") < 0
-    assert 'rel="canonical"' in body
+    assert 'content="noindex' in body
+    assert 'name="robots" content="noindex, nofollow' in body
+    assert (rv.headers.get("X-Robots-Tag") or "").lower().find("noindex") >= 0
+    assert 'rel="canonical"' not in body
     assert "window.VOYAGR_IS_SEARCH_CRAWLER =" not in body
     assert "VOYAGR_SEARCH_CRAWLER_UA_RE" not in body
     assert "function voyagrUaIsSearchCrawler()" in body
     assert "navigator.userAgent" in body
     assert json.dumps(list(SEARCH_CRAWLER_UA_TOKENS)) in body
     assert json.dumps(sorted(SEARCH_CRAWLER_UA_WORD_TOKENS)) in body
-    assert "voyagr-aeo-faq" in body
+    assert "voyagr-aeo-faq" not in body
     assert "<noscript>" in body
 
 
@@ -194,30 +194,28 @@ def test_home_still_shows_safety_overlay_for_browsers(client):
     assert "function showSafetyNotice()" in body
     assert "function voyagrUaIsSearchCrawler()" in body
     assert 'id="safetyNoticeOverlay"' in body
-    assert 'name="robots" content="index, follow' in body
+    assert 'name="robots" content="noindex, nofollow' in body
     # JS word-char helper must treat "_" as \w so slurp_browser is not Slurp.
     assert "function voyagrIsUaWordChar(ch)" in body
     assert "ch === '_'" in body
 
 
-def test_privacy_indexable(client):
+def test_privacy_not_indexable(client):
     rv = client.get("/privacy", headers={"User-Agent": GOOGLEBOT_UA})
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert 'content="noindex' not in body
-    assert 'name="robots" content="index, follow' in body
-    assert 'rel="canonical"' in body
-    assert (rv.headers.get("X-Robots-Tag") or "").lower().find("noindex") < 0
+    assert 'content="noindex' in body
+    assert 'name="robots" content="noindex, nofollow' in body
+    assert 'rel="canonical"' not in body
+    assert (rv.headers.get("X-Robots-Tag") or "").lower().find("noindex") >= 0
 
 
-def test_robots_allows_public_pages_and_lists_sitemap(client):
-    rv = client.get("/robots.txt")
+def test_robots_disallows_every_path_without_advertising_context(client):
+    rv=client.get('/robots.txt')
     assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    assert "User-agent: *" in body
-    assert "Disallow: /\n" not in body
-    assert "Sitemap:" in body
-    assert "/privacy" in client.get("/sitemap.xml").data.decode("utf-8", errors="replace")
+    assert rv.text == 'User-agent: *\nDisallow: /\n'
+    assert 'Sitemap:' not in rv.text and 'llms' not in rv.text
+
 
 
 def _charset_count(content_type: str) -> int:
@@ -235,22 +233,19 @@ def _charset_count(content_type: str) -> int:
 )
 def test_discoverability_text_content_type_has_one_charset(client, path, mime_prefix):
     rv = client.get(path)
-    assert rv.status_code == 200
+    assert rv.status_code == (410 if path.startswith("/llms") else 200)
     ct = rv.headers.get("Content-Type") or ""
     assert ct.lower().startswith(mime_prefix)
     assert _charset_count(ct) == 1
 
 
-def test_sitemap_urls_are_live_html(client):
-    sm = client.get("/sitemap.xml")
-    assert sm.status_code == 200
-    body = sm.data.decode("utf-8", errors="replace")
-    assert "<loc>" in body
-    for path in ("/", "/privacy"):
-        rv = client.get(path)
-        assert rv.status_code == 200, path
-        assert b"<html" in rv.data.lower()
-        assert b"noindex" not in rv.data
+def test_sitemap_has_no_discoverable_urls_but_owner_pages_remain(client):
+    assert '<loc>' not in client.get('/sitemap.xml').text
+    for path in ('/', '/privacy'):
+        rv=client.get(path)
+        assert rv.status_code == 200 and '<html' in rv.text
+        assert 'noindex' in rv.headers['X-Robots-Tag']
+
 
 
 def test_privacy_trailing_slash_redirects_to_canonical(client):

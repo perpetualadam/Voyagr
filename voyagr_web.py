@@ -207,9 +207,9 @@ register_blueprints(app)
 
 @app.after_request
 def _voyagr_discoverability_headers(response):
-    """Discourage crawlers when VOYAGR_BLOCK_SEARCH_INDEXING is set (no SecurityConfig dependency)."""
+    """Apply crawler opt-out to all app responses, including assets, errors and redirects."""
     if block_search_indexing():
-        response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive'
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive, nosnippet, noimageindex'
     return response
 
 # ============================================================================

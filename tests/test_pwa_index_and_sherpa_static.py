@@ -135,37 +135,21 @@ def test_api_config_json(client):
     assert rv.get_json().get("success") is True
 
 
-def test_index_has_seo_meta_and_jsonld(client):
-    rv = client.get("/")
+def test_index_opts_out_without_losing_app_manifest(client):
+    rv=client.get('/')
     assert rv.status_code == 200
-    body = rv.data.decode("utf-8", errors="replace")
-    # Canonical + OG + Twitter: one occurrence each, fed from voyagr.seo.
-    assert '<link rel="canonical"' in body
-    assert 'property="og:title"' in body
-    assert 'property="og:image"' in body
-    assert 'property="og:image:alt"' in body
-    assert 'name="twitter:card"' in body
-    assert 'type="application/ld+json"' in body
-    assert "FAQPage" in body
-    # Description must be present exactly once (no accidental duplication).
-    assert body.count('<meta name="description"') == 1
-    assert 'lang="en-GB"' in body
+    assert 'noindex' in rv.headers['X-Robots-Tag']
+    assert 'type="application/ld+json"' not in rv.text
+    assert 'rel="canonical"' not in rv.text
+    assert 'rel="manifest"' in rv.text
+    assert 'lang="en-GB"' in rv.text
 
 
-def test_robots_sitemap_llms_routes(client):
-    robots = client.get("/robots.txt")
-    assert robots.status_code == 200
-    assert b"User-agent: *" in robots.data
 
-    sitemap = client.get("/sitemap.xml")
-    assert sitemap.status_code == 200
-    assert b"<urlset" in sitemap.data
-
-    llms = client.get("/llms.txt")
-    assert llms.status_code == 200
-    # llms.txt must name the app (proves it's the seo.py-rendered body, not a 404 page).
-    assert b"Voyagr" in llms.data
-
-    llms_full = client.get("/llms-full.txt")
-    assert llms_full.status_code == 200
-    assert b"extended LLM context" in llms_full.data
+def test_discovery_routes_withdraw_context_without_breaking_pwa(client):
+    assert client.get('/robots.txt').text == 'User-agent: *\nDisallow: /\n'
+    sitemap=client.get('/sitemap.xml')
+    assert sitemap.status_code == 200 and '<urlset' in sitemap.text and '<loc>' not in sitemap.text
+    assert client.get('/llms.txt').status_code == 410
+    assert client.get('/llms-full.txt').status_code == 410
+    assert client.get('/manifest.json').status_code == 200

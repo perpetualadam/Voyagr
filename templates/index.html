@@ -8,41 +8,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">
-    <meta name="description" content="{{ seo_description }}">
-    {% if block_search_indexing %}
-    <meta name="robots" content="noindex, nofollow, noarchive">
-    <meta name="googlebot" content="noindex, nofollow, noarchive">
-    {% else %}
-    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
-    {% endif %}
-    {# SEO / GEO / AEO / LLMO — all metadata sourced from voyagr/seo.py so tags stay consistent
-       with /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt and the structured data below. #}
-    <link rel="canonical" href="{{ seo_canonical }}">
-    {% if not block_search_indexing %}
-    <link rel="alternate" hreflang="en-GB" href="{{ seo_canonical }}">
-    <link rel="alternate" hreflang="en" href="{{ seo_canonical }}">
-    <link rel="alternate" hreflang="x-default" href="{{ seo_canonical }}">
-    <link rel="alternate" type="text/markdown" href="{{ seo_llms_txt_url }}" title="LLM context (llms.txt)">
-    <link rel="alternate" type="text/markdown" href="{{ seo_llms_full_txt_url }}" title="Extended LLM context (llms-full.txt)">
-    {% endif %}
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="{{ seo_site_name }}">
-    <meta property="og:title" content="{{ seo_title }}">
-    <meta property="og:description" content="{{ seo_description }}">
-    <meta property="og:url" content="{{ seo_canonical }}">
-    <meta property="og:image" content="{{ seo_og_image }}">
-    <meta property="og:image:alt" content="{{ seo_og_image_alt }}">
-    <meta property="og:image:width" content="{{ seo_og_image_width }}">
-    <meta property="og:image:height" content="{{ seo_og_image_height }}">
-    <meta property="og:locale" content="{{ seo_og_locale|default('en_GB') }}">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="{{ seo_title }}">
-    <meta name="twitter:description" content="{{ seo_description }}">
-    <meta name="twitter:image" content="{{ seo_og_image }}">
-    <meta name="twitter:image:alt" content="{{ seo_og_image_alt }}">
-    {% if seo_json_ld %}
-    <script type="application/ld+json">{{ seo_json_ld|safe }}</script>
-    {% endif %}
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -54,7 +21,7 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/static/images/icons/icon-512.png?v=20260421g">
     <link rel="mask-icon" href="/static/images/icons/icon.svg?v=20260421g" color="#00FF88">
     <link rel="manifest" href="/manifest.json">
-    <title>{{ seo_title }}</title>
+    <title>{{ seo_site_name }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20261114privacy3" />
     <script>
@@ -258,28 +225,7 @@
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
-    <noscript>
-        <main class="voyagr-noscript">
-            <h1>{{ seo_site_name }}</h1>
-            <p>{{ seo_body_description|default(seo_description) }}</p>
-            <p>
-                <a href="{{ seo_llms_txt_url }}">LLM context (llms.txt)</a>
-                ·
-                <a href="{{ seo_llms_full_txt_url }}">Extended LLM context</a>
-                ·
-                <a href="/privacy">Privacy Policy</a>
-            </p>
-            {% if seo_faq %}
-            <section aria-label="Frequently asked questions">
-                <h2>Frequently asked questions</h2>
-                {% for item in seo_faq %}
-                <h3>{{ item.q }}</h3>
-                <p>{{ item.a }}</p>
-                {% endfor %}
-            </section>
-            {% endif %}
-        </main>
-    </noscript>
+    <noscript><p>JavaScript is required to use this private navigation app. <a href="/privacy">Privacy information</a>.</p></noscript>
     <!-- First-run driver safety + privacy notice (shown once; gate before app use).
          Footer (checkbox + Continue) stays pinned so mobile users need not scroll to act. -->
     <div id="safetyNoticeOverlay" class="safety-notice-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="safetyNoticeTitle">
@@ -399,7 +345,7 @@
     </section>
     {% endif %}
     <div class="app-container">
-        <h1 class="voyagr-seo-brand">{{ seo_site_name }}</h1>
+        <h1 class="voyagr-app-brand">{{ seo_site_name }}</h1>
         {% if not personal_mode %}
         <div id="softAuthBanner" class="voyagr-soft-auth-banner" style="display: none;" role="region" aria-label="Sign in prompt">
             <div class="voyagr-soft-auth-banner__inner">
@@ -1909,23 +1855,7 @@
                     <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
-                {% if seo_faq and not block_search_indexing %}
-                <!-- Visible FAQ for AEO / rich results (same copy as JSON-LD + llms.txt).
-                     Kept outside tab panels so it remains in the sheet for crawlers and users. -->
-                <section class="preferences-section voyagr-aeo-faq" aria-labelledby="voyagrAeoFaqHeading">
-                    <h2 id="voyagrAeoFaqHeading" class="voyagr-aeo-faq__heading">About Voyagr — FAQ</h2>
-                    <p class="voyagr-aeo-faq__intro">
-                        Quick answers about Voyagr Navigation. Full privacy details are on the
-                        <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
-                    </p>
-                    {% for item in seo_faq %}
-                    <details class="voyagr-aeo-faq__item"{% if loop.first %} open{% endif %}>
-                        <summary>{{ item.q }}</summary>
-                        <p>{{ item.a }}</p>
-                    </details>
-                    {% endfor %}
-                </section>
-                {% endif %}
+
             </div>
         </div>
 

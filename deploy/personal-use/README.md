@@ -227,3 +227,45 @@ synthetic local item before and after explicit unlock, confirm map loading and
 fresh GPS/provider requests, and check Stop/Done remain usable during deferred
 recovery. Perform driving checks as a passenger. A successful configuration check
 alone does not prove map tiles, GPS fixes or provider data are current.
+
+### Search, answer-engine and AI discovery withdrawal
+
+The app now always opts out of indexing, including when personal mode is off or
+`VOYAGR_BLOCK_SEARCH_INDEXING=false` is left in an old environment. HTML has
+noindex/nofollow/noarchive/nosnippet/noimageindex metadata and app responses carry
+the matching `X-Robots-Tag`. Search canonicals, hreflang, social cards, JSON-LD,
+answer-engine FAQ promotion and LLM-context links are no longer published.
+`/robots.txt` returns a wildcard `Disallow: /` without sitemap/context references.
+`/sitemap.xml` remains valid but empty; `/llms.txt` and `/llms-full.txt` return
+410 Gone with no product/context material. These responses are not stored by
+HTTP caches. The app manifest, icons, safety notices and private-login recovery
+page remain functional. No device data is cleared and authentication is unchanged.
+
+Application deployment and a coherent cached-shell update are required. The
+repository security-header snippet also proposes the same always-on response
+header for Nginx-served assets and errors. Updating that installed snippet is a
+separate configuration operation requiring review/approval, backup, `nginx -t`
+and reload. Include it in locations with their own `add_header`, because those
+do not inherit server-level headers. Do not replace live site configurations
+with generic examples or change the working password-prompt repair.
+
+Before deployment, preserve existing authentication and confirm the app remains
+bound to loopback. After an approved rollout, inspect headers without printing
+credentials or location queries: owner root/privacy/manifest should still work,
+anonymous app/API/map requests should remain denied, application responses should
+carry the opt-out header, and owner requests to the former LLM documents should
+return 410. Check root, www and the DuckDNS alias; the edge header check is separate
+from the Flask check. Old cached documents may remain until the normal asset
+update completes; do not clear browser storage to force this.
+
+Crawler directives are voluntary and are not access control. Password protection
+prevents anonymous crawling of protected content; compliant crawlers can obey the
+wildcard policy if they can retrieve it, but there is no authentication exemption
+for robots or bots in this change. Do not open the app so a crawler can read a
+noindex tag. Existing search listings can persist, including URL-only listings
+for robots-blocked pages. Google Search Console and Bing Webmaster Tools removal
+requests may be needed for already indexed URLs; these require verified property
+access and were not submitted by this change. Public repository links, third-party
+copies, DNS/certificate records and previously collected AI data cannot be erased
+by changing this application. No claim of completed internet removal or production
+verification is made.

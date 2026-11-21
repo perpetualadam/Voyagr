@@ -1,11 +1,8 @@
 """
-Discoverability controls: reduce casual search-engine indexing while keeping the PWA open (no login wall).
-
-Set VOYAGR_BLOCK_SEARCH_INDEXING=true in production when you want robots/noindex headers.
-This is not a substitute for authentication — share the URL only with people you trust.
+Public discovery is disabled. Authentication remains the access boundary.
+Legacy environment flags cannot opt this application back into indexing.
 """
 
-import os
 import re
 from typing import FrozenSet, Tuple
 
@@ -47,13 +44,8 @@ _WORD_TOKEN_RE = {
 
 
 def block_search_indexing() -> bool:
-    from voyagr.personal_use import enabled
-    return enabled() or os.getenv('VOYAGR_BLOCK_SEARCH_INDEXING', '').strip().lower() in (
-        '1',
-        'true',
-        'yes',
-        'on',
-    )
+    """This private application never opts into public indexing, in any mode."""
+    return True
 
 
 def is_search_crawler(user_agent: str = "") -> bool:
