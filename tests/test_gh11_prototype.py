@@ -197,7 +197,7 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
   graph.dataaccess.default_type: MMAP
   prepare.min_network_size: 0
   import.osm.ignored_highways: footway,construction,cycleway,path,steps
-  graph.encoded_values: car_access,car_average_speed,road_access,max_speed,road_class
+  graph.encoded_values: car_access,car_average_speed,road_access,max_speed,road_class,osm_way_id
   profiles:
     - name: car
       custom_model_files: [car.json]
@@ -212,7 +212,7 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     before = {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
     cases = tmp_path / "cases.json"
     cases.write_text(json.dumps({"cases": [
-        {"id": "primary", "points": [[0, 0], [0, .02]]},
+        {"id": "primary", "points": [[0, 0], [0, .02]], "expected_osm_way_ids": [10], "require_all_expected_ways": True, "max_snap_distance_m": 1},
         {"id": "alternatives", "points": [[0, 0], [0, .02]], "alternatives": True, "max_visited_nodes": 1000000},
         {"id": "no_motorway", "points": [[0, 0], [0, .02]], "no_motorways": True, "max_visited_nodes": 1000000},
         {"id": "continuous_via", "points": [[0, 0], [0, .01], [0, .02]]},
@@ -227,6 +227,8 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert len(report["cases"]) == 4
     primary, _, avoided, via = report["cases"]
     assert avoided["candidates"][0]["distance_km"] > primary["candidates"][0]["distance_km"]
+    assert primary["candidates"][0]["matched_osm_way_ids"] == [10]
+    assert primary["candidates"][0]["edge_key_scope"] == "current_loaded_graph_only"
     assert via["requested_points"] == 3
     assert primary["max_visited_nodes"] == 250000
     assert avoided["max_visited_nodes"] == 1000000 and avoided["no_motorways"] is True
@@ -251,3 +253,14 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert "outside 1000..1000000" in oversized["reason"] and "query_ms" not in oversized
     assert "must be an integer" in wrong_type["reason"] and "query_ms" not in wrong_type
     assert timed["status"] == "UNVERIFIED_OR_FAILED" and timed["query_ms"] >= 0
+
+    cases.write_text(json.dumps({"cases": [
+        {"id": "wrong_way", "points": [[0, 0], [0, .02]], "expected_osm_way_ids": [999]},
+        {"id": "empty_way_evidence", "points": [[0, 0], [0, .02]], "expected_osm_way_ids": []},
+        {"id": "bad_tolerance", "points": [[0, 0], [0, .02]], "max_snap_distance_m": 0},
+    ]}))
+    failed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert failed.returncode != 0
+    assert "OSM way association mismatch" in failed.stdout
+    assert "invalid expected OSM ways" in failed.stdout
+    assert "snap tolerance outside" in failed.stdout

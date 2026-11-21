@@ -71,6 +71,23 @@ public class ReadOnlyRouteRegression {
             require(nodeBudget>=1000 && nodeBudget<=1000000,"node budget outside 1000..1000000");
             result.put("max_visited_nodes",nodeBudget);
             result.put("timeout_ms",20000);
+            double tolerance=75;
+            if(test.has("max_snap_distance_m")) {
+                require(test.get("max_snap_distance_m").isNumber(),"snap tolerance must be numeric");
+                tolerance=test.get("max_snap_distance_m").doubleValue();
+            }
+            require(Double.isFinite(tolerance) && tolerance>=0.1 && tolerance<=75,"snap tolerance outside 0.1..75m");
+            result.put("max_snap_distance_m",tolerance);
+            Set<Integer> expectedWays=new TreeSet<>();
+            if(test.has("expected_osm_way_ids")) {
+                var values=test.get("expected_osm_way_ids");
+                require(values.isArray() && !values.isEmpty() && values.size()<=10,"invalid expected OSM ways");
+                for(var value:values) {
+                    require(value.isIntegralNumber() && value.canConvertToInt() && value.intValue()>0,"invalid OSM way ID");
+                    expectedWays.add(value.intValue());
+                }
+                require(hopper.getEncodingManager().hasEncodedValue("osm_way_id"),"OSM way evidence missing from graph");
+            }
             var visits=test.path("points");
             require(visits.isArray() && visits.size()>=2 && visits.size()<=5,"invalid public fixture visits");
             GHRequest request=new GHRequest().setProfile("car").setPathDetails(List.of("edge_key","max_speed"));
@@ -103,6 +120,12 @@ public class ReadOnlyRouteRegression {
             for(ResponsePath path:response.getAll()) {
                 List<Integer> keys=validate(hopper,path,noMotorways);
                 require(seen.add(keys),"duplicate alternative");
+                var geometry=path.getPoints();
+                var first=visits.get(0);var last=visits.get(visits.size()-1);
+                require(DistanceCalcEarth.DIST_EARTH.calcDist(first.get(0).asDouble(),first.get(1).asDouble(),
+                    geometry.getLat(0),geometry.getLon(0))<=tolerance,"origin snap exceeds tolerance");
+                require(DistanceCalcEarth.DIST_EARTH.calcDist(last.get(0).asDouble(),last.get(1).asDouble(),
+                    geometry.getLat(geometry.size()-1),geometry.getLon(geometry.size()-1))<=tolerance,"destination snap exceeds tolerance");
                 // Verify every requested visit appears in order, including intermediate visits.
                 int cursor=0;
                 for(var visit:visits) {
@@ -110,13 +133,25 @@ public class ReadOnlyRouteRegression {
                     for(;cursor<path.getPoints().size();cursor++) {
                         double distance=DistanceCalcEarth.DIST_EARTH.calcDist(visit.get(0).asDouble(),
                             visit.get(1).asDouble(),path.getPoints().getLat(cursor),path.getPoints().getLon(cursor));
-                        if(distance<=75) { found=true;break; }
+                        if(distance<=tolerance) { found=true;break; }
                     }
-                    require(found,"requested visit missing or reordered (75m tolerance)");
+                    require(found,"requested visit missing or reordered within tolerance");
                 }
-                candidates.add(Map.of("distance_km",path.getDistance()/1000,
+                Map<String,Object> candidate=new LinkedHashMap<>(Map.of("distance_km",path.getDistance()/1000,
                     "duration_minutes",path.getTime()/60000.0,"directed_edges",keys.size(),
                     "instructions",path.getInstructions().size()));
+                if(!expectedWays.isEmpty()) {
+                    Set<Integer> actualWays=new TreeSet<>();
+                    var wayId=hopper.getEncodingManager().getIntEncodedValue("osm_way_id");
+                    for(int key:keys) actualWays.add(hopper.getBaseGraph().getEdgeIteratorStateForKey(key).get(wayId));
+                    require(expectedWays.containsAll(actualWays),"OSM way association mismatch");
+                    require(!test.path("require_all_expected_ways").asBoolean(false)
+                        || actualWays.equals(expectedWays),"expected OSM way missing from traversal");
+                    candidate.put("matched_osm_way_ids",actualWays);
+                    candidate.put("directed_edge_keys",keys);
+                    candidate.put("edge_key_scope","current_loaded_graph_only");
+                }
+                candidates.add(candidate);
             }
             result.put("status","PASS_AVAILABLE_GRAPH_CHECKS");
             result.put("requested_points",visits.size());

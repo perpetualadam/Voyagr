@@ -169,3 +169,42 @@ only those two with 1,000,000 nodes and the unchanged 20-second timeout. Neither
 mandatory motorway exclusion nor candidate/turn/visit validation is relaxed.
 Their UK results remain unverified until that explicit retry is executed. The
 graph remains read-only and no rebuild, app switch or listening server is needed.
+
+## Selected public hazard source-way association
+
+`uk-association-cases.json` records five short traversals derived from public
+OSM records in the pinned PBF (checksum included in the fixture). These cases
+have not been executed against the UK graph locally. They test source-road
+association, not actual hazard avoidance or enforcement applicability:
+
+- Camera node 50032464 lies on one-way motorway link 1183050528. The test follows
+  the observed OSM node order through the camera; its direction tag is not used
+  to infer an enforcement direction.
+- Ecclesfield Road relation 15486512 identifies device 314037901 and from/to
+  road nodes on way 1146841914. Relation 15486513 reverses those road nodes for
+  device 9210340813. The device coordinate is not snapped to the nearest road.
+- Castleford and Red Lane use the observed road approaches and intermediate
+  level-crossing nodes. Adjacent tagged crossing nodes are not assumed to be
+  independent physical hazards or deduplicated using distance alone.
+
+These cases require endpoint and visit matching within **one metre**, and require
+every traversed edge to carry one of the explicit `osm_way_id` values. Where
+requested, every expected way must be encountered. A different snapped road,
+missing evidence or tolerance failure remains UNVERIFIED_OR_FAILED. No automatic
+tolerance increase or geographic polygon fallback is provided.
+
+Matching candidates report directed edge keys, scoped to the currently loaded
+graph only. Keys must never be reused on GH8 or a different graph build. They
+are evidence for the next exclusion experiment, not an application-ready hazard
+index. The fixture PBF checksum is source documentation, not automatic graph
+attestation. No physical camera activity, legal applicability, inventory completeness
+or freshness is established by matching these ways.
+
+OSM node 414693 is on a footway omitted by this car import; node 417484 had only
+railway parents in the inspected snapshot. Neither is silently promoted to a
+motor-vehicle road hazard. General crossing coverage remains unverified.
+
+GH11.1 stores `osm_way_id` as a 31-bit integer. This fixture is within range;
+future source IDs exceeding that range need explicit importer review rather
+than truncation. Opt-in tests verify exact way matching and reject wrong/empty
+way evidence and invalid snap tolerances without enabling navigation.

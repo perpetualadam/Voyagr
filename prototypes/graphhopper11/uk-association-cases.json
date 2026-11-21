@@ -1,0 +1,36 @@
+{
+  "scope": "Public OSM source records from the pinned UK PBF. Only source-way association is tested, not hazard avoidance or physical enforcement.",
+  "source_pbf_sha256": "20d0e39cb555b457126d47903a084cc9b7b79d49345b601b3c4e1887fda385cf",
+  "cases": [
+    {
+      "id": "camera_50032464_oneway_source_order",
+      "source_nodes": [61771714, 50032464, 50032466],
+      "points": [[53.778609, -1.5377496], [53.7788901, -1.5379451], [53.7794106, -1.5383188]],
+      "expected_osm_way_ids": [1183050528], "require_all_expected_ways": true, "max_snap_distance_m": 1
+    },
+    {
+      "id": "camera_314037901_relation_15486512_from_to",
+      "source_nodes": [10671946525, 10671946524],
+      "points": [[53.4544533, -1.4636483], [53.4542529, -1.4637374]],
+      "expected_osm_way_ids": [1146841914], "require_all_expected_ways": true, "max_snap_distance_m": 1
+    },
+    {
+      "id": "camera_9210340813_relation_15486513_reverse",
+      "source_nodes": [10671946524, 10671946525],
+      "points": [[53.4542529, -1.4637374], [53.4544533, -1.4636483]],
+      "expected_osm_way_ids": [1146841914], "require_all_expected_ways": true, "max_snap_distance_m": 1
+    },
+    {
+      "id": "castleford_418755_road_crossing",
+      "source_nodes": [2725000012, 418755, 503588555],
+      "points": [[53.7231949, -1.3623917], [53.7231543, -1.3624727], [53.7229897, -1.3627628]],
+      "expected_osm_way_ids": [4770670, 4770672], "require_all_expected_ways": true, "max_snap_distance_m": 1
+    },
+    {
+      "id": "red_lane_418624_road_crossing",
+      "source_nodes": [443775600, 418624, 2137274904],
+      "points": [[53.6763712, -1.3958619], [53.6764136, -1.3958476], [53.676438, -1.3958452]],
+      "expected_osm_way_ids": [37840714, 37840727], "require_all_expected_ways": true, "max_snap_distance_m": 1
+    }
+  ]
+}
