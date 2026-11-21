@@ -167,8 +167,11 @@ VPS2's first seven public samples passed five cases; native alternatives and
 motorway exclusion both exhausted 250,000 nodes. `uk-retry-cases.json` retries
 only those two with 1,000,000 nodes and the unchanged 20-second timeout. Neither
 mandatory motorway exclusion nor candidate/turn/visit validation is relaxed.
-Their UK results remain unverified until that explicit retry is executed. The
-graph remains read-only and no rebuild, app switch or listening server is needed.
+The operator-supplied VPS2 retry report shows both passed available-graph checks:
+three alternatives in 3.481 seconds and motorway exclusion in 1.635 seconds, with
+the same CPU/memory caps and unchanged validators. This is reported VPS2 evidence,
+not an independently repeated benchmark or capacity claim. The graph remained
+read-only; no rebuild, app switch or listening server was needed.
 
 ## Selected public hazard source-way association
 
