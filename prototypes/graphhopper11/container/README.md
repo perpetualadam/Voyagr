@@ -1,4 +1,16 @@
-# Reviewable isolated VPS2 package — NOT DEPLOYED
+# Isolated VPS2 package — release evidence and strict-mode development
+
+Milestone 2 was subsequently rebuilt, approved and started on VPS2 as image
+`sha256:be4c9bc0e0600d14291a8cb57c8b20d86ec4f1cbe5771eecdd0c5ec440344268`.
+Its service and Pixel 6 acceptance are in
+[../VPS2_ACCEPTANCE_2026-11-22.md](../VPS2_ACCEPTANCE_2026-11-22.md).
+The local image/archive and initial plan below are historical milestone-2
+artifacts, not an update procedure for that running container.
+
+Current strict-mode development adds shared browser gates and schema-2 manifests.
+It is not installed on VPS2. It requires a newly tested image and manifest;
+the old staging directory is intentionally refused by the staging tool. Do not
+reuse the historical startup plan to overwrite or silently replace the service.
 
 ## Local result
 

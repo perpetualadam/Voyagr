@@ -120,6 +120,9 @@ def test_auth_request_contract_versions_and_cross_origin_refused_before_java(app
     asset = client.get("/prototype-viewer.js", headers=AUTH)
     assert asset.status_code == 200 and asset.mimetype == "application/javascript"
     assert "script-src 'self'" in asset.headers["Content-Security-Policy"]
+    for name in ("strict-route-policy.js", "avoidance-integrity.js", "navigation-safety-ux.js"):
+        assert client.get("/strict-assets/"+name, headers=AUTH).status_code == 200
+    assert client.get("/strict-assets/not-registered.js", headers=AUTH).status_code == 404
     for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}):
         assert client.post("/api/prototype/route", json=dict(body(manifest), **extra), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=body(manifest, "unknown"), headers=AUTH).status_code == 400
@@ -223,3 +226,14 @@ def test_manifest_preparation_is_private_and_refuses_overwrite(manifest, tmp_pat
     inside = Path(manifest["paths"]["graph"]) / "must-not-create.json"
     assert subprocess.run(command[:-1] + [str(inside)], capture_output=True, timeout=30).returncode != 0
     assert not inside.exists()
+
+
+def test_browser_policy_hashes_and_old_manifest_schema_fail_closed(manifest):
+    changed = copy.deepcopy(manifest)
+    changed["browser_hashes"]["navigation-safety-ux.js"] = "0"*64
+    with pytest.raises(Refused, match="browser_policy_changed"):
+        create_app(changed, password=PASSWORD)
+    changed = copy.deepcopy(manifest)
+    changed["schema"] = 1
+    with pytest.raises(Refused, match="manifest_contract"):
+        create_app(changed, password=PASSWORD)

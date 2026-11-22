@@ -12,3 +12,11 @@
 !prototypes/graphhopper11/container/healthcheck.py
 !prototypes/graphhopper11/container/wheels/
 !prototypes/graphhopper11/container/wheels/*.whl
+!static/
+!static/js/
+!static/js/modules/
+!static/js/modules/navigation/
+!static/js/modules/navigation/strict-route-policy.js
+!static/js/modules/navigation/avoidance-integrity.js
+!static/js/app/
+!static/js/app/navigation-safety-ux.js

@@ -404,11 +404,18 @@ authenticated registered-case requests invoke the actual GH11 JAR on a read-only
 graph and return geometry, instructions and checked directed traces to a separate
 viewer. No listener or VPS service is started, and the UK app imports none of it.
 Actual Java/test-client evidence is distinct from synthetic boundary tests and
-from the still-pending approved VPS2/browser acceptance.
+from the subsequent operator VPS2/Pixel 6 acceptance recorded below.
 
 ## Container package
 
 The separate [container package](container/README.md) is locally smoke-tested with
 the actual WSGI server, Python and Java runtimes. It uses an authenticated Unix
-socket and no container network. The rendered VPS2 plan is proposed only; no
-VPS2 startup or production change has occurred.
+socket and no container network. The original rendered plan is preserved as release evidence; the operator later
+approved and completed the isolated VPS2 startup. Production remains unchanged.
+
+## Strict-mode development
+
+[STRICT_MODE.md](STRICT_MODE.md) records opt-in changes to the shared Start,
+selection, candidate and request-ordering gates. Legacy mode remains the default;
+the running milestone-2 VPS2 service is unchanged. Its operator and Pixel 6
+acceptance evidence is in [VPS2_ACCEPTANCE_2026-11-22.md](VPS2_ACCEPTANCE_2026-11-22.md).

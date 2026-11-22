@@ -1,0 +1,17 @@
+{
+  "anonymous_http": 401,
+  "authenticated_viewer_http": 200,
+  "route_http": 200,
+  "refusal_http": 422,
+  "graph_unchanged": true,
+  "navigation_allowed": false,
+  "image_id": "sha256:0509aaef069a38a4021f72e8dce318a70bb924afdb4c095bcb751d5439138297",
+  "network": "none",
+  "uid": 10001,
+  "read_only_root": true,
+  "scope": "LOCAL_GENERATED_GRAPH_STRICT_DEVELOPMENT",
+  "manifest_schema": 2,
+  "vps2_updated": false,
+  "production_changed": false,
+  "temporary_service_removed": true
+}

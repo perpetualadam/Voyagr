@@ -83,21 +83,16 @@ This command does not import a graph, download data, start a server, change
 credentials or write production configuration. No VPS command is requested yet.
 The factory is `create_app(manifest_dict, password=separate_secret, heap_mb=...)`.
 
-## VPS2 service proposal — NOT EXECUTED
+## VPS2 accepted preview release and subsequent development
 
-The immutable-ID local image and Unix-socket WSGI package are built and
-smoke-tested; see [container/README.md](container/README.md) for the evidence,
-archive checksum and exact rendered commands. The proposed VPS2 service uses no
-container network or TCP ports, read-only inputs/root, UID 10001 and a private
-Unix socket reached through SSH. No Nginx or production credential changes are
-needed. A new private staging tree holds copies of public data and a separate
-secret; the original graph/source remain unchanged.
+The operator completed the approved milestone-2 service and Pixel 6 browser checks;
+see [VPS2_ACCEPTANCE_2026-11-22.md](VPS2_ACCEPTANCE_2026-11-22.md). The accepted
+service stays on its recorded image and schema-1 manifest. Production and GH8
+remain unchanged.
 
-VPS2 host, architecture, current resources and installed image identity still
-need checks. Proposed 6 GiB memory/4 GiB heap are unbenchmarked; the successful
-local generated-graph test used 1 GiB/512 MiB. Approval is required before VPS2
-staging/service startup. The package, plan and archive are prepared locally only.
-Milestone 2 remains in progress until the approved VPS2 service and viewer checks
-pass. Strict browser Start semantics, arbitrary user settings, live source
-freshness, general association compilation and production migration remain later
-work.
+The current branch adds opt-in strict browser gates and schema-2 browser-script
+binding. These changes are development-only; see [STRICT_MODE.md](STRICT_MODE.md).
+The [container package](container/README.md) preserves historical release evidence
+and the original proposal for reference. A future update needs a new tested image,
+a newly prepared manifest and reviewed update steps. No new physical-phone
+acceptance or strict navigation authority is claimed.

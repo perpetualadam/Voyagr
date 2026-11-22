@@ -10,6 +10,10 @@ on:
       - 'tests/test_gh11_isolated_app.py'
       - 'tests/test_gh11_container_package.py'
       - 'voyagr/services/routing/private_route_cache.py'
+      - 'static/js/modules/navigation/strict-route-policy.js'
+      - 'static/js/modules/navigation/avoidance-integrity.js'
+      - 'static/js/app/navigation-safety-ux.js'
+      - 'static/js/app/route-comparison-orchestration.js'
       - '.github/workflows/graphhopper11-prototype.yml'
 
 permissions:

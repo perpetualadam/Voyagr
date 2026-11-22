@@ -133,6 +133,8 @@ def call(method,path,body=None,authenticated=True):
 assert call('GET','/',authenticated=False)[0]==401
 assert call('GET','/')[0]==200
 assert call('GET','/prototype-viewer.js')[0]==200
+for asset in ('strict-route-policy.js','avoidance-integrity.js','navigation-safety-ux.js'):
+ assert call('GET','/strict-assets/'+asset)[0]==200
 status,raw=call('GET','/api/prototype/versions'); assert status==200
 versions=json.loads(raw)
 request={**{k:versions[k] for k in ('graph_version','source_version','policy_version')},'case_id':'detour'}

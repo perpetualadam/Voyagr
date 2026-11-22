@@ -1,5 +1,10 @@
 # Isolated GH11 application-boundary investigation
 
+This audit describes the main-branch behaviour inspected before the opt-in
+strict-mode change. [STRICT_MODE.md](STRICT_MODE.md) records the new development
+guards; default UK behaviour is preserved. The original explicit-Start finding
+remains relevant to a default-mode migration, while opt-in gates are now tested.
+
 No application endpoints, frontend gates, production settings or engine selection
 are changed. The web app is Flask; the main route handler is still in
 `voyagr_web.py`, not FastAPI. This is an offline synthetic contract experiment,

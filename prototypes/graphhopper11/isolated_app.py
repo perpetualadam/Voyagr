@@ -23,6 +23,12 @@ from flask import Flask, Response, jsonify, request
 JAR_SHA256 = "8462f758d9ea49edaded557cec5c687a0a24f004ec371cd4daaeb0534824ea33"
 RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
 MARKER = b"VOYAGR_GH11_REGRESSION "
+WEB_ROOT = Path(__file__).resolve().parents[2] / "static/js"
+BROWSER_ASSETS = {
+    "strict-route-policy.js": WEB_ROOT / "modules/navigation/strict-route-policy.js",
+    "avoidance-integrity.js": WEB_ROOT / "modules/navigation/avoidance-integrity.js",
+    "navigation-safety-ux.js": WEB_ROOT / "app/navigation-safety-ux.js",
+}
 
 
 class Refused(ValueError):
@@ -59,10 +65,11 @@ def build_manifest(*, jar, graph, config, registry, source):
         raise Refused("artifact_mismatch")
     hashes = {k: digest(paths[k]) for k in ("config", "registry", "source")}
     files = graph_files(paths["graph"])
-    return {"schema": 1, "paths": paths, "hashes": hashes, "graph_files": files,
+    browser_hashes = {name: digest(path) for name, path in BROWSER_ASSETS.items()}
+    return {"schema": 2, "paths": paths, "hashes": hashes, "graph_files": files,
             "graph_version": version(files), "source_version": hashes["source"],
-            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__)]),
-            "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
+            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes]),
+            "browser_hashes": browser_hashes, "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
 
 
 class LocalJavaBridge:
@@ -92,10 +99,12 @@ class LocalJavaBridge:
 
     def verify(self, *, check_source=False):
         m = self.manifest
-        if m.get("schema") != 1 or m.get("engine_sha256") != JAR_SHA256:
+        if m.get("schema") != 2 or m.get("engine_sha256") != JAR_SHA256:
             raise Refused("manifest_contract")
         if digest(m["paths"]["jar"]) != JAR_SHA256 or digest(RUNNER) != m["runner_sha256"] or digest(__file__) != m["bridge_sha256"]:
             raise Refused("runtime_changed")
+        if {name: digest(path) for name, path in BROWSER_ASSETS.items()} != m["browser_hashes"]:
+            raise Refused("browser_policy_changed")
         for key in ("config", "registry") + (("source",) if check_source else ()):
             if digest(m["paths"][key]) != m["hashes"][key]:
                 raise Refused("input_changed")
@@ -103,7 +112,7 @@ class LocalJavaBridge:
         if files != m["graph_files"] or version(files) != m["graph_version"]:
             raise Refused("graph_changed")
         if (m["source_version"] != m["hashes"]["source"] or m["policy_version"] !=
-                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"]])):
+                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"]])):
             raise Refused("version_mismatch")
 
     def _execute(self, fixture, directory):
@@ -293,6 +302,12 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
     @app.get("/")
     def viewer():
         return Response(Path(__file__).with_name("isolated_viewer.html").read_text(), mimetype="text/html")
+
+    @app.get("/strict-assets/<name>")
+    def strict_asset(name):
+        if name not in BROWSER_ASSETS:
+            return Response(status=404)
+        return Response(BROWSER_ASSETS[name].read_text(), mimetype="application/javascript")
 
     @app.get("/prototype-viewer.js")
     def viewer_script():
