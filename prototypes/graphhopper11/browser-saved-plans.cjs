@@ -79,10 +79,12 @@ async function main(){
   });
   assert.deepEqual(journeyGuard,{opaque:true,refused:true,simulationRefused:true,closed:true});
   phase='bound preview journey';await page.evaluate(()=>{
-   let generation=1;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()};
-   const journey={capture:()=>({route_id:'synthetic_bound',generation,active:true,simulating:false}),current:value=>value.generation===generation&&value.active===true&&value.simulating===false};
-   const binding=VoyagrGH11JourneyBridge.bind({owner:VoyagrGH11SavedSession,journey,gps:{getAcceptedOriginFix:()=>fix}});
-   window.advanceSyntheticJourney=notify=>{generation++;fix.timestamp=Date.now();if(notify)binding.refresh();};
+   let intent=1,binding=null;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()},line=[[0,0],[0,.01]];
+   const modes={captureIntent:()=>intent,intentCurrent:value=>value===intent,onIntentCancelled:()=>()=>{},getState:()=> 'LIVE',isSimulating:()=>false,isJourneyCommitPending:()=>false,isAbandoning:()=>false};
+   const lifecycle={getRouteInProgress:()=>true,getRoutePolyline:()=>line,getNavigationStarting:()=>false,getNavigationFailure:()=>null};
+   const host=VoyagrGH11HostJourney.create({owner:VoyagrGH11SavedSession,modes,lifecycle,gps:{getAcceptedOriginFix:()=>fix},eventTarget:window,onChange:()=>binding?.refresh()});
+   binding=VoyagrGH11JourneyBridge.bind(host);
+   window.advanceSyntheticJourney=notify=>{intent++;fix.timestamp=Date.now();if(notify)host.refresh();};
   });
   const boundReference=await calculate('detour');
   assert.notEqual(await id('line').getAttribute('points'),'');

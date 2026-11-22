@@ -248,3 +248,12 @@ work; closing keeps the bound path fail-closed. Registered preview without bindi
 is preserved. Real guard/validator DOM regressions and an actual Chromium restore
 race use synthetic evidence only. UK lifecycle/GPS wiring remains pending; no
 production migration or navigation authority is introduced. See JOURNEY_EVIDENCE.md.
+
+## Subsequent Milestone 3 checkpoint: real host contracts
+
+An explicit isolated adapter now consumes the existing UK journey-intent,
+lifecycle and accepted-origin interfaces, without importing or starting the UK
+runtime. Real intent-clock/lifecycle unit tests and synthetic browser integration
+cover invalidation and refusal states. The adapter is packaged but not connected
+to production; accepted-fix refresh hooks and actual UK binding remain pending.
+See HOST_JOURNEY_ADAPTER.md. Milestone 3 remains in progress.

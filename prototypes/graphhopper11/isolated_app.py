@@ -34,6 +34,7 @@ RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
 MARKER = b"VOYAGR_GH11_REGRESSION "
 WEB_ROOT = Path(__file__).resolve().parents[2] / "static/js"
 BROWSER_ASSETS = {
+    "gh11-host-journey.js": Path(__file__).with_name("host_journey_adapter.js"),
     "speed-gps.js": WEB_ROOT / "modules/navigation/speed-gps.js",
     "gh11-journey-evidence.js": Path(__file__).with_name("journey_evidence.js"),
     "local-store.js": WEB_ROOT / "modules/privacy/local-store.js",

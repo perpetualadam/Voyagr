@@ -42,3 +42,5 @@
 
 !prototypes/graphhopper11/journey_evidence.js
 !static/js/modules/navigation/speed-gps.js
+
+!prototypes/graphhopper11/host_journey_adapter.js
