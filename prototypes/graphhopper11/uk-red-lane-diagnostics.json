@@ -43,7 +43,8 @@
       "max_visited_nodes": 1000000,
       "max_snap_distance_m": 1,
       "diagnose_anchors": true,
-      "diagnose_exact_nodes": true
+      "diagnose_exact_nodes": true,
+      "pin_exact_anchors": true
     },
     {
       "id": "red_lane_reverse_both_directions_excluded",
@@ -56,7 +57,8 @@
       "max_visited_nodes": 1000000,
       "max_snap_distance_m": 1,
       "diagnose_anchors": true,
-      "diagnose_exact_nodes": true
+      "diagnose_exact_nodes": true,
+      "pin_exact_anchors": true
     }
   ]
 }

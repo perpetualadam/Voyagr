@@ -297,3 +297,31 @@ refusal when all corridors are closed, diagnostic fields, and unchanged graph
 hashes. Existing synthetic turn tests remain separate evidence; they do not prove
 general UK turn-restriction correctness. The exact-node UK result awaits VPS2
 execution. Application integration and production migration remain NO-GO.
+
+## Request-scoped exact endpoint prototype
+
+The operator's subsequent exact-node diagnostic reached the intended Red Lane
+anchors in both directions: 819.387 m, ten directed edges and zero forbidden
+traversals, including the tiny connecting edge (connector keys 5261444/5261445 on
+that specific graph). This is evidence for a selected detour, not general hazard
+coverage or production readiness. Coordinate requests still failed their anchor
+gate; no acceptance was overridden.
+
+`pin_exact_anchors` now opts an association-anchored, two-point, non-alternative
+case into a request-scoped tower-node location-index wrapper. It constructs snaps
+for the actual derived nodes, requiring an eligible incident edge under Router's
+supplied filter. It never selects a neighbour if the node is ineligible. Ordinary
+requests delegate to the original index. Thread-local context is cleared in a
+finally block, including failures; no graph or persistent index is modified.
+Coincident start and end request coordinates with different IDs are refused
+because the coordinate lookup cannot distinguish those endpoints. This feature
+is limited to the offline prototype; it does not resolve general user-coordinate
+association, heading constraints, alternatives or multi-stop endpoint handling.
+
+Existing independent trace, turn, endpoint-identity and one-metre checks remain
+unchanged. The exact-node diagnostic remains separate. A generated second graph
+contains distinct coincident tower nodes joined by a 0.001 m edge. Tests check
+both pinned directions include that connector, a blocked endpoint cannot fall
+back to its eligible twin, ordinary routing resumes after refusal, and graph
+hashes remain unchanged. The updated Red Lane fixture enables pinning; its UK
+result awaits VPS2 execution. The slip-road failure remains a separate issue.

@@ -17,6 +17,44 @@ import static com.graphhopper.json.Statement.Op.MULTIPLY;
 public class ReadOnlyRouteRegression {
     static final String BLOCKS="voyagr_blocked_keys";
     static class ExclusionHopper extends GraphHopper {
+        private final ThreadLocal<List<Integer>> exactAnchors=new ThreadLocal<>();
+        void installAnchorIndex() {
+            var delegate=getLocationIndex();
+            setLocationIndex(new com.graphhopper.storage.index.LocationIndex() {
+                @Override public void close() { delegate.close(); }
+                @Override public void query(TileFilter filter,Visitor visitor) { delegate.query(filter,visitor); }
+                @Override public com.graphhopper.storage.index.Snap findClosest(double lat,double lon,
+                        com.graphhopper.routing.util.EdgeFilter filter) {
+                    var anchors=exactAnchors.get();
+                    if(anchors==null) return delegate.findClosest(lat,lon,filter);
+                    var nodes=getBaseGraph().getNodeAccess();
+                    for(int node:anchors) if(lat==nodes.getLat(node) && lon==nodes.getLon(node)) {
+                        var edges=getBaseGraph().createEdgeExplorer().setBaseNode(node);
+                        while(edges.next()) if(filter.accept(edges)) {
+                            var snap=new com.graphhopper.storage.index.Snap(lat,lon);
+                            snap.setClosestNode(node);snap.setClosestEdge(edges.detach(false));
+                            snap.setWayIndex(0);snap.setQueryDistance(0);
+                            snap.setSnappedPosition(com.graphhopper.storage.index.Snap.Position.TOWER);
+                            snap.setSnappedPoint(new com.graphhopper.util.shapes.GHPoint3D(lat,lon,Double.NaN));
+                            return snap;
+                        }
+                        // Never fall back to a neighbouring node when the anchor is ineligible.
+                        return new com.graphhopper.storage.index.Snap(lat,lon);
+                    }
+                    throw new IllegalStateException("unexpected coordinate in anchored request");
+                }
+            });
+        }
+        GHResponse routeAnchored(GHRequest request,int from,int to) {
+            require(exactAnchors.get()==null,"nested anchored request forbidden");
+            require(request.getPoints().size()==2 && from>=0 && to>=0 && from!=to,"two distinct anchors required");
+            var nodes=getBaseGraph().getNodeAccess();
+            require(nodes.getLat(from)!=nodes.getLat(to) || nodes.getLon(from)!=nodes.getLon(to),
+                "coincident request endpoints cannot be distinguished");
+            exactAnchors.set(List.of(from,to));
+            try { return route(request); } finally { exactAnchors.remove(); }
+        }
+
         @Override protected WeightingFactory createWeightingFactory() {
             var original=super.createWeightingFactory();
             return (profile,hints,disableTurns)-> {
@@ -297,7 +335,13 @@ public class ReadOnlyRouteRegression {
             }
             long start=System.nanoTime();
             GHResponse response;
-            try { response=hopper.route(request); }
+            try {
+                if(test.path("pin_exact_anchors").asBoolean(false)) {
+                    require(anchorStart>=0 && !alternatives && visits.size()==2,"pinning requires two association-derived anchors");
+                    result.put("endpoint_mode","request_scoped_exact_tower_nodes");
+                    response=((ExclusionHopper)hopper).routeAnchored(request,anchorStart,anchorEnd);
+                } else response=hopper.route(request);
+            }
             finally { result.put("query_ms",(System.nanoTime()-start)/1e6); }
             if(response.hasErrors()) {
                 result.put("provider_error_types",response.getErrors().stream().map(e->e.getClass().getSimpleName()).toList());
@@ -381,6 +425,7 @@ public class ReadOnlyRouteRegression {
             long start=System.nanoTime();
             require(hopper.load(),"existing graph unavailable; import forbidden");
             double loadMs=(System.nanoTime()-start)/1e6;
+            ((ExclusionHopper)hopper).installAnchorIndex();
             Map<String,List<Integer>> associations=new LinkedHashMap<>();
             List<Map<String,Object>> evidence=new ArrayList<>();
             if(fixture.has("associations")) {

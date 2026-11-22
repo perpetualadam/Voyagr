@@ -276,7 +276,7 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     trials = [
         {"id": "forward_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "alternatives": True},
         {"id": "reverse_control", "points": [[0, .02], [0, 0]], "blocked_associations": ["forward"], "required_association": "reverse", "expected_osm_way_ids": [10]},
-        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True, "diagnose_anchors": True, "diagnose_exact_nodes": True},
+        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True, "diagnose_anchors": True, "diagnose_exact_nodes": True, "pin_exact_anchors": True},
         {"id": "virtual_direction", "points": [[0, .002], [0, .018]], "blocked_associations": ["forward"]},
     ]
     for case in trials:
@@ -345,3 +345,66 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert "unverified association" in refusal["cases"][0]["reason"]
     assert all(not row.get("route_absence_proven", False) for row in refusal["cases"])
     assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
+
+    # A second graph has distinct tower nodes at the same coordinate, joined by
+    # a real 0.001m imported edge. Pinning must retain the connector in the trace.
+    twin_osm = tmp_path / "twins.osm"
+    twin_osm.write_text(osm.read_text().replace(
+        '<node id="7" lat="-0.004" lon="0.01"/>',
+        '<node id="7" lat="-0.004" lon="0.01"/>'
+        '<node id="8" lat="0" lon="0.02"/><node id="9" lat="0" lon="0.021"/>'
+    ).replace(
+        '<way id="11"><nd ref="1"/><nd ref="4"/><nd ref="2"/>',
+        '<way id="11"><nd ref="1"/><nd ref="4"/><nd ref="8"/>'
+    ).replace('</osm>', '''
+      <way id="15"><nd ref="8"/><nd ref="2"/><tag k="highway" v="residential"/></way>
+      <way id="16"><nd ref="8"/><nd ref="9"/><tag k="highway" v="residential"/></way>
+    </osm>'''))
+    twin_graph = tmp_path / "twin-graph"
+    twin_config = tmp_path / "twins.yml"
+    twin_config.write_text(config.read_text().replace(str(osm), str(twin_osm)).replace(str(graph), str(twin_graph)))
+    subprocess.run(["java", "-Xmx512m", "-jar", str(jar), "import", str(twin_config)],
+                   cwd=tmp_path, check=True, capture_output=True, timeout=90)
+    twin_before = {p.name: runner.digest(p) for p in twin_graph.iterdir() if p.is_file()}
+    twin_associations = [associations[0], closed_associations[-1], {
+        "id": "connector", "points": [[0, .021], [0, 0]],
+        "expected_osm_way_ids": [16, 15, 10], "require_all_expected_ways": True, "max_snap_distance_m": 1,
+    }]
+    # Block the direct motorway and lower corridor so the upper route must use
+    # the coincident-node connector. Test both directions and then block it too.
+    twin_cases = [{
+        "id": "pinned_reverse" if reverse else "pinned_forward",
+        "anchors_from_association": "forward", "reverse_anchors": reverse,
+        "blocked_associations": ["forward", "lower"], "block_both_directions": True,
+        "pin_exact_anchors": True, "diagnose_anchors": True,
+    } for reverse in (False, True)]
+    cases.write_text(json.dumps({"associations": twin_associations[:2], "cases": twin_cases}))
+    twin_command = command[:command.index(str(config))] + [str(twin_config), str(twin_graph), str(cases)]
+    completed = subprocess.run(twin_command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    twin_report = json.loads(next(line.split(" ", 1)[1] for line in completed.stdout.splitlines()
+                                 if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    for case in twin_report["cases"]:
+        assert case["endpoint_mode"] == "request_scoped_exact_tower_nodes"
+        assert case["anchor_diagnostics"]["original_node_identity_matches"] is True
+        assert case["candidates"][0]["forbidden_traversals"] == 0
+        diagnostic = case["anchor_diagnostics"]
+        endpoint = "expected_start" if case["id"] == "pinned_reverse" else "expected_end"
+        connector = next(n for n in diagnostic[endpoint]["neighbors"] if n["osm_way_id"] == 15)
+        assert connector["distance_m"] == pytest.approx(.001)
+        traversal = connector["edge_key"] if endpoint == "expected_start" else connector["edge_key"] ^ 1
+        assert traversal in case["candidates"][0]["directed_edge_keys"]
+    cases.write_text(json.dumps({"associations": twin_associations, "cases": [{
+        "id": "pinned_ineligible", "anchors_from_association": "forward",
+        "blocked_associations": ["forward", "lower", "connector"],
+        "block_both_directions": True, "pin_exact_anchors": True,
+    }, {"id": "after_refusal", "points": [[0, 0], [0, .02]], "expected_osm_way_ids": [10]}]}))
+    refused = subprocess.run(twin_command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert refused.returncode != 0
+    refusal = json.loads(next(line.split(" ", 1)[1] for line in refused.stdout.splitlines()
+                             if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    assert refusal["cases"][0]["status"] == "UNVERIFIED_OR_FAILED"
+    assert refusal["cases"][0]["route_absence_proven"] is False
+    assert "candidates" not in refusal["cases"][0]
+    assert refusal["cases"][1]["status"] == "PASS_AVAILABLE_GRAPH_CHECKS"
+    assert twin_before == {p.name: runner.digest(p) for p in twin_graph.iterdir() if p.is_file()}
