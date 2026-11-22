@@ -740,8 +740,7 @@ def test_raw_app_settings_preflight_derives_full_policy_without_java(app, manife
     assert not bridge.cache
 
 
-@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
-def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
+def _run_real_browser(app, monkeypatch, runner_name, expected_status, expected_calls):
     import signal
     import threading
     from werkzeug.serving import make_server, WSGIRequestHandler
@@ -764,7 +763,7 @@ def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
     thread.start()
     process = None
     try:
-        runner = Path(__file__).resolve().parents[1]/'prototypes/graphhopper11/browser-acceptance.cjs'
+        runner = Path(__file__).resolve().parents[1]/'prototypes/graphhopper11'/runner_name
         process = subprocess.Popen(['node', str(runner), f'http://127.0.0.1:{server.server_port}/'],
                                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
         try:
@@ -775,10 +774,10 @@ def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
             pytest.fail('Isolated browser exceeded its test budget')
         assert process.returncode == 0, errors[-2000:]
         evidence = json.loads(output)
-        assert evidence['status'] == 'PASS_ISOLATED_CHROMIUM_HTTP'
+        assert evidence['status'] == expected_status
         assert evidence['external_requests'] == 0 and not evidence['navigation_allowed']
         assert evidence['synthetic_storage_retained'] and evidence['phone_acceptance'] == 'UNVERIFIED'
-        assert calls == {'execute': 1, 'validate': 4}
+        assert calls == expected_calls
         bridge.verify(check_source=True)
     finally:
         if process is not None and process.poll() is None:
@@ -788,3 +787,71 @@ def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
         server.server_close()
         thread.join(timeout=5)
         assert not thread.is_alive()
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
+    _run_real_browser(app,monkeypatch,'browser-acceptance.cjs','PASS_ISOLATED_CHROMIUM_HTTP',{'execute':1,'validate':4})
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_http_fault_recovery(app, manifest, monkeypatch):
+    import threading
+    from flask import request, jsonify, g
+
+    # Fault controls exist only on this temporary test app, after its unchanged
+    # Basic/Origin guards. Never register them in create_app or a deployed image.
+    modes = {'none','deny_policy_401','deny_policy_403','deny_route_401','deny_route_403','hold_policy'}
+    state = {'mode':'none'}
+    entered, release, completed = threading.Event(), threading.Event(), threading.Event()
+    release.set()
+
+    @app.post('/__test/control')
+    def fault_control():
+        value = request.get_json(silent=True)
+        if not isinstance(value,dict) or set(value) != {'mode'} or not isinstance(value['mode'],str) or value['mode'] not in modes:
+            return jsonify(success=False),400
+        state['mode'] = value['mode']
+        if value['mode'] == 'hold_policy':
+            entered.clear(); completed.clear(); release.clear()
+        else:
+            release.set()
+        return jsonify(success=True)
+
+    @app.get('/__test/state')
+    def fault_state():
+        return jsonify(entered=entered.is_set(),completed=completed.is_set())
+
+    @app.before_request
+    def inject_fault():
+        mode = state['mode']
+        if request.method != 'POST':
+            return None
+        for endpoint in ('policy','route'):
+            if request.path == '/api/prototype/'+endpoint and mode.startswith('deny_'+endpoint+'_'):
+                # Deliberate authenticated denial without a new browser password
+                # challenge. This tests UI handling, not Basic expiry or Nginx.
+                return jsonify(success=False,reason='synthetic_denial',navigation_allowed=False),int(mode[-3:])
+        if request.path == '/api/prototype/policy' and mode == 'hold_policy':
+            g.synthetic_held = True
+            entered.set()
+            if not release.wait(timeout=10):
+                return jsonify(success=False,reason='synthetic_gate_timeout',navigation_allowed=False),503
+        return None
+
+    @app.after_request
+    def finish_fault(response):
+        if getattr(g,'synthetic_held',False):
+            completed.set()
+        return response
+
+    try:
+        _run_real_browser(app,monkeypatch,'browser-fault-acceptance.cjs','PASS_ISOLATED_CHROMIUM_FAULTS',{'execute':2,'validate':6})
+    finally:
+        release.set()
+
+
+def test_fault_controls_are_absent_from_normal_factory(app):
+    client = app.test_client()
+    assert client.get('/__test/state',headers=AUTH).status_code == 404
+    assert client.post('/__test/control',json={'mode':'none'},headers=AUTH).status_code == 404

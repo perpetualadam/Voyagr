@@ -58,3 +58,37 @@ This does not test a physical Pixel, VPS2, private-site Nginx, installed PWA/ser
 worker, arbitrary journey, WebGL map/tiles, GPS, live warning delivery, legal/hazard
 data coverage or capacity. No merge, deployment or production change was performed.
 Milestone 3 remains in progress; production migration remains NO-GO.
+
+## Controlled HTTP denial and delayed-preflight checkpoint
+
+`test_real_chromium_http_fault_recovery` now adds a second real-browser scenario.
+The fixture registers authenticated, test-only fault controls on its temporary app,
+after the factory's unchanged Basic/Origin guards. These routes are defined only
+in the test file; a regression verifies that the normal factory returns HTTP 404
+for both control paths. They are not production configuration or packaged runtime
+features. The runner still blocks external page requests and uses a fresh profile.
+
+The server deliberately returns 401 and 403 at each of `/api/prototype/policy` and
+`/api/prototype/route`. Each denial must retain the existing SVG preview, current
+full settings, a synthetic storage marker and disabled Start. A denied preflight
+must not issue a route request. Clearing the fault must allow a newly preflighted
+reference restoration. Four refusal/recovery pairs are exercised through real HTTP.
+
+A bounded server-side gate then delays a real preflight. Editing the settings
+invalidates/aborts the request; releasing the old reply must not issue routing or
+replace the preview/new choices. A fresh calculation with the edited settings must
+succeed. The service wrapper expects two Java executions and six independent route
+validations across this scenario; all results remain preview-only and the graph/
+source hashes must remain unchanged. The gate times out rather than hanging CI.
+
+Both browser scenarios passed locally on 22 November 2026. The existing opt-in CI
+command selects both `real_chromium` tests on supported Ubuntu 24.04 with Java 17.
+No response is mocked in Chromium: faults are deliberately injected in the test
+server. This verifies handling of authenticated HTTP denials without a new password
+challenge. It does not prove Basic credential expiry/recovery, Nginx behavior,
+private-access overlays while driving, or the original phone map-loss cause.
+The delayed-reply test exercises real browser cancellation; ignored-cancellation
+and other stale-response permutations remain separate DOM regression evidence.
+
+No runtime defect was observed in these controlled paths, so no application source
+or authentication configuration was changed. Other Milestone 3 goals remain open.

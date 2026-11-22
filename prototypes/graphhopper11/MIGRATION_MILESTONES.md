@@ -90,7 +90,8 @@ the registered-case experiment, not actual navigation or production migration.
 
 ## 3. Mandatory rules across the app — IN PROGRESS (opt-in gates under test)
 
-- [ ] Connect a separate strict browser mode to the isolated backend.
+- [x] Connect a separate strict browser mode to the isolated backend for registered
+      test cases only, with navigation disabled.
 - [ ] Keep mandatory refusal through explicit Start, manual selection and automatic replacement.
 - [ ] Check every alternative and leg; preserve current journey on a failed replacement.
 - [ ] Bind cache/selection to versions, settings, ordered stops and current origin.
@@ -142,6 +143,12 @@ full-settings calculation, restoration, mandatory refusal, offline recovery,
 cache revalidation and synthetic storage markers. This is an isolated checkpoint,
 not a live UK request connection or phone acceptance; see
 [REAL_BROWSER_ACCEPTANCE.md](REAL_BROWSER_ACCEPTANCE.md).
+
+A second real-browser checkpoint now verifies controlled 401/403 denials at both
+preflight and route delivery, validated recovery, and a delayed preflight superseded
+by edited settings. Fault controls exist only in the disposable test fixture; the
+normal factory rejects their paths. This does not establish Nginx credential
+expiry/recovery or physical-phone behavior. See REAL_BROWSER_ACCEPTANCE.md.
 
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
