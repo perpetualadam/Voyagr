@@ -9,6 +9,7 @@ const fetch=(...args)=>root.fetch(...args);
 'use strict';
 const status=document.getElementById('status'), calculate=document.getElementById('calculate');
 const cases=document.getElementById('cases'), alternatives=document.getElementById('alternatives');
+const restore=document.getElementById('restore'), planText=document.getElementById('planReference');
 let versions=null, routes=[], registeredSettings={}, registeredBindings={};
 if(!root.VoyagrStrictRoutePolicyModule||!root.VoyagrNavigationSafetyUX||!root.VoyagrAvoidanceIntegrity){status.textContent='Strict verification unavailable.';return;}
 if(root.VOYAGR_STRICT_ROUTING!==true)Object.defineProperty(root,'VOYAGR_STRICT_ROUTING',{value:true,writable:false,configurable:false});
@@ -24,13 +25,39 @@ document.getElementById('instructions').textContent=route.instruction_details.ma
 alternatives.addEventListener('change',showRoute);
 function showSettings(){document.getElementById('selectedSettings').textContent=JSON.stringify(registeredSettings[cases.value]||{},null,2);}
 cases.addEventListener('change',()=>{root.VoyagrAvoidanceIntegrity.invalidate();showSettings();});
-calculate.addEventListener('click',async()=>{const selectedCase=cases.value;const selectedSettings=registeredSettings[selectedCase];const selectedBinding=registeredBindings[selectedCase];const ticket=root.VoyagrAvoidanceIntegrity.begin(root.localStorage);calculate.disabled=true;root.VoyagrNavigationSafetyUX.reset();routes=[];alternatives.replaceChildren();document.getElementById('line').setAttribute('points','');document.getElementById('instructions').textContent='';status.textContent='Calculating…';
-try{const result=await get('/api/prototype/route',Object.assign(root.VoyagrAvoidanceIntegrity.fetchOptions(ticket),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({case_id:selectedCase,selected_settings:selectedSettings,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version})}));
+function stable(value){return JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);}
+function reference(caseId){return {schema:1,case_id:caseId,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,selected_settings:registeredSettings[caseId],request_binding:registeredBindings[caseId]};}
+function clearPreview(){routes=[];alternatives.replaceChildren();document.getElementById('line').setAttribute('points','');document.getElementById('instructions').textContent='';}
+async function calculateCase(saved){
+const selectedCase=saved?saved.case_id:cases.value;
+const selectedSettings=registeredSettings[selectedCase], selectedBinding=registeredBindings[selectedCase];
+const ticket=root.VoyagrAvoidanceIntegrity.begin(root.localStorage);
+calculate.disabled=true;restore.disabled=true;
+if(!saved){root.VoyagrNavigationSafetyUX.reset();clearPreview();}
+status.textContent=saved?'Restoring and checking…':'Calculating…';
+try{
+const body=saved||{case_id:selectedCase,selected_settings:selectedSettings,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version};
+const result=await get(saved?'/api/prototype/restore':'/api/prototype/route',Object.assign(root.VoyagrAvoidanceIntegrity.fetchOptions(ticket),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));
 if(!root.VoyagrAvoidanceIntegrity.current(ticket,root.localStorage)){status.textContent='Request superseded; calculate the selected case.';return;}
-if(result.request_binding!==selectedBinding||JSON.stringify(result.selected_settings)!==JSON.stringify(selectedSettings)||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version)throw new Error('Response contract refused.');
-routes=result.candidates;routes.forEach((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';alternatives.append(option);});
+if(result.request_binding!==selectedBinding||stable(result.selected_settings)!==stable(selectedSettings)||stable(result.plan_reference)!==stable(reference(selectedCase))||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version)throw new Error('Response contract refused.');
+// Build replacement controls before replacing the current preview.
+if(!Array.isArray(result.candidates)||!result.candidates.length||result.candidates.length>3||result.candidates.some(route=>!route||route.navigation_allowed!==false||!Number.isFinite(route.distance_km)||route.distance_km<=0||!route.geometry||route.geometry.type!=='LineString'||!Array.isArray(route.geometry.coordinates)||route.geometry.coordinates.length<2||route.geometry.coordinates.length>20000||route.geometry.coordinates.some(point=>!Array.isArray(point)||point.length!==2||!point.every(Number.isFinite)||Math.abs(point[0])>180||Math.abs(point[1])>90)||!Array.isArray(route.instruction_details)||!route.instruction_details.length||route.instruction_details.some(item=>!item||typeof item.name!=='string'||!Number.isFinite(item.distance_m)||item.distance_m<0)))throw new Error('Response contract refused.');
+const options=result.candidates.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});
+routes=result.candidates;alternatives.replaceChildren(...options);cases.value=selectedCase;showSettings();
+planText.value=JSON.stringify(result.plan_reference);
 status.textContent=routes.length+' route(s) passed selected fixture checks. Navigation remains unavailable.';showRoute();
-}catch(error){status.textContent=root.VoyagrAvoidanceIntegrity.current(ticket,root.localStorage)?error.message:'Request superseded; calculate the selected case.';}finally{root.VoyagrAvoidanceIntegrity.finish(ticket);calculate.disabled=false;}});
-Promise.all([get('/api/prototype/cases'),get('/api/prototype/versions')]).then(([registry,identity])=>{versions=identity;registeredSettings=registry.case_settings||{};registeredBindings=registry.case_bindings||{};if(registry.cases.some(id=>!registeredSettings[id]||!/^[a-f0-9]{64}$/.test(registeredBindings[id])))throw new Error('Registered settings unavailable.');registry.cases.forEach(id=>{const option=document.createElement('option');option.value=id;option.textContent=id;cases.append(option);});showSettings();calculate.disabled=false;status.textContent='Select a registered test case.';}).catch(error=>{status.textContent=error.message;});
+}catch(error){status.textContent=root.VoyagrAvoidanceIntegrity.current(ticket,root.localStorage)?error.message:'Request superseded; calculate the selected case.';}
+finally{root.VoyagrAvoidanceIntegrity.finish(ticket);calculate.disabled=false;restore.disabled=false;}
+}
+calculate.addEventListener('click',()=>calculateCase(null));
+restore.addEventListener('click',()=>{
+try{
+if(planText.value.length>1024)throw new Error('Plan reference refused; current preview retained.');
+const saved=JSON.parse(planText.value);
+if(!saved||!Object.prototype.hasOwnProperty.call(registeredSettings,saved.case_id)||stable(saved)!==stable(reference(saved.case_id)))throw new Error('Plan reference changed; current preview retained.');
+calculateCase(saved);
+}catch(_){status.textContent='Plan reference refused; current preview retained.';}
+});
+Promise.all([get('/api/prototype/cases'),get('/api/prototype/versions')]).then(([registry,identity])=>{versions=identity;registeredSettings=registry.case_settings||{};registeredBindings=registry.case_bindings||{};if(registry.cases.some(id=>!registeredSettings[id]||!/^[a-f0-9]{64}$/.test(registeredBindings[id])))throw new Error('Registered settings unavailable.');registry.cases.forEach(id=>{const option=document.createElement('option');option.value=id;option.textContent=id;cases.append(option);});showSettings();calculate.disabled=false;restore.disabled=false;status.textContent='Select a registered test case.';}).catch(error=>{status.textContent=error.message;});
 
 });

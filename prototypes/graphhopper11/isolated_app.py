@@ -107,6 +107,11 @@ class LocalJavaBridge:
                 "mandatory_associations": sorted(case.get("blocked_associations", [])),
                 "both_directions": bool(case.get("block_both_directions", False))}
 
+    def plan_reference(self, case_id):
+        return {"schema": 1, "case_id": case_id,
+                **{key: self.manifest[key] for key in ("graph_version", "source_version", "policy_version")},
+                "selected_settings": self.settings(case_id), "request_binding": self.binding(case_id)}
+
     def binding(self, case_id):
         return version([self.manifest["graph_version"], self.manifest["source_version"],
                         self.manifest["policy_version"], self.cases[case_id], self.settings(case_id)])
@@ -302,6 +307,7 @@ class LocalJavaBridge:
         m = self.manifest
         return {"success": True, "case_id": case["id"], "engine_version": "11.1",
                 "selected_settings": self.settings(case["id"]), "request_binding": self.binding(case["id"]),
+                "plan_reference": self.plan_reference(case["id"]),
                 **{key: m[key] for key in ("graph_version", "source_version", "policy_version")},
                 "scope": "selected_fixture_graph_checks_only", "navigation_allowed": False,
                 "production_migration": "NO_GO", "blocked_edge_keys": blocked, "candidates": public_rows}
@@ -365,8 +371,26 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
             return jsonify(success=False, reason="settings_not_registered", navigation_allowed=False), 400
         if any(body[key] != bridge.manifest[key] for key in ("graph_version", "source_version", "policy_version")):
             return jsonify(success=False, reason="version_changed", navigation_allowed=False), 409
+        return calculate_registered(body["case_id"])
+
+    @app.post("/api/prototype/restore")
+    def restore():
+        # References are selectors, never proof of route compliance. Do not
+        # accept geometry, cached verdicts, authority flags or arbitrary settings.
+        body = request.get_json(silent=True)
+        fields = {"schema", "case_id", "graph_version", "source_version", "policy_version",
+                  "selected_settings", "request_binding"}
+        if (not isinstance(body, dict) or set(body) != fields or type(body.get("schema")) is not int
+                or body["schema"] != 1 or not isinstance(body.get("case_id"), str)
+                or body["case_id"] not in bridge.cases):
+            return jsonify(success=False, reason="plan_reference_contract", navigation_allowed=False), 400
+        if version(body) != version(bridge.plan_reference(body["case_id"])):
+            return jsonify(success=False, reason="plan_reference_changed", navigation_allowed=False), 409
+        return calculate_registered(body["case_id"])
+
+    def calculate_registered(case_id):
         try:
-            return jsonify(bridge.route(body["case_id"]))
+            return jsonify(bridge.route(case_id))
         except Refused as error:
             safe = {"engine_refused": 422, "transport_busy": 503, "transport_timeout": 504,
                     "transport_output_limit": 422, "graph_changed": 409, "input_changed": 409,

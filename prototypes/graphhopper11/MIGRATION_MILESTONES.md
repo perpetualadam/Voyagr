@@ -101,6 +101,10 @@ Registered settings are now echoed and checked end to end, with a bounded
 public-fixture cache that revalidates raw evidence on reuse. Arbitrary settings,
 production-cache integration and deployed acceptance remain pending.
 
+Registered test-plan references can now be restored through current settings/version
+checks and route revalidation, preserving the preview on refusal. This is not
+production saved-journey integration; see [RESTORE_PLANS.md](RESTORE_PLANS.md).
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting

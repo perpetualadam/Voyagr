@@ -146,6 +146,9 @@ assert result['candidates'] and all(set(r['directed_edge_keys']).isdisjoint(resu
 assert result['selected_settings']==settings['detour'] and len(result['request_binding'])==64
 status,raw=call('POST','/api/prototype/route',request); assert status==200
 assert json.loads(raw)==result
+status,raw=call('POST','/api/prototype/restore',result['plan_reference']); assert status==200
+assert json.loads(raw)['candidates']==result['candidates']
+assert call('POST','/api/prototype/restore',{**result['plan_reference'],'graph_version':'0'*64})[0]==409
 changed={**request,'selected_settings':{**settings['detour'],'mandatory_associations':[]}}
 assert call('POST','/api/prototype/route',changed)[0]==400
 request['case_id']='refused'
@@ -154,7 +157,7 @@ status,raw=call('POST','/api/prototype/route',request); assert status==422
 assert json.loads(raw)['navigation_allowed'] is False
 from prototypes.graphhopper11.isolated_app import LocalJavaBridge
 LocalJavaBridge(json.loads(Path('/inputs/manifest.json').read_text())).verify(check_source=True)
-print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'graph_unchanged':True,'navigation_allowed':False}))
+print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'restore_http':200,'changed_restore_http':409,'graph_unchanged':True,'navigation_allowed':False}))
 '''
         result = json.loads(docker(['exec','-i',name,'python','-'],code=program,timeout=90))
         result.update(image_id=image,network='none',uid=10001,read_only_root=True)

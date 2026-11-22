@@ -306,3 +306,71 @@ def test_cache_expiry_and_ordered_case_settings_change_force_execution(app, monk
     bridge.cases['detour'] = original
     bridge.route('via')
     assert len(calls) == 3
+
+
+def test_real_saved_reference_restoration_recalculates_after_cache_eviction(app, manifest, monkeypatch):
+    client = app.test_client()
+    first = client.post('/api/prototype/route', json=body(manifest), headers=AUTH).get_json()
+    saved = first['plan_reference']
+    assert set(saved) == {'schema', 'case_id', 'graph_version', 'source_version', 'policy_version',
+                          'selected_settings', 'request_binding'}
+    assert 'geometry' not in json.dumps(saved)
+    bridge = app.extensions['gh11_bridge']
+    bridge.cache.clear()
+    execute, calls = bridge._execute, []
+    def counting(*args):
+        calls.append(True)
+        return execute(*args)
+    monkeypatch.setattr(bridge, '_execute', counting)
+    restored = client.post('/api/prototype/restore', json=saved, headers=AUTH)
+    assert restored.status_code == 200
+    assert len(calls) == 1
+    result = restored.get_json()
+    assert result['plan_reference'] == saved
+    assert result['candidates'] == first['candidates']
+    assert result['navigation_allowed'] is False
+
+
+def test_changed_saved_references_auth_and_origin_refuse_before_route_access(app, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    saved = bridge.plan_reference('detour')
+    def forbidden(*_):
+        pytest.fail('Invalid reference must not reach routing or cache')
+    monkeypatch.setattr(bridge, 'route', forbidden)
+    client = app.test_client()
+    assert client.post('/api/prototype/restore', json=saved).status_code == 401
+    assert client.post('/api/prototype/restore', json=saved, headers=dict(AUTH, Origin='https://elsewhere.invalid')).status_code == 403
+    for field in ('graph_version', 'source_version', 'policy_version', 'request_binding'):
+        response = client.post('/api/prototype/restore', json=dict(saved, **{field:'0'*64}), headers=AUTH)
+        assert response.status_code == 409
+        assert response.get_json()['reason'] == 'plan_reference_changed'
+    for changed in (dict(saved, selected_settings={}), dict(saved, selected_settings=dict(saved['selected_settings'], no_motorways=True))):
+        assert client.post('/api/prototype/restore', json=changed, headers=AUTH).status_code == 409
+    for changed in (dict(saved, schema=True), dict(saved, schema=2), dict(saved, case_id='unknown'),
+                    dict(saved, geometry={}), dict(saved, navigation_allowed=True), {}, []):
+        response = client.post('/api/prototype/restore', json=changed, headers=AUTH)
+        assert response.status_code == 400
+        assert response.get_json()['navigation_allowed'] is False
+    assert client.post('/api/prototype/restore', data='x'*2048, content_type='application/json', headers=AUTH).status_code == 413
+
+
+def test_warm_saved_restore_revalidates_and_never_replays_cached_verdict(app, manifest):
+    client = app.test_client()
+    first = client.post('/api/prototype/route', json=body(manifest), headers=AUTH).get_json()
+    bridge = app.extensions['gh11_bridge']
+    evidence = bridge.cache[bridge.binding('detour')][1]
+    evidence['cases'][0]['candidates'][0]['edge_intervals'][0][2] = evidence['cases'][0]['blocked_edge_keys'][0]
+    response = client.post('/api/prototype/restore', json=first['plan_reference'], headers=AUTH)
+    assert response.status_code == 422
+    assert response.get_json()['navigation_allowed'] is False
+    assert 'candidates' not in response.get_json()
+    assert not bridge.cache
+
+
+def test_saved_reference_cannot_turn_no_route_into_navigation(app):
+    bridge = app.extensions['gh11_bridge']
+    response = app.test_client().post('/api/prototype/restore', json=bridge.plan_reference('no_route'), headers=AUTH)
+    assert response.status_code == 422
+    assert response.get_json()['reason'] == 'engine_refused'
+    assert response.get_json()['navigation_allowed'] is False
+    assert not bridge.cache

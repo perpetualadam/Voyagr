@@ -4,6 +4,7 @@
 <body><h1>Isolated GH11 route experiment</h1><p>Registered public test cases only. Navigation is unavailable.</p>
 <label>Case <select id="cases"></select></label><button id="calculate" disabled>Calculate</button>
 <details><summary>Selected test settings</summary><pre id="selectedSettings"></pre></details>
+<details><summary>Keep or restore a test plan</summary><label for="planReference">Copy this reference to keep it, or paste one to restore. No journey is saved automatically.</label><textarea id="planReference" rows="5" maxlength="1024"></textarea><button id="restore" disabled>Restore test plan</button></details>
 <button id="strictStart" data-navigation-start disabled>Start navigation</button><p id="routeAvoidanceNotice">This experiment supports preview only.</p><p id="navigationStartExplanation"></p>
 <p id="status" role="status">Loading registered cases…</p><label>Returned route <select id="alternatives"></select></label>
 <svg id="plot" viewBox="0 0 800 360" role="img" aria-label="Calculated route geometry"><polyline id="line" fill="none" stroke="#254ecb" stroke-width="4"/></svg>
