@@ -12,7 +12,7 @@ COPY --chmod=0444 prototypes/graphhopper11/container/wsgi.py prototypes/graphhop
 COPY --chmod=0444 static/js/modules/navigation/polyline-codec.js static/js/modules/navigation/strict-route-policy.js static/js/modules/navigation/avoidance-integrity.js /app/static/js/modules/navigation/
 COPY --chmod=0444 static/js/app/navigation-safety-ux.js /app/static/js/app/
 RUN chmod 0555 /app/static /app/static/js /app/static/js/modules /app/static/js/modules/navigation /app/static/js/app
-RUN chmod 0555 /app /app/prototypes /app/prototypes/graphhopper11 /app/prototypes/graphhopper11/container
+RUN chmod 0555 /app /app/voyagr /app/prototypes /app/prototypes/graphhopper11 /app/prototypes/graphhopper11/container
 USER 10001:10001
 ENTRYPOINT ["gunicorn", "--workers=1", "--threads=1", "--bind=unix:/run/gh11/service.sock", "--umask=0077", "--timeout=180", "--graceful-timeout=10", "--worker-tmp-dir=/tmp", "--access-logfile=/dev/null", "--error-logfile=-", "prototypes.graphhopper11.container.wsgi:app"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 CMD ["python", "-m", "prototypes.graphhopper11.container.healthcheck"]
