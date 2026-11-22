@@ -384,6 +384,21 @@ public class ReadOnlyRouteRegression {
                 Map<String,Object> candidate=new LinkedHashMap<>(Map.of("distance_km",path.getDistance()/1000,
                     "duration_minutes",path.getTime()/60000.0,"directed_edges",keys.size(),
                     "instructions",path.getInstructions().size()));
+                if(test.path("include_path_data").asBoolean(false)) {
+                    List<List<Double>> coordinates=new ArrayList<>();
+                    for(int i=0;i<geometry.size();i++) coordinates.add(List.of(geometry.getLon(i),geometry.getLat(i)));
+                    candidate.put("geometry",Map.of("type","LineString","coordinates",coordinates));
+                    candidate.put("directed_edge_keys",keys);
+                    List<List<Object>> intervals=new ArrayList<>();
+                    for(var detail:path.getPathDetails().get("edge_key"))
+                        intervals.add(List.of(detail.getFirst(),detail.getLast(),detail.getValue()));
+                    candidate.put("edge_intervals",intervals);
+                    List<Map<String,Object>> instructions=new ArrayList<>();
+                    for(var instruction:path.getInstructions()) instructions.add(Map.of(
+                        "name",instruction.getName(),"sign",instruction.getSign(),
+                        "distance_m",instruction.getDistance(),"time_ms",instruction.getTime()));
+                    candidate.put("instruction_details",instructions);
+                }
                 if(!expectedWays.isEmpty()) {
                     Set<Integer> actualWays=new TreeSet<>();
                     var wayId=hopper.getEncodingManager().getIntEncodedValue("osm_way_id");

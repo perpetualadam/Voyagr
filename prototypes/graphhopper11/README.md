@@ -396,3 +396,12 @@ an independent instance of the existing bounded cache implementation; it is
 not wired into Flask, the browser or the Java prototype. All synthetic selections
 retain navigation_allowed=false. UK production remains unchanged and migration
 remains NO-GO.
+
+## Separate Flask-to-Java factory
+
+[ISOLATED_APP.md](ISOLATED_APP.md) describes the milestone-2 local connection:
+authenticated registered-case requests invoke the actual GH11 JAR on a read-only
+graph and return geometry, instructions and checked directed traces to a separate
+viewer. No listener or VPS service is started, and the UK app imports none of it.
+Actual Java/test-client evidence is distinct from synthetic boundary tests and
+from the still-pending approved VPS2/browser acceptance.

@@ -46,26 +46,31 @@ Outstanding review findings carried into implementation:
    concurrency, deadlines, origin authentication and trusted evidence ownership
    must be specified before introducing a listener.
 
-## 2. Isolated application connection — NEXT
+## 2. Isolated application connection — IN PROGRESS (local bridge implemented)
 
 Implement locally and review before any VPS2 service is started. No existing
 phone-test instance, reverse proxy or UK application settings may be replaced.
 
-- [ ] Define the real request/response schema: ordered visits, profile, alternatives,
+- [x] Define the selected-fixture request/response schema: ordered visits, profile, alternatives,
       mandatory rules, graph/source/policy identities, evidence state and refusals.
-- [ ] Build a trusted graph manifest/selected-fixture association registry; refuse
+- [x] Build an operator-owned graph manifest/selected-fixture association registry; refuse
       client-supplied directed keys, custom Java expressions and coverage claims.
-- [ ] Add bounded Java transport returning geometry, instructions, directed traces
+- [x] Add bounded Java transport returning geometry, instructions, directed traces
       and version identities; keep the graph read-only and use request-local blocks.
-- [ ] Add a separate Flask app factory/configuration importing no production app
+- [x] Add a separate Flask app factory/configuration importing no production app
       and calling that real transport; synthetic test providers are insufficient.
-- [ ] Make unsupported profiles/rules, stale evidence, transport failures and
+- [x] Refuse unregistered client settings, version changes, transport failures and
       validator failures explicit refusals with no alternate-engine fallback.
-- [ ] Run test-client integration tests against the actual Java process and
+- [x] Run test-client integration tests against the actual Java process and
       generated graph, with no live routing requests or datasets downloaded.
 - [ ] Present the complete resource/network/authentication/start/stop proposal
       before requesting approval to start the isolated VPS2 service.
 - [ ] After approval, show a validated route from the real isolated app on VPS2.
+
+Local implementation details, test scope and remaining service proposal:
+[ISOLATED_APP.md](ISOLATED_APP.md). Registered static source snapshots are not a
+freshness/coverage service; arbitrary user journeys and legal routing remain
+unsupported. Request JSON cannot supply edge IDs or custom models.
 
 Exit: actual Flask-to-Java calculation and route display demonstrated, graph and
 source identities verified, failures refused, GH8/production unchanged. This does
