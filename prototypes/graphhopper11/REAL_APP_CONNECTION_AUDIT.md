@@ -4,6 +4,16 @@ Date: 2026-11-22. Decision: **REMEDIATION_REQUIRED; production migration NO-GO**
 This audit changes documentation only. No VPS, running app, service, configuration,
 location history, saved-device data or authentication was accessed or changed.
 
+## Subsequent targeted remediation
+
+The branch now explicitly transfers `routing_context` and `navigation_allowed`
+from the selected candidate in both merge helpers, clearing old values when
+absent. The historical finding and probe below refer to the pinned audited
+commit; the current code produces the corrected result. Focused gate/Start and
+legacy regressions are recorded in [SELECTION_METADATA_FIX.md](SELECTION_METADATA_FIX.md).
+This closes the field-transfer gap only, not the remaining adapter/authority,
+cache, saved-store or deployment gates.
+
 ## Evidence baseline
 
 - Fetched main: `2fcc9a10d253ca976cc635a09e0e0f09a4d5896a`.
@@ -62,7 +72,7 @@ location history, saved-device data or authentication was accessed or changed.
 
 ## Reproduced selection-contract gap
 
-Run from the repository; all values are synthetic metadata, with no coordinates,
+Run from the pinned audited revision above; all values are synthetic metadata, with no coordinates,
 listener, engine request, account, saved record or navigation attempt:
 
 ```sh

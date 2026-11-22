@@ -2490,6 +2490,10 @@
             var prec = Number.isFinite(sel.geometry_precision) ? sel.geometry_precision : 6;
             return Object.assign({}, routeData, {
                 id: sel.id,
+                // Strict authority belongs to the selected candidate, including
+                // absence. Never inherit another route's context or permission.
+                routing_context: sel.routing_context,
+                navigation_allowed: sel.navigation_allowed,
                 destination: sel.destination || routeData.destination,
                 destinationName: sel.destinationName || routeData.destinationName,
                 end_lat: sel.end_lat != null ? sel.end_lat : routeData.end_lat,
@@ -2544,6 +2548,9 @@
         return {
             ...p,
             ...route,
+            // Clear old strict metadata when the new selection has none.
+            routing_context: route.routing_context,
+            navigation_allowed: route.navigation_allowed,
             warning_coverage: route.warning_coverage,
             provider_limitations: route.provider_limitations,
             provider_capabilities: route.provider_capabilities,

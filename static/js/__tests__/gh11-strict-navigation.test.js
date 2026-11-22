@@ -5,6 +5,7 @@ const UX=require('../app/navigation-safety-ux.js');
 const Life=require('../app/navigation-lifecycle-orchestration.js');
 const Reroute=require('../app/reroute-map-orchestration.js');
 const Compare=require('../app/route-comparison-orchestration.js');
+const Selection=require('../modules/navigation/route-selection.js');
 const {makeRoute,bindTransition,bindStart}=require('./fixtures/navigation-transition.cjs');
 function context(){return {graph_version:'a'.repeat(64),source_version:'b'.repeat(64),policy_version:'c'.repeat(64),request_binding:'d'.repeat(64),scope:'navigation_verified',navigation_authorized:true,issued_at_ms:Date.now()-1000,valid_until_ms:Date.now()+300000,requirements:[{category:'tolls',enabled:true,mode:'mandatory'}]};}
 function boundRoute(){const route=makeRoute();route.navigation_allowed=true;route.routing_context={...context(),checked_at_ms:Date.now()};return route;}
@@ -131,4 +132,54 @@ test('a context-bound synthetic replacement can commit through the actual rerout
     const actual=Life.getRoutePolyline();expect(actual).toHaveLength(next.polyline.length);
     actual.forEach((point,i)=>point.forEach((value,j)=>expect(value).toBeCloseTo(next.polyline[i][j],10)));
     expect(window.lastCalculatedRoute.id).toBe('replacement');
+});
+
+const selectionMerges=[
+    ['navigation', (base,next)=>Selection.mergeNavigationRouteFromSelected(base,[next],0)],
+    ['preview', (base,next)=>Selection.mergeLastCalculatedRouteFromSelection(base,next)]
+];
+describe.each(selectionMerges)('%s selected-route strict metadata',(_name,merge)=>{
+    test.each(['refused','missing_permission','missing_context'])('old authority cannot survive a %s selected route',fault=>{
+        const base=boundRoute(),next=boundRoute();next.id='NEW';
+        if(fault==='refused')next.navigation_allowed=false;
+        if(fault==='missing_permission')delete next.navigation_allowed;
+        if(fault==='missing_context')delete next.routing_context;
+        const inputs=JSON.stringify([base,next]);
+        const merged=merge(base,next);
+        expect(merged.id).toBe('NEW');
+        expect(AI.currentDecision(merged,{},localStorage).allowed).toBe(false);
+        expect(AI.prepareGuidanceCandidate(merged)).toBeNull();
+        expect(JSON.stringify([base,next])).toBe(inputs);
+    });
+    test('new valid authority replaces an old refusal and binding',()=>{
+        const base=boundRoute();base.navigation_allowed=false;base.routing_context.request_binding='e'.repeat(64);
+        const next=boundRoute();next.id='NEW';
+        const merged=merge(base,next);
+        expect(merged.id).toBe(next.id);
+        expect(merged.routing_context).toEqual(next.routing_context);
+        expect(AI.gate(merged,{storage:localStorage})).toBe(true);
+        expect(AI.prepareGuidanceCandidate(merged)).not.toBeNull();
+    });
+    test.each(['graph_version','source_version','policy_version','request_binding','expired'])('new %s mismatch cannot borrow the previous context',field=>{
+        const base=boundRoute(),next=boundRoute();next.id='NEW';
+        if(field==='expired')next.routing_context.valid_until_ms=Date.now()-1;
+        else next.routing_context[field]='e'.repeat(64);
+        expect(AI.currentDecision(merge(base,next),{},localStorage).allowed).toBe(false);
+    });
+});
+
+test.each([false,true])('actual Start uses the selected permission %s rather than the old one',allowed=>{
+    const transition=bindTransition();bindStart(transition);
+    const old=boundRoute();old.navigation_allowed=!allowed;old.id='OLD';
+    const next=boundRoute();next.navigation_allowed=allowed;next.id='NEW';
+    Compare.setRouteOptions([old,next]);Compare.setSelectedRouteIndex(1);
+    window.lastCalculatedRoute=old;window.lastRouteApiResponse={routes:[old,next]};
+    const before=transition.snapshot();
+    expect(Life.startTurnByTurnNavigation(old)).toBe(allowed);
+    if(allowed){
+        expect(Life.getRouteInProgress()).toBe(true);
+        expect(window.lastCalculatedRoute.id).toBe('NEW');
+        expect(window.lastCalculatedRoute.routing_context).toEqual(next.routing_context);
+        expect(window.lastCalculatedRoute.navigation_allowed).toBe(true);
+    }else expect(transition.snapshot()).toBe(before);
 });

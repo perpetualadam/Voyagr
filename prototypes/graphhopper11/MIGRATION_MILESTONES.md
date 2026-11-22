@@ -108,7 +108,8 @@ production saved-journey integration; see [RESTORE_PLANS.md](RESTORE_PLANS.md).
 The real-app audit found a selected-route strict-context propagation gap and
 distinguished advisory explicit Start from fresh-GPS reassessment. The ordered
 connection plan is in [REAL_APP_CONNECTION_AUDIT.md](REAL_APP_CONNECTION_AUDIT.md);
-no application code was changed by that audit.
+no application code was changed by that audit. The subsequent focused merge fix
+and its regression scope are recorded in [SELECTION_METADATA_FIX.md](SELECTION_METADATA_FIX.md).
 
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
