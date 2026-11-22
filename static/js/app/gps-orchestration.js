@@ -832,8 +832,10 @@
         if (nl && nl.resetNavigationArrivalState) nl.resetNavigationArrivalState();
     }
 
+    const acceptedOriginListeners = new Set();
     function rememberAcceptedPosition(position) {
         const c=position.coords;
+        const previous=lastAcceptedOriginFix;
         lastAcceptedOriginFix={lat:c.latitude,lon:c.longitude,accuracy:c.accuracy,timestamp:position.timestamp};
         // Browser coordinate properties need not be enumerable. Copy only fields
         // used by matching, preserving the original timestamp and uncertainty.
@@ -841,6 +843,12 @@
             latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,
             heading:c.heading,speed:c.speed,headingAccuracy:c.headingAccuracy
         }};
+        if (!previous || previous.timestamp!==position.timestamp || previous.lat!==c.latitude || previous.lon!==c.longitude || previous.accuracy!==c.accuracy) {
+            for (const listener of [...acceptedOriginListeners]) {
+                if (!acceptedOriginListeners.has(listener)) continue;
+                try { listener(); } catch (_) { /* Optional observers cannot interrupt GPS processing. */ }
+            }
+        }
     }
 
     function seedNavigationPositionFromAcceptedFix() {
@@ -2149,6 +2157,11 @@
         saveCameraAlertPreferences: saveCameraAlertPreferences,
         loadCameraAlertPreferences: loadCameraAlertPreferences,
         getAcceptedOriginFix:function(){return lastAcceptedOriginFix && Object.assign({},lastAcceptedOriginFix);},
+        onAcceptedOriginFix:function(listener){
+            if(typeof listener!=='function')throw Error('Accepted-position listener unavailable');
+            acceptedOriginListeners.add(listener);
+            return function(){acceptedOriginListeners.delete(listener);};
+        },
         acceptOriginPosition:function(position){
             var check=sgModule().validateNavigationGpsFix(position,Date.now(),0);
             if(!check.accepted || lastAcceptedOriginFix && position.timestamp<lastAcceptedOriginFix.timestamp)return false;

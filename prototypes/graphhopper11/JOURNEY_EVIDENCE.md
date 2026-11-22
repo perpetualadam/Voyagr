@@ -64,3 +64,19 @@ notification, and changes journey generation during an actual fresh restore. Six
 Java executions and six validations are required by that scenario. All GPS/journey
 inputs are synthetic; real UK host lifecycle, live GPS and phone acceptance remain
 unverified. This is UI commit integration in the isolated viewer, not UK UI wiring.
+
+
+## Accepted-position notifications
+
+The host adapter now requires the GPS module's explicit `onAcceptedOriginFix`
+subscription. The dormant source hook delivers no payload, catches observer
+exceptions and does not start tracking or alter fix acceptance. Only a changed
+accepted fix emits; rejected or identical fixes preserve the previous evidence.
+Subscription cleanup is part of adapter close. The UK app does not automatically
+create this adapter or bind it to the preview.
+
+Focused integration tests run the actual GPS acceptance API, shared validator,
+journey intent clock, lifecycle getters and viewer guard with synthetic state and
+mocked route transport. The browser test exercises the packaged adapter using a
+synthetic notification source during an actual GH11 restore. Neither establishes
+hardware GPS, UK deployment or live account behavior.

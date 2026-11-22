@@ -144,3 +144,11 @@ UI using synthetic sources. A valid context displays a route; changing generatio
 without notification prevents alternative display, and an explicit refresh during
 actual restore prevents late UI completion. Six Java executions and validations
 are now required. No physical GPS or production journey is used.
+
+
+The bound restore race now changes only the synthetic accepted fix and emits its
+no-payload subscription callback, rather than manually refreshing the UI or
+changing the journey intent. The packaged host adapter forwards that notification
+to the viewer. The six-execution/six-validation requirement remains unchanged.
+Actual GPS-orchestration notifications are tested separately in deterministic
+JavaScript integration with synthetic positions; no physical GPS test was run.

@@ -665,3 +665,21 @@ test('a superseded save failure cannot clear a newer journey preview',async()=>{
  expect(document.getElementById('line').getAttribute('points')).not.toBe('');reject(Error('superseded'));await settle();
  expect(document.getElementById('line').getAttribute('points')).not.toBe('');expect(document.getElementById('planReference').value).toBe(current);expect(document.getElementById('saveCurrentPlan').disabled).toBe(false);
 });
+test('actual accepted GPS notification flows through host adapter to cancel a late viewer response',async()=>{
+ const owner=ownerFacade();await completeReady();serveComplete();let Modes,Gps;
+ jest.isolateModules(()=>{Modes=require('../app/journey-modes.js');Gps=require('../app/gps-orchestration.js');});
+ const Life=require('../app/navigation-lifecycle-orchestration.js'),Host=require('../../../prototypes/graphhopper11/host_journey_adapter.js');
+ jest.spyOn(Modes,'getState').mockReturnValue('LIVE');global.VoyagrGH11JourneyEvidence=JourneyEvidence;
+ Gps.bind({m:{speedGps:()=>SpeedGps}});const stamp=Date.now();Gps.acceptOriginPosition({timestamp:stamp,coords:{latitude:12.34,longitude:34.56,accuracy:10}});
+ Life.setRoutePolyline([[0,0],[0,.02]]);Life.setRouteInProgress(true);let binding=null;
+ const host=Host.create({owner,modes:Modes,lifecycle:Life,gps:Gps,eventTarget:window,onChange:()=>binding?.refresh()});
+ try{
+  binding=global.VoyagrGH11JourneyBridge.bind({...host,validator:SpeedGps});let finish;
+  const served=fetch.getMockImplementation();fetch.mockImplementation((url,options)=>url.endsWith('/app-route')?new Promise(resolve=>{finish=async()=>resolve(await served(url,options));}):served(url,options));
+  document.getElementById('calculate').click();await settle();
+  expect(Gps.acceptOriginPosition({timestamp:stamp+1,coords:{latitude:12.35,longitude:34.56,accuracy:10}})).toBe(true);
+  await finish();await settle();
+  expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+  for(const [,options] of fetch.mock.calls){if(options?.body){expect(options.body).not.toContain('12.34');expect(options.body).not.toContain('12.35');expect(options.body).not.toContain('34.56');}}
+ }finally{host.close();binding?.close();Life.setRouteInProgress(false);Life.setRoutePolyline(null);delete global.VoyagrJourneyModes;delete global.VoyagrGpsOrchestration;}
+});

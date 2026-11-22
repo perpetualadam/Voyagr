@@ -257,3 +257,13 @@ runtime. Real intent-clock/lifecycle unit tests and synthetic browser integratio
 cover invalidation and refusal states. The adapter is packaged but not connected
 to production; accepted-fix refresh hooks and actual UK binding remain pending.
 See HOST_JOURNEY_ADAPTER.md. Milestone 3 remains in progress.
+
+
+## Subsequent Milestone 3 checkpoint: accepted-position refresh
+
+A dormant, no-payload GPS subscription hook now forwards changed accepted fixes to
+the explicitly bound isolated adapter. Real GPS-module/host/viewer unit integration
+and a synthetic-source actual-browser restore race cover refresh and stale-result
+refusal. No watcher, account service, automatic UK binding or deployment was added.
+Actual UK boot integration, geometry notifications and physical-phone checks remain
+pending. Milestone 3 is still in progress.

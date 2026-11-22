@@ -9,7 +9,7 @@ import, discover or start any service. A reviewed host would explicitly supply:
   isSimulating, isJourneyCommitPending and isAbandoning (journey-modes.js).
 - `VoyagrNavigationLifecycleOrchestration.getRouteInProgress/getRoutePolyline`,
   getNavigationStarting and getNavigationFailure (navigation-lifecycle-orchestration.js).
-- `VoyagrGpsOrchestration.getAcceptedOriginFix` (gps-orchestration.js).
+- `VoyagrGpsOrchestration.getAcceptedOriginFix/onAcceptedOriginFix` (gps-orchestration.js).
 
 The adapter requires confirmed LIVE state, no simulation, pending commit,
 abandonment, startup or navigation failure, and valid active two-dimensional
@@ -24,13 +24,16 @@ never exposed or logged; it is cleared on close. It is context equality, not
 road/hazard/turn compliance or authentication. A 100,000-point bound refuses larger
 geometry. Performance at that bound has not been benchmarked.
 
-The host must call `host.refresh()` after accepted-position or geometry updates and
-any uncertain lifecycle transition, with `onChange` forwarding to the bound viewer's
-`refresh()`. There is no existing accepted-fix event wired here and no polling.
+The adapter now subscribes explicitly to accepted-origin notifications, with
+`onChange` forwarding to the bound viewer's `refresh()`. The GPS module emits a
+no-argument notification only after storing a changed accepted fix. Invalid or
+identical fixes do not notify; observer exceptions cannot interrupt GPS processing.
+The host must still call `host.refresh()` after geometry updates and any uncertain
+lifecycle transition. There is no polling or new GPS watcher.
 Without notifications, operation checks detect the current difference, but cannot
 reconstruct a transition that changes and reverses entirely between observations.
 The real intent epoch and lifecycle notifications remain required. Close removes
-listeners/subscriptions, invalidates evidence and leaves the host state untouched.
+GPS, lifecycle and intent listeners/subscriptions, invalidates evidence and leaves the host state untouched.
 
 The module is an authenticated, source-hashed asset in the isolated package. No UK
 script tag or runtime binding is added. Its browser test uses synthetic API-shaped

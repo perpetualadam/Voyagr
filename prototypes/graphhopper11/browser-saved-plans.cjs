@@ -79,21 +79,22 @@ async function main(){
   });
   assert.deepEqual(journeyGuard,{opaque:true,refused:true,simulationRefused:true,closed:true});
   phase='bound preview journey';await page.evaluate(()=>{
-   let intent=1,binding=null;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()},line=[[0,0],[0,.01]];
+   let intent=1,binding=null,acceptedListener=null;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()},line=[[0,0],[0,.01]];
    const modes={captureIntent:()=>intent,intentCurrent:value=>value===intent,onIntentCancelled:()=>()=>{},getState:()=> 'LIVE',isSimulating:()=>false,isJourneyCommitPending:()=>false,isAbandoning:()=>false};
    const lifecycle={getRouteInProgress:()=>true,getRoutePolyline:()=>line,getNavigationStarting:()=>false,getNavigationFailure:()=>null};
-   const host=VoyagrGH11HostJourney.create({owner:VoyagrGH11SavedSession,modes,lifecycle,gps:{getAcceptedOriginFix:()=>fix},eventTarget:window,onChange:()=>binding?.refresh()});
+   const host=VoyagrGH11HostJourney.create({owner:VoyagrGH11SavedSession,modes,lifecycle,gps:{getAcceptedOriginFix:()=>fix,onAcceptedOriginFix:listener=>{acceptedListener=listener;return ()=>{acceptedListener=null;};}},eventTarget:window,onChange:()=>binding?.refresh()});
    binding=VoyagrGH11JourneyBridge.bind(host);
-   window.advanceSyntheticJourney=notify=>{intent++;fix.timestamp=Date.now();if(notify)host.refresh();};
+   window.advanceSyntheticJourney=notify=>{intent++;fix.timestamp=Date.now();if(notify)acceptedListener?.();};
+   window.acceptSyntheticFix=()=>{fix.timestamp=Math.max(Date.now(),fix.timestamp+1);acceptedListener?.();};
   });
   const boundReference=await calculate('detour');
   assert.notEqual(await id('line').getAttribute('points'),'');
   await page.evaluate(()=>advanceSyntheticJourney(false));await id('alternatives').dispatchEvent('change');
   assert.equal(await id('line').getAttribute('points'),'');assert.equal(await id('planReference').inputValue(),'');
-  phase='journey change during actual restore';assert.equal((await context.request.post(target.origin+'/__test/reset-saved-restore')).status(),200);
+  phase='accepted fix during actual restore';assert.equal((await context.request.post(target.origin+'/__test/reset-saved-restore')).status(),200);
   await open('planReference');await id('planReference').fill(JSON.stringify(boundReference));await id('restore').click();
   await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).entered,{timeout:5000}).toBe(true);
-  await page.evaluate(()=>advanceSyntheticJourney(true));
+  await page.evaluate(()=>acceptSyntheticFix());
   await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).completed,{timeout:15000}).toBe(true);
   await page.evaluate(()=>new Promise(requestAnimationFrame));
   assert.equal(await id('line').getAttribute('points'),'');assert.equal(await id('planReference').inputValue(),'');assert.equal(await id('saveCurrentPlan').isDisabled(),true);assert.equal(await id('strictStart').isDisabled(),true);
