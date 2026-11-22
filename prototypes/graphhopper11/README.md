@@ -1,9 +1,13 @@
 # Isolated GraphHopper 11.1 prototype
 
 This is a local experiment, not a routing service or migration switch. Nothing
-in the UK Flask application imports it. It opens no listener, has no provider
-URL, downloads no map data, and imports only two generated five-node OSM XML
-fixtures in a fresh temporary directory. The runner has no network code.
+in the UK Flask application imports it. It opens no listener and downloads no map
+data. `run.py` imports two tiny generated OSM fixtures in a fresh temporary
+directory; `ReadOnlyRouteRegression.java` instead loads an existing graph with
+writes disabled. The synthetic integration boundary has no provider URL and uses
+an injected test provider, not the real Flask/Java transport.
+
+Progress and exit criteria: [MIGRATION_MILESTONES.md](MIGRATION_MILESTONES.md).
 
 ## Pinned runtime
 
