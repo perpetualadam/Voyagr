@@ -122,6 +122,11 @@ refuses unsupported/unverified mandatory policy before execution, and binds expl
 policies through API cache and reference restoration. Full UI normalization remains
 pending; see [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md).
 
+Temporary canonical-rule controls in the standalone viewer now preflight rules,
+preserve warnings/refusals and support schema-2 references without storage writes.
+The real UK settings/parser and saved-store integration remain pending; see
+[POLICY_UI.md](POLICY_UI.md).
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting

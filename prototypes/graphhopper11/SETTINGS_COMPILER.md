@@ -85,11 +85,10 @@ can be supplied without truncation. Authentication and cross-origin checks run
 before these body reads. Unknown fields and authority/coverage/edge-key injection
 remain refused. This changes only the isolated factory's input limits.
 
-Advanced policy input and schema-2 reference restoration are currently API-level.
-The standalone viewer still selects default registered cases and schema-1 references;
-it refuses advanced pasted references rather than silently dropping rules. The
-real UI, owner-scoped saved collections and production RouteCache are not wired
-into this compiler. No browser storage or existing journeys are changed.
+The standalone viewer now connects temporary canonical-rule controls and schema-2
+reference restoration to this API; see [POLICY_UI.md](POLICY_UI.md). The real UK
+settings/parser, owner-scoped saved collections and production RouteCache remain
+unconnected. Browser storage and existing journeys are not changed.
 
 ## Synthetic example (no coordinates)
 

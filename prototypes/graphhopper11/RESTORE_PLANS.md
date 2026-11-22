@@ -6,11 +6,12 @@ read, migrated, cleared or overwritten by this feature.
 
 ## Subsequent explicit-policy extension
 
-Schema-1 references remain the standalone viewer contract. Explicit canonical
-policies now use schema-2 API references carrying the full selected policy, which
-is recompiled during restoration. See [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md)
-for refusal, binding and body-limit details. The viewer does not silently strip
-advanced policy fields; advanced policy restoration remains API-only.
+Schema-1 references retain the default registered contract. Explicit canonical
+policies use schema-2 references carrying the full selected policy, recompiled
+during restoration. The standalone viewer now supports both with preflight and
+non-destructive control updates; see [POLICY_UI.md](POLICY_UI.md). The real UK
+saved-route store is not connected. See [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md)
+for refusal, binding and body-limit details.
 
 ## Contract
 

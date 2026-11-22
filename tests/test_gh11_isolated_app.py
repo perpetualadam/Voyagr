@@ -581,3 +581,15 @@ def test_policy_preflight_rejects_route_only_fields_but_preserves_mandatory_refu
         response = client.post('/api/prototype/'+endpoint,json=payload,headers=AUTH)
         assert response.status_code == 422
         assert response.get_json()['policy_report']['unresolved_mandatory'][0]['category'] == 'railway_crossings'
+
+
+@pytest.mark.parametrize('name',['isolated_viewer.js','isolated_viewer.html'])
+def test_rule_ui_metadata_and_manifest_binding_fail_closed(app, manifest, name):
+    from prototypes.graphhopper11.policy_compiler import CATEGORIES
+    registry = app.test_client().get('/api/prototype/cases',headers=AUTH).get_json()
+    assert registry['policy_categories'] == list(CATEGORIES)
+    assert len(set(registry['policy_categories'])) == 13
+    assert set(manifest['viewer_hashes']) == {'isolated_viewer.js','isolated_viewer.html'}
+    changed = copy.deepcopy(manifest);changed['viewer_hashes'][name]='0'*64
+    with pytest.raises(Refused,match='browser_policy_changed'):
+        create_app(changed,password=PASSWORD)

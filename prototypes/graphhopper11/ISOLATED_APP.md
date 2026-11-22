@@ -126,3 +126,5 @@ Registered reference restoration and its acceptance limits: [RESTORE_PLANS.md](R
 The additional `app_preview` contract and real-instruction export are described in [RESPONSE_ADAPTER.md](RESPONSE_ADAPTER.md). It remains preview-only and does not grant navigation authority.
 
 Canonical policy preflight, explicit-rule routing and schema-2 reference scope are documented in [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md). Legacy envelopes remain bounded at 1 KiB; explicit policy envelopes allow 4 KiB for all rule categories. The compiler does not grant navigation authority.
+
+Temporary rule controls, preflight/response binding and schema-2 viewer restoration are documented in [POLICY_UI.md](POLICY_UI.md). The viewer and HTML are now manifest-bound; the real UK settings and stored journeys remain unchanged.

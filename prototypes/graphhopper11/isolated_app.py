@@ -19,9 +19,10 @@ import threading
 import time
 
 from flask import Flask, Response, jsonify, request
-from prototypes.graphhopper11.policy_compiler import compile_policy, normalize_policy, InvalidPolicy
+from prototypes.graphhopper11.policy_compiler import compile_policy, normalize_policy, InvalidPolicy, CATEGORIES
 
 COMPILER = Path(__file__).with_name("policy_compiler.py")
+VIEWER_FILES = {name: Path(__file__).with_name(name) for name in ("isolated_viewer.js", "isolated_viewer.html")}
 
 JAR_SHA256 = "8462f758d9ea49edaded557cec5c687a0a24f004ec371cd4daaeb0534824ea33"
 RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
@@ -76,10 +77,11 @@ def build_manifest(*, jar, graph, config, registry, source):
     hashes = {k: digest(paths[k]) for k in ("config", "registry", "source")}
     files = graph_files(paths["graph"])
     browser_hashes = {name: digest(path) for name, path in BROWSER_ASSETS.items()}
+    viewer_hashes = {name: digest(path) for name, path in VIEWER_FILES.items()}
     return {"schema": 2, "paths": paths, "hashes": hashes, "graph_files": files,
             "graph_version": version(files), "source_version": hashes["source"],
-            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes, digest(COMPILER)]),
-            "compiler_sha256": digest(COMPILER), "browser_hashes": browser_hashes, "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
+            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes, digest(COMPILER), viewer_hashes]),
+            "viewer_hashes": viewer_hashes, "compiler_sha256": digest(COMPILER), "browser_hashes": browser_hashes, "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
 
 
 class LocalJavaBridge:
@@ -144,6 +146,8 @@ class LocalJavaBridge:
             raise Refused("runtime_changed")
         if {name: digest(path) for name, path in BROWSER_ASSETS.items()} != m["browser_hashes"]:
             raise Refused("browser_policy_changed")
+        if {name: digest(path) for name, path in VIEWER_FILES.items()} != m.get("viewer_hashes"):
+            raise Refused("browser_policy_changed")
         for key in ("config", "registry") + (("source",) if check_source else ()):
             if digest(m["paths"][key]) != m["hashes"][key]:
                 raise Refused("input_changed")
@@ -151,7 +155,7 @@ class LocalJavaBridge:
         if files != m["graph_files"] or version(files) != m["graph_version"]:
             raise Refused("graph_changed")
         if (m["source_version"] != m["hashes"]["source"] or m["policy_version"] !=
-                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"], m["compiler_sha256"]])):
+                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"], m["compiler_sha256"], m["viewer_hashes"]])):
             raise Refused("version_mismatch")
 
     def _execute(self, fixture, directory):
@@ -466,7 +470,7 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
 
     @app.get("/api/prototype/cases")
     def cases():
-        return jsonify(cases=list(bridge.cases), case_settings={name: bridge.settings(name) for name in bridge.cases},
+        return jsonify(cases=list(bridge.cases), policy_categories=list(CATEGORIES), case_settings={name: bridge.settings(name) for name in bridge.cases},
                        case_bindings={name: bridge.binding(name) for name in bridge.cases},
                        navigation_allowed=False)
 
