@@ -117,6 +117,11 @@ and strict navigation refusal are tested through the actual shared modules; see
 [RESPONSE_ADAPTER.md](RESPONSE_ADAPTER.md). This is not a full `/api/route` or map
 application connection.
 
+The isolated canonical avoidance compiler now preserves all 13 rule categories,
+refuses unsupported/unverified mandatory policy before execution, and binds explicit
+policies through API cache and reference restoration. Full UI normalization remains
+pending; see [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md).
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting

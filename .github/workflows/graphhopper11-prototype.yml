@@ -8,9 +8,11 @@ on:
       - 'tests/test_gh11_prototype.py'
       - 'tests/test_gh11_integration_boundary.py'
       - 'tests/test_gh11_isolated_app.py'
+      - 'tests/test_gh11_policy_compiler.py'
       - 'tests/test_gh11_container_package.py'
       - 'voyagr/services/routing/private_route_cache.py'
       - 'voyagr/utils/graphhopper.py'
+      - 'voyagr/services/routing/integrity.py'
       - 'static/js/modules/navigation/strict-route-policy.js'
       - 'static/js/modules/navigation/polyline-codec.js'
       - 'static/js/modules/navigation/route-selection.js'
@@ -52,7 +54,7 @@ jobs:
           GH11_PROTOTYPE_JAR: ${{ runner.temp }}/graphhopper-web-11.1.jar
         run: |
           python -m pip install pytest "Flask>=3.1.2,<4"
-          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py tests/test_gh11_container_package.py
+          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py tests/test_gh11_container_package.py tests/test_gh11_policy_compiler.py
 
   container-package:
     runs-on: ubuntu-latest

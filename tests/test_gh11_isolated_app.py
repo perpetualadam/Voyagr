@@ -62,6 +62,7 @@ def manifest(tmp_path_factory):
         dict(plain, id="via", points=[[0, 0], [.003, .01], [0, .02]]),
         dict(plain, id="departure", points=[[.003, .01], [0, .02]]),
         dict(plain, id="no_route", blocked_associations=["main", "upper"]),
+        dict(plain, id="motorway_rule", no_motorways=True),
     ]}))
     return build_manifest(jar=jar, graph=graph, config=config, registry=registry, source=source)
 
@@ -445,7 +446,7 @@ def test_preview_precision_matches_real_browser_binding_for_negative_half_coordi
         'instruction_details':[{'name':'Synthetic', 'sign':0,'text':'Continue', 'interval':[0,2],
                                 'distance_m':1000,'time_ms':60000}]}
     result = {**{key:'a'*64 for key in ('graph_version','source_version','policy_version','request_binding')},
-              'candidates':[raw]}
+              'candidates':[raw], 'policy_report':{'selected':{'requirements':[]}}}
     preview = app_preview(result)
     script = r"""
 const assert=require('node:assert/strict');
@@ -458,3 +459,110 @@ assert.equal(route.navigation_allowed,false);
     completed = subprocess.run(['node','-e',script], input=json.dumps(preview), text=True,
                                capture_output=True, timeout=15, cwd=Path(__file__).resolve().parents[1])
     assert completed.returncode == 0, completed.stderr
+
+
+def policy_request(category='railway_crossings', mode='mandatory', enabled=True):
+    return {'profile':'car','requirements':[{'category':category,'enabled':enabled,'mode':mode}]}
+
+
+@pytest.mark.parametrize('endpoint', ['route','policy'])
+@pytest.mark.parametrize('category', ['speed_cameras','railway_crossings','tolls'])
+def test_http_mandatory_policy_refuses_before_java_and_cache(app, manifest, monkeypatch, endpoint, category):
+    bridge = app.extensions['gh11_bridge']
+    def forbidden(*_):
+        pytest.fail('Unproven mandatory policy must not execute Java')
+    monkeypatch.setattr(bridge, '_execute', forbidden)
+    bridge.cache['sentinel'] = (0, {'must_not_be_touched':True})
+    before = copy.deepcopy(bridge.cache)
+    response = app.test_client().post('/api/prototype/'+endpoint,
+        json=dict(body(manifest),policy_request=policy_request(category)),headers=AUTH)
+    assert response.status_code == 422
+    data = response.get_json()
+    assert data['reason'] == 'mandatory_avoidance_unavailable' and data['navigation_allowed'] is False
+    assert data['policy_report']['unresolved_mandatory'][0]['category'] == category
+    assert data['policy_report']['selected']['requirements'][0]['mode'] == 'mandatory'
+    assert 'candidates' not in data and 'app_preview' not in data
+    assert bridge.cache == before
+
+
+def test_registered_motorway_policy_executes_the_existing_model_and_retains_rule(app, manifest):
+    response = app.test_client().post('/api/prototype/route',
+        json=dict(body(manifest,'motorway_rule'),policy_request=policy_request('motorways')),headers=AUTH)
+    assert response.status_code == 200, response.get_json()
+    data = response.get_json()
+    assert data['selected_settings']['no_motorways'] is True
+    assert data['policy_report']['rules'][0]['state'] == 'COMPILED'
+    assert data['policy_report']['unresolved_mandatory'] == []
+    assert data['navigation_allowed'] is False
+    for route in data['app_preview']['routes']:
+        assert route['avoidance_assessment']['requirements'] == [
+            {'category':'motorways','enabled':True,'mode':'mandatory','scope':'route','status':'UNVERIFIED'}]
+        assert route['navigation_allowed'] is False
+
+
+def test_preference_policy_binds_cache_and_v2_restore_without_downgrading(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    client = app.test_client()
+    selected = policy_request('tolls','preference')
+    response = client.post('/api/prototype/route',json=dict(body(manifest),policy_request=selected),headers=AUTH)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['policy_report']['preference_warnings'][0]['category'] == 'tolls'
+    assert data['policy_report']['rules'][0]['enabled'] is True
+    assert data['policy_report']['rules'][0]['mode'] == 'preference'
+    assert data['request_binding'] != bridge.binding('detour')
+    saved = data['plan_reference']
+    assert saved['schema'] == 2 and saved['policy_request'] == data['policy_report']['selected']
+    restored = client.post('/api/prototype/restore',json=saved,headers=AUTH)
+    assert restored.status_code == 200
+    assert restored.get_json()['policy_report'] == data['policy_report']
+    assert restored.get_json()['request_binding'] == data['request_binding']
+    assert bridge.binding('detour',policy_request('tolls','preference',False)) not in bridge.cache
+    def forbidden(*_):
+        pytest.fail('Changed mandatory rules cannot reuse cached preference evidence')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    changed = copy.deepcopy(saved);changed['policy_request']['requirements'][0]['mode'] = 'mandatory'
+    assert client.post('/api/prototype/restore',json=changed,headers=AUTH).status_code == 409
+    rebound = bridge.plan_reference('detour',policy_request('tolls','mandatory'))
+    refusal = client.post('/api/prototype/restore',json=rebound,headers=AUTH)
+    assert refusal.status_code == 422
+    assert refusal.get_json()['policy_report']['unresolved_mandatory'][0]['mode'] == 'mandatory'
+
+
+def test_full_policy_list_survives_bounded_body_and_preflight_never_routes(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.policy_compiler import CATEGORIES
+    bridge = app.extensions['gh11_bridge']
+    def forbidden(*_):
+        pytest.fail('Policy preflight must not execute Java')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    selected = {'profile':'car','requirements':[
+        {'category':category,'enabled':True,'mode':'preference','scope':'route'} for category in CATEGORIES]}
+    payload = dict(body(manifest),policy_request=selected)
+    assert 1024 < len(json.dumps(payload).encode()) < 4096
+    client = app.test_client()
+    assert client.post('/api/prototype/policy',json=payload).status_code == 401
+    assert client.post('/api/prototype/policy',json=payload,headers=dict(AUTH,Origin='https://elsewhere.invalid')).status_code == 403
+    response = client.post('/api/prototype/policy',json=payload,headers=AUTH)
+    assert response.status_code == 200
+    report = response.get_json()['policy_report']
+    assert len(report['selected']['requirements']) == len(CATEGORIES)
+    assert len(report['preference_warnings']) == len(CATEGORIES)
+    assert report['navigation_allowed'] is False
+    assert not bridge.cache
+    assert client.post('/api/prototype/policy',data='x'*4097,content_type='application/json',headers=AUTH).status_code == 413
+
+
+def test_profile_invalid_policy_and_compiler_identity_fail_closed(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    def forbidden(*_):
+        pytest.fail('Unsupported or malformed policy must not execute Java')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    client = app.test_client()
+    for selected in (None,{},dict(policy_request(),coverage='AVAILABLE'),policy_request('unknown')):
+        assert client.post('/api/prototype/route',json=dict(body(manifest),policy_request=selected),headers=AUTH).status_code == 400
+    selected = dict(policy_request(),profile='bicycle')
+    response = client.post('/api/prototype/route',json=dict(body(manifest),policy_request=selected),headers=AUTH)
+    assert response.status_code == 422 and response.get_json()['reason'] == 'profile_not_supported'
+    changed = copy.deepcopy(manifest);changed['compiler_sha256'] = '0'*64
+    with pytest.raises(Refused,match='runtime_changed'):
+        create_app(changed,password=PASSWORD)

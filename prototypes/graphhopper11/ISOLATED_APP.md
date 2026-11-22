@@ -124,3 +124,5 @@ Local validation and packaging limitations: [SETTINGS_CACHE_LOCAL_EVIDENCE.json]
 Registered reference restoration and its acceptance limits: [RESTORE_PLANS.md](RESTORE_PLANS.md). Restoring never trusts saved geometry or a saved compliance verdict.
 
 The additional `app_preview` contract and real-instruction export are described in [RESPONSE_ADAPTER.md](RESPONSE_ADAPTER.md). It remains preview-only and does not grant navigation authority.
+
+Canonical policy preflight, explicit-rule routing and schema-2 reference scope are documented in [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md). Legacy envelopes remain bounded at 1 KiB; explicit policy envelopes allow 4 KiB for all rule categories. The compiler does not grant navigation authority.

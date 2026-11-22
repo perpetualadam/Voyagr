@@ -41,7 +41,9 @@ Each adapted candidate contains:
   geometry; it is a consistency check, not cryptographic navigation authority.
 
 `avoidance_assessment.geometry_valid` records the checked geometry shape only.
-Its status remains `UNVERIFIED`, its requirements are empty, and no fresh GPS,
+Its status remains `UNVERIFIED`. Legacy fixture requests have no canonical rows;
+explicit policies retain their selected rows as described in
+[SETTINGS_COMPILER.md](SETTINGS_COMPILER.md). No fresh GPS,
 origin/endpoint integrity, complete hazard coverage or legal compliance is invented.
 Both `navigation_allowed` and `automatic_selection_allowed` stay false. New
 assessment timestamps record geometry revalidation, not fresh hazard data.

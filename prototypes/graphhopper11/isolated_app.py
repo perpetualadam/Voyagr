@@ -19,6 +19,9 @@ import threading
 import time
 
 from flask import Flask, Response, jsonify, request
+from prototypes.graphhopper11.policy_compiler import compile_policy, normalize_policy, InvalidPolicy
+
+COMPILER = Path(__file__).with_name("policy_compiler.py")
 
 JAR_SHA256 = "8462f758d9ea49edaded557cec5c687a0a24f004ec371cd4daaeb0534824ea33"
 RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
@@ -34,6 +37,12 @@ BROWSER_ASSETS = {
 
 class Refused(ValueError):
     pass
+
+
+class PolicyRefused(Refused):
+    def __init__(self, report):
+        super().__init__('mandatory_policy_unavailable')
+        self.report = copy.deepcopy(report)
 
 
 def digest(path):
@@ -69,8 +78,8 @@ def build_manifest(*, jar, graph, config, registry, source):
     browser_hashes = {name: digest(path) for name, path in BROWSER_ASSETS.items()}
     return {"schema": 2, "paths": paths, "hashes": hashes, "graph_files": files,
             "graph_version": version(files), "source_version": hashes["source"],
-            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes]),
-            "browser_hashes": browser_hashes, "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
+            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes, digest(COMPILER)]),
+            "compiler_sha256": digest(COMPILER), "browser_hashes": browser_hashes, "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
 
 
 class LocalJavaBridge:
@@ -108,19 +117,29 @@ class LocalJavaBridge:
                 "mandatory_associations": sorted(case.get("blocked_associations", [])),
                 "both_directions": bool(case.get("block_both_directions", False))}
 
-    def plan_reference(self, case_id):
-        return {"schema": 1, "case_id": case_id,
-                **{key: self.manifest[key] for key in ("graph_version", "source_version", "policy_version")},
-                "selected_settings": self.settings(case_id), "request_binding": self.binding(case_id)}
+    def policy(self, case_id, selected=None):
+        return compile_policy(selected if selected is not None else {'profile':'car','requirements':[]},
+                              registered_no_motorways=self.cases[case_id].get('no_motorways') is True)
 
-    def binding(self, case_id):
-        return version([self.manifest["graph_version"], self.manifest["source_version"],
+    def plan_reference(self, case_id, selected=None):
+        result = {"schema": 2 if selected is not None else 1, "case_id": case_id,
+                **{key: self.manifest[key] for key in ("graph_version", "source_version", "policy_version")},
+                "selected_settings": self.settings(case_id), "request_binding": self.binding(case_id, selected)}
+        if selected is not None:
+            result['policy_request'] = normalize_policy(selected)
+        return result
+
+    def binding(self, case_id, selected=None):
+        base = version([self.manifest["graph_version"], self.manifest["source_version"],
                         self.manifest["policy_version"], self.cases[case_id], self.settings(case_id)])
+        return base if selected is None else version([base, normalize_policy(selected)])
 
     def verify(self, *, check_source=False):
         m = self.manifest
         if m.get("schema") != 2 or m.get("engine_sha256") != JAR_SHA256:
             raise Refused("manifest_contract")
+        if m.get("compiler_sha256") != digest(COMPILER):
+            raise Refused("runtime_changed")
         if digest(m["paths"]["jar"]) != JAR_SHA256 or digest(RUNNER) != m["runner_sha256"] or digest(__file__) != m["bridge_sha256"]:
             raise Refused("runtime_changed")
         if {name: digest(path) for name, path in BROWSER_ASSETS.items()} != m["browser_hashes"]:
@@ -132,7 +151,7 @@ class LocalJavaBridge:
         if files != m["graph_files"] or version(files) != m["graph_version"]:
             raise Refused("graph_changed")
         if (m["source_version"] != m["hashes"]["source"] or m["policy_version"] !=
-                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"]])):
+                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"], m["compiler_sha256"]])):
             raise Refused("version_mismatch")
 
     def _execute(self, fixture, directory):
@@ -178,21 +197,24 @@ class LocalJavaBridge:
             raise Refused("engine_refused")
         return report
 
-    def route(self, case_id):
+    def route(self, case_id, selected=None):
         if case_id not in self.cases:
             raise Refused("case_not_registered")
+        policy = self.policy(case_id, selected)
+        if not policy['route_preview_allowed']:
+            raise PolicyRefused(policy)
         if not self.lock.acquire(blocking=False):
             raise Refused("transport_busy")
         try:
             self.verify()
-            binding = self.binding(case_id)
+            binding = self.binding(case_id, selected)
             now = time.monotonic()
             self.cache = {key: entry for key, entry in self.cache.items() if entry[0] > now}
             cached = self.cache.get(binding)
             if cached is not None:
                 try:
                     # Re-run the same independent validation for every candidate.
-                    result = self.validate(copy.deepcopy(cached[1]), self.cases[case_id])
+                    result = self.validate(copy.deepcopy(cached[1]), self.cases[case_id], selected)
                     self.verify()
                     return result
                 except Exception:
@@ -207,7 +229,7 @@ class LocalJavaBridge:
                 path.write_text(json.dumps(fixture))
                 report = self._execute(path, directory)
             self.verify()
-            result = self.validate(report, case)
+            result = self.validate(report, case, selected)
             if len(self.cache) >= 8:
                 self.cache.pop(next(iter(self.cache)))
             self.cache[binding] = (time.monotonic() + 30, copy.deepcopy(report))
@@ -215,7 +237,10 @@ class LocalJavaBridge:
         finally:
             self.lock.release()
 
-    def validate(self, report, case):
+    def validate(self, report, case, selected=None):
+        policy = self.policy(case['id'], selected)
+        if not policy['route_preview_allowed']:
+            raise PolicyRefused(policy)
         if report.get("engine_version") != "11.1" or report.get("all_available_graph_checks_passed") is not True:
             raise Refused("engine_contract")
         cases = report.get("cases")
@@ -323,8 +348,9 @@ class LocalJavaBridge:
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
         result = {"success": True, "case_id": case["id"], "engine_version": "11.1",
-                "selected_settings": self.settings(case["id"]), "request_binding": self.binding(case["id"]),
-                "plan_reference": self.plan_reference(case["id"]),
+                "selected_settings": self.settings(case["id"]), "request_binding": self.binding(case["id"], selected),
+                "policy_report": policy,
+                "plan_reference": self.plan_reference(case["id"], selected),
                 **{key: m[key] for key in ("graph_version", "source_version", "policy_version")},
                 "scope": "selected_fixture_graph_checks_only", "navigation_allowed": False,
                 "production_migration": "NO_GO", "blocked_edge_keys": blocked, "candidates": public_rows}
@@ -379,7 +405,9 @@ def app_preview(result):
                        "navigation_allowed": False, "automatic_selection_allowed": False,
                        "avoidance_assessment": {"status": "UNVERIFIED", "geometry_valid": True,
                            "checked_at": time.time(), "geometry_binding": f"{binding:08x}",
-                           "requirements": [], "automatic_selection_allowed": False,
+                           "requirements": [dict(rule, status='UNVERIFIED' if rule['enabled'] else 'DISABLED')
+                                            for rule in result['policy_report']['selected']['requirements']],
+                           "automatic_selection_allowed": False,
                            "claim": "selected_fixture_graph_checks_only"}})
     return {"success": True, "routes": routes, "navigation_allowed": False,
             "scope": "selected_fixture_graph_checks_only", "production_migration": "NO_GO"}
@@ -391,7 +419,7 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
         raise ValueError("separate_strong_password_required")
     bridge = LocalJavaBridge(manifest, java=java, timeout=timeout, heap_mb=heap_mb)
     app = Flask(__name__)
-    app.config.update(MAX_CONTENT_LENGTH=1024, TESTING=False)
+    app.config.update(MAX_CONTENT_LENGTH=4096, TESTING=False)
     app.extensions["gh11_bridge"] = bridge
 
     @app.before_request
@@ -402,6 +430,17 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
         if request.method == "POST" and (request.headers.get("Sec-Fetch-Site") == "cross-site" or
                 request.headers.get("Origin", request.host_url.rstrip("/")) != request.host_url.rstrip("/")):
             return jsonify(success=False, reason="cross_origin_refused", navigation_allowed=False), 403
+
+    @app.before_request
+    def policy_body_limit():
+        if request.method == 'POST' and request.path in ('/api/prototype/route','/api/prototype/restore'):
+            # Legacy envelopes retain 1 KiB; full canonical policy lists get a
+            # bounded 4 KiB envelope. Flask bounds the read before JSON parsing.
+            raw = request.get_data(cache=True)
+            if len(raw) > 1024:
+                body = request.get_json(silent=True)
+                if not isinstance(body, dict) or 'policy_request' not in body:
+                    return jsonify(success=False, reason='request_too_large', navigation_allowed=False), 413
 
     @app.after_request
     def private_response(response):
@@ -435,7 +474,8 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
     def route():
         body = request.get_json(silent=True)
         required = {"case_id", "graph_version", "source_version", "policy_version"}
-        if not isinstance(body, dict) or set(body) not in (required, required | {"selected_settings"}):
+        if (not isinstance(body, dict) or not required <= set(body)
+                or not set(body) <= required | {"selected_settings", "policy_request"}):
             return jsonify(success=False, reason="request_contract", navigation_allowed=False), 400
         if not isinstance(body["case_id"], str) or body["case_id"] not in bridge.cases:
             return jsonify(success=False, reason="case_not_registered", navigation_allowed=False), 400
@@ -443,7 +483,25 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
             return jsonify(success=False, reason="settings_not_registered", navigation_allowed=False), 400
         if any(body[key] != bridge.manifest[key] for key in ("graph_version", "source_version", "policy_version")):
             return jsonify(success=False, reason="version_changed", navigation_allowed=False), 409
-        return calculate_registered(body["case_id"])
+        try:
+            selected = normalize_policy(body['policy_request']) if 'policy_request' in body else None
+        except InvalidPolicy as error:
+            return jsonify(success=False, reason=str(error), navigation_allowed=False), 400
+        return calculate_registered(body["case_id"], selected)
+
+    @app.post("/api/prototype/policy")
+    def policy_preflight():
+        body = request.get_json(silent=True)
+        required = {'case_id', 'graph_version', 'source_version', 'policy_version', 'policy_request'}
+        if not isinstance(body, dict) or set(body) != required or not isinstance(body.get('case_id'), str) or body['case_id'] not in bridge.cases:
+            return jsonify(success=False, reason='request_contract', navigation_allowed=False), 400
+        if any(body[key] != bridge.manifest[key] for key in ('graph_version','source_version','policy_version')):
+            return jsonify(success=False, reason='version_changed', navigation_allowed=False), 409
+        try:
+            selected = normalize_policy(body['policy_request'])
+        except InvalidPolicy as error:
+            return jsonify(success=False, reason=str(error), navigation_allowed=False), 400
+        return calculate_registered(body['case_id'], selected, preflight=True)
 
     @app.post("/api/prototype/restore")
     def restore():
@@ -452,17 +510,30 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
         body = request.get_json(silent=True)
         fields = {"schema", "case_id", "graph_version", "source_version", "policy_version",
                   "selected_settings", "request_binding"}
-        if (not isinstance(body, dict) or set(body) != fields or type(body.get("schema")) is not int
-                or body["schema"] != 1 or not isinstance(body.get("case_id"), str)
+        if (not isinstance(body, dict) or type(body.get("schema")) is not int
+                or body['schema'] not in (1, 2)
+                or set(body) != (fields | {'policy_request'} if body['schema'] == 2 else fields) or not isinstance(body.get("case_id"), str)
                 or body["case_id"] not in bridge.cases):
             return jsonify(success=False, reason="plan_reference_contract", navigation_allowed=False), 400
-        if version(body) != version(bridge.plan_reference(body["case_id"])):
-            return jsonify(success=False, reason="plan_reference_changed", navigation_allowed=False), 409
-        return calculate_registered(body["case_id"])
-
-    def calculate_registered(case_id):
         try:
-            return jsonify(bridge.route(case_id))
+            selected = normalize_policy(body['policy_request']) if body['schema'] == 2 else None
+        except InvalidPolicy as error:
+            return jsonify(success=False, reason=str(error), navigation_allowed=False), 400
+        if version(body) != version(bridge.plan_reference(body["case_id"], selected)):
+            return jsonify(success=False, reason="plan_reference_changed", navigation_allowed=False), 409
+        return calculate_registered(body["case_id"], selected)
+
+    def calculate_registered(case_id, selected=None, preflight=False):
+        try:
+            if preflight:
+                bridge.verify()
+                report = bridge.policy(case_id, selected)
+                if not report['route_preview_allowed']:
+                    raise PolicyRefused(report)
+                return jsonify(success=True, policy_report=report, request_binding=bridge.binding(case_id, selected), navigation_allowed=False)
+            return jsonify(bridge.route(case_id, selected))
+        except PolicyRefused as error:
+            return jsonify(success=False, reason='profile_not_supported' if not error.report['profile_supported'] else 'mandatory_avoidance_unavailable', policy_report=error.report, navigation_allowed=False), 422
         except Refused as error:
             safe = {"engine_refused": 422, "transport_busy": 503, "transport_timeout": 504,
                     "transport_output_limit": 422, "graph_changed": 409, "input_changed": 409,

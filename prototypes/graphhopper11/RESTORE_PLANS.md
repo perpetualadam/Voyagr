@@ -4,6 +4,14 @@ Scope: isolated public fixtures only. No VPS2 update, production app change or
 real navigation authority. Existing saved journeys and browser storage are not
 read, migrated, cleared or overwritten by this feature.
 
+## Subsequent explicit-policy extension
+
+Schema-1 references remain the standalone viewer contract. Explicit canonical
+policies now use schema-2 API references carrying the full selected policy, which
+is recompiled during restoration. See [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md)
+for refusal, binding and body-limit details. The viewer does not silently strip
+advanced policy fields; advanced policy restoration remains API-only.
+
 ## Contract
 
 A successful preview includes `plan_reference`: schema 1, registered case ID,

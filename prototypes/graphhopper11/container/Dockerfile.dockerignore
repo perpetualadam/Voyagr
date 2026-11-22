@@ -22,3 +22,5 @@
 !static/js/app/navigation-safety-ux.js
 
 !static/js/modules/navigation/polyline-codec.js
+
+!prototypes/graphhopper11/policy_compiler.py
