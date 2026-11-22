@@ -2,6 +2,7 @@
 import copy
 import json
 import subprocess
+import sys
 import pytest
 from prototypes.graphhopper11.app_settings_adapter import adapt_settings, compile_app_settings
 from voyagr.avoidance_contract import normalize_requirements
@@ -90,7 +91,7 @@ assert 'voyagr.services' not in sys.modules
 assert 'voyagr_web' not in sys.modules
 assert 'voyagr.utils' not in sys.modules
 """
-    subprocess.check_call(['.venv/bin/python', '-c', script])
+    subprocess.check_call([sys.executable, '-c', script])
 
 
 def test_returned_settings_are_not_aliases_and_cost_visibility_is_not_avoidance():
