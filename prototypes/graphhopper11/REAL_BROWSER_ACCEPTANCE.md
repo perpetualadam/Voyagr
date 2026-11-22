@@ -152,3 +152,9 @@ changing the journey intent. The packaged host adapter forwards that notificatio
 to the viewer. The six-execution/six-validation requirement remains unchanged.
 Actual GPS-orchestration notifications are tested separately in deterministic
 JavaScript integration with synthetic positions; no physical GPS test was run.
+
+The final bound-preview portion now reloads its fresh test page and calls the
+packaged explicit UK boot connector with synthetic same-origin loopback host
+globals. Owner and journey bindings are established together, then actual routing
+and fresh restore run with accepted-fix invalidation. This is synthetic host
+integration, distinct from loading the complete UK application or physical GPS.

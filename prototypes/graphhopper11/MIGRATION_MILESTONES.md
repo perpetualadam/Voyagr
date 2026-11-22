@@ -267,3 +267,12 @@ and a synthetic-source actual-browser restore race cover refresh and stale-resul
 refusal. No watcher, account service, automatic UK binding or deployment was added.
 Actual UK boot integration, geometry notifications and physical-phone checks remain
 pending. Milestone 3 is still in progress.
+
+## Subsequent Milestone 3 checkpoint: explicit loopback UK boot
+
+The isolated package now provides one explicit same-origin loopback connector for
+owner/session and journey/GPS bindings. It validates ready host contracts, detects
+module replacement and closes the preview fail-closed on partial setup failure.
+Actual module/store integration tests and the synthetic-host real-browser scenario
+cover the connection. Production UK boot activation and full host-page acceptance
+are still pending. See UK_HOST_BOOT.md; Milestone 3 remains in progress.

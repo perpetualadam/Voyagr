@@ -683,3 +683,23 @@ test('actual accepted GPS notification flows through host adapter to cancel a la
   for(const [,options] of fetch.mock.calls){if(options?.body){expect(options.body).not.toContain('12.34');expect(options.body).not.toContain('12.35');expect(options.body).not.toContain('34.56');}}
  }finally{host.close();binding?.close();Life.setRouteInProgress(false);Life.setRoutePolyline(null);delete global.VoyagrJourneyModes;delete global.VoyagrGpsOrchestration;}
 });
+test('explicit UK boot uses real GPS/intent/lifecycle APIs and the actual separate owner store',async()=>{
+ const Plans=require('../../../prototypes/graphhopper11/saved_plans.js'),Store=require('../modules/privacy/local-store.js'),{IDBFactory}=require('fake-indexeddb');
+ const Boot=require('../../../prototypes/graphhopper11/uk_host_boot.js'),Host=require('../../../prototypes/graphhopper11/host_journey_adapter.js');
+ const previousIdb=global.indexedDB;global.indexedDB=new IDBFactory();global.VoyagrGH11SavedPlans=Plans;global.VoyagrLocalStore=Store;
+ await completeReady();serveComplete();let Modes,Gps,connection;
+ jest.isolateModules(()=>{Modes=require('../app/journey-modes.js');Gps=require('../app/gps-orchestration.js');});
+ const Life=require('../app/navigation-lifecycle-orchestration.js');jest.spyOn(Modes,'getState').mockReturnValue('LIVE');
+ Life.bind({});Life.setRoutePolyline([[0,0],[0,.02]]);Life.setRouteInProgress(true);
+ Gps.bind({m:{speedGps:()=>SpeedGps}});const at=Date.now();Gps.acceptOriginPosition({timestamp:at,coords:{latitude:12.34,longitude:34.56,accuracy:10}});
+ const source={capture:()=>({owner:'sb:synthetic_a',epoch:0}),current:value=>value.owner==='sb:synthetic_a'&&value.epoch===0,ready:jest.fn(),db:jest.fn()};
+ const host=new EventTarget();Object.assign(host,{location:global.location,VoyagrLocalData:source,VoyagrJourneyModes:Modes,VoyagrNavigationLifecycleOrchestration:Life,VoyagrGpsOrchestration:Gps});
+ global.VoyagrGH11HostJourney=Host;global.VoyagrSpeedGps=SpeedGps;global.VoyagrGH11JourneyEvidence=JourneyEvidence;
+ try{
+  connection=Boot.connect({hostWindow:host,previewWindow:globalThis});expect(connection.navigation_allowed).toBe(false);expect(global.VoyagrGH11SavedSession.capture().owner).toBe('sb:synthetic_a');
+  document.getElementById('useCompleteRequest').checked=true;document.getElementById('useCompleteRequest').dispatchEvent(new Event('change'));document.getElementById('loadCompleteRequest').click();
+  document.getElementById('calculate').click();await settle();expect(document.getElementById('line').getAttribute('points')).not.toBe('');
+  Gps.acceptOriginPosition({timestamp:at+1,coords:{latitude:12.35,longitude:34.56,accuracy:10}});
+  expect(document.getElementById('line').getAttribute('points')).toBe('');expect(source.ready).not.toHaveBeenCalled();expect(source.db).not.toHaveBeenCalled();
+ }finally{connection?.close();global.VoyagrGH11SavedSession?.close();Life.setRouteInProgress(false);Life.setRoutePolyline(null);global.indexedDB=previousIdb;delete global.VoyagrGpsOrchestration;delete global.VoyagrJourneyModes;delete global.VoyagrGH11HostJourney;}
+});

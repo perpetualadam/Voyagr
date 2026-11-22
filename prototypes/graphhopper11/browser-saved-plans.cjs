@@ -78,12 +78,14 @@ async function main(){
    guard.close();return {opaque,refused,simulationRefused,closed:!guard.current(token)};
   });
   assert.deepEqual(journeyGuard,{opaque:true,refused:true,simulationRefused:true,closed:true});
-  phase='bound preview journey';await page.evaluate(()=>{
-   let intent=1,binding=null,acceptedListener=null;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()},line=[[0,0],[0,.01]];
-   const modes={captureIntent:()=>intent,intentCurrent:value=>value===intent,onIntentCancelled:()=>()=>{},getState:()=> 'LIVE',isSimulating:()=>false,isJourneyCommitPending:()=>false,isAbandoning:()=>false};
-   const lifecycle={getRouteInProgress:()=>true,getRoutePolyline:()=>line,getNavigationStarting:()=>false,getNavigationFailure:()=>null};
-   const host=VoyagrGH11HostJourney.create({owner:VoyagrGH11SavedSession,modes,lifecycle,gps:{getAcceptedOriginFix:()=>fix,onAcceptedOriginFix:listener=>{acceptedListener=listener;return ()=>{acceptedListener=null;};}},eventTarget:window,onChange:()=>binding?.refresh()});
-   binding=VoyagrGH11JourneyBridge.bind(host);
+  phase='explicit UK host boot';await page.reload();await ready();await page.evaluate(()=>{
+   let intent=1,acceptedListener=null;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()},line=[[0,0],[0,.01]];
+   const identity={owner:'sb:synthetic_b',epoch:0};
+   window.VoyagrLocalData={capture:()=>({...identity}),current:value=>value.owner===identity.owner&&value.epoch===identity.epoch};
+   window.VoyagrJourneyModes={PROTOCOL:1,captureIntent:()=>intent,intentCurrent:value=>value===intent,onIntentCancelled:()=>()=>{},getState:()=> 'LIVE',isSimulating:()=>false,isJourneyCommitPending:()=>false,isAbandoning:()=>false};
+   window.VoyagrNavigationLifecycleOrchestration={DURABLE_OWNERSHIP_PROTOCOL:1,endpointIntentReady:()=>true,getRouteInProgress:()=>true,getRoutePolyline:()=>line,getNavigationStarting:()=>false,getNavigationFailure:()=>null};
+   window.VoyagrGpsOrchestration={getAcceptedOriginFix:()=>fix,onAcceptedOriginFix:listener=>{acceptedListener=listener;return ()=>{acceptedListener=null;};}};
+   window.testUKConnection=VoyagrGH11UKHostBoot.connect({hostWindow:window,previewWindow:window});
    window.advanceSyntheticJourney=notify=>{intent++;fix.timestamp=Date.now();if(notify)acceptedListener?.();};
    window.acceptSyntheticFix=()=>{fix.timestamp=Math.max(Date.now(),fix.timestamp+1);acceptedListener?.();};
   });

@@ -18,6 +18,7 @@ on:
       - 'static/js/__tests__/gh11-saved-plans.test.js'
       - 'static/js/__tests__/gh11-journey-evidence.test.js'
       - 'static/js/__tests__/gh11-host-journey.test.js'
+      - 'static/js/__tests__/gh11-uk-host-boot.test.js'
       - 'static/js/app/journey-modes.js'
       - 'static/js/app/gps-orchestration.js'
       - 'static/js/app/navigation-lifecycle-orchestration.js'
