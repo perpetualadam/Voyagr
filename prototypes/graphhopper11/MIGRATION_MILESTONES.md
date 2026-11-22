@@ -193,3 +193,12 @@ Exit: user-observed physical-phone checks pass, separate from automated browser 
 
 Exit: concrete rollout proposal and demonstrated rollback. Production readiness
 must not be inferred from completing an earlier milestone.
+
+## Subsequent Milestone 3 checkpoint: full request adapter
+
+The direct registered-fixture app-request bridge now preserves complete initial,
+ordered-via and reroute payloads, binds their identities through fresh restoration,
+and refuses unsupported journey semantics. Every call bypasses the public fixture
+cache; engine failure cannot reuse cached evidence. It is not wired into the UK UI,
+HTTP `/api/route`, private cache or owner store. See
+[APP_REQUEST_BRIDGE.md](APP_REQUEST_BRIDGE.md). Milestone 3 remains in progress.

@@ -674,7 +674,7 @@ def test_conflicting_app_policy_cannot_hide_selected_constraints(app, manifest, 
     assert not bridge.cache
 
 
-@pytest.mark.parametrize('name', ['adapter', 'contract'])
+@pytest.mark.parametrize('name', ['adapter', 'contract', 'request_bridge'])
 def test_settings_source_identity_is_required_in_manifest(manifest, name):
     changed = copy.deepcopy(manifest);changed['settings_hashes'][name] = '0'*64
     with pytest.raises(Refused,match='runtime_changed'):
@@ -855,3 +855,96 @@ def test_fault_controls_are_absent_from_normal_factory(app):
     client = app.test_client()
     assert client.get('/__test/state',headers=AUTH).status_code == 404
     assert client.post('/__test/control',json={'mode':'none'},headers=AUTH).status_code == 404
+
+
+def full_app_body(case='detour'):
+    result = dict(start='0,0',end='0,0.02',routing_mode='auto',vehicle_type='petrol_diesel',
+                  avoid_caz=False,max_detour=20,avoidance_mode='preference',fuel_efficiency=6.5,
+                  fuel_price_mode='automatic',fuel_category='',optimize_stop_order=False,round_trip=False,
+                  via_points=[],stops=[],departure_time=None)
+    if case == 'via':
+        result['via_points'] = [dict(lat=.003,lon=.01,type='via',name='Synthetic via',provenance='coordinates',original_index=0)]
+    if case == 'departure':
+        result.update(start='0.003,0.01',is_reroute=True,force_refresh=True,include_tolls=True,include_caz=True)
+    return result
+
+
+@pytest.mark.parametrize('case',['detour','alternatives','via','departure'])
+def test_full_app_request_routes_and_restores_every_registered_candidate_and_leg(app, manifest, case):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)
+    identities={k:manifest[k] for k in ('graph_version','source_version','policy_version')}
+    supplied=full_app_body(case);before=copy.deepcopy(supplied)
+    result=adapter.calculate(case,supplied,identities)
+    assert result['app_request_context']['app_request'] == before == supplied
+    assert result['app_request_context']['cost_warnings']
+    assert result['gps_verification'] == 'UNVERIFIED'
+    assert result['plan_reference']['schema'] == 3
+    assert result['cache_policy'] == 'bypass_complete_app_request' and not bridge.cache
+    assert result['navigation_allowed'] is False and not result['app_integration_allowed']
+    for row in result['app_preview']['routes']:
+        assert row['routing_context']['request_binding'] == result['request_binding']
+        assert len(row['leg_geometry_ranges']) == (2 if case == 'via' else 1)
+        assert not row['navigation_allowed'] and not row['automatic_selection_allowed']
+        assert row['gh11_evidence']['forbidden_traversals'] == 0
+    restored=adapter.restore(result['plan_reference'])
+    assert restored['request_binding'] == result['request_binding']
+    assert restored['candidates'] == result['candidates']
+    assert not bridge.cache
+    # No arbitrary-coordinate HTTP handler or schema downgrade was enabled.
+    assert app.test_client().post('/api/prototype/restore',json=result['plan_reference'],headers=AUTH).status_code == 400
+
+
+def test_complete_app_request_bypasses_existing_fixture_cache(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge,adapt_app_request
+    bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)
+    identities={k:manifest[k] for k in ('graph_version','source_version','policy_version')}
+    supplied=full_app_body();selected=adapt_app_request(supplied,bridge.cases['detour'])['policy_request']
+    bridge.route('detour',selected)
+    cached=copy.deepcopy(bridge.cache);execute=bridge._execute;calls=[]
+    def fresh(*args):
+        calls.append(True)
+        return execute(*args)
+    monkeypatch.setattr(bridge,'_execute',fresh)
+    result=adapter.calculate('detour',supplied,identities)
+    adapter.restore(result['plan_reference'])
+    assert len(calls) == 2 and bridge.cache == cached
+
+
+def test_complete_app_request_changes_and_unsupported_rules_refuse_before_engine(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    from prototypes.graphhopper11.isolated_app import PolicyRefused
+    bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)
+    identities={k:manifest[k] for k in ('graph_version','source_version','policy_version')}
+    supplied=full_app_body()
+    def forbidden(*args):
+        pytest.fail('Invalid journey/reference or unsupported mandatory rules cannot execute Java')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    for change in ({'start':'0,0.001'},{'round_trip':True},{'stops':[dict(lat=0,lon=.01,duration=0)]}):
+        with pytest.raises(Refused):
+            adapter.calculate('detour',dict(supplied,**change),identities)
+    with pytest.raises(PolicyRefused):
+        adapter.calculate('detour',dict(supplied,avoid_tolls=True,avoidance_mode='mandatory'),identities)
+    with pytest.raises(Refused,match='version_changed'):
+        adapter.calculate('detour',supplied,dict(identities,graph_version='0'*64))
+    _,reference=adapter._prepare('detour',supplied,identities)
+    for change in ({'fuel_efficiency':7.5},{'force_refresh':True},{'is_reroute':True}):
+        altered=copy.deepcopy(reference);altered['app_request'].update(change)
+        with pytest.raises(Refused,match='app_reference_changed'):
+            adapter.restore(altered)
+    assert not bridge.cache
+
+
+def test_complete_app_request_engine_failure_never_falls_back_to_cached_route(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge,adapt_app_request
+    bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)
+    identities={k:manifest[k] for k in ('graph_version','source_version','policy_version')}
+    supplied=full_app_body();selected=adapt_app_request(supplied,bridge.cases['detour'])['policy_request']
+    bridge.cache[bridge.binding('detour',selected)] = (float('inf'),{'untrusted_cached_evidence':True})
+    before=copy.deepcopy(bridge.cache)
+    def failed(*args):
+        raise Refused('engine_refused')
+    monkeypatch.setattr(bridge,'_execute',failed)
+    with pytest.raises(Refused,match='engine_refused'):
+        adapter.calculate('detour',supplied,identities)
+    assert bridge.cache == before

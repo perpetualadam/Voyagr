@@ -21,7 +21,8 @@ import time
 from flask import Flask, Response, jsonify, request
 from prototypes.graphhopper11.policy_compiler import compile_policy, normalize_policy, InvalidPolicy, CATEGORIES
 
-SETTINGS_SOURCES = {"adapter": Path(__file__).with_name("app_settings_adapter.py"),
+SETTINGS_SOURCES = {"request_bridge": Path(__file__).with_name("app_request_bridge.py"),
+                    "adapter": Path(__file__).with_name("app_settings_adapter.py"),
                     "contract": Path(__file__).resolve().parents[2] / "voyagr/avoidance_contract.py"}
 COMPILER = Path(__file__).with_name("policy_compiler.py")
 VIEWER_FILES = {name: Path(__file__).with_name(name) for name in ("isolated_viewer.js", "isolated_viewer.html")}
@@ -206,7 +207,7 @@ class LocalJavaBridge:
             raise Refused("engine_refused")
         return report
 
-    def route(self, case_id, selected=None):
+    def route(self, case_id, selected=None, *, force_refresh=False):
         if case_id not in self.cases:
             raise Refused("case_not_registered")
         policy = self.policy(case_id, selected)
@@ -219,7 +220,7 @@ class LocalJavaBridge:
             binding = self.binding(case_id, selected)
             now = time.monotonic()
             self.cache = {key: entry for key, entry in self.cache.items() if entry[0] > now}
-            cached = self.cache.get(binding)
+            cached = None if force_refresh else self.cache.get(binding)
             if cached is not None:
                 try:
                     # Re-run the same independent validation for every candidate.
@@ -239,9 +240,10 @@ class LocalJavaBridge:
                 report = self._execute(path, directory)
             self.verify()
             result = self.validate(report, case, selected)
-            if len(self.cache) >= 8:
-                self.cache.pop(next(iter(self.cache)))
-            self.cache[binding] = (time.monotonic() + 30, copy.deepcopy(report))
+            if not force_refresh:
+                if len(self.cache) >= 8:
+                    self.cache.pop(next(iter(self.cache)))
+                self.cache[binding] = (time.monotonic() + 30, copy.deepcopy(report))
             return result
         finally:
             self.lock.release()

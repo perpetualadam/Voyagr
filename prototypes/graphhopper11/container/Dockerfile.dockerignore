@@ -28,3 +28,5 @@
 !prototypes/graphhopper11/app_settings_adapter.py
 !voyagr/
 !voyagr/avoidance_contract.py
+
+!prototypes/graphhopper11/app_request_bridge.py
