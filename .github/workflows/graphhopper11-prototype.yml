@@ -30,7 +30,8 @@ permissions:
 
 jobs:
   synthetic:
-    runs-on: ubuntu-latest
+    # Playwright 1.56.1 supports Ubuntu 24.04; latest may advance beyond it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7

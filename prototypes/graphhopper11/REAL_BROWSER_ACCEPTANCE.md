@@ -36,7 +36,8 @@ post-reload restore. This checks raw-evidence cache reuse and revalidation in th
 real HTTP workflow. Final manifest verification checks the graph/source unchanged.
 
 Local execution passed on 22 November 2026 using system Chromium and Java 21.
-The workflow installs its lockfile Playwright Chromium and Java 17 and runs the
+The workflow pins supported Ubuntu 24.04, installs its lockfile Playwright
+Chromium and Java 17, and runs the
 opt-in test separately from the normally skipped browser check. CI acceptance is
 separate from the local result; no timing here is a routing/capacity benchmark.
 
