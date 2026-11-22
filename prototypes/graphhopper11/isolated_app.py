@@ -21,6 +21,8 @@ import time
 from flask import Flask, Response, jsonify, request
 from prototypes.graphhopper11.policy_compiler import compile_policy, normalize_policy, InvalidPolicy, CATEGORIES
 
+SETTINGS_SOURCES = {"adapter": Path(__file__).with_name("app_settings_adapter.py"),
+                    "contract": Path(__file__).resolve().parents[2] / "voyagr/avoidance_contract.py"}
 COMPILER = Path(__file__).with_name("policy_compiler.py")
 VIEWER_FILES = {name: Path(__file__).with_name(name) for name in ("isolated_viewer.js", "isolated_viewer.html")}
 
@@ -78,9 +80,10 @@ def build_manifest(*, jar, graph, config, registry, source):
     files = graph_files(paths["graph"])
     browser_hashes = {name: digest(path) for name, path in BROWSER_ASSETS.items()}
     viewer_hashes = {name: digest(path) for name, path in VIEWER_FILES.items()}
-    return {"schema": 2, "paths": paths, "hashes": hashes, "graph_files": files,
+    settings_hashes = {name: digest(path) for name, path in SETTINGS_SOURCES.items()}
+    return {"schema": 2, "settings_hashes": settings_hashes, "paths": paths, "hashes": hashes, "graph_files": files,
             "graph_version": version(files), "source_version": hashes["source"],
-            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes, digest(COMPILER), viewer_hashes]),
+            "policy_version": version([hashes["registry"], hashes["config"], digest(RUNNER), digest(__file__), browser_hashes, digest(COMPILER), viewer_hashes, settings_hashes]),
             "viewer_hashes": viewer_hashes, "compiler_sha256": digest(COMPILER), "browser_hashes": browser_hashes, "runner_sha256": digest(RUNNER), "bridge_sha256": digest(__file__), "engine_sha256": JAR_SHA256}
 
 
@@ -140,6 +143,8 @@ class LocalJavaBridge:
         m = self.manifest
         if m.get("schema") != 2 or m.get("engine_sha256") != JAR_SHA256:
             raise Refused("manifest_contract")
+        if m.get("settings_hashes") != {name: digest(path) for name, path in SETTINGS_SOURCES.items()}:
+            raise Refused("runtime_changed")
         if m.get("compiler_sha256") != digest(COMPILER):
             raise Refused("runtime_changed")
         if digest(m["paths"]["jar"]) != JAR_SHA256 or digest(RUNNER) != m["runner_sha256"] or digest(__file__) != m["bridge_sha256"]:
@@ -155,7 +160,7 @@ class LocalJavaBridge:
         if files != m["graph_files"] or version(files) != m["graph_version"]:
             raise Refused("graph_changed")
         if (m["source_version"] != m["hashes"]["source"] or m["policy_version"] !=
-                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"], m["compiler_sha256"], m["viewer_hashes"]])):
+                version([m["hashes"]["registry"], m["hashes"]["config"], m["runner_sha256"], m["bridge_sha256"], m["browser_hashes"], m["compiler_sha256"], m["viewer_hashes"], m["settings_hashes"]])):
             raise Refused("version_mismatch")
 
     def _execute(self, fixture, directory):

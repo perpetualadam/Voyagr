@@ -24,3 +24,7 @@
 !static/js/modules/navigation/polyline-codec.js
 
 !prototypes/graphhopper11/policy_compiler.py
+
+!prototypes/graphhopper11/app_settings_adapter.py
+!voyagr/
+!voyagr/avoidance_contract.py

@@ -593,3 +593,120 @@ def test_rule_ui_metadata_and_manifest_binding_fail_closed(app, manifest, name):
     changed = copy.deepcopy(manifest);changed['viewer_hashes'][name]='0'*64
     with pytest.raises(Refused,match='browser_policy_changed'):
         create_app(changed,password=PASSWORD)
+
+
+def app_policy(**settings):
+    from prototypes.graphhopper11.app_settings_adapter import adapt_settings
+    adapted = adapt_settings(dict(avoid_caz=False, **settings))
+    return dict(adapted['policy_request'], app_settings=adapted['app_settings'])
+
+
+def test_full_app_settings_survive_route_cache_and_reference_restore(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    client = app.test_client()
+    selected = app_policy(max_detour=20, prefer_scenic=True, route_optimization='scenic',
+                          avoid_tolls=True, avoidance_mode='preference')
+    payload = dict(body(manifest), policy_request=selected)
+    preflight = client.post('/api/prototype/policy', json=payload, headers=AUTH)
+    assert preflight.status_code == 200
+    assert not bridge.cache
+    response = client.post('/api/prototype/route', json=payload, headers=AUTH)
+    assert response.status_code == 200, response.get_json()
+    result = response.get_json()
+    assert result['policy_report'] == preflight.get_json()['policy_report']
+    assert result['policy_report']['selected']['app_settings'] == selected['app_settings']
+    assert result['policy_report']['supplemental_settings']
+    assert result['plan_reference']['policy_request'] == result['policy_report']['selected']
+    original_execute = bridge._execute
+    def forbidden(*_):
+        pytest.fail('Repeat and restore must revalidate cached raw evidence without Java')
+    monkeypatch.setattr(bridge, '_execute', forbidden)
+    for endpoint, data in (('route', payload), ('restore', result['plan_reference'])):
+        cached = client.post('/api/prototype/'+endpoint, json=data, headers=AUTH)
+        assert cached.status_code == 200
+        assert cached.get_json()['policy_report'] == result['policy_report']
+        assert cached.get_json()['request_binding'] == result['request_binding']
+        assert not cached.get_json()['navigation_allowed']
+    changed = app_policy(max_detour=21, prefer_scenic=True, route_optimization='scenic',
+                         avoid_tolls=True, avoidance_mode='preference')
+    assert bridge.binding('detour', changed) not in bridge.cache
+    tampered = copy.deepcopy(result['plan_reference']);tampered['policy_request'] = changed
+    assert client.post('/api/prototype/restore', json=tampered, headers=AUTH).status_code == 409
+    monkeypatch.setattr(bridge, '_execute', original_execute)
+    validation = bridge.validate
+    def count_validation(*args, **kwargs):
+        count_validation.called += 1
+        return validation(*args, **kwargs)
+    count_validation.called = 0
+    monkeypatch.setattr(bridge, 'validate', count_validation)
+    assert client.post('/api/prototype/restore',json=result['plan_reference'],headers=AUTH).status_code == 200
+    assert count_validation.called == 1
+
+
+@pytest.mark.parametrize('endpoint', ['policy', 'route', 'restore'])
+def test_changed_app_mandatory_policy_cannot_reuse_preference_cache(app, manifest, monkeypatch, endpoint):
+    bridge = app.extensions['gh11_bridge']
+    def forbidden(*_):
+        pytest.fail('Unproven app mandatory policy must not execute Java')
+    monkeypatch.setattr(bridge, '_execute', forbidden)
+    preference = app_policy(avoid_tolls=True, avoidance_mode='preference')
+    bridge.cache[bridge.binding('detour', preference)] = (float('inf'), {'untrusted': True})
+    before = copy.deepcopy(bridge.cache)
+    mandatory = app_policy(avoid_tolls=True, avoidance_mode='mandatory')
+    payload = bridge.plan_reference('detour', mandatory) if endpoint == 'restore' else dict(body(manifest), policy_request=mandatory)
+    response = app.test_client().post('/api/prototype/'+endpoint,json=payload,headers=AUTH)
+    assert response.status_code == 422
+    assert response.get_json()['policy_report']['selected']['app_settings']['avoidance_mode'] == 'mandatory'
+    assert 'candidates' not in response.get_json()
+    assert bridge.cache == before
+
+
+@pytest.mark.parametrize('endpoint', ['policy', 'route', 'restore'])
+def test_conflicting_app_policy_cannot_hide_selected_constraints(app, manifest, monkeypatch, endpoint):
+    bridge = app.extensions['gh11_bridge']
+    monkeypatch.setattr(bridge, '_execute', lambda *_: pytest.fail('Conflicting policy cannot execute'))
+    selected = app_policy(avoid_tolls=True, avoidance_mode='mandatory')
+    payload = bridge.plan_reference('detour', selected) if endpoint == 'restore' else dict(body(manifest),policy_request=selected)
+    payload['policy_request']['requirements'] = []
+    response = app.test_client().post('/api/prototype/'+endpoint,json=payload,headers=AUTH)
+    assert response.status_code == 400
+    assert response.get_json()['reason'] == 'app_settings_policy_mismatch'
+    assert not bridge.cache
+
+
+@pytest.mark.parametrize('name', ['adapter', 'contract'])
+def test_settings_source_identity_is_required_in_manifest(manifest, name):
+    changed = copy.deepcopy(manifest);changed['settings_hashes'][name] = '0'*64
+    with pytest.raises(Refused,match='runtime_changed'):
+        LocalJavaBridge(changed)
+    changed.pop('settings_hashes')
+    with pytest.raises(Refused,match='runtime_changed'):
+        LocalJavaBridge(changed)
+
+
+def test_rich_settings_cache_hit_rejects_changed_adapter_identity(app, manifest):
+    bridge = app.extensions['gh11_bridge']
+    selected = app_policy(max_detour=20)
+    payload = dict(body(manifest), policy_request=selected)
+    client = app.test_client()
+    assert client.post('/api/prototype/route',json=payload,headers=AUTH).status_code == 200
+    assert bridge.binding('detour', selected) in bridge.cache
+    bridge.manifest['settings_hashes']['adapter'] = '0'*64
+    response = client.post('/api/prototype/route',json=payload,headers=AUTH)
+    assert response.status_code == 409
+    assert response.get_json()['reason'] == 'runtime_changed'
+    assert 'candidates' not in response.get_json()
+
+
+def test_all_explicit_app_categories_fit_bounded_restore_contract(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.policy_compiler import CATEGORIES
+    bridge = app.extensions['gh11_bridge']
+    selected = app_policy(avoidance_requirements=[dict(category=c,enabled=False,mode='mandatory') for c in CATEGORIES])
+    payload = bridge.plan_reference('detour', selected)
+    assert len(json.dumps(payload)) < 4096
+    monkeypatch.setattr(bridge, '_execute', lambda *_: pytest.fail('Preflight must not execute Java'))
+    response = app.test_client().post('/api/prototype/policy',json=dict(body(manifest),policy_request=selected),headers=AUTH)
+    assert response.status_code == 200
+    assert len(response.get_json()['policy_report']['rules']) == 13
+    assert len(response.get_json()['policy_report']['app_settings']['avoidance_requirements']) == 13
+    assert not bridge.cache

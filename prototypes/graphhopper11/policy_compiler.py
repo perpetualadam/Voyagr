@@ -15,7 +15,7 @@ class InvalidPolicy(ValueError):
 
 
 def normalize_policy(value):
-    if (not isinstance(value, dict) or set(value) != {'profile', 'requirements'}
+    if (not isinstance(value, dict) or set(value) not in ({'profile', 'requirements'}, {'profile', 'requirements', 'app_settings'})
             or not isinstance(value['profile'], str)
             or not re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', value['profile'])
             or not isinstance(value['requirements'], list) or len(value['requirements']) > len(CATEGORIES)):
@@ -30,7 +30,19 @@ def normalize_policy(value):
             raise InvalidPolicy('policy_requirement_contract')
         seen.add(row['category'])
         rows.append(dict(category=row['category'], enabled=row['enabled'], mode=row['mode'], scope='route'))
-    return {'profile': value['profile'], 'requirements': sorted(rows, key=lambda item: item['category'])}
+    selected = {'profile': value['profile'], 'requirements': sorted(rows, key=lambda item: item['category'])}
+    if 'app_settings' in value:
+        # Local import avoids a module initialization cycle; adaptation of the
+        # legacy rows itself only normalizes a plain two-field policy.
+        from prototypes.graphhopper11.app_settings_adapter import adapt_settings
+        try:
+            adapted = adapt_settings(value['app_settings'])
+        except ValueError as error:
+            raise InvalidPolicy(str(error)) from None
+        if selected != adapted['policy_request']:
+            raise InvalidPolicy('app_settings_policy_mismatch')
+        selected['app_settings'] = adapted['app_settings']
+    return selected
 
 
 def compile_policy(value, *, registered_no_motorways=False):
@@ -62,6 +74,12 @@ def compile_policy(value, *, registered_no_motorways=False):
             'unresolved_mandatory': blocked, 'preference_warnings': warnings,
             'profile_supported': profile_supported,
             'route_preview_allowed': profile_supported and not blocked,
+            **({'app_settings': copy.deepcopy(selected['app_settings']),
+                'supplemental_settings': [{'setting': key, 'value': copy.deepcopy(selected['app_settings'][key]),
+                    'state': 'UNVERIFIED', 'reason': 'app_preference_not_integrated'}
+                    for key in ('prefer_scenic', 'prefer_quiet', 'route_optimization', 'max_detour')
+                    if key in selected['app_settings']],
+                'app_integration_allowed': False} if 'app_settings' in selected else {}),
             'navigation_allowed': False, 'automatic_selection_allowed': False,
             'legal_restrictions': {'required': True, 'verification': 'UNVERIFIED'},
             'scope': 'registered_case_compilation_only', 'route_absence_proven': False}

@@ -124,7 +124,16 @@ pending; see [SETTINGS_COMPILER.md](SETTINGS_COMPILER.md).
 
 Temporary canonical-rule controls in the standalone viewer now preflight rules,
 preserve warnings/refusals and support schema-2 references without storage writes.
-The real UK settings/parser and saved-store integration remain pending; see
+The offline legacy-settings adapter now shares the application's unchanged
+normalizer. Rich policies retain the original settings, re-derive and compare all
+canonical rows/profile, and bind the full report through isolated cache hits and
+schema-2 restoration. Adapter/contract source hashes enter manifest identity.
+Supplemental preferences stay UNVERIFIED and navigation stays disabled. See
+[APP_SETTINGS_ADAPTER.md](APP_SETTINGS_ADAPTER.md).
+
+The real UK UI/request connection, production cache/saved-store integration and
+phone acceptance of this revision remain pending. The standalone viewer refuses
+rich settings references until its next bridge can preserve them; see
 [POLICY_UI.md](POLICY_UI.md).
 
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).

@@ -140,3 +140,9 @@ private-cache integration and live navigation remain pending.
 The next offline layer now adapts real-app legacy settings without enabling routing.
 See [APP_SETTINGS_ADAPTER.md](APP_SETTINGS_ADAPTER.md) for the supported contract,
 shared-normalizer extraction, supplemental gaps and remaining service integration.
+
+Rich policies may additionally carry `app_settings`. These are re-derived through
+the shared normalizer and must agree with every canonical row and the profile.
+All settings, including unimplemented supplemental preferences, bind into the
+policy fingerprint, isolated cache identity and schema-2 reference. Adapter and
+contract source hashes require a fresh manifest. See APP_SETTINGS_ADAPTER.md.

@@ -101,3 +101,23 @@ def test_returned_settings_are_not_aliases_and_cost_visibility_is_not_avoidance(
     assert next(r for r in result['policy_request']['requirements'] if r['category'] == 'tolls')['enabled']
     result['app_settings']['avoidance_requirements'].append({'category': 'tolls'})
     assert settings['avoidance_requirements'] == []
+
+
+def test_rich_policy_binds_all_settings_and_rejects_weaker_or_conflicting_rows():
+    from prototypes.graphhopper11.policy_compiler import compile_policy, InvalidPolicy
+    settings = {'avoid_caz': False, 'max_detour': 20, 'prefer_scenic': True}
+    adapted = adapt_settings(settings)
+    selected = dict(adapted['policy_request'], app_settings=adapted['app_settings'])
+    report = compile_policy(selected)
+    assert report['selected']['app_settings'] == settings
+    assert report['app_settings'] == settings
+    assert {r['setting'] for r in report['supplemental_settings']} == {'max_detour', 'prefer_scenic'}
+    assert not report['app_integration_allowed'] and not report['navigation_allowed']
+    changed = copy.deepcopy(selected);changed['app_settings']['max_detour'] = 21
+    assert compile_policy(changed)['fingerprint'] != report['fingerprint']
+    changed['requirements'][0]['enabled'] = not changed['requirements'][0]['enabled']
+    with pytest.raises(InvalidPolicy, match='app_settings_policy_mismatch'):
+        compile_policy(changed)
+    changed = copy.deepcopy(selected);changed['app_settings']['avoidance_mode'] = 'mandatory'
+    with pytest.raises(InvalidPolicy, match='app_settings_policy_mismatch'):
+        compile_policy(changed)

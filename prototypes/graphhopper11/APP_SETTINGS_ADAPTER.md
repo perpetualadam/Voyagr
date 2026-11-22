@@ -1,6 +1,6 @@
 # Real-app settings preflight
 
-This is an offline adapter, not an enabled app connection or a deployed service.
+The adapter is now accepted by the isolated registered-case service; it is not an enabled real-app connection or a deployed revision.
 `app_settings_adapter.adapt_settings()` accepts only settings, retains every
 supplied field and derives all 13 avoidance rows using the same dependency-free
 normalizer that `voyagr/services/routing/integrity.py` re-exports. The extraction
@@ -22,20 +22,43 @@ Scenic/quiet, optimization and detour selections remain in the supplied settings
 fingerprint and supplemental UNVERIFIED report. The existing app applies detour
 as a route-variety preference, with exceptions in `route_variety.py`; this adapter
 does not claim a strict detour bound. Include-cost flags remain distinct from
-avoidance flags. No general preference implementation, route-cache connection,
-HTTP endpoint, saved-reference extension or browser activation is added here.
-`app_integration_allowed` and `navigation_allowed` are always false. The canonical
-policy's preview flag is only a registered-case avoidance preflight result, never
-permission to ignore supplemental settings or submit to the real app.
+avoidance flags. `app_integration_allowed` and `navigation_allowed` remain false.
+A registered-case preview is not evidence of general preference enforcement.
 
-Next milestone: bind the complete settings fingerprint and supplemental capability
-report into the isolated service's manifest, cache and restored references before
-adding an opt-in browser bridge. This must fail closed for unsupported constraints
-and cannot infer coverage or authority from selected fixture successes.
+## Isolated service contract
 
-Validation: `tests/test_gh11_app_settings_adapter.py` runs the actual JavaScript
-shared-request builder with synthetic settings and no cost/location/storage input,
-then checks Python normalization and capability decisions. It also covers defaults,
-master-switch behavior, camera/signal separation, exemptions, strict input rejection,
-profile preservation and fingerprint changes. No phone acceptance or VPS change
-is established by these offline tests. Milestone 3 remains in progress.
+Pass the adapter's `policy_request` with an additional `app_settings` member equal
+to its retained `app_settings`. The existing authenticated `/api/prototype/policy`
+and `/api/prototype/route` endpoints accept this richer policy. The compiler
+re-derives all 13 canonical rows and the profile from the supplied settings, and
+rejects any disagreement with `app_settings_policy_mismatch` (HTTP 400). The app
+settings object is never used to change registered coordinates or Java models.
+Unsupported mandatory exclusions return HTTP 422 before Java or cache lookup.
+No extra endpoint or real-app activation is introduced.
+
+The policy report retains the settings and supplemental UNVERIFIED preferences.
+The selected policy fingerprint, request binding, process-local raw-evidence cache
+key and schema-2 plan reference include the entire settings object. Each cache hit
+and restore recompiles and independently revalidates raw route evidence. Changing
+a setting cannot reuse another settings binding. Editing saved settings without
+updating the reference binding returns HTTP 409; even a newly bound reference
+cannot override an unsupported mandatory rule. References are selectors, not proof
+or authentication credentials. Navigation remains disabled throughout.
+
+Fresh manifests must include hashes of the settings adapter and shared avoidance
+contract; these hashes also enter `policy_version`. Missing or changed identities
+refuse before cached evidence can be returned. Existing manifests and references
+are not silently upgraded. The isolated container packages both source files
+without importing production services. Deployment remains a separate approval.
+
+The existing standalone UI deliberately accepts only its original two-field policy
+contract and refuses richer references rather than stripping their app settings.
+A real-app/browser bridge and production cache/saved-store integration remain
+pending. Request size limits, authentication and Origin checks are unchanged.
+
+Validation covers the actual JavaScript shared request builder using synthetic
+settings without location/storage input, strict normalization, exemptions, source
+identity, HTTP preflight/refusal, cache revalidation and reference restoration.
+The container smoke additionally checks rich-policy round trips. These are
+synthetic tests; no phone acceptance, VPS change or deployment is established.
+Milestone 3 remains in progress.
