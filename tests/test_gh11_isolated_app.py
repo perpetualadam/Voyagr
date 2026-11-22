@@ -856,6 +856,8 @@ def test_fault_controls_are_absent_from_normal_factory(app):
     client = app.test_client()
     assert client.get('/__test/state',headers=AUTH).status_code == 404
     assert client.post('/__test/control',json={'mode':'none'},headers=AUTH).status_code == 404
+    assert client.get('/__test/saved-restore-state',headers=AUTH).status_code == 404
+    assert client.post('/__test/reset-saved-restore',headers=AUTH).status_code == 404
 
 
 def full_app_body(case='detour'):
@@ -1089,3 +1091,26 @@ def test_failed_private_requests_never_issue_cache_capability(app, manifest, mon
     response=client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost')
     assert response.status_code==422 and 'Set-Cookie' not in response.headers
     assert not boundary.store.cache
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_owner_saved_plans(app, manifest, monkeypatch):
+    import threading
+    from flask import request,jsonify
+    entered,completed=threading.Event(),threading.Event()
+    @app.before_request
+    def observe_saved_restore():
+        if request.path=='/api/prototype/app-restore':
+            entered.set()
+    @app.after_request
+    def saved_restore_finished(response):
+        if request.path=='/api/prototype/app-restore':
+            completed.set()
+        return response
+    @app.get('/__test/saved-restore-state')
+    def saved_restore_state():
+        return jsonify(entered=entered.is_set(),completed=completed.is_set())
+    @app.post('/__test/reset-saved-restore')
+    def reset_saved_restore():
+        entered.clear();completed.clear();return jsonify(success=True)
+    _run_real_browser(app,monkeypatch,'browser-saved-plans.cjs','PASS_OWNER_SAVED_PLANS',{'execute':4,'validate':4})

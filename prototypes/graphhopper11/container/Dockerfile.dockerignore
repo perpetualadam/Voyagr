@@ -35,3 +35,7 @@
 !voyagr/services/
 !voyagr/services/routing/
 !voyagr/services/routing/private_route_cache.py
+
+!prototypes/graphhopper11/saved_plans.js
+!static/js/modules/privacy/
+!static/js/modules/privacy/local-store.js

@@ -573,3 +573,39 @@ test('complete routing ignores a late result after a programmatic request edit',
     expect(document.getElementById('line').getAttribute('points')).toBe(points);
     expect(JSON.parse(document.getElementById('completeRequest').value).max_detour).toBe(99);
 });
+
+function ownerFacade(){
+ let owner='guest',epoch=0,notify;const capture=()=>({owner,epoch});
+ const current=token=>token.owner===owner&&token.epoch===epoch;
+ const session={capture,current,list:jest.fn(async()=>[]),get:jest.fn(),save:jest.fn(async()=>({})),switchOwner(next){owner=next;epoch++;notify();}};
+ global.VoyagrLocalStore={};global.VoyagrGH11SavedPlans={create:options=>{notify=options.onOwnerChange;return session;}};
+ return session;
+}
+afterEach(()=>{delete global.VoyagrGH11SavedPlans;delete global.VoyagrLocalStore;delete global.VoyagrGH11SavedSession;});
+test('an owner change clears private preview state and rejects a late complete response even if abort is ignored',async()=>{
+ const owner=ownerFacade();await completeReady();serveComplete();let finish;
+ const served=fetch.getMockImplementation();fetch.mockImplementation((url,options)=>url.endsWith('/app-route')?new Promise(resolve=>{finish=async()=>resolve(await served(url,options));}):served(url,options));
+ document.getElementById('calculate').click();await settle();owner.switchOwner('sb:synthetic_b');await finish();await settle();
+ expect(document.getElementById('line').getAttribute('points')).toBe('');
+ expect(document.getElementById('planReference').value).toBe('');
+ expect(document.getElementById('completeRequest').value).toBe('');
+ expect(document.getElementById('savedPlanOwner').textContent).toContain('sb:synthetic_b');
+ expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+});
+test('only a validated complete preview is offered for an explicit scoped save',async()=>{
+ const owner=ownerFacade();await completeReady();serveComplete();
+ expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+ document.getElementById('calculate').click();await settle();
+ document.getElementById('saveCurrentPlan').click();await settle();
+ expect(owner.save).toHaveBeenCalledWith(JSON.parse(document.getElementById('planReference').value),{owner:'guest',epoch:0},expect.any(Function));
+ document.getElementById('completeRequest').dispatchEvent(new Event('input'));
+ expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+});
+test('a late saved-selector read cannot start restoration after an owner change',async()=>{
+ const owner=ownerFacade();await completeReady();let finish;
+ owner.list.mockResolvedValue([{id:'a'.repeat(64),case_id:'public_case',saved_at:1,restorable:true}]);
+ document.getElementById('loadSavedPlans').click();await settle();
+ owner.get.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));document.getElementById('restoreSavedPlan').click();await settle();
+ const before=fetch.mock.calls.length;owner.switchOwner('sb:synthetic_b');finish(completeReply(completeTemplate).plan_reference);await settle();
+ expect(fetch.mock.calls).toHaveLength(before);expect(document.getElementById('planReference').value).toBe('');
+});

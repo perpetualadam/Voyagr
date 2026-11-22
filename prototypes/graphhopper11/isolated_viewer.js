@@ -5,6 +5,10 @@
 })(globalThis,function(root){
 'use strict';
 const document=root.document, fetch=(...args)=>root.fetch(...args);
+let validatedPlan=null;
+let planSession=null;
+try{if(root.VoyagrGH11SavedPlans&&root.VoyagrLocalStore)planSession=root.VoyagrGH11SavedPlans.create({indexedDB:root.indexedDB,onOwnerChange:()=>ownerChanged()});}catch(_){/* Storage failure must not block preview routing. */}
+root.VoyagrGH11SavedSession=planSession;
 const byId=id=>document.getElementById(id);
 const status=byId('status'), calculate=byId('calculate'), restore=byId('restore');
 const cases=byId('cases'), alternatives=byId('alternatives'), planText=byId('planReference');
@@ -115,7 +119,7 @@ function readPolicy(caseId){
 }
 function showSettings(){byId('selectedSettings').textContent=JSON.stringify(registeredSettings[cases.value]||{},null,2);}
 function changed(){
-    operation++;integrity.invalidate();calculate.disabled=!versions;restore.disabled=!versions;
+    operation++;integrity.invalidate();validatedPlan=null;byId('saveCurrentPlan').disabled=true;calculate.disabled=!versions;restore.disabled=!versions;
     byId('policyResult').hidden=true;
     status.textContent='Request superseded; selection or rules changed. Calculate to apply them; earlier preview is unchanged.';
 }
@@ -202,14 +206,16 @@ alternatives.addEventListener('change',showRoute);
 function clearPreview(){routes=[];alternatives.replaceChildren();byId('line').setAttribute('points','');byId('instructions').textContent='';}
 async function calculateCase(saved){
     const selectedCase=saved?saved.case_id:cases.value, ownerCase=cases.value;
+    const localOwner=planSession?planSession.capture():null;
     const complete=saved?saved.schema===3:useComplete.checked;
     const ownerPolicy=stable(selection(ownerCase)), requested=saved?(complete?{app_request:readComplete(selectedCase,JSON.stringify(saved.app_request))}:saved.schema===2?normalizePolicy(saved.policy_request):null):selection(selectedCase);
     let policy=complete?completePolicy(requested.app_request):requested&&Object.prototype.hasOwnProperty.call(requested,'profile')?requested:null;
     const context=complete?completeContext(requested.app_request):null;
     const ticket=integrity.begin(root.localStorage), owned=++operation, fetchOptions=integrity.fetchOptions(ticket);
-    const current=()=>{try{return owned===operation&&(!ticket.controller||!ticket.controller.signal.aborted)&&integrity.current(ticket,root.localStorage)&&cases.value===ownerCase&&stable(selection(ownerCase))===ownerPolicy;}catch(_){return false;}};
+    const current=()=>{try{return (!planSession||planSession.current(localOwner))&&owned===operation&&(!ticket.controller||!ticket.controller.signal.aborted)&&integrity.current(ticket,root.localStorage)&&cases.value===ownerCase&&stable(selection(ownerCase))===ownerPolicy;}catch(_){return false;}};
     const selectedSettings=registeredSettings[selectedCase];let selectedBinding=registeredBindings[selectedCase], approved=null;
     calculate.disabled=true;restore.disabled=true;
+    validatedPlan=null;byId('saveCurrentPlan').disabled=true;
     if(!saved&&!requested){root.VoyagrNavigationSafetyUX.reset();clearPreview();byId('policyResult').hidden=true;}
     status.textContent=saved?'Restoring and checking…':'Calculating…';
     try{
@@ -243,6 +249,8 @@ async function calculateCase(saved){
         const options=prepared.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});
         routes=prepared;alternatives.replaceChildren(...options);cases.value=selectedCase;if(saved){useComplete.checked=complete;if(complete){completeText.value=JSON.stringify(requested.app_request);syncControls();}else applyRestoredPolicy(policy);}showSettings();
         planText.value=JSON.stringify(result.plan_reference);
+        validatedPlan=complete&&planSession?{reference:JSON.parse(JSON.stringify(result.plan_reference)),owner:localOwner,operation:owned}:null;
+        byId('saveCurrentPlan').disabled=!validatedPlan;
         status.textContent=routes.length+' route(s) passed selected fixture checks. '+(approved&&(approved.preference_warnings.length||(approved.supplemental_settings||[]).length||(context&&context.cost_warnings.length))?'Some preferences remain unresolved; see Rule check details. ':'')+'Navigation remains unavailable.';showRoute();
     }catch(error){
         if(current()){
@@ -275,6 +283,40 @@ restore.addEventListener('click',()=>{
         run(saved);
     }catch(_){status.textContent='Plan reference refused; current preview retained.';}
 });
+async function loadOwnedPlans(owner=planSession.capture()){
+    const rows=await planSession.list(owner);
+    if(!planSession.current(owner))return;
+    const options=rows.map(row=>{const option=document.createElement('option');option.value=row.id||'';option.disabled=!row.restorable;option.textContent=row.restorable?row.case_id+' · '+new Date(row.saved_at).toISOString():'Unrecognized saved entry retained';return option;});
+    byId('savedPlans').replaceChildren(...options);byId('restoreSavedPlan').disabled=!rows.some(row=>row.restorable);
+    byId('savedPlanStatus').textContent=rows.length+' saved entry/entries for this local owner.';
+}
+function ownerChanged(){
+    changed();clearPreview();root.VoyagrNavigationSafetyUX.reset();planText.value='';byId('policyDecisions').replaceChildren();
+    byId('savedPlans').replaceChildren();byId('restoreSavedPlan').disabled=true;
+    useComplete.checked=false;completeText.value='';appSettings.value='{"avoid_caz":false}';applyRestoredPolicy(null);
+    byId('savedPlanOwner').textContent='Local preview owner: '+planSession.capture().owner;
+    byId('savedPlanStatus').textContent='Local owner changed. Stored entries retained in their own scope.';
+    status.textContent='Local owner changed; preview cleared. Load and freshly validate this owner’s saved plan.';
+}
+byId('loadSavedPlans').addEventListener('click',()=>{if(!planSession)return;const owner=planSession.capture();loadOwnedPlans(owner).catch(()=>{if(planSession.current(owner))byId('savedPlanStatus').textContent='Saved plans unavailable; existing records retained.';});});
+byId('saveCurrentPlan').addEventListener('click',async()=>{
+    const selected=validatedPlan;if(!selected||!planSession)return;
+    try{
+        await planSession.save(selected.reference,selected.owner,()=>validatedPlan===selected&&operation===selected.operation);
+        if(!planSession.current(selected.owner)||validatedPlan!==selected||operation!==selected.operation)return;
+        await loadOwnedPlans(selected.owner);
+        if(planSession.current(selected.owner)&&validatedPlan===selected&&operation===selected.operation)byId('savedPlanStatus').textContent='Saved this validated test reference on this device.';
+    }catch(_){if(planSession.current(selected.owner))byId('savedPlanStatus').textContent='Plan was not confirmed saved; existing records retained.';}
+});
+byId('restoreSavedPlan').addEventListener('click',async()=>{
+    if(!planSession)return;
+    const owner=planSession.capture(),owned=operation;
+    try{
+        const selected=await planSession.get(byId('savedPlans').value,owner);
+        if(!planSession.current(owner)||owned!==operation)return;
+        planText.value=JSON.stringify(selected);restore.click();
+    }catch(_){if(planSession.current(owner)&&owned===operation)byId('savedPlanStatus').textContent='Saved reference unavailable; current preview retained.';}
+});
 Promise.all([get('/api/prototype/cases'),get('/api/prototype/versions')]).then(([registry,identity])=>{
     caseRequests=registry.case_requests||{};useComplete.disabled=Object.keys(caseRequests).length===0;
     registeredSettings=registry.case_settings||{};registeredBindings=registry.case_bindings||{};categories=registry.policy_categories||[];
@@ -282,6 +324,6 @@ Promise.all([get('/api/prototype/cases'),get('/api/prototype/versions')]).then((
     if(registry.cases.some(id=>!registeredSettings[id]||!hash(registeredBindings[id])))throw Error('Registered settings unavailable.');
     registry.cases.forEach(id=>{const option=document.createElement('option');option.value=id;option.textContent=id;cases.append(option);});
     if(['graph_version','source_version','policy_version'].some(key=>typeof identity[key]!=='string'||!identity[key]))throw Error('Version identity unavailable.');
-    versions=identity;mountPolicyRows();showSettings();calculate.disabled=false;restore.disabled=false;status.textContent='Select a registered test case.';
+    versions=identity;mountPolicyRows();showSettings();calculate.disabled=false;restore.disabled=false;byId('loadSavedPlans').disabled=!planSession;status.textContent='Select a registered test case.';
 }).catch(error=>{status.textContent=error.message;});
 });

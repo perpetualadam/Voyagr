@@ -1,0 +1,67 @@
+'use strict';
+// Real IndexedDB and HTTP. All records/owners are synthetic in a fresh context.
+const assert=require('node:assert/strict');
+const {chromium,expect}=require('@playwright/test');
+const target=new URL(process.argv[2]);
+if(target.protocol!=='http:'||target.hostname!=='127.0.0.1'||!target.port||target.pathname!=='/'||target.username||target.password)throw Error('Loopback origin required');
+let phase='startup';
+async function main(){
+ let browser,context;
+ try{
+  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_BINARY?{executablePath:process.env.CHROMIUM_BINARY}:{}),args:['--no-sandbox'],timeout:20000});
+  context=await browser.newContext({httpCredentials:{username:'prototype',password:'f'.repeat(64)},serviceWorkers:'block'});
+  const errors=[];let external=0;
+  await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==target.origin){external++;return route.abort();}return route.continue();});
+  const page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',()=>errors.push('pageerror'));
+  const id=name=>page.locator('#'+name);
+  const ready=()=>page.waitForFunction(()=>!document.getElementById('calculate').disabled);
+  async function open(name){await page.locator('details').filter({has:id(name)}).evaluate(element=>{element.open=true;});}
+  async function load(){await id('loadSavedPlans').click();await page.waitForFunction(()=>document.getElementById('savedPlanStatus').textContent.includes('saved entry/entries'));}
+  async function calculate(caseId){
+   await id('cases').selectOption(caseId);await open('useCompleteRequest');
+   if(!await id('useCompleteRequest').isChecked())await id('useCompleteRequest').check();
+   await id('loadCompleteRequest').click();await id('calculate').click();
+   await page.waitForFunction(()=>document.getElementById('status').textContent.includes('route(s) passed'));await ready();
+   const ref=JSON.parse(await id('planReference').inputValue());assert.equal(ref.schema,3);assert.equal(await id('strictStart').isDisabled(),true);return ref;
+  }
+  phase='guest save';await page.goto(target.href);await ready();
+  await page.evaluate(async()=>{
+   localStorage.setItem('gh11-saved-marker','synthetic-retained');
+   const legacy=VoyagrLocalStore.create(indexedDB);await legacy.update('guest','routes',()=>[{id:'legacy-sentinel',geometry:'untouched'}]);legacy.close();
+  });
+  const original=await calculate('detour');await open('saveCurrentPlan');await id('saveCurrentPlan').click();
+  await page.waitForFunction(()=>document.getElementById('savedPlanStatus').textContent.includes('Saved this validated'));
+  assert.equal(await id('savedPlans').locator('option').count(),1);
+  phase='reload and fresh restoration';await page.reload();await ready();await open('loadSavedPlans');await load();
+  await id('restoreSavedPlan').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('route(s) passed'));await ready();
+  assert.deepEqual(JSON.parse(await id('planReference').inputValue()),original);
+  const stored=await page.evaluate(async()=>{
+   const preview=VoyagrLocalStore.create(indexedDB,{name:VoyagrGH11SavedPlans.DB_NAME});const rows=await preview.read('guest','routes');preview.close();return rows;
+  });
+  assert.deepEqual(Object.keys(stored[0]).sort(),['id','reference','saved_at','schema']);assert.deepEqual(stored[0].reference,original);
+  phase='independent owner';await page.evaluate(()=>VoyagrGH11SavedSession.switchOwner('sb:synthetic_b'));
+  assert.equal(await id('line').getAttribute('points'),'');await load();assert.equal(await id('savedPlans').locator('option').count(),0);
+  assert.equal(await page.evaluate(async id=>{try{await VoyagrGH11SavedSession.get(id);return false;}catch(_){return true;}},original.request_binding),true);
+  const other=await calculate('via');await id('saveCurrentPlan').click();
+  await page.waitForFunction(()=>document.getElementById('savedPlanStatus').textContent.includes('Saved this validated'));
+  phase='return to original owner';await page.evaluate(()=>VoyagrGH11SavedSession.switchOwner('guest'));await load();
+  assert.equal(await id('savedPlans').locator('option').count(),1);
+  assert.equal(await page.evaluate(async id=>{try{await VoyagrGH11SavedSession.get(id);return false;}catch(_){return true;}},other.request_binding),true);
+  phase='owner change during restore';assert.equal((await context.request.post(target.origin+'/__test/reset-saved-restore')).status(),200);
+  await id('restoreSavedPlan').click();
+  await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).entered,{timeout:5000}).toBe(true);
+  await page.evaluate(()=>VoyagrGH11SavedSession.switchOwner('sb:synthetic_b'));
+  await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).completed,{timeout:15000}).toBe(true);
+  await page.evaluate(()=>new Promise(requestAnimationFrame));
+  assert.equal(await id('line').getAttribute('points'),'');assert.equal(await id('planReference').inputValue(),'');assert.equal(await id('strictStart').isDisabled(),true);
+  assert.ok((await id('savedPlanOwner').textContent()).includes('sb:synthetic_b'));
+  phase='retained data';const retained=await page.evaluate(async()=>{
+   const legacy=VoyagrLocalStore.create(indexedDB);const rows=await legacy.read('guest','routes');legacy.close();
+   return {rows,marker:localStorage.getItem('gh11-saved-marker'),own:await VoyagrGH11SavedSession.list()};
+  });
+  assert.deepEqual(retained.rows,[{id:'legacy-sentinel',geometry:'untouched'}]);assert.equal(retained.marker,'synthetic-retained');assert.equal(retained.own.length,1);
+  assert.deepEqual(errors,[]);assert.equal(external,0);
+  console.log(JSON.stringify({status:'PASS_OWNER_SAVED_PLANS',external_requests:0,navigation_allowed:false,synthetic_storage_retained:true,phone_acceptance:'UNVERIFIED'}));
+ }finally{if(context)await context.close();if(browser)await browser.close();}
+}
+main().catch(error=>{console.error('FAIL: isolated saved-plan phase '+phase+' ('+error.name+')');process.exitCode=1;});

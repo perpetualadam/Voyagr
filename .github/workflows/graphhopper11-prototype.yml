@@ -14,6 +14,8 @@ on:
       - 'tests/test_gh11_private_complete_cache.py'
       - 'voyagr/avoidance_contract.py'
       - 'static/js/modules/navigation/routing-request.js'
+      - 'static/js/modules/privacy/local-store.js'
+      - 'static/js/__tests__/gh11-saved-plans.test.js'
       - 'tests/test_gh11_container_package.py'
       - 'voyagr/services/routing/private_route_cache.py'
       - 'voyagr/utils/graphhopper.py'

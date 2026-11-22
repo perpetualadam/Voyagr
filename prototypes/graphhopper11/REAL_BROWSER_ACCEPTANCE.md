@@ -127,3 +127,14 @@ validations are required. No real browser profile or production certificate is u
 See PRIVATE_COMPLETE_CACHE.md for scope and retention limits. The prior HTTP
 scenarios still bypass cache reuse and keep their original counts. No production
 authentication or trusted-proxy settings changed.
+
+## Owner-scoped device saved-plan checkpoint
+
+`test_real_chromium_owner_saved_plans` adds a fifth opt-in scenario using actual
+IndexedDB plus the local HTTP/GH11 stack. It saves only a schema-3 request selector
+in a separate database, verifies reload and fresh restoration, separates two
+synthetic local scopes, and switches scope after a restore has reached the server.
+The completed old result cannot repopulate the next scope. Four Java executions/
+validations are required. Synthetic legacy records and a localStorage marker are
+unchanged. No device profile or production journey collection is accessed; see
+OWNER_SAVED_PLANS.md for the distinction between local scopes and authentication.

@@ -212,3 +212,13 @@ Secure cookies, scope isolation, expiry and corrupt-evidence refusal are tested,
 including a fourth real Chromium/TLS scenario. This does not connect the UK cache,
 owner-saved collections or accepted live GPS. See PRIVATE_COMPLETE_CACHE.md.
 Milestone 3 remains in progress.
+
+## Subsequent Milestone 3 checkpoint: isolated owner-saved references
+
+The standalone preview now explicitly saves validated schema-3 selectors using the
+actual device-store implementation in a separate database. Local owner/epoch guards
+prevent cross-scope replay and stale UI completion; restoring always preflights and
+routes afresh. Legacy records and unknown isolated entries are retained, not migrated
+or silently deleted. A fifth real-browser test covers persistence/reload, owner
+isolation and owner change during restore. This is not production account/owner,
+private journey or accepted-GPS integration. See OWNER_SAVED_PLANS.md.
