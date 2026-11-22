@@ -51,6 +51,15 @@ python -m prototypes.graphhopper11.container.smoke \
   --image voyagr-gh11-app:local-test --jar /path/to/pinned/graphhopper-web-11.1.jar
 ```
 
+The reviewed build context must also contain `voyagr/avoidance_contract.py`,
+`prototypes/graphhopper11/app_settings_adapter.py` and the four shared browser
+assets copied by the Dockerfile. A prototype-folder-only archive is insufficient.
+Use a pinned checkout/export containing those allowlisted files; do not copy a
+production .env or existing database. The build-context allowlist includes only
+the shared contract from `voyagr`, not production services or account data.
+Fresh manifests bind adapter/contract hashes and must be generated from the same
+reviewed runtime package; old manifests/references are not silently migrated.
+
 Both base images are digest-pinned. Every Python dependency and transitive wheel
 is version/hash locked; wheels are generated locally and excluded from Git. The
 build installation uses no network. TLS verification is never disabled. A strict
