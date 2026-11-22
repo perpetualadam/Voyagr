@@ -30,3 +30,8 @@
 !voyagr/avoidance_contract.py
 
 !prototypes/graphhopper11/app_request_bridge.py
+
+!prototypes/graphhopper11/private_complete_cache.py
+!voyagr/services/
+!voyagr/services/routing/
+!voyagr/services/routing/private_route_cache.py

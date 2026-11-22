@@ -230,7 +230,7 @@ async function calculateCase(saved){
         const result=await post(complete?(saved?'/api/prototype/app-restore':'/api/prototype/app-route'):(saved?'/api/prototype/restore':'/api/prototype/route'),body,fetchOptions);
         if(!current()){if(owned===operation)status.textContent='Request expired or superseded. Calculate again.';return;}
         if(result.request_binding!==selectedBinding||stable(result.selected_settings)!==stable(selectedSettings)||stable(result.plan_reference)!==stable(expectedReference)||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version||(policy&&stable(result.policy_report)!==stable(approved)))throw Error('Response contract refused.');
-        if(complete&&(result.app_integration_allowed!==false||result.gps_verification!=='UNVERIFIED'||result.cache_policy!=='bypass_complete_app_request'||stable(result.app_request_context)!==stable(context)))throw Error('Complete response refused.');
+        if(complete&&(result.app_integration_allowed!==false||result.gps_verification!=='UNVERIFIED'||!['bypass_complete_app_request','private_complete_request'].includes(result.cache_policy)||stable(result.app_request_context)!==stable(context)))throw Error('Complete response refused.');
         const preview=result.app_preview;
         if(!preview||preview.navigation_allowed!==false||!Array.isArray(preview.routes)||!Array.isArray(result.candidates)||preview.routes.length!==result.candidates.length||!preview.routes.length||preview.routes.length>3)throw Error('Response contract refused.');
         const identities=new Set();

@@ -21,7 +21,9 @@ import time
 from flask import Flask, Response, jsonify, request
 from prototypes.graphhopper11.policy_compiler import compile_policy, normalize_policy, InvalidPolicy, CATEGORIES
 
-SETTINGS_SOURCES = {"request_bridge": Path(__file__).with_name("app_request_bridge.py"),
+SETTINGS_SOURCES = {"private_cache_adapter": Path(__file__).with_name("private_complete_cache.py"),
+                    "private_cache_impl": Path(__file__).resolve().parents[2] / "voyagr/services/routing/private_route_cache.py",
+                    "request_bridge": Path(__file__).with_name("app_request_bridge.py"),
                     "adapter": Path(__file__).with_name("app_settings_adapter.py"),
                     "contract": Path(__file__).resolve().parents[2] / "voyagr/avoidance_contract.py"}
 COMPILER = Path(__file__).with_name("policy_compiler.py")
@@ -207,7 +209,7 @@ class LocalJavaBridge:
             raise Refused("engine_refused")
         return report
 
-    def route(self, case_id, selected=None, *, force_refresh=False):
+    def route(self, case_id, selected=None, *, force_refresh=False, evidence_cache=None, cache_key=None):
         if case_id not in self.cases:
             raise Refused("case_not_registered")
         policy = self.policy(case_id, selected)
@@ -220,15 +222,24 @@ class LocalJavaBridge:
             binding = self.binding(case_id, selected)
             now = time.monotonic()
             self.cache = {key: entry for key, entry in self.cache.items() if entry[0] > now}
-            cached = None if force_refresh else self.cache.get(binding)
+            private = evidence_cache is not None and isinstance(cache_key,str) and not force_refresh
+            try:
+                cached = evidence_cache.get(cache_key) if private else None if force_refresh else self.cache.get(binding)
+            except Exception:
+                if private:
+                    evidence_cache.clear()
+                raise Refused('cached_evidence_refused') from None
             if cached is not None:
                 try:
                     # Re-run the same independent validation for every candidate.
-                    result = self.validate(copy.deepcopy(cached[1]), self.cases[case_id], selected)
+                    result = self.validate(copy.deepcopy(cached if private else cached[1]), self.cases[case_id], selected)
                     self.verify()
                     return result
                 except Exception:
-                    self.cache.pop(binding, None)
+                    if private:
+                        evidence_cache.clear()
+                    else:
+                        self.cache.pop(binding, None)
                     raise Refused("cached_evidence_refused") from None
             fixture = copy.deepcopy(self.registry)
             case = copy.deepcopy(self.cases[case_id])
@@ -240,7 +251,9 @@ class LocalJavaBridge:
                 report = self._execute(path, directory)
             self.verify()
             result = self.validate(report, case, selected)
-            if not force_refresh:
+            if private:
+                evidence_cache.set(cache_key,report)
+            elif not force_refresh:
                 if len(self.cache) >= 8:
                     self.cache.pop(next(iter(self.cache)))
                 self.cache[binding] = (time.monotonic() + 30, copy.deepcopy(report))
@@ -433,7 +446,10 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
     app.config.update(MAX_CONTENT_LENGTH=4096, TESTING=False)
     app.extensions["gh11_bridge"] = bridge
     from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge, public_request_template
-    complete_bridge = RegisteredAppRequestBridge(bridge)
+    from prototypes.graphhopper11.private_complete_cache import PrivateCompleteCache
+    private_cache = PrivateCompleteCache()
+    app.extensions["gh11_private_cache"] = private_cache
+    complete_bridge = RegisteredAppRequestBridge(bridge,private_cache=private_cache)
     app.extensions["gh11_app_request_bridge"] = complete_bridge
 
     @app.before_request
@@ -572,6 +588,7 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
     @app.post('/api/prototype/app-policy')
     @app.post('/api/prototype/app-route')
     @app.post('/api/prototype/app-restore')
+    @private_cache.protect
     def complete_request():
         body = request.get_json(silent=True)
         try:

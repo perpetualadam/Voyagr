@@ -42,12 +42,11 @@ versions, visits or rules cannot replay the old binding. References remain selec
 not authentication or saved compliance verdicts. No persistent or owner storage is
 read/written. Navigation, automatic selection and app-integration authority stay off.
 
-Every complete-request operation bypasses the existing public fixture cache,
-including normal requests, reroutes and restore. It neither reads that cache nor
-stores results into it. This conservative boundary avoids inventing complete
-private-cache integration; private scopes, epochs, lifetime and request ownership
-still need the existing production cache adapter. An engine failure refuses even
-when old fixture evidence exists. No GH8/Valhalla/OSRM fallback is called.
+Complete requests now use a separate HTTPS capability-scoped cache instance that
+reuses the actual app cache implementation. Every hit revalidates raw evidence;
+HTTP, reroutes, forced refresh and restores retain fresh calculation. No UK
+singleton or private owner store is connected. See PRIVATE_COMPLETE_CACHE.md for
+ownership, retention, corruption refusal and transport boundaries.
 
 Adapter source enters manifest policy identity and is copied into the isolated
 container. Fresh manifests are required; old deployments are unchanged. The
@@ -61,8 +60,7 @@ interface. A third scenario now exercises complete normal/via/reroute/alternativ
 requests, fresh restoration and cross-case restoration through the new interface.
 It still does not load the production UI.
 
-Next: private-cache and owner-saved-store integration, with explicit ownership,
-lifetime and current-origin evidence. Do not enable arbitrary
+Next: owner-saved-store integration and current accepted GPS/journey ownership. Do not enable arbitrary
 journeys or navigation until the missing capability/evidence gates are met.
 Milestone 3 remains in progress; production migration remains NO-GO. No merge,
 deployment, VPS access, production configuration or private-history change occurred.
@@ -87,6 +85,6 @@ complete-request intent. No browser storage is written. Explicitly loading anoth
 case template replaces only the editable test input, not the current preview.
 
 All new endpoints use the unchanged Basic, Origin, no-store and 4 KiB guards.
-Preflight never runs Java. Complete calculation and restoration always re-execute
-and independently validate. Client proofs, custom models, private origins outside
+Preflight never runs Java. Complete calculation always independently validates; restoration always
+re-executes. HTTPS calculations may reuse only revalidated private raw evidence. Client proofs, custom models, private origins outside
 the registry and legacy reference downgrades cannot grant routing authority.

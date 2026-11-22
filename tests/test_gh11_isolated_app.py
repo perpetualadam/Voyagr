@@ -71,7 +71,8 @@ def manifest(tmp_path_factory):
 def app(manifest):
     app = create_app(manifest, password=PASSWORD)
     app.config["TESTING"] = True
-    return app
+    yield app
+    app.extensions["gh11_private_cache"].store.clear()
 
 
 def body(manifest, case="detour"):
@@ -674,7 +675,7 @@ def test_conflicting_app_policy_cannot_hide_selected_constraints(app, manifest, 
     assert not bridge.cache
 
 
-@pytest.mark.parametrize('name', ['adapter', 'contract', 'request_bridge'])
+@pytest.mark.parametrize('name', ['adapter', 'contract', 'request_bridge', 'private_cache_adapter', 'private_cache_impl'])
 def test_settings_source_identity_is_required_in_manifest(manifest, name):
     changed = copy.deepcopy(manifest);changed['settings_hashes'][name] = '0'*64
     with pytest.raises(Refused,match='runtime_changed'):
@@ -740,7 +741,7 @@ def test_raw_app_settings_preflight_derives_full_policy_without_java(app, manife
     assert not bridge.cache
 
 
-def _run_real_browser(app, monkeypatch, runner_name, expected_status, expected_calls):
+def _run_real_browser(app, monkeypatch, runner_name, expected_status, expected_calls, tls_files=None):
     import signal
     import threading
     from werkzeug.serving import make_server, WSGIRequestHandler
@@ -758,13 +759,13 @@ def _run_real_browser(app, monkeypatch, runner_name, expected_status, expected_c
             return _method(*args, **kwargs)
         monkeypatch.setattr(bridge, '_execute' if name == 'execute' else 'validate', counted)
 
-    server = make_server('127.0.0.1', 0, app, threaded=True, request_handler=QuietHandler)
+    server = make_server('127.0.0.1', 0, app, threaded=True, request_handler=QuietHandler, ssl_context=tls_files)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     process = None
     try:
         runner = Path(__file__).resolve().parents[1]/'prototypes/graphhopper11'/runner_name
-        process = subprocess.Popen(['node', str(runner), f'http://127.0.0.1:{server.server_port}/'],
+        process = subprocess.Popen(['node', str(runner), f'{"https" if tls_files else "http"}://127.0.0.1:{server.server_port}/'],
                                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
         try:
             output, errors = process.communicate(timeout=120)
@@ -997,3 +998,94 @@ def test_anchor_only_registry_cases_keep_legacy_metadata_without_complete_templa
     registry=response.get_json()
     assert 'detour' in registry['cases'] and 'detour' in registry['case_settings']
     assert 'detour' not in registry['case_requests'] and 'via' in registry['case_requests']
+
+
+def test_complete_private_cache_tls_ownership_revalidation_and_bypasses(app, manifest, monkeypatch):
+    bridge=app.extensions['gh11_bridge'];boundary=app.extensions['gh11_private_cache']
+    identities={key:manifest[key] for key in ('graph_version','source_version','policy_version')}
+    body=full_app_body();payload=dict(case_id='detour',app_request=body,**identities)
+    a,b=app.test_client(),app.test_client();counts={'execute':0,'validate':0}
+    for name in counts:
+        original=getattr(bridge,'_execute' if name=='execute' else 'validate')
+        def track(*args,_name=name,_original=original,**kwargs):
+            counts[_name]+=1
+            return _original(*args,**kwargs)
+        monkeypatch.setattr(bridge,'_execute' if name=='execute' else 'validate',track)
+    def call(client,path='app-route',data=None,secure=True):
+        return client.post('/api/prototype/'+path,json=payload if data is None else data,headers=AUTH,base_url='https://localhost' if secure else 'http://localhost')
+    preflight=call(a,'app-policy')
+    assert preflight.status_code==200 and 'Set-Cookie' not in preflight.headers and not boundary.store.cache
+    first=call(a);assert first.status_code==200
+    assert first.get_json()['cache_policy']=='private_complete_request'
+    assert '__Host-voyagr-gh11-scope=' in first.headers['Set-Cookie']
+    original_expiry=next(iter(boundary.store.cache.values()))[0]
+    second=call(a);assert second.status_code==200 and counts=={'execute':1,'validate':2}
+    assert 'Set-Cookie' not in second.headers and next(iter(boundary.store.cache.values()))[0]==original_expiry
+    assert call(b).status_code==200 and counts['execute']==2
+    changed=dict(payload,app_request=dict(body,fuel_efficiency=7.5))
+    assert call(a,data=changed).status_code==200 and counts['execute']==3
+    size=boundary.store.get_stats()['size']
+    for flags in ({'force_refresh':True},{'is_reroute':True}):
+        fresh=call(a,data=dict(payload,app_request=dict(body,**flags)))
+        assert fresh.status_code==200 and fresh.get_json()['cache_policy']=='bypass_complete_app_request'
+        assert boundary.store.get_stats()['size']==size
+    restored=call(a,'app-restore',first.get_json()['plan_reference'])
+    assert restored.status_code==200 and restored.get_json()['cache_policy']=='bypass_complete_app_request'
+    http=call(a,secure=False)
+    assert http.status_code==200 and http.get_json()['cache_policy']=='bypass_complete_app_request'
+    assert 'Set-Cookie' not in http.headers and counts['execute']==7
+    assert not bridge.cache  # Never the shared fixture dictionary or UK singleton.
+
+
+def test_private_cache_corruption_refuses_without_engine_fallback_or_authority(app, manifest, monkeypatch):
+    bridge=app.extensions['gh11_bridge'];boundary=app.extensions['gh11_private_cache'];client=app.test_client()
+    payload=dict(case_id='detour',app_request=full_app_body(),**{key:manifest[key] for key in ('graph_version','source_version','policy_version')})
+    first=client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost')
+    assert first.status_code==200
+    key=next(iter(boundary.store.cache));expires,raw=boundary.store.cache[key]
+    corrupted=json.loads(raw);corrupted['cases'][0]['candidates'][0]['directed_edge_keys']=[999999]
+    boundary.store.cache[key]=(expires,json.dumps(corrupted).encode())
+    def forbidden(*args):
+        pytest.fail('Corrupt private evidence must refuse rather than fallback to engine')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    response=client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost')
+    assert response.status_code==422 and response.get_json()['navigation_allowed'] is False
+    assert 'candidates' not in response.get_json() and not boundary.store.cache
+
+
+def test_private_cache_cannot_replay_mandatory_or_changed_version_requests(app, manifest, monkeypatch):
+    bridge=app.extensions['gh11_bridge'];boundary=app.extensions['gh11_private_cache'];client=app.test_client()
+    payload=dict(case_id='detour',app_request=full_app_body(),**{key:manifest[key] for key in ('graph_version','source_version','policy_version')})
+    assert client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost').status_code==200
+    def forbidden(*args):
+        pytest.fail('Mandatory or stale requests cannot read private cached evidence')
+    monkeypatch.setattr(boundary.store,'get',forbidden);monkeypatch.setattr(bridge,'_execute',forbidden)
+    for altered,expected in ((dict(payload,app_request=dict(payload['app_request'],avoid_tolls=True,avoidance_mode='mandatory')),422),
+                             (dict(payload,policy_version='0'*64),409)):
+        response=client.post('/api/prototype/app-route',json=altered,headers=AUTH,base_url='https://localhost')
+        assert response.status_code==expected and 'candidates' not in response.get_json()
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_https_private_cache(app, manifest, monkeypatch, tmp_path):
+    cert,key=tmp_path/'cert.pem',tmp_path/'key.pem'
+    subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','1',
+                    '-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1',
+                    '-keyout',str(key),'-out',str(cert)],check=True,capture_output=True,timeout=30)
+    _run_real_browser(app,monkeypatch,'browser-private-cache.cjs','PASS_PRIVATE_CACHE_HTTPS',
+                      {'execute':7,'validate':9},tls_files=(str(cert),str(key)))
+
+
+def test_failed_private_requests_never_issue_cache_capability(app, manifest, monkeypatch):
+    bridge=app.extensions['gh11_bridge'];boundary=app.extensions['gh11_private_cache'];client=app.test_client()
+    payload=dict(case_id='detour',app_request=full_app_body(),**{key:manifest[key] for key in ('graph_version','source_version','policy_version')})
+    for data,headers,status in ((payload,{},401),(payload,dict(AUTH,Origin='https://other.invalid'),403),
+                                (dict(payload,proof=True),AUTH,400)):
+        response=client.post('/api/prototype/app-route',json=data,headers=headers,base_url='https://localhost')
+        assert response.status_code==status and 'Set-Cookie' not in response.headers
+    def failed(*args):
+        raise Refused('engine_refused')
+    monkeypatch.setattr(bridge,'_execute',failed)
+    response=client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost')
+    assert response.status_code==422 and 'Set-Cookie' not in response.headers
+    assert not boundary.store.cache

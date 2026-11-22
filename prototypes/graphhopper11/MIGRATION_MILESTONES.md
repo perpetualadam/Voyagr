@@ -202,3 +202,13 @@ and refuses unsupported journey semantics. Every call bypasses the public fixtur
 cache; engine failure cannot reuse cached evidence. The standalone frontend now connects through dedicated registered-case endpoints;
 the UK UI/HTTP `/api/route`, private cache and owner store remain unconnected. See
 [APP_REQUEST_BRIDGE.md](APP_REQUEST_BRIDGE.md). Milestone 3 remains in progress.
+
+## Subsequent Milestone 3 checkpoint: isolated private cache
+
+HTTPS complete requests now use a separate capability-scoped instance of the actual
+app cache, binding complete requests/costs/visits/versions and revalidating raw
+evidence on every hit. HTTP, reroutes, forced refresh and restores remain fresh.
+Secure cookies, scope isolation, expiry and corrupt-evidence refusal are tested,
+including a fourth real Chromium/TLS scenario. This does not connect the UK cache,
+owner-saved collections or accepted live GPS. See PRIVATE_COMPLETE_CACHE.md.
+Milestone 3 remains in progress.

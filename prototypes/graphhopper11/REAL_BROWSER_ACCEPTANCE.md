@@ -114,3 +114,16 @@ legacy-reference downgrades and late results after programmatic edits.
 All three opt-in browser scenarios run under the existing CI command. No production
 UI, owner-store data, live GPS/map tiles or physical phone is used. Milestone 3 remains
 in progress; these results do not authorize deployment or production migration.
+
+## HTTPS private-cache checkpoint
+
+`test_real_chromium_https_private_cache` adds a fourth opt-in scenario. The harness
+generates a temporary localhost self-signed certificate and starts a separate TLS
+listener. Fresh browser contexts ignore that test certificate only, while requests
+remain restricted to the exact loopback origin. It checks Secure/HttpOnly/Strict
+capabilities, independent browsers, changed requests, private reuse with validation,
+all fresh bypass paths and invalid-cookie recovery. Seven Java executions/nine
+validations are required. No real browser profile or production certificate is used.
+See PRIVATE_COMPLETE_CACHE.md for scope and retention limits. The prior HTTP
+scenarios still bypass cache reuse and keep their original counts. No production
+authentication or trusted-proxy settings changed.

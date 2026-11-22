@@ -87,11 +87,13 @@ def adapt_app_request(body, case):
 class RegisteredAppRequestBridge:
     """Direct isolated adapter; not a live `/api/route` handler or private cache.
 
-    Every operation bypasses the public fixture cache until complete private
-    request-cache integration exists. References are selectors, never authority.
+    HTTPS calculations can reuse independently revalidated private evidence.
+    HTTP, reroutes, refreshes and restores stay fresh; the public fixture cache
+    is always bypassed. References are selectors, never authority.
     """
-    def __init__(self, bridge):
+    def __init__(self, bridge, *, private_cache=None):
         self.bridge = bridge
+        self.private_cache = private_cache
 
     def _prepare(self, case_id, body, identities):
         b = self.bridge
@@ -116,11 +118,15 @@ class RegisteredAppRequestBridge:
                     request_binding=reference['request_binding'],plan_reference=reference,
                     navigation_allowed=False,app_integration_allowed=False)
 
-    def calculate(self, case_id, body, identities):
+    def calculate(self, case_id, body, identities, *, bypass_cache=False):
         adapted,reference = self._prepare(case_id,body,identities)
-        result = self.bridge.route(case_id,adapted['policy_request'],force_refresh=True)
+        bypass = bypass_cache or adapted['force_refresh'] or adapted['is_reroute']
+        key = self.private_cache.key({'case_id':case_id,'request_binding':reference['request_binding'],
+                                     'resolved':adapted,'versions':identities},bypass=bypass) if self.private_cache else None
+        result = self.bridge.route(case_id,adapted['policy_request'],force_refresh=key is None,
+                                   evidence_cache=self.private_cache.store if key else None,cache_key=key)
         result.update(request_binding=reference['request_binding'],plan_reference=reference,
-                      app_request_context=adapted,cache_policy='bypass_complete_app_request',
+                      app_request_context=adapted,cache_policy='private_complete_request' if key else 'bypass_complete_app_request',
                       gps_verification='UNVERIFIED',app_integration_allowed=False)
         result['app_preview'] = app_preview(result)
         self.bridge.verify()
@@ -134,7 +140,7 @@ class RegisteredAppRequestBridge:
         _,expected = self._prepare(reference['case_id'],reference['app_request'],identities)
         if reference != expected:
             raise Refused('app_reference_changed')
-        return self.calculate(reference['case_id'],reference['app_request'],identities)
+        return self.calculate(reference['case_id'],reference['app_request'],identities,bypass_cache=True)
 
 
 def public_request_template(case):
