@@ -122,3 +122,5 @@ saved plans, arbitrary user settings or general navigation authority.
 Local validation and packaging limitations: [SETTINGS_CACHE_LOCAL_EVIDENCE.json](SETTINGS_CACHE_LOCAL_EVIDENCE.json). CI results belong to the exact PR head and are separate from these local results.
 
 Registered reference restoration and its acceptance limits: [RESTORE_PLANS.md](RESTORE_PLANS.md). Restoring never trusts saved geometry or a saved compliance verdict.
+
+The additional `app_preview` contract and real-instruction export are described in [RESPONSE_ADAPTER.md](RESPONSE_ADAPTER.md). It remains preview-only and does not grant navigation authority.

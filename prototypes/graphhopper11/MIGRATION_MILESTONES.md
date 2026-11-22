@@ -111,6 +111,12 @@ connection plan is in [REAL_APP_CONNECTION_AUDIT.md](REAL_APP_CONNECTION_AUDIT.m
 no application code was changed by that audit. The subsequent focused merge fix
 and its regression scope are recorded in [SELECTION_METADATA_FIX.md](SELECTION_METADATA_FIX.md).
 
+The registered-case response adapter now exports real instruction text/shape
+intervals and waypoint boundaries into the app planning format. Planning acceptance
+and strict navigation refusal are tested through the actual shared modules; see
+[RESPONSE_ADAPTER.md](RESPONSE_ADAPTER.md). This is not a full `/api/route` or map
+application connection.
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting

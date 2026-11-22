@@ -10,7 +10,9 @@ on:
       - 'tests/test_gh11_isolated_app.py'
       - 'tests/test_gh11_container_package.py'
       - 'voyagr/services/routing/private_route_cache.py'
+      - 'voyagr/utils/graphhopper.py'
       - 'static/js/modules/navigation/strict-route-policy.js'
+      - 'static/js/modules/navigation/polyline-codec.js'
       - 'static/js/modules/navigation/route-selection.js'
       - 'static/js/__tests__/gh11-strict-navigation.test.js'
       - 'static/js/modules/navigation/avoidance-integrity.js'
@@ -30,6 +32,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

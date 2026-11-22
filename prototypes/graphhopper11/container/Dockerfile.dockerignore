@@ -20,3 +20,5 @@
 !static/js/modules/navigation/avoidance-integrity.js
 !static/js/app/
 !static/js/app/navigation-safety-ux.js
+
+!static/js/modules/navigation/polyline-codec.js

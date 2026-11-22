@@ -8,7 +8,7 @@ COPY --chmod=0555 prototypes/graphhopper11/container/wheels /wheels
 RUN python -m pip install --no-index --find-links=/wheels --no-cache-dir --require-hashes -r /app/requirements.lock && java -version
 COPY --chmod=0444 prototypes/graphhopper11/isolated_app.py prototypes/graphhopper11/prepare_app_manifest.py prototypes/graphhopper11/ReadOnlyRouteRegression.java prototypes/graphhopper11/isolated_viewer.html prototypes/graphhopper11/isolated_viewer.js /app/prototypes/graphhopper11/
 COPY --chmod=0444 prototypes/graphhopper11/container/wsgi.py prototypes/graphhopper11/container/healthcheck.py /app/prototypes/graphhopper11/container/
-COPY --chmod=0444 static/js/modules/navigation/strict-route-policy.js static/js/modules/navigation/avoidance-integrity.js /app/static/js/modules/navigation/
+COPY --chmod=0444 static/js/modules/navigation/polyline-codec.js static/js/modules/navigation/strict-route-policy.js static/js/modules/navigation/avoidance-integrity.js /app/static/js/modules/navigation/
 COPY --chmod=0444 static/js/app/navigation-safety-ux.js /app/static/js/app/
 RUN chmod 0555 /app/static /app/static/js /app/static/js/modules /app/static/js/modules/navigation /app/static/js/app
 RUN chmod 0555 /app /app/prototypes /app/prototypes/graphhopper11 /app/prototypes/graphhopper11/container

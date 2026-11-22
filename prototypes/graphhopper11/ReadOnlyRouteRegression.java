@@ -394,9 +394,29 @@ public class ReadOnlyRouteRegression {
                         intervals.add(List.of(detail.getFirst(),detail.getLast(),detail.getValue()));
                     candidate.put("edge_intervals",intervals);
                     List<Map<String,Object>> instructions=new ArrayList<>();
-                    for(var instruction:path.getInstructions()) instructions.add(Map.of(
-                        "name",instruction.getName(),"sign",instruction.getSign(),
-                        "distance_m",instruction.getDistance(),"time_ms",instruction.getTime()));
+                    JsonNode serialized=Jackson.newObjectMapper().valueToTree(path.getInstructions());
+                    require(serialized.isArray() && serialized.size()==path.getInstructions().size(),"instruction serializer contract");
+                    int instructionIndex=0;
+                    for(var instruction:path.getInstructions()) {
+                        var wire=serialized.get(instructionIndex++);
+                        instructions.add(Map.of("name",instruction.getName(),"sign",instruction.getSign(),
+                            "distance_m",instruction.getDistance(),"time_ms",instruction.getTime(),
+                            "text",wire.path("text").asText(),"interval",wire.path("interval")));
+                    }
+                    var visitIndices=path.getWaypointIndices();
+                    require(visitIndices!=null && visitIndices.size()==visits.size()
+                        && visitIndices.get(0)==0 && visitIndices.get(visitIndices.size()-1)==geometry.size()-1,
+                        "waypoint interval coverage");
+                    int previousVisit=-1;
+                    for(int i=0;i<visitIndices.size();i++) {
+                        int at=visitIndices.get(i);
+                        require(at>=previousVisit && at>=0 && at<geometry.size(),"waypoint interval order");
+                        require(DistanceCalcEarth.DIST_EARTH.calcDist(visits.get(i).get(0).asDouble(),
+                            visits.get(i).get(1).asDouble(),geometry.getLat(at),geometry.getLon(at))<=tolerance,
+                            "waypoint interval does not match requested visit");
+                        previousVisit=at;
+                    }
+                    candidate.put("waypoint_indices",visitIndices);
                     candidate.put("instruction_details",instructions);
                 }
                 if(!expectedWays.isEmpty()) {

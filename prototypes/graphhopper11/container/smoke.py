@@ -133,7 +133,7 @@ def call(method,path,body=None,authenticated=True):
 assert call('GET','/',authenticated=False)[0]==401
 assert call('GET','/')[0]==200
 assert call('GET','/prototype-viewer.js')[0]==200
-for asset in ('strict-route-policy.js','avoidance-integrity.js','navigation-safety-ux.js'):
+for asset in ('polyline-codec.js','strict-route-policy.js','avoidance-integrity.js','navigation-safety-ux.js'):
  assert call('GET','/strict-assets/'+asset)[0]==200
 status,raw=call('GET','/api/prototype/versions'); assert status==200
 versions=json.loads(raw)
@@ -145,7 +145,12 @@ result=json.loads(raw); assert result['navigation_allowed'] is False
 assert result['candidates'] and all(set(r['directed_edge_keys']).isdisjoint(result['blocked_edge_keys']) for r in result['candidates'])
 assert result['selected_settings']==settings['detour'] and len(result['request_binding'])==64
 status,raw=call('POST','/api/prototype/route',request); assert status==200
-assert json.loads(raw)==result
+repeat=json.loads(raw)
+assert len(repeat['app_preview']['routes'])==len(result['app_preview']['routes'])
+for old,new in zip(result['app_preview']['routes'],repeat['app_preview']['routes']):
+ assert new['avoidance_assessment']['checked_at']>=old['avoidance_assessment']['checked_at']>0
+ new['avoidance_assessment']['checked_at']=old['avoidance_assessment']['checked_at']
+assert repeat==result
 status,raw=call('POST','/api/prototype/restore',result['plan_reference']); assert status==200
 assert json.loads(raw)['candidates']==result['candidates']
 assert call('POST','/api/prototype/restore',{**result['plan_reference'],'graph_version':'0'*64})[0]==409

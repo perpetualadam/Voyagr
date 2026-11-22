@@ -55,6 +55,6 @@ The real response/maneuver adapter, canonical settings/coverage authority,
 versioned private-cache integration and owner-scoped saved-store integration
 remain incomplete. The standalone viewer still cannot authorize navigation.
 Deployment and phone acceptance of this source change are unperformed.
-Milestone 3 remains in progress; production migration remains NO-GO. The next
-bounded implementation is the response-contract adapter, retaining preview-only
-scope until navigation prerequisites can actually be established.
+Milestone 3 remains in progress; production migration remains NO-GO. The subsequent registered-case response adapter is documented in
+[RESPONSE_ADAPTER.md](RESPONSE_ADAPTER.md). It retains preview-only scope; full
+application transport and navigation prerequisites remain incomplete.

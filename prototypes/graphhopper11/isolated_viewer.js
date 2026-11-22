@@ -17,11 +17,11 @@ root.VoyagrStrictRoutePolicy=root.VoyagrStrictRoutePolicyModule.create({navigati
 const start=document.getElementById('strictStart');
 start.addEventListener('click',()=>{const row=routes[Number(alternatives.value)];root.VoyagrNavigationSafetyUX.present(row);status.textContent='This experiment supports preview only. Navigation is unavailable.';});
 async function get(url,options){const response=await fetch(url,Object.assign({cache:'no-store',credentials:'same-origin'},options));if(!response.ok)throw new Error('Request refused ('+response.status+').');return response.json();}
-function showRoute(){const route=routes[Number(alternatives.value)];if(!route)return;root.VoyagrNavigationSafetyUX.present(route);const coords=route.geometry.coordinates;
+function showRoute(){const route=routes[Number(alternatives.value)];if(!route)return;root.VoyagrNavigationSafetyUX.present(route);const coords=route.polyline.map(point=>[point[1],point[0]]);
 const xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
 const scale=Math.min(760/Math.max(maxX-minX,1e-9),320/Math.max(maxY-minY,1e-9));
 document.getElementById('line').setAttribute('points',coords.map(p=>[20+(p[0]-minX)*scale,340-(p[1]-minY)*scale].join(',')).join(' '));
-document.getElementById('instructions').textContent=route.instruction_details.map((i,n)=>(n+1)+'. '+(i.name||'Unnamed road')+' — '+Math.round(i.distance_m)+' m').join('\n');}
+document.getElementById('instructions').textContent=route.maneuvers.map((i,n)=>(n+1)+'. '+i.instruction+' — '+Math.round(i.length*1000)+' m').join('\n');}
 alternatives.addEventListener('change',showRoute);
 function showSettings(){document.getElementById('selectedSettings').textContent=JSON.stringify(registeredSettings[cases.value]||{},null,2);}
 cases.addEventListener('change',()=>{root.VoyagrAvoidanceIntegrity.invalidate();showSettings();});
@@ -41,9 +41,17 @@ const result=await get(saved?'/api/prototype/restore':'/api/prototype/route',Obj
 if(!root.VoyagrAvoidanceIntegrity.current(ticket,root.localStorage)){status.textContent='Request superseded; calculate the selected case.';return;}
 if(result.request_binding!==selectedBinding||stable(result.selected_settings)!==stable(selectedSettings)||stable(result.plan_reference)!==stable(reference(selectedCase))||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version)throw new Error('Response contract refused.');
 // Build replacement controls before replacing the current preview.
-if(!Array.isArray(result.candidates)||!result.candidates.length||result.candidates.length>3||result.candidates.some(route=>!route||route.navigation_allowed!==false||!Number.isFinite(route.distance_km)||route.distance_km<=0||!route.geometry||route.geometry.type!=='LineString'||!Array.isArray(route.geometry.coordinates)||route.geometry.coordinates.length<2||route.geometry.coordinates.length>20000||route.geometry.coordinates.some(point=>!Array.isArray(point)||point.length!==2||!point.every(Number.isFinite)||Math.abs(point[0])>180||Math.abs(point[1])>90)||!Array.isArray(route.instruction_details)||!route.instruction_details.length||route.instruction_details.some(item=>!item||typeof item.name!=='string'||!Number.isFinite(item.distance_m)||item.distance_m<0)))throw new Error('Response contract refused.');
-const options=result.candidates.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});
-routes=result.candidates;alternatives.replaceChildren(...options);cases.value=selectedCase;showSettings();
+const preview=result.app_preview;
+if(!preview||preview.navigation_allowed!==false||!Array.isArray(preview.routes)||!Array.isArray(result.candidates)||preview.routes.length!==result.candidates.length||!preview.routes.length||preview.routes.length>3)throw new Error('Response contract refused.');
+const identities=new Set();
+const prepared=preview.routes.map((route,index)=>{
+if(route.geometry_precision!==6||identities.has(route.id)||route.navigation_allowed!==false||route.automatic_selection_allowed!==false||!route.routing_context||['graph_version','source_version','policy_version','request_binding'].some(key=>route.routing_context[key]!==result[key])||stable(route.gh11_evidence)!==stable(result.candidates[index]))throw new Error('Response contract refused.');
+const candidate=root.VoyagrAvoidanceIntegrity.preparePlanningCandidate(route);
+if(!candidate)throw new Error('Response contract refused.');
+identities.add(candidate.id);return candidate;
+});
+const options=prepared.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});
+routes=prepared;alternatives.replaceChildren(...options);cases.value=selectedCase;showSettings();
 planText.value=JSON.stringify(result.plan_reference);
 status.textContent=routes.length+' route(s) passed selected fixture checks. Navigation remains unavailable.';showRoute();
 }catch(error){status.textContent=root.VoyagrAvoidanceIntegrity.current(ticket,root.localStorage)?error.message:'Request superseded; calculate the selected case.';}

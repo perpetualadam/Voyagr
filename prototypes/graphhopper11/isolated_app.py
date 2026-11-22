@@ -25,6 +25,7 @@ RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
 MARKER = b"VOYAGR_GH11_REGRESSION "
 WEB_ROOT = Path(__file__).resolve().parents[2] / "static/js"
 BROWSER_ASSETS = {
+    "polyline-codec.js": WEB_ROOT / "modules/navigation/polyline-codec.js",
     "strict-route-policy.js": WEB_ROOT / "modules/navigation/strict-route-policy.js",
     "avoidance-integrity.js": WEB_ROOT / "modules/navigation/avoidance-integrity.js",
     "navigation-safety-ux.js": WEB_ROOT / "app/navigation-safety-ux.js",
@@ -286,13 +287,29 @@ class LocalJavaBridge:
             instructions = row.get("instruction_details")
             if not isinstance(instructions, list) or not instructions or len(instructions) != row.get("instructions"):
                 raise Refused("instructions_missing")
+            cursor = 0
             for instruction in instructions:
                 if (not isinstance(instruction, dict) or not isinstance(instruction.get("name"), str)
                         or type(instruction.get("sign")) is not int):
                     raise Refused("instruction_contract")
+                interval = instruction.get("interval")
+                if (instruction["sign"] not in PREVIEW_SIGN_TYPES or not isinstance(instruction.get("text"), str)
+                        or not instruction["text"].strip() or len(instruction["text"]) > 2000
+                        or not isinstance(interval, list) or len(interval) != 2
+                        or any(type(x) is not int for x in interval)
+                        or interval[0] != cursor or not cursor <= interval[1] < len(coords)):
+                    raise Refused("instruction_interval_contract")
+                cursor = interval[1]
                 for field in ("distance_m", "time_ms"):
                     if type(instruction.get(field)) not in (int, float) or not math.isfinite(instruction[field]) or instruction[field] < 0:
                         raise Refused("instruction_contract")
+            indices = row.get("waypoint_indices")
+            if (cursor != len(coords)-1 or type(result.get("requested_points")) is not int or not isinstance(indices, list) or not 2 <= len(indices) <= 5
+                    or len(indices) != result.get("requested_points")
+                    or any(type(x) is not int or not 0 <= x < len(coords) for x in indices)
+                    or indices[0] != 0 or indices[-1] != len(coords)-1
+                    or indices != sorted(indices)):
+                raise Refused("waypoint_or_instruction_coverage")
             for field in ("distance_km", "duration_minutes"):
                 if type(row.get(field)) not in (int, float) or not math.isfinite(row[field]) or row[field] < 0:
                     raise Refused("metrics_contract")
@@ -300,17 +317,72 @@ class LocalJavaBridge:
                 raise Refused("metrics_contract")
         public_rows = []
         fields = ("distance_km", "duration_minutes", "directed_edges", "instructions", "geometry",
-                  "instruction_details", "edge_intervals", "directed_edge_keys")
+                  "instruction_details", "edge_intervals", "directed_edge_keys", "waypoint_indices")
         for row in rows:
             public_rows.append({**{key: row[key] for key in fields}, "forbidden_traversals": 0,
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
-        return {"success": True, "case_id": case["id"], "engine_version": "11.1",
+        result = {"success": True, "case_id": case["id"], "engine_version": "11.1",
                 "selected_settings": self.settings(case["id"]), "request_binding": self.binding(case["id"]),
                 "plan_reference": self.plan_reference(case["id"]),
                 **{key: m[key] for key in ("graph_version", "source_version", "policy_version")},
                 "scope": "selected_fixture_graph_checks_only", "navigation_allowed": False,
                 "production_migration": "NO_GO", "blocked_edge_keys": blocked, "candidates": public_rows}
+        result["app_preview"] = app_preview(result)
+        return result
+
+
+
+# Preview mapping mirrors the established application signs; a parity regression
+# checks voyagr.utils.graphhopper. Unknown signs refuse instead of guessing straight.
+PREVIEW_SIGN_TYPES = {-98:13, -8:13, -7:24, -6:27, -3:14, -2:15, -1:16,
+                      0:8, 1:9, 2:10, 3:11, 4:4, 5:0, 6:26, 7:23, 8:12}
+
+
+def app_preview(result):
+    """Validated registered-case evidence -> real app planning shape; never authority."""
+    routes = []
+    for row in result["candidates"]:
+        points = [[math.floor(lat*1e6+.5), math.floor(lon*1e6+.5)]
+                  for lon, lat in row["geometry"]["coordinates"]]
+        encoded, previous = [], [0, 0]
+        binding = 2166136261
+        for point in points:
+            for axis in (0, 1):
+                delta = point[axis]-previous[axis]
+                previous[axis] = point[axis]
+                value = ~(delta << 1) if delta < 0 else delta << 1
+                while value >= 32:
+                    encoded.append(chr((32 | (value & 31))+63)); value >>= 5
+                encoded.append(chr(value+63))
+            for char in f"{point[0]},{point[1]};":
+                binding = ((binding ^ ord(char))*16777619) & 0xffffffff
+        identity = version([result["request_binding"], row["directed_edge_keys"], row["geometry"]])
+        maneuvers = [{"type": PREVIEW_SIGN_TYPES[item["sign"]], "instruction": item["text"],
+                      "begin_shape_index": item["interval"][0], "end_shape_index": item["interval"][1],
+                      "length": item["distance_m"]/1000, "time": item["time_ms"]/1000,
+                      "street_names": [item["name"]] if item["name"] else []}
+                     for item in row["instruction_details"]]
+        indices = row["waypoint_indices"]
+        routes.append({"id": identity, "source": "GraphHopper 11.1 isolated preview",
+                       "geometry": "".join(encoded), "geometry_precision": 6,
+                       "polyline": [[lat/1e6, lon/1e6] for lat, lon in points],
+                       "distance_km": row["distance_km"], "duration_minutes": row["duration_minutes"],
+                       "maneuvers": maneuvers, "geometry_complete": True,
+                       "leg_geometry_ranges": [{"leg_index": i, "start_shape_index": indices[i],
+                                                "end_shape_index": indices[i+1], "preview_only": True}
+                                               for i in range(len(indices)-1)],
+                       "gh11_evidence": copy.deepcopy(row),
+                       "routing_context": {**{key: result[key] for key in
+                           ("graph_version", "source_version", "policy_version", "request_binding")},
+                           "scope": "selected_fixture_graph_checks_only"},
+                       "navigation_allowed": False, "automatic_selection_allowed": False,
+                       "avoidance_assessment": {"status": "UNVERIFIED", "geometry_valid": True,
+                           "checked_at": time.time(), "geometry_binding": f"{binding:08x}",
+                           "requirements": [], "automatic_selection_allowed": False,
+                           "claim": "selected_fixture_graph_checks_only"}})
+    return {"success": True, "routes": routes, "navigation_allowed": False,
+            "scope": "selected_fixture_graph_checks_only", "production_migration": "NO_GO"}
 
 
 def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):

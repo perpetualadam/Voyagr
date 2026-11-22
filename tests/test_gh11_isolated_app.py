@@ -176,7 +176,7 @@ def test_real_transport_timeout_and_output_limit_kill_child_group(manifest, tmp_
         bridge.route("detour")
 
 
-@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings"])
+@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint"])
 def test_independent_transport_validation_rejects_corrupted_result(app, fault):
     bridge = app.extensions["gh11_bridge"]
     case = dict(bridge.cases["detour"], alternatives=True)
@@ -184,14 +184,14 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
     for key in (2, 4, 6):
         candidates.append({"geometry": {"type": "LineString", "coordinates": [[0, 0], [.02, 0]]},
                            "edge_intervals": [[0, 1, key]], "directed_edge_keys": [key], "directed_edges": 1,
-                           "distance_km": 1, "duration_minutes": 1, "instructions": 1,
-                           "instruction_details": [{"name": "Road", "sign": 0, "distance_m": 1000, "time_ms": 60000}]})
+                           "distance_km": 1, "duration_minutes": 1, "instructions": 1, "waypoint_indices":[0,1],
+                           "instruction_details": [{"name": "Road", "sign": 0, "distance_m": 1000, "time_ms": 60000,"text":"Continue", "interval":[0,1]}]})
     report = {"engine_version": "11.1", "all_available_graph_checks_passed": True,
               "associations": [{"id": name, "status": "PASS_AVAILABLE_GRAPH_CHECKS",
                                 "candidates": [{"directed_edge_keys": [key]}]}
                                for name, key in (("main", 98), ("upper", 100))],
               "cases": [{"id": "detour", "status": "PASS_AVAILABLE_GRAPH_CHECKS",
-                         "alternatives": True, "no_motorways": False, "blocked_edge_keys": [98, 99], "candidates": candidates}]}
+                         "alternatives": True, "no_motorways": False, "requested_points":2, "blocked_edge_keys": [98, 99], "candidates": candidates}]}
     accepted = bridge.validate(report, case)
     assert len(accepted["candidates"]) == 3 and accepted["navigation_allowed"] is False
     if fault == "unsafe_third":
@@ -207,6 +207,13 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
         candidates[0]["distance_km"] = float("nan")
     elif fault == "settings":
         report["cases"][0]["no_motorways"] = True
+    elif fault == "unknown_sign":
+        candidates[0]["instruction_details"][0]["sign"] = 999
+    elif fault == "shape_interval":
+        candidates[0]["instruction_details"][0]["interval"] = [0, 2]
+    elif fault == "missing_waypoint":
+        candidates[0]["waypoint_indices"] = [0]
+
     with pytest.raises(Refused):
         bridge.validate(report, case)
 
@@ -374,3 +381,80 @@ def test_saved_reference_cannot_turn_no_route_into_navigation(app):
     assert response.get_json()['reason'] == 'engine_refused'
     assert response.get_json()['navigation_allowed'] is False
     assert not bridge.cache
+
+
+@pytest.mark.parametrize('case', ['detour','alternatives','via','departure'])
+def test_real_app_preview_contract_passes_shared_planner_but_refuses_navigation(app, manifest, case):
+    response = app.test_client().post('/api/prototype/route', json=body(manifest,case), headers=AUTH)
+    assert response.status_code == 200
+    result = response.get_json()
+    preview = result['app_preview']
+    assert preview['navigation_allowed'] is False and len(preview['routes']) == len(result['candidates'])
+    ids = set()
+    for raw, route in zip(result['candidates'], preview['routes']):
+        assert route['id'] not in ids
+        ids.add(route['id'])
+        assert route['navigation_allowed'] is False and route['automatic_selection_allowed'] is False
+        assert route['avoidance_assessment']['status'] == 'UNVERIFIED'
+        assert route['avoidance_assessment']['requirements'] == []
+        assert route['gh11_evidence'] == raw
+        assert route['routing_context']['request_binding'] == result['request_binding']
+        assert len(route['leg_geometry_ranges']) == (2 if case == 'via' else 1)
+        for instruction, maneuver in zip(raw['instruction_details'],route['maneuvers']):
+            assert instruction['text'] == maneuver['instruction']
+            assert instruction['interval'] == [maneuver['begin_shape_index'],maneuver['end_shape_index']]
+    script = r"""
+const assert=require('node:assert/strict');
+const AI=require('./static/js/modules/navigation/avoidance-integrity.js');
+const Policy=require('./static/js/modules/navigation/strict-route-policy.js');
+const Selection=require('./static/js/modules/navigation/route-selection.js');
+const preview=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+global.VOYAGR_STRICT_ROUTING=true;
+global.VoyagrStrictRoutePolicy=Policy.create({navigation_authorized:false,scope:preview.scope});
+for(const route of preview.routes){
+ const prepared=AI.preparePlanningCandidate(route);
+ assert.ok(prepared,'real shared planning validator refused the adapter');
+ assert.equal(prepared.geometry_precision,6);
+ assert.equal(AI.geometryBinding(prepared),route.avoidance_assessment.geometry_binding);
+ assert.deepEqual(Selection.mergeNavigationRouteFromSelected({},[route],0).routing_context,route.routing_context);
+ assert.equal(AI.prepareNavigationCandidate(route),null);
+ assert.equal(AI.prepareGuidanceCandidate(route),null);
+ assert.equal(AI.gate(route,{storage:{getItem:()=>null}}),false);
+}
+"""
+    completed = subprocess.run(['node','-e',script], input=json.dumps(preview), text=True,
+                               capture_output=True, timeout=15, cwd=Path(__file__).resolve().parents[1])
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_preview_signs_match_existing_application_without_importing_app():
+    import ast
+    from prototypes.graphhopper11.isolated_app import PREVIEW_SIGN_TYPES
+    source = Path(__file__).resolve().parents[1]/'voyagr/utils/graphhopper.py'
+    tree = ast.parse(source.read_text())
+    assignment = next(node for node in tree.body if isinstance(node,ast.Assign)
+                      and any(isinstance(target,ast.Name) and target.id=='GH_SIGN_TO_VALHALLA' for target in node.targets))
+    assert PREVIEW_SIGN_TYPES == ast.literal_eval(assignment.value)
+
+
+def test_preview_precision_matches_real_browser_binding_for_negative_half_coordinates():
+    from prototypes.graphhopper11.isolated_app import app_preview
+    raw = {'geometry':{'type':'LineString','coordinates':[
+        [-1.2345675,53.0000005],[-0.0000005,-0.0000005],[1.2345675,-53.0000005]]},
+        'directed_edge_keys':[2], 'waypoint_indices':[0,2], 'distance_km':1,'duration_minutes':1,
+        'instruction_details':[{'name':'Synthetic', 'sign':0,'text':'Continue', 'interval':[0,2],
+                                'distance_m':1000,'time_ms':60000}]}
+    result = {**{key:'a'*64 for key in ('graph_version','source_version','policy_version','request_binding')},
+              'candidates':[raw]}
+    preview = app_preview(result)
+    script = r"""
+const assert=require('node:assert/strict');
+const AI=require('./static/js/modules/navigation/avoidance-integrity.js');
+const route=JSON.parse(require('node:fs').readFileSync(0,'utf8')).routes[0];
+assert.equal(AI.geometryBinding({geometry:route.gh11_evidence.geometry}),route.avoidance_assessment.geometry_binding);
+assert.ok(AI.preparePlanningCandidate(route));
+assert.equal(route.navigation_allowed,false);
+"""
+    completed = subprocess.run(['node','-e',script], input=json.dumps(preview), text=True,
+                               capture_output=True, timeout=15, cwd=Path(__file__).resolve().parents[1])
+    assert completed.returncode == 0, completed.stderr
