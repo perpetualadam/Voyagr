@@ -105,6 +105,11 @@ Registered test-plan references can now be restored through current settings/ver
 checks and route revalidation, preserving the preview on refusal. This is not
 production saved-journey integration; see [RESTORE_PLANS.md](RESTORE_PLANS.md).
 
+The real-app audit found a selected-route strict-context propagation gap and
+distinguished advisory explicit Start from fresh-GPS reassessment. The ordered
+connection plan is in [REAL_APP_CONNECTION_AUDIT.md](REAL_APP_CONNECTION_AUDIT.md);
+no application code was changed by that audit.
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting
