@@ -382,3 +382,13 @@ continuous trace checks and zero forbidden-traversal checks. Existing synthetic
 alternative-count and illegal leg-join controls remain separate evidence. All
 UK additions beyond the primary await operator execution. No application code,
 production setting, budgets, exclusions or acceptance gates change.
+
+## Isolated application-boundary contract
+
+See [APPLICATION_INTEGRATION.md](APPLICATION_INTEGRATION.md) for the current
+application trace, confirmed explicit-Start migration blocker, cache freshness
+requirements and the synthetic-only coordinator/tests. This experiment reuses
+an independent instance of the existing bounded cache implementation; it is
+not wired into Flask, the browser or the Java prototype. All synthetic selections
+retain navigation_allowed=false. UK production remains unchanged and migration
+remains NO-GO.

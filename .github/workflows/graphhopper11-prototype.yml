@@ -36,5 +36,5 @@ jobs:
         env:
           GH11_PROTOTYPE_JAR: ${{ runner.temp }}/graphhopper-web-11.1.jar
         run: |
-          python -m pip install pytest
-          python -m pytest -q tests/test_gh11_prototype.py
+          python -m pip install pytest "Flask>=3.1.2,<4"
+          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_integration_boundary.py
