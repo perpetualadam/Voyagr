@@ -1,0 +1,14 @@
+**
+!prototypes/
+!prototypes/graphhopper11/
+!prototypes/graphhopper11/isolated_app.py
+!prototypes/graphhopper11/prepare_app_manifest.py
+!prototypes/graphhopper11/ReadOnlyRouteRegression.java
+!prototypes/graphhopper11/isolated_viewer.html
+!prototypes/graphhopper11/isolated_viewer.js
+!prototypes/graphhopper11/container/
+!prototypes/graphhopper11/container/requirements.lock
+!prototypes/graphhopper11/container/wsgi.py
+!prototypes/graphhopper11/container/healthcheck.py
+!prototypes/graphhopper11/container/wheels/
+!prototypes/graphhopper11/container/wheels/*.whl

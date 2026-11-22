@@ -85,29 +85,19 @@ The factory is `create_app(manifest_dict, password=separate_secret, heap_mb=...)
 
 ## VPS2 service proposal — NOT EXECUTED
 
-A reviewable deployment package still needs an immutable Python/JDK image and
-WSGI entrypoint. Build/test those locally first. Proposed operational boundary:
+The immutable-ID local image and Unix-socket WSGI package are built and
+smoke-tested; see [container/README.md](container/README.md) for the evidence,
+archive checksum and exact rendered commands. The proposed VPS2 service uses no
+container network or TCP ports, read-only inputs/root, UID 10001 and a private
+Unix socket reached through SSH. No Nginx or production credential changes are
+needed. A new private staging tree holds copies of public data and a separate
+secret; the original graph/source remain unchanged.
 
-- New dedicated directory, container and temporary writable work area; no changes
-  to existing GH8, phone-test, Nominatim, tileserver or production app processes.
-- Bind only an unused loopback port (candidate 18511; availability unverified).
-  Use an SSH tunnel initially; no DNS, public port or Nginx authentication edits.
-- Read-only graph, source, pinned JAR, config, registry and application code;
-  unprivileged UID, dropped capabilities, no-new-privileges and no outbound network.
-- Candidate limit: one CPU, 6 GiB total memory/no extra swap, 4 GiB Java heap,
-  bounded PIDs/tmpfs, one WSGI worker and one request at a time and no automatic restart initially.
-  Capacity and compatibility with other VPS2 services remain unmeasured.
-- Generate a separate random secret in a private external file. Do not put it in
-  Git, command arguments, screenshots, pasted output or image layers.
-- Verify startup version hashes, anonymous 401, authenticated case list, validated
-  route and viewer. Repeat preserved refusal cases; verify graph hashes unchanged.
-- Rollback: stop/remove only this new container and tunnel. Keep graph/source and
-  GH8 intact. No production routing flag is involved.
-
-Before requesting approval to start this service: present the exact image digest,
-file mounts, port/resource checks, startup command, secret-file permissions,
-health checks and stop command. None of those infrastructure actions has been
-performed here. Milestone 2 remains in progress until an approved VPS2 app route
-and viewer are observed. Browser strict Start semantics, real user settings,
-source freshness, authenticated association compilation and migration acceptance
-remain later work.
+VPS2 host, architecture, current resources and installed image identity still
+need checks. Proposed 6 GiB memory/4 GiB heap are unbenchmarked; the successful
+local generated-graph test used 1 GiB/512 MiB. Approval is required before VPS2
+staging/service startup. The package, plan and archive are prepared locally only.
+Milestone 2 remains in progress until the approved VPS2 service and viewer checks
+pass. Strict browser Start semantics, arbitrary user settings, live source
+freshness, general association compilation and production migration remain later
+work.

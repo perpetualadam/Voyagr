@@ -405,3 +405,10 @@ graph and return geometry, instructions and checked directed traces to a separat
 viewer. No listener or VPS service is started, and the UK app imports none of it.
 Actual Java/test-client evidence is distinct from synthetic boundary tests and
 from the still-pending approved VPS2/browser acceptance.
+
+## Container package
+
+The separate [container package](container/README.md) is locally smoke-tested with
+the actual WSGI server, Python and Java runtimes. It uses an authenticated Unix
+socket and no container network. The rendered VPS2 plan is proposed only; no
+VPS2 startup or production change has occurred.

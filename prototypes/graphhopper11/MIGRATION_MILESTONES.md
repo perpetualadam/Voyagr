@@ -46,7 +46,7 @@ Outstanding review findings carried into implementation:
    concurrency, deadlines, origin authentication and trusted evidence ownership
    must be specified before introducing a listener.
 
-## 2. Isolated application connection — IN PROGRESS (local bridge implemented)
+## 2. Isolated application connection — IN PROGRESS (local container tested)
 
 Implement locally and review before any VPS2 service is started. No existing
 phone-test instance, reverse proxy or UK application settings may be replaced.
@@ -63,9 +63,16 @@ phone-test instance, reverse proxy or UK application settings may be replaced.
       validator failures explicit refusals with no alternate-engine fallback.
 - [x] Run test-client integration tests against the actual Java process and
       generated graph, with no live routing requests or datasets downloaded.
-- [ ] Present the complete resource/network/authentication/start/stop proposal
+- [x] Present the complete resource/network/authentication/start/stop proposal
       before requesting approval to start the isolated VPS2 service.
 - [ ] After approval, show a validated route from the real isolated app on VPS2.
+
+Local container smoke passed: actual WSGI/Java route, refusal, authentication,
+graph immutability, UID 10001, read-only root and network none. The service and
+its generated data were removed afterward. Exact image identity, offline transfer
+archive checksum, staging guards, startup and rollback commands are recorded in
+[container/README.md](container/README.md). VPS2 readiness and service checks are
+still pending and require separate approval before startup.
 
 Local implementation details, test scope and remaining service proposal:
 [ISOLATED_APP.md](ISOLATED_APP.md). Registered static source snapshots are not a

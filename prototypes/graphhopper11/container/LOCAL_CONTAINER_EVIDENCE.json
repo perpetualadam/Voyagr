@@ -1,0 +1,26 @@
+{
+  "scope": "LOCAL_GENERATED_GRAPH_ONLY",
+  "image_id": "sha256:e36e4b293f7522d96820f19dd60e1d9c3a3752aeb4f7747397f637e6bcfa3773",
+  "architecture": "linux/amd64",
+  "java": "17.0.21.1",
+  "python_base_digest": "sha256:a83ba18aef0f865b1a4a611c2cf460fe446f2795673bbb9fe43be570439e3b39",
+  "anonymous_http": 401,
+  "authenticated_viewer_http": 200,
+  "route_http": 200,
+  "refusal_http": 422,
+  "graph_unchanged": true,
+  "navigation_allowed": false,
+  "network": "none",
+  "uid": 10001,
+  "read_only_root": true,
+  "local_service_stopped_and_removed": true,
+  "temporary_test_data_removed": true,
+  "vps2_service_started": false,
+  "production_changed": false,
+  "local_smoke_resources": {
+    "memory": "1 GiB",
+    "heap": "512 MiB",
+    "cpus": 1
+  },
+  "vps2_resources": "Proposed 6 GiB memory / 4 GiB heap; not benchmarked"
+}

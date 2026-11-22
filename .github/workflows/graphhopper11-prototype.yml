@@ -8,6 +8,7 @@ on:
       - 'tests/test_gh11_prototype.py'
       - 'tests/test_gh11_integration_boundary.py'
       - 'tests/test_gh11_isolated_app.py'
+      - 'tests/test_gh11_container_package.py'
       - 'voyagr/services/routing/private_route_cache.py'
       - '.github/workflows/graphhopper11-prototype.yml'
 
@@ -40,4 +41,27 @@ jobs:
           GH11_PROTOTYPE_JAR: ${{ runner.temp }}/graphhopper-web-11.1.jar
         run: |
           python -m pip install pytest "Flask>=3.1.2,<4"
-          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py
+          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py tests/test_gh11_container_package.py
+
+  container-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Download hash-locked wheels with TLS verification
+        run: python -m prototypes.graphhopper11.container.prepare_wheels
+      - name: Build network-disabled installation layers
+        run: docker build --platform linux/amd64 --network none -f prototypes/graphhopper11/container/Dockerfile -t voyagr-gh11-package-ci .
+      - name: Fetch pinned patched test runtime only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 --max-time 120 \
+            --output "$RUNNER_TEMP/graphhopper-web-11.1.jar" \
+            https://github.com/graphhopper/graphhopper/releases/download/11.1/graphhopper-web-11.1.jar
+          echo "8462f758d9ea49edaded557cec5c687a0a24f004ec371cd4daaeb0534824ea33  $RUNNER_TEMP/graphhopper-web-11.1.jar" | sha256sum --check
+      - name: Test generated graph through Unix-socket WSGI service and remove it
+        run: python -m prototypes.graphhopper11.container.smoke --image voyagr-gh11-package-ci --jar "$RUNNER_TEMP/graphhopper-web-11.1.jar" --workspace "$RUNNER_TEMP"
