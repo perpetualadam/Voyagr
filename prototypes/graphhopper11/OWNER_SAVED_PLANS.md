@@ -69,3 +69,23 @@ Still pending: integration with the real UK owner/session coordinator, actual
 saved-route formats and accepted GPS/current-journey ownership, plus general
 hazard/legal/stop/reroute evidence and physical-phone acceptance. Milestone 3 remains
 in progress; production migration remains NO-GO.
+
+## Explicit owner-coordinator binding
+
+`VoyagrGH11SavedSession.bindOwnerCoordinator(source, eventTarget)` now accepts the
+actual device coordinator's synchronous `capture()` / `current(token)` contract.
+A future reviewed host integration may pass `VoyagrLocalData` and the same window.
+Binding is explicit and one-time; the standalone preview does not start or import
+that coordinator. It never calls `ready()`, `db()`, auth endpoints or collections.
+The `voyagr-local-owner-change` event triggers a fresh capture; event payloads and
+raw `voyagr-auth-changed` user IDs are not identity evidence. Every guarded operation
+also rechecks the source, catching missed notifications. Unknown/throwing or
+unconfirmed identity blocks saved reads/writes without falling back to guest.
+A changed source epoch invalidates work even when the owner name is unchanged.
+Once bound, manual scope overrides are refused. Closing unsubscribes.
+
+Unit tests and the real saved-plan browser scenario exercise a synthetic coordinator
+with this production interface, including an owner change during actual restoration.
+This proves the adapter boundary, not live Supabase authentication or UK host wiring.
+The UK profile coordinator still owns account-to-device-profile transitions. No
+production coordinator is loaded by the preview and no live account was contacted.

@@ -32,25 +32,32 @@ async function main(){
   const original=await calculate('detour');await open('saveCurrentPlan');await id('saveCurrentPlan').click();
   await page.waitForFunction(()=>document.getElementById('savedPlanStatus').textContent.includes('Saved this validated'));
   assert.equal(await id('savedPlans').locator('option').count(),1);
-  phase='reload and fresh restoration';await page.reload();await ready();await open('loadSavedPlans');await load();
+  phase='reload and fresh restoration';await page.reload();await ready();
+  await page.evaluate(()=>{
+   let identity={owner:'guest',epoch:0};
+   const source={capture:()=>({...identity}),current:token=>token.owner===identity.owner&&token.epoch===identity.epoch,ready:()=>{throw Error('Migration forbidden');},db:()=>{throw Error('Production collections forbidden');}};
+   window.changeSyntheticOwner=owner=>{identity={owner,epoch:identity.epoch+1};window.dispatchEvent(new Event('voyagr-local-owner-change'));};
+   VoyagrGH11SavedSession.bindOwnerCoordinator(source,window);
+  });
+  await open('loadSavedPlans');await load();
   await id('restoreSavedPlan').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('route(s) passed'));await ready();
   assert.deepEqual(JSON.parse(await id('planReference').inputValue()),original);
   const stored=await page.evaluate(async()=>{
    const preview=VoyagrLocalStore.create(indexedDB,{name:VoyagrGH11SavedPlans.DB_NAME});const rows=await preview.read('guest','routes');preview.close();return rows;
   });
   assert.deepEqual(Object.keys(stored[0]).sort(),['id','reference','saved_at','schema']);assert.deepEqual(stored[0].reference,original);
-  phase='independent owner';await page.evaluate(()=>VoyagrGH11SavedSession.switchOwner('sb:synthetic_b'));
+  phase='independent owner';await page.evaluate(()=>changeSyntheticOwner('sb:synthetic_b'));
   assert.equal(await id('line').getAttribute('points'),'');await load();assert.equal(await id('savedPlans').locator('option').count(),0);
   assert.equal(await page.evaluate(async id=>{try{await VoyagrGH11SavedSession.get(id);return false;}catch(_){return true;}},original.request_binding),true);
   const other=await calculate('via');await id('saveCurrentPlan').click();
   await page.waitForFunction(()=>document.getElementById('savedPlanStatus').textContent.includes('Saved this validated'));
-  phase='return to original owner';await page.evaluate(()=>VoyagrGH11SavedSession.switchOwner('guest'));await load();
+  phase='return to original owner';await page.evaluate(()=>changeSyntheticOwner('guest'));await load();
   assert.equal(await id('savedPlans').locator('option').count(),1);
   assert.equal(await page.evaluate(async id=>{try{await VoyagrGH11SavedSession.get(id);return false;}catch(_){return true;}},other.request_binding),true);
   phase='owner change during restore';assert.equal((await context.request.post(target.origin+'/__test/reset-saved-restore')).status(),200);
   await id('restoreSavedPlan').click();
   await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).entered,{timeout:5000}).toBe(true);
-  await page.evaluate(()=>VoyagrGH11SavedSession.switchOwner('sb:synthetic_b'));
+  await page.evaluate(()=>changeSyntheticOwner('sb:synthetic_b'));
   await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).completed,{timeout:15000}).toBe(true);
   await page.evaluate(()=>new Promise(requestAnimationFrame));
   assert.equal(await id('line').getAttribute('points'),'');assert.equal(await id('planReference').inputValue(),'');assert.equal(await id('strictStart').isDisabled(),true);

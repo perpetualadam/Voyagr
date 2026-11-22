@@ -222,3 +222,12 @@ routes afresh. Legacy records and unknown isolated entries are retained, not mig
 or silently deleted. A fifth real-browser test covers persistence/reload, owner
 isolation and owner change during restore. This is not production account/owner,
 private journey or accepted-GPS integration. See OWNER_SAVED_PLANS.md.
+
+## Subsequent Milestone 3 checkpoint: owner-coordinator identity boundary
+
+An explicit binding now follows the device coordinator's captured owner/epoch and
+change notifications without invoking migration, auth or production collections.
+Unknown identity blocks saved-plan access; missed events are caught by operation
+checks. The real browser scenario uses the same contract with synthetic identities.
+Live UK host/account wiring and accepted GPS/current-journey integration remain
+pending. Milestone 3 is in progress; this is not production account authentication.

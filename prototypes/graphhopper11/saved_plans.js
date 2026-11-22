@@ -23,14 +23,34 @@ function create(options={}){
     const implementation=options.storeModule||root.VoyagrLocalStore;
     if(!implementation)throw Error('Device store unavailable.');
     const store=implementation.create(options.indexedDB||root.indexedDB,{name:DB_NAME});
-    let owner='guest',epoch=0,closed=false;
-    const capture=()=>({owner,epoch}),current=token=>!closed&&!!token&&token.owner===owner&&token.epoch===epoch;
+    let owner='guest',epoch=0,closed=false,binding=null,available=true;
+    const capture=()=>({owner,epoch});
+    function refresh(){
+        if(!binding||closed)return;
+        let next=null;
+        try{
+            const value=binding.source.capture();
+            if(value&&implementation.validOwner(value.owner)&&value.owner!=='legacy:unassigned'&&Number.isSafeInteger(value.epoch)&&value.epoch>=0&&binding.source.current(value)===true)next={owner:value.owner,epoch:value.epoch};
+        }catch(_){/* Unknown identity cannot read or write saved records. */}
+        if(next&&available&&binding.token&&next.owner===binding.token.owner&&next.epoch===binding.token.epoch)return;
+        if(!next&&!available)return;
+        binding.token=next;available=!!next;if(next)owner=next.owner;
+        epoch++;options.onOwnerChange?.(capture());
+    }
+    const current=token=>{refresh();return !closed&&available&&!!token&&token.owner===owner&&token.epoch===epoch;};
     function check(token){if(!current(token))throw Error('Local owner changed.');}
     async function rows(token){check(token);const value=await store.read(token.owner,'routes');check(token);if(value!==null&&!Array.isArray(value))throw Error('Existing saved data retained.');return value||[];}
     return {
         capture,current,
+        bindOwnerCoordinator(source,eventTarget=root){
+            if(closed||binding||!source||typeof source.capture!=='function'||typeof source.current!=='function'||typeof eventTarget.addEventListener!=='function'||typeof eventTarget.removeEventListener!=='function')throw Error('Owner coordinator unavailable.');
+            // Read identity only: never ready(), db(), migration, auth or collections.
+            binding={source,token:null,eventTarget};
+            eventTarget.addEventListener('voyagr-local-owner-change',refresh);
+            refresh();return capture();
+        },
         switchOwner(next){
-            if(closed||!implementation.validOwner(next)||next==='legacy:unassigned')throw Error('Invalid local owner.');
+            if(closed||binding||!implementation.validOwner(next)||next==='legacy:unassigned')throw Error('Invalid local owner.');
             owner=next;epoch++;options.onOwnerChange?.(capture());return capture();
         },
         async list(token=capture()){
@@ -51,7 +71,7 @@ function create(options={}){
             const found=(await rows(token)).find(item=>record(item)&&item.id===id);
             if(!found)throw Error('Saved plan unavailable for this owner.');return reference(found.reference);
         },
-        close(){closed=true;epoch++;store.close();}
+        close(){if(binding)binding.eventTarget.removeEventListener('voyagr-local-owner-change',refresh);closed=true;epoch++;store.close();}
     };
 }
 const api={DB_NAME,create};root.VoyagrGH11SavedPlans=api;if(typeof module==='object'&&module.exports)module.exports=api;

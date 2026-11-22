@@ -51,3 +51,46 @@ test('capacity refuses a new entry without trimming existing plans',async()=>{
  await expect(session.save({...reference(),request_binding:'f'.repeat(64)})).rejects.toThrow();
  expect(await session.list()).toHaveLength(20);
 });
+
+describe('explicit device-owner coordinator boundary',()=>{
+ let identity,target,source;
+ beforeEach(()=>{
+  identity={owner:'guest',epoch:0};target=new EventTarget();
+  source={capture:jest.fn(()=>({...identity})),current:jest.fn(token=>token.owner===identity.owner&&token.epoch===identity.epoch),ready:jest.fn(()=>{throw Error('migration forbidden');}),db:jest.fn(()=>{throw Error('collections forbidden');})};
+ });
+ const announce=()=>target.dispatchEvent(new Event('voyagr-local-owner-change'));
+ test('binds current identity, follows owner epochs and never starts migration or collections',async()=>{
+  await session.save(reference());session.bindOwnerCoordinator(source,target);
+  const guest=session.capture();expect(await session.list()).toHaveLength(1);
+  identity={owner:'sb:test_account',epoch:1};announce();expect(session.current(guest)).toBe(false);
+  expect(await session.list()).toEqual([]);await session.save(reference('b'));
+  expect(()=>session.switchOwner('guest')).toThrow();
+  identity={owner:'guest',epoch:2};announce();expect(session.current(guest)).toBe(false);
+  expect(await session.get('a'.repeat(64))).toEqual(reference());
+  expect(source.ready).not.toHaveBeenCalled();expect(source.db).not.toHaveBeenCalled();
+ });
+ test('ignores raw authentication-event payloads and rechecks identity without an event',async()=>{
+  session.bindOwnerCoordinator(source,target);const old=session.capture();
+  target.dispatchEvent(new CustomEvent('voyagr-auth-changed',{detail:{userId:'forged'}}));
+  expect(session.current(old)).toBe(true);
+  identity={owner:'sb:changed',epoch:1};await expect(session.save(reference(),old)).rejects.toThrow();
+  expect(session.capture().owner).toBe('sb:changed');expect(await session.list()).toEqual([]);
+ });
+ test.each([null,{owner:'legacy:unassigned',epoch:1},{owner:'sb:bad',epoch:-1},{owner:'invalid',epoch:1}])('unknown identity blocks reads and writes without guest fallback: %j',async value=>{
+  session.bindOwnerCoordinator(source,target);const old=session.capture();
+  source.capture.mockReturnValue(value);announce();expect(session.current(old)).toBe(false);
+  await expect(session.list()).rejects.toThrow();await expect(session.save(reference())).rejects.toThrow();
+  source.capture.mockImplementation(()=>({...identity}));announce();expect(await session.list()).toEqual([]);
+ });
+ test('throwing or unconfirmed identity fails closed and close unsubscribes',async()=>{
+  session.bindOwnerCoordinator(source,target);source.current.mockReturnValue('true');announce();
+  await expect(session.list()).rejects.toThrow();
+  source.capture.mockImplementation(()=>{throw Error('unavailable');});announce();await expect(session.list()).rejects.toThrow();
+  session.close();source.capture.mockClear();announce();expect(source.capture).not.toHaveBeenCalled();
+ });
+ test('owner change while save is pending cannot redirect the write',async()=>{
+  session.bindOwnerCoordinator(source,target);const pending=session.save(reference());
+  identity={owner:'sb:new',epoch:1};announce();await expect(pending).rejects.toThrow();
+  expect(await session.list()).toEqual([]);identity={owner:'guest',epoch:2};announce();expect(await session.list()).toEqual([]);
+ });
+});
