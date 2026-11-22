@@ -118,3 +118,21 @@ Successful results are not a GDPR compliance certification or deployment approva
 The harness does not deploy runtime changes or run production migrations. Its
 browser follow-up includes the two coordinator fixes documented in the browser
 report; no production settings need reversing when stopping the harness.
+
+## Immutable-asset multi-tab probe
+
+For script-chain diagnosis without accounts or routing services, use the temporary
+loopback-only server and fresh Chromium context:
+
+```bash
+CHROMIUM_BINARY=/path/to/chromium PYTHONPATH=. .venv/bin/python scripts/privacy-http-lab/bootstrap-probe.py --tabs 20
+```
+
+It needs Flask/Jinja and Node's Playwright package. It renders the real template,
+serves real content-addressed assets and the real service worker, and stubs local
+API responses. External browser requests are blocked; no geolocation permission,
+existing profile, private database or credentials are used. Each tab must complete
+the entire release chain. `--block-worker` is a diagnostic comparison only and is
+never an acceptance substitute. Process groups, server and temporary assets are
+cleaned up on completion/timeout. This does not establish full-app authentication,
+GPS, navigation or physical-phone behavior.

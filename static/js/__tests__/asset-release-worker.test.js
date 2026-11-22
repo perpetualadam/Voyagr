@@ -3,8 +3,8 @@ const fs=require('fs'),vm=require('vm'),nodeCrypto=require('crypto');
 const path=require('path');
 const origin='https://app.test';
 class Reply{
- constructor(body,options={}){this.bytes=Buffer.from(body);this.status=options.status||200;this.ok=this.status>=200&&this.status<300;this.type='basic';this.headers={get:()=>null};}
- clone(){return new Reply(this.bytes,{status:this.status});}async text(){return this.bytes.toString();}async arrayBuffer(){return this.bytes.buffer.slice(this.bytes.byteOffset,this.bytes.byteOffset+this.bytes.length);}
+ constructor(body,options={}){this.bytes=Buffer.from(body);this.status=options.status||200;this.ok=this.status>=200&&this.status<300;this.type='basic';this.headers=new Map();if(options.headers?.forEach)options.headers.forEach((value,name)=>this.headers.set(name.toLowerCase(),value));else for(const [name,value] of Object.entries(options.headers||{}))this.headers.set(name.toLowerCase(),value);}
+ clone(){return new Reply(this.bytes,{status:this.status,headers:this.headers});}async text(){return this.bytes.toString();}async arrayBuffer(){return this.bytes.buffer.slice(this.bytes.byteOffset,this.bytes.byteOffset+this.bytes.length);}
 }
 const key=x=>new URL(typeof x==='string'?x:x.url,origin).href;
 function bundle(release='1'.repeat(64)){
@@ -104,4 +104,23 @@ test.each(['v51','v52'])('map data cached by %s survives a verified release upgr
 test('empty worker messages cannot throw or force activation/reset',()=>{
  const w=worker();expect(()=>w.message(null)).not.toThrow();expect(()=>w.message(undefined)).not.toThrow();
  expect(w.boundaries.skipWaiting).not.toHaveBeenCalled();expect(w.boundaries.claim).not.toHaveBeenCalled();expect(w.deleted).toEqual([]);
+});
+
+test('verified cached bytes remain readable after the cache response stream is cancelled',async()=>{
+ const w=worker(),b=bundle(),asset=b.assets[0],body=b.bodies.get(key(asset.url));
+ const cacheName='voyagr-release-v52-'+'1'.repeat(64);
+ await w.cache(cacheName).put(asset.url,new Reply(body,{headers:{'Content-Type':'application/javascript','Content-Encoding':'gzip','Content-Length':'20','Cache-Control':'public,max-age=31536000,immutable','X-Content-Type-Options':'nosniff'}}));
+ let cancelled=false;
+ const stored=w.stores.get(cacheName).get(key(asset.url));
+ jest.spyOn(stored,'clone').mockImplementation(()=>{
+  const response=new Reply(body,{headers:stored.headers});
+  response.text=async()=>{if(cancelled)throw Error('Cache stream cancelled');return body;};
+  return response;
+ });
+ w.setFetch(async()=>{throw Error('Offline: verified cache must remain usable');});
+ const response=await w.fetch(asset.url);cancelled=true;
+ expect(await response.text()).toBe(body);
+ expect(response.headers.get('content-type')).toBe('application/javascript');expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+ expect(response.headers.get('cache-control')).toContain('immutable');expect(response.headers.has('content-encoding')).toBe(false);expect(response.headers.has('content-length')).toBe(false);
+ expect(w.deleted).toEqual([]);expect(w.boundaries.skipWaiting).not.toHaveBeenCalled();expect(w.boundaries.claim).not.toHaveBeenCalled();
 });
