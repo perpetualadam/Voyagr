@@ -274,9 +274,26 @@ and excluded-route evidence **before** applying the same anchor refusal:
   exclusion weighting. Its EDGE/PILLAR/TOWER position and pre-QueryGraph node
   are diagnostic only, not an attestation of Router's actual QueryGraph choice.
 
-Original-edge endpoints need not be the endpoints of a clipped virtual route
-edge. This is a hypothesis for Red Lane, not a confirmed explanation or a reason
-to weaken acceptance. Coincident or genuinely displaced graph nodes are also
-possible. Diagnostic failures are reported separately and cannot approve a route.
-The synthetic test checks metadata generation and unchanged graph hashes. Red
-Lane's actual topology remains unverified until the VPS2 report is inspected.
+The subsequent operator report identifies coincident graph nodes 2350752 and
+2350753 at Red Lane, connected by a 0.001 m edge. Unrestricted routing uses the
+expected node; exclusion routing uses its neighbour in both directions. Endpoint
+coordinate errors are zero, but node identities differ. The existing refusal is
+preserved; coordinate equality alone cannot establish equivalent topology.
+
+`diagnose_exact_nodes` now additionally runs bounded **edge-based Dijkstra on the
+base graph** between the original association-derived node IDs. It bypasses
+coordinate snapping, uses the same request-scoped exclusion weighting and car
+turn costs, and independently checks all returned edges for continuity, access,
+forbidden keys, stored turn restrictions and finite turn weights. It verifies
+exact start/end IDs and accumulated distance. This is one path only, with no
+initial/final heading constraints, instructions, alternatives or browser wiring.
+Its status is separate from coordinate-route acceptance and cannot override a
+failed route case. A budget exhaustion or missing path never proves route absence.
+The same one-million-node maximum and 20-second timeout apply to this additional
+query; the container resource limits remain unchanged.
+
+Local real-engine synthetic controls verify a detour avoiding the selected keys,
+refusal when all corridors are closed, diagnostic fields, and unchanged graph
+hashes. Existing synthetic turn tests remain separate evidence; they do not prove
+general UK turn-restriction correctness. The exact-node UK result awaits VPS2
+execution. Application integration and production migration remain NO-GO.

@@ -153,6 +153,53 @@ public class ReadOnlyRouteRegression {
         return result;
     }
 
+    // Diagnostic oracle only: bypass coordinate snapping, never substitute for route acceptance.
+    static Map<String,Object> exactNodeDiagnostic(GraphHopper hopper,GHRequest request,
+                                                   int from,int to,int budget,Set<Integer> blocked) {
+        Map<String,Object> result=new LinkedHashMap<>();
+        result.put("status","UNVERIFIED_OR_FAILED");
+        result.put("route_absence_proven",false);
+        result.put("scope","base graph edge-based Dijkstra; no coordinate snapping or initial/final heading constraint");
+        result.put("from_node",from);result.put("to_node",to);
+        long start=System.nanoTime();
+        try {
+            require(from>=0 && to>=0 && from!=to,"distinct exact anchors required");
+            var weighting=hopper.createWeighting(hopper.getProfile("car"),request.getHints());
+            var algorithm=new com.graphhopper.routing.Dijkstra(hopper.getBaseGraph(),weighting,
+                com.graphhopper.routing.util.TraversalMode.EDGE_BASED);
+            algorithm.setMaxVisitedNodes(budget);algorithm.setTimeoutMillis(20000);
+            var path=algorithm.calcPath(from,to);
+            result.put("visited_nodes",algorithm.getVisitedNodes());
+            require(path.isFound(),"no path returned within diagnostic budget; route absence unproven");
+            require(path.getFromNode()==from && path.getEndNode()==to,"exact-node endpoints differ");
+            var access=hopper.getEncodingManager().getBooleanEncodedValue("car_access");
+            var restriction=hopper.getEncodingManager().getTurnBooleanEncodedValue(TurnRestriction.key("car"));
+            require(restriction!=null,"turn evidence missing");
+            var keys=new ArrayList<Integer>();
+            int cursor=from,previous=-1;
+            double distance=0;
+            for(var edge:path.calcEdges()) {
+                int key=edge.getEdgeKey();
+                require(edge.getBaseNode()==cursor,"disconnected exact-node path");
+                require(!blocked.contains(key),"mandatory directed exclusion violated");
+                require(edge.get(access) && Double.isFinite(weighting.calcEdgeWeight(edge,false)),"inaccessible exact-node edge");
+                if(previous>=0) {
+                    require(!hopper.getBaseGraph().getTurnCostStorage().get(restriction,previous/2,cursor,key/2),
+                        "imported turn restriction violated");
+                    require(Double.isFinite(weighting.calcTurnWeight(previous/2,cursor,key/2)),"non-finite turn weight");
+                }
+                keys.add(key);distance+=edge.getDistance();cursor=edge.getAdjNode();previous=key;
+            }
+            require(!keys.isEmpty() && cursor==to && Math.abs(distance-path.getDistance())<0.01,
+                "incomplete exact-node trace");
+            result.put("status","PASS_EXACT_NODE_DIAGNOSTIC");
+            result.put("distance_m",path.getDistance());result.put("duration_ms",path.getTime());
+            result.put("directed_edge_keys",keys);result.put("forbidden_traversals",0);
+        } catch(Exception error) { result.put("reason",error.getClass().getSimpleName()+": "+error.getMessage()); }
+        finally { result.put("query_ms",(System.nanoTime()-start)/1e6); }
+        return result;
+    }
+
     static Map<String,Object> runCase(GraphHopper hopper,JsonNode test,Map<String,List<Integer>> associations) {
         String name=test.path("id").asText();
         Map<String,Object> result=new LinkedHashMap<>();
@@ -244,6 +291,10 @@ public class ReadOnlyRouteRegression {
                 result.put("baseline_exercises_exclusion",true);
             }
             request.putHint(BLOCKS,Set.copyOf(blocked));
+            if(test.path("diagnose_exact_nodes").asBoolean(false)) {
+                require(anchorStart>=0 && !noMotorways && !alternatives,"exact-node diagnostic requires plain anchored case");
+                result.put("exact_node_diagnostic",exactNodeDiagnostic(hopper,request,anchorStart,anchorEnd,nodeBudget,blocked));
+            }
             long start=System.nanoTime();
             GHResponse response;
             try { response=hopper.route(request); }

@@ -182,12 +182,15 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
       <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.02"/>
       <node id="3" lat="0" lon="0.01"/><node id="4" lat="0.003" lon="0.01"/>
       <node id="5" lat="-0.003" lon="0.01"/>
+      <node id="6" lat="0.004" lon="0.01"/><node id="7" lat="-0.004" lon="0.01"/>
       <way id="10"><nd ref="1"/><nd ref="3"/><nd ref="2"/>
         <tag k="highway" v="motorway"/><tag k="oneway" v="no"/></way>
       <way id="11"><nd ref="1"/><nd ref="4"/><nd ref="2"/>
         <tag k="highway" v="residential"/></way>
       <way id="12"><nd ref="1"/><nd ref="5"/><nd ref="2"/>
         <tag k="highway" v="residential"/></way>
+      <way id="13"><nd ref="4"/><nd ref="6"/><tag k="highway" v="residential"/></way>
+      <way id="14"><nd ref="5"/><nd ref="7"/><tag k="highway" v="residential"/></way>
     </osm>''')
     graph = tmp_path / "graph"
     config = tmp_path / "config.yml"
@@ -273,7 +276,7 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     trials = [
         {"id": "forward_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "alternatives": True},
         {"id": "reverse_control", "points": [[0, .02], [0, 0]], "blocked_associations": ["forward"], "required_association": "reverse", "expected_osm_way_ids": [10]},
-        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True, "diagnose_anchors": True},
+        {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True, "diagnose_anchors": True, "diagnose_exact_nodes": True},
         {"id": "virtual_direction", "points": [[0, .002], [0, .018]], "blocked_associations": ["forward"]},
     ]
     for case in trials:
@@ -295,6 +298,12 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert exclusion_report["cases"][0]["baseline_exercises_exclusion"] is True
     assert exclusion_report["cases"][1]["candidates"][0]["directed_edge_keys"] == [reverse_key]
     assert set(exclusion_report["cases"][2]["blocked_edge_keys"]) == {forward_key, reverse_key}
+    oracle = exclusion_report["cases"][2]["exact_node_diagnostic"]
+    assert oracle["status"] == "PASS_EXACT_NODE_DIAGNOSTIC"
+    assert oracle["from_node"] != oracle["to_node"]
+    assert oracle["distance_m"] > 0 and oracle["forbidden_traversals"] == 0
+    assert oracle["route_absence_proven"] is False
+    assert set(oracle["directed_edge_keys"]).isdisjoint({forward_key, reverse_key})
     for label in ("baseline_anchor_diagnostics", "anchor_diagnostics"):
         diagnostic = exclusion_report["cases"][2][label]
         assert "diagnostic_error" not in diagnostic
@@ -305,6 +314,24 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
         assert len(diagnostic["expected_start"]["neighbors"]) <= 12
         assert all("osm_way_id" in n for n in diagnostic["expected_start"]["neighbors"])
     assert before == {p.name: runner.digest(p) for p in graph.iterdir() if p.is_file()}
+    # Closing every synthetic corridor must never become a successful oracle result.
+    closed_associations = associations + [
+        {"id": "upper", "points": [[0, 0], [.003, .01], [0, .02]], "expected_osm_way_ids": [11], "max_snap_distance_m": 1},
+        {"id": "lower", "points": [[0, 0], [-.003, .01], [0, .02]], "expected_osm_way_ids": [12], "max_snap_distance_m": 1},
+    ]
+    cases.write_text(json.dumps({"associations": closed_associations, "cases": [{
+        "id": "all_closed_exact", "anchors_from_association": "forward",
+        "blocked_associations": ["forward", "upper", "lower"],
+        "block_both_directions": True, "diagnose_exact_nodes": True,
+    }]}))
+    closed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=90)
+    assert closed.returncode != 0
+    closed_report = json.loads(next(line.split(" ", 1)[1] for line in closed.stdout.splitlines()
+                                   if line.startswith("VOYAGR_GH11_REGRESSION ")))
+    oracle = closed_report["cases"][0]["exact_node_diagnostic"]
+    assert oracle["status"] == "UNVERIFIED_OR_FAILED"
+    assert oracle["route_absence_proven"] is False
+    assert "no path returned" in oracle["reason"]
     # Reject unknown evidence and endpoint re-snapping; neither proves no route exists.
     cases.write_text(json.dumps({"associations": associations, "cases": [
         {"id": "unknown", "points": [[0, 0], [0, .02]], "blocked_associations": ["missing"]},
