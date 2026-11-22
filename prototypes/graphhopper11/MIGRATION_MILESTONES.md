@@ -231,3 +231,11 @@ Unknown identity blocks saved-plan access; missed events are caught by operation
 checks. The real browser scenario uses the same contract with synthetic identities.
 Live UK host/account wiring and accepted GPS/current-journey integration remain
 pending. Milestone 3 is in progress; this is not production account authentication.
+
+## Subsequent Milestone 3 checkpoint: ephemeral journey evidence
+
+A packaged, explicitly supplied owner/journey/GPS context guard now reuses the real
+GPS validator and invalidates delayed preview work on evidence changes. Synthetic
+unit/browser checks cover this boundary without collecting a location or enabling
+navigation. The host journey snapshot API, accepted GPS runtime wiring and UI commit
+integration remain pending. See JOURNEY_EVIDENCE.md; Milestone 3 remains in progress.

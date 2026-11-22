@@ -67,6 +67,17 @@ async function main(){
    return {rows,marker:localStorage.getItem('gh11-saved-marker'),own:await VoyagrGH11SavedSession.list()};
   });
   assert.deepEqual(retained.rows,[{id:'legacy-sentinel',geometry:'untouched'}]);assert.equal(retained.marker,'synthetic-retained');assert.equal(retained.own.length,1);
+  phase='ephemeral journey boundary';const journeyGuard=await page.evaluate(async()=>{
+   let generation=1,active=true,simulating=false;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()};
+   const journey={capture:()=>({route_id:'synthetic_public',generation,active,simulating}),current:value=>value.generation===generation&&value.active===active&&value.simulating===simulating};
+   const guard=VoyagrGH11JourneyEvidence.create({owner:VoyagrGH11SavedSession,journey,gps:{getAcceptedOriginFix:()=>fix}});
+   const token=guard.capture();const opaque=Object.keys(token).length===0&&guard.current(token);
+   let finish;const pending=guard.run(()=>new Promise(resolve=>{finish=resolve;}));generation++;finish('late');
+   let refused=false;try{await pending;}catch(_){refused=true;}
+   simulating=true;let simulationRefused=false;try{guard.capture();}catch(_){simulationRefused=true;}
+   guard.close();return {opaque,refused,simulationRefused,closed:!guard.current(token)};
+  });
+  assert.deepEqual(journeyGuard,{opaque:true,refused:true,simulationRefused:true,closed:true});
   assert.deepEqual(errors,[]);assert.equal(external,0);
   console.log(JSON.stringify({status:'PASS_OWNER_SAVED_PLANS',external_requests:0,navigation_allowed:false,synthetic_storage_retained:true,phone_acceptance:'UNVERIFIED'}));
  }finally{if(context)await context.close();if(browser)await browser.close();}

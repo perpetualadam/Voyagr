@@ -34,6 +34,8 @@ RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
 MARKER = b"VOYAGR_GH11_REGRESSION "
 WEB_ROOT = Path(__file__).resolve().parents[2] / "static/js"
 BROWSER_ASSETS = {
+    "speed-gps.js": WEB_ROOT / "modules/navigation/speed-gps.js",
+    "gh11-journey-evidence.js": Path(__file__).with_name("journey_evidence.js"),
     "local-store.js": WEB_ROOT / "modules/privacy/local-store.js",
     "gh11-saved-plans.js": Path(__file__).with_name("saved_plans.js"),
     "polyline-codec.js": WEB_ROOT / "modules/navigation/polyline-codec.js",

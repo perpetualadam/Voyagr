@@ -39,3 +39,6 @@
 !prototypes/graphhopper11/saved_plans.js
 !static/js/modules/privacy/
 !static/js/modules/privacy/local-store.js
+
+!prototypes/graphhopper11/journey_evidence.js
+!static/js/modules/navigation/speed-gps.js
