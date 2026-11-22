@@ -566,3 +566,18 @@ def test_profile_invalid_policy_and_compiler_identity_fail_closed(app, manifest,
     changed = copy.deepcopy(manifest);changed['compiler_sha256'] = '0'*64
     with pytest.raises(Refused,match='runtime_changed'):
         create_app(changed,password=PASSWORD)
+
+
+def test_policy_preflight_rejects_route_only_fields_but_preserves_mandatory_refusal(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    def forbidden(*_):
+        pytest.fail('Neither invalid preflight nor unproven mandatory policy may route')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    route_body = dict(body(manifest), selected_settings=bridge.settings('detour'), policy_request=policy_request())
+    client = app.test_client()
+    assert client.post('/api/prototype/policy',json=route_body,headers=AUTH).status_code == 400
+    preflight_body = {key:value for key,value in route_body.items() if key != 'selected_settings'}
+    for endpoint,payload in (('policy',preflight_body),('route',route_body)):
+        response = client.post('/api/prototype/'+endpoint,json=payload,headers=AUTH)
+        assert response.status_code == 422
+        assert response.get_json()['policy_report']['unresolved_mandatory'][0]['category'] == 'railway_crossings'

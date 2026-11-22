@@ -158,7 +158,7 @@ changed={**request,'selected_settings':{**settings['detour'],'mandatory_associat
 assert call('POST','/api/prototype/route',changed)[0]==400
 # Canonical policies are preserved, not silently converted to weaker rules.
 mandatory={**request,'policy_request':{'profile':'car','requirements':[{'category':'railway_crossings','enabled':True,'mode':'mandatory'}]}}
-status,raw=call('POST','/api/prototype/policy',mandatory); assert status==422
+status,raw=call('POST','/api/prototype/policy',{k:v for k,v in mandatory.items() if k!='selected_settings'}); assert status==422
 assert json.loads(raw)['policy_report']['unresolved_mandatory'][0]['category']=='railway_crossings'
 status,raw=call('POST','/api/prototype/route',mandatory); assert status==422
 assert 'candidates' not in json.loads(raw)
