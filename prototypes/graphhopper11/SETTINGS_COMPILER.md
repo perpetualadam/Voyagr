@@ -136,3 +136,7 @@ isolated VPS2 update. Local container acceptance is not claimed for this revisio
 check the exact-head CI container/Java 17 results separately. Physical-phone
 acceptance, full UI request normalization, general hazard/turn/endpoint evidence,
 private-cache integration and live navigation remain pending.
+
+The next offline layer now adapts real-app legacy settings without enabling routing.
+See [APP_SETTINGS_ADAPTER.md](APP_SETTINGS_ADAPTER.md) for the supported contract,
+shared-normalizer extraction, supplemental gaps and remaining service integration.

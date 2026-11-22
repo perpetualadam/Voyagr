@@ -87,7 +87,7 @@ def test_duplicate_categories_refuse_and_order_only_changes_are_equivalent():
 
 
 def test_supported_category_vocabulary_matches_real_application_without_importing_it():
-    source = Path(__file__).resolve().parents[1]/'voyagr/services/routing/integrity.py'
+    source = Path(__file__).resolve().parents[1]/'voyagr/avoidance_contract.py'
     tree = ast.parse(source.read_text())
     assignment = next(node for node in tree.body if isinstance(node,ast.Assign)
                       and any(isinstance(target,ast.Name) and target.id=='CATEGORIES' for target in node.targets))
