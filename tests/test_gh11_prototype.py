@@ -278,6 +278,8 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
         {"id": "reverse_control", "points": [[0, .02], [0, 0]], "blocked_associations": ["forward"], "required_association": "reverse", "expected_osm_way_ids": [10]},
         {"id": "both_excluded", "anchors_from_association": "forward", "blocked_associations": ["forward"], "block_both_directions": True, "diagnose_anchors": True, "diagnose_exact_nodes": True, "pin_exact_anchors": True},
         {"id": "virtual_direction", "points": [[0, .002], [0, .018]], "blocked_associations": ["forward"]},
+        {"id": "blocked_continuous_via", "points": [[0, 0], [.003, .01], [0, .02]], "blocked_associations": ["forward"], "block_both_directions": True},
+        {"id": "provider_reroute_departure", "points": [[.003, .01], [0, .02]], "blocked_associations": ["forward"], "expected_osm_way_ids": [11]},
     ]
     for case in trials:
         case.update(max_snap_distance_m=1, max_visited_nodes=1000000)
@@ -295,6 +297,8 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
         for candidate in case["candidates"]:
             assert set(candidate["directed_edge_keys"]).isdisjoint(case["blocked_edge_keys"])
             assert candidate["forbidden_traversals"] == 0
+    assert exclusion_report["cases"][4]["requested_points"] == 3
+    assert exclusion_report["cases"][5]["requested_points"] == 2
     assert exclusion_report["cases"][0]["baseline_exercises_exclusion"] is True
     assert exclusion_report["cases"][1]["candidates"][0]["directed_edge_keys"] == [reverse_key]
     assert set(exclusion_report["cases"][2]["blocked_edge_keys"]) == {forward_key, reverse_key}

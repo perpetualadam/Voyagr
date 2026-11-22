@@ -344,3 +344,41 @@ a provider refusal as proof that no compliant journey exists. It does not widen
 endpoints, unblock the camera, or test a different upstream/downstream journey.
 UK slip-road results remain pending; graph IDs are always rederived and no live
 routing infrastructure is contacted. Production migration remains NO-GO.
+
+## Preserved UK outcome controls and next query modes
+
+`uk-slip-road-refusal-controls.json` preserves the original exit endpoint and
+its downstream one-way-chain endpoint as separate refusal controls. Both have
+operator-observed no-route responses under the selected camera block. Complete
+incident-edge evidence shows the original endpoint has only a blocked legal
+incoming edge, and the downstream endpoint can only be entered from that node.
+This local topology evidence is distinct from the bounded search, which exhausted
+one million visited nodes and cannot itself prove absence. The runner deliberately
+keeps UNVERIFIED_OR_FAILED and nonzero exit for these cases; do not turn arbitrary
+provider errors into expected-pass outcomes.
+
+`uk-a61-regression-cases.json` preserves the separate reachable A61 junction
+journey. Operator evidence for its pinned primary: 3.227355 km, 60 directed edges,
+14 instructions, zero forbidden traversals and the same directed sequence as the
+exact-node diagnostic. Its unrestricted source association spans all five known
+exit ways. This does not replace either refusal destination.
+
+The fixture adds three pending VPS2 queries under the same camera block:
+
+- Native alternatives: up to three, every returned trace independently validated;
+  fewer than three is not automatically a failure. Ordinary coordinate lookup is
+  used because this prototype still forbids pinned native alternatives. Exact
+  association-derived endpoint identity checks remain in place.
+- A continuous three-point route via public motorway node 1596707312, with
+  pass_through enabled. Whole-trace validation spans every leg and checks imported
+  turn restrictions across edge joins and visit order within one metre. It does
+  not establish general stop/heading semantics or a multi-stop alternatives planner.
+- A fresh provider request starting at that motorway point, as a deviation-style
+  routing input. This tests the provider exclusion only; browser deviation
+  detection, reroute orchestration, caching and UI integration remain unverified.
+
+Local synthetic blocked-via and departure queries exercise the same runner's
+continuous trace checks and zero forbidden-traversal checks. Existing synthetic
+alternative-count and illegal leg-join controls remain separate evidence. All
+UK additions beyond the primary await operator execution. No application code,
+production setting, budgets, exclusions or acceptance gates change.
