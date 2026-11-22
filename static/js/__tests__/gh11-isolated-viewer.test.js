@@ -11,11 +11,13 @@ function candidate(name='A road'){
     return {geometry:{coordinates:[[0,0],[.01,.01],[.02,0]]},distance_km:2,
         instruction_details:[{name,distance_m:2000}]};
 }
+const settings={profile:'car',alternatives:false,no_motorways:false,mandatory_associations:['camera'],both_directions:false};
 async function start(routeReply){
+    routeReply={selected_settings:settings,request_binding:'a'.repeat(64),...routeReply};
     global.VoyagrAvoidanceIntegrity=AI;global.VoyagrNavigationSafetyUX=UX;
     document.body.innerHTML=html.match(/<body>([\s\S]*?)<script/)[1];
     global.fetch=jest.fn(async url=>({ok:true,status:200,json:async()=>
-        url.endsWith('/cases')?{cases:['public_case']}:
+        url.endsWith('/cases')?{cases:['public_case'],case_settings:{public_case:settings},case_bindings:{public_case:'a'.repeat(64)}}:
         url.endsWith('/versions')?{graph_version:'graph',source_version:'source',policy_version:'policy'}:routeReply}));
     // Function scope avoids leaking viewer declarations into the production globals.
     mount(globalThis);
@@ -28,7 +30,7 @@ test('viewer requests registered identity, plots route and renders instruction n
     expect(document.getElementById('calculate').disabled).toBe(false);
     document.getElementById('calculate').click();await settle();
     const call=fetch.mock.calls.find(([url])=>url.endsWith('/route'));
-    expect(JSON.parse(call[1].body)).toEqual({case_id:'public_case',graph_version:'graph',source_version:'source',policy_version:'policy'});
+    expect(JSON.parse(call[1].body)).toEqual({case_id:'public_case',selected_settings:settings,graph_version:'graph',source_version:'source',policy_version:'policy'});
     expect(document.getElementById('line').getAttribute('points').split(' ')).toHaveLength(3);
     expect(document.getElementById('instructions').textContent).toContain('<img');
     expect(document.querySelector('#instructions img')).toBeNull();
@@ -57,4 +59,18 @@ test('changing the selected case discards an older successful response',async()=
     expect(document.getElementById('line').getAttribute('points')).toBe('');
     expect(document.getElementById('status').textContent).toContain('superseded');
     expect(document.getElementById('strictStart').disabled).toBe(true);
+});
+
+ test('viewer refuses settings different from its selected registered policy',async()=>{
+    await start({case_id:'public_case',success:true,navigation_allowed:false,graph_version:'graph',source_version:'source',policy_version:'policy',selected_settings:{...settings,mandatory_associations:[]},candidates:[candidate()]});
+    document.getElementById('calculate').click();await settle();
+    expect(document.getElementById('status').textContent).toBe('Response contract refused.');
+    expect(document.getElementById('line').getAttribute('points')).toBe('');
+});
+
+ test('viewer refuses a different request binding even with identical settings',async()=>{
+    await start({case_id:'public_case',success:true,navigation_allowed:false,graph_version:'graph',source_version:'source',policy_version:'policy',request_binding:'b'.repeat(64),candidates:[candidate()]});
+    document.getElementById('calculate').click();await settle();
+    expect(document.getElementById('status').textContent).toBe('Response contract refused.');
+    expect(document.getElementById('line').getAttribute('points')).toBe('');
 });

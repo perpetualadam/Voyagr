@@ -134,6 +134,8 @@ def test_auth_request_contract_versions_and_cross_origin_refused_before_java(app
 
 def test_graph_mutation_is_refused_without_execution_or_path_leak(app, manifest, monkeypatch):
     bridge = app.extensions["gh11_bridge"]
+    bridge.route("detour")  # A warm cache must not bypass the graph fingerprint.
+    assert bridge.cache
     def forbidden(*_):
         pytest.fail("Changed graph must be refused before execution")
     monkeypatch.setattr(bridge, "_execute", forbidden)
@@ -174,7 +176,7 @@ def test_real_transport_timeout_and_output_limit_kill_child_group(manifest, tmp_
         bridge.route("detour")
 
 
-@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics"])
+@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings"])
 def test_independent_transport_validation_rejects_corrupted_result(app, fault):
     bridge = app.extensions["gh11_bridge"]
     case = dict(bridge.cases["detour"], alternatives=True)
@@ -189,7 +191,7 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
                                 "candidates": [{"directed_edge_keys": [key]}]}
                                for name, key in (("main", 98), ("upper", 100))],
               "cases": [{"id": "detour", "status": "PASS_AVAILABLE_GRAPH_CHECKS",
-                         "blocked_edge_keys": [98, 99], "candidates": candidates}]}
+                         "alternatives": True, "no_motorways": False, "blocked_edge_keys": [98, 99], "candidates": candidates}]}
     accepted = bridge.validate(report, case)
     assert len(accepted["candidates"]) == 3 and accepted["navigation_allowed"] is False
     if fault == "unsafe_third":
@@ -203,6 +205,8 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
         candidates[0]["instruction_details"] = []
     elif fault == "metrics":
         candidates[0]["distance_km"] = float("nan")
+    elif fault == "settings":
+        report["cases"][0]["no_motorways"] = True
     with pytest.raises(Refused):
         bridge.validate(report, case)
 
@@ -237,3 +241,68 @@ def test_browser_policy_hashes_and_old_manifest_schema_fail_closed(manifest):
     changed["schema"] = 1
     with pytest.raises(Refused, match="manifest_contract"):
         create_app(changed, password=PASSWORD)
+
+
+def test_registered_settings_rejected_before_execution(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    client = app.test_client()
+    settings = client.get('/api/prototype/cases', headers=AUTH).get_json()['case_settings']['detour']
+    assert settings['mandatory_associations'] == ['main']
+    def forbidden(*_):
+        pytest.fail('Changed settings must not reach Java or cache')
+    monkeypatch.setattr(bridge, 'route', forbidden)
+    for changed in (dict(settings, mandatory_associations=[]), dict(settings, no_motorways=True),
+                    dict(settings, alternatives=True), dict(settings, profile='truck'),
+                    dict(settings, both_directions=1), dict(settings, extra=True)):
+        response = client.post('/api/prototype/route', json=dict(body(manifest), selected_settings=changed), headers=AUTH)
+        assert response.status_code == 400
+        assert response.get_json()['reason'] == 'settings_not_registered'
+
+
+def test_real_cached_evidence_is_revalidated_and_not_shared_with_callers(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    execute = bridge._execute
+    calls = []
+    def counting(*args):
+        calls.append(True)
+        return execute(*args)
+    monkeypatch.setattr(bridge, '_execute', counting)
+    first = bridge.route('detour')
+    assert len(calls) == 1
+    assert first['selected_settings'] == bridge.settings('detour')
+    assert first['request_binding'] == bridge.binding('detour')
+    first['candidates'][0]['geometry']['coordinates'].clear()
+    second = bridge.route('detour')
+    assert len(calls) == 1 and second['candidates'][0]['geometry']['coordinates']
+    # Corruption of any cached trace must refuse, not serve an earlier verdict.
+    entry = bridge.cache[bridge.binding('detour')][1]
+    entry['cases'][0]['candidates'][0]['edge_intervals'][0][2] = entry['cases'][0]['blocked_edge_keys'][0]
+    with pytest.raises(Refused, match='cached_evidence_refused'):
+        bridge.route('detour')
+    assert not bridge.cache
+    assert len(calls) == 1
+
+
+def test_cache_expiry_and_ordered_case_settings_change_force_execution(app, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    execute = bridge._execute
+    calls = []
+    def counting(*args):
+        calls.append(True)
+        return execute(*args)
+    monkeypatch.setattr(bridge, '_execute', counting)
+    bridge.route('detour')
+    key = bridge.binding('detour')
+    expiry, evidence = bridge.cache[key]
+    bridge.cache[key] = (0, evidence)
+    bridge.route('detour')
+    assert len(calls) == 2
+    # Every registered variant binds ordered visits and exclusions independently.
+    original = copy.deepcopy(bridge.cases['detour'])
+    for name, value in (('points', list(reversed(original['points']))),
+                        ('blocked_associations', ['upper']), ('alternatives', True)):
+        bridge.cases['detour'] = dict(original, **{name: value})
+        assert bridge.binding('detour') != key
+    bridge.cases['detour'] = original
+    bridge.route('via')
+    assert len(calls) == 3

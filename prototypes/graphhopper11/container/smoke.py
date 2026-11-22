@@ -137,16 +137,24 @@ for asset in ('strict-route-policy.js','avoidance-integrity.js','navigation-safe
  assert call('GET','/strict-assets/'+asset)[0]==200
 status,raw=call('GET','/api/prototype/versions'); assert status==200
 versions=json.loads(raw)
-request={**{k:versions[k] for k in ('graph_version','source_version','policy_version')},'case_id':'detour'}
+status,raw=call('GET','/api/prototype/cases'); assert status==200
+settings=json.loads(raw)['case_settings']
+request={**{k:versions[k] for k in ('graph_version','source_version','policy_version')},'case_id':'detour','selected_settings':settings['detour']}
 status,raw=call('POST','/api/prototype/route',request); assert status==200
 result=json.loads(raw); assert result['navigation_allowed'] is False
 assert result['candidates'] and all(set(r['directed_edge_keys']).isdisjoint(result['blocked_edge_keys']) for r in result['candidates'])
+assert result['selected_settings']==settings['detour'] and len(result['request_binding'])==64
+status,raw=call('POST','/api/prototype/route',request); assert status==200
+assert json.loads(raw)==result
+changed={**request,'selected_settings':{**settings['detour'],'mandatory_associations':[]}}
+assert call('POST','/api/prototype/route',changed)[0]==400
 request['case_id']='refused'
+request['selected_settings']=settings['refused']
 status,raw=call('POST','/api/prototype/route',request); assert status==422
 assert json.loads(raw)['navigation_allowed'] is False
 from prototypes.graphhopper11.isolated_app import LocalJavaBridge
 LocalJavaBridge(json.loads(Path('/inputs/manifest.json').read_text())).verify(check_source=True)
-print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'graph_unchanged':True,'navigation_allowed':False}))
+print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'graph_unchanged':True,'navigation_allowed':False}))
 '''
         result = json.loads(docker(['exec','-i',name,'python','-'],code=program,timeout=90))
         result.update(image_id=image,network='none',uid=10001,read_only_root=True)

@@ -1,6 +1,6 @@
 """Separate authenticated Flask/test-client bridge to the real local GH11 process.
 
-Selected fixture cases only. No app.run, production imports, cache, live-provider
+Selected fixture cases only. No app.run, production imports, persistent cache, live-provider
 fallback, client edge keys, custom models or real navigation authority.
 """
 import copy
@@ -96,6 +96,20 @@ class LocalJavaBridge:
                 raise Refused("registry_identity")
             self.cases[name] = case
         self.lock = threading.Lock()
+        # Bounded, process-local public fixtures only. Never persisted or shared
+        # with production; cache entries retain raw evidence, not trusted verdicts.
+        self.cache = {}
+
+    def settings(self, case_id):
+        case = self.cases[case_id]
+        return {"profile": "car", "alternatives": bool(case.get("alternatives", False)),
+                "no_motorways": bool(case.get("no_motorways", False)),
+                "mandatory_associations": sorted(case.get("blocked_associations", [])),
+                "both_directions": bool(case.get("block_both_directions", False))}
+
+    def binding(self, case_id):
+        return version([self.manifest["graph_version"], self.manifest["source_version"],
+                        self.manifest["policy_version"], self.cases[case_id], self.settings(case_id)])
 
     def verify(self, *, check_source=False):
         m = self.manifest
@@ -165,6 +179,19 @@ class LocalJavaBridge:
             raise Refused("transport_busy")
         try:
             self.verify()
+            binding = self.binding(case_id)
+            now = time.monotonic()
+            self.cache = {key: entry for key, entry in self.cache.items() if entry[0] > now}
+            cached = self.cache.get(binding)
+            if cached is not None:
+                try:
+                    # Re-run the same independent validation for every candidate.
+                    result = self.validate(copy.deepcopy(cached[1]), self.cases[case_id])
+                    self.verify()
+                    return result
+                except Exception:
+                    self.cache.pop(binding, None)
+                    raise Refused("cached_evidence_refused") from None
             fixture = copy.deepcopy(self.registry)
             case = copy.deepcopy(self.cases[case_id])
             case["include_path_data"] = True
@@ -174,7 +201,11 @@ class LocalJavaBridge:
                 path.write_text(json.dumps(fixture))
                 report = self._execute(path, directory)
             self.verify()
-            return self.validate(report, case)
+            result = self.validate(report, case)
+            if len(self.cache) >= 8:
+                self.cache.pop(next(iter(self.cache)))
+            self.cache[binding] = (time.monotonic() + 30, copy.deepcopy(report))
+            return result
         finally:
             self.lock.release()
 
@@ -187,6 +218,8 @@ class LocalJavaBridge:
         result = cases[0]
         if result.get("id") != case["id"] or result.get("status") != "PASS_AVAILABLE_GRAPH_CHECKS":
             raise Refused("case_refused")
+        if any(result.get(name) is not bool(case.get(name, False)) for name in ("alternatives", "no_motorways")):
+            raise Refused("settings_evidence_mismatch")
         blocked = result.get("blocked_edge_keys")
         if not isinstance(blocked, list) or any(type(k) is not int or k < 0 for k in blocked):
             raise Refused("block_contract")
@@ -268,6 +301,7 @@ class LocalJavaBridge:
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
         return {"success": True, "case_id": case["id"], "engine_version": "11.1",
+                "selected_settings": self.settings(case["id"]), "request_binding": self.binding(case["id"]),
                 **{key: m[key] for key in ("graph_version", "source_version", "policy_version")},
                 "scope": "selected_fixture_graph_checks_only", "navigation_allowed": False,
                 "production_migration": "NO_GO", "blocked_edge_keys": blocked, "candidates": public_rows}
@@ -315,15 +349,20 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
 
     @app.get("/api/prototype/cases")
     def cases():
-        return jsonify(cases=list(bridge.cases), navigation_allowed=False)
+        return jsonify(cases=list(bridge.cases), case_settings={name: bridge.settings(name) for name in bridge.cases},
+                       case_bindings={name: bridge.binding(name) for name in bridge.cases},
+                       navigation_allowed=False)
 
     @app.post("/api/prototype/route")
     def route():
         body = request.get_json(silent=True)
-        if not isinstance(body, dict) or set(body) != {"case_id", "graph_version", "source_version", "policy_version"}:
+        required = {"case_id", "graph_version", "source_version", "policy_version"}
+        if not isinstance(body, dict) or set(body) not in (required, required | {"selected_settings"}):
             return jsonify(success=False, reason="request_contract", navigation_allowed=False), 400
         if not isinstance(body["case_id"], str) or body["case_id"] not in bridge.cases:
             return jsonify(success=False, reason="case_not_registered", navigation_allowed=False), 400
+        if "selected_settings" in body and version(body["selected_settings"]) != version(bridge.settings(body["case_id"])):
+            return jsonify(success=False, reason="settings_not_registered", navigation_allowed=False), 400
         if any(body[key] != bridge.manifest[key] for key in ("graph_version", "source_version", "policy_version")):
             return jsonify(success=False, reason="version_changed", navigation_allowed=False), 409
         try:

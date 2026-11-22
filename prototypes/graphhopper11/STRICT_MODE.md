@@ -27,8 +27,9 @@ failed replacement.
 Request tickets capture the strict context revision as well as existing preference
 and intent ordering. Context changes invalidate old responses. Reused/cached route
 objects are rechecked against current context and existing assessment freshness.
-This does not add or activate a GH11 backend cache. The real isolated service still
-has no route cache; production cache integration remains pending. Existing UK
+The isolated backend now has a bounded 30-second public-fixture evidence cache,
+revalidated on every hit; see [ISOLATED_APP.md](ISOLATED_APP.md). Production cache
+integration remains pending. Existing UK
 cache reassessment and explicit/reroute refresh rules are unchanged.
 
 ## Isolated viewer and manifest
@@ -60,7 +61,7 @@ Start and rejection of a superseded response. Python tests continue to exercise
 actual Flask/Java registered-case routing and browser-asset manifest binding.
 
 This is not yet milestone-3 completion: full UK app bootstrapping, authenticated
-navigation-authority/evidence compilation, arbitrary real settings, real GH11
+navigation-authority/evidence compilation, arbitrary real settings, production-cache and general GH11
 cache wiring, saved/restored cases, all browser entry paths and deployed browser
 acceptance remain pending. Active-guidance expiry/graphics-recovery UX and driving
 behaviour are unverified. No physical check of these new gates has been claimed.

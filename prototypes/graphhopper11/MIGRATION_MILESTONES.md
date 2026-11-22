@@ -97,6 +97,10 @@ the registered-case experiment, not actual navigation or production migration.
 - [ ] Test saved/restored plans, source outages, stale-response races, policy changes
       and refusal of legacy provider fallbacks.
 
+Registered settings are now echoed and checked end to end, with a bounded
+public-fixture cache that revalidates raw evidence on reuse. Arbitrary settings,
+production-cache integration and deployed acceptance remain pending.
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting

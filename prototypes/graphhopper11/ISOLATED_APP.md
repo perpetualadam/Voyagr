@@ -15,8 +15,8 @@ transport/trace checks -> JSON and a separate SVG geometry/instruction viewer.
 
 This is the actual GH11 JAR and graph path, not the synthetic callback coordinator.
 The Flask factory is exercised with its test client, generated OSM and a real
-imported graph. The viewer module is separately DOM-tested. An actual browser
-connected to VPS2 has not yet been tested.
+imported graph. The viewer module is separately DOM-tested. The previous release passed selected-case Pixel 6 browser acceptance; the current
+development changes have not been deployed or tested on the physical phone.
 
 The manifest records every graph file hash, source data hash, configuration,
 registry, Java runner, Python validator and pinned JAR identity. Graph/configuration/registry/runtime
@@ -36,7 +36,10 @@ candidate's complete intervals, exclusions, geometry, metrics and instructions,
 and relies on the pinned Java validator for graph access/connectivity/turn checks.
 It does not disguise synthetic coverage as real evidence.
 
-One subprocess at a time; no caching or alternate-engine fallback. Each temporary
+One subprocess at a time; no alternate-engine fallback. A process-local cache
+retains at most eight raw public-fixture reports for 30 seconds. Every reuse
+rehashes the graph/runtime and independently revalidates all candidates; no
+validated verdict or client-supplied route is trusted. Nothing is persisted. Each temporary
 request directory is removed after use. Java uses one active processor, configured
 heap 512/1024/2048/4096 MB, a maximum 120-second transport timeout (default 60),
 existing per-route node/time limits and a 2 MiB captured-output cap. Timeout/output
@@ -96,3 +99,24 @@ The [container package](container/README.md) preserves historical release eviden
 and the original proposal for reference. A future update needs a new tested image,
 a newly prepared manifest and reviewed update steps. No new physical-phone
 acceptance or strict navigation authority is claimed.
+
+## Registered settings and bounded evidence reuse (milestone 3 development)
+
+The cases endpoint exposes server-owned profile, alternative request, motorway
+exclusion, mandatory association selections and directional scope. The viewer
+shows these in a details panel, submits the exact selected settings and refuses a
+mismatched response. HTTP clients may omit the settings for compatibility with
+existing operator checks; this always uses the unchanged registered case, never
+an arbitrary preference set. Supplied settings must match exactly, including
+boolean types, with unknown fields rejected before Java/cache access.
+
+A request fingerprint binds the entire registered case (including ordered visits)
+and graph/source/policy versions. Cache hits cannot cross those identities. Raw
+reports expire after 30 seconds, are copied on read/write, revalidated for settings,
+blocks and every candidate, and evicted on validation failure. Graph checks still
+run before and after reuse. Cache lifetime is a resource limit, not evidence of
+hazard freshness. Source data remains a frozen snapshot; navigation stays disabled.
+This is a dedicated preview cache, not integration with production RouteCache,
+saved plans, arbitrary user settings or general navigation authority.
+
+Local validation and packaging limitations: [SETTINGS_CACHE_LOCAL_EVIDENCE.json](SETTINGS_CACHE_LOCAL_EVIDENCE.json). CI results belong to the exact PR head and are separate from these local results.
