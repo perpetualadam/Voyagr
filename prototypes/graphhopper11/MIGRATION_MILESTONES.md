@@ -199,6 +199,6 @@ must not be inferred from completing an earlier milestone.
 The direct registered-fixture app-request bridge now preserves complete initial,
 ordered-via and reroute payloads, binds their identities through fresh restoration,
 and refuses unsupported journey semantics. Every call bypasses the public fixture
-cache; engine failure cannot reuse cached evidence. It is not wired into the UK UI,
-HTTP `/api/route`, private cache or owner store. See
+cache; engine failure cannot reuse cached evidence. The standalone frontend now connects through dedicated registered-case endpoints;
+the UK UI/HTTP `/api/route`, private cache and owner store remain unconnected. See
 [APP_REQUEST_BRIDGE.md](APP_REQUEST_BRIDGE.md). Milestone 3 remains in progress.

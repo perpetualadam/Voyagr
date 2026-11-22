@@ -10,6 +10,10 @@ const status=byId('status'), calculate=byId('calculate'), restore=byId('restore'
 const cases=byId('cases'), alternatives=byId('alternatives'), planText=byId('planReference');
 const usePolicy=byId('usePolicy'), controls=byId('policyControls');
 const useAppSettings=byId('useAppSettings'), appSettings=byId('appSettings');
+const useComplete=byId('useCompleteRequest'), completeText=byId('completeRequest'), loadComplete=byId('loadCompleteRequest');
+let caseRequests={};
+const settingKeys=['routing_mode','vehicle_type','avoidance_mode','avoidance_requirements','avoid_points','enable_hazard_avoidance','avoid_cameras','avoid_traffic_lights','avoid_railway_crossings','avoid_tolls','avoid_caz','avoid_motorways','avoid_ferries','avoid_unpaved','caz_exempt','include_tolls','include_caz','prefer_scenic','prefer_quiet','route_optimization','max_detour'];
+const costKeys=['electricity_price','energy_efficiency','fuel_category','fuel_efficiency','fuel_price','fuel_price_mode'];
 let versions=null, routes=[], registeredSettings={}, registeredBindings={}, categories=[], operation=0;
 if(!root.VoyagrStrictRoutePolicyModule||!root.VoyagrNavigationSafetyUX||!root.VoyagrAvoidanceIntegrity){status.textContent='Strict verification unavailable.';return;}
 const integrity=root.VoyagrAvoidanceIntegrity;
@@ -69,7 +73,36 @@ function settingsPolicy(value){
     }).sort((a,b)=>a.category.localeCompare(b.category));
     return {profile:!value.routing_mode||value.routing_mode==='auto'?'car':value.routing_mode,requirements};
 }
-function selection(caseId){return useAppSettings.checked?{app_settings:readAppSettings()}:readPolicy(caseId);}
+function requestSettings(body){return readAppSettings(JSON.stringify(Object.fromEntries(Object.entries(body).filter(([key])=>settingKeys.includes(key)))));}
+function readComplete(caseId,text=completeText.value){
+    if(typeof text!=='string'||text.length>2500||!caseRequests[caseId])throw Error('Complete request refused.');
+    const body=JSON.parse(text),allowed=[...settingKeys,...costKeys,'start','end','via_points','stops','optimize_stop_order','round_trip','departure_time','time_windows','total_stop_time','force_refresh','is_reroute','preserve_stop_order'];
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!allowed.includes(key)))throw Error('Complete request refused.');
+    const pair=value=>{
+        if(typeof value!=='string'||value.length>80||!/^\s*[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?\s*$/.test(value))throw Error('Registered coordinates required.');
+        return value.split(',').map(Number);
+    };
+    const vias=body.via_points===undefined?[]:body.via_points;
+    if(!Array.isArray(vias)||vias.length>3)throw Error('Complete visits refused.');
+    for(const via of vias){
+        if(!via||typeof via!=='object'||Object.keys(via).some(key=>!['lat','lon','name','type','provenance','source_kind','original_index'].includes(key))||typeof via.lat!=='number'||typeof via.lon!=='number'||via.type!==undefined&&via.type!=='via'||via.name!==undefined&&(typeof via.name!=='string'||via.name.length>160))throw Error('Complete visits refused.');
+        if(['provenance','source_kind'].some(key=>key in via&&!['gps','searched','map','saved','coordinates','unknown'].includes(via[key]))||'original_index' in via&&(!Number.isInteger(via.original_index)||via.original_index<0||via.original_index>=26))throw Error('Complete visits refused.');
+    }
+    const points=[pair(body.start),...vias.map(via=>[via.lat,via.lon]),pair(body.end)],template=caseRequests[caseId];
+    if(stable(points)!==stable([pair(template.start),...(template.via_points||[]).map(via=>[via.lat,via.lon]),pair(template.end)]))throw Error('Registered coordinates required.');
+    if(['optimize_stop_order','round_trip','force_refresh','is_reroute','preserve_stop_order'].some(key=>key in body&&typeof body[key]!=='boolean'))throw Error('Complete flags refused.');
+    if(body.round_trip===true||body.optimize_stop_order===true&&vias.length||'stops' in body&&(!Array.isArray(body.stops)||body.stops.length)||body.departure_time!=null||body.time_windows!=null||'total_stop_time' in body&&body.total_stop_time!==0)throw Error('Journey semantics unavailable.');
+    for(const key of costKeys.filter(key=>key in body)){
+        if(key==='fuel_price_mode'){if(!['manual','automatic'].includes(body[key]))throw Error('Cost input refused.');}
+        else if(key==='fuel_category'){if(!['','petrol','diesel'].includes(body[key]))throw Error('Cost input refused.');}
+        else if(!(key==='fuel_price'&&body[key]===null)&&(typeof body[key]!=='number'||!Number.isFinite(body[key])||body[key]<0))throw Error('Cost input refused.');
+    }
+    requestSettings(body);return body;
+}
+function completePolicy(body){const settings=requestSettings(body);return normalizePolicy({...settingsPolicy(settings),app_settings:settings});}
+function completeReference(caseId,body,binding){return {schema:3,case_id:caseId,...Object.fromEntries(['graph_version','source_version','policy_version'].map(key=>[key,versions[key]])),app_request:body,request_binding:binding};}
+function completeContext(body){return {app_request:body,visits:[body.start.split(',').map(Number),...(body.via_points||[]).map(via=>[via.lat,via.lon]),body.end.split(',').map(Number)],policy_request:completePolicy(body),is_reroute:body.is_reroute===true,force_refresh:body.force_refresh===true,cost_warnings:costKeys.filter(key=>key in body).map(setting=>({setting,value:body[setting],state:'UNVERIFIED'}))};}
+function selection(caseId){return useComplete.checked?{app_request:readComplete(caseId)}:useAppSettings.checked?{app_settings:readAppSettings()}:readPolicy(caseId);}
 const policyRows=()=>Array.from(byId('policyRules').children);
 function readPolicy(caseId){
     if(!usePolicy.checked)return null;
@@ -86,7 +119,10 @@ function changed(){
     byId('policyResult').hidden=true;
     status.textContent='Request superseded; selection or rules changed. Calculate to apply them; earlier preview is unchanged.';
 }
-function syncControls(){controls.hidden=!usePolicy.checked;controls.disabled=!usePolicy.checked||useAppSettings.checked;usePolicy.disabled=useAppSettings.checked;appSettings.disabled=!useAppSettings.checked;}
+function syncControls(){controls.hidden=!usePolicy.checked;controls.disabled=!usePolicy.checked||useAppSettings.checked;usePolicy.disabled=useAppSettings.checked;appSettings.disabled=!useAppSettings.checked||useComplete.checked;controls.disabled=controls.disabled||useComplete.checked;usePolicy.disabled=usePolicy.disabled||useComplete.checked;useAppSettings.disabled=useComplete.checked;completeText.disabled=!useComplete.checked;loadComplete.disabled=!useComplete.checked||!caseRequests[cases.value];}
+useComplete.addEventListener('change',()=>{if(useComplete.checked&&!caseRequests[cases.value]){useComplete.checked=false;syncControls();changed();status.textContent='Complete requests are unavailable for this registered case.';return;}if(useComplete.checked&&!completeText.value)completeText.value=JSON.stringify(caseRequests[cases.value]);syncControls();changed();});
+completeText.addEventListener('input',changed);
+loadComplete.addEventListener('click',()=>{completeText.value=JSON.stringify(caseRequests[cases.value]);changed();});
 useAppSettings.addEventListener('change',()=>{syncControls();changed();});
 appSettings.addEventListener('input',changed);
 usePolicy.addEventListener('change',()=>{syncControls();changed();});
@@ -95,7 +131,7 @@ controls.addEventListener('change',event=>{
     if(row){row.dataset.present='true';row.querySelector('select').disabled=!row.querySelector('input').checked;}
     changed();
 });
-cases.addEventListener('change',()=>{showSettings();changed();});
+cases.addEventListener('change',()=>{showSettings();syncControls();changed();});
 function mountPolicyRows(){
     for(const category of categories){
         const row=document.createElement('div');row.className='policy-row';row.dataset.policyCategory=category;row.dataset.present='true';
@@ -132,12 +168,13 @@ function reportMatches(report,policy,allowed){
     const warned=report.rules.filter(row=>row.enabled&&row.mode==='preference'&&row.state!=='COMPILED').map(row=>row.category);
     return Array.isArray(report.preference_warnings)&&stable(report.preference_warnings.map(row=>row.category))===stable(warned);
 }
-function renderPolicy(report){
+function renderPolicy(report,costs=[]){
     const list=byId('policyDecisions');list.replaceChildren();
     for(const row of report.rules.filter(rule=>rule.enabled)){
         const item=document.createElement('li');item.textContent=label(row.category)+' — '+(row.mode==='mandatory'?'must avoid':'prefer to avoid')+': '+row.message;list.append(item);
     }
     for(const row of report.supplemental_settings||[]){const item=document.createElement('li');item.textContent=label(row.setting)+' — '+JSON.stringify(row.value)+': unverified in this experiment.';list.append(item);}
+    for(const row of costs){const item=document.createElement('li');item.textContent=label(row.setting)+' — '+JSON.stringify(row.value)+': unverified cost input.';list.append(item);}
     if(!list.children.length){const item=document.createElement('li');item.textContent='No enabled custom rules. Fixed registered-case constraints still apply.';list.append(item);}
     byId('policyResult').hidden=false;
 }
@@ -165,8 +202,10 @@ alternatives.addEventListener('change',showRoute);
 function clearPreview(){routes=[];alternatives.replaceChildren();byId('line').setAttribute('points','');byId('instructions').textContent='';}
 async function calculateCase(saved){
     const selectedCase=saved?saved.case_id:cases.value, ownerCase=cases.value;
-    const ownerPolicy=stable(selection(ownerCase)), requested=saved?(saved.schema===2?normalizePolicy(saved.policy_request):null):selection(selectedCase);
-    let policy=requested&&Object.prototype.hasOwnProperty.call(requested,'profile')?requested:null;
+    const complete=saved?saved.schema===3:useComplete.checked;
+    const ownerPolicy=stable(selection(ownerCase)), requested=saved?(complete?{app_request:readComplete(selectedCase,JSON.stringify(saved.app_request))}:saved.schema===2?normalizePolicy(saved.policy_request):null):selection(selectedCase);
+    let policy=complete?completePolicy(requested.app_request):requested&&Object.prototype.hasOwnProperty.call(requested,'profile')?requested:null;
+    const context=complete?completeContext(requested.app_request):null;
     const ticket=integrity.begin(root.localStorage), owned=++operation, fetchOptions=integrity.fetchOptions(ticket);
     const current=()=>{try{return owned===operation&&(!ticket.controller||!ticket.controller.signal.aborted)&&integrity.current(ticket,root.localStorage)&&cases.value===ownerCase&&stable(selection(ownerCase))===ownerPolicy;}catch(_){return false;}};
     const selectedSettings=registeredSettings[selectedCase];let selectedBinding=registeredBindings[selectedCase], approved=null;
@@ -175,20 +214,23 @@ async function calculateCase(saved){
     status.textContent=saved?'Restoring and checking…':'Calculating…';
     try{
         if(requested){
-            const preflight=await post('/api/prototype/policy',{case_id:selectedCase,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,...(policy?{policy_request:policy}:requested)},fetchOptions);
+            const preflight=await post(complete?'/api/prototype/app-policy':'/api/prototype/policy',{case_id:selectedCase,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,...(complete?requested:policy?{policy_request:policy}:requested)},fetchOptions);
             if(!current()){if(owned===operation)status.textContent='Request expired or superseded. Calculate again.';return;}
             if(!policy){
                 policy=normalizePolicy(preflight.policy_report&&preflight.policy_report.selected);
                 if(stable(policy.app_settings)!==stable(requested.app_settings))throw Error('Full settings response refused.');
             }
             if(preflight.success!==true||preflight.navigation_allowed!==false||!hash(preflight.request_binding)||!reportMatches(preflight.policy_report,policy,true))throw Error('Policy response refused.');
-            approved=preflight.policy_report;selectedBinding=preflight.request_binding;renderPolicy(approved);
+            if(complete&&(preflight.app_integration_allowed!==false||stable(preflight.app_request_context)!==stable(context)||stable(preflight.plan_reference)!==stable(completeReference(selectedCase,requested.app_request,preflight.request_binding))))throw Error('Complete preflight refused.');
+            approved=preflight.policy_report;selectedBinding=preflight.request_binding;renderPolicy(approved,context?context.cost_warnings:[]);
         }
-        if(saved&&stable(saved)!==stable(reference(selectedCase,policy,selectedBinding)))throw Error('Plan reference changed; current preview retained.');
-        const body=saved||{case_id:selectedCase,selected_settings:selectedSettings,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,...(policy?{policy_request:policy}:{})};
-        const result=await post(saved?'/api/prototype/restore':'/api/prototype/route',body,fetchOptions);
+        const expectedReference=complete?completeReference(selectedCase,requested.app_request,selectedBinding):reference(selectedCase,policy,selectedBinding);
+        if(saved&&stable(saved)!==stable(expectedReference))throw Error('Plan reference changed; current preview retained.');
+        const body=saved||{case_id:selectedCase,...(complete?{}:{selected_settings:selectedSettings}),graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,...(complete?requested:policy?{policy_request:policy}:{})};
+        const result=await post(complete?(saved?'/api/prototype/app-restore':'/api/prototype/app-route'):(saved?'/api/prototype/restore':'/api/prototype/route'),body,fetchOptions);
         if(!current()){if(owned===operation)status.textContent='Request expired or superseded. Calculate again.';return;}
-        if(result.request_binding!==selectedBinding||stable(result.selected_settings)!==stable(selectedSettings)||stable(result.plan_reference)!==stable(reference(selectedCase,policy,selectedBinding))||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version||(policy&&stable(result.policy_report)!==stable(approved)))throw Error('Response contract refused.');
+        if(result.request_binding!==selectedBinding||stable(result.selected_settings)!==stable(selectedSettings)||stable(result.plan_reference)!==stable(expectedReference)||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version||(policy&&stable(result.policy_report)!==stable(approved)))throw Error('Response contract refused.');
+        if(complete&&(result.app_integration_allowed!==false||result.gps_verification!=='UNVERIFIED'||result.cache_policy!=='bypass_complete_app_request'||stable(result.app_request_context)!==stable(context)))throw Error('Complete response refused.');
         const preview=result.app_preview;
         if(!preview||preview.navigation_allowed!==false||!Array.isArray(preview.routes)||!Array.isArray(result.candidates)||preview.routes.length!==result.candidates.length||!preview.routes.length||preview.routes.length>3)throw Error('Response contract refused.');
         const identities=new Set();
@@ -199,9 +241,9 @@ async function calculateCase(saved){
             identities.add(candidate.id);return candidate;
         });
         const options=prepared.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});
-        routes=prepared;alternatives.replaceChildren(...options);cases.value=selectedCase;if(saved)applyRestoredPolicy(policy);showSettings();
+        routes=prepared;alternatives.replaceChildren(...options);cases.value=selectedCase;if(saved){useComplete.checked=complete;if(complete){completeText.value=JSON.stringify(requested.app_request);syncControls();}else applyRestoredPolicy(policy);}showSettings();
         planText.value=JSON.stringify(result.plan_reference);
-        status.textContent=routes.length+' route(s) passed selected fixture checks. '+(approved&&(approved.preference_warnings.length||(approved.supplemental_settings||[]).length)?'Some preferences remain unresolved; see Rule check details. ':'')+'Navigation remains unavailable.';showRoute();
+        status.textContent=routes.length+' route(s) passed selected fixture checks. '+(approved&&(approved.preference_warnings.length||(approved.supplemental_settings||[]).length||(context&&context.cost_warnings.length))?'Some preferences remain unresolved; see Rule check details. ':'')+'Navigation remains unavailable.';showRoute();
     }catch(error){
         if(current()){
             if(!policy&&requested&&error.policyReport){
@@ -220,6 +262,12 @@ restore.addEventListener('click',()=>{
         if(planText.value.length>4096)throw Error('Plan reference refused.');
         const saved=JSON.parse(planText.value);
         if(!saved||!Object.prototype.hasOwnProperty.call(registeredSettings,saved.case_id))throw Error('Plan reference refused.');
+        if(saved.schema===3){
+            const body=readComplete(saved.case_id,JSON.stringify(saved.app_request));
+            if(!hash(saved.request_binding)||stable(saved)!==stable(completeReference(saved.case_id,body,saved.request_binding)))throw Error('Complete reference refused.');
+            run(saved);return;
+        }
+        if(useComplete.checked)throw Error('Legacy reference cannot remove a complete request.');
         const policy=saved.schema===2?normalizePolicy(saved.policy_request):null;
         if(!policy&&(usePolicy.checked||useAppSettings.checked))throw Error('Legacy references cannot silently remove selected rules.');
         if(policy&&(!hash(saved.request_binding)||policy.profile!==registeredSettings[saved.case_id].profile))throw Error('Plan reference refused.');
@@ -228,6 +276,7 @@ restore.addEventListener('click',()=>{
     }catch(_){status.textContent='Plan reference refused; current preview retained.';}
 });
 Promise.all([get('/api/prototype/cases'),get('/api/prototype/versions')]).then(([registry,identity])=>{
+    caseRequests=registry.case_requests||{};useComplete.disabled=Object.keys(caseRequests).length===0;
     registeredSettings=registry.case_settings||{};registeredBindings=registry.case_bindings||{};categories=registry.policy_categories||[];
     if(!Array.isArray(categories)||categories.length>13||new Set(categories).size!==categories.length||categories.some(category=>typeof category!=='string'||!/^[a-z_]{1,32}$/.test(category)))throw Error('Policy categories unavailable.');
     if(registry.cases.some(id=>!registeredSettings[id]||!hash(registeredBindings[id])))throw Error('Registered settings unavailable.');

@@ -92,3 +92,25 @@ and other stale-response permutations remain separate DOM regression evidence.
 
 No runtime defect was observed in these controlled paths, so no application source
 or authentication configuration was changed. Other Milestone 3 goals remain open.
+
+## Complete-request HTTP/browser checkpoint
+
+`test_real_chromium_http_complete_requests` adds a third actual Chromium scenario.
+It uses the complete-request mode and dedicated authenticated endpoints to calculate
+normal, via, changed-origin reroute and alternative registered cases. It verifies
+full payload retention (including manual pricing and reroute flags), UNVERIFIED cost
+reporting, fresh schema-3 restoration, next calculation, mandatory refusal before
+a route request, edited-reference refusal and validated cross-case restoration.
+Every displayed alternative remains non-navigable; all returned via leg ranges are
+checked. A synthetic storage marker and the previous preview survive refusal.
+
+The wrapper requires seven actual Java executions and seven independent validations,
+with no fixture-cache writes: this is a fresh-routing workflow, not private-cache
+acceptance. The normal factory tests additionally cover 401/403 Origin/authentication
+guards, 4 KiB bounds, changed versions/coordinates, mandatory refusal and preservation
+of anchor-only legacy case metadata. DOM tests cover altered contexts/cost warnings,
+legacy-reference downgrades and late results after programmatic edits.
+
+All three opt-in browser scenarios run under the existing CI command. No production
+UI, owner-store data, live GPS/map tiles or physical phone is used. Milestone 3 remains
+in progress; these results do not authorize deployment or production migration.

@@ -432,6 +432,9 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
     app = Flask(__name__)
     app.config.update(MAX_CONTENT_LENGTH=4096, TESTING=False)
     app.extensions["gh11_bridge"] = bridge
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge, public_request_template
+    complete_bridge = RegisteredAppRequestBridge(bridge)
+    app.extensions["gh11_app_request_bridge"] = complete_bridge
 
     @app.before_request
     def authenticate():
@@ -477,7 +480,13 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
 
     @app.get("/api/prototype/cases")
     def cases():
-        return jsonify(cases=list(bridge.cases), policy_categories=list(CATEGORIES), case_settings={name: bridge.settings(name) for name in bridge.cases},
+        templates = {}
+        for name,case in bridge.cases.items():
+            try:
+                templates[name] = public_request_template(case)
+            except Refused:
+                pass  # Anchor-only legacy cases keep their existing preview path.
+        return jsonify(case_requests=templates, cases=list(bridge.cases), policy_categories=list(CATEGORIES), case_settings={name: bridge.settings(name) for name in bridge.cases},
                        case_bindings={name: bridge.binding(name) for name in bridge.cases},
                        navigation_allowed=False)
 
@@ -559,6 +568,36 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
         except Exception:
             # No stack traces, engine logs, filesystem paths or supplied secrets.
             return jsonify(success=False, reason="routing_refused", navigation_allowed=False), 422
+
+    @app.post('/api/prototype/app-policy')
+    @app.post('/api/prototype/app-route')
+    @app.post('/api/prototype/app-restore')
+    def complete_request():
+        body = request.get_json(silent=True)
+        try:
+            if request.path.endswith('/app-restore'):
+                result = complete_bridge.restore(body)
+            else:
+                required = {'case_id','graph_version','source_version','policy_version','app_request'}
+                if not isinstance(body,dict) or set(body) != required:
+                    raise Refused('app_request_contract')
+                identities = {key:body[key] for key in ('graph_version','source_version','policy_version')}
+                method = complete_bridge.preflight if request.path.endswith('/app-policy') else complete_bridge.calculate
+                result = method(body['case_id'],body['app_request'],identities)
+            return jsonify(result)
+        except PolicyRefused as error:
+            return jsonify(success=False,reason='mandatory_avoidance_unavailable',policy_report=error.report,navigation_allowed=False),422
+        except Refused as error:
+            code = str(error)
+            contracts = {'app_request_contract','app_reference_contract','request_coordinates','app_request_boolean',
+                         'ordered_visits_contract','visit_provenance_contract','cost_parameter_contract',
+                         'journey_not_registered','case_not_registered'}
+            versions = {'version_changed','app_reference_changed','runtime_changed','graph_changed','input_changed'}
+            safe = contracts | versions | {'engine_refused','transport_busy','transport_timeout',
+                    'stop_semantics_not_supported','journey_optimization_not_supported','time_sensitive_journey_not_supported'}
+            return jsonify(success=False,reason=code if code in safe else 'routing_refused',navigation_allowed=False), (400 if code in contracts else 409 if code in versions else 503 if code=='transport_busy' else 504 if code=='transport_timeout' else 422)
+        except Exception:
+            return jsonify(success=False,reason='routing_refused',navigation_allowed=False),422
 
     @app.get("/api/prototype/versions")
     def versions():

@@ -948,3 +948,52 @@ def test_complete_app_request_engine_failure_never_falls_back_to_cached_route(ap
     with pytest.raises(Refused,match='engine_refused'):
         adapter.calculate('detour',supplied,identities)
     assert bridge.cache == before
+
+
+def test_complete_request_http_guards_preflight_and_fresh_restore(app, manifest, monkeypatch):
+    bridge=app.extensions['gh11_bridge'];client=app.test_client()
+    identities={key:manifest[key] for key in ('graph_version','source_version','policy_version')}
+    supplied=full_app_body();payload=dict(case_id='detour',app_request=supplied,**identities)
+    before=bridge._execute
+    def forbidden(*args):
+        pytest.fail('Preflight or rejected complete request cannot execute Java')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    for path in ('app-policy','app-route','app-restore'):
+        assert client.post('/api/prototype/'+path,json=payload).status_code == 401
+        assert client.post('/api/prototype/'+path,json=payload,headers=dict(AUTH,Origin='https://other.invalid')).status_code == 403
+    response=client.post('/api/prototype/app-policy',json=payload,headers=AUTH)
+    assert response.status_code == 200
+    reference=response.get_json()['plan_reference']
+    assert reference['schema'] == 3 and reference['app_request'] == supplied
+    assert not bridge.cache
+    assert client.post('/api/prototype/app-route',json=dict(payload,app_request=dict(supplied,start='1,1')),headers=AUTH).status_code == 400
+    assert client.post('/api/prototype/app-policy',json=dict(payload,proof=True),headers=AUTH).status_code == 400
+    assert client.post('/api/prototype/app-route',json=dict(payload,graph_version='0'*64),headers=AUTH).status_code == 409
+    assert client.post('/api/prototype/app-route',json=dict(payload,app_request=dict(supplied,avoid_tolls=True,avoidance_mode='mandatory')),headers=AUTH).status_code == 422
+    changed=copy.deepcopy(reference);changed['app_request']['fuel_efficiency']=7.0
+    assert client.post('/api/prototype/app-restore',json=changed,headers=AUTH).status_code == 409
+    assert client.post('/api/prototype/app-policy',data='x'*4097,content_type='application/json',headers=AUTH).status_code == 413
+    monkeypatch.setattr(bridge,'_execute',before)
+    routed=client.post('/api/prototype/app-route',json=payload,headers=AUTH)
+    assert routed.status_code == 200, routed.get_json()
+    restored=client.post('/api/prototype/app-restore',json=reference,headers=AUTH)
+    assert restored.status_code == 200
+    assert routed.get_json()['candidates'] == restored.get_json()['candidates']
+    assert routed.get_json()['app_request_context']['app_request'] == supplied
+    assert not bridge.cache
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_http_complete_requests(app, manifest, monkeypatch):
+    _run_real_browser(app,monkeypatch,'browser-complete-acceptance.cjs','PASS_ISOLATED_COMPLETE_HTTP',{'execute':7,'validate':7})
+    assert not app.extensions['gh11_bridge'].cache
+
+
+def test_anchor_only_registry_cases_keep_legacy_metadata_without_complete_template(app):
+    bridge=app.extensions['gh11_bridge']
+    bridge.cases['detour'].pop('points')
+    response=app.test_client().get('/api/prototype/cases',headers=AUTH)
+    assert response.status_code == 200
+    registry=response.get_json()
+    assert 'detour' in registry['cases'] and 'detour' in registry['case_settings']
+    assert 'detour' not in registry['case_requests'] and 'via' in registry['case_requests']

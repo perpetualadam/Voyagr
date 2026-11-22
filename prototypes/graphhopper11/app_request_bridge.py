@@ -1,4 +1,4 @@
-"""Full app payloads -> registered public cases only; no HTTP/production wiring."""
+"""Full app payloads -> registered public cases only; no production wiring."""
 import copy
 import math
 import re
@@ -109,6 +109,13 @@ class RegisteredAppRequestBridge:
         reference = dict(schema=3,case_id=case_id,**expected,app_request=adapted['app_request'],request_binding=binding)
         return adapted,reference
 
+    def preflight(self, case_id, body, identities):
+        adapted,reference = self._prepare(case_id,body,identities)
+        return dict(success=True,app_request_context=adapted,
+                    policy_report=self.bridge.policy(case_id,adapted['policy_request']),
+                    request_binding=reference['request_binding'],plan_reference=reference,
+                    navigation_allowed=False,app_integration_allowed=False)
+
     def calculate(self, case_id, body, identities):
         adapted,reference = self._prepare(case_id,body,identities)
         result = self.bridge.route(case_id,adapted['policy_request'],force_refresh=True)
@@ -128,3 +135,16 @@ class RegisteredAppRequestBridge:
         if reference != expected:
             raise Refused('app_reference_changed')
         return self.calculate(reference['case_id'],reference['app_request'],identities)
+
+
+def public_request_template(case):
+    """Operator-owned public fixtures only; never a device-location source."""
+    points = case.get('points')
+    if not isinstance(points,list) or not 2 <= len(points) <= 5 or any(not isinstance(p,list) or len(p)!=2 or not _number(p[0]) or not _number(p[1]) or not -90 <= p[0] <= 90 or not -180 <= p[1] <= 180 for p in points):
+        raise Refused('case_request_not_available')
+    return dict(start=','.join(map(str,points[0])),end=','.join(map(str,points[-1])),
+                via_points=[dict(lat=p[0],lon=p[1],type='via',provenance='coordinates',original_index=i)
+                            for i,p in enumerate(points[1:-1])],
+                stops=[],optimize_stop_order=False,round_trip=False,departure_time=None,
+                routing_mode='auto',vehicle_type='petrol_diesel',avoid_caz=False,
+                avoidance_mode='preference',max_detour=20)

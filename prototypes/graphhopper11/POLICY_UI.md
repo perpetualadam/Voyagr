@@ -174,3 +174,12 @@ The subsequent opt-in real Chromium/HTTP acceptance now covers the synthetic
 full-settings workflow without mocked responses. See REAL_BROWSER_ACCEPTANCE.md
 for its local evidence, CI command and limits. The earlier DOM evidence remains
 separate; no phone or production acceptance is implied.
+
+## Complete-request frontend checkpoint
+
+A separate complete-request mode now uses the registered app-request adapter via
+its dedicated authenticated endpoints. It preserves the full schema-3 request,
+cost/flag warnings and selected-case identity through preflight, fresh routing and
+restoration. Local and server validation reject unregistered coordinates. The older
+canonical/full-settings modes and reference schemas keep their own contracts. See
+APP_REQUEST_BRIDGE.md for the new limits and REAL_BROWSER_ACCEPTANCE.md for evidence.

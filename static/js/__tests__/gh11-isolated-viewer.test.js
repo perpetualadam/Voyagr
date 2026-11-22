@@ -21,13 +21,13 @@ maneuvers:row.instruction_details.map(item=>({type:8,instruction:item.name,lengt
 avoidance_assessment:{geometry_valid:true,geometry_binding:AI.geometryBinding({geometry,geometry_precision:6}),checked_at:1,status:'UNVERIFIED',requirements:reply.policy_report?reply.policy_report.selected.requirements.map(row=>({...row,status:row.enabled?'UNVERIFIED':'DISABLED'})):[]},
 routing_context:{graph_version:reply.graph_version,source_version:reply.source_version,policy_version:reply.policy_version,request_binding:reply.request_binding},gh11_evidence:row,navigation_allowed:false,automatic_selection_allowed:false};
 })};}
-async function start(routeReply,fixedSettings=settings,policyCategories=['motorways','railway_crossings','tolls']){
+async function start(routeReply,fixedSettings=settings,policyCategories=['motorways','railway_crossings','tolls'],caseRequests={}){
     routeReply={plan_reference:{...reference(),selected_settings:fixedSettings},selected_settings:fixedSettings,request_binding:'a'.repeat(64),...routeReply};
     if(!routeReply.app_preview)routeReply.app_preview=appPreview(routeReply);
     global.VoyagrAvoidanceIntegrity=AI;global.VoyagrNavigationSafetyUX=UX;
     document.body.innerHTML=html.match(/<body>([\s\S]*?)<script/)[1];
     global.fetch=jest.fn(async url=>({ok:true,status:200,json:async()=>
-        url.endsWith('/cases')?{cases:['public_case'],policy_categories:policyCategories,case_settings:{public_case:fixedSettings},case_bindings:{public_case:'a'.repeat(64)}}:
+        url.endsWith('/cases')?{case_requests:caseRequests,cases:['public_case'],policy_categories:policyCategories,case_settings:{public_case:fixedSettings},case_bindings:{public_case:'a'.repeat(64)}}:
         url.endsWith('/versions')?{graph_version:'graph',source_version:'source',policy_version:'policy'}:routeReply}));
     // Function scope avoids leaking viewer declarations into the production globals.
     mount(globalThis);
@@ -488,4 +488,88 @@ test.each(settingsParity)('browser full-settings derivation agrees with compiler
         expect(fetch.mock.calls.filter(([url])=>url.endsWith('/route'))).toHaveLength(0);
     }
     expect(document.getElementById('strictStart').disabled).toBe(true);
+});
+
+const completeTemplate={start:'0,0',end:'0,0.02',via_points:[],stops:[],optimize_stop_order:false,round_trip:false,departure_time:null,avoid_caz:false,avoid_tolls:true,avoidance_mode:'preference',max_detour:20};
+const completeCosts=['electricity_price','energy_efficiency','fuel_category','fuel_efficiency','fuel_price','fuel_price_mode'];
+const journeyKeys=['start','end','via_points','stops','optimize_stop_order','round_trip','departure_time','time_windows','total_stop_time','force_refresh','is_reroute','preserve_stop_order'];
+function completeReply(body){
+    const selected=richPolicy(Object.fromEntries(Object.entries(body).filter(([key])=>!completeCosts.includes(key)&&!journeyKeys.includes(key))));
+    const reply=policyRoute(selected), binding=policyBinding(body);
+    reply.request_binding=binding;reply.policy_report=richReport(selected);
+    reply.plan_reference={schema:3,case_id:'public_case',graph_version:'graph',source_version:'source',policy_version:'policy',app_request:body,request_binding:binding};
+    reply.app_request_context={app_request:body,visits:[body.start.split(',').map(Number),...(body.via_points||[]).map(p=>[p.lat,p.lon]),body.end.split(',').map(Number)],policy_request:selected,is_reroute:body.is_reroute===true,force_refresh:body.force_refresh===true,cost_warnings:completeCosts.filter(key=>key in body).map(setting=>({setting,value:body[setting],state:'UNVERIFIED'}))};
+    reply.app_integration_allowed=false;reply.gps_verification='UNVERIFIED';reply.cache_policy='bypass_complete_app_request';
+    reply.app_preview=appPreview(reply);return reply;
+}
+async function completeReady(){
+    await start({case_id:'public_case',success:true,navigation_allowed:false,graph_version:'graph',source_version:'source',policy_version:'policy',candidates:[candidate()]},settings,undefined,{public_case:completeTemplate});
+    document.getElementById('calculate').click();await settle();
+    const points=document.getElementById('line').getAttribute('points');
+    document.getElementById('useCompleteRequest').checked=true;document.getElementById('useCompleteRequest').dispatchEvent(new Event('change'));
+    return points;
+}
+function serveComplete(mutate=()=>{}){
+    fetch.mockImplementation(async(url,options)=>{
+        const envelope=JSON.parse(options.body),reply=completeReply(envelope.app_request);
+        mutate(reply,url);
+        return {ok:true,status:200,json:async()=>reply};
+    });
+}
+
+test('complete-request mode preserves flags and costs through calculation restore and next calculation',async()=>{
+    await completeReady();const before=JSON.stringify(localStorage);
+    const supplied={...completeTemplate,is_reroute:true,force_refresh:true,fuel_price_mode:'manual',fuel_price:1.6};
+    document.getElementById('completeRequest').value=JSON.stringify(supplied);serveComplete();
+    document.getElementById('calculate').click();await settle();
+    expect(document.getElementById('status').textContent).toContain('route(s) passed');
+    expect(JSON.parse(fetch.mock.calls.filter(([url])=>url.endsWith('/app-route')).at(-1)[1].body).app_request).toEqual(supplied);
+    expect(document.getElementById('policyDecisions').textContent).toContain('unverified cost input');
+    const saved=JSON.parse(document.getElementById('planReference').value);expect(saved.schema).toBe(3);
+    document.getElementById('completeRequest').value=JSON.stringify({...supplied,fuel_price:1.9});
+    document.getElementById('restore').click();await settle();
+    expect(JSON.parse(document.getElementById('completeRequest').value)).toEqual(supplied);
+    document.getElementById('calculate').click();await settle();
+    expect(JSON.parse(fetch.mock.calls.filter(([url])=>url.endsWith('/app-route')).at(-1)[1].body).app_request).toEqual(supplied);
+    expect(JSON.stringify(localStorage)).toBe(before);
+    expect(document.getElementById('strictStart').disabled).toBe(true);
+});
+
+test.each([{start:'1,1'},{end:'1,1'},{password:'must-not-send'},{stops:[{lat:0,lon:0}]},{departure_time:'later'},{fuel_price_mode:'invent'},{is_reroute:1}])('invalid complete input %j refuses before HTTP',async changed=>{
+    const points=await completeReady();document.getElementById('completeRequest').value=JSON.stringify({...completeTemplate,...changed});
+    const before=fetch.mock.calls.length;document.getElementById('calculate').click();await settle();
+    expect(fetch.mock.calls).toHaveLength(before);expect(document.getElementById('line').getAttribute('points')).toBe(points);
+});
+
+test.each(['request','context','cost','authority','reference','route_context'])('altered complete %s evidence cannot replace preview',async fault=>{
+    const points=await completeReady();const supplied={...completeTemplate,fuel_price:1.6};
+    document.getElementById('completeRequest').value=JSON.stringify(supplied);
+    serveComplete((reply,url)=>{
+        if(fault==='route_context'){if(url.endsWith('/app-route'))reply.app_request_context.force_refresh=true;return;}
+        if(!url.endsWith('/app-policy'))return;
+        if(fault==='request')reply.app_request_context.app_request={...supplied,max_detour:99};
+        if(fault==='context')reply.app_request_context.visits.reverse();
+        if(fault==='cost')reply.app_request_context.cost_warnings=[];
+        if(fault==='authority')reply.app_integration_allowed=true;
+        if(fault==='reference')reply.plan_reference.request_binding='f'.repeat(64);
+    });
+    document.getElementById('calculate').click();await settle();
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+    expect(JSON.parse(document.getElementById('completeRequest').value)).toEqual(supplied);
+});
+
+test('complete mode refuses older references without silently dropping its request',async()=>{
+    const points=await completeReady();document.getElementById('planReference').value=JSON.stringify(reference());const before=fetch.mock.calls.length;
+    document.getElementById('restore').click();await settle();
+    expect(fetch.mock.calls).toHaveLength(before);expect(document.getElementById('line').getAttribute('points')).toBe(points);
+});
+
+test('complete routing ignores a late result after a programmatic request edit',async()=>{
+    const points=await completeReady();let finish;serveComplete();
+    const served=fetch.getMockImplementation();fetch.mockImplementation((url,options)=>url.endsWith('/app-route')?new Promise(resolve=>{finish=async()=>resolve(await served(url,options));}):served(url,options));
+    document.getElementById('calculate').click();await settle();
+    document.getElementById('completeRequest').value=JSON.stringify({...completeTemplate,max_detour:99});
+    await finish();await settle();
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+    expect(JSON.parse(document.getElementById('completeRequest').value).max_detour).toBe(99);
 });

@@ -198,8 +198,16 @@ full=full_adapter.calculate('detour',{'start':'0,0','end':'0,0.02','avoid_caz':F
 assert full['plan_reference']['schema']==3 and full['navigation_allowed'] is False
 assert full_adapter.restore(full['plan_reference'])['request_binding']==full['request_binding']
 assert not local_bridge.cache
+complete_payload={**{k:versions[k] for k in ('graph_version','source_version','policy_version')},'case_id':'detour','app_request':full['app_request_context']['app_request']}
+status,raw=call('POST','/api/prototype/app-policy',complete_payload); assert status==200
+assert json.loads(raw)['plan_reference']==full['plan_reference']
+status,raw=call('POST','/api/prototype/app-route',complete_payload); assert status==200
+complete_result=json.loads(raw); assert complete_result['cache_policy']=='bypass_complete_app_request'
+status,raw=call('POST','/api/prototype/app-restore',complete_result['plan_reference']); assert status==200
+assert json.loads(raw)['request_binding']==complete_result['request_binding']
+assert call('POST','/api/prototype/restore',complete_result['plan_reference'])[0]==400
 local_bridge.verify(check_source=True)
-print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'restore_http':200,'changed_restore_http':409,'mandatory_policy_http':422,'preference_policy_http':200,'policy_restore_http':200,'raw_app_settings_preflight_http':200,'app_settings_restore_http':200,'conflicting_app_settings_http':400,'direct_full_request_restore':True,'graph_unchanged':True,'navigation_allowed':False}))
+print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'restore_http':200,'changed_restore_http':409,'mandatory_policy_http':422,'preference_policy_http':200,'policy_restore_http':200,'raw_app_settings_preflight_http':200,'app_settings_restore_http':200,'conflicting_app_settings_http':400,'complete_request_http_restore':200,'direct_full_request_restore':True,'graph_unchanged':True,'navigation_allowed':False}))
 '''
         result = json.loads(docker(['exec','-i',name,'python','-'],code=program,timeout=90))
         result.update(image_id=image,network='none',uid=10001,read_only_root=True)

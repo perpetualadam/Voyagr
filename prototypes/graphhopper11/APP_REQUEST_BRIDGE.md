@@ -1,10 +1,12 @@
 # Complete app-request bridge — registered fixtures only
 
-`RegisteredAppRequestBridge` is a direct Python adapter around the isolated local
-GH11 bridge. It begins full request integration without enabling `/api/route`,
-adding an arbitrary-coordinate HTTP endpoint, contacting a provider or changing
-the UK app. The existing viewer and HTTP restore API reject its schema-3 refs.
-This is not a completed real-app/browser or owner-store connection.
+`RegisteredAppRequestBridge` wraps the isolated local GH11 bridge. The standalone
+viewer now connects through dedicated authenticated `/api/prototype/app-policy`,
+`app-route` and `app-restore` endpoints. This does not enable the UK `/api/route`
+handler, contact a provider or permit arbitrary journeys. Every request still must
+match the selected operator-owned public case exactly. The legacy `/restore` API
+continues to reject schema-3 references; the new complete-request path accepts them.
+This is not the production UI, private-cache or owner-store connection.
 
 The audit traced `buildInitialRouteRequestBody`, `buildRerouteRequestBody` and
 `route-prefs.getRouteCostParams`. Their contracts include `lat,lon` coordinate
@@ -54,12 +56,37 @@ network-disabled generated-graph container smoke checks direct calculation/resto
 Validation combines actual JavaScript builders using synthetic settings, strict
 malformed/unsupported-request regressions, real GH11 initial/alternative/via/reroute
 cases, all returned candidate/leg checks, fresh restore, cache bypass and refusal
-of engine fallback, changed bindings and unsupported mandatory rules. The existing
-real Chromium/HTTP tests continue to cover the older registered HTTP interface;
-they do not exercise this new direct Python adapter through the production UI.
+of engine fallback, changed bindings and unsupported mandatory rules. The original real Chromium/HTTP tests continue to cover the older registered
+interface. A third scenario now exercises complete normal/via/reroute/alternative
+requests, fresh restoration and cross-case restoration through the new interface.
+It still does not load the production UI.
 
-Next: a reviewed isolated frontend request connection for this complete contract,
-followed by private-cache and owner-saved-store integration. Do not enable arbitrary
+Next: private-cache and owner-saved-store integration, with explicit ownership,
+lifetime and current-origin evidence. Do not enable arbitrary
 journeys or navigation until the missing capability/evidence gates are met.
 Milestone 3 remains in progress; production migration remains NO-GO. No merge,
 deployment, VPS access, production configuration or private-history change occurred.
+
+## Standalone complete-request mode
+
+The separate complete-request checkbox loads an explicit public template on first
+use. Its JSON editor preserves all supplied supported fields, including costs and
+reroute flags. Coordinate/via changes must match the chosen case before any HTTP
+request; unknown fields, credentials and unsupported semantics refuse locally.
+The server independently repeats validation. Older anchor-only cases without
+explicit coordinate lists retain their legacy metadata/preview path and do not
+publish complete-request templates. No graph-anchor inference is presented as GPS.
+
+The browser snapshots the entire request, checks the preflight policy/context/
+reference, then verifies those identities against every returned candidate before
+commitment. Cost warnings remain UNVERIFIED and Start stays disabled. Input edits,
+programmatic edits and case changes invalidate old responses. A failed restore
+retains the prior request/preview; successful schema-3 restoration loads its exact
+request, including across cases. Older references cannot silently remove active
+complete-request intent. No browser storage is written. Explicitly loading another
+case template replaces only the editable test input, not the current preview.
+
+All new endpoints use the unchanged Basic, Origin, no-store and 4 KiB guards.
+Preflight never runs Java. Complete calculation and restoration always re-execute
+and independently validate. Client proofs, custom models, private origins outside
+the registry and legacy reference downgrades cannot grant routing authority.

@@ -63,3 +63,10 @@ def test_missing_manual_price_is_retained_as_unverified_not_fabricated():
     body=dict(start='0,0',end='0,0.02',fuel_price_mode='manual',fuel_price=None)
     adapted=adapt_app_request(body,{'points':[[0,0],[0,.02]]})
     assert {'setting':'fuel_price','value':None,'state':'UNVERIFIED'} in adapted['cost_warnings']
+
+
+@pytest.mark.parametrize('case',[{}, {'points':[]}, {'points':[[True,0],[0,1]]}, {'points':[[91,0],[0,1]]}])
+def test_anchor_only_or_invalid_cases_cannot_publish_coordinate_templates(case):
+    from prototypes.graphhopper11.app_request_bridge import public_request_template
+    with pytest.raises(Refused,match='case_request_not_available'):
+        public_request_template(case)
