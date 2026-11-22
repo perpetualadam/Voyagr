@@ -1113,4 +1113,4 @@ def test_real_chromium_owner_saved_plans(app, manifest, monkeypatch):
     @app.post('/__test/reset-saved-restore')
     def reset_saved_restore():
         entered.clear();completed.clear();return jsonify(success=True)
-    _run_real_browser(app,monkeypatch,'browser-saved-plans.cjs','PASS_OWNER_SAVED_PLANS',{'execute':4,'validate':4})
+    _run_real_browser(app,monkeypatch,'browser-saved-plans.cjs','PASS_OWNER_SAVED_PLANS',{'execute':6,'validate':6})

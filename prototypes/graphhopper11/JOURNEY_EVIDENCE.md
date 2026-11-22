@@ -37,3 +37,30 @@ scenario also exercises this packaged module with synthetic in-memory sources.
 No actual phone GPS or production owner/journey has been accessed. Current registered
 HTTP route requests remain public fixture cases; arbitrary phone-origin routing is
 still refused. Milestone 3 remains in progress and production migration is NO-GO.
+
+## Explicit preview UI binding
+
+`VoyagrGH11JourneyBridge.bind(options)` now creates the real guard for this viewer
+using explicitly supplied owner/journey/GPS sources. No source is selected or
+started automatically. Binding clears the unbound preview and cannot be removed
+by closing the returned handle: close makes subsequent requests fail closed.
+`refresh()` is the host notification hook for lifecycle/position changes. The host
+must call it when evidence changes; there is no watcher or timer in this prototype.
+
+Bound calculation and restore capture context before network work, recheck before
+requests and after responses, and check again immediately before committing prepared
+candidates to the UI. Alternatives and explicit saves recheck the displayed token.
+Expired or changed evidence clears geometry, instructions, reference and save
+eligibility while preserving the request editor and stored plans. Delayed response
+completion cannot repopulate a cleared view. Without a binding, the original
+registered-fixture preview path remains available; navigation stays disabled in both
+modes. No fix or context token is included in requests or saved references.
+
+Viewer DOM tests use the actual guard/validator to cover owner, route, stop,
+simulation and fix changes during delayed responses, immediate refresh, alternative
+selection, stale-before-network refusal and saving. The fifth real Chromium test
+also calculates a bound preview, invalidates it via alternative selection without a
+notification, and changes journey generation during an actual fresh restore. Six
+Java executions and six validations are required by that scenario. All GPS/journey
+inputs are synthetic; real UK host lifecycle, live GPS and phone acceptance remain
+unverified. This is UI commit integration in the isolated viewer, not UK UI wiring.

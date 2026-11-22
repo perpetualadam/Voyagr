@@ -239,3 +239,12 @@ GPS validator and invalidates delayed preview work on evidence changes. Syntheti
 unit/browser checks cover this boundary without collecting a location or enabling
 navigation. The host journey snapshot API, accepted GPS runtime wiring and UI commit
 integration remain pending. See JOURNEY_EVIDENCE.md; Milestone 3 remains in progress.
+
+## Subsequent Milestone 3 checkpoint: guarded isolated UI commits
+
+An explicit journey binding now protects the standalone viewer's requests, final UI
+commits, alternative display and saves. Host refresh invalidates current/pending
+work; closing keeps the bound path fail-closed. Registered preview without binding
+is preserved. Real guard/validator DOM regressions and an actual Chromium restore
+race use synthetic evidence only. UK lifecycle/GPS wiring remains pending; no
+production migration or navigation authority is introduced. See JOURNEY_EVIDENCE.md.

@@ -78,6 +78,23 @@ async function main(){
    guard.close();return {opaque,refused,simulationRefused,closed:!guard.current(token)};
   });
   assert.deepEqual(journeyGuard,{opaque:true,refused:true,simulationRefused:true,closed:true});
+  phase='bound preview journey';await page.evaluate(()=>{
+   let generation=1;const fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()};
+   const journey={capture:()=>({route_id:'synthetic_bound',generation,active:true,simulating:false}),current:value=>value.generation===generation&&value.active===true&&value.simulating===false};
+   const binding=VoyagrGH11JourneyBridge.bind({owner:VoyagrGH11SavedSession,journey,gps:{getAcceptedOriginFix:()=>fix}});
+   window.advanceSyntheticJourney=notify=>{generation++;fix.timestamp=Date.now();if(notify)binding.refresh();};
+  });
+  const boundReference=await calculate('detour');
+  assert.notEqual(await id('line').getAttribute('points'),'');
+  await page.evaluate(()=>advanceSyntheticJourney(false));await id('alternatives').dispatchEvent('change');
+  assert.equal(await id('line').getAttribute('points'),'');assert.equal(await id('planReference').inputValue(),'');
+  phase='journey change during actual restore';assert.equal((await context.request.post(target.origin+'/__test/reset-saved-restore')).status(),200);
+  await open('planReference');await id('planReference').fill(JSON.stringify(boundReference));await id('restore').click();
+  await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).entered,{timeout:5000}).toBe(true);
+  await page.evaluate(()=>advanceSyntheticJourney(true));
+  await expect.poll(async()=>(await(await context.request.get(target.origin+'/__test/saved-restore-state')).json()).completed,{timeout:15000}).toBe(true);
+  await page.evaluate(()=>new Promise(requestAnimationFrame));
+  assert.equal(await id('line').getAttribute('points'),'');assert.equal(await id('planReference').inputValue(),'');assert.equal(await id('saveCurrentPlan').isDisabled(),true);assert.equal(await id('strictStart').isDisabled(),true);
   assert.deepEqual(errors,[]);assert.equal(external,0);
   console.log(JSON.stringify({status:'PASS_OWNER_SAVED_PLANS',external_requests:0,navigation_allowed:false,synthetic_storage_retained:true,phone_acceptance:'UNVERIFIED'}));
  }finally{if(context)await context.close();if(browser)await browser.close();}

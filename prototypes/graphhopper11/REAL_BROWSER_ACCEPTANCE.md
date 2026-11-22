@@ -138,3 +138,9 @@ The completed old result cannot repopulate the next scope. Four Java executions/
 validations are required. Synthetic legacy records and a localStorage marker are
 unchanged. No device profile or production journey collection is accessed; see
 OWNER_SAVED_PLANS.md for the distinction between local scopes and authentication.
+
+The saved-plan scenario additionally binds the actual journey guard to the preview
+UI using synthetic sources. A valid context displays a route; changing generation
+without notification prevents alternative display, and an explicit refresh during
+actual restore prevents late UI completion. Six Java executions and validations
+are now required. No physical GPS or production journey is used.

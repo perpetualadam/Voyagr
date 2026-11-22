@@ -55,7 +55,7 @@ The fifth opt-in Chromium scenario uses real IndexedDB and real loopback HTTP/GH
 It saves a guest reference, reloads, loads it and restores with fresh validation;
 checks that only reference fields were stored; saves an independent local owner;
 and switches owners during an actual server restore. The server wrapper requires
-four Java executions and four validations, and the late result must not appear.
+six Java executions and six validations (including the bound journey UI checks), and the late result must not appear.
 A synthetic marker and synthetic legacy record in the ordinary test database remain
 unchanged. Observation endpoints exist only on the temporary test app; the normal
 factory rejects those paths. The browser context is fresh and no actual user

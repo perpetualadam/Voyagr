@@ -609,3 +609,59 @@ test('a late saved-selector read cannot start restoration after an owner change'
  const before=fetch.mock.calls.length;owner.switchOwner('sb:synthetic_b');finish(completeReply(completeTemplate).plan_reference);await settle();
  expect(fetch.mock.calls).toHaveLength(before);expect(document.getElementById('planReference').value).toBe('');
 });
+
+const JourneyEvidence=require('../../../prototypes/graphhopper11/journey_evidence.js');
+const SpeedGps=require('../modules/navigation/speed-gps.js');
+function bindJourney(){
+ let epoch=0,generation=1,active=true,simulating=false,fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()};
+ global.VoyagrGH11JourneyEvidence=JourneyEvidence;
+ const owner={capture:()=>({owner:'guest',epoch}),current:token=>token.epoch===epoch};
+ const journey={capture:()=>({route_id:'public_fixture',generation,active,simulating}),current:token=>token.generation===generation&&token.active===active&&token.simulating===simulating};
+ const binding=global.VoyagrGH11JourneyBridge.bind({owner,journey,gps:{getAcceptedOriginFix:()=>fix},validator:SpeedGps});
+ return {binding,change:kind=>{if(kind==='owner')epoch++;else if(kind==='stop')active=false;else if(kind==='simulation')simulating=true;else if(kind==='fix')fix={...fix,timestamp:fix.timestamp+1};else generation++;}};
+}
+afterEach(()=>{delete global.VoyagrGH11JourneyEvidence;delete global.VoyagrGH11JourneyBridge;});
+test.each(['owner','route','stop','simulation','fix'])('bound %s changes block delayed complete responses with the real evidence guard',async kind=>{
+ await completeReady();serveComplete();const live=bindJourney();let finish;
+ const served=fetch.getMockImplementation();fetch.mockImplementation((url,options)=>url.endsWith('/app-route')?new Promise(resolve=>{finish=async()=>resolve(await served(url,options));}):served(url,options));
+ document.getElementById('calculate').click();await settle();live.change(kind);await finish();await settle();
+ expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('planReference').value).toBe('');expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+ expect(document.getElementById('strictStart').disabled).toBe(true);expect(document.getElementById('status').textContent).toContain('Journey evidence');
+});
+test('bound current evidence displays preview; host refresh clears it without replacing settings',async()=>{
+ await completeReady();serveComplete();const live=bindJourney();const before=document.getElementById('completeRequest').value;
+ document.getElementById('calculate').click();await settle();expect(document.getElementById('line').getAttribute('points')).not.toBe('');
+ live.change('route');live.binding.refresh();expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('completeRequest').value).toBe(before);
+});
+test('alternative selection rechecks context even without host notification',async()=>{
+ await completeReady();serveComplete();const live=bindJourney();document.getElementById('calculate').click();await settle();
+ live.change('stop');document.getElementById('alternatives').dispatchEvent(new Event('change'));
+ expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('instructions').textContent).toBe('');
+});
+test('stale context refuses before network and closing cannot remove the guard',async()=>{
+ await completeReady();serveComplete();const live=bindJourney();live.change('simulation');const before=fetch.mock.calls.length;
+ document.getElementById('calculate').click();await settle();expect(fetch.mock.calls).toHaveLength(before);
+ live.binding.close();expect(()=>global.VoyagrGH11JourneyBridge.bind({})).toThrow();
+ document.getElementById('calculate').click();await settle();expect(fetch.mock.calls).toHaveLength(before);
+});
+test('save rechecks journey evidence without altering already stored plans',async()=>{
+ const owner=ownerFacade();await completeReady();serveComplete();const live=bindJourney();
+ document.getElementById('calculate').click();await settle();expect(document.getElementById('saveCurrentPlan').disabled).toBe(false);
+ live.change('fix');document.getElementById('saveCurrentPlan').click();await settle();
+ expect(owner.save).not.toHaveBeenCalled();expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+});
+test('evidence is checked again after candidate preparation immediately before UI commit',async()=>{
+ await completeReady();serveComplete();const live=bindJourney();const prepare=AI.preparePlanningCandidate;
+ jest.spyOn(AI,'preparePlanningCandidate').mockImplementation(route=>{const result=prepare(route);live.change('route');return result;});
+ document.getElementById('calculate').click();await settle();
+ expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('planReference').value).toBe('');expect(document.getElementById('alternatives').options).toHaveLength(0);
+});
+test('a superseded save failure cannot clear a newer journey preview',async()=>{
+ const owner=ownerFacade();await completeReady();serveComplete();const live=bindJourney();
+ document.getElementById('calculate').click();await settle();let reject;
+ owner.save.mockImplementation(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+ document.getElementById('saveCurrentPlan').click();await settle();live.change('fix');
+ document.getElementById('calculate').click();await settle();const current=document.getElementById('planReference').value;
+ expect(document.getElementById('line').getAttribute('points')).not.toBe('');reject(Error('superseded'));await settle();
+ expect(document.getElementById('line').getAttribute('points')).not.toBe('');expect(document.getElementById('planReference').value).toBe(current);expect(document.getElementById('saveCurrentPlan').disabled).toBe(false);
+});

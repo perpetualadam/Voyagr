@@ -6,6 +6,7 @@
 'use strict';
 const document=root.document, fetch=(...args)=>root.fetch(...args);
 let validatedPlan=null;
+let journeyGuard=null,displayJourneyToken=null,pendingJourneyToken=null;
 let planSession=null;
 try{if(root.VoyagrGH11SavedPlans&&root.VoyagrLocalStore)planSession=root.VoyagrGH11SavedPlans.create({indexedDB:root.indexedDB,onOwnerChange:()=>ownerChanged()});}catch(_){/* Storage failure must not block preview routing. */}
 root.VoyagrGH11SavedSession=planSession;
@@ -194,6 +195,7 @@ function reference(caseId,policy=null,binding=registeredBindings[caseId]){
     return saved;
 }
 function showRoute(){
+    if(journeyGuard&&!journeyCurrent(displayJourneyToken)){clearJourneyPreview();return;}
     const route=routes[Number(alternatives.value)];if(!route)return;
     root.VoyagrNavigationSafetyUX.present(route);
     const coords=route.polyline.map(point=>[point[1],point[0]]),xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);
@@ -204,21 +206,36 @@ function showRoute(){
 }
 alternatives.addEventListener('change',showRoute);
 function clearPreview(){routes=[];alternatives.replaceChildren();byId('line').setAttribute('points','');byId('instructions').textContent='';}
+function journeyCurrent(token){try{return !journeyGuard||journeyGuard.current(token)===true;}catch(_){return false;}}
+function clearJourneyPreview(){changed();clearPreview();root.VoyagrNavigationSafetyUX.reset();planText.value='';displayJourneyToken=null;pendingJourneyToken=null;status.textContent='Journey evidence changed or unavailable. Preview cleared; obtain current evidence and calculate again.';}
+root.VoyagrGH11JourneyBridge={bind(options){
+    if(journeyGuard||!root.VoyagrGH11JourneyEvidence)throw Error('Journey bridge unavailable.');
+    journeyGuard=root.VoyagrGH11JourneyEvidence.create(options);
+    clearJourneyPreview();
+    const refresh=()=>{if((displayJourneyToken&&!journeyCurrent(displayJourneyToken))||(pendingJourneyToken&&!journeyCurrent(pendingJourneyToken)))clearJourneyPreview();};
+    // Explicit host notification. No GPS watcher, timers, auth or stored journey reads.
+    return {refresh,close(){journeyGuard.close();clearJourneyPreview();}};
+}};
 async function calculateCase(saved){
+    if(journeyGuard&&displayJourneyToken&&!journeyCurrent(displayJourneyToken))clearJourneyPreview();
     const selectedCase=saved?saved.case_id:cases.value, ownerCase=cases.value;
     const localOwner=planSession?planSession.capture():null;
+    let journeyToken=null;
+    try{if(journeyGuard)journeyToken=journeyGuard.capture();}catch(_){clearJourneyPreview();return;}
+    pendingJourneyToken=journeyToken;
     const complete=saved?saved.schema===3:useComplete.checked;
     const ownerPolicy=stable(selection(ownerCase)), requested=saved?(complete?{app_request:readComplete(selectedCase,JSON.stringify(saved.app_request))}:saved.schema===2?normalizePolicy(saved.policy_request):null):selection(selectedCase);
     let policy=complete?completePolicy(requested.app_request):requested&&Object.prototype.hasOwnProperty.call(requested,'profile')?requested:null;
     const context=complete?completeContext(requested.app_request):null;
     const ticket=integrity.begin(root.localStorage), owned=++operation, fetchOptions=integrity.fetchOptions(ticket);
-    const current=()=>{try{return (!planSession||planSession.current(localOwner))&&owned===operation&&(!ticket.controller||!ticket.controller.signal.aborted)&&integrity.current(ticket,root.localStorage)&&cases.value===ownerCase&&stable(selection(ownerCase))===ownerPolicy;}catch(_){return false;}};
+    const current=()=>{try{return journeyCurrent(journeyToken)&&(!planSession||planSession.current(localOwner))&&owned===operation&&(!ticket.controller||!ticket.controller.signal.aborted)&&integrity.current(ticket,root.localStorage)&&cases.value===ownerCase&&stable(selection(ownerCase))===ownerPolicy;}catch(_){return false;}};
     const selectedSettings=registeredSettings[selectedCase];let selectedBinding=registeredBindings[selectedCase], approved=null;
     calculate.disabled=true;restore.disabled=true;
     validatedPlan=null;byId('saveCurrentPlan').disabled=true;
     if(!saved&&!requested){root.VoyagrNavigationSafetyUX.reset();clearPreview();byId('policyResult').hidden=true;}
     status.textContent=saved?'Restoring and checking…':'Calculating…';
     try{
+        if(!current()){if(owned===operation)clearJourneyPreview();return;}
         if(requested){
             const preflight=await post(complete?'/api/prototype/app-policy':'/api/prototype/policy',{case_id:selectedCase,graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,...(complete?requested:policy?{policy_request:policy}:requested)},fetchOptions);
             if(!current()){if(owned===operation)status.textContent='Request expired or superseded. Calculate again.';return;}
@@ -233,6 +250,7 @@ async function calculateCase(saved){
         const expectedReference=complete?completeReference(selectedCase,requested.app_request,selectedBinding):reference(selectedCase,policy,selectedBinding);
         if(saved&&stable(saved)!==stable(expectedReference))throw Error('Plan reference changed; current preview retained.');
         const body=saved||{case_id:selectedCase,...(complete?{}:{selected_settings:selectedSettings}),graph_version:versions.graph_version,source_version:versions.source_version,policy_version:versions.policy_version,...(complete?requested:policy?{policy_request:policy}:{})};
+        if(!current()){if(owned===operation)clearJourneyPreview();return;}
         const result=await post(complete?(saved?'/api/prototype/app-restore':'/api/prototype/app-route'):(saved?'/api/prototype/restore':'/api/prototype/route'),body,fetchOptions);
         if(!current()){if(owned===operation)status.textContent='Request expired or superseded. Calculate again.';return;}
         if(result.request_binding!==selectedBinding||stable(result.selected_settings)!==stable(selectedSettings)||stable(result.plan_reference)!==stable(expectedReference)||result.case_id!==selectedCase||!result.success||result.navigation_allowed!==false||result.graph_version!==versions.graph_version||result.source_version!==versions.source_version||result.policy_version!==versions.policy_version||(policy&&stable(result.policy_report)!==stable(approved)))throw Error('Response contract refused.');
@@ -247,9 +265,11 @@ async function calculateCase(saved){
             identities.add(candidate.id);return candidate;
         });
         const options=prepared.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});
+        if(!current()){if(owned===operation)clearJourneyPreview();return;}
+        displayJourneyToken=journeyToken;
         routes=prepared;alternatives.replaceChildren(...options);cases.value=selectedCase;if(saved){useComplete.checked=complete;if(complete){completeText.value=JSON.stringify(requested.app_request);syncControls();}else applyRestoredPolicy(policy);}showSettings();
         planText.value=JSON.stringify(result.plan_reference);
-        validatedPlan=complete&&planSession?{reference:JSON.parse(JSON.stringify(result.plan_reference)),owner:localOwner,operation:owned}:null;
+        validatedPlan=complete&&planSession?{reference:JSON.parse(JSON.stringify(result.plan_reference)),owner:localOwner,operation:owned,journeyToken}:null;
         byId('saveCurrentPlan').disabled=!validatedPlan;
         status.textContent=routes.length+' route(s) passed selected fixture checks. '+(approved&&(approved.preference_warnings.length||(approved.supplemental_settings||[]).length||(context&&context.cost_warnings.length))?'Some preferences remain unresolved; see Rule check details. ':'')+'Navigation remains unavailable.';showRoute();
     }catch(error){
@@ -261,7 +281,7 @@ async function calculateCase(saved){
             if(reported)renderPolicy(error.policyReport);
             status.textContent=reported?'Selected rules could not be compiled or verified. Current preview retained; see Rule check details.':error.message;
         }
-    }finally{integrity.finish(ticket);if(owned===operation){calculate.disabled=false;restore.disabled=false;}}
+    }finally{integrity.finish(ticket);if(owned===operation){pendingJourneyToken=null;if(!journeyCurrent(journeyToken))clearJourneyPreview();calculate.disabled=false;restore.disabled=false;}}
 }
 function run(saved){calculateCase(saved).catch(()=>{status.textContent='Settings unavailable; current preview retained.';});}
 calculate.addEventListener('click',()=>run(null));
@@ -301,12 +321,15 @@ function ownerChanged(){
 byId('loadSavedPlans').addEventListener('click',()=>{if(!planSession)return;const owner=planSession.capture();loadOwnedPlans(owner).catch(()=>{if(planSession.current(owner))byId('savedPlanStatus').textContent='Saved plans unavailable; existing records retained.';});});
 byId('saveCurrentPlan').addEventListener('click',async()=>{
     const selected=validatedPlan;if(!selected||!planSession)return;
+    if(!journeyCurrent(selected.journeyToken)){if(validatedPlan===selected&&operation===selected.operation)clearJourneyPreview();return;}
     try{
-        await planSession.save(selected.reference,selected.owner,()=>validatedPlan===selected&&operation===selected.operation);
+        await planSession.save(selected.reference,selected.owner,()=>validatedPlan===selected&&operation===selected.operation&&journeyCurrent(selected.journeyToken));
+        if(!journeyCurrent(selected.journeyToken)){if(validatedPlan===selected&&operation===selected.operation)clearJourneyPreview();return;}
         if(!planSession.current(selected.owner)||validatedPlan!==selected||operation!==selected.operation)return;
         await loadOwnedPlans(selected.owner);
+        if(!journeyCurrent(selected.journeyToken)){if(validatedPlan===selected&&operation===selected.operation)clearJourneyPreview();return;}
         if(planSession.current(selected.owner)&&validatedPlan===selected&&operation===selected.operation)byId('savedPlanStatus').textContent='Saved this validated test reference on this device.';
-    }catch(_){if(planSession.current(selected.owner))byId('savedPlanStatus').textContent='Plan was not confirmed saved; existing records retained.';}
+    }catch(_){if(!journeyCurrent(selected.journeyToken)){if(validatedPlan===selected&&operation===selected.operation)clearJourneyPreview();return;}if(planSession.current(selected.owner))byId('savedPlanStatus').textContent='Plan was not confirmed saved; existing records retained.';}
 });
 byId('restoreSavedPlan').addEventListener('click',async()=>{
     if(!planSession)return;
