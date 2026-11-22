@@ -710,3 +710,31 @@ def test_all_explicit_app_categories_fit_bounded_restore_contract(app, manifest,
     assert len(response.get_json()['policy_report']['rules']) == 13
     assert len(response.get_json()['policy_report']['app_settings']['avoidance_requirements']) == 13
     assert not bridge.cache
+
+
+def test_raw_app_settings_preflight_derives_full_policy_without_java(app, manifest, monkeypatch):
+    bridge = app.extensions['gh11_bridge']
+    monkeypatch.setattr(bridge,'_execute',lambda *_: pytest.fail('Settings preflight cannot execute Java'))
+    settings = dict(routing_mode='auto',vehicle_type='electric',avoid_tolls=True,max_detour=20,prefer_scenic=True)
+    payload = dict(body(manifest),app_settings=settings)
+    client = app.test_client()
+    assert client.post('/api/prototype/policy',json=payload).status_code == 401
+    assert client.post('/api/prototype/policy',json=payload,headers=dict(AUTH,Origin='https://other.invalid')).status_code == 403
+    response = client.post('/api/prototype/policy',json=payload,headers=AUTH)
+    assert response.status_code == 200
+    report = response.get_json()['policy_report']
+    from prototypes.graphhopper11.app_settings_adapter import adapt_settings
+    adapted = adapt_settings(settings)
+    assert report['selected'] == dict(adapted['policy_request'],app_settings=settings)
+    assert report['app_settings'] == settings and len(report['rules']) == 13
+    assert report['supplemental_settings'] and not report['app_integration_allowed']
+    assert response.get_json()['request_binding'] == bridge.binding('detour',report['selected'])
+    assert not bridge.cache
+    assert client.post('/api/prototype/route',json=payload,headers=AUTH).status_code == 400
+    assert client.post('/api/prototype/policy',json=dict(payload,policy_request=report['selected']),headers=AUTH).status_code == 400
+    assert client.post('/api/prototype/policy',json=dict(payload,app_settings={'password':'not-allowed'}),headers=AUTH).status_code == 400
+    mandatory = dict(settings,avoidance_mode='mandatory')
+    refusal = client.post('/api/prototype/policy',json=dict(payload,app_settings=mandatory),headers=AUTH)
+    assert refusal.status_code == 422
+    assert refusal.get_json()['policy_report']['app_settings'] == mandatory
+    assert not bridge.cache

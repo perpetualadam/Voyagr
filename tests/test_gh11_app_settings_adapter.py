@@ -121,3 +121,16 @@ def test_rich_policy_binds_all_settings_and_rejects_weaker_or_conflicting_rows()
     changed = copy.deepcopy(selected);changed['app_settings']['avoidance_mode'] = 'mandatory'
     with pytest.raises(InvalidPolicy, match='app_settings_policy_mismatch'):
         compile_policy(changed)
+
+
+def test_browser_parity_fixtures_are_exact_current_compiler_outputs():
+    from pathlib import Path
+    from prototypes.graphhopper11.policy_compiler import CATEGORIES, compile_policy
+    fixtures = json.loads(Path('prototypes/graphhopper11/app-settings-parity.json').read_text())
+    assert len(fixtures) == 6
+    for fixture in fixtures:
+        adapted = adapt_settings(fixture['policy']['app_settings'])
+        selected = dict(adapted['policy_request'],app_settings=adapted['app_settings'])
+        assert fixture['categories'] == list(CATEGORIES)
+        assert fixture['policy'] == selected
+        assert fixture['report'] == compile_policy(selected)

@@ -175,6 +175,8 @@ assert json.loads(raw)['policy_report']==policy_result['policy_report']
 from prototypes.graphhopper11.app_settings_adapter import adapt_settings
 adapted=adapt_settings({'avoid_caz':False,'avoid_tolls':True,'max_detour':20,'prefer_scenic':True})
 rich={**adapted['policy_request'],'app_settings':adapted['app_settings']}
+status,raw=call('POST','/api/prototype/policy',{**{k:v for k,v in request.items() if k!='selected_settings'},'app_settings':adapted['app_settings']}); assert status==200
+assert json.loads(raw)['policy_report']['selected']==rich
 status,raw=call('POST','/api/prototype/route',{**request,'policy_request':rich}); assert status==200
 app_result=json.loads(raw)
 assert app_result['policy_report']['selected']['app_settings']==adapted['app_settings']
@@ -190,7 +192,7 @@ status,raw=call('POST','/api/prototype/route',request); assert status==422
 assert json.loads(raw)['navigation_allowed'] is False
 from prototypes.graphhopper11.isolated_app import LocalJavaBridge
 LocalJavaBridge(json.loads(Path('/inputs/manifest.json').read_text())).verify(check_source=True)
-print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'restore_http':200,'changed_restore_http':409,'mandatory_policy_http':422,'preference_policy_http':200,'policy_restore_http':200,'app_settings_restore_http':200,'conflicting_app_settings_http':400,'graph_unchanged':True,'navigation_allowed':False}))
+print(json.dumps({'anonymous_http':401,'authenticated_viewer_http':200,'route_http':200,'refusal_http':422,'settings_mismatch_http':400,'repeat_route_http':200,'restore_http':200,'changed_restore_http':409,'mandatory_policy_http':422,'preference_policy_http':200,'policy_restore_http':200,'raw_app_settings_preflight_http':200,'app_settings_restore_http':200,'conflicting_app_settings_http':400,'graph_unchanged':True,'navigation_allowed':False}))
 '''
         result = json.loads(docker(['exec','-i',name,'python','-'],code=program,timeout=90))
         result.update(image_id=image,network='none',uid=10001,read_only_root=True)

@@ -51,9 +51,10 @@ refuse before cached evidence can be returned. Existing manifests and references
 are not silently upgraded. The isolated container packages both source files
 without importing production services. Deployment remains a separate approval.
 
-The existing standalone UI deliberately accepts only its original two-field policy
-contract and refuses richer references rather than stripping their app settings.
-A real-app/browser bridge and production cache/saved-store integration remain
+The standalone viewer now accepts richer references and a separate synthetic
+full-settings mode. Raw settings preflight returns the canonical policy, which the
+browser independently checks before routing or restoring; see POLICY_UI.md.
+The real UK UI connection and production cache/saved-store integration remain
 pending. Request size limits, authentication and Origin checks are unchanged.
 
 Validation covers the actual JavaScript shared request builder using synthetic

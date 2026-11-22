@@ -21,13 +21,13 @@ maneuvers:row.instruction_details.map(item=>({type:8,instruction:item.name,lengt
 avoidance_assessment:{geometry_valid:true,geometry_binding:AI.geometryBinding({geometry,geometry_precision:6}),checked_at:1,status:'UNVERIFIED',requirements:reply.policy_report?reply.policy_report.selected.requirements.map(row=>({...row,status:row.enabled?'UNVERIFIED':'DISABLED'})):[]},
 routing_context:{graph_version:reply.graph_version,source_version:reply.source_version,policy_version:reply.policy_version,request_binding:reply.request_binding},gh11_evidence:row,navigation_allowed:false,automatic_selection_allowed:false};
 })};}
-async function start(routeReply,fixedSettings=settings){
+async function start(routeReply,fixedSettings=settings,policyCategories=['motorways','railway_crossings','tolls']){
     routeReply={plan_reference:{...reference(),selected_settings:fixedSettings},selected_settings:fixedSettings,request_binding:'a'.repeat(64),...routeReply};
     if(!routeReply.app_preview)routeReply.app_preview=appPreview(routeReply);
     global.VoyagrAvoidanceIntegrity=AI;global.VoyagrNavigationSafetyUX=UX;
     document.body.innerHTML=html.match(/<body>([\s\S]*?)<script/)[1];
     global.fetch=jest.fn(async url=>({ok:true,status:200,json:async()=>
-        url.endsWith('/cases')?{cases:['public_case'],policy_categories:['motorways','railway_crossings','tolls'],case_settings:{public_case:fixedSettings},case_bindings:{public_case:'a'.repeat(64)}}:
+        url.endsWith('/cases')?{cases:['public_case'],policy_categories:policyCategories,case_settings:{public_case:fixedSettings},case_bindings:{public_case:'a'.repeat(64)}}:
         url.endsWith('/versions')?{graph_version:'graph',source_version:'source',policy_version:'policy'}:routeReply}));
     // Function scope avoids leaking viewer declarations into the production globals.
     mount(globalThis);
@@ -357,5 +357,135 @@ test('an expired preflight cannot route even if the transport ignores cancellati
     expect(fetch.mock.calls).toHaveLength(1);
     expect(document.getElementById('line').getAttribute('points')).toBe(points);
     expect(document.getElementById('status').textContent).toContain('expired');
+    expect(document.getElementById('strictStart').disabled).toBe(true);
+});
+
+function fullSettings(value={avoid_caz:false,avoid_tolls:true,avoidance_mode:'preference',max_detour:20,prefer_scenic:true}){
+    document.getElementById('appSettings').value=JSON.stringify(value);
+    document.getElementById('useAppSettings').checked=true;
+    document.getElementById('useAppSettings').dispatchEvent(new Event('change'));
+    return value;
+}
+function richPolicy(appSettings){
+    return {profile:'car',requirements:['motorways','railway_crossings','tolls'].map(category=>({category,enabled:category==='tolls'&&appSettings.avoid_tolls===true,mode:appSettings.avoidance_mode||'preference',scope:'route'})),app_settings:appSettings};
+}
+function richReport(policy){
+    return {...policyReport(policy),app_settings:policy.app_settings,app_integration_allowed:false,
+        supplemental_settings:['prefer_scenic','prefer_quiet','route_optimization','max_detour'].filter(key=>Object.hasOwn(policy.app_settings,key)).map(setting=>({setting,value:policy.app_settings[setting],state:'UNVERIFIED',reason:'app_preference_not_integrated'}))};
+}
+function serveFullSettings(mutate=()=>{}){
+    fetch.mockImplementation(async(url,options)=>{
+        const body=JSON.parse(options.body), policy=body.policy_request||richPolicy(body.app_settings);
+        const report=richReport(policy);
+        if(url.endsWith('/policy')){
+            const response={success:report.route_preview_allowed,navigation_allowed:false,request_binding:policyBinding(policy),policy_report:report};mutate(response,url);
+            return {ok:report.route_preview_allowed,status:report.route_preview_allowed?200:422,json:async()=>response};
+        }
+        const response=policyRoute(policy);response.policy_report=report;mutate(response,url);
+        return {ok:true,json:async()=>response};
+    });
+}
+
+test('full settings round trip through preflight route restore and next calculation without storage writes',async()=>{
+    await renderedPreview();const before=JSON.stringify(localStorage), supplied=fullSettings();serveFullSettings();
+    document.getElementById('calculate').click();await settle();
+    const preflight=fetch.mock.calls.filter(([url])=>url.endsWith('/policy')).at(-1);
+    expect(JSON.parse(preflight[1].body).app_settings).toEqual(supplied);
+    const routed=JSON.parse(fetch.mock.calls.filter(([url])=>url.endsWith('/route')).at(-1)[1].body);
+    expect(routed.policy_request.app_settings).toEqual(supplied);
+    expect(document.getElementById('policyDecisions').textContent).toContain('Max detour');
+    expect(document.getElementById('status').textContent).toContain('preferences remain unresolved');
+    const saved=JSON.parse(document.getElementById('planReference').value);
+    expect(saved.policy_request.app_settings).toEqual(supplied);
+    document.getElementById('appSettings').value=JSON.stringify({avoid_caz:false,max_detour:99});
+    document.getElementById('restore').click();await settle();
+    expect(JSON.parse(document.getElementById('appSettings').value)).toEqual(supplied);
+    expect(document.getElementById('useAppSettings').checked).toBe(true);
+    document.getElementById('calculate').click();await settle();
+    expect(JSON.parse(fetch.mock.calls.filter(([url])=>url.endsWith('/policy')).at(-1)[1].body).app_settings).toEqual(supplied);
+    expect(document.getElementById('strictStart').disabled).toBe(true);
+    expect(JSON.stringify(localStorage)).toBe(before);
+});
+
+test.each(['dropped_setting','missing_warning','altered_warning','authority','incomplete_rows','weakened_rule','wrong_profile','route_report'])('full settings %s response cannot commit',async fault=>{
+    const points=await renderedPreview(), supplied=fullSettings();
+    serveFullSettings((response,url)=>{
+        if(fault==='route_report'){if(url.endsWith('/route'))delete response.policy_report.app_settings.max_detour;return;}
+        if(!url.endsWith('/policy'))return;
+        if(fault==='dropped_setting')delete response.policy_report.selected.app_settings.max_detour;
+        if(fault==='missing_warning')response.policy_report.supplemental_settings=[];
+        if(fault==='altered_warning')response.policy_report.supplemental_settings[0].state='COMPILED';
+        if(fault==='authority')response.policy_report.app_integration_allowed=true;
+        if(fault==='incomplete_rows')response.policy_report.selected.requirements.pop();
+        if(fault==='weakened_rule')response.policy_report=richReport({...response.policy_report.selected,requirements:response.policy_report.selected.requirements.map(row=>({...row,enabled:false}))});
+        if(fault==='wrong_profile')response.policy_report.selected.profile='bicycle';
+    });
+    document.getElementById('calculate').click();await settle();
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+    expect(JSON.parse(document.getElementById('appSettings').value)).toEqual(supplied);
+    expect(document.getElementById('strictStart').disabled).toBe(true);
+});
+
+test('unsupported full-settings mandatory avoidance stops before route and retains choices',async()=>{
+    const points=await renderedPreview(), supplied=fullSettings({avoid_caz:false,avoid_tolls:true,avoidance_mode:'mandatory',max_detour:20});serveFullSettings();
+    const before=fetch.mock.calls.filter(([url])=>url.endsWith('/route')).length;
+    document.getElementById('calculate').click();await settle();
+    expect(fetch.mock.calls.filter(([url])=>url.endsWith('/route'))).toHaveLength(before);
+    expect(document.getElementById('status').textContent).toContain('could not be compiled');
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+    expect(JSON.parse(document.getElementById('appSettings').value)).toEqual(supplied);
+});
+
+test.each([null,[],{password:'must not send'},{lat:1},{avoid_points:[{lat:1,lon:2}]},{avoid_tolls:1},{max_detour:101}])('malformed or private full settings %j refuse before HTTP',async supplied=>{
+    const points=await renderedPreview();fullSettings(supplied);const before=fetch.mock.calls.length;
+    document.getElementById('calculate').click();await settle();
+    expect(fetch.mock.calls).toHaveLength(before);
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+});
+
+test.each(['input','programmatic'])('editing full settings during preflight %s prevents stale routing',async event=>{
+    const points=await renderedPreview();fullSettings();let finish;
+    fetch.mockImplementationOnce((_url,options)=>new Promise(resolve=>{finish=()=>{const policy=richPolicy(JSON.parse(options.body).app_settings);resolve({ok:true,json:async()=>({success:true,navigation_allowed:false,request_binding:policyBinding(policy),policy_report:richReport(policy)})});};}));
+    const before=fetch.mock.calls.filter(([url])=>url.endsWith('/route')).length;
+    document.getElementById('calculate').click();await settle();
+    document.getElementById('appSettings').value=JSON.stringify({avoid_caz:false,max_detour:44});
+    if(event==='input')document.getElementById('appSettings').dispatchEvent(new Event('input'));
+    finish();await settle();
+    expect(fetch.mock.calls.filter(([url])=>url.endsWith('/route'))).toHaveLength(before);
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+});
+
+test('failed rich restore retains full settings and legacy references cannot remove them',async()=>{
+    const points=await renderedPreview(), supplied=fullSettings();serveFullSettings();
+    const saved=policyRoute(richPolicy({avoid_caz:false,max_detour:55})).plan_reference;
+    document.getElementById('planReference').value=JSON.stringify(saved);
+    fetch.mockRejectedValueOnce(new Error('Offline'));document.getElementById('restore').click();await settle();
+    expect(JSON.parse(document.getElementById('appSettings').value)).toEqual(supplied);
+    document.getElementById('planReference').value=JSON.stringify(reference());const before=fetch.mock.calls.length;
+    document.getElementById('restore').click();await settle();
+    expect(fetch.mock.calls).toHaveLength(before);
+    expect(document.getElementById('line').getAttribute('points')).toBe(points);
+});
+
+const settingsParity=JSON.parse(fs.readFileSync(path.join(__dirname,'../../../prototypes/graphhopper11/app-settings-parity.json'),'utf8'));
+test.each(settingsParity)('browser full-settings derivation agrees with compiler-verified fixture %#',async compiled=>{
+    const supplied=compiled.policy.app_settings;
+    await start({case_id:'public_case',success:true,navigation_allowed:false,graph_version:'graph',source_version:'source',policy_version:'policy',candidates:[candidate()]},settings,compiled.categories);
+    fullSettings(supplied);
+    fetch.mockImplementation(async(url,options)=>{
+        const body=JSON.parse(options.body);
+        if(url.endsWith('/policy'))return {ok:compiled.report.route_preview_allowed,status:compiled.report.route_preview_allowed?200:422,json:async()=>({success:compiled.report.route_preview_allowed,navigation_allowed:false,request_binding:policyBinding(compiled.policy),policy_report:compiled.report})};
+        expect(body.policy_request).toEqual(compiled.policy);
+        const response=policyRoute(compiled.policy);response.policy_report=compiled.report;
+        return {ok:true,json:async()=>response};
+    });
+    document.getElementById('calculate').click();await settle();
+    if(compiled.report.route_preview_allowed){
+        expect(document.getElementById('status').textContent).toContain('route(s) passed');
+        expect(JSON.parse(document.getElementById('planReference').value).policy_request).toEqual(compiled.policy);
+    }else{
+        expect(document.getElementById('status').textContent).toContain('could not be compiled');
+        expect(fetch.mock.calls.filter(([url])=>url.endsWith('/route'))).toHaveLength(0);
+    }
     expect(document.getElementById('strictStart').disabled).toBe(true);
 });

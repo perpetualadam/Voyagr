@@ -122,7 +122,50 @@ After a separately reviewed and explicitly approved isolated-service update:
 5. Confirm a legacy reference cannot drop active custom rules and a stale reference
    cannot be restored. Repeat offline/401/timeout checks without clearing storage.
 
-No such phone checks or new deployment have been performed. This does not connect
-arbitrary journeys, legacy UK UI flags, vehicle exemptions, optimization/scenic
-controls, owner-scoped saved journeys or production RouteCache. General hazard,
-legal, turn/endpoint and freshness evidence are still incomplete.
+No such phone checks or new deployment have been performed. The initial canonical
+controls did not accept legacy settings. The full-settings extension below adds
+synthetic legacy normalization, not the live UK UI, arbitrary journeys, actual
+optimization/scenic routing, owner-scoped saved journeys or production RouteCache.
+General hazard, legal, turn/endpoint and freshness evidence remain incomplete.
+
+## Full settings bridge (branch only; not deployed)
+
+The separate full-settings mode accepts bounded synthetic settings JSON without
+reading or writing device preferences. Its allowlist refuses unknown fields,
+credentials, coordinates, nonempty avoid points and malformed values before HTTP.
+It disables individual-rule editing while active, retaining those choices if the
+user explicitly returns to that mode. No private journey input is added.
+
+`/api/prototype/policy` accepts exactly one of `policy_request` or `app_settings`
+with the registered case and three version identities. Raw settings are adapted
+server-side and returned as a rich selected policy. This is preflight only: no
+Java, cache lookup or route execution. Authentication, Origin and 4 KiB limits
+remain unchanged. Route/restore still require the canonical rich policy.
+
+The browser independently derives the expected profile and all legacy/default/
+explicit canonical rules. It rejects inconsistent selected rules, dropped settings,
+missing or altered supplemental warnings, and any app/navigation authority claim.
+Unimplemented scenic/quiet/optimization/detour settings render as text with an
+UNVERIFIED explanation. All supplied values enter the existing policy-bound route
+request, cache identity and schema-2 reference; no browser storage is written.
+
+Successful rich restoration loads the full settings after preflight and candidate
+validation. The next calculation retains them. Refusal leaves the previous preview
+and current choices intact. Legacy references cannot silently remove active full
+settings. Input events and an independent semantic snapshot guard reject stale
+responses, including programmatic edits without input events. Start stays disabled.
+
+Focused DOM tests use real shared planning modules with mocked HTTP. Six shared
+fixtures cover defaults, camera-off, electric/CAZ exemptions, explicit overrides and
+road/optimization preferences; Python tests assert these fixtures equal the current
+compiler outputs and JavaScript tests verify browser agreement. This avoids a
+nested runtime subprocess dependency in the DOM suite. Real-engine Flask tests
+exercise raw-settings preflight and guards; container smoke checks the same alias
+and rich route/restore round trip. None establishes a physical-phone acceptance or
+an actual HTTP browser session.
+
+After a separately approved update, test synthetic full settings, unsupported Must
+avoid, unresolved Prefer warnings, rich restore/next calculation, edits during both
+requests, offline/401/timeouts and retained local data. Do not clear browser storage.
+The real UK UI, arbitrary journeys, saved-store integration and deployment remain
+pending. Milestone 3 remains in progress.

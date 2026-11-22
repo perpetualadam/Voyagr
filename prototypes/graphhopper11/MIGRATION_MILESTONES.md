@@ -132,8 +132,9 @@ Supplemental preferences stay UNVERIFIED and navigation stays disabled. See
 [APP_SETTINGS_ADAPTER.md](APP_SETTINGS_ADAPTER.md).
 
 The real UK UI/request connection, production cache/saved-store integration and
-phone acceptance of this revision remain pending. The standalone viewer refuses
-rich settings references until its next bridge can preserve them; see
+phone acceptance of this revision remain pending. The standalone viewer now preserves
+rich settings references and accepts bounded synthetic settings with independent
+browser/server normalization and stale-response guards; see
 [POLICY_UI.md](POLICY_UI.md).
 
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).

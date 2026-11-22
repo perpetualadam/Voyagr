@@ -501,14 +501,19 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
     @app.post("/api/prototype/policy")
     def policy_preflight():
         body = request.get_json(silent=True)
-        required = {'case_id', 'graph_version', 'source_version', 'policy_version', 'policy_request'}
-        if not isinstance(body, dict) or set(body) != required or not isinstance(body.get('case_id'), str) or body['case_id'] not in bridge.cases:
+        required = {'case_id', 'graph_version', 'source_version', 'policy_version'}
+        if not isinstance(body, dict) or set(body) not in (required | {'policy_request'}, required | {'app_settings'}) or not isinstance(body.get('case_id'), str) or body['case_id'] not in bridge.cases:
             return jsonify(success=False, reason='request_contract', navigation_allowed=False), 400
         if any(body[key] != bridge.manifest[key] for key in ('graph_version','source_version','policy_version')):
             return jsonify(success=False, reason='version_changed', navigation_allowed=False), 409
         try:
-            selected = normalize_policy(body['policy_request'])
-        except InvalidPolicy as error:
+            if 'app_settings' in body:
+                from prototypes.graphhopper11.app_settings_adapter import adapt_settings
+                adapted = adapt_settings(body['app_settings'])
+                selected = normalize_policy(dict(adapted['policy_request'], app_settings=adapted['app_settings']))
+            else:
+                selected = normalize_policy(body['policy_request'])
+        except ValueError as error:
             return jsonify(success=False, reason=str(error), navigation_allowed=False), 400
         return calculate_registered(body['case_id'], selected, preflight=True)
 
