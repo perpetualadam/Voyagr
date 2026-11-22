@@ -59,6 +59,16 @@ jobs:
           python -m pip install pytest "Flask>=3.1.2,<4"
           python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py tests/test_gh11_container_package.py tests/test_gh11_policy_compiler.py tests/test_gh11_app_settings_adapter.py
 
+      - name: Install isolated browser test dependencies
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Test real Chromium against loopback-only synthetic GH11
+        env:
+          GH11_PROTOTYPE_JAR: ${{ runner.temp }}/graphhopper-web-11.1.jar
+          GH11_BROWSER_ACCEPTANCE: '1'
+        run: python -m pytest -q tests/test_gh11_isolated_app.py -k real_chromium
+
   container-package:
     runs-on: ubuntu-latest
     timeout-minutes: 15

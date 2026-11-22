@@ -137,6 +137,12 @@ rich settings references and accepts bounded synthetic settings with independent
 browser/server normalization and stale-response guards; see
 [POLICY_UI.md](POLICY_UI.md).
 
+Real Chromium -> loopback HTTP -> local GH11 acceptance now covers registered
+full-settings calculation, restoration, mandatory refusal, offline recovery,
+cache revalidation and synthetic storage markers. This is an isolated checkpoint,
+not a live UK request connection or phone acceptance; see
+[REAL_BROWSER_ACCEPTANCE.md](REAL_BROWSER_ACCEPTANCE.md).
+
 Development scope and pending deployment are recorded in [STRICT_MODE.md](STRICT_MODE.md).
 
 Exit: actual Flask/browser tests pass; the current synthetic contract is supporting

@@ -738,3 +738,53 @@ def test_raw_app_settings_preflight_derives_full_policy_without_java(app, manife
     assert refusal.status_code == 422
     assert refusal.get_json()['policy_report']['app_settings'] == mandatory
     assert not bridge.cache
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
+    import signal
+    import threading
+    from werkzeug.serving import make_server, WSGIRequestHandler
+
+    class QuietHandler(WSGIRequestHandler):
+        def log(self, *_args, **_kwargs):
+            pass  # Never emit request paths, authentication headers or bodies.
+
+    bridge = app.extensions['gh11_bridge']
+    calls = {'execute': 0, 'validate': 0}
+    for name in calls:
+        method = getattr(bridge, '_execute' if name == 'execute' else 'validate')
+        def counted(*args, _name=name, _method=method, **kwargs):
+            calls[_name] += 1
+            return _method(*args, **kwargs)
+        monkeypatch.setattr(bridge, '_execute' if name == 'execute' else 'validate', counted)
+
+    server = make_server('127.0.0.1', 0, app, threaded=True, request_handler=QuietHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    process = None
+    try:
+        runner = Path(__file__).resolve().parents[1]/'prototypes/graphhopper11/browser-acceptance.cjs'
+        process = subprocess.Popen(['node', str(runner), f'http://127.0.0.1:{server.server_port}/'],
+                                   stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+        try:
+            output, errors = process.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+            pytest.fail('Isolated browser exceeded its test budget')
+        assert process.returncode == 0, errors[-2000:]
+        evidence = json.loads(output)
+        assert evidence['status'] == 'PASS_ISOLATED_CHROMIUM_HTTP'
+        assert evidence['external_requests'] == 0 and not evidence['navigation_allowed']
+        assert evidence['synthetic_storage_retained'] and evidence['phone_acceptance'] == 'UNVERIFIED'
+        assert calls == {'execute': 1, 'validate': 4}
+        bridge.verify(check_source=True)
+    finally:
+        if process is not None and process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+        assert not thread.is_alive()

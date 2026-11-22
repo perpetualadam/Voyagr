@@ -169,3 +169,8 @@ avoid, unresolved Prefer warnings, rich restore/next calculation, edits during b
 requests, offline/401/timeouts and retained local data. Do not clear browser storage.
 The real UK UI, arbitrary journeys, saved-store integration and deployment remain
 pending. Milestone 3 remains in progress.
+
+The subsequent opt-in real Chromium/HTTP acceptance now covers the synthetic
+full-settings workflow without mocked responses. See REAL_BROWSER_ACCEPTANCE.md
+for its local evidence, CI command and limits. The earlier DOM evidence remains
+separate; no phone or production acceptance is implied.
