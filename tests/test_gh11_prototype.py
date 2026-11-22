@@ -301,6 +301,8 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     oracle = exclusion_report["cases"][2]["exact_node_diagnostic"]
     assert oracle["status"] == "PASS_EXACT_NODE_DIAGNOSTIC"
     assert oracle["from_node"] != oracle["to_node"]
+    assert oracle["from_node_details"]["node_id"] == oracle["from_node"]
+    assert oracle["to_node_details"]["node_id"] == oracle["to_node"]
     assert oracle["distance_m"] > 0 and oracle["forbidden_traversals"] == 0
     assert oracle["route_absence_proven"] is False
     assert set(oracle["directed_edge_keys"]).isdisjoint({forward_key, reverse_key})
@@ -332,6 +334,10 @@ def test_readonly_regression_runner_checks_real_paths_without_changing_graph(tmp
     assert oracle["status"] == "UNVERIFIED_OR_FAILED"
     assert oracle["route_absence_proven"] is False
     assert "no path returned" in oracle["reason"]
+    assert oracle["from_node_details"]["neighbors"]
+    assert oracle["to_node_details"]["neighbors"]
+    assert all(n["forward_blocked"] and n["reverse_blocked"]
+               for n in oracle["from_node_details"]["neighbors"])
     # Reject unknown evidence and endpoint re-snapping; neither proves no route exists.
     cases.write_text(json.dumps({"associations": associations, "cases": [
         {"id": "unknown", "points": [[0, 0], [0, .02]], "blocked_associations": ["missing"]},

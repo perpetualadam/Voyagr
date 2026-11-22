@@ -202,6 +202,8 @@ public class ReadOnlyRouteRegression {
         long start=System.nanoTime();
         try {
             require(from>=0 && to>=0 && from!=to,"distinct exact anchors required");
+            result.put("from_node_details",nodeDiagnostic(hopper,from,blocked));
+            result.put("to_node_details",nodeDiagnostic(hopper,to,blocked));
             var weighting=hopper.createWeighting(hopper.getProfile("car"),request.getHints());
             var algorithm=new com.graphhopper.routing.Dijkstra(hopper.getBaseGraph(),weighting,
                 com.graphhopper.routing.util.TraversalMode.EDGE_BASED);

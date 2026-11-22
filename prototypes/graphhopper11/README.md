@@ -325,3 +325,22 @@ both pinned directions include that connector, a blocked endpoint cannot fall
 back to its eligible twin, ordinary routing resumes after refusal, and graph
 hashes remain unchanged. The updated Red Lane fixture enables pinning; its UK
 result awaits VPS2 execution. The slip-road failure remains a separate issue.
+
+## Slip-road refusal investigation
+
+Operator execution of the pinned Red Lane fixture passed both directions with
+exact endpoint identities, ten edges, 819.387 m and zero forbidden traversals;
+the routed sequences matched the separate exact-node diagnostic. This resolves
+that selected prototype case only.
+
+`uk-slip-road-diagnostics.json` isolates camera 50032464 on source way 1183050528.
+It compares ordinary coordinate routing with exact association-derived tower
+anchors, while keeping the selected direction blocked, one-metre tolerance,
+one-million-node budget and 20-second per-query limit. Both cases also run the
+bounded exact-node diagnostic. Its source/destination incident edges are now
+reported even when no path is returned, including access and block flags. This
+can expose an endpoint trapped by a one-way camera segment without classifying
+a provider refusal as proof that no compliant journey exists. It does not widen
+endpoints, unblock the camera, or test a different upstream/downstream journey.
+UK slip-road results remain pending; graph IDs are always rederived and no live
+routing infrastructure is contacted. Production migration remains NO-GO.

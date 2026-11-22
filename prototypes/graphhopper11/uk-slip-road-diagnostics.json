@@ -1,0 +1,59 @@
+{
+  "scope": "Read-only slip-road diagnostics. Selected camera direction remains blocked; compare ordinary and pinned endpoints. Missing paths do not prove absence.",
+  "source_pbf_sha256": "20d0e39cb555b457126d47903a084cc9b7b79d49345b601b3c4e1887fda385cf",
+  "associations": [
+    {
+      "id": "camera_50032464_oneway_source_order",
+      "source_nodes": [
+        61771714,
+        50032464,
+        50032466
+      ],
+      "points": [
+        [
+          53.778609,
+          -1.5377496
+        ],
+        [
+          53.7788901,
+          -1.5379451
+        ],
+        [
+          53.7794106,
+          -1.5383188
+        ]
+      ],
+      "expected_osm_way_ids": [
+        1183050528
+      ],
+      "require_all_expected_ways": true,
+      "max_snap_distance_m": 1
+    }
+  ],
+  "cases": [
+    {
+      "id": "slip_camera_unpinned",
+      "anchors_from_association": "camera_50032464_oneway_source_order",
+      "blocked_associations": [
+        "camera_50032464_oneway_source_order"
+      ],
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "pin_exact_anchors": false,
+      "diagnose_exact_nodes": true,
+      "diagnose_anchors": true
+    },
+    {
+      "id": "slip_camera_pinned",
+      "anchors_from_association": "camera_50032464_oneway_source_order",
+      "blocked_associations": [
+        "camera_50032464_oneway_source_order"
+      ],
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "pin_exact_anchors": true,
+      "diagnose_exact_nodes": true,
+      "diagnose_anchors": true
+    }
+  ]
+}
