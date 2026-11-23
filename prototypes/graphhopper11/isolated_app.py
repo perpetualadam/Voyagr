@@ -34,6 +34,7 @@ RUNNER = Path(__file__).with_name("ReadOnlyRouteRegression.java")
 MARKER = b"VOYAGR_GH11_REGRESSION "
 WEB_ROOT = Path(__file__).resolve().parents[2] / "static/js"
 BROWSER_ASSETS = {
+    "journey-plan.js": WEB_ROOT / "modules/navigation/journey-plan.js",
     "gh11-uk-host-boot.js": Path(__file__).with_name("uk_host_boot.js"),
     "gh11-host-journey.js": Path(__file__).with_name("host_journey_adapter.js"),
     "speed-gps.js": WEB_ROOT / "modules/navigation/speed-gps.js",
@@ -363,7 +364,7 @@ class LocalJavaBridge:
                     or len(indices) != result.get("requested_points")
                     or any(type(x) is not int or not 0 <= x < len(coords) for x in indices)
                     or indices[0] != 0 or indices[-1] != len(coords)-1
-                    or indices != sorted(indices)):
+                    or any(right <= left for left, right in zip(indices, indices[1:]))):
                 raise Refused("waypoint_or_instruction_coverage")
             for field in ("distance_km", "duration_minutes"):
                 if type(row.get(field)) not in (int, float) or not math.isfinite(row[field]) or row[field] < 0:
@@ -420,12 +421,17 @@ def app_preview(result):
                       "street_names": [item["name"]] if item["name"] else []}
                      for item in row["instruction_details"]]
         indices = row["waypoint_indices"]
+        if (not isinstance(indices, list) or not 2 <= len(indices) <= 5
+                or any(type(index) is not int or not 0 <= index < len(points) for index in indices)
+                or indices[0] != 0 or indices[-1] != len(points)-1
+                or any(right <= left for left, right in zip(indices, indices[1:]))):
+            raise Refused("preview_leg_contract")
         routes.append({"id": identity, "source": "GraphHopper 11.1 isolated preview",
                        "geometry": "".join(encoded), "geometry_precision": 6,
                        "polyline": [[lat/1e6, lon/1e6] for lat, lon in points],
                        "distance_km": row["distance_km"], "duration_minutes": row["duration_minutes"],
                        "maneuvers": maneuvers, "geometry_complete": True,
-                       "leg_geometry_ranges": [{"leg_index": i, "start_shape_index": indices[i],
+                       "leg_geometry_ranges": [{"leg_index": i, "begin_shape_index": indices[i],
                                                 "end_shape_index": indices[i+1], "preview_only": True}
                                                for i in range(len(indices)-1)],
                        "gh11_evidence": copy.deepcopy(row),

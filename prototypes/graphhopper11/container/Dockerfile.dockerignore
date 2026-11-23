@@ -46,3 +46,5 @@
 !prototypes/graphhopper11/host_journey_adapter.js
 
 !prototypes/graphhopper11/uk_host_boot.js
+
+!static/js/modules/navigation/journey-plan.js

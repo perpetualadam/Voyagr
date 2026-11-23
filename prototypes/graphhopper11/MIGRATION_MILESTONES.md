@@ -295,3 +295,25 @@ restore/offline/GPS-replacement paths retain active state, and legitimate redraw
 still works. The twelve-check UK browser scenario binds actual LIVE host context
 with a synthetic fix without granting GH11 guidance. See ACTIVE_JOURNEY_ACCEPTANCE.md.
 Positive GH11 guidance/route parity remains NO-GO and Milestone 3 is in progress.
+
+## Current Milestone 3 remaining scope (23 November 2026)
+
+The four unchecked acceptance rows above refer to full UK routing, not just the
+registered-case preview. Existing isolated tests establish refusal, version/settings
+binding, saved references and selected-case leg checks; they do not close these rows.
+
+1. Guidance/start/selection/replacement capability and origin/endpoint/turn provenance,
+   retaining mandatory refusal wherever proof is unavailable.
+2. Every candidate/leg through full UK settings, ordered visits, multi-stop and
+   deviation-reroute paths, including fewer/no compliant routes.
+3. Live origin, versions, settings, ordered stops and owner-bound cache/selection
+   in the complete UK request path.
+4. Full saved-journey restore, outage, stale-response/policy races and provider-fallback
+   acceptance beyond registered fixtures and separate preview references.
+
+The leg projection now uses canonical begin/end indices and the viewer validates
+actual UK inspection for every candidate. Actual generated-graph primary/alternative/
+via/reroute outputs pass inspection while remaining non-navigable. Collapsed bounds
+and malformed third alternatives refuse without partial UI replacement. This closes
+a concrete compatibility defect, not general turn/stop or guidance proof. See
+LEG_PLANNING_CONTRACT.md. Milestone 3 remains in progress; no deployment is included.

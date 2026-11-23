@@ -6,17 +6,19 @@ require('../modules/navigation/strict-route-policy.js');
 const AI=require('../modules/navigation/avoidance-integrity.js');
 const Codec=require('../modules/navigation/polyline-codec.js');
 const UX=require('../app/navigation-safety-ux.js');
+const JourneyPlan=require('../modules/navigation/journey-plan.js');
 const mount=require('../../../prototypes/graphhopper11/isolated_viewer.js');
 const settle=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
 function candidate(name='A road'){
     return {navigation_allowed:false,geometry:{type:'LineString',coordinates:[[0,0],[.01,.01],[.02,0]]},distance_km:2,
-        instruction_details:[{name,distance_m:2000}]};
+        waypoint_indices:[0,2],instruction_details:[{name,distance_m:2000}]};
 }
 const settings={profile:'car',alternatives:false,no_motorways:false,mandatory_associations:['camera'],both_directions:false};
 function reference(){return {schema:1,case_id:'public_case',graph_version:'graph',source_version:'source',policy_version:'policy',selected_settings:settings,request_binding:'a'.repeat(64)};}
 function appPreview(reply){return {navigation_allowed:false,routes:(reply.candidates||[]).map((row,i)=>{
 const geometry=Codec.encodePolyline(row.geometry.coordinates.map(point=>[point[1],point[0]]),6);
-return {id:'preview-'+i,geometry,geometry_precision:6,distance_km:row.distance_km,
+return {id:'preview-'+i,geometry,geometry_precision:6,distance_km:row.distance_km,geometry_complete:true,
+leg_geometry_ranges:row.waypoint_indices.slice(0,-1).map((begin,i)=>({leg_index:i,begin_shape_index:begin,end_shape_index:row.waypoint_indices[i+1],preview_only:true})),
 maneuvers:row.instruction_details.map(item=>({type:8,instruction:item.name,length:item.distance_m/1000,begin_shape_index:0,end_shape_index:row.geometry.coordinates.length-1})),
 avoidance_assessment:{geometry_valid:true,geometry_binding:AI.geometryBinding({geometry,geometry_precision:6}),checked_at:1,status:'UNVERIFIED',requirements:reply.policy_report?reply.policy_report.selected.requirements.map(row=>({...row,status:row.enabled?'UNVERIFIED':'DISABLED'})):[]},
 routing_context:{graph_version:reply.graph_version,source_version:reply.source_version,policy_version:reply.policy_version,request_binding:reply.request_binding},gh11_evidence:row,navigation_allowed:false,automatic_selection_allowed:false};
@@ -24,7 +26,7 @@ routing_context:{graph_version:reply.graph_version,source_version:reply.source_v
 async function start(routeReply,fixedSettings=settings,policyCategories=['motorways','railway_crossings','tolls'],caseRequests={}){
     routeReply={plan_reference:{...reference(),selected_settings:fixedSettings},selected_settings:fixedSettings,request_binding:'a'.repeat(64),...routeReply};
     if(!routeReply.app_preview)routeReply.app_preview=appPreview(routeReply);
-    global.VoyagrAvoidanceIntegrity=AI;global.VoyagrNavigationSafetyUX=UX;
+    global.VoyagrJourneyPlan=JourneyPlan;global.VoyagrAvoidanceIntegrity=AI;global.VoyagrNavigationSafetyUX=UX;
     document.body.innerHTML=html.match(/<body>([\s\S]*?)<script/)[1];
     global.fetch=jest.fn(async url=>({ok:true,status:200,json:async()=>
         url.endsWith('/cases')?{case_requests:caseRequests,cases:['public_case'],policy_categories:policyCategories,case_settings:{public_case:fixedSettings},case_bindings:{public_case:'a'.repeat(64)}}:
@@ -500,6 +502,7 @@ function completeReply(body){
     reply.plan_reference={schema:3,case_id:'public_case',graph_version:'graph',source_version:'source',policy_version:'policy',app_request:body,request_binding:binding};
     reply.app_request_context={app_request:body,visits:[body.start.split(',').map(Number),...(body.via_points||[]).map(p=>[p.lat,p.lon]),body.end.split(',').map(Number)],policy_request:selected,is_reroute:body.is_reroute===true,force_refresh:body.force_refresh===true,cost_warnings:completeCosts.filter(key=>key in body).map(setting=>({setting,value:body[setting],state:'UNVERIFIED'}))};
     reply.app_integration_allowed=false;reply.gps_verification='UNVERIFIED';reply.cache_policy='bypass_complete_app_request';
+    if(body.via_points?.length)reply.candidates.forEach(row=>{row.waypoint_indices=[0,1,2];});
     reply.app_preview=appPreview(reply);return reply;
 }
 async function completeReady(){
@@ -702,4 +705,22 @@ test('explicit UK boot uses real GPS/intent/lifecycle APIs and the actual separa
   Gps.acceptOriginPosition({timestamp:at+1,coords:{latitude:12.35,longitude:34.56,accuracy:10}});
   expect(document.getElementById('line').getAttribute('points')).toBe('');expect(source.ready).not.toHaveBeenCalled();expect(source.db).not.toHaveBeenCalled();
  }finally{connection?.close();global.VoyagrGH11SavedSession?.close();Life.setRouteInProgress(false);Life.setRoutePolyline(null);global.indexedDB=previousIdb;delete global.VoyagrGpsOrchestration;delete global.VoyagrJourneyModes;delete global.VoyagrGH11HostJourney;}
+});
+test.each(['missing','legacy_key','zero_length','gap','outside_geometry','non_numeric','collapsed_evidence'])('bad third-candidate %s leg metadata cannot replace an existing preview',async fault=>{
+ const points=await completeReady();serveComplete((reply,url)=>{
+  if(!url.endsWith('/app-route'))return;
+  reply.candidates=[candidate('one'),candidate('two'),candidate('three')];reply.app_preview=appPreview(reply);
+  const route=reply.app_preview.routes[2];
+  if(fault==='missing')delete route.leg_geometry_ranges;
+  if(fault==='legacy_key'){route.leg_geometry_ranges[0].start_shape_index=0;delete route.leg_geometry_ranges[0].begin_shape_index;}
+  if(fault==='zero_length')route.leg_geometry_ranges[0].end_shape_index=0;
+  if(fault==='gap')route.leg_geometry_ranges[0].begin_shape_index=1;
+  if(fault==='outside_geometry')route.leg_geometry_ranges[0].end_shape_index=3;
+  if(fault==='non_numeric')route.leg_geometry_ranges[0].begin_shape_index='0';
+  if(fault==='collapsed_evidence')reply.candidates[2].waypoint_indices=[0,0,2];
+ });
+ document.getElementById('calculate').click();await settle();
+ expect(document.getElementById('status').textContent).toBe('Response contract refused.');
+ expect(document.getElementById('line').getAttribute('points')).toBe(points);
+ expect(document.getElementById('alternatives').options).toHaveLength(1);expect(document.getElementById('strictStart').disabled).toBe(true);
 });

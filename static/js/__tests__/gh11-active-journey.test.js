@@ -46,7 +46,7 @@ function preview(id='gh11-preview'){
  route.routing_context={graph_version:'a'.repeat(64),source_version:'b'.repeat(64),policy_version:'c'.repeat(64),request_binding:'d'.repeat(64),scope:'selected_fixture_graph_checks_only'};
  route.avoidance_assessment.status='UNVERIFIED';route.avoidance_assessment.requirements.forEach(rule=>{rule.status='UNVERIFIED';});
  route.avoidance_assessment.automatic_selection_allowed=false;route.avoidance_assessment.claim='selected_fixture_graph_checks_only';
- route.leg_geometry_ranges=[{leg_index:0,start_shape_index:0,end_shape_index:1,preview_only:true},{leg_index:1,start_shape_index:1,end_shape_index:2,preview_only:true}];
+ route.leg_geometry_ranges=[{leg_index:0,begin_shape_index:0,end_shape_index:1,preview_only:true},{leg_index:1,begin_shape_index:1,end_shape_index:2,preview_only:true}];
  return route;
 }
 function retained(before,persisted){

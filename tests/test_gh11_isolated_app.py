@@ -178,7 +178,7 @@ def test_real_transport_timeout_and_output_limit_kill_child_group(manifest, tmp_
         bridge.route("detour")
 
 
-@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint"])
+@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint", "collapsed_waypoint"])
 def test_independent_transport_validation_rejects_corrupted_result(app, fault):
     bridge = app.extensions["gh11_bridge"]
     case = dict(bridge.cases["detour"], alternatives=True)
@@ -215,6 +215,10 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
         candidates[0]["instruction_details"][0]["interval"] = [0, 2]
     elif fault == "missing_waypoint":
         candidates[0]["waypoint_indices"] = [0]
+    elif fault == "collapsed_waypoint":
+        report["cases"][0]["requested_points"] = 3
+        for row in candidates:
+            row["waypoint_indices"] = [0, 0, 1]
 
     with pytest.raises(Refused):
         bridge.validate(report, case)
@@ -410,12 +414,17 @@ const assert=require('node:assert/strict');
 const AI=require('./static/js/modules/navigation/avoidance-integrity.js');
 const Policy=require('./static/js/modules/navigation/strict-route-policy.js');
 const Selection=require('./static/js/modules/navigation/route-selection.js');
+const JourneyPlan=require('./static/js/modules/navigation/journey-plan.js');
 const preview=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 global.VOYAGR_STRICT_ROUTING=true;
 global.VoyagrStrictRoutePolicy=Policy.create({navigation_authorized:false,scope:preview.scope});
 for(const route of preview.routes){
  const prepared=AI.preparePlanningCandidate(route);
  assert.ok(prepared,'real shared planning validator refused the adapter');
+ const inspected=JourneyPlan.inspection(prepared,AI);
+ assert.deepEqual(inspected.ranges,route.leg_geometry_ranges);
+ assert.equal(inspected.ranges.length,route.gh11_evidence.waypoint_indices.length-1);
+ inspected.ranges.forEach((leg,i)=>{assert.equal(leg.begin_shape_index,route.gh11_evidence.waypoint_indices[i]);assert.equal(leg.end_shape_index,route.gh11_evidence.waypoint_indices[i+1]);assert.equal(leg.preview_only,true);assert.equal('start_shape_index' in leg,false);});
  assert.equal(prepared.geometry_precision,6);
  assert.equal(AI.geometryBinding(prepared),route.avoidance_assessment.geometry_binding);
  assert.deepEqual(Selection.mergeNavigationRouteFromSelected({},[route],0).routing_context,route.routing_context);
@@ -1114,3 +1123,18 @@ def test_real_chromium_owner_saved_plans(app, manifest, monkeypatch):
     def reset_saved_restore():
         entered.clear();completed.clear();return jsonify(success=True)
     _run_real_browser(app,monkeypatch,'browser-saved-plans.cjs','PASS_OWNER_SAVED_PLANS',{'execute':6,'validate':6})
+
+
+@pytest.mark.parametrize('indices',[[],[0],[0,0,2],[0,2,1,2],[0,3],[False,2],[0,'1',2]])
+def test_preview_adapter_refuses_collapsed_or_invalid_leg_boundaries(indices):
+    from prototypes.graphhopper11.isolated_app import app_preview
+    row={'geometry':{'type':'LineString','coordinates':[[0,0],[.01,0],[.02,0]]},
+         'directed_edge_keys':[2],'waypoint_indices':indices,'distance_km':2,'duration_minutes':2,
+         'instruction_details':[{'name':'Synthetic','sign':0,'text':'Continue','interval':[0,2],
+                                 'distance_m':2000,'time_ms':120000}]}
+    result={**{key:'a'*64 for key in ('graph_version','source_version','policy_version','request_binding')},
+            'candidates':[row],'policy_report':{'selected':{'requirements':[]}}}
+    before=copy.deepcopy(result)
+    with pytest.raises(Refused,match='preview_leg_contract'):
+        app_preview(result)
+    assert result==before

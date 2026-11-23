@@ -20,7 +20,7 @@ let caseRequests={};
 const settingKeys=['routing_mode','vehicle_type','avoidance_mode','avoidance_requirements','avoid_points','enable_hazard_avoidance','avoid_cameras','avoid_traffic_lights','avoid_railway_crossings','avoid_tolls','avoid_caz','avoid_motorways','avoid_ferries','avoid_unpaved','caz_exempt','include_tolls','include_caz','prefer_scenic','prefer_quiet','route_optimization','max_detour'];
 const costKeys=['electricity_price','energy_efficiency','fuel_category','fuel_efficiency','fuel_price','fuel_price_mode'];
 let versions=null, routes=[], registeredSettings={}, registeredBindings={}, categories=[], operation=0;
-if(!root.VoyagrStrictRoutePolicyModule||!root.VoyagrNavigationSafetyUX||!root.VoyagrAvoidanceIntegrity){status.textContent='Strict verification unavailable.';return;}
+if(!root.VoyagrJourneyPlan||!root.VoyagrStrictRoutePolicyModule||!root.VoyagrNavigationSafetyUX||!root.VoyagrAvoidanceIntegrity){status.textContent='Strict verification unavailable.';return;}
 const integrity=root.VoyagrAvoidanceIntegrity;
 if(root.VOYAGR_STRICT_ROUTING!==true)Object.defineProperty(root,'VOYAGR_STRICT_ROUTING',{value:true,writable:false,configurable:false});
 root.VoyagrStrictRoutePolicy=root.VoyagrStrictRoutePolicyModule.create({navigation_authorized:false,scope:'selected_fixture_graph_checks_only'});
@@ -261,7 +261,12 @@ async function calculateCase(saved){
         const prepared=preview.routes.map((route,index)=>{
             if(route.geometry_precision!==6||identities.has(route.id)||route.navigation_allowed!==false||route.automatic_selection_allowed!==false||!route.routing_context||['graph_version','source_version','policy_version','request_binding'].some(key=>route.routing_context[key]!==result[key])||stable(route.gh11_evidence)!==stable(result.candidates[index]))throw Error('Response contract refused.');
             if(policy&&stable((route.avoidance_assessment&&route.avoidance_assessment.requirements||[]).map(({category,enabled,mode,scope})=>({category,enabled,mode,scope})))!==stable(policy.requirements))throw Error('Response contract refused.');
+            const indices=result.candidates[index].waypoint_indices;
+            if(!Array.isArray(indices)||indices.length<2||indices.length>5||indices.some((value,i)=>!Number.isInteger(value)||value<0||i>0&&value<=indices[i-1])||(context&&indices.length!==context.visits.length))throw Error('Response contract refused.');
+            const expected=indices.slice(0,-1).map((begin,i)=>({leg_index:i,begin_shape_index:begin,end_shape_index:indices[i+1],preview_only:true}));
+            if(stable(route.leg_geometry_ranges)!==stable(expected))throw Error('Response contract refused.');
             const candidate=integrity.preparePlanningCandidate(route);if(!candidate)throw Error('Response contract refused.');
+            try{root.VoyagrJourneyPlan.inspection(candidate,integrity);}catch(_){throw Error('Response contract refused.');}
             identities.add(candidate.id);return candidate;
         });
         const options=prepared.map((route,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent='Route '+(i+1)+' · '+route.distance_km.toFixed(3)+' km';return option;});

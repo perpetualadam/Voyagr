@@ -50,8 +50,7 @@ accessed, no deployment occurs and the test uses a disposable SQLite/browser pro
 Positive GH11 guidance is still NO-GO: app_preview explicitly returns no navigation
 permission and selected-fixture checks are not a guidance capability. Full rule,
 origin/endpoint, leg/turn, stop-order and reroute evidence must be supported before
-that contract changes. Its preview leg ranges are not yet a full UK guidance
-contract (preview start/end indices differ from JourneyPlan inspection's begin/end
-indices). No flags are relabeled or mandatory rules relaxed here. UK settings and
+that contract changes. Its preview legs now use the canonical UK begin/end planning indices, but
+that compatibility correction is not a complete leg/turn guidance contract. No flags are relabeled or mandatory rules relaxed here. UK settings and
 positive engine/alternative/multi-stop/reroute parity remain pending; Milestone 3 is
 still open. No physical-phone or production readiness is claimed.

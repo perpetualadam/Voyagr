@@ -9,6 +9,7 @@ PROTOTYPE_FILES = ('isolated_viewer.html', 'isolated_viewer.js', 'saved_plans.js
 def register_gh11_fixture(app, root):
     root = Path(root)
     assets = {
+        'journey-plan.js': 'static/js/modules/navigation/journey-plan.js',
         'isolated_viewer.js': 'prototypes/graphhopper11/isolated_viewer.js',
         'gh11-saved-plans.js': 'prototypes/graphhopper11/saved_plans.js',
         'gh11-journey-evidence.js': 'prototypes/graphhopper11/journey_evidence.js',
