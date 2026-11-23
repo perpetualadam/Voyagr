@@ -37,3 +37,18 @@ Remaining Milestone 3 work is full UK guidance capability/provenance, broader
 settings/alternative/stop/reroute parity, live request/cache/selection binding and
 full saved-journey/outage/race/fallback acceptance. Positive GH11 guidance is still
 NO-GO; canonical preview legs are not navigation or hazard/turn/legal evidence.
+
+### Registered endpoint observations (23 November 2026)
+
+The Python bridge now independently measures every registered requested visit
+against the corresponding geometry vertex for every candidate, including via
+points. The operator registry fixes the snap bound (default 75 metres, permitted
+range 0.1–75); provider claims cannot increase it. A displaced visit or mismatched
+visit count refuses the entire response. Cached reports traverse the same check.
+
+`registered_visit_observations` records requested and resolved public fixture
+coordinates, shape indices and recomputed distances. Anchor-only cases without
+registered coordinates remain explicitly UNVERIFIED. These observations are
+carried in `gh11_evidence`; they are not guidance authority, device GPS evidence,
+heading evidence, turn/legal validation or proof of hazard coverage. The browser
+still refuses navigation. No production or VPS deployment is included.

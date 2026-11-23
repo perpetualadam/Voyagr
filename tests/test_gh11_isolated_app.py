@@ -97,6 +97,14 @@ def test_real_flask_java_route_geometry_instructions_and_exclusions(app, manifes
         assert row["geometry"]["type"] == "LineString"
         assert len(row["geometry"]["coordinates"]) >= 2
         assert row["instruction_details"]
+        observations = row["registered_visit_observations"]
+        assert observations["status"] == "WITHIN_REGISTERED_SNAP_BOUND"
+        assert observations["gps_verification"] == "UNVERIFIED"
+        assert observations["navigation_allowed"] is False
+        assert [v["requested"] for v in observations["visits"]] == app.extensions["gh11_bridge"].cases[case]["points"]
+        assert all(v["displacement_m"] <= observations["max_snap_distance_m"] for v in observations["visits"])
+        for visit in observations["visits"]:
+            assert visit["resolved"] == list(reversed(row["geometry"]["coordinates"][visit["shape_index"]]))
         assert set(row["directed_edge_keys"]).isdisjoint(result["blocked_edge_keys"])
     app.extensions["gh11_bridge"].verify()
     assert before == manifest["graph_files"]
@@ -178,7 +186,7 @@ def test_real_transport_timeout_and_output_limit_kill_child_group(manifest, tmp_
         bridge.route("detour")
 
 
-@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint", "collapsed_waypoint"])
+@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint", "collapsed_waypoint", "displaced_origin", "displaced_third_destination"])
 def test_independent_transport_validation_rejects_corrupted_result(app, fault):
     bridge = app.extensions["gh11_bridge"]
     case = dict(bridge.cases["detour"], alternatives=True)
@@ -196,6 +204,11 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
                          "alternatives": True, "no_motorways": False, "requested_points":2, "blocked_edge_keys": [98, 99], "candidates": candidates}]}
     accepted = bridge.validate(report, case)
     assert len(accepted["candidates"]) == 3 and accepted["navigation_allowed"] is False
+    for row in accepted["candidates"]:
+        observed = row["registered_visit_observations"]
+        assert observed["status"] == "WITHIN_REGISTERED_SNAP_BOUND"
+        assert observed["navigation_allowed"] is False and observed["gps_verification"] == "UNVERIFIED"
+        assert [v["displacement_m"] for v in observed["visits"]] == [0, 0]
     if fault == "unsafe_third":
         candidates[2]["edge_intervals"][0][2] = 98
         candidates[2]["directed_edge_keys"] = [98]
@@ -219,9 +232,32 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
         report["cases"][0]["requested_points"] = 3
         for row in candidates:
             row["waypoint_indices"] = [0, 0, 1]
+    elif fault == "displaced_origin":
+        candidates[0]["geometry"]["coordinates"][0] = [.001, 0]
+    elif fault == "displaced_third_destination":
+        candidates[2]["geometry"]["coordinates"][-1] = [.021, 0]
+        # Provider claims cannot raise the operator-owned snap bound.
+        report["cases"][0]["max_snap_distance_m"] = 1000
+        candidates[2]["registered_visit_observations"] = {"status": "WITHIN_REGISTERED_SNAP_BOUND"}
 
     with pytest.raises(Refused):
         bridge.validate(report, case)
+
+
+def test_registered_intermediate_visit_proximity_is_ordered_and_non_authoritative():
+    from prototypes.graphhopper11.isolated_app import registered_visit_observations
+    case = {"points": [[0, 0], [.003, .01], [0, .02]], "max_snap_distance_m": 1}
+    geometry = [[0, 0], [.01, .003], [.02, 0]]
+    observed = registered_visit_observations(case, geometry, [0, 1, 2])
+    assert [v["requested"] for v in observed["visits"]] == case["points"]
+    assert observed["navigation_allowed"] is False
+    geometry[1] = [.01, 0]
+    with pytest.raises(Refused, match="registered_visit_displaced"):
+        registered_visit_observations(case, geometry, [0, 1, 2])
+    with pytest.raises(Refused, match="registered_visit_contract"):
+        registered_visit_observations(case, geometry, [0, 2])
+    unknown = registered_visit_observations({}, geometry, [0, 2])
+    assert unknown["status"] == "UNVERIFIED" and unknown["visits"] == []
 
 
 def test_manifest_preparation_is_private_and_refuses_overwrite(manifest, tmp_path):
@@ -272,7 +308,8 @@ def test_registered_settings_rejected_before_execution(app, manifest, monkeypatc
         assert response.get_json()['reason'] == 'settings_not_registered'
 
 
-def test_real_cached_evidence_is_revalidated_and_not_shared_with_callers(app, manifest, monkeypatch):
+@pytest.mark.parametrize('corruption', ['trace', 'endpoint'])
+def test_real_cached_evidence_is_revalidated_and_not_shared_with_callers(app, manifest, monkeypatch, corruption):
     bridge = app.extensions['gh11_bridge']
     execute = bridge._execute
     calls = []
@@ -289,7 +326,10 @@ def test_real_cached_evidence_is_revalidated_and_not_shared_with_callers(app, ma
     assert len(calls) == 1 and second['candidates'][0]['geometry']['coordinates']
     # Corruption of any cached trace must refuse, not serve an earlier verdict.
     entry = bridge.cache[bridge.binding('detour')][1]
-    entry['cases'][0]['candidates'][0]['edge_intervals'][0][2] = entry['cases'][0]['blocked_edge_keys'][0]
+    if corruption == 'trace':
+        entry['cases'][0]['candidates'][0]['edge_intervals'][0][2] = entry['cases'][0]['blocked_edge_keys'][0]
+    else:
+        entry['cases'][0]['candidates'][0]['geometry']['coordinates'][-1] = [.021, 0]
     with pytest.raises(Refused, match='cached_evidence_refused'):
         bridge.route('detour')
     assert not bridge.cache
@@ -1048,13 +1088,18 @@ def test_complete_private_cache_tls_ownership_revalidation_and_bypasses(app, man
     assert not bridge.cache  # Never the shared fixture dictionary or UK singleton.
 
 
-def test_private_cache_corruption_refuses_without_engine_fallback_or_authority(app, manifest, monkeypatch):
+@pytest.mark.parametrize('corruption', ['trace', 'endpoint'])
+def test_private_cache_corruption_refuses_without_engine_fallback_or_authority(app, manifest, monkeypatch, corruption):
     bridge=app.extensions['gh11_bridge'];boundary=app.extensions['gh11_private_cache'];client=app.test_client()
     payload=dict(case_id='detour',app_request=full_app_body(),**{key:manifest[key] for key in ('graph_version','source_version','policy_version')})
     first=client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost')
     assert first.status_code==200
     key=next(iter(boundary.store.cache));expires,raw=boundary.store.cache[key]
-    corrupted=json.loads(raw);corrupted['cases'][0]['candidates'][0]['directed_edge_keys']=[999999]
+    corrupted=json.loads(raw)
+    if corruption == 'trace':
+        corrupted['cases'][0]['candidates'][0]['directed_edge_keys']=[999999]
+    else:
+        corrupted['cases'][0]['candidates'][0]['geometry']['coordinates'][-1]=[.021,0]
     boundary.store.cache[key]=(expires,json.dumps(corrupted).encode())
     def forbidden(*args):
         pytest.fail('Corrupt private evidence must refuse rather than fallback to engine')

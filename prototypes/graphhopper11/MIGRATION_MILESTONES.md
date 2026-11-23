@@ -317,3 +317,13 @@ via/reroute outputs pass inspection while remaining non-navigable. Collapsed bou
 and malformed third alternatives refuse without partial UI replacement. This closes
 a concrete compatibility defect, not general turn/stop or guidance proof. See
 LEG_PLANNING_CONTRACT.md. Milestone 3 remains in progress; no deployment is included.
+
+## Subsequent Milestone 3 checkpoint: independent registered endpoint checks
+
+The Python bridge independently checks each candidate's indexed origin, destination
+and intermediate visits against operator-registered coordinates and snap bounds.
+Transport corruption and both public-fixture/private-cache corruption refuse without
+fallback. Recomputed observations remain coordinate-proximity evidence only, with
+GPS unverified and navigation disabled. Anchor-only cases without registered
+coordinates remain unverified. See LEG_PLANNING_CONTRACT.md. The four full UK
+acceptance rows remain open; no deployment or physical-phone check is implied.

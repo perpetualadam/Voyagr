@@ -313,6 +313,7 @@ class LocalJavaBridge:
         if not isinstance(rows, list) or not 1 <= len(rows) <= (3 if case.get("alternatives") else 1):
             raise Refused("candidate_contract")
         identities = set()
+        visit_observations = []
         for row in rows:
             geometry = row.get("geometry", {})
             coords = geometry.get("coordinates")
@@ -366,6 +367,7 @@ class LocalJavaBridge:
                     or indices[0] != 0 or indices[-1] != len(coords)-1
                     or any(right <= left for left, right in zip(indices, indices[1:]))):
                 raise Refused("waypoint_or_instruction_coverage")
+            visit_observations.append(registered_visit_observations(case, coords, indices))
             for field in ("distance_km", "duration_minutes"):
                 if type(row.get(field)) not in (int, float) or not math.isfinite(row[field]) or row[field] < 0:
                     raise Refused("metrics_contract")
@@ -374,8 +376,9 @@ class LocalJavaBridge:
         public_rows = []
         fields = ("distance_km", "duration_minutes", "directed_edges", "instructions", "geometry",
                   "instruction_details", "edge_intervals", "directed_edge_keys", "waypoint_indices")
-        for row in rows:
+        for row, observations in zip(rows, visit_observations):
             public_rows.append({**{key: row[key] for key in fields}, "forbidden_traversals": 0,
+                                "registered_visit_observations": observations,
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
         result = {"success": True, "case_id": case["id"], "engine_version": "11.1",
@@ -394,6 +397,37 @@ class LocalJavaBridge:
 # checks voyagr.utils.graphhopper. Unknown signs refuse instead of guessing straight.
 PREVIEW_SIGN_TYPES = {-98:13, -8:13, -7:24, -6:27, -3:14, -2:15, -1:16,
                       0:8, 1:9, 2:10, 3:11, 4:4, 5:0, 6:26, 7:23, 8:12}
+
+
+def registered_visit_observations(case, coordinates, indices):
+    """Independent coordinate proximity only; never GPS, legal or guidance authority."""
+    result = {"scope": "registered_coordinate_proximity_only", "navigation_allowed": False,
+              "gps_verification": "UNVERIFIED", "status": "UNVERIFIED", "visits": []}
+    if "points" not in case:
+        return result
+    visits = case["points"]
+    tolerance = case.get("max_snap_distance_m", 75)
+    if (not isinstance(visits, list) or len(visits) != len(indices)
+            or type(tolerance) not in (int, float) or not math.isfinite(tolerance)
+            or not .1 <= tolerance <= 75):
+        raise Refused("registered_visit_contract")
+    for position, (visit, index) in enumerate(zip(visits, indices)):
+        if (not isinstance(visit, list) or len(visit) != 2
+                or any(type(value) not in (int, float) or not math.isfinite(value) for value in visit)
+                or abs(visit[0]) > 90 or abs(visit[1]) > 180):
+            raise Refused("registered_visit_contract")
+        lon, lat = coordinates[index]
+        lat1, lat2 = map(math.radians, (visit[0], lat))
+        half = (math.sin((lat2-lat1)/2)**2 + math.cos(lat1)*math.cos(lat2)
+                * math.sin(math.radians(lon-visit[1])/2)**2)
+        distance = 6371000 * 2 * math.asin(math.sqrt(min(1, max(0, half))))
+        if distance > tolerance:
+            raise Refused("registered_visit_displaced")
+        result["visits"].append({"visit_index": position, "shape_index": index,
+                                 "requested": list(visit), "resolved": [lat, lon],
+                                 "displacement_m": distance})
+    result.update(status="WITHIN_REGISTERED_SNAP_BOUND", max_snap_distance_m=tolerance)
+    return result
 
 
 def app_preview(result):
