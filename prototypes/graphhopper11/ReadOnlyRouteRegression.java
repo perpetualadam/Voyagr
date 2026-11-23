@@ -16,7 +16,38 @@ import static com.graphhopper.json.Statement.Op.MULTIPLY;
 /** Offline existing-graph checks only. No listener, import fallback or application wiring. */
 public class ReadOnlyRouteRegression {
     static final String BLOCKS="voyagr_blocked_keys";
+    static final String QUERY_TRACE="voyagr_query_traversal";
+    static class QueryTraversalDetails extends com.graphhopper.util.details.PathDetailsBuilderFactory {
+        @Override public List<com.graphhopper.util.details.PathDetailsBuilder> createPathDetailsBuilders(
+                List<String> requested,com.graphhopper.routing.Path path,
+                com.graphhopper.routing.ev.EncodedValueLookup lookup,
+                com.graphhopper.routing.weighting.Weighting weighting,com.graphhopper.storage.Graph graph) {
+            var standard=new ArrayList<>(requested);standard.remove(QUERY_TRACE);
+            var builders=new ArrayList<>(super.createPathDetailsBuilders(standard,path,lookup,weighting,graph));
+            if(requested.contains(QUERY_TRACE)) {
+                require(graph instanceof com.graphhopper.routing.querygraph.QueryGraph
+                    && path.getGraph()==graph,"actual request QueryGraph required");
+                builders.add(new com.graphhopper.util.details.AbstractPathDetailsBuilder(QUERY_TRACE) {
+                    Map<String,Object> value;
+                    @Override public boolean isEdgeDifferentToLastEdge(EdgeIteratorState edge) {
+                        var nodes=graph.getNodeAccess();
+                        int original=edge instanceof VirtualEdgeIteratorState
+                            ? ((VirtualEdgeIteratorState)edge).getOriginalEdgeKey():edge.getEdgeKey();
+                        value=Map.of("query_edge_key",edge.getEdgeKey(),"original_edge_key",original,
+                            "base_node",edge.getBaseNode(),"adjacent_node",edge.getAdjNode(),
+                            "base_point",List.of(nodes.getLon(edge.getBaseNode()),nodes.getLat(edge.getBaseNode())),
+                            "adjacent_point",List.of(nodes.getLon(edge.getAdjNode()),nodes.getLat(edge.getAdjNode())),
+                            "virtual",edge instanceof VirtualEdgeIteratorState);
+                        return true;
+                    }
+                    @Override protected Object getCurrentValue() { return value; }
+                });
+            }
+            return builders;
+        }
+    }
     static class ExclusionHopper extends GraphHopper {
+        ExclusionHopper() { setPathDetailsBuilderFactory(new QueryTraversalDetails()); }
         private final ThreadLocal<List<Integer>> exactAnchors=new ThreadLocal<>();
         void installAnchorIndex() {
             var delegate=getLocationIndex();
@@ -302,7 +333,9 @@ public class ReadOnlyRouteRegression {
                 result.put("anchor_scope","original_graph_nodes_of_associated_edges");
             }
             require(visits.isArray() && visits.size()>=2 && visits.size()<=5,"invalid public fixture visits");
-            GHRequest request=new GHRequest().setProfile("car").setPathDetails(List.of("edge_key","max_speed"));
+            GHRequest request=new GHRequest().setProfile("car").setPathDetails(
+                test.path("include_path_data").asBoolean(false)
+                    ? List.of("edge_key","max_speed",QUERY_TRACE):List.of("edge_key","max_speed"));
             for(var point:visits) {
                 require(point.isArray() && point.size()==2 && point.get(0).isNumber()
                     && point.get(1).isNumber(),"invalid coordinate");
@@ -398,6 +431,10 @@ public class ReadOnlyRouteRegression {
                     for(var detail:path.getPathDetails().get("edge_key"))
                         intervals.add(List.of(detail.getFirst(),detail.getLast(),detail.getValue()));
                     candidate.put("edge_intervals",intervals);
+                    var actual=path.getPathDetails().get(QUERY_TRACE);
+                    require(actual!=null && !actual.isEmpty(),"actual query traversal missing");
+                    candidate.put("query_graph_intervals",actual.stream().map(detail->Map.of(
+                        "first",detail.getFirst(),"last",detail.getLast(),"traversal",detail.getValue())).toList());
                     List<Map<String,Object>> instructions=new ArrayList<>();
                     JsonNode serialized=Jackson.newObjectMapper().valueToTree(path.getInstructions());
                     require(serialized.isArray() && serialized.size()==path.getInstructions().size(),"instruction serializer contract");

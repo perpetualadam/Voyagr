@@ -56,3 +56,8 @@ Unsupported or missing mandatory evidence must refuse Start/selection/replacemen
 
 No navigation authority, production integration, deployment, physical-phone check
 or general legal/hazard guarantee is added by this change. Migration remains NO-GO.
+
+A subsequent checkpoint adds actual request QueryGraph traversal observations and
+transport connectivity checks; see QUERY_GRAPH_EVIDENCE.md. This narrows the
+calculated-route evidence gap while physical approach, ambiguous snap selection
+and general turn/legal semantics remain unverified.

@@ -340,6 +340,7 @@ class LocalJavaBridge:
                     keys.append(key)
             if cursor != len(coords)-1 or keys != row.get("directed_edge_keys") or len(keys) != row.get("directed_edges") or tuple(keys) in identities:
                 raise Refused("trace_contract")
+            validate_query_traversal(row.get("query_graph_intervals"), coords, intervals)
             identities.add(tuple(keys))
             instructions = row.get("instruction_details")
             if not isinstance(instructions, list) or not instructions or len(instructions) != row.get("instructions"):
@@ -375,10 +376,11 @@ class LocalJavaBridge:
                 raise Refused("metrics_contract")
         public_rows = []
         fields = ("distance_km", "duration_minutes", "directed_edges", "instructions", "geometry",
-                  "instruction_details", "edge_intervals", "directed_edge_keys", "waypoint_indices")
+                  "instruction_details", "edge_intervals", "directed_edge_keys", "waypoint_indices", "query_graph_intervals")
         for row, observations in zip(rows, visit_observations):
             public_rows.append({**{key: row[key] for key in fields}, "forbidden_traversals": 0,
                                 "registered_visit_observations": observations,
+                                "query_graph_scope": "current_request_only",
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
         result = {"success": True, "case_id": case["id"], "engine_version": "11.1",
@@ -397,6 +399,43 @@ class LocalJavaBridge:
 # checks voyagr.utils.graphhopper. Unknown signs refuse instead of guessing straight.
 PREVIEW_SIGN_TYPES = {-98:13, -8:13, -7:24, -6:27, -3:14, -2:15, -1:16,
                       0:8, 1:9, 2:10, 3:11, 4:4, 5:0, 6:26, 7:23, 8:12}
+
+
+def validate_query_traversal(rows, coordinates, originals):
+    """Check actual request-graph evidence; node/edge IDs never imply live heading."""
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 20000:
+        raise Refused("query_traversal_missing")
+    cursor, original_index, previous_node = 0, 0, None
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"first", "last", "traversal"}:
+            raise Refused("query_traversal_contract")
+        first, last, edge = row["first"], row["last"], row["traversal"]
+        if (type(first) is not int or type(last) is not int or first != cursor
+                or not first < last < len(coordinates) or not isinstance(edge, dict)
+                or set(edge) != {"query_edge_key", "original_edge_key", "base_node", "adjacent_node",
+                                 "base_point", "adjacent_point", "virtual"}):
+            raise Refused("query_traversal_contract")
+        for name in ("query_edge_key", "original_edge_key", "base_node", "adjacent_node"):
+            if type(edge[name]) is not int or not 0 <= edge[name] < 2**31:
+                raise Refused("query_traversal_contract")
+        if type(edge["virtual"]) is not bool or (not edge["virtual"] and edge["query_edge_key"] != edge["original_edge_key"]):
+            raise Refused("query_traversal_contract")
+        if previous_node is not None and previous_node != edge["base_node"]:
+            raise Refused("query_traversal_disconnected")
+        for name, index in (("base_point", first), ("adjacent_point", last)):
+            point = edge[name]
+            if (not isinstance(point, list) or len(point) != 2
+                    or any(type(v) not in (int, float) or not math.isfinite(v) for v in point)
+                    or any(abs(a-b) > 1e-7 for a, b in zip(point, coordinates[index]))):
+                raise Refused("query_traversal_geometry")
+        while original_index < len(originals) and originals[original_index][1] <= first:
+            original_index += 1
+        if (original_index >= len(originals) or originals[original_index][0] > first
+                or originals[original_index][1] < last or originals[original_index][2] != edge["original_edge_key"]):
+            raise Refused("query_traversal_original_mismatch")
+        cursor, previous_node = last, edge["adjacent_node"]
+    if cursor != len(coordinates)-1:
+        raise Refused("query_traversal_incomplete")
 
 
 def registered_visit_observations(case, coordinates, indices):

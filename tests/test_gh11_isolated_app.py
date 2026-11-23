@@ -25,9 +25,11 @@ def manifest(tmp_path_factory):
       <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.02"/>
       <node id="3" lat="0" lon="0.01"/><node id="4" lat="0.003" lon="0.01"/>
       <node id="5" lat="0.004" lon="0.01"/>
+      <node id="6" lat="0.000002" lon="0"/><node id="7" lat="0.000002" lon="0.02"/>
       <way id="10"><nd ref="1"/><nd ref="3"/><nd ref="2"/><tag k="highway" v="primary"/></way>
       <way id="11"><nd ref="1"/><nd ref="4"/><nd ref="2"/><tag k="highway" v="residential"/></way>
       <way id="12"><nd ref="4"/><nd ref="5"/><tag k="highway" v="residential"/></way>
+      <way id="13"><nd ref="6"/><nd ref="7"/><tag k="highway" v="primary"/></way>
     </osm>''')
     graph = root / "graph"
     config = root / "config.yml"
@@ -61,8 +63,13 @@ def manifest(tmp_path_factory):
         dict(plain, id="alternatives", alternatives=True),
         dict(plain, id="via", points=[[0, 0], [.003, .01], [0, .02]]),
         dict(plain, id="departure", points=[[.003, .01], [0, .02]]),
-        dict(plain, id="no_route", blocked_associations=["main", "upper"]),
+        # The close parallel road remains outside this registered source-road contract.
+        dict(plain, id="no_route", blocked_associations=["main", "upper"], expected_osm_way_ids=[10]),
         dict(plain, id="motorway_rule", no_motorways=True),
+        dict(plain, id="partial", points=[[0,.002],[0,.018]], blocked_associations=["upper"], expected_osm_way_ids=[10]),
+        dict(plain, id="partial_reverse", points=[[0,.018],[0,.002]], blocked_associations=["upper"], expected_osm_way_ids=[10]),
+        dict(plain, id="partial_via", points=[[0,.002],[0,.01],[0,.018]], blocked_associations=["upper"], expected_osm_way_ids=[10]),
+        dict(plain, id="parallel", points=[[.000002,.002],[.000002,.018]], blocked_associations=["upper"], expected_osm_way_ids=[13]),
     ]}))
     return build_manifest(jar=jar, graph=graph, config=config, registry=registry, source=source)
 
@@ -97,6 +104,8 @@ def test_real_flask_java_route_geometry_instructions_and_exclusions(app, manifes
         assert row["geometry"]["type"] == "LineString"
         assert len(row["geometry"]["coordinates"]) >= 2
         assert row["instruction_details"]
+        assert row["query_graph_intervals"][0]["first"] == 0
+        assert row["query_graph_intervals"][-1]["last"] == len(row["geometry"]["coordinates"])-1
         observations = row["registered_visit_observations"]
         assert observations["status"] == "WITHIN_REGISTERED_SNAP_BOUND"
         assert observations["gps_verification"] == "UNVERIFIED"
@@ -267,13 +276,16 @@ def test_real_transport_timeout_and_output_limit_kill_child_group(manifest, tmp_
         bridge.route("detour")
 
 
-@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint", "collapsed_waypoint", "displaced_origin", "displaced_third_destination"])
+@pytest.mark.parametrize("fault", ["unsafe_third", "trace_gap", "missing_blocks", "instructions", "metrics", "settings", "unknown_sign", "shape_interval", "missing_waypoint", "collapsed_waypoint", "displaced_origin", "displaced_third_destination", "query_missing_third"])
 def test_independent_transport_validation_rejects_corrupted_result(app, fault):
     bridge = app.extensions["gh11_bridge"]
     case = dict(bridge.cases["detour"], alternatives=True)
     candidates = []
     for key in (2, 4, 6):
         candidates.append({"geometry": {"type": "LineString", "coordinates": [[0, 0], [.02, 0]]},
+                           "query_graph_intervals": [{"first":0,"last":1,"traversal":{
+                               "query_edge_key":key,"original_edge_key":key,"base_node":0,"adjacent_node":1,
+                               "base_point":[0,0],"adjacent_point":[.02,0],"virtual":False}}],
                            "edge_intervals": [[0, 1, key]], "directed_edge_keys": [key], "directed_edges": 1,
                            "distance_km": 1, "duration_minutes": 1, "instructions": 1, "waypoint_indices":[0,1],
                            "instruction_details": [{"name": "Road", "sign": 0, "distance_m": 1000, "time_ms": 60000,"text":"Continue", "interval":[0,1]}]})
@@ -313,10 +325,14 @@ def test_independent_transport_validation_rejects_corrupted_result(app, fault):
         report["cases"][0]["requested_points"] = 3
         for row in candidates:
             row["waypoint_indices"] = [0, 0, 1]
+    elif fault == "query_missing_third":
+        candidates[2].pop("query_graph_intervals")
     elif fault == "displaced_origin":
         candidates[0]["geometry"]["coordinates"][0] = [.001, 0]
+        candidates[0]["query_graph_intervals"][0]["traversal"]["base_point"] = [.001, 0]
     elif fault == "displaced_third_destination":
         candidates[2]["geometry"]["coordinates"][-1] = [.021, 0]
+        candidates[2]["query_graph_intervals"][-1]["traversal"]["adjacent_point"] = [.021, 0]
         # Provider claims cannot raise the operator-owned snap bound.
         report["cases"][0]["max_snap_distance_m"] = 1000
         candidates[2]["registered_visit_observations"] = {"status": "WITHIN_REGISTERED_SNAP_BOUND"}
@@ -389,7 +405,7 @@ def test_registered_settings_rejected_before_execution(app, manifest, monkeypatc
         assert response.get_json()['reason'] == 'settings_not_registered'
 
 
-@pytest.mark.parametrize('corruption', ['trace', 'endpoint'])
+@pytest.mark.parametrize('corruption', ['trace', 'endpoint', 'query_missing'])
 def test_real_cached_evidence_is_revalidated_and_not_shared_with_callers(app, manifest, monkeypatch, corruption):
     bridge = app.extensions['gh11_bridge']
     execute = bridge._execute
@@ -409,8 +425,11 @@ def test_real_cached_evidence_is_revalidated_and_not_shared_with_callers(app, ma
     entry = bridge.cache[bridge.binding('detour')][1]
     if corruption == 'trace':
         entry['cases'][0]['candidates'][0]['edge_intervals'][0][2] = entry['cases'][0]['blocked_edge_keys'][0]
+    elif corruption == 'query_missing':
+        entry['cases'][0]['candidates'][0].pop('query_graph_intervals')
     else:
         entry['cases'][0]['candidates'][0]['geometry']['coordinates'][-1] = [.021, 0]
+        entry['cases'][0]['candidates'][0]['query_graph_intervals'][-1]['traversal']['adjacent_point'] = [.021, 0]
     with pytest.raises(Refused, match='cached_evidence_refused'):
         bridge.route('detour')
     assert not bridge.cache
@@ -1169,7 +1188,7 @@ def test_complete_private_cache_tls_ownership_revalidation_and_bypasses(app, man
     assert not bridge.cache  # Never the shared fixture dictionary or UK singleton.
 
 
-@pytest.mark.parametrize('corruption', ['trace', 'endpoint'])
+@pytest.mark.parametrize('corruption', ['trace', 'endpoint', 'query_missing'])
 def test_private_cache_corruption_refuses_without_engine_fallback_or_authority(app, manifest, monkeypatch, corruption):
     bridge=app.extensions['gh11_bridge'];boundary=app.extensions['gh11_private_cache'];client=app.test_client()
     payload=dict(case_id='detour',app_request=full_app_body(),**{key:manifest[key] for key in ('graph_version','source_version','policy_version')})
@@ -1179,8 +1198,11 @@ def test_private_cache_corruption_refuses_without_engine_fallback_or_authority(a
     corrupted=json.loads(raw)
     if corruption == 'trace':
         corrupted['cases'][0]['candidates'][0]['directed_edge_keys']=[999999]
+    elif corruption == 'query_missing':
+        corrupted['cases'][0]['candidates'][0].pop('query_graph_intervals')
     else:
         corrupted['cases'][0]['candidates'][0]['geometry']['coordinates'][-1]=[.021,0]
+        corrupted['cases'][0]['candidates'][0]['query_graph_intervals'][-1]['traversal']['adjacent_point']=[.021,0]
     boundary.store.cache[key]=(expires,json.dumps(corrupted).encode())
     def forbidden(*args):
         pytest.fail('Corrupt private evidence must refuse rather than fallback to engine')
@@ -1264,3 +1286,75 @@ def test_preview_adapter_refuses_collapsed_or_invalid_leg_boundaries(indices):
     with pytest.raises(Refused,match='preview_leg_contract'):
         app_preview(result)
     assert result==before
+
+
+def test_real_query_graph_partial_reverse_via_and_parallel_road_evidence(app):
+    bridge = app.extensions['gh11_bridge']
+    results = {name:bridge.route(name) for name in ('partial','partial_reverse','partial_via','parallel')}
+    for name, result in results.items():
+        assert result['navigation_allowed'] is False
+        row = result['candidates'][0]
+        trace = row['query_graph_intervals']
+        assert row['query_graph_scope'] == 'current_request_only'
+        assert trace[0]['traversal']['virtual'] and trace[-1]['traversal']['virtual']
+        assert trace[0]['traversal']['base_point'] == row['geometry']['coordinates'][0]
+        assert trace[-1]['traversal']['adjacent_point'] == row['geometry']['coordinates'][-1]
+        for before, after in zip(trace, trace[1:]):
+            assert before['last'] == after['first']
+            assert before['traversal']['adjacent_node'] == after['traversal']['base_node']
+        assert row['registered_visit_observations']['gps_verification'] == 'UNVERIFIED'
+        assert result['app_preview']['routes'][0]['gh11_evidence']['query_graph_intervals'] == trace
+    forward = results['partial']['candidates'][0]['directed_edge_keys']
+    reverse = results['partial_reverse']['candidates'][0]['directed_edge_keys']
+    assert reverse == [key^1 for key in reversed(forward)]
+    via = results['partial_via']['candidates'][0]
+    assert len(via['query_graph_intervals']) == 2 and len(via['directed_edge_keys']) == 1
+    assert len({entry['traversal']['query_edge_key'] for entry in via['query_graph_intervals']}) == 2
+    assert {entry['traversal']['original_edge_key'] for entry in via['query_graph_intervals']} == set(forward)
+    assert via['waypoint_indices'][1] in {entry['last'] for entry in via['query_graph_intervals'][:-1]}
+    parallel = results['parallel']['candidates'][0]['directed_edge_keys']
+    assert {key//2 for key in forward}.isdisjoint(key//2 for key in parallel)
+
+
+@pytest.mark.parametrize('fault', ['missing','incomplete','gap','disconnected','wrong_original',
+                                  'geometry','boolean_coordinate','raw_key','virtual_flag'])
+def test_query_graph_transport_refuses_inconsistent_actual_traversal(fault):
+    from prototypes.graphhopper11.isolated_app import validate_query_traversal
+    coordinates = [[0,0],[.01,0],[.02,0]]
+    originals = [[0,2,2]]
+    rows = [{'first':i,'last':i+1,'traversal':dict(query_edge_key=100+i*2,original_edge_key=2,
+        base_node=1000+i,adjacent_node=1001+i,base_point=coordinates[i][:],
+        adjacent_point=coordinates[i+1][:],virtual=True)} for i in range(2)]
+    validate_query_traversal(rows,coordinates,originals)
+    if fault == 'missing': rows = None
+    elif fault == 'incomplete': rows.pop()
+    elif fault == 'gap': rows[1]['first'] = 0
+    elif fault == 'disconnected': rows[1]['traversal']['base_node'] = 999  # same coordinates, different node
+    elif fault == 'wrong_original': rows[1]['traversal']['original_edge_key'] = 4
+    elif fault == 'geometry': rows[1]['traversal']['base_point'] = [.011,0]
+    elif fault == 'boolean_coordinate': rows[0]['traversal']['base_point'][0] = False
+    elif fault == 'raw_key': rows[1]['traversal']['virtual'] = False
+    elif fault == 'virtual_flag': rows[1]['traversal']['virtual'] = 1
+    with pytest.raises(Refused,match='query_traversal'):
+        validate_query_traversal(rows,coordinates,originals)
+
+
+def test_eligible_edge_resnap_to_parallel_road_requires_source_identity_guard(app, tmp_path):
+    bridge = app.extensions['gh11_bridge']
+    parallel = bridge.route('parallel')['candidates'][0]['directed_edge_keys']
+    fixture = copy.deepcopy(bridge.registry)
+    case = copy.deepcopy(bridge.cases['no_route'])
+    case.pop('expected_osm_way_ids')
+    case['include_path_data'] = True
+    fixture['cases'] = [case]
+    request = tmp_path/'unbound-public-fixture.json'
+    request.write_text(json.dumps(fixture))
+    report = bridge._execute(request,str(tmp_path))
+    result = report['cases'][0]
+    assert result['status'] == 'PASS_AVAILABLE_GRAPH_CHECKS'
+    row = result['candidates'][0]
+    assert {key//2 for key in row['directed_edge_keys']} == {key//2 for key in parallel}
+    assert row['query_graph_intervals'][0]['traversal']['base_point'][1] == pytest.approx(.000002)
+    assert case['points'][0][0] == 0  # Snap moved to another road within the one-metre bound.
+    with pytest.raises(Refused,match='engine_refused'):
+        bridge.route('no_route')  # The actual registered case retains its source-way guard.

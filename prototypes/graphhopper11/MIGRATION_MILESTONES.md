@@ -338,3 +338,14 @@ heading fields explicitly refuse in adapter regressions. Approach direction,
 QueryGraph snapping and general turn/legal completeness remain unverified; the
 four full UK acceptance rows are still open. See TURN_PROVENANCE.md. Navigation
 remains disabled and no VPS/production deployment is included.
+
+## Subsequent Milestone 3 checkpoint: actual request-graph traversal
+
+A GH11 path-detail hook now records actual QueryGraph edges/nodes, original directed
+keys and node coordinates for each response. The bridge requires complete matching
+geometry/edge coverage and connected node identities on every candidate and cache
+hit. Interior endpoints, reverse travel, virtual via splits and a nearby parallel
+road are covered by generated fixtures; transport/cache corruption refuses. Query
+IDs are explicitly request-scoped. This is calculated-route evidence, not physical
+approach direction or general turn/legal proof. See QUERY_GRAPH_EVIDENCE.md. The
+four full UK acceptance rows remain open and navigation stays disabled.
