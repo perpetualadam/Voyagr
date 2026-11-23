@@ -36,6 +36,7 @@ def test_actual_normal_via_reroute_builders_preserve_every_supplied_field():
 
 @pytest.mark.parametrize('change',[
  {'unknown':True}, {'start':'nan,0'}, {'end':'90.1,0'}, {'is_reroute':1},
+ {'heading':90}, {'headings':[90,180]}, {'bearing':90}, {'origin_heading':90},
  {'stops':[{'lat':0,'lon':.01,'duration':0}]}, {'stops':None}, {'round_trip':True},
  {'via_points':[{'lat':0,'lon':.01}],'optimize_stop_order':True},
  {'departure_time':'2026-11-22T00:00:00Z'}, {'time_windows':[]}, {'total_stop_time':15},

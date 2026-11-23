@@ -78,7 +78,8 @@ public class ReadOnlyRouteRegression {
         if(!ok) throw new IllegalStateException(reason);
     }
 
-    static List<Integer> validate(GraphHopper hopper,ResponsePath path,boolean noMotorways,Set<Integer> blocked) {
+    static List<Integer> validate(GraphHopper hopper,ResponsePath path,boolean noMotorways,Set<Integer> blocked,
+                                  com.graphhopper.routing.weighting.Weighting weighting) {
         var points=path.getPoints();
         require(path.getDistance()>0 && points.size()>=2,"invalid geometry");
         for(int i=0;i<points.size();i++)
@@ -109,6 +110,8 @@ public class ReadOnlyRouteRegression {
                     require(incoming.getAdjNode()==edge.getBaseNode(),"disconnected directed edges");
                     require(!hopper.getBaseGraph().getTurnCostStorage().get(restriction,
                         previous/2,incoming.getAdjNode(),key/2),"imported turn restriction violated");
+                    double turnWeight=weighting.calcTurnWeight(previous/2,incoming.getAdjNode(),key/2);
+                    require(Double.isFinite(turnWeight) && turnWeight>=0,"invalid profile turn weight");
                 }
                 keys.add(key);
             }
@@ -324,7 +327,8 @@ public class ReadOnlyRouteRegression {
                 var baseline=hopper.route(request);
                 result.put("baseline_query_ms",(System.nanoTime()-baselineStart)/1e6);
                 require(!baseline.hasErrors() && !baseline.getAll().isEmpty(),"anchor baseline unavailable");
-                var keys=validate(hopper,baseline.getBest(),noMotorways,Set.of());
+                var keys=validate(hopper,baseline.getBest(),noMotorways,Set.of(),
+                    hopper.createWeighting(hopper.getProfile("car"),request.getHints()));
                 if(test.path("diagnose_anchors").asBoolean(false)) result.put("baseline_anchor_diagnostics",
                     anchorDiagnostic(hopper,request,baseline.getBest(),keys,anchorStart,anchorEnd,Set.of()));
                 require(!Collections.disjoint(keys,blocked),"baseline does not exercise selected exclusion");
@@ -353,7 +357,8 @@ public class ReadOnlyRouteRegression {
             require(!response.getAll().isEmpty() && response.getAll().size()<=(alternatives?3:1),"invalid candidate count");
             List<Map<String,Object>> candidates=new ArrayList<>(); Set<List<Integer>> seen=new HashSet<>();
             for(ResponsePath path:response.getAll()) {
-                List<Integer> keys=validate(hopper,path,noMotorways,blocked);
+                List<Integer> keys=validate(hopper,path,noMotorways,blocked,
+                    hopper.createWeighting(hopper.getProfile("car"),request.getHints()));
                 if(anchorStart>=0) {
                     if(test.path("diagnose_anchors").asBoolean(false)) result.put("anchor_diagnostics",
                         anchorDiagnostic(hopper,request,path,keys,anchorStart,anchorEnd,blocked));

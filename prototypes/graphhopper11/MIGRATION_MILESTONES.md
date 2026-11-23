@@ -327,3 +327,14 @@ fallback. Recomputed observations remain coordinate-proximity evidence only, wit
 GPS unverified and navigation disabled. Anchor-only cases without registered
 coordinates remain unverified. See LEG_PLANNING_CONTRACT.md. The four full UK
 acceptance rows remain open; no deployment or physical-phone check is implied.
+
+## Subsequent Milestone 3 checkpoint: profile turn validation
+
+Normal response validation now checks finite, nonnegative request-profile turn
+weights alongside original-edge continuity and imported car turn restrictions.
+Generated-graph forward/reverse/via-U-turn paths pass; invalid-cost injection
+refuses, and configured finite U-turn costs remain accepted. Unsupported approach
+heading fields explicitly refuse in adapter regressions. Approach direction,
+QueryGraph snapping and general turn/legal completeness remain unverified; the
+four full UK acceptance rows are still open. See TURN_PROVENANCE.md. Navigation
+remains disabled and no VPS/production deployment is included.

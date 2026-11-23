@@ -111,6 +111,87 @@ def test_real_flask_java_route_geometry_instructions_and_exclusions(app, manifes
     assert response.headers["Cache-Control"] == "private, no-store"
 
 
+
+def test_real_profile_turn_costs_are_checked_on_continuous_and_reverse_paths(manifest, tmp_path):
+    # Compile the actual checker, then exercise its validation with real GH paths.
+    # Inject only the weighting used by the validator: the graph/path remain real.
+    harness = tmp_path / "TurnWeightAcceptance.java"
+    harness.write_text(r'''import com.graphhopper.*;
+import com.graphhopper.jackson.Jackson;
+import com.graphhopper.routing.weighting.*;
+import com.graphhopper.util.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import java.io.File;
+import java.net.URLClassLoader;
+import java.util.*;
+import java.lang.reflect.*;
+public class TurnWeightAcceptance {
+ public static void main(String[] args) throws Exception {
+  var compiler=javax.tools.ToolProvider.getSystemJavaCompiler();
+  if(compiler==null || compiler.run(null,null,null,"-classpath",args[0],"-d",args[4],args[3])!=0)
+   throw new IllegalStateException("checker compilation failed");
+  try(var loader=new URLClassLoader(new java.net.URL[]{new File(args[4]).toURI().toURL()},TurnWeightAcceptance.class.getClassLoader())) {
+   var checker=Class.forName("ReadOnlyRouteRegression",true,loader);
+   var validate=checker.getDeclaredMethod("validate",GraphHopper.class,ResponsePath.class,boolean.class,Set.class,Weighting.class);
+   validate.setAccessible(true);
+   var tree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
+   var config=Jackson.newObjectMapper().treeToValue(tree.get("graphhopper"),GraphHopperConfig.class);
+   config.putObject("graph.location",args[2]).putObject("datareader.file","");
+   var hopper=new GraphHopper();
+   try {
+    hopper.init(config).setAllowWrites(false);
+    if(!hopper.load()) throw new IllegalStateException("existing fixture required");
+    int checks=0, refusals=0, uturns=0;
+    for(int mode=0;mode<3;mode++) {
+     var request=new GHRequest().setProfile("car").setPathDetails(List.of("edge_key"))
+      .putHint("ch.disable",true).putHint("lm.disable",true).putHint("way_point_max_distance",0)
+      .putHint("pass_through",false);
+     request.addPoint(new com.graphhopper.util.shapes.GHPoint(0,mode==1?.02:0));
+     request.addPoint(new com.graphhopper.util.shapes.GHPoint(.003,.01));
+     request.addPoint(new com.graphhopper.util.shapes.GHPoint(0,mode==0?.02:0));
+     var response=hopper.route(request);
+     if(response.hasErrors()) throw new IllegalStateException("fixture routing failed");
+     var weighting=hopper.createWeighting(hopper.getProfile("car"),request.getHints());
+     for(var path:response.getAll()) {
+      var keys=(List<Integer>)validate.invoke(null,hopper,path,false,Set.of(),weighting);
+      if(keys.size()<2) throw new IllegalStateException("turn not exercised");
+      for(int i=1;i<keys.size();i++) if((keys.get(i-1)^1)==keys.get(i)) {
+       var edge=hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(i-1));
+       if(weighting.calcTurnWeight(keys.get(i-1)/2,edge.getAdjNode(),keys.get(i)/2)!=60)
+        throw new IllegalStateException("configured U-turn cost lost");
+       uturns++;
+      }
+      checks++;
+      for(double bad:new double[]{Double.POSITIVE_INFINITY,Double.NaN,-1}) {
+       var invalid=new AbstractAdjustedWeighting(weighting) {
+        @Override public double calcTurnWeight(int incoming,int via,int outgoing) { return bad; }
+        @Override public String getName() { return weighting.getName(); }
+       };
+       try { validate.invoke(null,hopper,path,false,Set.of(),invalid); }
+       catch(InvocationTargetException error) {
+        if(!(error.getCause() instanceof IllegalStateException)
+           || !"invalid profile turn weight".equals(error.getCause().getMessage())) throw error;
+        refusals++;continue;
+       }
+       throw new IllegalStateException("invalid turn cost accepted");
+      }
+     }
+    }
+    if(checks!=3 || refusals!=9 || uturns<1) throw new IllegalStateException("incomplete turn coverage");
+    System.out.println("PASS_PROFILE_TURNS paths=3 invalid_cost_refusals=9 configured_uturn=60 navigation=DISABLED");
+   } finally { hopper.close(); }
+  }
+ }
+}''')
+    completed = subprocess.run(['java','-Xmx512m','--class-path',manifest['paths']['jar'],str(harness),
+        manifest['paths']['jar'],manifest['paths']['config'],manifest['paths']['graph'],
+        str(Path(__file__).resolve().parents[1]/'prototypes/graphhopper11/ReadOnlyRouteRegression.java'),str(tmp_path)],
+        cwd=tmp_path,capture_output=True,text=True,timeout=60)
+    assert completed.returncode == 0, (completed.stdout+completed.stderr)[-4000:]
+    assert 'PASS_PROFILE_TURNS paths=3 invalid_cost_refusals=9 configured_uturn=60 navigation=DISABLED' in completed.stdout
+
+
 def test_no_route_is_refused_without_fallback(app, manifest):
     response = app.test_client().post("/api/prototype/route", json=body(manifest, "no_route"), headers=AUTH)
     assert response.status_code == 422
