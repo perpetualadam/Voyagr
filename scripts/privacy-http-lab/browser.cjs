@@ -309,6 +309,9 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 60000));
     phase = 'full candidate route speed without Overpass';
     await require('./route-speed-browser.cjs')(origin, check);
+    phase = 'full UK page explicit GH11 host connection';
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    await require('./uk-host-browser.cjs')(origin, check);
     console.log(checks + ' full-candidate Chromium checks passed. Synthetic data; not phone or production verification.');
   } catch (error) {
     error.testPhase = phase;

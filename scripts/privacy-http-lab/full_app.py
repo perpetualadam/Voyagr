@@ -21,6 +21,8 @@ import importlib
 # Recheck its contents now that the disposable copy has been created.
 importlib.invalidate_caches()
 from voyagr_web import app
+from gh11_fixture import register_gh11_fixture
+register_gh11_fixture(app, destination)
 
 
 @app.post('/__lab__/worker-revision')

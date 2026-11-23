@@ -276,3 +276,12 @@ module replacement and closes the preview fail-closed on partial setup failure.
 Actual module/store integration tests and the synthetic-host real-browser scenario
 cover the connection. Production UK boot activation and full host-page acceptance
 are still pending. See UK_HOST_BOOT.md; Milestone 3 remains in progress.
+
+## Subsequent Milestone 3 checkpoint: full UK page acceptance
+
+The disposable privacy browser lab now connects normally booted UK modules to a
+same-origin preview frame using the explicit connector. Eight checks cover actual
+planning-state refusal before routing, owner propagation, close and retained
+synthetic data/runtime identity. Test-only assets/metadata are explicit; no active
+journey, engine execution, account login or hardware GPS is implied. Active UK
+routing/navigation parity and phone acceptance remain pending; Milestone 3 is open.

@@ -136,3 +136,31 @@ the entire release chain. `--block-worker` is a diagnostic comparison only and i
 never an acceptance substitute. Process groups, server and temporary assets are
 cleaned up on completion/timeout. This does not establish full-app authentication,
 GPS, navigation or physical-phone behavior.
+
+## Full UK page to GH11 host connection
+
+The browser lab also runs `uk-host-browser.cjs` against the complete disposable UK
+candidate. It loads the real page/modules and a preview iframe on the same loopback
+origin, then calls the explicit connector. Test-only routes in `gh11_fixture.py`
+serve an allowlist of public preview scripts/HTML; they are registered only by
+`full_app.py`, never the production entry point. No JAR, graph, manifest, database
+or credentials are exposed by these routes. The source-copy allowlist includes
+only six public prototype HTML/JS files.
+
+This test uses actual UK module state, not a mocked LIVE journey. It verifies the
+planning-mode connection refuses before any routing request, navigation/save stay
+disabled, an explicit synthetic owner-coordinator change propagates, and closing
+retains a synthetic host record/localStorage marker and does not replace host
+modules or alter the inactive runtime state. Registry/version GET responses are
+synthetic; route requests are blocked and must have a zero count. No GraphHopper
+execution, account login or physical location is claimed.
+
+A fresh browser context blocks service workers for this focused host/frame test;
+the earlier full privacy suite retains its real-worker assertions. The real safety
+notice is acknowledged before the test-only iframe is placed in the foreground.
+The lab waits the normal 60-second asset-rate window before this extra cold browser,
+without changing server limits. A local run against a temporary full-code copy with
+fresh SQLite/browser storage and denied backend network connections passed all
+eight checks. CI runs against the disposable candidate/internal account fixtures.
+Active guidance/rerouting, general planning-mode UK routing, physical GPS and phone
+acceptance remain pending. This test does not activate a production UK connector.

@@ -194,7 +194,10 @@ def main(ca_file=None, browser=False):
                 path = Path(relative)
                 allowed = (path.parts[0] in {'templates', 'static'} or
                            path.suffix == '.py' and (len(path.parts) == 1 or path.parts[0] == 'voyagr') or
-                           relative in {'service-worker.js', 'manifest.json', 'camera_areas.geojson'})
+                           relative in {'service-worker.js', 'manifest.json', 'camera_areas.geojson'} or
+                           relative in {'prototypes/graphhopper11/' + name for name in
+                                        ('isolated_viewer.html', 'isolated_viewer.js', 'saved_plans.js',
+                                         'journey_evidence.js', 'host_journey_adapter.js', 'uk_host_boot.js')})
                 if not allowed:
                     continue
                 original = ROOT / path
