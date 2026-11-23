@@ -285,3 +285,13 @@ planning-state refusal before routing, owner propagation, close and retained
 synthetic data/runtime identity. Test-only assets/metadata are explicit; no active
 journey, engine execution, account login or hardware GPS is implied. Active UK
 routing/navigation parity and phone acceptance remain pending; Milestone 3 is open.
+
+## Subsequent Milestone 3 checkpoint: active journey refusal
+
+The real explicit Start establishes a synthetic LIVE baseline in deterministic and
+full UK-page tests. An incoming preview could previously be masked by selected-route
+merge and report a redraw; it is now refused before that merge. Three alternatives,
+restore/offline/GPS-replacement paths retain active state, and legitimate redraw
+still works. The twelve-check UK browser scenario binds actual LIVE host context
+with a synthetic fix without granting GH11 guidance. See ACTIVE_JOURNEY_ACCEPTANCE.md.
+Positive GH11 guidance/route parity remains NO-GO and Milestone 3 is in progress.

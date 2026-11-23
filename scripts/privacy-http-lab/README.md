@@ -164,3 +164,11 @@ fresh SQLite/browser storage and denied backend network connections passed all
 eight checks. CI runs against the disposable candidate/internal account fixtures.
 Active guidance/rerouting, general planning-mode UK routing, physical GPS and phone
 acceptance remain pending. This test does not activate a production UK connector.
+
+The UK host scenario now has twelve checks: it also performs actual Start on a
+synthetic baseline, binds a fresh synthetic accepted fix to the real LIVE host,
+refuses preview takeover without selection merge and retains that journey when the
+preview closes. It never changes a mode getter or gate to obtain LIVE. The initial
+route/evidence is a test fixture, route requests remain blocked and no GH11 guidance,
+real-road compliance, physical GPS or warning acceptance is established. The test
+explicitly stops its synthetic journey before discarding the browser profile.
