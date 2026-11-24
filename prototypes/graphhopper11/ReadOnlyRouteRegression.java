@@ -274,6 +274,68 @@ public class ReadOnlyRouteRegression {
         return result;
     }
 
+    // Operator-selected diagnostic only. Never use avoidance-filtered snapping to
+    // decide which road the vehicle might occupy, or turn a partial scan into proof.
+    static Map<String,Object> observeOriginCandidates(GraphHopper hopper,JsonNode point,JsonNode options) {
+        require(options.isObject() && options.has("radius_m") && options.size()<3
+            && (!options.has("edge_limit") || options.size()==2),"invalid origin diagnostic options");
+        var names=options.fieldNames();
+        while(names.hasNext()) require(Set.of("radius_m","edge_limit").contains(names.next()),"unsupported origin diagnostic option");
+        require(options.get("radius_m").isNumber(),"origin radius must be numeric");
+        double radius=options.get("radius_m").doubleValue();
+        require(Double.isFinite(radius) && radius>=.01 && radius<=150,"origin radius outside diagnostic bounds");
+        int limit=10000;
+        if(options.has("edge_limit")) {
+            require(options.get("edge_limit").isIntegralNumber() && options.get("edge_limit").canConvertToInt(),"invalid origin edge limit");
+            limit=options.get("edge_limit").intValue();
+        }
+        require(limit>=1 && limit<=10000,"origin edge limit outside diagnostic bounds");
+        double lat=point.get(0).asDouble(),lon=point.get(1).asDouble();
+        require(Double.isFinite(lat) && Double.isFinite(lon) && Math.abs(lat)<=90 && Math.abs(lon)<=180,"invalid origin diagnostic point");
+        var access=hopper.getEncodingManager().getBooleanEncodedValue("car_access");
+        var edges=hopper.getBaseGraph().getAllEdges();
+        var keys=new TreeSet<Integer>();
+        int examined=0,vertices=0;boolean complete=true;String reason="complete_imported_graph_scan";
+        long deadline=System.nanoTime()+250_000_000L;
+        while(edges.next()) {
+            if(examined>=limit || System.nanoTime()>deadline) {complete=false;reason="edge_or_time_budget";break;}
+            var shape=edges.fetchWayGeometry(FetchMode.ALL);
+            if(shape.size()<2) {complete=false;reason="invalid_imported_geometry";break;}
+            if(vertices+shape.size()>100000) {complete=false;reason="geometry_budget";break;}
+            vertices+=shape.size();examined++;
+            double nearest=Double.POSITIVE_INFINITY;
+            for(int i=0;i<shape.size();i++) {
+                if(i%256==0 && System.nanoTime()>deadline) {complete=false;reason="time_budget";break;}
+                double a=shape.getLat(i),b=shape.getLon(i);
+                if(!Double.isFinite(a) || !Double.isFinite(b) || Math.abs(a)>90 || Math.abs(b)>180) {
+                    complete=false;reason="invalid_imported_geometry";break;
+                }
+                nearest=Math.min(nearest,DistanceCalcEarth.DIST_EARTH.calcDist(lat,lon,a,b));
+                if(i>0 && DistanceCalcEarth.DIST_EARTH.validEdgeDistance(lat,lon,shape.getLat(i-1),shape.getLon(i-1),a,b))
+                    nearest=Math.min(nearest,DistanceCalcEarth.DIST_EARTH.calcDenormalizedDist(
+                        DistanceCalcEarth.DIST_EARTH.calcNormalizedEdgeDistance(lat,lon,shape.getLat(i-1),shape.getLon(i-1),a,b)));
+            }
+            if(!complete)break;
+            if(!Double.isFinite(nearest)) {complete=false;reason="invalid_distance";break;}
+            if(nearest<=radius) {
+                if(edges.get(access)) keys.add(edges.getEdgeKey());
+                if(edges.getReverse(access)) keys.add(edges.getReverseEdgeKey());
+                if(keys.size()>256) {complete=false;reason="candidate_budget";keys=new TreeSet<>(keys.stream().limit(256).toList());break;}
+            }
+        }
+        String classification=!complete?"UNVERIFIED":keys.size()>1?"MULTIPLE_OBSERVED_TRAVERSALS"
+            :keys.isEmpty()?"NO_OBSERVED_TRAVERSAL":"ONE_OBSERVED_TRAVERSAL";
+        var result=new LinkedHashMap<String,Object>();
+        result.put("scope","encoded_car_access_in_imported_graph_only");
+        result.put("classification",classification);result.put("scan_complete",complete);result.put("reason",reason);
+        result.put("radius_m",radius);result.put("edge_limit",limit);result.put("edges_examined",examined);
+        result.put("candidate_count",keys.size());result.put("candidate_edge_keys",keys);
+        result.put("key_scope","current_loaded_graph_only");result.put("avoidance_filter_applied",false);
+        result.put("heading_verification","UNVERIFIED");result.put("physical_road_verification","UNVERIFIED");
+        result.put("navigation_allowed",false);result.put("route_absence_proven",false);
+        return result;
+    }
+
     static Map<String,Object> runCase(GraphHopper hopper,JsonNode test,Map<String,List<Integer>> associations) {
         String name=test.path("id").asText();
         Map<String,Object> result=new LinkedHashMap<>();
@@ -341,6 +403,8 @@ public class ReadOnlyRouteRegression {
                     && point.get(1).isNumber(),"invalid coordinate");
                 request.addPoint(new com.graphhopper.util.shapes.GHPoint(point.get(0).asDouble(),point.get(1).asDouble()));
             }
+            if(test.has("diagnose_origin")) result.put("origin_candidate_observation",
+                observeOriginCandidates(hopper,visits.get(0),test.get("diagnose_origin")));
             request.putHint("ch.disable",true).putHint("lm.disable",true)
                 .putHint("way_point_max_distance",0).putHint("max_visited_nodes",nodeBudget)
                 .putHint("timeout_ms",20000);

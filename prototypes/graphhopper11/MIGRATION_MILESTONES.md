@@ -361,3 +361,15 @@ Saved data/settings remain retained. This is coordinate binding at the browser
 boundary, not server GPS attestation, physical road/heading proof or arbitrary
 live-origin routing. See REQUEST_ORIGIN_BINDING.md. The four full UK acceptance
 rows remain open, navigation stays disabled and no deployment is included.
+
+## Subsequent Milestone 3 checkpoint: imported origin ambiguity observations
+
+An opt-in native diagnostic observes nearby encoded car traversals independently
+of hazard exclusions or the selected route. Synthetic parallel, reverse, one-way,
+junction, empty and truncated-scan cases preserve uncertainty/refusal flags. No
+candidate count grants a physical road/heading claim, and partial scans cannot
+claim uniqueness. The bounded graph-wide scan is diagnostic-only, not a scalable
+UK/US live locator; HTTP clients cannot enable it and normal requests do not scan.
+See ORIGIN_AMBIGUITY_DIAGNOSTIC.md. General live-origin association and all four
+full UK acceptance streams remain open; navigation is disabled and no deployment
+is included.

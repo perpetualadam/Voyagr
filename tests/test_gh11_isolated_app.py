@@ -28,7 +28,7 @@ def manifest(tmp_path_factory):
       <node id="6" lat="0.000002" lon="0"/><node id="7" lat="0.000002" lon="0.02"/>
       <way id="10"><nd ref="1"/><nd ref="3"/><nd ref="2"/><tag k="highway" v="primary"/></way>
       <way id="11"><nd ref="1"/><nd ref="4"/><nd ref="2"/><tag k="highway" v="residential"/></way>
-      <way id="12"><nd ref="4"/><nd ref="5"/><tag k="highway" v="residential"/></way>
+      <way id="12"><nd ref="4"/><nd ref="5"/><tag k="highway" v="residential"/><tag k="oneway" v="yes"/></way>
       <way id="13"><nd ref="6"/><nd ref="7"/><tag k="highway" v="primary"/></way>
     </osm>''')
     graph = root / "graph"
@@ -223,7 +223,7 @@ def test_auth_request_contract_versions_and_cross_origin_refused_before_java(app
     for name in ("strict-route-policy.js", "avoidance-integrity.js", "navigation-safety-ux.js"):
         assert client.get("/strict-assets/"+name, headers=AUTH).status_code == 200
     assert client.get("/strict-assets/not-registered.js", headers=AUTH).status_code == 404
-    for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}):
+    for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}, {"diagnose_origin":{"radius_m":1}}):
         assert client.post("/api/prototype/route", json=dict(body(manifest), **extra), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=body(manifest, "unknown"), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=dict(body(manifest), graph_version="0"*64), headers=AUTH).status_code == 409
@@ -1358,3 +1358,72 @@ def test_eligible_edge_resnap_to_parallel_road_requires_source_identity_guard(ap
     assert case['points'][0][0] == 0  # Snap moved to another road within the one-metre bound.
     with pytest.raises(Refused,match='engine_refused'):
         bridge.route('no_route')  # The actual registered case retains its source-way guard.
+
+
+def origin_diagnostic(bridge, tmp_path, *, start=(0,.005), end=(0,.018), radius=1, limit=10000, blocked=('upper',)):
+    fixture = copy.deepcopy(bridge.registry)
+    case = copy.deepcopy(bridge.cases['partial'])
+    case.pop('expected_osm_way_ids')
+    case.update(points=[list(start),list(end)],max_snap_distance_m=75,
+                include_path_data=True,blocked_associations=list(blocked),
+                diagnose_origin={'radius_m':radius,'edge_limit':limit})
+    fixture['cases'] = [case]
+    request = tmp_path/'public-origin-diagnostic.json'
+    request.write_text(json.dumps(fixture))
+    result = bridge._execute(request,str(tmp_path))['cases'][0]
+    observation = result['origin_candidate_observation']
+    assert observation['navigation_allowed'] is False and observation['route_absence_proven'] is False
+    assert observation['heading_verification'] == observation['physical_road_verification'] == 'UNVERIFIED'
+    assert observation['avoidance_filter_applied'] is False
+    assert observation['key_scope'] == 'current_loaded_graph_only'
+    assert observation['candidate_count'] == len(set(observation['candidate_edge_keys']))
+    return observation, result
+
+
+def test_real_imported_graph_keeps_parallel_and_reverse_approaches_before_avoidance(app, tmp_path):
+    bridge = app.extensions['gh11_bridge']
+    forward, _ = origin_diagnostic(bridge,tmp_path)
+    reverse, _ = origin_diagnostic(bridge,tmp_path,end=(0,.002))
+    avoided, result = origin_diagnostic(bridge,tmp_path,blocked=('main',))
+    assert forward['scan_complete'] and forward['classification'] == 'MULTIPLE_OBSERVED_TRAVERSALS'
+    assert forward['candidate_count'] == 4  # Two bidirectional parallel edges.
+    assert forward['candidate_edge_keys'] == reverse['candidate_edge_keys'] == avoided['candidate_edge_keys']
+    assert set(result['blocked_edge_keys']) <= set(avoided['candidate_edge_keys'])
+    assert all(key^1 in forward['candidate_edge_keys'] for key in forward['candidate_edge_keys'])
+
+
+def test_real_oneway_observation_is_not_physical_heading_authority(app, tmp_path):
+    observation, result = origin_diagnostic(app.extensions['gh11_bridge'],tmp_path,
+        start=(.0035,.01),end=(.0039,.01),blocked=('main',))
+    assert observation['scan_complete'] and observation['classification'] == 'ONE_OBSERVED_TRAVERSAL'
+    assert observation['candidate_count'] == 1
+    assert observation['candidate_edge_keys'] == result['candidates'][0]['directed_edge_keys']
+    assert observation['navigation_allowed'] is False
+
+
+def test_real_intersection_has_multiple_imported_approaches(app, tmp_path):
+    observation, _ = origin_diagnostic(app.extensions['gh11_bridge'],tmp_path,start=(0,0))
+    assert observation['scan_complete'] and observation['classification'] == 'MULTIPLE_OBSERVED_TRAVERSALS'
+    assert observation['candidate_count'] >= 6  # Junction plus independent nearby parallel road.
+
+
+def test_empty_and_truncated_imported_observations_cannot_establish_an_approach(app, tmp_path):
+    bridge = app.extensions['gh11_bridge']
+    empty, _ = origin_diagnostic(bridge,tmp_path,start=(.0001,.005),end=(.0001,.018))
+    assert empty['scan_complete'] and empty['classification'] == 'NO_OBSERVED_TRAVERSAL'
+    assert empty['candidate_count'] == 0 and empty['navigation_allowed'] is False
+    partial, _ = origin_diagnostic(bridge,tmp_path,limit=1)
+    assert partial['scan_complete'] is False and partial['classification'] == 'UNVERIFIED'
+    assert partial['edges_examined'] == 1 and partial['reason'] == 'edge_or_time_budget'
+
+
+@pytest.mark.parametrize('options',[{'radius_m':True},{'radius_m':0},{'radius_m':151},
+    {'radius_m':1,'edge_limit':0},{'radius_m':1,'edge_limit':10001},
+    {'radius_m':1,'edge_limit':True},{'radius_m':1,'heading':90}])
+def test_invalid_or_unsupported_origin_diagnostic_controls_refuse(app, tmp_path, options):
+    bridge = app.extensions['gh11_bridge'];fixture = copy.deepcopy(bridge.registry)
+    case = copy.deepcopy(bridge.cases['partial']);case['diagnose_origin'] = options
+    fixture['cases'] = [case];request = tmp_path/'invalid-origin-diagnostic.json'
+    request.write_text(json.dumps(fixture))
+    with pytest.raises(Refused):
+        bridge._execute(request,str(tmp_path))
