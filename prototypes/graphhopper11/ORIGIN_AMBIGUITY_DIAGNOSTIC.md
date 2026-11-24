@@ -85,3 +85,9 @@ Those inputs must then bind to Start, alternatives, leg seams, reroutes and cach
 reuse without inferred connectors or avoidance-based relocation. The four full UK
 Milestone 3 acceptance streams remain open. Migration stays NO-GO; no deployment is
 included. A future reviewed package/manifest would be required for any VPS update.
+
+A subsequent checkpoint adds an opt-in `lookup: index` mode and a shared distance
+kernel; `full_scan` remains the default comparison oracle. See
+INDEXED_ORIGIN_LOOKUP.md for query-versus-coverage semantics, indexed budgets,
+regional limits, differential synthetic comparisons and negative index controls.
+Neither mode provides physical road/heading or navigation authority.

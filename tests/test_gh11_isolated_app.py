@@ -1360,13 +1360,13 @@ def test_eligible_edge_resnap_to_parallel_road_requires_source_identity_guard(ap
         bridge.route('no_route')  # The actual registered case retains its source-way guard.
 
 
-def origin_diagnostic(bridge, tmp_path, *, start=(0,.005), end=(0,.018), radius=1, limit=10000, blocked=('upper',)):
+def origin_diagnostic(bridge, tmp_path, *, start=(0,.005), end=(0,.018), radius=1, limit=10000, blocked=('upper',), lookup='full_scan'):
     fixture = copy.deepcopy(bridge.registry)
     case = copy.deepcopy(bridge.cases['partial'])
     case.pop('expected_osm_way_ids')
     case.update(points=[list(start),list(end)],max_snap_distance_m=75,
                 include_path_data=True,blocked_associations=list(blocked),
-                diagnose_origin={'radius_m':radius,'edge_limit':limit})
+                diagnose_origin={'radius_m':radius,'edge_limit':limit,'lookup':lookup})
     fixture['cases'] = [case]
     request = tmp_path/'public-origin-diagnostic.json'
     request.write_text(json.dumps(fixture))
@@ -1419,7 +1419,8 @@ def test_empty_and_truncated_imported_observations_cannot_establish_an_approach(
 
 @pytest.mark.parametrize('options',[{'radius_m':True},{'radius_m':0},{'radius_m':151},
     {'radius_m':1,'edge_limit':0},{'radius_m':1,'edge_limit':10001},
-    {'radius_m':1,'edge_limit':True},{'radius_m':1,'heading':90}])
+    {'radius_m':1,'edge_limit':True},{'radius_m':1,'heading':90},
+    {'radius_m':1,'lookup':True},{'radius_m':1,'lookup':'closest'}])
 def test_invalid_or_unsupported_origin_diagnostic_controls_refuse(app, tmp_path, options):
     bridge = app.extensions['gh11_bridge'];fixture = copy.deepcopy(bridge.registry)
     case = copy.deepcopy(bridge.cases['partial']);case['diagnose_origin'] = options
@@ -1427,3 +1428,203 @@ def test_invalid_or_unsupported_origin_diagnostic_controls_refuse(app, tmp_path,
     request.write_text(json.dumps(fixture))
     with pytest.raises(Refused):
         bridge._execute(request,str(tmp_path))
+
+
+@pytest.fixture(scope='module')
+def origin_index_probe(manifest, tmp_path_factory):
+    root = tmp_path_factory.mktemp('gh11-index-differential')
+    source = root/'OriginIndexProbe.java'
+    source.write_text(r'''import com.graphhopper.*;
+import com.graphhopper.jackson.Jackson;
+import com.graphhopper.storage.index.*;
+import com.graphhopper.util.shapes.BBox;
+import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import java.io.File;
+import java.net.URLClassLoader;
+import java.util.*;
+import java.lang.reflect.*;
+public class OriginIndexProbe {
+ static class ProbeHopper extends GraphHopper {
+  LocationIndex original;
+  void variant(String mode) {
+   if(mode.equals("normal")){setLocationIndex(original);return;}
+   setLocationIndex(new LocationIndex() {
+    public void close(){original.close();}
+    public Snap findClosest(double lat,double lon,com.graphhopper.routing.util.EdgeFilter filter){return original.findClosest(lat,lon,filter);}
+    public void query(TileFilter filter,Visitor visitor){
+     switch(mode){
+      case "empty":return;
+      case "throw":throw new IllegalStateException("synthetic index failure");
+      case "invalid":visitor.onEdge(Integer.MAX_VALUE);return;
+      case "flood":for(int i=0;i<60000;i++)visitor.onEdge(0);return;
+      case "tiles":for(int i=0;i<10001;i++)visitor.onTile(new BBox(0,1,0,1),0);return;
+      case "duplicate":original.query(filter,new Visitor(){
+       public boolean isTileInfo(){return visitor.isTileInfo();}
+       public void onTile(BBox tile,int depth){visitor.onTile(tile,depth);}
+       public void onEdge(int id){visitor.onEdge(id);visitor.onEdge(id);}
+      });return;
+      default:throw new IllegalStateException("unknown synthetic variant");
+     }
+    }
+   });
+  }
+ }
+ public static void main(String[] args)throws Exception {
+  var compiler=javax.tools.ToolProvider.getSystemJavaCompiler();
+  if(compiler==null || compiler.run(null,null,null,"-classpath",args[0],"-d",args[4],args[3])!=0)
+   throw new IllegalStateException("checker compilation failed");
+  try(var loader=new URLClassLoader(new java.net.URL[]{new File(args[4]).toURI().toURL()},OriginIndexProbe.class.getClassLoader())) {
+   var check=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("observeOriginCandidates",GraphHopper.class,JsonNode.class,JsonNode.class);
+   check.setAccessible(true);
+   var mapper=Jackson.newObjectMapper();var configTree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
+   var config=mapper.treeToValue(configTree.get("graphhopper"),GraphHopperConfig.class);
+   config.putObject("graph.location",args[2]).putObject("datareader.file","");
+   var hopper=new ProbeHopper();
+   try {
+    hopper.init(config).setAllowWrites(false);
+    if(!hopper.load())throw new IllegalStateException("existing graph required");
+    hopper.original=hopper.getLocationIndex();
+    boolean[] boundary={false};
+    hopper.original.query(new BBox(.004,.006,-.001,.001),new LocationIndex.Visitor(){
+     public boolean isTileInfo(){return true;}
+     public void onEdge(int id){}
+     public void onTile(BBox tile,int depth){if(Math.abs(tile.minLon-.005)<1e-8 || Math.abs(tile.maxLon-.005)<1e-8)boundary[0]=true;}
+    });
+    var observations=new ArrayList<Object>();
+    for(var input:mapper.readTree(new File(args[5]))) {
+     hopper.variant(input.path("fault").asText("normal"));
+     var options=mapper.createObjectNode().put("radius_m",input.path("radius_m").asDouble(1))
+      .put("edge_limit",input.path("edge_limit").asInt(10000));
+     try {
+      var full=check.invoke(null,hopper,input.get("point"),options);
+      options.put("lookup","index");
+      var indexed=check.invoke(null,hopper,input.get("point"),options);
+      observations.add(Map.of("full",full,"indexed",indexed));
+     }catch(InvocationTargetException error){
+      if(!(error.getCause() instanceof IllegalStateException))throw error;
+      observations.add(Map.of("refused",true));
+     }
+    }
+    System.out.println("INDEX_DIFFERENTIAL "+mapper.writeValueAsString(Map.of("midpoint_is_tile_border",boundary[0],"observations",observations)));
+   }finally{hopper.close();}
+  }
+ }
+}''')
+    def run(cases, paths=None):
+        paths = manifest['paths'] if paths is None else paths
+        request = root/'synthetic-inputs.json';request.write_text(json.dumps(cases))
+        command = ['java','-Xmx512m','--class-path',paths['jar'],str(source),
+                   paths['jar'],paths['config'],paths['graph'],
+                   str(Path(__file__).resolve().parents[1]/'prototypes/graphhopper11/ReadOnlyRouteRegression.java'),str(root),str(request)]
+        completed = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=60)
+        assert completed.returncode == 0, (completed.stdout+completed.stderr)[-4000:]
+        rows = [line.removeprefix('INDEX_DIFFERENTIAL ') for line in completed.stdout.splitlines() if line.startswith('INDEX_DIFFERENTIAL ')]
+        assert len(rows) == 1
+        return json.loads(rows[0])
+    return run
+
+
+def assert_index_observation_only(observation):
+    assert observation['lookup_method'] == 'index' and observation['scan_complete'] is False
+    assert observation['classification'] == observation['index_coverage_verification'] == 'UNVERIFIED'
+    assert observation['navigation_allowed'] is False and observation['route_absence_proven'] is False
+    assert observation['physical_road_verification'] == observation['heading_verification'] == 'UNVERIFIED'
+    assert observation['avoidance_filter_applied'] is False
+
+
+def test_real_index_matches_full_scan_at_tile_border_and_long_edge_interiors(origin_index_probe):
+    points = [[0,.005],[0,.005-1e-9],[0,.005+1e-9],[.0015,.005],[.0035,.01],[0,0],[.0001,.005]]
+    cases = [dict(point=point,radius_m=radius) for point in points for radius in (.01,1,20,150)]
+    result = origin_index_probe(cases)
+    assert result['midpoint_is_tile_border'] is True
+    observations = result['observations']
+    for pair in observations:
+        full,indexed = pair['full'],pair['indexed']
+        assert full['scan_complete'] is True and indexed['index_query_complete'] is True
+        assert full['candidate_edge_keys'] == indexed['candidate_edge_keys']
+        assert indexed['edges_examined'] <= full['edges_examined']
+        assert_index_observation_only(indexed)
+    assert observations[1]['full']['candidate_count'] == 4  # Both parallel roads at an interior point.
+    assert any(pair['indexed']['edges_examined'] < pair['full']['edges_examined'] for pair in observations)
+
+
+def test_index_duplicate_callbacks_do_not_create_or_hide_candidates(origin_index_probe):
+    pairs = origin_index_probe([dict(point=[0,.005],fault='normal'),dict(point=[0,.005],fault='duplicate')])['observations']
+    normal,duplicate = [pair['indexed'] for pair in pairs]
+    assert normal['candidate_edge_keys'] == duplicate['candidate_edge_keys']
+    assert normal['edges_examined'] == duplicate['edges_examined']
+    assert duplicate['edge_callbacks'] == 2*normal['edge_callbacks']
+    assert duplicate['index_query_complete'] is True
+    assert_index_observation_only(duplicate)
+
+
+def test_empty_index_can_finish_while_missing_real_candidates_and_never_claim_completeness(origin_index_probe):
+    pair = origin_index_probe([dict(point=[0,.005],fault='empty')])['observations'][0]
+    assert pair['full']['scan_complete'] is True and pair['full']['candidate_count'] == 4
+    indexed = pair['indexed']
+    assert indexed['index_query_complete'] is True and indexed['candidate_count'] == 0
+    assert indexed['reason'] == 'index_coverage_unverified'
+    assert_index_observation_only(indexed)
+
+
+@pytest.mark.parametrize('fault,reason',[('throw','index_query_failure'),('invalid','invalid_index_edge'),
+                                       ('flood','callback_budget'),('tiles','tile_budget')])
+def test_index_failure_and_query_budgets_cannot_fall_back_or_claim_a_unique_approach(origin_index_probe,fault,reason):
+    indexed = origin_index_probe([dict(point=[0,.005],fault=fault)])['observations'][0]['indexed']
+    assert indexed['index_query_complete'] is False
+    assert indexed['reason'] in (reason,'time_budget')
+    if fault == 'flood':
+        assert indexed['edges_examined'] <= 1 and indexed['candidate_count'] <= 2
+    else:
+        assert indexed['edges_examined'] == indexed['candidate_count'] == 0
+    assert_index_observation_only(indexed)
+
+
+def test_index_region_and_edge_limit_refuse_without_completeness_claim(origin_index_probe):
+    cases = [dict(point=point) for point in ([81,0],[0,179.999999],[0,-179.999999])]
+    cases.append(dict(point=[0,.005],edge_limit=1))
+    rows = origin_index_probe(cases)['observations']
+    for pair in rows:
+        assert_index_observation_only(pair['indexed'])
+        assert pair['indexed']['index_query_complete'] is False
+    assert all(pair['indexed']['reason']=='unsupported_index_envelope' for pair in rows[:3])
+    assert rows[-1]['indexed']['reason']=='edge_budget' and rows[-1]['indexed']['edges_examined']==1
+
+
+def test_operator_fixture_index_mode_preserves_candidates_but_never_grants_scan_completeness(app,tmp_path):
+    bridge = app.extensions['gh11_bridge']
+    full,_ = origin_diagnostic(bridge,tmp_path)
+    indexed,result = origin_diagnostic(bridge,tmp_path,lookup='index',blocked=('main',))
+    assert indexed['index_query_complete'] is True
+    assert indexed['candidate_edge_keys'] == full['candidate_edge_keys']
+    assert set(result['blocked_edge_keys']) <= set(indexed['candidate_edge_keys'])
+    assert_index_observation_only(indexed)
+
+
+def test_index_probe_rejects_invalid_origin_types_instead_of_numeric_coercion(origin_index_probe):
+    cases = [dict(point=point) for point in (None,[],[True,0],['0',0],[91,0],[0,181])]
+    assert origin_index_probe(cases)['observations'] == [{'refused':True}]*len(cases)
+
+
+@pytest.mark.parametrize('latitude,longitude',[(53,-1),(40,-105)])
+def test_real_index_differential_on_translated_synthetic_graphs(manifest,origin_index_probe,tmp_path,latitude,longitude):
+    import xml.etree.ElementTree as ET
+    tree = ET.parse(manifest['paths']['source'])
+    for node in tree.getroot().findall('node'):
+        node.set('lat',str(float(node.get('lat'))+latitude))
+        node.set('lon',str(float(node.get('lon'))+longitude))
+    source = tmp_path/'translated-synthetic.osm';tree.write(source,encoding='unicode')
+    graph = tmp_path/'graph';config = tmp_path/'config.yml'
+    config.write_text(Path(manifest['paths']['config']).read_text()
+        .replace(manifest['paths']['source'],str(source)).replace(manifest['paths']['graph'],str(graph)))
+    subprocess.run(['java','-Xmx512m','-jar',manifest['paths']['jar'],'import',str(config)],
+        cwd=tmp_path,capture_output=True,check=True,timeout=90)
+    points = [(0,.005),(.0015,.005),(.0035,.01),(0,0),(.0001,.005)]
+    cases = [dict(point=[latitude+lat,longitude+lon],radius_m=radius)
+             for lat,lon in points for radius in (.01,1,20,150)]
+    result = origin_index_probe(cases,paths=dict(manifest['paths'],source=str(source),config=str(config),graph=str(graph)))
+    for pair in result['observations']:
+        assert pair['full']['scan_complete'] is True and pair['indexed']['index_query_complete'] is True
+        assert pair['full']['candidate_edge_keys'] == pair['indexed']['candidate_edge_keys']
+        assert_index_observation_only(pair['indexed'])

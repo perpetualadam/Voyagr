@@ -373,3 +373,15 @@ UK/US live locator; HTTP clients cannot enable it and normal requests do not sca
 See ORIGIN_AMBIGUITY_DIAGNOSTIC.md. General live-origin association and all four
 full UK acceptance streams remain open; navigation is disabled and no deployment
 is included.
+
+## Subsequent Milestone 3 checkpoint: indexed candidate retrieval
+
+An opt-in native index mode retrieves stored edge candidates without avoidance
+filtering and applies the full-scan oracle's geometry test. Differential synthetic
+checks include confirmed tile borders, long/diagonal edges and translated UK/US
+latitudes. Faults, duplicated callbacks, unsupported regions and budgets preserve
+refusal/uncertainty. Query completion is explicitly separate from index coverage;
+a silently empty index cannot claim absence or uniqueness. This is a diagnostic
+lookup prototype, not measured real-graph scalability or live-origin authority.
+See INDEXED_ORIGIN_LOOKUP.md. All four full UK acceptance streams remain open,
+navigation stays disabled and no deployment is included.
