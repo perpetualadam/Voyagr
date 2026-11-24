@@ -23,6 +23,12 @@ function create({owner,journey,gps,validator=root.VoyagrSpeedGps,now=()=>Date.no
     }
     return {
         capture(){const evidence=read(),token=Object.freeze({});tokens.set(token,evidence);return token;},
+        captureForOrigin(origin){
+            const evidence=read();
+            // Match the real request builder's numeric round-trip, never an accuracy radius.
+            if(!Array.isArray(origin)||origin.length!==2||origin.some(value=>typeof value!=='number'||!Number.isFinite(value))||origin[0]!==evidence.fix.lat||origin[1]!==evidence.fix.lon)throw Error('Request origin does not match accepted GPS fix.');
+            const token=Object.freeze({});tokens.set(token,{...evidence,request_origin:origin.slice()});return token;
+        },
         current,
         async run(work){
             if(typeof work!=='function')throw Error('Preview work unavailable.');

@@ -615,8 +615,8 @@ test('a late saved-selector read cannot start restoration after an owner change'
 
 const JourneyEvidence=require('../../../prototypes/graphhopper11/journey_evidence.js');
 const SpeedGps=require('../modules/navigation/speed-gps.js');
-function bindJourney(){
- let epoch=0,generation=1,active=true,simulating=false,fix={lat:0,lon:0,accuracy:10,timestamp:Date.now()};
+function bindJourney(origin=[0,0]){
+ let epoch=0,generation=1,active=true,simulating=false,fix={lat:origin[0],lon:origin[1],accuracy:10,timestamp:Date.now()};
  global.VoyagrGH11JourneyEvidence=JourneyEvidence;
  const owner={capture:()=>({owner:'guest',epoch}),current:token=>token.epoch===epoch};
  const journey={capture:()=>({route_id:'public_fixture',generation,active,simulating}),current:token=>token.generation===generation&&token.active===active&&token.simulating===simulating};
@@ -673,17 +673,17 @@ test('actual accepted GPS notification flows through host adapter to cancel a la
  jest.isolateModules(()=>{Modes=require('../app/journey-modes.js');Gps=require('../app/gps-orchestration.js');});
  const Life=require('../app/navigation-lifecycle-orchestration.js'),Host=require('../../../prototypes/graphhopper11/host_journey_adapter.js');
  jest.spyOn(Modes,'getState').mockReturnValue('LIVE');global.VoyagrGH11JourneyEvidence=JourneyEvidence;
- Gps.bind({m:{speedGps:()=>SpeedGps}});const stamp=Date.now();Gps.acceptOriginPosition({timestamp:stamp,coords:{latitude:12.34,longitude:34.56,accuracy:10}});
+ Gps.bind({m:{speedGps:()=>SpeedGps}});const stamp=Date.now();Gps.acceptOriginPosition({timestamp:stamp,coords:{latitude:0,longitude:0,accuracy:10}});
  Life.setRoutePolyline([[0,0],[0,.02]]);Life.setRouteInProgress(true);let binding=null;
  const host=Host.create({owner,modes:Modes,lifecycle:Life,gps:Gps,eventTarget:window,onChange:()=>binding?.refresh()});
  try{
   binding=global.VoyagrGH11JourneyBridge.bind({...host,validator:SpeedGps});let finish;
   const served=fetch.getMockImplementation();fetch.mockImplementation((url,options)=>url.endsWith('/app-route')?new Promise(resolve=>{finish=async()=>resolve(await served(url,options));}):served(url,options));
   document.getElementById('calculate').click();await settle();
-  expect(Gps.acceptOriginPosition({timestamp:stamp+1,coords:{latitude:12.35,longitude:34.56,accuracy:10}})).toBe(true);
+  expect(Gps.acceptOriginPosition({timestamp:stamp+1,coords:{latitude:.001,longitude:0,accuracy:10}})).toBe(true);
   await finish();await settle();
   expect(document.getElementById('line').getAttribute('points')).toBe('');expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
-  for(const [,options] of fetch.mock.calls){if(options?.body){expect(options.body).not.toContain('12.34');expect(options.body).not.toContain('12.35');expect(options.body).not.toContain('34.56');}}
+  for(const [,options] of fetch.mock.calls){if(options?.body){expect(options.body).not.toContain('0.001');expect(options.body).not.toContain('timestamp');expect(options.body).not.toContain('accuracy');}}
  }finally{host.close();binding?.close();Life.setRouteInProgress(false);Life.setRoutePolyline(null);delete global.VoyagrJourneyModes;delete global.VoyagrGpsOrchestration;}
 });
 test('explicit UK boot uses real GPS/intent/lifecycle APIs and the actual separate owner store',async()=>{
@@ -694,7 +694,7 @@ test('explicit UK boot uses real GPS/intent/lifecycle APIs and the actual separa
  jest.isolateModules(()=>{Modes=require('../app/journey-modes.js');Gps=require('../app/gps-orchestration.js');});
  const Life=require('../app/navigation-lifecycle-orchestration.js');jest.spyOn(Modes,'getState').mockReturnValue('LIVE');
  Life.bind({});Life.setRoutePolyline([[0,0],[0,.02]]);Life.setRouteInProgress(true);
- Gps.bind({m:{speedGps:()=>SpeedGps}});const at=Date.now();Gps.acceptOriginPosition({timestamp:at,coords:{latitude:12.34,longitude:34.56,accuracy:10}});
+ Gps.bind({m:{speedGps:()=>SpeedGps}});const at=Date.now();Gps.acceptOriginPosition({timestamp:at,coords:{latitude:0,longitude:0,accuracy:10}});
  const source={capture:()=>({owner:'sb:synthetic_a',epoch:0}),current:value=>value.owner==='sb:synthetic_a'&&value.epoch===0,ready:jest.fn(),db:jest.fn()};
  const host=new EventTarget();Object.assign(host,{location:global.location,VoyagrLocalData:source,VoyagrJourneyModes:Modes,VoyagrNavigationLifecycleOrchestration:Life,VoyagrGpsOrchestration:Gps});
  global.VoyagrGH11HostJourney=Host;global.VoyagrSpeedGps=SpeedGps;global.VoyagrGH11JourneyEvidence=JourneyEvidence;
@@ -702,7 +702,7 @@ test('explicit UK boot uses real GPS/intent/lifecycle APIs and the actual separa
   connection=Boot.connect({hostWindow:host,previewWindow:globalThis});expect(connection.navigation_allowed).toBe(false);expect(global.VoyagrGH11SavedSession.capture().owner).toBe('sb:synthetic_a');
   document.getElementById('useCompleteRequest').checked=true;document.getElementById('useCompleteRequest').dispatchEvent(new Event('change'));document.getElementById('loadCompleteRequest').click();
   document.getElementById('calculate').click();await settle();expect(document.getElementById('line').getAttribute('points')).not.toBe('');
-  Gps.acceptOriginPosition({timestamp:at+1,coords:{latitude:12.35,longitude:34.56,accuracy:10}});
+  Gps.acceptOriginPosition({timestamp:at+1,coords:{latitude:.001,longitude:0,accuracy:10}});
   expect(document.getElementById('line').getAttribute('points')).toBe('');expect(source.ready).not.toHaveBeenCalled();expect(source.db).not.toHaveBeenCalled();
  }finally{connection?.close();global.VoyagrGH11SavedSession?.close();Life.setRouteInProgress(false);Life.setRoutePolyline(null);global.indexedDB=previousIdb;delete global.VoyagrGpsOrchestration;delete global.VoyagrJourneyModes;delete global.VoyagrGH11HostJourney;}
 });
@@ -723,4 +723,45 @@ test.each(['missing','legacy_key','zero_length','gap','outside_geometry','non_nu
  expect(document.getElementById('status').textContent).toBe('Response contract refused.');
  expect(document.getElementById('line').getAttribute('points')).toBe(points);
  expect(document.getElementById('alternatives').options).toHaveLength(1);expect(document.getElementById('strictStart').disabled).toBe(true);
+});
+
+test.each([[12.34,34.56],[.000001,0],[0,.000001]])('bound request refuses displaced accepted origin %j before preflight or routing',async(lat,lon)=>{
+ await completeReady();serveComplete();const live=bindJourney([lat,lon]);
+ const text=document.getElementById('completeRequest').value,before=fetch.mock.calls.length;
+ document.getElementById('calculate').click();await settle();
+ expect(fetch.mock.calls).toHaveLength(before);
+ expect(document.getElementById('line').getAttribute('points')).toBe('');
+ expect(document.getElementById('planReference').value).toBe('');
+ expect(document.getElementById('completeRequest').value).toBe(text);
+ expect(document.getElementById('saveCurrentPlan').disabled).toBe(true);
+ expect(document.getElementById('strictStart').disabled).toBe(true);live.binding.close();
+});
+test('bound legacy registered routing needs a known origin and cannot silently use context-only capture',async()=>{
+ await start({case_id:'public_case',success:true,navigation_allowed:false,graph_version:'graph',source_version:'source',policy_version:'policy',candidates:[candidate()]});
+ const live=bindJourney(),before=fetch.mock.calls.length;
+ document.getElementById('calculate').click();await settle();
+ expect(fetch.mock.calls).toHaveLength(before);expect(document.getElementById('line').getAttribute('points')).toBe('');
+ live.binding.close();
+});
+test('bound legacy routing with registered numeric origin still displays a preview',async()=>{
+ await start({case_id:'public_case',success:true,navigation_allowed:false,graph_version:'graph',source_version:'source',policy_version:'policy',candidates:[candidate()]},settings,undefined,{public_case:completeTemplate});
+ const live=bindJourney();document.getElementById('calculate').click();await settle();
+ expect(fetch.mock.calls.some(([url])=>url.endsWith('/route'))).toBe(true);
+ expect(document.getElementById('line').getAttribute('points')).not.toBe('');
+ expect(document.getElementById('strictStart').disabled).toBe(true);live.binding.close();
+});
+
+test.each([false,true])('bound complete request refuses an old origin before HTTP, including reroute=%s',async reroute=>{
+ await completeReady();serveComplete();const live=bindJourney([.000001,0]);
+ const body={...completeTemplate,is_reroute:reroute,force_refresh:reroute};
+ document.getElementById('completeRequest').value=JSON.stringify(body);
+ const reference=completeReply(body).plan_reference,before=fetch.mock.calls.length,preferences=JSON.stringify(localStorage);
+ document.getElementById('calculate').click();await settle();
+ document.getElementById('planReference').value=JSON.stringify(reference);
+ document.getElementById('restore').click();await settle();
+ expect(fetch.mock.calls).toHaveLength(before);
+ expect(document.getElementById('completeRequest').value).toBe(JSON.stringify(body));
+ expect(document.getElementById('line').getAttribute('points')).toBe('');
+ expect(document.getElementById('strictStart').disabled).toBe(true);
+ expect(JSON.stringify(localStorage)).toBe(preferences);live.binding.close();
 });

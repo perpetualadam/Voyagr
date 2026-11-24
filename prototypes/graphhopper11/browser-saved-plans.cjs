@@ -13,6 +13,7 @@ async function main(){
   const errors=[];let external=0;
   await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==target.origin){external++;return route.abort();}return route.continue();});
   const page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',()=>errors.push('pageerror'));
+  const routeRequests=[];page.on('request',request=>{if(/^\/api\/prototype\/(?:app-)?(?:policy|route|restore)$/.test(new URL(request.url()).pathname))routeRequests.push('request');});
   const id=name=>page.locator('#'+name);
   const ready=()=>page.waitForFunction(()=>!document.getElementById('calculate').disabled);
   async function open(name){await page.locator('details').filter({has:id(name)}).evaluate(element=>{element.open=true;});}
@@ -88,7 +89,19 @@ async function main(){
    window.testUKConnection=VoyagrGH11UKHostBoot.connect({hostWindow:window,previewWindow:window});
    window.advanceSyntheticJourney=notify=>{intent++;fix.timestamp=Date.now();if(notify)acceptedListener?.();};
    window.acceptSyntheticFix=()=>{fix.timestamp=Math.max(Date.now(),fix.timestamp+1);acceptedListener?.();};
+   window.moveSyntheticOrigin=lat=>{fix.lat=lat;fix.timestamp=Math.max(Date.now(),fix.timestamp+1);acceptedListener?.();};
   });
+  phase='mismatched live origin before HTTP';await page.evaluate(()=>moveSyntheticOrigin(.000001));
+  const beforeOriginRefusal=routeRequests.length;
+  await id('cases').selectOption('detour');await open('useCompleteRequest');await id('useCompleteRequest').check();
+  await id('loadCompleteRequest').click();await id('calculate').click();
+  await expect(id('status')).toContainText('Journey evidence');await ready();
+  await open('planReference');await id('planReference').fill(JSON.stringify(original));await id('restore').click();
+  await expect(id('status')).toContainText('Journey evidence');await ready();
+  assert.equal(routeRequests.length,beforeOriginRefusal);assert.equal(await id('line').getAttribute('points'),'');
+  assert.equal(await id('strictStart').isDisabled(),true);assert.equal(await id('saveCurrentPlan').isDisabled(),true);
+  assert.equal((await page.evaluate(()=>VoyagrGH11SavedSession.list())).length,1);
+  await page.evaluate(()=>moveSyntheticOrigin(0));
   const boundReference=await calculate('detour');
   assert.notEqual(await id('line').getAttribute('points'),'');
   await page.evaluate(()=>advanceSyntheticJourney(false));await id('alternatives').dispatchEvent('change');

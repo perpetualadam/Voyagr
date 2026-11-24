@@ -80,3 +80,11 @@ journey intent clock, lifecycle getters and viewer guard with synthetic state an
 mocked route transport. The browser test exercises the packaged adapter using a
 synthetic notification source during an actual GH11 restore. Neither establishes
 hardware GPS, UK deployment or live account behavior.
+
+## Request-specific origin binding
+
+Context-only capture does not establish a request origin. The viewer now uses
+`captureForOrigin` to compare the validated registered start with the accepted fix
+before any HTTP work. See REQUEST_ORIGIN_BINDING.md for exact matching, retained
+late-result guards, privacy limits and synthetic browser evidence. This adds no
+road/heading or navigation authority and does not change the UK production boot.

@@ -44,3 +44,29 @@ test('invalid clock and mutable coordinator captures cannot bypass ownership',()
  clock=NaN;expect(()=>guard.capture()).toThrow();clock=100000;
  owner.capture=()=>identity;journey.capture=()=>route;const token=guard.capture();identity.epoch++;expect(guard.current(token)).toBe(false);
 });
+
+test('request-origin capture is opaque, copied and bound to the exact accepted fix',()=>{
+ const origin=[fix.lat,fix.lon],token=guard.captureForOrigin(origin);
+ expect(Object.keys(token)).toEqual([]);expect(JSON.stringify(token)).toBe('{}');
+ expect(token.navigation_allowed).toBeUndefined();expect(guard.current(token)).toBe(true);
+ origin[0]=0;expect(guard.current(token)).toBe(true);
+ fix={...fix,lat:53.000001,timestamp:clock+1};expect(guard.current(token)).toBe(false);
+});
+test.each([null,undefined,[],[53],['53',-1],[true,-1],[NaN,-1],[Infinity,-1],[91,-1],[53,181],[-1,53],[53.000001,-1],[53,-.999999],[53,-1,0]])('unbound, malformed or displaced origin %j refuses',origin=>{
+ expect(()=>guard.captureForOrigin(origin)).toThrow();
+});
+test('an accuracy radius or numeric rounding cannot authorize another request origin',()=>{
+ fix={lat:53.123456789,lon:-1.123456789,accuracy:1000,timestamp:clock};
+ expect(()=>guard.captureForOrigin([53.123457,-1.123457])).toThrow('Request origin');
+ expect(guard.current(guard.captureForOrigin([fix.lat,fix.lon]))).toBe(true);
+});
+test('origin binding retains freshness, owner and journey refusal',()=>{
+ const token=guard.captureForOrigin([53,-1]);identity.epoch++;
+ expect(guard.current(token)).toBe(false);route.simulating=true;
+ expect(()=>guard.captureForOrigin([53,-1])).toThrow();
+});
+
+test('an exact request origin cannot revive an expired accepted fix',()=>{
+ const token=guard.captureForOrigin([53,-1]);clock+=15001;
+ expect(guard.current(token)).toBe(false);expect(()=>guard.captureForOrigin([53,-1])).toThrow();
+});

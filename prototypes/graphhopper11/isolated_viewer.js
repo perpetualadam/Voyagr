@@ -221,12 +221,18 @@ async function calculateCase(saved){
     const selectedCase=saved?saved.case_id:cases.value, ownerCase=cases.value;
     const localOwner=planSession?planSession.capture():null;
     let journeyToken=null;
-    try{if(journeyGuard)journeyToken=journeyGuard.capture();}catch(_){clearJourneyPreview();return;}
-    pendingJourneyToken=journeyToken;
     const complete=saved?saved.schema===3:useComplete.checked;
     const ownerPolicy=stable(selection(ownerCase)), requested=saved?(complete?{app_request:readComplete(selectedCase,JSON.stringify(saved.app_request))}:saved.schema===2?normalizePolicy(saved.policy_request):null):selection(selectedCase);
     let policy=complete?completePolicy(requested.app_request):requested&&Object.prototype.hasOwnProperty.call(requested,'profile')?requested:null;
     const context=complete?completeContext(requested.app_request):null;
+    try{
+        if(journeyGuard){
+            const start=context?context.visits[0]:caseRequests[selectedCase]?.start;
+            const origin=Array.isArray(start)?start:typeof start==='string'&&/^\s*[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?\s*$/.test(start)?start.split(',').map(Number):null;
+            journeyToken=journeyGuard.captureForOrigin(origin);
+        }
+    }catch(_){clearJourneyPreview();return;}
+    pendingJourneyToken=journeyToken;
     const ticket=integrity.begin(root.localStorage), owned=++operation, fetchOptions=integrity.fetchOptions(ticket);
     const current=()=>{try{return journeyCurrent(journeyToken)&&(!planSession||planSession.current(localOwner))&&owned===operation&&(!ticket.controller||!ticket.controller.signal.aborted)&&integrity.current(ticket,root.localStorage)&&cases.value===ownerCase&&stable(selection(ownerCase))===ownerPolicy;}catch(_){return false;}};
     const selectedSettings=registeredSettings[selectedCase];let selectedBinding=registeredBindings[selectedCase], approved=null;

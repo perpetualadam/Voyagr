@@ -349,3 +349,15 @@ road are covered by generated fixtures; transport/cache corruption refuses. Quer
 IDs are explicitly request-scoped. This is calculated-route evidence, not physical
 approach direction or general turn/legal proof. See QUERY_GRAPH_EVIDENCE.md. The
 four full UK acceptance rows remain open and navigation stays disabled.
+
+## Subsequent Milestone 3 checkpoint: request-origin/accepted-fix binding
+
+The explicit browser journey bridge now compares each request's registered start
+with the current accepted fix before any policy/routing HTTP work. Opaque tokens
+retain owner/journey/fix freshness and late-result guards. Matching-origin unit
+and actual-browser restore races still execute, while mismatched Calculate,
+Restore, reroute and legacy/unknown-origin paths refuse without network work.
+Saved data/settings remain retained. This is coordinate binding at the browser
+boundary, not server GPS attestation, physical road/heading proof or arbitrary
+live-origin routing. See REQUEST_ORIGIN_BINDING.md. The four full UK acceptance
+rows remain open, navigation stays disabled and no deployment is included.
