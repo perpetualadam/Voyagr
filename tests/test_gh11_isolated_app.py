@@ -223,7 +223,7 @@ def test_auth_request_contract_versions_and_cross_origin_refused_before_java(app
     for name in ("strict-route-policy.js", "avoidance-integrity.js", "navigation-safety-ux.js"):
         assert client.get("/strict-assets/"+name, headers=AUTH).status_code == 200
     assert client.get("/strict-assets/not-registered.js", headers=AUTH).status_code == 404
-    for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}, {"diagnose_origin":{"radius_m":1}}):
+    for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}, {"diagnose_origin":{"radius_m":1}}, {"audit_index_inventory":{"edge_limit":10000}}):
         assert client.post("/api/prototype/route", json=dict(body(manifest), **extra), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=body(manifest, "unknown"), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=dict(body(manifest), graph_version="0"*64), headers=AUTH).status_code == 409
@@ -1455,6 +1455,7 @@ public class OriginIndexProbe {
     public void query(TileFilter filter,Visitor visitor){
      switch(mode){
       case "empty":return;
+      case "spatial_empty":if(filter!=null)return;original.query(filter,visitor);return;
       case "throw":throw new IllegalStateException("synthetic index failure");
       case "invalid":visitor.onEdge(Integer.MAX_VALUE);return;
       case "flood":for(int i=0;i<60000;i++)visitor.onEdge(0);return;
@@ -1477,6 +1478,8 @@ public class OriginIndexProbe {
   try(var loader=new URLClassLoader(new java.net.URL[]{new File(args[4]).toURI().toURL()},OriginIndexProbe.class.getClassLoader())) {
    var check=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("observeOriginCandidates",GraphHopper.class,JsonNode.class,JsonNode.class);
    check.setAccessible(true);
+   var inventory=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("observeIndexInventory",GraphHopper.class,int.class);
+   inventory.setAccessible(true);
    var mapper=Jackson.newObjectMapper();var configTree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
    var config=mapper.treeToValue(configTree.get("graphhopper"),GraphHopperConfig.class);
    config.putObject("graph.location",args[2]).putObject("datareader.file","");
@@ -1497,6 +1500,9 @@ public class OriginIndexProbe {
      var options=mapper.createObjectNode().put("radius_m",input.path("radius_m").asDouble(1))
       .put("edge_limit",input.path("edge_limit").asInt(10000));
      try {
+      if(input.path("inventory").asBoolean(false)){
+       observations.add(Map.of("inventory",inventory.invoke(null,hopper,input.path("edge_limit").asInt(10000))));continue;
+      }
       var full=check.invoke(null,hopper,input.get("point"),options);
       options.put("lookup","index");
       var indexed=check.invoke(null,hopper,input.get("point"),options);
@@ -1506,7 +1512,7 @@ public class OriginIndexProbe {
       observations.add(Map.of("refused",true));
      }
     }
-    System.out.println("INDEX_DIFFERENTIAL "+mapper.writeValueAsString(Map.of("midpoint_is_tile_border",boundary[0],"observations",observations)));
+    System.out.println("INDEX_DIFFERENTIAL "+new ObjectMapper().writeValueAsString(Map.of("midpoint_is_tile_border",boundary[0],"observations",observations)));
    }finally{hopper.close();}
   }
  }
@@ -1628,3 +1634,153 @@ def test_real_index_differential_on_translated_synthetic_graphs(manifest,origin_
         assert pair['full']['scan_complete'] is True and pair['indexed']['index_query_complete'] is True
         assert pair['full']['candidate_edge_keys'] == pair['indexed']['candidate_edge_keys']
         assert_index_observation_only(pair['indexed'])
+
+
+def test_native_inventory_matches_ids_but_does_not_prove_spatial_coverage(origin_index_probe):
+    from prototypes.graphhopper11.index_inventory_audit import validate_inventory
+    cases = [dict(inventory=True,fault=fault) for fault in ('normal','duplicate','empty','spatial_empty')]
+    observations = origin_index_probe(cases)['observations']
+    normal,duplicate,empty,misplaced = [row['inventory'] for row in observations]
+    for row in (normal,duplicate,empty,misplaced):
+        assert validate_inventory(row,10000) == row
+    for row in (normal,duplicate,misplaced):
+        assert row['inventory_status'] == 'MATCHED_EDGE_INVENTORY' and row['inventory_match'] is True
+        assert row['inventory_complete'] is True
+        assert row['graph_edge_count'] == row['indexed_edge_count'] > 0
+        assert row['graph_inventory_sha256'] == row['index_inventory_sha256']
+        assert row['index_geometry_coverage'] == row['physical_road_verification'] == row['heading_verification'] == 'UNVERIFIED'
+        assert row['navigation_allowed'] is row['route_absence_proven'] is False
+    assert duplicate['index_callbacks'] == 2*normal['index_callbacks']
+    assert empty['inventory_status'] == 'MISMATCHED_EDGE_INVENTORY' and empty['inventory_match'] is False
+    assert empty['missing_edge_count'] == normal['graph_edge_count'] and empty['indexed_edge_count'] == 0
+    spatial = origin_index_probe([dict(point=[0,.005],fault='spatial_empty')])['observations'][0]
+    assert spatial['full']['candidate_count'] == 4 and spatial['indexed']['candidate_count'] == 0
+    assert_index_observation_only(spatial['indexed'])
+
+
+@pytest.mark.parametrize('fault,reason',[('throw','index_inventory_failure'),('invalid','invalid_index_edge'),
+                                       ('flood','callback_budget'),('tiles','tile_budget')])
+def test_native_inventory_failures_keep_partial_counts_unverified(origin_index_probe,fault,reason):
+    from prototypes.graphhopper11.index_inventory_audit import validate_inventory
+    row = origin_index_probe([dict(inventory=True,fault=fault,edge_limit=5)])['observations'][0]['inventory']
+    assert row['inventory_status'] == 'UNVERIFIED' and row['inventory_complete'] is False
+    assert row['graph_enumeration_complete'] is True and row['index_query_complete'] is False
+    assert row['inventory_match'] is row['missing_edge_count'] is row['unexpected_edge_count'] is None
+    assert row['graph_inventory_sha256'] is row['index_inventory_sha256'] is None
+    assert row['reason'] == reason and row['navigation_allowed'] is False
+    assert validate_inventory(row,5) == row
+
+
+@pytest.fixture(scope='module')
+def inventory_evidence(manifest):
+    from prototypes.graphhopper11.index_inventory_audit import audit_index_inventory
+    return audit_index_inventory(manifest)
+
+
+def test_manifest_bound_inventory_audit_records_only_narrow_stable_evidence(manifest,inventory_evidence):
+    from prototypes.graphhopper11.isolated_app import version
+    row = inventory_evidence['observation']
+    assert row['inventory_status'] == 'MATCHED_EDGE_INVENTORY' and row['inventory_match'] is True
+    assert inventory_evidence['artifact_check'] == 'matched_manifest_before_and_after'
+    for key,value in inventory_evidence['bindings'].items():
+        assert value == (manifest['hashes']['config'] if key=='config_sha256' else manifest[key])
+    assert inventory_evidence['manifest_identity'] == version(manifest)
+    unsigned = dict(inventory_evidence);identity=unsigned.pop('evidence_identity')
+    assert version(unsigned) == identity
+    assert inventory_evidence['scope'] == 'manifest_bound_edge_id_inventory_only'
+    assert inventory_evidence['navigation_allowed'] is False and inventory_evidence['production_migration'] == 'NO_GO'
+    text = json.dumps(inventory_evidence)
+    for path in manifest['paths'].values():
+        assert str(path) not in text
+    assert row['index_geometry_coverage'] == 'UNVERIFIED'
+
+
+@pytest.mark.parametrize('change',[
+    {'navigation_allowed':True},{'index_geometry_coverage':'VERIFIED'},{'missing_edge_count':1},
+    {'inventory_complete':False},{'indexed_edge_count':True},{'graph_inventory_sha256':'bad'},
+    {'scope':'complete_physical_coverage'},{'extra':True},{'index_callbacks':0},{'reason':[]},
+])
+def test_inventory_contract_cannot_promote_or_contradict_native_evidence(inventory_evidence,change):
+    from prototypes.graphhopper11.index_inventory_audit import validate_inventory
+    row = dict(inventory_evidence['observation'],**change)
+    with pytest.raises(Refused,match='index_inventory_contract'):
+        validate_inventory(row,10000)
+
+
+def test_inventory_graph_budget_is_unknown_and_never_runs_a_partial_id_comparison(manifest):
+    from prototypes.graphhopper11.index_inventory_audit import audit_index_inventory
+    report = audit_index_inventory(manifest,edge_limit=1)
+    row = report['observation']
+    assert row['inventory_status'] == 'UNVERIFIED' and row['reason'] == 'graph_edge_budget'
+    assert row['graph_edge_count'] == 1 and row['index_callbacks'] == 0
+    assert row['inventory_match'] is row['graph_inventory_sha256'] is None
+    assert row['navigation_allowed'] is False
+
+
+def test_inventory_mutated_artifact_is_refused_after_native_work(manifest,inventory_evidence,monkeypatch):
+    from prototypes.graphhopper11.index_inventory_audit import audit_index_inventory
+    path = Path(manifest['paths']['config']);original=path.read_bytes()
+    def changed(*args):
+        path.write_bytes(original+b'\n# synthetic mutation\n')
+        return {'engine_version':'11.1','java_runtime':inventory_evidence['java_runtime'],'audit_only':True,'index_inventory_observation':copy.deepcopy(inventory_evidence['observation']),
+                'navigation_allowed':False,'production_migration':'NO_GO'}
+    monkeypatch.setattr(LocalJavaBridge,'_execute',changed)
+    try:
+        with pytest.raises(Refused,match='input_changed'):
+            audit_index_inventory(manifest)
+    finally:
+        path.write_bytes(original)
+
+
+def test_inventory_audit_cli_is_explicit_and_has_no_guidance_or_path_disclosure(manifest,tmp_path):
+    import sys
+    path = tmp_path/'manifest.json';path.write_text(json.dumps(manifest))
+    command = [sys.executable,'-m','prototypes.graphhopper11.index_inventory_audit','--manifest',str(path)]
+    result = subprocess.run(command,capture_output=True,text=True,timeout=60)
+    assert result.returncode == 0, result.stderr[-2000:]
+    report = json.loads(result.stdout)
+    assert report['observation']['inventory_status'] == 'MATCHED_EDGE_INVENTORY'
+    assert report['observation']['index_geometry_coverage'] == 'UNVERIFIED' and report['navigation_allowed'] is False
+    assert str(tmp_path) not in result.stdout
+    limited = subprocess.run(command+['--edge-limit','1'],capture_output=True,text=True,timeout=60)
+    assert limited.returncode == 2 and json.loads(limited.stdout)['observation']['inventory_status'] == 'UNVERIFIED'
+
+
+@pytest.mark.parametrize('edge_limit',[True,0,-1,50_000_001,1.0])
+def test_inventory_invalid_budgets_refuse_before_inspecting_a_manifest(monkeypatch,edge_limit):
+    from prototypes.graphhopper11 import index_inventory_audit as audit
+    def forbidden(*args,**kwargs):
+        pytest.fail('Invalid budget must not inspect files or execute Java')
+    monkeypatch.setattr(audit,'LocalJavaBridge',forbidden)
+    with pytest.raises(Refused,match='index_inventory_limit'):
+        audit.audit_index_inventory({},edge_limit=edge_limit)
+
+
+def test_inventory_evidence_refuses_changed_auditor_code(manifest,inventory_evidence,monkeypatch):
+    from prototypes.graphhopper11 import index_inventory_audit as audit
+    actual_digest = audit.digest;calls=[]
+    def changed(path):
+        calls.append(True)
+        return actual_digest(path) if len(calls)==1 else '0'*64
+    monkeypatch.setattr(audit,'digest',changed)
+    monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:{'engine_version':'11.1','java_runtime':inventory_evidence['java_runtime'],
+        'audit_only':True,'index_inventory_observation':copy.deepcopy(inventory_evidence['observation']),
+        'navigation_allowed':False,'production_migration':'NO_GO'})
+    with pytest.raises(Refused,match='index_inventory_binding_changed'):
+        audit.audit_index_inventory(manifest)
+
+
+def test_inventory_changed_manifest_is_refused_before_native_execution(manifest,monkeypatch):
+    from prototypes.graphhopper11.index_inventory_audit import audit_index_inventory
+    changed = copy.deepcopy(manifest);changed['graph_version'] = '0'*64
+    monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:pytest.fail('Stale manifest must not execute Java'))
+    with pytest.raises(Refused,match='graph_changed'):
+        audit_index_inventory(changed)
+
+
+def test_inventory_cannot_mislabel_a_normal_route_report_as_audit_evidence(manifest,monkeypatch):
+    from prototypes.graphhopper11.index_inventory_audit import audit_index_inventory
+    monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:{'engine_version':'11.1',
+        'all_available_graph_checks_passed':True,'cases':[{'status':'PASS_AVAILABLE_GRAPH_CHECKS'}]})
+    with pytest.raises(Refused,match='index_inventory_envelope'):
+        audit_index_inventory(manifest)

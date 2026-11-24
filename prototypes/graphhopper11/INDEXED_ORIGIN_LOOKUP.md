@@ -89,3 +89,8 @@ necessary. No new GPS inputs, location history, persistent storage, production
 wiring, graph downloads or VPS changes are included. A future reviewed package and
 manifest would be required before any separate deployment. Milestone 3 stays open;
 production migration remains NO-GO and navigation stays disabled.
+
+A subsequent checkpoint adds a separate manifest-bound edge-ID inventory audit;
+see INDEX_INVENTORY_EVIDENCE.md. It detects structural omissions, but a matched
+inventory deliberately does not verify spatial placement or upgrade indexed
+observations. No live lookup or navigation gate is enabled by the audit.

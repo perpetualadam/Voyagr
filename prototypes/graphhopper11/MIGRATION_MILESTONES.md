@@ -385,3 +385,14 @@ a silently empty index cannot claim absence or uniqueness. This is a diagnostic
 lookup prototype, not measured real-graph scalability or live-origin authority.
 See INDEXED_ORIGIN_LOOKUP.md. All four full UK acceptance streams remain open,
 navigation stays disabled and no deployment is included.
+
+## Subsequent Milestone 3 checkpoint: manifest-bound index inventory
+
+An explicit offline audit reconciles base-graph and stored-index edge IDs, recording
+manifest/config/engine/code/runtime identities and pre/post artifact checks. Missing
+IDs, execution limits, malformed evidence and changed inputs refuse or remain
+unverified. A matched-but-spatially-wrong index control prevents inventory equality
+from becoming geometry coverage or guidance authority. No normal HTTP request can
+enable audit mode, and no VPS run is included. See INDEX_INVENTORY_EVIDENCE.md.
+Construction lineage, real-graph spatial coverage/performance and all four full UK
+acceptance streams remain open; navigation stays disabled and migration is NO-GO.

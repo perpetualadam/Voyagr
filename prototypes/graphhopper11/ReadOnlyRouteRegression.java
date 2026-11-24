@@ -404,6 +404,69 @@ public class ReadOnlyRouteRegression {
         result.put("lookup_method","full_scan");return result;
     }
 
+    static String inventoryDigest(BitSet bits) throws Exception {
+        return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bits.toByteArray()));
+    }
+    static Map<String,Object> observeIndexInventory(GraphHopper hopper,int limit) throws Exception {
+        require(limit>=1 && limit<=50_000_000,"invalid inventory edge limit");
+        var expected=new BitSet();var indexed=new BitSet();
+        int bound=hopper.getBaseGraph().getEdges();
+        int[] counts=new int[4]; // examined graph edges, index callbacks, tiles, unique indexed IDs
+        boolean graphComplete=false,queryComplete=false;String reason="edge_id_inventory_compared";
+        long deadline=System.nanoTime()+20_000_000_000L;
+        try {
+            if(bound<0 || bound>50_000_000)throw new OriginObservationStop("graph_id_budget");
+            var edges=hopper.getBaseGraph().getAllEdges();
+            while(edges.next()) {
+                if(System.nanoTime()>deadline)throw new OriginObservationStop("time_budget");
+                if(counts[0]>=limit)throw new OriginObservationStop("graph_edge_budget");
+                int id=edges.getEdge();
+                if(id<0 || id>=bound || expected.get(id))throw new OriginObservationStop("invalid_graph_inventory");
+                expected.set(id);counts[0]++;
+            }
+            graphComplete=true;
+            hopper.getLocationIndex().query((com.graphhopper.storage.index.LocationIndex.TileFilter)null,
+                new com.graphhopper.storage.index.LocationIndex.Visitor() {
+                    void checkTime(){if(System.nanoTime()>deadline)throw new OriginObservationStop("time_budget");}
+                    @Override public boolean isTileInfo(){return true;}
+                    @Override public void onTile(com.graphhopper.util.shapes.BBox tile,int depth){
+                        checkTime();if(++counts[2]>Math.min(50_000_000,limit*8+1024))throw new OriginObservationStop("tile_budget");
+                    }
+                    @Override public void onEdge(int id){
+                        checkTime();if(++counts[1]>Math.min(250_000_000,limit*5+1024))throw new OriginObservationStop("callback_budget");
+                        if(id<0 || id>=bound)throw new OriginObservationStop("invalid_index_edge");
+                        if(!indexed.get(id)) {
+                            if(counts[3]>=limit)throw new OriginObservationStop("index_edge_budget");
+                            indexed.set(id);counts[3]++;
+                        }
+                    }
+                });
+            if(System.nanoTime()>deadline)throw new OriginObservationStop("time_budget");
+            queryComplete=true;
+        }catch(OriginObservationStop stop){reason=stop.reason;}
+         catch(Exception error){reason="index_inventory_failure";}
+        boolean complete=graphComplete && queryComplete;
+        var missing=(BitSet)expected.clone();missing.andNot(indexed);
+        var unexpected=(BitSet)indexed.clone();unexpected.andNot(expected);
+        boolean match=expected.equals(indexed);
+        var result=new LinkedHashMap<String,Object>();
+        result.put("scope","edge_id_inventory_only");
+        result.put("inventory_status",!complete?"UNVERIFIED":match?"MATCHED_EDGE_INVENTORY":"MISMATCHED_EDGE_INVENTORY");
+        result.put("reason",reason);result.put("edge_limit",limit);result.put("edge_id_bound",bound);
+        result.put("graph_edge_count",expected.cardinality());result.put("indexed_edge_count",indexed.cardinality());
+        result.put("graph_enumeration_complete",graphComplete);result.put("index_query_complete",queryComplete);
+        result.put("inventory_complete",complete);result.put("inventory_match",complete?match:null);
+        result.put("missing_edge_count",complete?missing.cardinality():null);
+        result.put("unexpected_edge_count",complete?unexpected.cardinality():null);
+        result.put("graph_inventory_sha256",complete?inventoryDigest(expected):null);
+        result.put("index_inventory_sha256",complete?inventoryDigest(indexed):null);
+        result.put("index_callbacks",counts[1]);result.put("tiles_visited",counts[2]);
+        result.put("index_geometry_coverage","UNVERIFIED");result.put("physical_road_verification","UNVERIFIED");
+        result.put("heading_verification","UNVERIFIED");result.put("navigation_allowed",false);
+        result.put("route_absence_proven",false);
+        return result;
+    }
+
     static Map<String,Object> runCase(GraphHopper hopper,JsonNode test,Map<String,List<Integer>> associations) {
         String name=test.path("id").asText();
         Map<String,Object> result=new LinkedHashMap<>();
@@ -627,7 +690,13 @@ public class ReadOnlyRouteRegression {
             .putObject("datareader.file","");
         var fixture=Jackson.newObjectMapper().readTree(new File(args[2]));
         var tests=fixture.path("cases");
-        require(tests.isArray() && tests.size()>0 && tests.size()<=10,"fixture count limit");
+        boolean inventoryOnly=fixture.has("audit_index_inventory");
+        if(inventoryOnly) {
+            require(fixture.isObject() && fixture.size()==2 && tests.isArray() && tests.isEmpty(),"inventory audit must be separate from routing");
+            var options=fixture.get("audit_index_inventory");
+            require(options.isObject() && options.size()==1 && options.has("edge_limit")
+                && options.get("edge_limit").isIntegralNumber() && options.get("edge_limit").canConvertToInt(),"invalid inventory audit options");
+        } else require(tests.isArray() && tests.size()>0 && tests.size()<=10,"fixture count limit");
         if(fixture.has("associations")) require(config.getCHProfiles().isEmpty() && config.getLMProfiles().isEmpty(),
             "directed exclusions require unaccelerated prototype configuration");
         GraphHopper hopper=new ExclusionHopper();
@@ -636,6 +705,13 @@ public class ReadOnlyRouteRegression {
             long start=System.nanoTime();
             require(hopper.load(),"existing graph unavailable; import forbidden");
             double loadMs=(System.nanoTime()-start)/1e6;
+            if(inventoryOnly) {
+                var observation=observeIndexInventory(hopper,fixture.get("audit_index_inventory").get("edge_limit").intValue());
+                System.out.println("VOYAGR_GH11_REGRESSION "+new ObjectMapper().writeValueAsString(Map.of(
+                    "engine_version",Constants.VERSION,"java_runtime",System.getProperty("java.version"),"audit_only",true,"index_inventory_observation",observation,
+                    "navigation_allowed",false,"production_migration","NO_GO")));
+                return;
+            }
             ((ExclusionHopper)hopper).installAnchorIndex();
             Map<String,List<Integer>> associations=new LinkedHashMap<>();
             List<Map<String,Object>> evidence=new ArrayList<>();
