@@ -97,3 +97,8 @@ graph linkage, full turn/leg/settings/cache/restore acceptance and physical-phon
 checks remain open. This audit supplies one artifact-bound structural observation;
 it does not close those gates. Milestone 3 remains in progress, migration is NO-GO,
 and navigation stays disabled. Nothing is merged or deployed by this work.
+
+The subsequent INDEX_GEOMETRY_EVIDENCE.md checkpoint adds manifest-bound finite
+geometry probes. It detects the matched-inventory/spatially-empty control, but
+neither a matching inventory nor matching finite probes establishes construction
+lineage, exhaustive coverage or live-origin authority.

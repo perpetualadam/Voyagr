@@ -223,7 +223,7 @@ def test_auth_request_contract_versions_and_cross_origin_refused_before_java(app
     for name in ("strict-route-policy.js", "avoidance-integrity.js", "navigation-safety-ux.js"):
         assert client.get("/strict-assets/"+name, headers=AUTH).status_code == 200
     assert client.get("/strict-assets/not-registered.js", headers=AUTH).status_code == 404
-    for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}, {"diagnose_origin":{"radius_m":1}}, {"audit_index_inventory":{"edge_limit":10000}}):
+    for extra in ({"blocked_keys": []}, {"custom_model": {}}, {"coverage": "COMPLETE"}, {"diagnose_origin":{"radius_m":1}}, {"audit_index_inventory":{"edge_limit":10000}}, {"audit_index_geometry":{"edge_limit":10000,"sample_limit":128}}):
         assert client.post("/api/prototype/route", json=dict(body(manifest), **extra), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=body(manifest, "unknown"), headers=AUTH).status_code == 400
     assert client.post("/api/prototype/route", json=dict(body(manifest), graph_version="0"*64), headers=AUTH).status_code == 409
@@ -1480,6 +1480,8 @@ public class OriginIndexProbe {
    check.setAccessible(true);
    var inventory=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("observeIndexInventory",GraphHopper.class,int.class);
    inventory.setAccessible(true);
+   var geometry=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("observeIndexGeometry",GraphHopper.class,int.class,int.class);
+   geometry.setAccessible(true);
    var mapper=Jackson.newObjectMapper();var configTree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
    var config=mapper.treeToValue(configTree.get("graphhopper"),GraphHopperConfig.class);
    config.putObject("graph.location",args[2]).putObject("datareader.file","");
@@ -1500,6 +1502,9 @@ public class OriginIndexProbe {
      var options=mapper.createObjectNode().put("radius_m",input.path("radius_m").asDouble(1))
       .put("edge_limit",input.path("edge_limit").asInt(10000));
      try {
+      if(input.path("geometry").asBoolean(false)){
+       observations.add(Map.of("geometry",geometry.invoke(null,hopper,input.path("edge_limit").asInt(10000),input.path("sample_limit").asInt(128))));continue;
+      }
       if(input.path("inventory").asBoolean(false)){
        observations.add(Map.of("inventory",inventory.invoke(null,hopper,input.path("edge_limit").asInt(10000))));continue;
       }
@@ -1784,3 +1789,163 @@ def test_inventory_cannot_mislabel_a_normal_route_report_as_audit_evidence(manif
         'all_available_graph_checks_passed':True,'cases':[{'status':'PASS_AVAILABLE_GRAPH_CHECKS'}]})
     with pytest.raises(Refused,match='index_inventory_envelope'):
         audit_index_inventory(manifest)
+
+
+@pytest.mark.parametrize('fault,status',[
+    ('normal','MATCHED_FINITE_PROBES'),('duplicate','MATCHED_FINITE_PROBES'),
+    ('spatial_empty','MISMATCH_OBSERVED'),('empty','MISMATCH_OBSERVED'),
+    ('throw','UNVERIFIED'),('invalid','UNVERIFIED'),('flood','UNVERIFIED'),('tiles','UNVERIFIED'),
+])
+def test_geometry_probes_detect_spatial_misses_without_granting_coverage(origin_index_probe,fault,status):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    row=origin_index_probe([dict(geometry=True,fault=fault)])['observations'][0]['geometry']
+    assert validate_geometry(row,10000,128) == row
+    assert row['status'] == status
+    assert row['index_geometry_coverage'] == row['construction_lineage'] == 'UNVERIFIED'
+    assert row['physical_road_verification'] == row['heading_verification'] == 'UNVERIFIED'
+    assert row['navigation_allowed'] is row['route_absence_proven'] is False
+    assert row['samples_selected'] > 0
+    if status=='MISMATCH_OBSERVED':
+        assert any(sample['missing_count'] > 0 for sample in row['samples'])
+    if status=='UNVERIFIED':
+        assert all(sample['match'] is sample['missing_count'] is None for sample in row['samples'])
+
+
+@pytest.mark.parametrize('limits,reason',[
+    ({'sample_limit':1},'sample_budget'),({'edge_limit':1},'edge_budget'),
+])
+def test_geometry_probe_selection_limits_never_claim_complete_comparison(origin_index_probe,limits,reason):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    row=origin_index_probe([dict(geometry=True,**limits)])['observations'][0]['geometry']
+    assert validate_geometry(row,limits.get('edge_limit',10000),limits.get('sample_limit',128)) == row
+    assert row['reason']==reason and row['status']=='UNVERIFIED'
+    assert row['selection_complete'] is row['comparisons_complete'] is False
+
+
+@pytest.fixture(scope='module')
+def geometry_evidence(manifest):
+    from prototypes.graphhopper11.index_geometry_audit import audit_index_geometry
+    return audit_index_geometry(manifest)
+
+
+def test_geometry_audit_binds_finite_observations_without_exposing_points(manifest,geometry_evidence):
+    from prototypes.graphhopper11.isolated_app import version
+    report=geometry_evidence
+    assert report['observation']['status']=='MATCHED_FINITE_PROBES'
+    assert report['artifact_check']=='matched_manifest_before_and_after'
+    assert report['manifest_identity']==version(manifest)
+    assert report['bindings']['graph_version']==manifest['graph_version']
+    assert report['bindings']['source_version']==manifest['source_version']
+    assert report['bindings']['config_sha256']==manifest['hashes']['config']
+    unsigned=dict(report);identity=unsigned.pop('evidence_identity')
+    assert version(unsigned)==identity
+    text=json.dumps(report)
+    for path in manifest['paths'].values():
+        assert str(path) not in text
+    for sample in report['observation']['samples']:
+        assert not {'point','lat','lon','candidate_edge_keys'} & set(sample)
+    assert report['navigation_allowed'] is False and report['production_migration']=='NO_GO'
+
+
+@pytest.mark.parametrize('change',[
+    {'index_geometry_coverage':'VERIFIED'},{'construction_lineage':'VERIFIED'},{'navigation_allowed':True},
+    {'samples_selected':False},{'comparisons_complete':False},{'reason':[]},{'extra':0},
+])
+def test_geometry_audit_rejects_promoted_or_inconsistent_reports(geometry_evidence,change):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    with pytest.raises(Refused,match='index_geometry_contract'):
+        validate_geometry(dict(geometry_evidence['observation'],**change),10000,128)
+
+
+@pytest.mark.parametrize('change',[
+    {'missing_count':1},{'match':False},{'ordinal':True},{'comparison_complete':False},
+    {'full_candidate_count':True},{'index_candidate_count':257},{'extra':0},
+    {'full_scan_reason':'time_budget'},{'index_query_reason':'index_query_failure'},{'full_scan_complete':False},
+])
+def test_geometry_audit_rejects_inconsistent_sample_rows(geometry_evidence,change):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    row=copy.deepcopy(geometry_evidence['observation']);row['samples'][0].update(change)
+    with pytest.raises(Refused,match='index_geometry_contract'):
+        validate_geometry(row,10000,128)
+
+
+@pytest.mark.parametrize('limits',[
+    {'edge_limit':True},{'edge_limit':0},{'edge_limit':10001},
+    {'sample_limit':False},{'sample_limit':0},{'sample_limit':129},{'sample_limit':1.5},
+])
+def test_geometry_invalid_limits_refuse_before_manifest_access(monkeypatch,limits):
+    from prototypes.graphhopper11 import index_geometry_audit as audit
+    monkeypatch.setattr(audit,'LocalJavaBridge',lambda *args,**kwargs:pytest.fail('Must refuse before file access'))
+    with pytest.raises(Refused,match='index_geometry_limit'):
+        audit.audit_index_geometry({},**limits)
+
+
+def test_geometry_audit_cli_has_narrow_success_unknown_and_redacted_refusal(manifest,tmp_path):
+    import sys
+    path=tmp_path/'manifest.json';path.write_text(json.dumps(manifest))
+    cmd=[sys.executable,'-m','prototypes.graphhopper11.index_geometry_audit','--manifest',str(path)]
+    matched=subprocess.run(cmd,capture_output=True,text=True,timeout=60)
+    assert matched.returncode==0, matched.stderr[-2000:]
+    assert json.loads(matched.stdout)['observation']['status']=='MATCHED_FINITE_PROBES'
+    partial=subprocess.run(cmd+['--sample-limit','1'],capture_output=True,text=True,timeout=60)
+    assert partial.returncode==2 and json.loads(partial.stdout)['observation']['status']=='UNVERIFIED'
+    path.write_text('{}')
+    refused=subprocess.run(cmd,capture_output=True,text=True,timeout=60)
+    assert refused.returncode==1 and json.loads(refused.stdout)['reason']=='index_geometry_audit_refused'
+    assert str(tmp_path) not in matched.stdout+partial.stdout+refused.stdout
+
+
+def test_geometry_audit_refuses_changed_input_after_native_work(manifest,geometry_evidence,monkeypatch):
+    from prototypes.graphhopper11.index_geometry_audit import audit_index_geometry
+    path=Path(manifest['paths']['config']);original=path.read_bytes()
+    def changed(*args):
+        path.write_bytes(original+b'\n# synthetic mutation\n')
+        return {'engine_version':'11.1','java_runtime':geometry_evidence['java_runtime'],'audit_only':True,
+                'index_geometry_observation':geometry_evidence['observation'],'navigation_allowed':False,'production_migration':'NO_GO'}
+    monkeypatch.setattr(LocalJavaBridge,'_execute',changed)
+    try:
+        with pytest.raises(Refused,match='input_changed'):
+            audit_index_geometry(manifest)
+    finally:
+        path.write_bytes(original)
+
+
+def test_geometry_audit_rejects_inventory_report_instead_of_geometry(manifest,monkeypatch):
+    from prototypes.graphhopper11.index_geometry_audit import audit_index_geometry
+    monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:{'audit_only':True,'index_inventory_observation':{}})
+    with pytest.raises(Refused,match='index_geometry_envelope'):
+        audit_index_geometry(manifest)
+
+
+@pytest.mark.parametrize('extra',[
+    {'associations':[]},{'audit_index_inventory':{'edge_limit':10000}},
+    {'cases':[{'id':'unregistered','points':[[0,0],[0,.02]]}]},
+    {'audit_index_geometry':{'edge_limit':10000,'sample_limit':128,'coverage':'complete'}},
+])
+def test_native_geometry_audit_cannot_mix_with_routing_or_inventory(manifest,tmp_path,extra):
+    bridge=LocalJavaBridge(manifest)
+    request=tmp_path/'audit.json'
+    request.write_text(json.dumps(dict({'cases':[],'audit_index_geometry':{'edge_limit':10000,'sample_limit':128}},**extra)))
+    with pytest.raises(Refused):
+        bridge._execute(request,str(tmp_path))
+
+
+def test_geometry_auditor_source_change_refuses_evidence(manifest,geometry_evidence,monkeypatch):
+    from prototypes.graphhopper11 import index_geometry_audit as audit
+    actual_digest=audit.digest;calls=[]
+    def changed(path):
+        calls.append(True)
+        return actual_digest(path) if len(calls)==1 else '0'*64
+    monkeypatch.setattr(audit,'digest',changed)
+    monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:{'engine_version':'11.1','java_runtime':geometry_evidence['java_runtime'],
+        'audit_only':True,'index_geometry_observation':geometry_evidence['observation'],'navigation_allowed':False,'production_migration':'NO_GO'})
+    with pytest.raises(Refused,match='index_geometry_binding_changed'):
+        audit.audit_index_geometry(manifest)
+
+
+def test_geometry_stale_graph_manifest_refuses_before_java(manifest,monkeypatch):
+    from prototypes.graphhopper11.index_geometry_audit import audit_index_geometry
+    changed=copy.deepcopy(manifest);changed['graph_version']='0'*64
+    monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:pytest.fail('Stale manifest must refuse before native work'))
+    with pytest.raises(Refused,match='graph_changed'):
+        audit_index_geometry(changed)

@@ -396,3 +396,14 @@ from becoming geometry coverage or guidance authority. No normal HTTP request ca
 enable audit mode, and no VPS run is included. See INDEX_INVENTORY_EVIDENCE.md.
 Construction lineage, real-graph spatial coverage/performance and all four full UK
 acceptance streams remain open; navigation stays disabled and migration is NO-GO.
+
+## Subsequent Milestone 3 checkpoint: finite geometry differential audit
+
+A manifest-bound offline audit selects deterministic graph geometry vertices and
+segment midpoints, comparing full-scan and indexed directed-car candidates. The
+matched-global-inventory/spatially-empty negative control now produces observed
+mismatches. Sampling/scan/query limits preserve unknown verdicts; even all probes
+matching never establishes exhaustive spatial coverage or construction lineage.
+See INDEX_GEOMETRY_EVIDENCE.md for the implemented scope and required reproducible
+construction experiment. No real-graph/VPS run is included; all four UK acceptance
+streams remain open, navigation is disabled and migration remains NO-GO.

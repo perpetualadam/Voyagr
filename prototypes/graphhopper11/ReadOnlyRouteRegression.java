@@ -404,6 +404,72 @@ public class ReadOnlyRouteRegression {
         result.put("lookup_method","full_scan");return result;
     }
 
+    // Finite graph-derived probes, never exhaustive geometry/cell coverage proof.
+    static Map<String,Object> observeIndexGeometry(GraphHopper hopper,int limit,int sampleLimit) {
+        require(limit>=1 && limit<=10000 && sampleLimit>=1 && sampleLimit<=128,"invalid geometry audit limits");
+        var samples=new ArrayList<double[]>();var rows=new ArrayList<Map<String,Object>>();
+        boolean selectionComplete=false;String reason="graph_geometry_probes_selected";
+        int edgesSeen=0,vertices=0;long deadline=System.nanoTime()+20_000_000_000L;
+        try {
+            var edges=hopper.getBaseGraph().getAllEdges();
+            while(edges.next()) {
+                if(System.nanoTime()>deadline)throw new OriginObservationStop("time_budget");
+                if(edgesSeen>=limit)throw new OriginObservationStop("edge_budget");
+                var shape=edges.fetchWayGeometry(FetchMode.ALL);edgesSeen++;
+                if(shape.size()<2)throw new OriginObservationStop("invalid_imported_geometry");
+                if(vertices+shape.size()>100000)throw new OriginObservationStop("geometry_budget");
+                vertices+=shape.size();
+                for(int i=0;i<shape.size();i++) {
+                    double lat=shape.getLat(i),lon=shape.getLon(i);
+                    if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)
+                        throw new OriginObservationStop("invalid_imported_geometry");
+                    if(samples.size()>=sampleLimit)throw new OriginObservationStop("sample_budget");
+                    samples.add(new double[]{lat,lon});
+                    if(i+1<shape.size()) {
+                        double nextLat=shape.getLat(i+1),nextLon=shape.getLon(i+1);
+                        if(!Double.isFinite(nextLat)||!Double.isFinite(nextLon)||Math.abs(nextLat)>90||Math.abs(nextLon)>180
+                            ||Math.abs(lon-nextLon)>180)throw new OriginObservationStop("unsupported_geometry_envelope");
+                        if(samples.size()>=sampleLimit)throw new OriginObservationStop("sample_budget");
+                        samples.add(new double[]{(lat+nextLat)/2,(lon+nextLon)/2});
+                    }
+                }
+            }
+            selectionComplete=true;
+        }catch(OriginObservationStop stop){reason=stop.reason;}
+         catch(Exception error){reason="geometry_selection_failure";}
+        var mapper=new ObjectMapper();
+        for(var sample:samples) {
+            if(System.nanoTime()>deadline){reason="time_budget";break;}
+            var point=mapper.createArrayNode().add(sample[0]).add(sample[1]);
+            var options=mapper.createObjectNode().put("radius_m",1).put("edge_limit",limit);
+            var full=observeOriginCandidates(hopper,point,options);
+            options.put("lookup","index");var indexed=observeOriginCandidates(hopper,point,options);
+            boolean complete=Boolean.TRUE.equals(full.get("scan_complete")) && Boolean.TRUE.equals(indexed.get("index_query_complete"));
+            var expected=new TreeSet<Integer>((Collection<Integer>)full.get("candidate_edge_keys"));
+            var actual=new TreeSet<Integer>((Collection<Integer>)indexed.get("candidate_edge_keys"));
+            var missing=new TreeSet<Integer>(expected);missing.removeAll(actual);
+            var unexpected=new TreeSet<Integer>(actual);unexpected.removeAll(expected);
+            var row=new LinkedHashMap<String,Object>();row.put("ordinal",rows.size());
+            row.put("comparison_complete",complete);row.put("match",complete?expected.equals(actual):null);
+            row.put("full_scan_complete",full.get("scan_complete"));row.put("index_query_complete",indexed.get("index_query_complete"));
+            row.put("full_scan_reason",full.get("reason"));row.put("index_query_reason",indexed.get("reason"));
+            row.put("full_candidate_count",expected.size());row.put("index_candidate_count",actual.size());
+            row.put("missing_count",complete?missing.size():null);row.put("unexpected_count",complete?unexpected.size():null);
+            rows.add(row);
+        }
+        boolean complete=selectionComplete && rows.size()==samples.size() && !rows.isEmpty()
+            && rows.stream().allMatch(row->Boolean.TRUE.equals(row.get("comparison_complete")));
+        boolean mismatch=rows.stream().anyMatch(row->Boolean.FALSE.equals(row.get("match")));
+        var result=new LinkedHashMap<String,Object>();result.put("scope","graph_derived_finite_geometry_probes_only");
+        result.put("status",mismatch?"MISMATCH_OBSERVED":complete?"MATCHED_FINITE_PROBES":"UNVERIFIED");
+        result.put("reason",reason);result.put("edge_limit",limit);result.put("sample_limit",sampleLimit);
+        result.put("radius_m",1);result.put("edges_seen",edgesSeen);result.put("selection_complete",selectionComplete);
+        result.put("samples_selected",samples.size());result.put("comparisons_complete",complete);result.put("samples",rows);
+        result.put("index_geometry_coverage","UNVERIFIED");result.put("construction_lineage","UNVERIFIED");
+        result.put("physical_road_verification","UNVERIFIED");result.put("heading_verification","UNVERIFIED");
+        result.put("navigation_allowed",false);result.put("route_absence_proven",false);return result;
+    }
+
     static String inventoryDigest(BitSet bits) throws Exception {
         return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bits.toByteArray()));
     }
@@ -691,7 +757,14 @@ public class ReadOnlyRouteRegression {
         var fixture=Jackson.newObjectMapper().readTree(new File(args[2]));
         var tests=fixture.path("cases");
         boolean inventoryOnly=fixture.has("audit_index_inventory");
-        if(inventoryOnly) {
+        boolean geometryOnly=fixture.has("audit_index_geometry");
+        if(geometryOnly) {
+            require(fixture.isObject() && fixture.size()==2 && tests.isArray() && tests.isEmpty(),"geometry audit must be separate from routing");
+            var options=fixture.get("audit_index_geometry");
+            require(options.isObject() && options.size()==2,"invalid geometry audit options");
+            for(String key:List.of("edge_limit","sample_limit")) require(options.has(key) && options.get(key).isIntegralNumber()
+                && options.get(key).canConvertToInt(),"invalid geometry audit limit");
+        } else if(inventoryOnly) {
             require(fixture.isObject() && fixture.size()==2 && tests.isArray() && tests.isEmpty(),"inventory audit must be separate from routing");
             var options=fixture.get("audit_index_inventory");
             require(options.isObject() && options.size()==1 && options.has("edge_limit")
@@ -705,6 +778,14 @@ public class ReadOnlyRouteRegression {
             long start=System.nanoTime();
             require(hopper.load(),"existing graph unavailable; import forbidden");
             double loadMs=(System.nanoTime()-start)/1e6;
+            if(geometryOnly) {
+                var options=fixture.get("audit_index_geometry");
+                var observation=observeIndexGeometry(hopper,options.get("edge_limit").intValue(),options.get("sample_limit").intValue());
+                System.out.println("VOYAGR_GH11_REGRESSION "+new ObjectMapper().writeValueAsString(Map.of(
+                    "engine_version",Constants.VERSION,"java_runtime",System.getProperty("java.version"),"audit_only",true,
+                    "index_geometry_observation",observation,"navigation_allowed",false,"production_migration","NO_GO")));
+                return;
+            }
             if(inventoryOnly) {
                 var observation=observeIndexInventory(hopper,fixture.get("audit_index_inventory").get("edge_limit").intValue());
                 System.out.println("VOYAGR_GH11_REGRESSION "+new ObjectMapper().writeValueAsString(Map.of(
