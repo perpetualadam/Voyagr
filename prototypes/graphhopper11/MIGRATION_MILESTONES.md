@@ -407,3 +407,15 @@ matching never establishes exhaustive spatial coverage or construction lineage.
 See INDEX_GEOMETRY_EVIDENCE.md for the implemented scope and required reproducible
 construction experiment. No real-graph/VPS run is included; all four UK acceptance
 streams remain open, navigation is disabled and migration remains NO-GO.
+
+## Subsequent Milestone 3 checkpoint: observed fixed-fixture import provenance
+
+An operator-only harness now performs two clean imports of its embedded synthetic
+fixture using the pinned GH11.1 engine and hash-recorded car model. It records
+actual process outcomes, input/runtime/code/log bindings and complete graph-file
+manifests, rechecks earlier outputs and reports byte differences without ignoring
+metadata. Failures/limits/tampering refuse or retain false observation flags. This
+is not trusted attestation, general reproducibility or routing/legal/coverage
+proof. See IMPORT_PROVENANCE.md. Binding read-only load and diagnostic audits to
+the observed output remains next; no real-data/VPS import is included. All four UK
+acceptance streams remain open, navigation is disabled and migration remains NO-GO.

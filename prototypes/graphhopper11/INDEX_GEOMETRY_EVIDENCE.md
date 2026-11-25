@@ -92,3 +92,8 @@ production change or physical-phone test was performed here. All new graph data
 is generated synthetic data. Milestone 3 and its four full UK journey acceptance
 streams remain open; construction lineage and exhaustive spatial coverage remain
 unverified.
+
+The subsequent IMPORT_PROVENANCE.md checkpoint implements a fixed-synthetic-input
+two-import observer and reports complete graph-file differences. It does not yet
+bind these spatial probes to those newly observed outputs, and it establishes no
+real UK/US construction or exhaustive spatial coverage claim.
