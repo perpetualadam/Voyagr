@@ -123,3 +123,9 @@ attestation, measured scale/concurrency and the four full UK journey acceptance
 streams remain open. Any real-data/VPS experiment requires a separate concrete,
 reviewed action. Nothing here imports real maps, enables navigation, merges code,
 deploys, restarts services or modifies VPS2/UK production.
+
+The subsequent OBSERVED_GRAPH_AUDITS.md checkpoint now binds a fresh observer run
+to explicit load-only configs and the actual read-only inventory/finite-geometry
+requests on those exact original graphs. Original import receipts keep their
+UNVERIFIED load field; the separate continuation records its later observed loads.
+No general coverage, reproducibility, legal/hazard or navigation claim is added.

@@ -419,3 +419,14 @@ is not trusted attestation, general reproducibility or routing/legal/coverage
 proof. See IMPORT_PROVENANCE.md. Binding read-only load and diagnostic audits to
 the observed output remains next; no real-data/VPS import is included. All four UK
 acceptance streams remain open, navigation is disabled and migration remains NO-GO.
+
+## Subsequent Milestone 3 checkpoint: observed graph read-only audit chain
+
+The fixed synthetic two-import observer now feeds a separate artifact-bound
+continuation: explicit load-only config mapping, exact observed graph/source/model
+and receipt checks, actual read-only native loads, and nested inventory/finite
+geometry evidence for both builds. Pre/post changes, mismatched claims and audit
+workspace reuse refuse; incomplete probes never become coverage proof. See
+OBSERVED_GRAPH_AUDITS.md. This closes only the synthetic construction-to-diagnostic
+binding checkpoint. Exhaustive geometry coverage, real artifacts/scale and all four
+UK acceptance streams remain open; navigation stays disabled and migration NO-GO.

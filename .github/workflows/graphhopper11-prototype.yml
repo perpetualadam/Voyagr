@@ -7,6 +7,7 @@ on:
       - 'prototypes/graphhopper11/**'
       - 'tests/test_gh11_prototype.py'
       - 'tests/test_gh11_import_provenance.py'
+      - 'tests/test_gh11_observed_graph_audits.py'
       - 'tests/test_gh11_integration_boundary.py'
       - 'tests/test_gh11_isolated_app.py'
       - 'tests/test_gh11_policy_compiler.py'
@@ -72,7 +73,7 @@ jobs:
           GH11_PROTOTYPE_JAR: ${{ runner.temp }}/graphhopper-web-11.1.jar
         run: |
           python -m pip install pytest "Flask>=3.1.2,<4"
-          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_import_provenance.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py tests/test_gh11_container_package.py tests/test_gh11_policy_compiler.py tests/test_gh11_app_settings_adapter.py tests/test_gh11_app_request_bridge.py tests/test_gh11_private_complete_cache.py
+          python -m pytest -q tests/test_gh11_prototype.py tests/test_gh11_import_provenance.py tests/test_gh11_observed_graph_audits.py tests/test_gh11_integration_boundary.py tests/test_gh11_isolated_app.py tests/test_gh11_container_package.py tests/test_gh11_policy_compiler.py tests/test_gh11_app_settings_adapter.py tests/test_gh11_app_request_bridge.py tests/test_gh11_private_complete_cache.py
 
       - name: Install isolated browser test dependencies
         run: |

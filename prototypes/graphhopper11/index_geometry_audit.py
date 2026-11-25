@@ -72,11 +72,11 @@ def validate_geometry(value, edge_limit, sample_limit):
     return copy.deepcopy(value)
 
 
-def audit_index_geometry(manifest, *, edge_limit=10000, sample_limit=128, java='java', timeout=60, heap_mb=512):
+def audit_index_geometry(manifest, *, edge_limit=10000, sample_limit=128, java='java', timeout=60, heap_mb=512, bridge_factory=None):
     if type(edge_limit) is not int or not 1 <= edge_limit <= 10000 or type(sample_limit) is not int or not 1 <= sample_limit <= 128:
         raise Refused('index_geometry_limit')
     auditor_hash=digest(__file__)
-    bridge=LocalJavaBridge(manifest,java=java,timeout=timeout,heap_mb=heap_mb)
+    bridge=(bridge_factory or LocalJavaBridge)(manifest,java=java,timeout=timeout,heap_mb=heap_mb)
     identity=version(bridge.manifest)
     with tempfile.TemporaryDirectory(prefix='voyagr-gh11-geometry-') as directory:
         request=Path(directory)/'audit.json'
