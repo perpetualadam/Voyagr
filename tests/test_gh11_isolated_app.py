@@ -1449,13 +1449,20 @@ public class OriginIndexProbe {
   LocationIndex original;
   void variant(String mode) {
    if(mode.equals("normal")){setLocationIndex(original);return;}
-   setLocationIndex(new LocationIndex() {
+   setLocationIndex(new LocationIndexTree(getBaseGraph(),new com.graphhopper.storage.RAMDirectory()) {
+    public int getMinResolutionInMeter(){return mode.equals("bad_grid")?0:((LocationIndexTree)original).getMinResolutionInMeter();}
     public void close(){original.close();}
     public Snap findClosest(double lat,double lon,com.graphhopper.routing.util.EdgeFilter filter){return original.findClosest(lat,lon,filter);}
     public void query(TileFilter filter,Visitor visitor){
      switch(mode){
       case "empty":return;
       case "spatial_empty":if(filter!=null)return;original.query(filter,visitor);return;
+      case "cell_hole":{
+       var grid=IndexStructureInfo.create(ProbeHopper.this.getBaseGraph().getBounds(),getMinResolutionInMeter());
+       double x=grid.getBounds().minLon+grid.getDeltaLon()/2,y=grid.getBounds().minLat;
+       if(filter!=null && filter.acceptPartially(new BBox(x-1e-8,x+1e-8,y-1e-7,y+1e-7)))return;
+       original.query(filter,visitor);return;
+      }
       case "throw":throw new IllegalStateException("synthetic index failure");
       case "invalid":visitor.onEdge(Integer.MAX_VALUE);return;
       case "flood":for(int i=0;i<60000;i++)visitor.onEdge(0);return;
@@ -1482,6 +1489,9 @@ public class OriginIndexProbe {
    inventory.setAccessible(true);
    var geometry=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("observeIndexGeometry",GraphHopper.class,int.class,int.class);
    geometry.setAccessible(true);
+   var gridCuts=Class.forName("ReadOnlyRouteRegression",true,loader).getDeclaredMethod("addGridCuts",TreeSet.class,
+    double.class,double.class,double.class,double.class,int.class,int.class,long.class);
+   gridCuts.setAccessible(true);
    var mapper=Jackson.newObjectMapper();var configTree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
    var config=mapper.treeToValue(configTree.get("graphhopper"),GraphHopperConfig.class);
    config.putObject("graph.location",args[2]).putObject("datareader.file","");
@@ -1502,6 +1512,11 @@ public class OriginIndexProbe {
      var options=mapper.createObjectNode().put("radius_m",input.path("radius_m").asDouble(1))
       .put("edge_limit",input.path("edge_limit").asInt(10000));
      try {
+      if(input.has("cuts")){
+       var cuts=new TreeSet<Double>();cuts.add(0d);cuts.add(1d);
+       for(var axis:input.get("cuts"))gridCuts.invoke(null,cuts,axis.get(0).asDouble(),axis.get(1).asDouble(),0d,1d,2,128,System.nanoTime()+1_000_000_000L);
+       observations.add(Map.of("cuts",cuts));continue;
+      }
       if(input.path("geometry").asBoolean(false)){
        observations.add(Map.of("geometry",geometry.invoke(null,hopper,input.path("edge_limit").asInt(10000),input.path("sample_limit").asInt(128))));continue;
       }
@@ -1639,6 +1654,10 @@ def test_real_index_differential_on_translated_synthetic_graphs(manifest,origin_
         assert pair['full']['scan_complete'] is True and pair['indexed']['index_query_complete'] is True
         assert pair['full']['candidate_edge_keys'] == pair['indexed']['candidate_edge_keys']
         assert_index_observation_only(pair['indexed'])
+    segmented=origin_index_probe([dict(geometry=True)],paths=dict(manifest['paths'],source=str(source),config=str(config),graph=str(graph)))['observations'][0]['geometry']
+    assert segmented['probe_strategy']=='segment_tile_intersections_v1'
+    assert segmented['status']=='MATCHED_FINITE_PROBES' and segmented['grid_crossing_probes']>0
+    assert segmented['index_geometry_coverage']=='UNVERIFIED' and segmented['navigation_allowed'] is False
 
 
 def test_native_inventory_matches_ids_but_does_not_prove_spatial_coverage(origin_index_probe):
@@ -1949,3 +1968,71 @@ def test_geometry_stale_graph_manifest_refuses_before_java(manifest,monkeypatch)
     monkeypatch.setattr(LocalJavaBridge,'_execute',lambda *args:pytest.fail('Stale manifest must refuse before native work'))
     with pytest.raises(Refused,match='graph_changed'):
         audit_index_geometry(changed)
+
+
+def test_segment_grid_strategy_covers_crossings_and_cell_intervals_with_bounded_metadata(origin_index_probe):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    rows=origin_index_probe([dict(geometry=True,fault=fault) for fault in ('normal','duplicate')])['observations']
+    normal,duplicate=[row['geometry'] for row in rows]
+    assert validate_geometry(normal,10000,128)==normal
+    assert normal==duplicate
+    assert normal['status']=='MATCHED_FINITE_PROBES' and normal['selection_complete'] is True
+    assert normal['probe_strategy']=='segment_tile_intersections_v1'
+    assert normal['grid_parts']>=2 and normal['grid_resolution_m']==300
+    assert normal['segments_seen']>0 and normal['grid_crossing_probes']>0
+    assert normal['endpoint_probes']==2*normal['segments_seen']
+    assert normal['original_midpoint_probes']==normal['segments_seen']
+    assert normal['cell_interval_probes']==normal['grid_crossing_probes']+normal['segments_seen']
+    assert sum(normal[k] for k in ('endpoint_probes','original_midpoint_probes','grid_crossing_probes','cell_interval_probes'))==normal['samples_selected']<=128
+    assert normal['index_geometry_coverage']=='UNVERIFIED' and normal['navigation_allowed'] is False
+
+
+def test_segment_cell_hole_evades_inventory_and_old_probes_but_is_observed_by_new_strategy(origin_index_probe):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    # Main road vertices and the former adjacent-vertex midpoints all look healthy.
+    legacy=origin_index_probe([dict(point=[0,lon],fault='cell_hole') for lon in (0,.005,.01,.015,.02)])['observations']
+    assert all(row['full']['scan_complete'] and row['indexed']['index_query_complete'] for row in legacy)
+    assert all(row['full']['candidate_edge_keys']==row['indexed']['candidate_edge_keys'] for row in legacy)
+    inventory,geometry=origin_index_probe([dict(inventory=True,fault='cell_hole'),dict(geometry=True,fault='cell_hole')])['observations']
+    assert inventory['inventory']['inventory_status']=='MATCHED_EDGE_INVENTORY'
+    row=geometry['geometry']
+    assert validate_geometry(row,10000,128)==row
+    assert row['status']=='MISMATCH_OBSERVED' and row['comparisons_complete'] is True
+    assert any(sample['missing_count']>0 for sample in row['samples'])
+    assert row['cell_interval_probes']>0 and row['index_geometry_coverage']=='UNVERIFIED'
+    assert row['navigation_allowed'] is row['route_absence_proven'] is False
+
+
+def test_invalid_loaded_grid_metadata_remains_unknown_without_spatial_queries(origin_index_probe):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    row=origin_index_probe([dict(geometry=True,fault='bad_grid')])['observations'][0]['geometry']
+    assert validate_geometry(row,10000,128)==row
+    assert row['reason']=='unsupported_index_grid' and row['status']=='UNVERIFIED'
+    assert row['samples_selected']==len(row['samples'])==0
+    assert row['selection_complete'] is row['comparisons_complete'] is False
+    assert row['navigation_allowed'] is False
+
+
+@pytest.mark.parametrize('change',[
+    {'probe_strategy':'complete_coverage'},{'grid_parts':True},{'grid_parts':2**30},
+    {'grid_resolution_m':0},{'segments_seen':0},{'grid_crossing_probes':128},
+    {'cell_interval_probes':0},{'endpoint_probes':False},
+])
+def test_segment_grid_metadata_cannot_be_promoted_or_contradict_probe_counts(geometry_evidence,change):
+    from prototypes.graphhopper11.index_geometry_audit import validate_geometry
+    with pytest.raises(Refused,match='index_geometry_contract'):
+        validate_geometry(dict(geometry_evidence['observation'],**change),10000,128)
+
+
+def test_segment_grid_cut_math_keeps_corner_reverse_aligned_and_near_corner_intervals(origin_index_probe):
+    cases=[{'cuts':axes} for axes in (
+        [[0,2],[0,2]],  # Same exact corner from both axes.
+        [[2,0],[2,0]],  # Reverse traversal visits the same cut.
+        [[1,1],[0,2]],  # Segment aligned with a grid line.
+        [[0,2],[0,1.9999999999999996]],  # Two distinct cuts extremely near a corner.
+        [[0,0],[0,0]],  # Zero-length segment has no internal crossing.
+    )]
+    rows=origin_index_probe(cases)['observations']
+    assert [row['cuts'] for row in rows[:3]]==[[0,.5,1]]*3
+    assert rows[3]['cuts']==[0,.5,.5000000000000001,1]
+    assert rows[4]['cuts']==[0,1]

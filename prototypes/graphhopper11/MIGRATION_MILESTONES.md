@@ -430,3 +430,14 @@ workspace reuse refuse; incomplete probes never become coverage proof. See
 OBSERVED_GRAPH_AUDITS.md. This closes only the synthetic construction-to-diagnostic
 binding checkpoint. Exhaustive geometry coverage, real artifacts/scale and all four
 UK acceptance streams remain open; navigation stays disabled and migration NO-GO.
+
+## Subsequent Milestone 3 checkpoint: finite segment-and-tile probes
+
+The offline geometry selector now preserves segment endpoints/original midpoints
+and adds loaded-grid crossings and cell-interval midpoints. A metadata-derived
+spatial-hole control passes global inventory and former probes but is detected by
+the stronger strategy. Counts/limits/unsupported grids preserve unknown results;
+even complete selection is finite sampling, not exhaustive cell-membership proof.
+See SEGMENT_TILE_PROBES.md. The observed-import read-only chain retains its exact
+bindings. Real coverage/scale, independent leaf membership and all four UK journey
+acceptance streams remain open; navigation is disabled and migration remains NO-GO.

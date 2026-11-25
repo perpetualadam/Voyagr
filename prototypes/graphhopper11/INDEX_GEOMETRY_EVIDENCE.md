@@ -10,9 +10,10 @@ records graph/source/policy, configuration, engine and native-runner identities,
 Java runtime, the auditor's source hash and a canonical evidence hash. These are
 artifact bindings, not a signature or proof of construction history.
 
-The native audit enumerates base-graph edges in stored order and selects each
-geometry vertex and each adjacent pair's arithmetic midpoint. Duplicate points
-are retained, preserving a deterministic selection order. Each selected point
+The native audit now uses `segment_tile_intersections_v1`: base-graph segment
+endpoints/original midpoints plus grid-crossing and cell-interval midpoint probes,
+selected in stored order. See SEGMENT_TILE_PROBES.md for the loaded grid model,
+negative control, metadata and limits. Duplicate points are retained. Each selected point
 uses a fixed one-metre radius and compares directed encoded-car-access candidates
 from the independent full graph scan with candidates retrieved from the stored
 index and filtered by the same distance kernel. Avoidance rules do not filter

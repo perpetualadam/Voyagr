@@ -404,13 +404,43 @@ public class ReadOnlyRouteRegression {
         result.put("lookup_method","full_scan");return result;
     }
 
-    // Finite graph-derived probes, never exhaustive geometry/cell coverage proof.
+    static void addGridCuts(TreeSet<Double> cuts,double a,double b,double minimum,double delta,int parts,int sampleLimit,long deadline) {
+        if(a==b)return;
+        long first=Math.max(1,(long)Math.floor((Math.min(a,b)-minimum)/delta)+1);
+        long last=Math.min(parts-1,(long)Math.ceil((Math.max(a,b)-minimum)/delta)-1);
+        for(long k=first;k<=last;k++) {
+            if(System.nanoTime()>deadline)throw new OriginObservationStop("time_budget");
+            double t=(minimum+k*delta-a)/(b-a);
+            if(Double.isFinite(t) && t>0 && t<1)cuts.add(t);
+            if(cuts.size()>sampleLimit+2)throw new OriginObservationStop("sample_budget");
+        }
+    }
+    static void geometryProbe(List<double[]> samples,int[] kinds,int kind,double lat,double lon,int sampleLimit) {
+        if(samples.size()>=sampleLimit)throw new OriginObservationStop("sample_budget");
+        if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>80||Math.abs(lon)>180)
+            throw new OriginObservationStop("unsupported_geometry_envelope");
+        samples.add(new double[]{lat,lon});kinds[kind]++;
+    }
+
+    // Graph-derived finite segment/grid probes. Never infer exhaustive coverage
+    // from stored tile callbacks (the public global query deduplicates edge IDs).
     static Map<String,Object> observeIndexGeometry(GraphHopper hopper,int limit,int sampleLimit) {
         require(limit>=1 && limit<=10000 && sampleLimit>=1 && sampleLimit<=128,"invalid geometry audit limits");
         var samples=new ArrayList<double[]>();var rows=new ArrayList<Map<String,Object>>();
         boolean selectionComplete=false;String reason="graph_geometry_probes_selected";
-        int edgesSeen=0,vertices=0;long deadline=System.nanoTime()+20_000_000_000L;
+        int edgesSeen=0,vertices=0,segmentsSeen=0,gridParts=0,resolution=0;
+        int[] kinds=new int[4]; // endpoints, original midpoints, grid crossings, cell-interval midpoints
+        long deadline=System.nanoTime()+20_000_000_000L;
         try {
+            if(!(hopper.getLocationIndex() instanceof com.graphhopper.storage.index.LocationIndexTree tree))
+                throw new OriginObservationStop("unsupported_index_grid");
+            resolution=tree.getMinResolutionInMeter();
+            if(resolution<1 || resolution>1_000_000)throw new OriginObservationStop("unsupported_index_grid");
+            var grid=com.graphhopper.storage.index.IndexStructureInfo.create(hopper.getBaseGraph().getBounds(),resolution);
+            gridParts=grid.getParts();var bounds=grid.getBounds();
+            double dy=grid.getDeltaLat(),dx=grid.getDeltaLon();
+            if(gridParts<1 || gridParts>1_048_576 || !Double.isFinite(dx) || !Double.isFinite(dy) || dx<=0 || dy<=0)
+                throw new OriginObservationStop("unsupported_index_grid");
             var edges=hopper.getBaseGraph().getAllEdges();
             while(edges.next()) {
                 if(System.nanoTime()>deadline)throw new OriginObservationStop("time_budget");
@@ -419,18 +449,28 @@ public class ReadOnlyRouteRegression {
                 if(shape.size()<2)throw new OriginObservationStop("invalid_imported_geometry");
                 if(vertices+shape.size()>100000)throw new OriginObservationStop("geometry_budget");
                 vertices+=shape.size();
-                for(int i=0;i<shape.size();i++) {
+                for(int i=0;i+1<shape.size();i++) {
                     double lat=shape.getLat(i),lon=shape.getLon(i);
-                    if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)
+                    double nextLat=shape.getLat(i+1),nextLon=shape.getLon(i+1);
+                    if(!Double.isFinite(lat)||!Double.isFinite(lon)||!Double.isFinite(nextLat)||!Double.isFinite(nextLon)
+                        ||Math.abs(lat)>90||Math.abs(nextLat)>90||Math.abs(lon)>180||Math.abs(nextLon)>180)
                         throw new OriginObservationStop("invalid_imported_geometry");
-                    if(samples.size()>=sampleLimit)throw new OriginObservationStop("sample_budget");
-                    samples.add(new double[]{lat,lon});
-                    if(i+1<shape.size()) {
-                        double nextLat=shape.getLat(i+1),nextLon=shape.getLon(i+1);
-                        if(!Double.isFinite(nextLat)||!Double.isFinite(nextLon)||Math.abs(nextLat)>90||Math.abs(nextLon)>180
-                            ||Math.abs(lon-nextLon)>180)throw new OriginObservationStop("unsupported_geometry_envelope");
-                        if(samples.size()>=sampleLimit)throw new OriginObservationStop("sample_budget");
-                        samples.add(new double[]{(lat+nextLat)/2,(lon+nextLon)/2});
+                    if(Math.abs(lat)>80||Math.abs(nextLat)>80||Math.abs(lon-nextLon)>180)
+                        throw new OriginObservationStop("unsupported_geometry_envelope");
+                    segmentsSeen++;
+                    geometryProbe(samples,kinds,0,lat,lon,sampleLimit);
+                    geometryProbe(samples,kinds,1,(lat+nextLat)/2,(lon+nextLon)/2,sampleLimit);
+                    geometryProbe(samples,kinds,0,nextLat,nextLon,sampleLimit);
+                    var cuts=new TreeSet<Double>();cuts.add(0d);cuts.add(1d);
+                    addGridCuts(cuts,lon,nextLon,bounds.minLon,dx,gridParts,sampleLimit,deadline);
+                    addGridCuts(cuts,lat,nextLat,bounds.minLat,dy,gridParts,sampleLimit,deadline);
+                    double previous=0;
+                    for(double t:cuts) {
+                        if(t==0)continue;
+                        double mid=(previous+t)/2;
+                        geometryProbe(samples,kinds,3,lat+(nextLat-lat)*mid,lon+(nextLon-lon)*mid,sampleLimit);
+                        if(t<1)geometryProbe(samples,kinds,2,lat+(nextLat-lat)*t,lon+(nextLon-lon)*t,sampleLimit);
+                        previous=t;
                     }
                 }
             }
@@ -464,6 +504,10 @@ public class ReadOnlyRouteRegression {
         result.put("status",mismatch?"MISMATCH_OBSERVED":complete?"MATCHED_FINITE_PROBES":"UNVERIFIED");
         result.put("reason",reason);result.put("edge_limit",limit);result.put("sample_limit",sampleLimit);
         result.put("radius_m",1);result.put("edges_seen",edgesSeen);result.put("selection_complete",selectionComplete);
+        result.put("probe_strategy","segment_tile_intersections_v1");result.put("grid_parts",gridParts);
+        result.put("grid_resolution_m",resolution);result.put("segments_seen",segmentsSeen);
+        result.put("endpoint_probes",kinds[0]);result.put("original_midpoint_probes",kinds[1]);
+        result.put("grid_crossing_probes",kinds[2]);result.put("cell_interval_probes",kinds[3]);
         result.put("samples_selected",samples.size());result.put("comparisons_complete",complete);result.put("samples",rows);
         result.put("index_geometry_coverage","UNVERIFIED");result.put("construction_lineage","UNVERIFIED");
         result.put("physical_road_verification","UNVERIFIED");result.put("heading_verification","UNVERIFIED");

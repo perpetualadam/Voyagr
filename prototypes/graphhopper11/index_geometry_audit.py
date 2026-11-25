@@ -9,11 +9,13 @@ import tempfile
 from prototypes.graphhopper11.isolated_app import LocalJavaBridge, Refused, digest, version
 
 FIXED = {'scope':'graph_derived_finite_geometry_probes_only','radius_m':1,
+         'probe_strategy':'segment_tile_intersections_v1',
          'index_geometry_coverage':'UNVERIFIED','construction_lineage':'UNVERIFIED',
          'physical_road_verification':'UNVERIFIED','heading_verification':'UNVERIFIED',
          'navigation_allowed':False,'route_absence_proven':False}
 REASONS = {'graph_geometry_probes_selected','time_budget','edge_budget','geometry_budget',
-           'invalid_imported_geometry','sample_budget','unsupported_geometry_envelope','geometry_selection_failure'}
+           'invalid_imported_geometry','sample_budget','unsupported_geometry_envelope','geometry_selection_failure','unsupported_index_grid'}
+PROBE_COUNTS = {'endpoint_probes','original_midpoint_probes','grid_crossing_probes','cell_interval_probes'}
 SCAN_REASONS = {'complete_imported_graph_scan','edge_or_time_budget','geometry_budget',
                 'invalid_imported_geometry','candidate_budget','time_budget','invalid_distance'}
 INDEX_REASONS = {'index_coverage_unverified','unsupported_index_envelope','time_budget','tile_budget',
@@ -25,7 +27,8 @@ def validate_geometry(value, edge_limit, sample_limit):
     def refuse():
         raise Refused('index_geometry_contract')
     fields = set(FIXED) | {'status','reason','edge_limit','sample_limit','edges_seen',
-                          'selection_complete','samples_selected','comparisons_complete','samples'}
+                          'selection_complete','samples_selected','comparisons_complete','samples',
+                          'grid_parts','grid_resolution_m','segments_seen'} | PROBE_COUNTS
     if not isinstance(value,dict) or set(value) != fields:
         refuse()
     if any(type(value[k]) is not type(v) or value[k] != v for k,v in FIXED.items()):
@@ -36,6 +39,19 @@ def validate_geometry(value, edge_limit, sample_limit):
             or value['edge_limit'] != edge_limit or value['sample_limit'] != sample_limit
             or not 0 <= value['edges_seen'] <= edge_limit or not 0 <= value['samples_selected'] <= sample_limit
             or not isinstance(value['samples'],list) or len(value['samples']) > value['samples_selected']):
+        refuse()
+    if (any(type(value[k]) is not int or not 0<=value[k]<=sample_limit for k in PROBE_COUNTS)
+            or sum(value[k] for k in PROBE_COUNTS)!=value['samples_selected']
+            or type(value['grid_parts']) is not int or not 0<=value['grid_parts']<=2**31-1
+            or type(value['grid_resolution_m']) is not int or not 0<=value['grid_resolution_m']<=2**31-1
+            or type(value['segments_seen']) is not int or not 0<=value['segments_seen']<=100000
+            or value['endpoint_probes']>2*value['segments_seen']
+            or value['original_midpoint_probes']>value['segments_seen']):
+        refuse()
+    if value['selection_complete'] and (not 1<=value['grid_parts']<=1_048_576 or not 1<=value['grid_resolution_m']<=1_000_000
+            or value['endpoint_probes']!=2*value['segments_seen']
+            or value['original_midpoint_probes']!=value['segments_seen']
+            or value['cell_interval_probes']!=value['grid_crossing_probes']+value['segments_seen']):
         refuse()
     for i,row in enumerate(value['samples']):
         if not isinstance(row,dict) or set(row) != {'ordinal','comparison_complete','match',
