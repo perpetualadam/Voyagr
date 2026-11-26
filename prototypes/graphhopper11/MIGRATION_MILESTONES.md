@@ -441,3 +441,14 @@ even complete selection is finite sampling, not exhaustive cell-membership proof
 See SEGMENT_TILE_PROBES.md. The observed-import read-only chain retains its exact
 bindings. Real coverage/scale, independent leaf membership and all four UK journey
 acceptance streams remain open; navigation is disabled and migration remains NO-GO.
+
+## Subsequent Milestone 3 checkpoint: stored strict-interior membership diagnostic
+
+A bounded independent Python decoder now reads pinned GH11.1 MMAP leaf memberships
+without query deduplication, and a separate rational clipping oracle checks necessary
+strict-interior cell memberships. Missing/wrong-cell controls preserve all global
+IDs yet are detected; malformed trees/budgets refuse and boundary-only cases remain
+unknown. Actual synthetic files and manifest/code/graph bindings are checked. See
+STORED_INDEX_MEMBERSHIP.md. Layout metadata, boundary/numeric semantics, construction
+integration, real artifacts/scale and all four UK acceptance streams remain open;
+no full coverage/route/legal claim is added, navigation is disabled and migration NO_GO.

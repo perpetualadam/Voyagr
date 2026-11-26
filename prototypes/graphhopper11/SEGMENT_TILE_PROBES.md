@@ -112,3 +112,8 @@ indexes, then separately approved real artifacts and measured resource limits.
 General real UK/US construction, mandatory legal/hazard proof, the four full UK
 journey acceptance streams, physical-phone behaviour and deployment remain open.
 No VPS2 or production service/configuration/data was accessed or changed here.
+
+The subsequent STORED_INDEX_MEMBERSHIP.md checkpoint adds an independent bounded
+MMAP leaf decoder and a strict-interior rational oracle. It can detect missing cell
+membership masked by global IDs, but leaves layout metadata, boundary/numeric
+semantics, complete coverage and construction integration unverified.
