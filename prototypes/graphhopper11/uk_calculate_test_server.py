@@ -33,12 +33,20 @@ def main():
     bridge = isolated.extensions['gh11_app_request_bridge']
     identities = {key: bridge.bridge.manifest[key]
                   for key in ('graph_version','source_version','policy_version')}
-    calls = {'engine': 0, 'route': 0, 'refused': 0}
+    calls = {'engine': 0, 'route': 0, 'refused': 0, 'accepted': []}
     execute = bridge.bridge._execute
 
     def counted(*args, **kwargs):
         calls['engine'] += 1
-        return execute(*args, **kwargs)
+        report = execute(*args, **kwargs)
+        # Test-only negative control: actual Java output reaches the independent
+        # validator with a broken third candidate. No fabricated success result.
+        if request.headers.get('X-GH11-UK-Fault') == 'third_metrics' and request.headers.get('X-GH11-UK-Case') == 'matrix_3':
+            report['cases'][0]['candidates'][2]['distance_km'] = -1
+        if request.headers.get('X-GH11-UK-Fault') == 'last_leg' and request.headers.get('X-GH11-UK-Case') == 'matrix_via':
+            indices = report['cases'][0]['candidates'][0]['waypoint_indices']
+            indices[-2] = indices[-1]
+        return report
 
     bridge.bridge._execute = counted
 
@@ -52,7 +60,17 @@ def main():
                 return jsonify(success=False), 403
             calls['route'] += 1
             try:
-                result = bridge.calculate('detour', request.get_json(), identities)
+                case_id = request.headers.get('X-GH11-UK-Case','detour')
+                result = bridge.calculate(case_id, request.get_json(), identities)
+                if case_id.startswith('matrix_'):
+                    calls['accepted'].append(dict(case_id=case_id,
+                        app_request=result['app_request_context']['app_request'],
+                        settings=result['policy_report']['selected']['app_settings'],
+                        binding=result['request_binding'],
+                        versions=identities,
+                        candidates=len(result['candidates']),
+                        legs=[len(row['leg_geometry_ranges']) for row in result['app_preview']['routes']],
+                        forbidden=[row['forbidden_traversals'] for row in result['candidates']]))
                 return jsonify(result['app_preview'])
             except Refused:
                 calls['refused'] += 1

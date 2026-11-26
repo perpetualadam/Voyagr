@@ -944,8 +944,7 @@ def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
     _run_real_browser(app,monkeypatch,'browser-acceptance.cjs','PASS_ISOLATED_CHROMIUM_HTTP',{'execute':1,'validate':4})
 
 
-@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
-def test_real_chromium_full_uk_calculate_registered_gh11(manifest, tmp_path):
+def _run_full_uk_browser(manifest, tmp_path, runner_name):
     """Full app boots in a clean copy; its ordinary Calculate reaches real Java."""
     import shutil
     import signal
@@ -972,7 +971,7 @@ def test_real_chromium_full_uk_calculate_registered_gh11(manifest, tmp_path):
     env.update(PYTHON_DOTENV_DISABLED='1',VOYAGR_PERSONAL_MODE='1',
                GH11_UK_TEST_ROOT=str(tmp_path),PYTHONDONTWRITEBYTECODE='1')
     server_script = root/'prototypes/graphhopper11/uk_calculate_test_server.py'
-    runner = root/'prototypes/graphhopper11/uk-calculate-acceptance.cjs'
+    runner = root/'prototypes/graphhopper11'/runner_name
     with (tmp_path/'server.log').open('w+') as log:
         process = subprocess.Popen([sys.executable,str(server_script),str(source),str(manifest_file),str(ready)],
                                    env=env,stdout=log,stderr=log,start_new_session=True)
@@ -992,15 +991,69 @@ def test_real_chromium_full_uk_calculate_registered_gh11(manifest, tmp_path):
                     browser.communicate()
             assert browser.returncode == 0, errors[-2000:]
             evidence = json.loads(output)
-            assert evidence['status'] == 'PASS_UK_CALCULATE_GH11_PREVIEW'
-            assert evidence['engine'] == 2 and evidence['route'] == 3 and evidence['refused'] == 1
-            assert evidence['start_refused'] and evidence['failed_replacement_retained']
-            assert evidence['active_journey_retained'] and evidence['external_requests_sent'] == 0
-            assert not evidence['navigation_allowed'] and evidence['phone_acceptance'] == 'UNVERIFIED'
+            return evidence
         finally:
             if process.poll() is None:
                 os.killpg(process.pid,signal.SIGTERM)
             process.wait(timeout=10)
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_calculate_registered_gh11(manifest, tmp_path):
+    evidence = _run_full_uk_browser(manifest,tmp_path,'uk-calculate-acceptance.cjs')
+    assert evidence['status'] == 'PASS_UK_CALCULATE_GH11_PREVIEW'
+    assert evidence['engine'] == 2 and evidence['route'] == 3 and evidence['refused'] == 1
+    assert evidence['start_refused'] and evidence['failed_replacement_retained']
+    assert evidence['active_journey_retained'] and evidence['external_requests_sent'] == 0
+    assert not evidence['navigation_allowed'] and evidence['phone_acceptance'] == 'UNVERIFIED'
+
+
+@pytest.fixture(scope='module')
+def matrix_manifest(manifest, tmp_path_factory):
+    """Independent graph: a motorway and three separate car bypasses."""
+    root = tmp_path_factory.mktemp('gh11-uk-matrix')
+    source, graph, config, registry = (root/name for name in ('fixture.osm','graph','config.yml','registry.json'))
+    points = {1:(0,0),2:(0,.02),3:(0,.01),4:(.003,.006),5:(.003,.014),6:(-.003,.01),7:(.006,.01)}
+    ways = {10:([1,3,2],'motorway'),11:([1,4,5,2],'residential'),12:([1,6,2],'residential'),13:([1,7,2],'residential')}
+    # Interior visits must be actual graph junctions: a graph with only the two
+    # collinear endpoint towers has bounds excluding its curved pillar geometry.
+    for node in (4,5,6,7):
+        points[node+100] = (points[node][0]+.0001,points[node][1])
+    branches = '\n'.join(f'<way id="{node+100}"><nd ref="{node}"/><nd ref="{node+100}"/><tag k="highway" v="service"/><tag k="oneway" v="yes"/></way>' for node in (4,5,6,7))
+    source.write_text('<osm version="0.6">\n'+'\n'.join(f'<node id="{i}" lat="{p[0]}" lon="{p[1]}"/>' for i,p in points.items())+'\n'+
+                      '\n'.join(f'<way id="{i}">\n'+'\n'.join(f'<nd ref="{n}"/>' for n in nodes)+f'\n<tag k="highway" v="{kind}"/>\n</way>' for i,(nodes,kind) in ways.items())+'\n'+branches+'\n</osm>')
+    config.write_text(Path(manifest['paths']['config']).read_text().replace(manifest['paths']['source'],str(source)).replace(manifest['paths']['graph'],str(graph)))
+    subprocess.run(['java','-Xmx512m','-jar',manifest['paths']['jar'],'import',str(config)],cwd=root,check=True,capture_output=True,timeout=90)
+    associations = [dict(id=str(i),points=[list(points[n]) for n in nodes],expected_osm_way_ids=[i],max_snap_distance_m=1) for i,(nodes,_) in ways.items() if i!=10]
+    associations.append(dict(id='spur',points=[list(points[4]),list(points[104])],expected_osm_way_ids=[104],max_snap_distance_m=1))
+    common = dict(points=[[0,0],[0,.02]],no_motorways=True,block_both_directions=True,max_snap_distance_m=1)
+    cases = [dict(common,id=f'matrix_{count}',alternatives=True,blocked_associations=['spur']+[str(i) for i in (13,12,11)[:3-count]]) for count in (3,2,1,0)]
+    cases.append(dict(common,id='matrix_via',points=[[0,0],list(points[4]),list(points[5]),[0,.02]],blocked_associations=['spur']))
+    registry.write_text(json.dumps(dict(associations=associations,cases=cases)))
+    return build_manifest(jar=manifest['paths']['jar'],graph=graph,config=config,registry=registry,source=source)
+
+
+def test_real_matrix_native_alternative_counts_and_ordered_legs(matrix_manifest):
+    app = create_app(matrix_manifest,password=PASSWORD)
+    client = app.test_client()
+    for count in (3,2,1):
+        response = client.post('/api/prototype/route',json=body(matrix_manifest,f'matrix_{count}'),headers=AUTH)
+        assert response.status_code == 200, response.get_json()
+        assert len(response.get_json()['candidates']) == count
+    assert client.post('/api/prototype/route',json=body(matrix_manifest,'matrix_0'),headers=AUTH).status_code == 422
+    via = client.post('/api/prototype/route',json=body(matrix_manifest,'matrix_via'),headers=AUTH)
+    assert via.status_code == 200, via.get_json()
+    assert len(via.get_json()['app_preview']['routes'][0]['leg_geometry_ranges']) == 3
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_alternatives_and_legs(matrix_manifest, tmp_path):
+    evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-calculate-matrix.cjs')
+    assert evidence['status'] == 'PASS_UK_ALTERNATIVES_AND_LEGS'
+    assert evidence['native_counts'] == [3,2,1] and evidence['ordered_legs'] == 3
+    assert evidence['engine'] == 7 and evidence['route'] == 11 and evidence['refused'] == 7
+    assert evidence['external_requests_sent'] == 0 and not evidence['navigation_allowed']
+    assert evidence['phone_acceptance'] == 'UNVERIFIED'
 
 
 @pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')

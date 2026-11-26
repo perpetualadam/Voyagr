@@ -96,8 +96,8 @@ concurrency remain unverified. GH8 and VPS2 have not been contacted or modified.
 No production deployment, migration, merge or positive GH11 guidance is enabled.
 
 This is the first bounded slice of the original Start/selection/replacement row;
-it does not close all four original integration rows. Next extend the same full
-Calculate acceptance to registered alternatives and ordered multi-leg requests,
-retaining every setting on every result and leg. Unsupported stop, arrival and
-mandatory-policy semantics must keep refusing; do not substitute index research
-for that original app integration work.
+it does not close all four original integration rows. The subsequent registered
+alternatives/ordered-leg matrix is recorded in
+[UK_ALTERNATIVES_LEGS_ACCEPTANCE.md](UK_ALTERNATIVES_LEGS_ACCEPTANCE.md).
+Unsupported stop, arrival and mandatory-policy semantics must keep refusing; do
+not substitute index research for that original app integration work.

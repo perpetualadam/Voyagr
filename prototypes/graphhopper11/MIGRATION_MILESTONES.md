@@ -63,9 +63,18 @@ guidance. Then address the remaining original rows in order: every alternative/l
 and ordered-stop/reroute settings; complete request/cache/selection binding; actual
 saved-journey restore/outage/race/fallback behaviour. Do not automatically turn an
 unverified general-proof question into another serial Milestone 3 prerequisite.
-**Next bounded task:** extend the full UK Calculate acceptance to registered
-alternatives and ordered multi-leg requests, retaining settings on every returned
-route/leg. Keep unsupported semantics refused and positive navigation disabled.
+**Second bounded slice:** [UK_ALTERNATIVES_LEGS_ACCEPTANCE.md](UK_ALTERNATIVES_LEGS_ACCEPTANCE.md)
+extends full UK Calculate to native three/two/one/zero candidate cases and three
+ordered pass-through legs. Every selected alternative retains settings/bindings,
+mounts its geometry and refuses Start; malformed third-candidate/last-leg output
+cannot partially publish. Timed stops and optimization remain unsupported and
+must refuse before Java, rather than being silently converted or disabled. The
+general alternatives/multi-stop row remains PARTIAL; no deployment/navigation
+authority or complete preference implementation is claimed.
+
+**Next bounded task:** the original cache/selection-binding row, exercising the
+full UK page with versions, settings, ordered visits and origin changes. Then the
+original saved/restore/outage/race/fallback row. Keep positive navigation disabled.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.
