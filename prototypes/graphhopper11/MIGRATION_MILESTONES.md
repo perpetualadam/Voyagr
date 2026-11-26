@@ -1,9 +1,62 @@
 # GH11.1 migration milestones
 
-Updated: 2026-11-22. Overall: **NO-GO for production migration**.
+Updated: 2026-11-26. Overall: **NO-GO for production migration**.
 Work continues on PR #540; it is open and unmerged. UK production and GH8 remain
 unchanged. Each milestone requires recorded evidence; a green test alone does
 not establish physical-phone behaviour or production readiness.
+
+## Delivery scope correction — 26 November 2026
+
+The original seven milestones below remain the delivery plan. The later origin,
+index, tile, import-provenance and binary-membership investigations were additional
+supporting research, not new original TODOs or automatic Milestone 3 exit criteria.
+They produced useful bounded evidence, but none closed the four full UK application
+acceptance rows. They should have been tracked separately rather than repeatedly
+presented as the next Milestone 3 delivery step. More passing tests do not by
+themselves mean another delivery milestone is complete.
+
+| Original milestone | Current honest status |
+| --- | --- |
+| 1. Prototype evidence review | Complete within the recorded self-review scope |
+| 2. Isolated application connection | Complete for registered-case preview; operator/phone selected-case evidence only |
+| 3. Mandatory rules across the app | In progress; four original full UK acceptance rows remain open |
+| 4. Expanded hazard and route coverage | Pending; supporting diagnostics exist, general coverage/association proof does not |
+| 5. VPS2 performance | Pending; no capacity result inferred from synthetic tests |
+| 6. Pixel 6 / Android 14 acceptance | Pending for the updated application/navigation; earlier preview screenshots are limited evidence |
+| 7. Migration and rollback rehearsal | Pending; no production migration authorized |
+
+**Priority reset:** pause further standalone index/boundary/decoder research. Keep
+that code and its limitations for Milestone 4; do not delete it or treat it as
+navigation authority. A confirmed app defect or an explicitly scoped Milestone 4
+acceptance requirement can justify resuming it. No safety requirement, original
+unchecked row or deployment gate is waived by this scheduling correction. Unknown
+mandatory compliance must still refuse; positive guidance remains blocked.
+
+**Next bounded task: Milestone 3, first open row (Start/selection/replacement).**
+Exercise the normal UK Calculate/request/response/display path against the actual
+isolated GH11 registered-fixture backend, then the actual Start/selection refusal
+and failed-replacement preservation gates. Use a disposable, normally booted UK
+page, synthetic accepted origin/identity and explicit test-only connection. Keep
+production `/api/route`, GH8, browser storage and navigation permissions unchanged.
+Unsupported rules/requests must refuse without fallback; supported registered
+preview work must actually reach Java, not be replaced with a mock response.
+
+Evidence for this priority: `routing-request.js:buildCalculateRouteFetchPlan`
+still selects `/api/route`; `isolated_viewer.js` uses `/api/prototype/app-route`.
+`UK_HOST_BOOT.md` describes a context connector, not route-generation wiring, and
+`ACTIVE_JOURNEY_ACCEPTANCE.md` records that the full UK lab blocks route HTTP calls
+and requires their count to remain zero. Thus green host/refusal tests do not yet
+establish the complete UK Calculate-to-GH11 connection.
+
+This first slice must report the exact supported cases and any concrete blocker;
+it cannot close the whole row through a standalone preview or grant positive GH11
+guidance. Then address the remaining original rows in order: every alternative/leg
+and ordered-stop/reroute settings; complete request/cache/selection binding; actual
+saved-journey restore/outage/race/fallback behaviour. Do not automatically turn an
+unverified general-proof question into another serial Milestone 3 prerequisite.
+For each next task, name the original row, observable acceptance check and result
+(PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
+and its milestone rather than reporting more diagnostics as delivery completion.
 
 ## 1. Prototype evidence review — COMPLETE (self-review)
 
@@ -362,7 +415,7 @@ boundary, not server GPS attestation, physical road/heading proof or arbitrary
 live-origin routing. See REQUEST_ORIGIN_BINDING.md. The four full UK acceptance
 rows remain open, navigation stays disabled and no deployment is included.
 
-## Subsequent Milestone 3 checkpoint: imported origin ambiguity observations
+## Supporting Milestone 4 research: imported origin ambiguity observations
 
 An opt-in native diagnostic observes nearby encoded car traversals independently
 of hazard exclusions or the selected route. Synthetic parallel, reverse, one-way,
@@ -374,7 +427,7 @@ See ORIGIN_AMBIGUITY_DIAGNOSTIC.md. General live-origin association and all four
 full UK acceptance streams remain open; navigation is disabled and no deployment
 is included.
 
-## Subsequent Milestone 3 checkpoint: indexed candidate retrieval
+## Supporting Milestone 4 research: indexed candidate retrieval
 
 An opt-in native index mode retrieves stored edge candidates without avoidance
 filtering and applies the full-scan oracle's geometry test. Differential synthetic
@@ -386,7 +439,7 @@ lookup prototype, not measured real-graph scalability or live-origin authority.
 See INDEXED_ORIGIN_LOOKUP.md. All four full UK acceptance streams remain open,
 navigation stays disabled and no deployment is included.
 
-## Subsequent Milestone 3 checkpoint: manifest-bound index inventory
+## Supporting Milestone 4 research: manifest-bound index inventory
 
 An explicit offline audit reconciles base-graph and stored-index edge IDs, recording
 manifest/config/engine/code/runtime identities and pre/post artifact checks. Missing
@@ -397,7 +450,7 @@ enable audit mode, and no VPS run is included. See INDEX_INVENTORY_EVIDENCE.md.
 Construction lineage, real-graph spatial coverage/performance and all four full UK
 acceptance streams remain open; navigation stays disabled and migration is NO-GO.
 
-## Subsequent Milestone 3 checkpoint: finite geometry differential audit
+## Supporting Milestone 4 research: finite geometry differential audit
 
 A manifest-bound offline audit selects deterministic graph geometry vertices and
 segment midpoints, comparing full-scan and indexed directed-car candidates. The
@@ -408,7 +461,7 @@ See INDEX_GEOMETRY_EVIDENCE.md for the implemented scope and required reproducib
 construction experiment. No real-graph/VPS run is included; all four UK acceptance
 streams remain open, navigation is disabled and migration remains NO-GO.
 
-## Subsequent Milestone 3 checkpoint: observed fixed-fixture import provenance
+## Supporting Milestone 4 research: observed fixed-fixture import provenance
 
 An operator-only harness now performs two clean imports of its embedded synthetic
 fixture using the pinned GH11.1 engine and hash-recorded car model. It records
@@ -420,7 +473,7 @@ proof. See IMPORT_PROVENANCE.md. Binding read-only load and diagnostic audits to
 the observed output remains next; no real-data/VPS import is included. All four UK
 acceptance streams remain open, navigation is disabled and migration remains NO-GO.
 
-## Subsequent Milestone 3 checkpoint: observed graph read-only audit chain
+## Supporting Milestone 4 research: observed graph read-only audit chain
 
 The fixed synthetic two-import observer now feeds a separate artifact-bound
 continuation: explicit load-only config mapping, exact observed graph/source/model
@@ -431,7 +484,7 @@ OBSERVED_GRAPH_AUDITS.md. This closes only the synthetic construction-to-diagnos
 binding checkpoint. Exhaustive geometry coverage, real artifacts/scale and all four
 UK acceptance streams remain open; navigation stays disabled and migration NO-GO.
 
-## Subsequent Milestone 3 checkpoint: finite segment-and-tile probes
+## Supporting Milestone 4 research: finite segment-and-tile probes
 
 The offline geometry selector now preserves segment endpoints/original midpoints
 and adds loaded-grid crossings and cell-interval midpoints. A metadata-derived
@@ -442,7 +495,7 @@ See SEGMENT_TILE_PROBES.md. The observed-import read-only chain retains its exac
 bindings. Real coverage/scale, independent leaf membership and all four UK journey
 acceptance streams remain open; navigation is disabled and migration remains NO-GO.
 
-## Subsequent Milestone 3 checkpoint: stored strict-interior membership diagnostic
+## Supporting Milestone 4 research: stored strict-interior membership diagnostic
 
 A bounded independent Python decoder now reads pinned GH11.1 MMAP leaf memberships
 without query deduplication, and a separate rational clipping oracle checks necessary
