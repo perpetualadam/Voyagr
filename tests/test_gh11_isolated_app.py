@@ -944,7 +944,7 @@ def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
     _run_real_browser(app,monkeypatch,'browser-acceptance.cjs','PASS_ISOLATED_CHROMIUM_HTTP',{'execute':1,'validate':4})
 
 
-def _run_full_uk_browser(manifest, tmp_path, runner_name):
+def _run_full_uk_browser(manifest, tmp_path, runner_name, *, tls=False):
     """Full app boots in a clean copy; its ordinary Calculate reaches real Java."""
     import shutil
     import signal
@@ -970,6 +970,12 @@ def _run_full_uk_browser(manifest, tmp_path, runner_name):
     env = {key:os.environ[key] for key in ('PATH','JAVA_HOME') if key in os.environ}
     env.update(PYTHON_DOTENV_DISABLED='1',VOYAGR_PERSONAL_MODE='1',
                GH11_UK_TEST_ROOT=str(tmp_path),PYTHONDONTWRITEBYTECODE='1')
+    if tls:
+        cert,key=tmp_path/'cert.pem',tmp_path/'key.pem'
+        subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','1',
+                        '-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1',
+                        '-keyout',str(key),'-out',str(cert)],check=True,capture_output=True,timeout=30)
+        env.update(GH11_UK_TLS_CERT=str(cert),GH11_UK_TLS_KEY=str(key))
     server_script = root/'prototypes/graphhopper11/uk_calculate_test_server.py'
     runner = root/'prototypes/graphhopper11'/runner_name
     with (tmp_path/'server.log').open('w+') as log:
@@ -1029,6 +1035,7 @@ def matrix_manifest(manifest, tmp_path_factory):
     common = dict(points=[[0,0],[0,.02]],no_motorways=True,block_both_directions=True,max_snap_distance_m=1)
     cases = [dict(common,id=f'matrix_{count}',alternatives=True,blocked_associations=['spur']+[str(i) for i in (13,12,11)[:3-count]]) for count in (3,2,1,0)]
     cases.append(dict(common,id='matrix_via',points=[[0,0],list(points[4]),list(points[5]),[0,.02]],blocked_associations=['spur']))
+    cases.append(dict(common,id='matrix_origin',points=[list(points[4]),[0,.02]],blocked_associations=['spur']))
     registry.write_text(json.dumps(dict(associations=associations,cases=cases)))
     return build_manifest(jar=manifest['paths']['jar'],graph=graph,config=config,registry=registry,source=source)
 
@@ -1052,6 +1059,16 @@ def test_real_chromium_full_uk_alternatives_and_legs(matrix_manifest, tmp_path):
     assert evidence['status'] == 'PASS_UK_ALTERNATIVES_AND_LEGS'
     assert evidence['native_counts'] == [3,2,1] and evidence['ordered_legs'] == 3
     assert evidence['engine'] == 7 and evidence['route'] == 11 and evidence['refused'] == 7
+    assert evidence['external_requests_sent'] == 0 and not evidence['navigation_allowed']
+    assert evidence['phone_acceptance'] == 'UNVERIFIED'
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_cache_selection_binding(matrix_manifest, tmp_path):
+    evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-cache-selection.cjs',tls=True)
+    assert evidence['status'] == 'PASS_UK_PRIVATE_CACHE_SELECTION'
+    assert evidence['same_request_revalidated'] and evidence['changed_inputs_separated']
+    assert evidence['private_browser_scopes'] and evidence['corrupt_cache_refused']
     assert evidence['external_requests_sent'] == 0 and not evidence['navigation_allowed']
     assert evidence['phone_acceptance'] == 'UNVERIFIED'
 

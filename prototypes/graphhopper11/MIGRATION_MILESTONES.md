@@ -72,9 +72,18 @@ must refuse before Java, rather than being silently converted or disabled. The
 general alternatives/multi-stop row remains PARTIAL; no deployment/navigation
 authority or complete preference implementation is claimed.
 
-**Next bounded task:** the original cache/selection-binding row, exercising the
-full UK page with versions, settings, ordered visits and origin changes. Then the
-original saved/restore/outage/race/fallback row. Keep positive navigation disabled.
+**Third bounded slice:** [UK_CACHE_SELECTION_ACCEPTANCE.md](UK_CACHE_SELECTION_ACCEPTANCE.md)
+exercises normal UK Calculate over disposable HTTPS with the actual separate
+capability cache. Identical requests revalidate raw evidence; changed settings,
+origin and ordered visits do not alias it. Each graph/source/policy mismatch and
+an unsupported mandatory rule refuse before reuse. Separate browsers have separate
+capabilities, and corrupted cached evidence refuses without Java fallback. Old
+inspection selections retain their old binding; they do not gain navigation.
+
+**Next bounded task:** the original saved/restore/outage/race/policy-change/fallback
+row through the full UK page. Keep positive navigation disabled. The broad original
+rows remain PARTIAL outside their registered synthetic acceptance; no general
+journey, real-device or deployment gate is waived.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.

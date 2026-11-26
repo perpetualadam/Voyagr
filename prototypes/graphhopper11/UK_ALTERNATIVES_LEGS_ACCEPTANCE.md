@@ -95,5 +95,6 @@ This is the second bounded original integration slice. The broad alternatives/
 multi-stop row remains PARTIAL because real stop semantics, general hazard/legal
 proof, arbitrary journeys, deployment and phone acceptance are not established.
 No production application source, configuration, VPS service or data is changed.
-The next original row is full-page cache/selection binding to versions, settings,
-ordered visits and origin, followed by saved/restore/outage/race/fallback acceptance.
+The subsequent full-page cache/selection binding is recorded in
+[UK_CACHE_SELECTION_ACCEPTANCE.md](UK_CACHE_SELECTION_ACCEPTANCE.md). The next
+original row is saved/restore/outage/race/fallback acceptance.
