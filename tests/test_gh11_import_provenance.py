@@ -127,23 +127,35 @@ def test_bounded_process_does_not_inherit_java_options_or_print_unbounded_output
     assert result['output'].startswith(b'absent\n') and b'synthetic-secret' not in result['output']
 
 
-def test_timeout_kills_import_process_group(tmp_path):
-    code='import subprocess,sys,time; p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(30)"]);print(p.pid,flush=True);time.sleep(30)'
-    result=audit.bounded_process([sys.executable,'-c',code],tmp_path,timeout=1)
-    assert result['reason']=='import_timeout' and result['returncode']!=0
-    pid=int(result['output'].strip())
+def require_terminated_process(pid):
     stat=Path(f'/proc/{pid}/stat')
     # SIGKILL delivery/reaping is asynchronous; require termination within a
     # bounded interval rather than racing /proc cleanup immediately after wait.
     for _ in range(100):
         try:
             state=stat.read_text().split()[2]
-        except FileNotFoundError:
+        except (FileNotFoundError,ProcessLookupError):
             return
         if state=='Z':
             return
         time.sleep(.01)
     pytest.fail('Import descendant survived process-group cleanup')
+
+
+def test_timeout_kills_import_process_group(tmp_path):
+    code='import subprocess,sys,time; p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(30)"]);print(p.pid,flush=True);time.sleep(30)'
+    result=audit.bounded_process([sys.executable,'-c',code],tmp_path,timeout=1)
+    assert result['reason']=='import_timeout' and result['returncode']!=0
+    require_terminated_process(int(result['output'].strip()))
+
+
+@pytest.mark.parametrize('error',[FileNotFoundError,ProcessLookupError])
+def test_reaped_process_disappearance_during_proc_read_counts_as_terminated(monkeypatch,error):
+    def vanished(path,*args,**kwargs):
+        assert str(path)=='/proc/123456789/stat'
+        raise error('process reaped during read')
+    monkeypatch.setattr(Path,'read_text',vanished)
+    require_terminated_process(123456789)
 
 
 def test_cli_cannot_accept_external_source_or_config(observed,tmp_path):
