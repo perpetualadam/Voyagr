@@ -67,6 +67,53 @@ def test_missing_manual_price_is_retained_as_unverified_not_fabricated():
     assert {'setting':'fuel_price','value':None,'state':'UNVERIFIED'} in adapted['cost_warnings']
 
 
+def complete_calculate_body():
+    """Include the final orchestration step omitted by the builder-only test."""
+    body = app_bodies()['normal']
+    script = """
+const plan=require('./static/js/modules/navigation/journey-plan.js');
+const body=JSON.parse(process.argv[1]);
+const input={dataset:{journeySource:'coordinates'}};
+body.journey_context=plan.applyDrivingArrival(body,input,input,null);
+console.log(JSON.stringify(body));
+"""
+    return json.loads(subprocess.check_output(['node','-e',script,json.dumps(body)],text=True,timeout=10))
+
+
+def test_complete_calculate_context_and_accuracy_are_retained_without_gps_authority():
+    supplied = complete_calculate_body()
+    supplied['origin_accuracy_m'] = 5
+    before = copy.deepcopy(supplied)
+    adapted = adapt_app_request(supplied,{'points':[[0,0],[0,.02]]})
+    assert adapted['app_request'] == before == supplied
+    assert adapted['app_request']['journey_context']['arrival_intent']['mode'] == 'place'
+    assert 'navigation_allowed' not in adapted
+
+
+@pytest.mark.parametrize('change',[
+    {'purpose':'live_gps'}, {'version':True}, {'stops':[{'coordinates':[0,.01]}]},
+    {'arrival_choice':{}}, {'arrival_intent':{'version':1,'mode':'roadside','target':[0,.02]}},
+    {'arrival_intent':{'version':1,'mode':'place','target':[0,.01]}},
+    {'origin':{'kind':'coordinates','coordinates':[0,.01]}},
+    {'origin':{'kind':'gps','coordinates':[False,0]}},
+    {'destination':{'kind':'searched','coordinates':[0,.02],'search_evidence':{}}},
+    {'origin':{'kind':[],'coordinates':[0,0]}},
+])
+def test_unsupported_complete_calculate_context_refuses(change):
+    supplied = complete_calculate_body()
+    supplied['journey_context'].update(change)
+    with pytest.raises(Refused):
+        adapt_app_request(supplied,{'points':[[0,0],[0,.02]]})
+
+
+@pytest.mark.parametrize('accuracy',[True,0,-1,151,float('nan'),'5',None])
+def test_origin_accuracy_is_metadata_with_a_bounded_numeric_contract(accuracy):
+    supplied = complete_calculate_body()
+    supplied['origin_accuracy_m'] = accuracy
+    with pytest.raises(Refused,match='origin_accuracy_contract'):
+        adapt_app_request(supplied,{'points':[[0,0],[0,.02]]})
+
+
 @pytest.mark.parametrize('case',[{}, {'points':[]}, {'points':[[True,0],[0,1]]}, {'points':[[91,0],[0,1]]}])
 def test_anchor_only_or_invalid_cases_cannot_publish_coordinate_templates(case):
     from prototypes.graphhopper11.app_request_bridge import public_request_template

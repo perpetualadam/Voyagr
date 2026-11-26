@@ -197,6 +197,26 @@ describe('route comparison and selection helpers', () => {
         expect(options[0].polyline).toBe(fallback);
     });
 
+    test('API display and selection retain preview restrictions for every alternative', () => {
+        const context = {scope:'selected_fixture_graph_checks_only'};
+        const options = RS.buildRouteOptionsFromApiResponse({
+            navigation_allowed:false, automatic_selection_allowed:false,
+            routes:[{id:1,routing_context:context,navigation_allowed:false},
+                {id:2,routing_context:context,navigation_allowed:true,automatic_selection_allowed:true}],
+        }, () => [[1,2],[2,3]]);
+        for (const route of options) {
+            expect(route.navigation_allowed).toBe(false);
+            expect(route.automatic_selection_allowed).toBe(false);
+            expect(route.routing_context).toEqual(context);
+        }
+        const fallback = RS.buildRouteOptionsFromApiResponse({navigation_allowed:false,
+            automatic_selection_allowed:false,routing_context:context}, jest.fn(), [[1,2],[2,3]])[0];
+        expect(fallback.navigation_allowed).toBe(false);
+        expect(fallback.automatic_selection_allowed).toBe(false);
+        expect(fallback.routing_context).toEqual(context);
+        expect(RS.buildRouteOptionsFromApiResponse({routes:[{id:3}]},jest.fn())[0].navigation_allowed).toBeUndefined();
+    });
+
     test('hydrateRouteOptionPolylines decodes missing polylines in place', () => {
         const decode = jest.fn(() => [[1, 2]]);
         const options = [{ geometry: 'x', source: 'osrm' }];

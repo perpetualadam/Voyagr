@@ -1862,6 +1862,11 @@
             warning_coverage: route.warning_coverage,
             maneuvers: route.maneuvers || [],
             source: route.source || routeSource,
+            // Display normalization must not erase an explicit provider refusal
+            // or the scope that prevents preview evidence becoming guidance.
+            navigation_allowed: opts.navigationAllowed===false ? false : route.navigation_allowed,
+            automatic_selection_allowed: opts.automaticSelectionAllowed===false ? false : route.automatic_selection_allowed,
+            routing_context: route.routing_context,
             leg_geometry_ranges:route.leg_geometry_ranges,
             geometry_complete:route.geometry_complete,
             provider_limitations: route.provider_limitations,
@@ -1894,6 +1899,8 @@
                     decodePolyline: decodePolyline,
                     routeSource: routeSource,
                     defaultPrecision: defaultPrecision,
+                    navigationAllowed: data.navigation_allowed,
+                    automaticSelectionAllowed: data.automatic_selection_allowed,
                 });
             });
         }
@@ -1913,6 +1920,9 @@
             geometry: data.geometry,
             maneuvers: data.maneuvers || [],
             source: data.source || 'Unknown',
+            navigation_allowed:data.navigation_allowed,
+            automatic_selection_allowed:data.automatic_selection_allowed,
+            routing_context:data.routing_context,
             provider_limitations:data.provider_limitations,
             provider_capabilities:data.provider_capabilities,
             camera_evidence: data.camera_evidence,

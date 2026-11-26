@@ -32,7 +32,16 @@ acceptance requirement can justify resuming it. No safety requirement, original
 unchecked row or deployment gate is waived by this scheduling correction. Unknown
 mandatory compliance must still refuse; positive guidance remains blocked.
 
-**Next bounded task: Milestone 3, first open row (Start/selection/replacement).**
+**Completed bounded slice: Milestone 3, first open row (Start/selection/replacement).**
+See [UK_CALCULATE_ACCEPTANCE.md](UK_CALCULATE_ACCEPTANCE.md): normal UK Calculate
+now reaches real synthetic GH11 Java through an explicit test-only connection,
+displays its preview, refuses Start and preserves a synthetic active journey
+against selection/reroute/Calculate replacement. The complete-request metadata
+rejection and dropped preview restrictions found by this acceptance are corrected.
+This is PASS within the registered synthetic scope, not completion of the whole
+row or authorization for navigation/deployment. Milestone 3 remains PARTIAL.
+
+Original acceptance scope (retained for review):
 Exercise the normal UK Calculate/request/response/display path against the actual
 isolated GH11 registered-fixture backend, then the actual Start/selection refusal
 and failed-replacement preservation gates. Use a disposable, normally booted UK
@@ -41,7 +50,7 @@ production `/api/route`, GH8, browser storage and navigation permissions unchang
 Unsupported rules/requests must refuse without fallback; supported registered
 preview work must actually reach Java, not be replaced with a mock response.
 
-Evidence for this priority: `routing-request.js:buildCalculateRouteFetchPlan`
+Evidence that motivated this priority: `routing-request.js:buildCalculateRouteFetchPlan`
 still selects `/api/route`; `isolated_viewer.js` uses `/api/prototype/app-route`.
 `UK_HOST_BOOT.md` describes a context connector, not route-generation wiring, and
 `ACTIVE_JOURNEY_ACCEPTANCE.md` records that the full UK lab blocks route HTTP calls
@@ -54,6 +63,9 @@ guidance. Then address the remaining original rows in order: every alternative/l
 and ordered-stop/reroute settings; complete request/cache/selection binding; actual
 saved-journey restore/outage/race/fallback behaviour. Do not automatically turn an
 unverified general-proof question into another serial Milestone 3 prerequisite.
+**Next bounded task:** extend the full UK Calculate acceptance to registered
+alternatives and ordered multi-leg requests, retaining settings on every returned
+route/leg. Keep unsupported semantics refused and positive navigation disabled.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.

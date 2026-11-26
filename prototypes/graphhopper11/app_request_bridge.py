@@ -8,7 +8,7 @@ from prototypes.graphhopper11.isolated_app import Refused, PolicyRefused, app_pr
 
 JOURNEY_FIELDS = {'start','end','via_points','stops','optimize_stop_order','round_trip',
                   'departure_time','time_windows','total_stop_time','force_refresh',
-                  'is_reroute','preserve_stop_order'}
+                  'is_reroute','preserve_stop_order','journey_context','origin_accuracy_m'}
 COST_NUMBERS = {'fuel_efficiency','fuel_price','energy_efficiency','electricity_price'}
 COST_FIELDS = COST_NUMBERS | {'fuel_price_mode','fuel_category'}
 
@@ -27,6 +27,46 @@ def _pair(value):
     if not isinstance(value,str) or len(value)>80 or not re.fullmatch(r'\s*[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?\s*',value):
         raise Refused('request_coordinates')
     return _coordinate(*(float(part) for part in value.split(',')))
+
+
+def _planning_context(body, visits):
+    """Accept the normal Calculate metadata, never GPS/arrival authority.
+
+    This bounded bridge supports coordinate endpoints and default place arrival.
+    Search evidence, explicit arrival choices and live-purpose metadata need their
+    own integration; refusing them is safer than silently discarding them.
+    """
+    if 'origin_accuracy_m' in body:
+        accuracy = body['origin_accuracy_m']
+        if not _number(accuracy) or not 0 < accuracy <= 150:
+            raise Refused('origin_accuracy_contract')
+    if 'journey_context' not in body:
+        return
+    context = body['journey_context']
+    if (not isinstance(context, dict) or set(context) != {
+            'version','purpose','origin','destination','arrival_intent','stops'}
+            or type(context['version']) is not int or context['version'] != 1
+            or context['purpose'] != 'planning' or context['stops'] != []):
+        raise Refused('planning_context_not_supported')
+    kinds = {'gps','searched','map','coordinates','saved','unknown'}
+    for name, point in (('origin', visits[0]), ('destination', visits[-1])):
+        endpoint = context[name]
+        if (not isinstance(endpoint,dict) or not {'kind','coordinates'} <= set(endpoint)
+                or not set(endpoint) <= {'kind','coordinates','source_kind'}
+                or not isinstance(endpoint['kind'],str) or endpoint['kind'] not in kinds
+                or ('source_kind' in endpoint and (not isinstance(endpoint['source_kind'],str)
+                    or endpoint['source_kind'] not in kinds))
+                or not isinstance(endpoint['coordinates'],list) or len(endpoint['coordinates']) != 2
+                or not all(_number(v) for v in endpoint['coordinates'])
+                or endpoint['coordinates'] != point):
+            raise Refused('planning_endpoint_contract')
+    intent = context['arrival_intent']
+    if (not isinstance(intent,dict) or set(intent) != {'version','mode','target'}
+            or type(intent['version']) is not int or intent['version'] != 1
+            or intent['mode'] != 'place' or not isinstance(intent['target'],list)
+            or len(intent['target']) != 2 or not all(_number(v) for v in intent['target'])
+            or intent['target'] != visits[-1]):
+        raise Refused('arrival_intent_not_supported')
 
 
 def adapt_app_request(body, case):
@@ -74,6 +114,7 @@ def adapt_app_request(body, case):
     visits.append(_pair(body['end']))
     if visits != case.get('points'):
         raise Refused('journey_not_registered')
+    _planning_context(body, visits)
     try:
         settings = adapt_settings({key:copy.deepcopy(value) for key,value in body.items() if key in FIELDS})
     except ValueError as error:
@@ -129,6 +170,16 @@ class RegisteredAppRequestBridge:
                       app_request_context=adapted,cache_policy='private_complete_request' if key else 'bypass_complete_app_request',
                       gps_verification='UNVERIFIED',app_integration_allowed=False)
         result['app_preview'] = app_preview(result)
+        context = adapted['app_request'].get('journey_context')
+        if context is not None:
+            # Provenance is display metadata. Never turn an accuracy number or
+            # caller-declared GPS kind into authenticated location evidence.
+            context = copy.deepcopy(context)
+            context['authority'] = 'request_metadata_only'
+            context['arrival_intent']['status'] = 'DEFAULT'
+            result['app_preview']['journey_context'] = context
+            for route in result['app_preview']['routes']:
+                route['journey_context'] = copy.deepcopy(context)
         self.bridge.verify()
         return result
 

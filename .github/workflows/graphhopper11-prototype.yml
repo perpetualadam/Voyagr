@@ -17,6 +17,12 @@ on:
       - 'tests/test_gh11_private_complete_cache.py'
       - 'voyagr/avoidance_contract.py'
       - 'static/js/modules/navigation/routing-request.js'
+      - 'static/js/app/calculate-route-orchestration.js'
+      - 'templates/index.html'
+      - 'voyagr_web.py'
+      - 'voyagr/api/core.py'
+      - 'voyagr/asset_release.py'
+      - 'requirements-web.txt'
       - 'static/js/modules/privacy/local-store.js'
       - 'static/js/__tests__/gh11-saved-plans.test.js'
       - 'static/js/__tests__/gh11-journey-evidence.test.js'
@@ -48,7 +54,8 @@ jobs:
   synthetic:
     # Playwright 1.56.1 supports Ubuntu 24.04; latest may advance beyond it.
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Includes the real UK web dependencies and a separate full-page browser boot.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -78,6 +85,9 @@ jobs:
 
       - name: Install isolated browser test dependencies
         run: |
+          # The Calculate acceptance boots a disposable copy of the real UK app.
+          python -m pip install -r requirements-web.txt -r requirements-geometry.txt
+          python -m pip install "Flask>=3.1.2,<4"
           npm ci --ignore-scripts
           npx playwright install --with-deps chromium
       - name: Test real Chromium against loopback-only synthetic GH11

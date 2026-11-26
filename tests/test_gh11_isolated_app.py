@@ -945,6 +945,65 @@ def test_real_chromium_http_settings_and_restore(app, manifest, monkeypatch):
 
 
 @pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_calculate_registered_gh11(manifest, tmp_path):
+    """Full app boots in a clean copy; its ordinary Calculate reaches real Java."""
+    import shutil
+    import signal
+    import time
+    import sys
+    root = Path(__file__).resolve().parents[1]
+    source = tmp_path / 'source'
+    source.mkdir()
+    tracked = subprocess.check_output(['git','ls-files','-z'],cwd=root).decode().split('\0')
+    for relative in filter(None, tracked):
+        path = Path(relative)
+        if not (path.parts[0] in {'static','templates'} or path.suffix == '.py'
+                or path.parts[:2] == ('prototypes','graphhopper11')
+                or relative in {'service-worker.js','manifest.json','camera_areas.geojson'}):
+            continue
+        original = root / path
+        assert not original.is_symlink() and original.resolve().is_relative_to(root)
+        target = source / path
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(original,target)
+    manifest_file, ready = tmp_path/'manifest.json', tmp_path/'ready.json'
+    manifest_file.write_text(json.dumps(manifest))
+    env = {key:os.environ[key] for key in ('PATH','JAVA_HOME') if key in os.environ}
+    env.update(PYTHON_DOTENV_DISABLED='1',VOYAGR_PERSONAL_MODE='1',
+               GH11_UK_TEST_ROOT=str(tmp_path),PYTHONDONTWRITEBYTECODE='1')
+    server_script = root/'prototypes/graphhopper11/uk_calculate_test_server.py'
+    runner = root/'prototypes/graphhopper11/uk-calculate-acceptance.cjs'
+    with (tmp_path/'server.log').open('w+') as log:
+        process = subprocess.Popen([sys.executable,str(server_script),str(source),str(manifest_file),str(ready)],
+                                   env=env,stdout=log,stderr=log,start_new_session=True)
+        try:
+            deadline = time.monotonic()+30
+            while not ready.exists() and process.poll() is None and time.monotonic()<deadline:
+                time.sleep(.1)
+            assert ready.exists(), 'Disposable UK fixture did not become ready; inspect private test log'
+            origin = json.loads(ready.read_text())['origin']
+            browser = subprocess.Popen(['node',str(runner),origin],stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE,text=True,start_new_session=True)
+            try:
+                output, errors = browser.communicate(timeout=120)
+            finally:
+                if browser.poll() is None:
+                    os.killpg(browser.pid,signal.SIGKILL)
+                    browser.communicate()
+            assert browser.returncode == 0, errors[-2000:]
+            evidence = json.loads(output)
+            assert evidence['status'] == 'PASS_UK_CALCULATE_GH11_PREVIEW'
+            assert evidence['engine'] == 2 and evidence['route'] == 3 and evidence['refused'] == 1
+            assert evidence['start_refused'] and evidence['failed_replacement_retained']
+            assert evidence['active_journey_retained'] and evidence['external_requests_sent'] == 0
+            assert not evidence['navigation_allowed'] and evidence['phone_acceptance'] == 'UNVERIFIED'
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid,signal.SIGTERM)
+            process.wait(timeout=10)
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
 def test_real_chromium_http_fault_recovery(app, manifest, monkeypatch):
     import threading
     from flask import request, jsonify, g
