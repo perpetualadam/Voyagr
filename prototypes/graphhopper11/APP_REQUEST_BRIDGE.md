@@ -1,5 +1,29 @@
 # Complete app-request bridge — registered fixtures only
 
+## General request contract boundary — 27 November 2026
+
+`normalize_app_request(body)` now parses the supported application contract
+independently of registered fixture coordinates. It preserves the complete input,
+ordered visits, settings, reroute/refresh intent and unavailable-cost warnings.
+It does no routing, cache lookup, persistence or network work, and returns no
+navigation permission or candidate evidence. Coordinate/GPS labels remain untrusted
+metadata. Unsupported stop, time, optimization and private-avoid-point semantics
+still refuse rather than being flattened or silently discarded.
+
+`adapt_app_request(body, case)` then requires exact operator-registered visits.
+Preflight, calculation and restore still share that gate before engine execution
+or cache reuse. Parsing an arbitrary UK/US journey is therefore possible without
+making it eligible for routing. Tests use actual application request builders and
+verify that such a parsed journey cannot execute, restore or alter the cache.
+
+This is the first structural change toward a general adapter, not that adapter's
+completion. Arbitrary-coordinate execution still needs trusted graph/source and
+hazard association/coverage validation. A production routing connection, timed
+stops, optimization and positive navigation remain unavailable. Milestone 3 stays
+PARTIAL and production migration NO_GO; no new HTTP endpoint or deployment is added.
+
+## Existing registered execution contract
+
 `RegisteredAppRequestBridge` wraps the isolated local GH11 bridge. The standalone
 viewer now connects through dedicated authenticated `/api/prototype/app-policy`,
 `app-route` and `app-restore` endpoints. This does not enable the UK `/api/route`

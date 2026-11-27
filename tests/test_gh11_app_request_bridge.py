@@ -3,7 +3,7 @@ import copy
 import json
 import subprocess
 import pytest
-from prototypes.graphhopper11.app_request_bridge import adapt_app_request
+from prototypes.graphhopper11.app_request_bridge import adapt_app_request, normalize_app_request
 from prototypes.graphhopper11.isolated_app import Refused
 
 
@@ -34,6 +34,22 @@ def test_actual_normal_via_reroute_builders_preserve_every_supplied_field():
         assert adapted['force_refresh'] is (name == 'reroute')
 
 
+def test_general_normalization_does_not_make_unregistered_journeys_eligible():
+    body = app_bodies()['via']
+    body.update(start='40,-75',end='41,-74',
+                via_points=[dict(lat=40.5,lon=-74.5,type='via',name='Public synthetic point')])
+    before = copy.deepcopy(body)
+    parsed = normalize_app_request(body)
+    assert parsed['visits'] == [[40,-75],[40.5,-74.5],[41,-74]]
+    assert parsed['app_request'] == before == body
+    assert 'navigation_allowed' not in parsed and 'candidates' not in parsed
+    # Syntax acceptance is not operator registration or route evidence.
+    with pytest.raises(Refused,match='journey_not_registered'):
+        adapt_app_request(body,{'points':[[0,0],[0,.02]]})
+    parsed['app_request']['via_points'][0]['lat'] = 0
+    assert body == before
+
+
 @pytest.mark.parametrize('change',[
  {'unknown':True}, {'start':'nan,0'}, {'end':'90.1,0'}, {'is_reroute':1},
  {'heading':90}, {'headings':[90,180]}, {'bearing':90}, {'origin_heading':90},
@@ -47,8 +63,11 @@ def test_actual_normal_via_reroute_builders_preserve_every_supplied_field():
  {'via_points':[{'lat':0,'lon':.01,'proof':True}]}, {'avoid_points':[{'lat':0,'lon':0}]},
 ])
 def test_unsupported_or_malformed_requests_refuse_without_coercion(change):
+    supplied = dict({'start':'0,0','end':'0,0.02','avoid_caz':False},**change)
     with pytest.raises(Refused):
-        adapt_app_request(dict({'start':'0,0','end':'0,0.02','avoid_caz':False},**change),{'points':[[0,0],[0,.02]]})
+        normalize_app_request(supplied)
+    with pytest.raises(Refused):
+        adapt_app_request(supplied,{'points':[[0,0],[0,.02]]})
 
 
 def test_changed_origin_and_reversed_vias_cannot_be_substituted():

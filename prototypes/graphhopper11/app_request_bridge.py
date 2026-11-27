@@ -69,12 +69,13 @@ def _planning_context(body, visits):
         raise Refused('arrival_intent_not_supported')
 
 
-def adapt_app_request(body, case):
-    """Strict subset of the real app contract, retaining every supplied field.
+def normalize_app_request(body):
+    """Parse the supported app contract without granting execution eligibility.
 
-    Ordered pass-through vias are supported only by exact registered points.
+    Coordinates here are untrusted request metadata, not graph/road association.
     Stops, reordering, round trips and time-sensitive semantics are not guessed.
-    All costs/preferences retain explicit unverified status; no navigation proof.
+    This function performs no engine, cache, storage or network work. Registered
+    eligibility and independent policy/evidence checks remain separate gates.
     """
     if not isinstance(body,dict) or not {'start','end'} <= set(body) or not set(body) <= FIELDS | JOURNEY_FIELDS | COST_FIELDS:
         raise Refused('app_request_contract')
@@ -112,8 +113,6 @@ def adapt_app_request(body, case):
             raise Refused('ordered_visits_contract')
         visits.append(_coordinate(via['lat'],via['lon']))
     visits.append(_pair(body['end']))
-    if visits != case.get('points'):
-        raise Refused('journey_not_registered')
     _planning_context(body, visits)
     try:
         settings = adapt_settings({key:copy.deepcopy(value) for key,value in body.items() if key in FIELDS})
@@ -123,6 +122,18 @@ def adapt_app_request(body, case):
             'policy_request':dict(settings['policy_request'],app_settings=settings['app_settings']),
             'is_reroute':body.get('is_reroute',False), 'force_refresh':body.get('force_refresh',False),
             'cost_warnings':[{'setting':key,'value':body[key],'state':'UNVERIFIED'} for key in sorted(COST_FIELDS & set(body))]}
+
+
+def adapt_app_request(body, case):
+    """Require exact operator-registered visits after general contract parsing.
+
+    Successful normalization alone never authorizes an arbitrary journey. Keep
+    this gate shared by preflight, execution, cache binding and restoration.
+    """
+    adapted = normalize_app_request(body)
+    if not isinstance(case,dict) or adapted['visits'] != case.get('points'):
+        raise Refused('journey_not_registered')
+    return adapted
 
 
 class RegisteredAppRequestBridge:

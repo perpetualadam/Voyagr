@@ -1228,6 +1228,28 @@ def test_complete_app_request_changes_and_unsupported_rules_refuse_before_engine
     assert not bridge.cache
 
 
+def test_general_normalization_cannot_bypass_registered_execution_or_restore(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge, normalize_app_request
+    bridge = app.extensions['gh11_bridge']
+    adapter = RegisteredAppRequestBridge(bridge)
+    identities = {key:manifest[key] for key in ('graph_version','source_version','policy_version')}
+    supplied = full_app_body()
+    _, reference = adapter._prepare('detour',supplied,identities)
+    changed = dict(supplied,start='40,-75',end='41,-74')
+    assert normalize_app_request(changed)['visits'] == [[40,-75],[41,-74]]
+    cache_before = copy.deepcopy(bridge.cache)
+    def forbidden(*args, **kwargs):
+        pytest.fail('Unregistered normalized requests must not execute an engine')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    for action in (adapter.preflight,adapter.calculate):
+        with pytest.raises(Refused,match='journey_not_registered'):
+            action('detour',changed,identities)
+    reference['app_request'] = changed
+    with pytest.raises(Refused,match='journey_not_registered'):
+        adapter.restore(reference)
+    assert bridge.cache == cache_before
+
+
 def test_complete_app_request_engine_failure_never_falls_back_to_cached_route(app, manifest, monkeypatch):
     from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge,adapt_app_request
     bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)

@@ -94,6 +94,16 @@ disabled. The broad rows remain PARTIAL outside their registered synthetic scope
 timed stops, optimization, arbitrary journeys, general hazard/legal proof, real
 devices and deployment are not established. No gate is waived, and no new serial
 index/import research is implied.
+
+**Exit review and next adapter step — 27 November:** all four registered full-page
+slices passed on `4c2750b0` with all eight GitHub checks green. This closes their
+bounded acceptance work, not the broad Milestone 3 rows. General request parsing
+is now separated from operator-registered execution eligibility; see
+[APP_REQUEST_BRIDGE.md](APP_REQUEST_BRIDGE.md). Arbitrary normalized coordinates
+still refuse at preflight/calculation/restore before Java or cache reuse. The
+remaining general execution adapter requires trusted association/coverage inputs
+(Milestone 4 dependency), plus explicit stop/optimization semantics; normalization
+alone cannot grant them. No additional index research or deployment is implied.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.
