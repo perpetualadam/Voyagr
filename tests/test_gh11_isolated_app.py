@@ -1250,6 +1250,47 @@ def test_general_normalization_cannot_bypass_registered_execution_or_restore(app
     assert bridge.cache == cache_before
 
 
+@pytest.mark.parametrize('change,reason',[
+    ({'stops':[dict(lat=.003,lon=.01,type='stop',duration=0)]},'stop_semantics_not_supported'),
+    ({'stops':[dict(lat=.003,lon=.01,type='stop',duration=15)]},'stop_semantics_not_supported'),
+    ({'total_stop_time':15},'stop_semantics_not_supported'),
+    ({'via_points':[dict(lat=.003,lon=.01)],'optimize_stop_order':True},'journey_optimization_not_supported'),
+    ({'round_trip':True},'journey_optimization_not_supported'),
+    ({'departure_time':'2026-11-27T12:00:00Z'},'time_sensitive_journey_not_supported'),
+    ({'time_windows':[]},'time_sensitive_journey_not_supported'),
+])
+def test_stop_and_time_capability_refusals_cannot_reuse_valid_private_cache(app, manifest, monkeypatch, change, reason):
+    """A warm valid request must not hide unsupported changed journey semantics."""
+    bridge = app.extensions['gh11_bridge']
+    boundary = app.extensions['gh11_private_cache']
+    client = app.test_client()
+    identities = {key:manifest[key] for key in ('graph_version','source_version','policy_version')}
+    supplied = full_app_body()
+    payload = dict(case_id='detour',app_request=supplied,**identities)
+    def call(path, body):
+        return client.post('/api/prototype/'+path,json=body,headers=AUTH,base_url='https://localhost')
+    valid = call('app-route',payload)
+    assert valid.status_code == 200
+    assert valid.get_json()['cache_policy'] == 'private_complete_request'
+    cached = copy.deepcopy(boundary.store.cache)
+    assert cached
+    def forbidden(*args, **kwargs):
+        pytest.fail('Unsupported stops/time/optimization cannot execute Java or validate cached evidence')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    monkeypatch.setattr(bridge,'validate',forbidden)
+    changed = dict(supplied,**change)
+    for path in ('app-policy','app-route'):
+        response = call(path,dict(payload,app_request=changed))
+        assert response.status_code == 422
+        assert response.get_json() == dict(success=False,reason=reason,navigation_allowed=False)
+    reference = valid.get_json()['plan_reference']
+    reference['app_request'] = changed
+    response = call('app-restore',reference)
+    assert response.status_code == 422
+    assert response.get_json() == dict(success=False,reason=reason,navigation_allowed=False)
+    assert boundary.store.cache == cached
+
+
 def test_complete_app_request_engine_failure_never_falls_back_to_cached_route(app, manifest, monkeypatch):
     from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge,adapt_app_request
     bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)

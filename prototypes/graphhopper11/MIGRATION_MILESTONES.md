@@ -104,6 +104,16 @@ still refuse at preflight/calculation/restore before Java or cache reuse. The
 remaining general execution adapter requires trusted association/coverage inputs
 (Milestone 4 dependency), plus explicit stop/optimization semantics; normalization
 alone cannot grant them. No additional index research or deployment is implied.
+
+**Stop semantics review — 27 November:**
+[STOP_SEMANTICS_REVIEW.md](STOP_SEMANTICS_REVIEW.md) traces the app's explicit
+stopping/dwell contract against the runner's pass-through-only implementation.
+Seven authenticated preflight/route/restore regressions start with valid warm
+private evidence, then verify unsupported stopping/time/optimization requests
+refuse before Java or cache validation without changing prior evidence. No
+production defect was confirmed or feature enabled. Stopping execution remains
+BLOCKED by missing arrival/departure/join/timing semantics; the document defines
+the coherent implementation task and its Milestone 4 association dependency.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.
