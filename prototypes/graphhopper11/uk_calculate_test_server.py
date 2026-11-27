@@ -38,6 +38,10 @@ def main():
     execute = bridge.bridge._execute
 
     def counted(*args, **kwargs):
+        if (request.headers.get('X-GH11-UK-Fault') == 'optimizer_last_order'
+                and json.loads(Path(args[0]).read_text())['cases'][0]['id']=='opt_210'):
+            calls['engine_outages'] += 1
+            raise Refused('transport_timeout')
         if request.headers.get('X-GH11-UK-Fault') == 'engine_outage':
             calls['engine_outages'] += 1
             raise Refused('transport_timeout')

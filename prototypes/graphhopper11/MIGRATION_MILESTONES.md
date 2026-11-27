@@ -145,6 +145,17 @@ Search limits and non-exhaustiveness remain explicit. This supersedes only the
 registered multi-stop-alternative limitation above. General journeys, stopping
 maneuvers, optimization and real-scale/phone/deployment gates remain open; Milestone
 3 stays PARTIAL. Extra whole-journey work must be benchmarked in Milestone 5.
+
+**Registered stop-order comparison — 27 November:**
+[REGISTERED_STOP_ORDER_PREVIEW.md](REGISTERED_STOP_ORDER_PREVIEW.md) adds explicit
+operator registration of all two/six complete stop orders. Every order executes
+freshly with the same policy and full-path validation before selecting the lowest
+reported primary driving duration. Missing or failed comparisons refuse as a whole;
+the actual UK page and saved inspection retain resolved identities/dwell and Start
+refusal. This supersedes the optimization limitation only for registered two/three
+stop previews. General optimization, mixed/interleaved visits, stopping maneuvers,
+optimization with alternatives and schedules remain unsupported. M3 is PARTIAL;
+M4 association and M5 performance dependencies are not waived.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.

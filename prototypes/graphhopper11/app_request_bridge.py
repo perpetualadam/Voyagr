@@ -1,7 +1,9 @@
 """Full app payloads -> registered public cases only; no production wiring."""
 import copy
+import itertools
 import math
 import re
+import time
 
 from prototypes.graphhopper11.app_settings_adapter import FIELDS, adapt_settings
 from prototypes.graphhopper11.isolated_app import Refused, PolicyRefused, app_preview, version
@@ -87,13 +89,18 @@ def normalize_app_request(body):
     return _normalize_app_request(body)
 
 
-def _normalize_app_request(body, *, continuous_stops=False):
+def _normalize_app_request(body, *, continuous_stops=False, registered_optimization=False):
     if not isinstance(body,dict) or not {'start','end'} <= set(body) or not set(body) <= FIELDS | JOURNEY_FIELDS | COST_FIELDS:
         raise Refused('app_request_contract')
     for field in ('optimize_stop_order','round_trip','force_refresh','is_reroute','preserve_stop_order'):
         if field in body and type(body[field]) is not bool:
             raise Refused('app_request_boolean')
-    if (body.get('optimize_stop_order',False) and (body.get('via_points') or body.get('stops'))) or body.get('round_trip',False):
+    optimizing=body.get('optimize_stop_order',False) and bool(body.get('via_points') or body.get('stops'))
+    if (optimizing and not registered_optimization) or body.get('round_trip',False):
+        raise Refused('journey_optimization_not_supported')
+    if optimizing and (body.get('via_points') or not isinstance(body.get('stops'),list) or not 2<=len(body['stops'])<=3
+            or body.get('preserve_stop_order') is True or body.get('route_optimization','fastest')!='fastest'
+            or body.get('prefer_scenic',False) or body.get('prefer_quiet',False)):
         raise Refused('journey_optimization_not_supported')
     if body.get('departure_time') is not None or body.get('time_windows') is not None:
         raise Refused('time_sensitive_journey_not_supported')
@@ -103,7 +110,7 @@ def _normalize_app_request(body, *, continuous_stops=False):
         raise Refused('stop_semantics_not_supported')
     if not isinstance(via_points,list) or len(via_points)+len(stops)>3:
         raise Refused('ordered_visits_contract')
-    if stops and body.get('preserve_stop_order') is False:
+    if stops and not optimizing and body.get('preserve_stop_order') is False:
         raise Refused('stop_semantics_not_supported')
     stop_plan = []
     for i, stop in enumerate(stops):
@@ -162,6 +169,7 @@ def _normalize_app_request(body, *, continuous_stops=False):
     except ValueError as error:
         raise Refused(str(error)) from None
     return {**({'stop_plan':stop_plan,'dwell_minutes':dwell,'stop_mode':'continuous_no_turn_reset'} if stops else {}),
+            **({'registered_stop_order_optimization':True} if optimizing else {}),
             **({'visit_plan':visit_plan} if stops and via_points else {}),
             'app_request':copy.deepcopy(body),'visits':visits,
             'policy_request':dict(settings['policy_request'],app_settings=settings['app_settings']),
@@ -178,7 +186,8 @@ def adapt_app_request(body, case):
     continuous = (isinstance(case,dict) and case.get('stop_preview_mode') == 'continuous_no_turn_reset'
                   and (case.get('alternatives',False) is False or
                        case.get('alternatives') is True and case.get('whole_journey_alternatives') is True))
-    adapted = _normalize_app_request(body,continuous_stops=continuous)
+    optimizing=(continuous and case.get('alternatives',False) is False and isinstance(case.get('stop_order_cases'),list))
+    adapted = _normalize_app_request(body,continuous_stops=continuous,registered_optimization=optimizing)
     if not isinstance(case,dict) or adapted['visits'] != case.get('points'):
         raise Refused('journey_not_registered')
     return adapted
@@ -194,6 +203,31 @@ class RegisteredAppRequestBridge:
     def __init__(self, bridge, *, private_cache=None):
         self.bridge = bridge
         self.private_cache = private_cache
+        self._clock = time.monotonic
+
+    def _optimization_orders(self,case_id,adapted):
+        """Require the entire finite permutation set before any engine work."""
+        root=self.bridge.cases[case_id];names=root.get('stop_order_cases')
+        points=adapted['visits'];stops=points[1:-1]
+        if (not 2<=len(stops)<=3 or len({tuple(p) for p in points})!=len(points)
+                or not isinstance(names,list) or len(names)!=math.factorial(len(stops))
+                or any(not isinstance(name,str) for name in names) or len(set(names))!=len(names)):
+            raise Refused('stop_order_registry_unverified')
+        constraints={key:value for key,value in root.items() if key not in ('id','points','stop_order_cases')}
+        expected=set(itertools.permutations(range(len(stops))));orders=[];seen=set()
+        for name in names:
+            case=self.bridge.cases.get(name)
+            if (not isinstance(case,dict) or case.get('alternatives',False) is not False
+                    or {key:value for key,value in case.items() if key not in ('id','points','stop_order_cases')}!=constraints
+                    or not isinstance(case.get('points'),list) or len(case['points'])!=len(points)
+                    or case['points'][0]!=points[0] or case['points'][-1]!=points[-1]):
+                raise Refused('stop_order_registry_unverified')
+            try:order=tuple(stops.index(point) for point in case['points'][1:-1])
+            except ValueError:raise Refused('stop_order_registry_unverified') from None
+            if order not in expected or order in seen:raise Refused('stop_order_registry_unverified')
+            seen.add(order);orders.append(dict(case_id=name,order=list(order)))
+        if seen!=expected:raise Refused('stop_order_registry_unverified')
+        return sorted(orders,key=lambda item:item['order'])
 
     def _prepare(self, case_id, body, identities):
         b = self.bridge
@@ -207,6 +241,8 @@ class RegisteredAppRequestBridge:
         policy = b.policy(case_id,adapted['policy_request'])
         if not policy['route_preview_allowed']:
             raise PolicyRefused(policy)
+        if adapted.get('registered_stop_order_optimization'):
+            adapted['optimization_orders']=self._optimization_orders(case_id,adapted)
         binding = version([b.binding(case_id,adapted['policy_request']),adapted])
         reference = dict(schema=3,case_id=case_id,**expected,app_request=adapted['app_request'],request_binding=binding)
         return adapted,reference
@@ -223,10 +259,35 @@ class RegisteredAppRequestBridge:
         bypass = bypass_cache or adapted['force_refresh'] or adapted['is_reroute']
         key = self.private_cache.key({'case_id':case_id,'request_binding':reference['request_binding'],
                                      'resolved':adapted,'versions':identities},bypass=bypass) if self.private_cache else None
-        result = self.bridge.route(case_id,adapted['policy_request'],force_refresh=key is None,
-                                   evidence_cache=self.private_cache.store if key else None,cache_key=key)
+        optimization=None
+        if adapted.get('optimization_orders'):
+            deadline=self._clock()+60;evaluated=[]
+            for entry in adapted['optimization_orders']:
+                if self._clock()>=deadline:raise Refused('stop_order_budget_exceeded')
+                # Never select a winner from mutable cached duration metrics.
+                candidate=self.bridge.route(entry['case_id'],adapted['policy_request'],force_refresh=True)
+                if self._clock()>=deadline:raise Refused('stop_order_budget_exceeded')
+                if len(candidate['candidates'])!=1:raise Refused('stop_order_registry_unverified')
+                evaluated.append((candidate['candidates'][0]['duration_minutes'],entry,candidate))
+            best=min(evaluated,key=lambda item:(item[0],item[1]['order']))
+            result=copy.deepcopy(best[2])
+            optimization=dict(scope='registered_primary_paths_only',objective='reported_primary_driving_time',
+                requested_order=[stop['original_index'] for stop in adapted['stop_plan']],
+                resolved_order=[adapted['stop_plan'][index]['original_index'] for index in best[1]['order']],
+                evaluated_orders=len(evaluated),navigation_allowed=False,
+                scores=[dict(order=[adapted['stop_plan'][i]['original_index'] for i in entry['order']],
+                             driving_minutes=minutes) for minutes,entry,_ in evaluated])
+            display_stops=[adapted['stop_plan'][i] for i in best[1]['order']]
+            result['resolved_case_id']=best[1]['case_id']
+            result['case_id']=case_id
+            result['stop_order_optimization']=copy.deepcopy(optimization)
+            key=None
+        else:
+            result = self.bridge.route(case_id,adapted['policy_request'],force_refresh=key is None,
+                                       evidence_cache=self.private_cache.store if key else None,cache_key=key)
+            display_stops=adapted.get('stop_plan')
         result.update(request_binding=reference['request_binding'],plan_reference=reference,
-                      app_request_context=adapted,cache_policy='private_complete_request' if key else 'bypass_complete_app_request',
+                      app_request_context=adapted,cache_policy='bypass_registered_optimization' if optimization else 'private_complete_request' if key else 'bypass_complete_app_request',
                       gps_verification='UNVERIFIED',app_integration_allowed=False)
         result['app_preview'] = app_preview(result)
         context = adapted['app_request'].get('journey_context')
@@ -247,8 +308,11 @@ class RegisteredAppRequestBridge:
                 origin=dict(kind='unknown',coordinates=adapted['visits'][0]),
                 destination=dict(kind='unknown',coordinates=adapted['visits'][-1]),
                 arrival_intent=dict(version=1,mode='place',target=adapted['visits'][-1],status='DEFAULT'))
-            context['ordered_stops'] = copy.deepcopy(adapted['stop_plan'])
-            ordered = adapted.get('visit_plan',adapted['stop_plan'])
+            context['ordered_stops'] = copy.deepcopy(display_stops)
+            if optimization:
+                context['registered_stop_order_optimization']=copy.deepcopy(optimization)
+                context['stops']=[dict(kind=stop['kind'],coordinates=stop['coordinates']) for stop in display_stops]
+            ordered = adapted.get('visit_plan',display_stops)
             if adapted.get('visit_plan'):
                 context['ordered_visits'] = copy.deepcopy(ordered)
             result['app_preview']['journey_context'] = copy.deepcopy(context)

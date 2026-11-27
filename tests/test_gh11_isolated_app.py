@@ -1089,6 +1089,15 @@ def test_real_chromium_full_uk_whole_journey_alternatives(whole_journey_manifest
 
 
 @pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_registered_stop_order_preview(stop_order_manifest,tmp_path):
+    evidence=_run_full_uk_browser(stop_order_manifest,tmp_path,'uk-stop-order-preview.cjs')
+    assert evidence['status']=='PASS_REGISTERED_STOP_ORDER_PREVIEW'
+    assert evidence['evaluated_orders']==6 and evidence['chosen_order']==[0,2,1]
+    assert evidence['saved_restored'] and not evidence['navigation_allowed']
+    assert evidence['phone_acceptance']=='UNVERIFIED'
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
 def test_real_chromium_full_uk_cache_selection_binding(matrix_manifest, tmp_path):
     evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-cache-selection.cjs',tls=True)
     assert evidence['status'] == 'PASS_UK_PRIVATE_CACHE_SELECTION'
@@ -1502,6 +1511,141 @@ def test_whole_journey_private_cache_revalidates_search_provenance_without_fallb
     response=call()
     assert response.status_code==422 and response.get_json()['reason']=='cached_evidence_refused'
     assert not cache.cache
+
+
+@pytest.fixture(scope='module')
+def stop_order_manifest(manifest,tmp_path_factory):
+    import itertools
+    root=tmp_path_factory.mktemp('gh11-stop-orders')
+    source,graph,config,registry=(root/name for name in ('fixture.osm','graph','config.yml','registry.json'))
+    points={1:(0,0),2:(0,.004),3:(0,.008),4:(0,.012),5:(0,.02),6:(.001,.025),7:(.001,.026)}
+    ways={10:[1,2,3,4,5],15:[6,7]}
+    for node in (2,3,4):
+        points[node+100]=(.0001,points[node][1]);ways[node+100]=[node,node+100]
+    source.write_text('<osm version="0.6">'+''.join(f'<node id="{i}" lat="{p[0]}" lon="{p[1]}"/>' for i,p in points.items())+
+        ''.join(f'<way id="{i}">'+''.join(f'<nd ref="{n}"/>' for n in nodes)+'<tag k="highway" v="residential"/></way>' for i,nodes in ways.items())+'</osm>')
+    config.write_text(Path(manifest['paths']['config']).read_text().replace(manifest['paths']['source'],str(source)).replace(manifest['paths']['graph'],str(graph)))
+    subprocess.run(['java','-Xmx512m','-jar',manifest['paths']['jar'],'import',str(config)],cwd=root,check=True,capture_output=True,timeout=90)
+    cases=[]
+    for prefix,stops in [('opt',[2,4,3]),('pair',[4,2])]:
+        permutations=list(itertools.permutations(range(len(stops))))
+        names=[prefix+'_'+''.join(map(str,order)) for order in permutations]
+        for name,order in zip(names,permutations):
+            case=dict(id=name,points=[list(points[1])]+[list(points[stops[i]]) for i in order]+[list(points[5])],
+                alternatives=False,stop_preview_mode='continuous_no_turn_reset',blocked_associations=['guard'],
+                block_both_directions=True,max_snap_distance_m=1)
+            if order==tuple(range(len(stops))):case['stop_order_cases']=names
+            cases.append(case)
+    registry.write_text(json.dumps(dict(associations=[dict(id='guard',points=[list(points[6]),list(points[7])],expected_osm_way_ids=[15],max_snap_distance_m=1)],cases=cases)))
+    return build_manifest(jar=manifest['paths']['jar'],graph=graph,config=config,registry=registry,source=source)
+
+
+def stop_order_body(pair=False):
+    points=[(0,.012),(0,.004)] if pair else [(0,.004),(0,.012),(0,.008)]
+    script='''
+const r=require('./static/js/modules/navigation/routing-request.js');
+const j=require('./static/js/modules/navigation/journey-plan.js');
+const points=JSON.parse(process.argv[1]);
+const body=r.buildInitialRouteRequestBody({start:'0,0',end:'0,0.02',optimizeStopOrder:true,
+ stops:points.map((p,i)=>({lat:p[0],lon:p[1],duration:i*5,name:'Synthetic stop '+i,provenance:'coordinates',original_index:i})),
+ sharedOptions:{routingMode:'auto',vehicleType:'petrol_diesel',avoidCaz:false}});
+body.journey_context=j.applyDrivingArrival(body,{dataset:{journeySource:'coordinates'}},{dataset:{journeySource:'coordinates'}},null);
+console.log(JSON.stringify(body));
+'''
+    return json.loads(subprocess.check_output(['node','-e',script,json.dumps(points)],text=True,timeout=10))
+
+
+@pytest.mark.parametrize('pair',[True,False])
+def test_registered_stop_order_optimization_compares_every_complete_primary_path(stop_order_manifest,pair):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    app=create_app(stop_order_manifest,password=PASSWORD);bridge=app.extensions['gh11_bridge']
+    adapter=RegisteredAppRequestBridge(bridge);body=stop_order_body(pair);before=copy.deepcopy(body)
+    identities={key:stop_order_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    case='pair_01' if pair else 'opt_012'
+    result=adapter.calculate(case,body,identities)
+    report=result['stop_order_optimization'];row=result['app_preview']['routes'][0]
+    assert report['evaluated_orders']==(2 if pair else 6)
+    assert report['resolved_order']==([1,0] if pair else [0,2,1])
+    assert row['driving_duration_minutes']==min(score['driving_minutes'] for score in report['scores'])
+    assert report['requested_order']==list(range(len(body['stops'])))
+    assert [stop['original_index'] for stop in row['journey_context']['ordered_stops']]==report['resolved_order']
+    assert row['dwell_duration_minutes']==sum(stop['duration'] for stop in body['stops'])
+    assert row['duration_minutes']==pytest.approx(row['driving_duration_minutes']+row['dwell_duration_minutes'])
+    assert len(row['leg_geometry_ranges'])==len(body['stops'])+1
+    assert row['gh11_evidence']['forbidden_traversals']==0 and not row['navigation_allowed']
+    assert result['cache_policy']=='bypass_registered_optimization' and not bridge.cache
+    assert result['case_id']==case and result['app_request_context']['app_request']==before==body
+    if pair:
+        restored=adapter.restore(result['plan_reference'])
+        assert restored['request_binding']==result['request_binding']
+        assert restored['app_preview']['routes'][0]['geometry']==row['geometry']
+        assert restored['stop_order_optimization']==report
+
+
+@pytest.mark.parametrize('fault',['missing','duplicate','policy','endpoint','unknown','quiet','mixed','fixed_order','mandatory','objective'])
+def test_incomplete_or_unsupported_stop_order_request_refuses_before_java(stop_order_manifest,monkeypatch,fault):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    app=create_app(stop_order_manifest,password=PASSWORD);bridge=app.extensions['gh11_bridge']
+    adapter=RegisteredAppRequestBridge(bridge);body=stop_order_body()
+    root=bridge.cases['opt_012']
+    if fault=='missing':root['stop_order_cases'].pop()
+    elif fault=='duplicate':root['stop_order_cases'][-1]=root['stop_order_cases'][0]
+    elif fault=='policy':bridge.cases['opt_021']['blocked_associations']=[]
+    elif fault=='endpoint':bridge.cases['opt_021']['points'][-1]=[0,.021]
+    elif fault=='unknown':root['stop_order_cases'][-1]='unknown_case'
+    elif fault=='quiet':body['prefer_quiet']=True
+    elif fault=='mixed':body['via_points']=[dict(lat=0,lon=.003)]
+    elif fault=='fixed_order':body['preserve_stop_order']=True
+    elif fault=='mandatory':body.update(avoid_tolls=True,avoidance_mode='mandatory')
+    elif fault=='objective':body['route_optimization']='eco'
+    def forbidden(*args,**kwargs):pytest.fail('Unproven optimization must refuse before engine work')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    identities={key:stop_order_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    with pytest.raises(Refused):adapter.calculate('opt_012',body,identities)
+
+
+@pytest.mark.parametrize('fault',['last_order','deadline'])
+def test_registered_optimization_never_publishes_an_incomplete_comparison(stop_order_manifest,monkeypatch,fault):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    app=create_app(stop_order_manifest,password=PASSWORD);bridge=app.extensions['gh11_bridge']
+    adapter=RegisteredAppRequestBridge(bridge);body=stop_order_body(pair=True)
+    execute=bridge._execute;calls=[]
+    def interrupted(*args,**kwargs):
+        calls.append(True)
+        if fault=='last_order' and len(calls)==2:raise Refused('transport_timeout')
+        return execute(*args,**kwargs)
+    monkeypatch.setattr(bridge,'_execute',interrupted)
+    if fault=='deadline':
+        ticks=iter([0,1,61]);monkeypatch.setattr(adapter,'_clock',lambda:next(ticks))
+    identities={key:stop_order_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    with pytest.raises(Refused):adapter.calculate('pair_01',body,identities)
+    assert len(calls)==(2 if fault=='last_order' else 1) and not bridge.cache
+
+
+def test_optimizer_http_never_borrows_warm_route_metrics_and_binds_restore(stop_order_manifest,monkeypatch):
+    app=create_app(stop_order_manifest,password=PASSWORD);bridge=app.extensions['gh11_bridge'];client=app.test_client()
+    boundary=app.extensions['gh11_private_cache'];adapter=app.extensions['gh11_app_request_bridge']
+    identities={key:stop_order_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    supplied=stop_order_body(pair=True)
+    payload=dict(case_id='pair_01',app_request=supplied,**identities)
+    def call(path='app-route',body=None):
+        return client.post('/api/prototype/'+path,json=payload if body is None else body,headers=AUTH,base_url='https://localhost')
+    # Warm an ordinary fixed-order request first; optimization cannot reuse it.
+    fixed=copy.deepcopy(payload);fixed['app_request']['optimize_stop_order']=False
+    assert client.post('/api/prototype/app-route',json=fixed,headers=AUTH,base_url='https://localhost').status_code==200
+    cached=copy.deepcopy(boundary.store.cache);assert cached
+    execute=bridge._execute;calls=[]
+    def fresh(*args,**kwargs):calls.append(True);return execute(*args,**kwargs)
+    monkeypatch.setattr(bridge,'_execute',fresh)
+    first=call();assert first.status_code==200 and len(calls)==2
+    assert first.get_json()['cache_policy']=='bypass_registered_optimization'
+    assert boundary.store.cache==cached
+    reference=first.get_json()['plan_reference'];reference['app_request']['stops'][0]['duration']=30
+    assert call('app-restore',reference).status_code==409 and len(calls)==2
+    ticks=iter([0,61]);monkeypatch.setattr(adapter,'_clock',lambda:next(ticks))
+    response=call()
+    assert response.status_code==504 and response.get_json()['reason']=='stop_order_budget_exceeded'
+    assert len(calls)==2 and boundary.store.cache==cached
 
 
 def test_registered_stop_preview_rejects_missing_continuity_and_changed_dwell_reference(app, manifest, monkeypatch):

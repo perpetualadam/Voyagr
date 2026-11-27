@@ -186,6 +186,7 @@
         if(!route)throw Error('Select a planned journey first.');
         if(active&&(!Number.isInteger(index)||index<0))throw Error('Current journey progress is unavailable. Stop and replan before live navigation.');
         var context=route.journey_context;
+        if(context&&context.registered_stop_order_optimization!==undefined)throw Error('Optimized registered plans are inspection only. Live continuation is unavailable.');
         if(context&&context.ordered_visits!==undefined)throw Error('Mixed stop/via plans are inspection only. Live continuation is unavailable.');
         var intent=context&&context.arrival_intent;
         if(intent&&(intent.version!==1||intent.mode!=='place'||intent.status==='UNSUPPORTED'||intent.status==='TARGET_MISMATCH'))throw Error('This arrival intent is preview only until its live validation is implemented.');

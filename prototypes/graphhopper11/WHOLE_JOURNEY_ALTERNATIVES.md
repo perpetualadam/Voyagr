@@ -95,6 +95,10 @@ npm run test:ci -- --maxWorkers=2
 
 ## Remaining original scope
 
+The separate [registered stop-order comparison](REGISTERED_STOP_ORDER_PREVIEW.md)
+now supports finite two/three-stop primary-path previews. It is not combined with
+this alternative-generation mode. The general optimization limitation below remains.
+
 Milestone 3 stays PARTIAL beyond registered previews. General journeys, arbitrary
 visit interleaving, stopping maneuvers, stop-order optimization and time-dependent
 routing remain unsupported. Trusted road/hazard association is a Milestone 4

@@ -714,8 +714,9 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
             versions = {'version_changed','app_reference_changed','runtime_changed','graph_changed','input_changed'}
             safe = contracts | versions | {'engine_refused','transport_busy','transport_timeout',
                     'cached_evidence_refused','whole_journey_search_unverified',
+                    'stop_order_registry_unverified','stop_order_budget_exceeded',
                     'stop_semantics_not_supported','journey_optimization_not_supported','time_sensitive_journey_not_supported'}
-            return jsonify(success=False,reason=code if code in safe else 'routing_refused',navigation_allowed=False), (400 if code in contracts else 409 if code in versions else 503 if code=='transport_busy' else 504 if code=='transport_timeout' else 422)
+            return jsonify(success=False,reason=code if code in safe else 'routing_refused',navigation_allowed=False), (400 if code in contracts else 409 if code in versions else 503 if code=='transport_busy' else 504 if code in ('transport_timeout','stop_order_budget_exceeded') else 422)
         except Exception:
             return jsonify(success=False,reason='routing_refused',navigation_allowed=False),422
 
