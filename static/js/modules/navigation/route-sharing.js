@@ -307,6 +307,23 @@
 
     var SAVED_ROUTES_STORAGE_KEY = 'savedRoutes';
 
+    // Persist refusals, never permission. A saved inspection must not lose its
+    // source scope and become eligible for explicit guidance after restoration.
+    function inspectionRefusals(route) {
+        var result={};
+        var context=route && route.routing_context;
+        var preview=context && context.scope==='selected_fixture_graph_checks_only' ||
+            route && route.avoidance_assessment && route.avoidance_assessment.claim==='selected_fixture_graph_checks_only';
+        if(preview || route && route.navigation_allowed===false)result.navigation_allowed=false;
+        if(preview || route && route.automatic_selection_allowed===false)result.automatic_selection_allowed=false;
+        if(preview){
+            result.routing_context=JSON.parse(JSON.stringify(context || {scope:'selected_fixture_graph_checks_only'}));
+            result.routing_context.scope='selected_fixture_graph_checks_only';
+            if(typeof route.source==='string')result.source=route.source;
+        }
+        return result;
+    }
+
     /**
      * Plan for saving the current calculated route to local storage.
      * @param {Object} o
@@ -331,12 +348,13 @@
         return {
             ok: true,
             savedRoute: {
+                ...inspectionRefusals(route),
                 id: now,
                 name: routeName,
                 start: o.startLabel,
                 end: o.endLabel,
                 distance_km: route.distance_km,
-                duration_minutes: route.time,
+                duration_minutes: route.duration_minutes != null ? route.duration_minutes : route.time,
                 fuel_cost: route.fuel_cost,
                 fuel_pricing: route.fuel_pricing && JSON.parse(JSON.stringify(route.fuel_pricing)),
                 toll_cost: route.toll_cost,
@@ -454,6 +472,7 @@
             startLabel: route.start,
             endLabel: route.end,
             lastCalculatedRoutePatch: {
+                ...inspectionRefusals(route),
                 id: route.id,
                 saved_origin_label: route.start,
                 navigation_resume_requires_fresh_gps: true,

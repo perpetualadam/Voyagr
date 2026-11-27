@@ -80,10 +80,20 @@ an unsupported mandatory rule refuse before reuse. Separate browsers have separa
 capabilities, and corrupted cached evidence refuses without Java fallback. Old
 inspection selections retain their old binding; they do not gain navigation.
 
-**Next bounded task:** the original saved/restore/outage/race/policy-change/fallback
-row through the full UK page. Keep positive navigation disabled. The broad original
-rows remain PARTIAL outside their registered synthetic acceptance; no general
-journey, real-device or deployment gate is waived.
+**Fourth bounded slice:** [UK_SAVED_RECOVERY_ACCEPTANCE.md](UK_SAVED_RECOVERY_ACCEPTANCE.md)
+covers actual device save/reload/offline inspection, restored Start refusal,
+transport/engine faults, rejection of a legacy envelope, delayed-response policy
+changes, superseded requests and bounded map readiness. It fixes saved preview
+restriction loss, selected-duration persistence and the reproduced temporary
+map-readiness commit race. Earlier CI failed the cache UI commit; subsequent
+committed-head checks must validate these fixes independently.
+
+**Next:** review the original Milestone 3 exit criteria and remaining implementation
+gaps against these four registered full-page slices. Keep positive navigation
+disabled. The broad rows remain PARTIAL outside their registered synthetic scope;
+timed stops, optimization, arbitrary journeys, general hazard/legal proof, real
+devices and deployment are not established. No gate is waived, and no new serial
+index/import research is implied.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.

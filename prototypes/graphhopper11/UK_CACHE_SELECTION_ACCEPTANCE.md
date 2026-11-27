@@ -104,3 +104,8 @@ general strict hazard coverage, timed-stop semantics or preference implementatio
 This is the third bounded original integration slice. Next is the original
 saved/restored-plan, source-outage, stale-response race, policy-change and legacy
 fallback acceptance row, using the full UK page and the same isolation constraints.
+
+That subsequent row and the previous committed-head CI failure/fix are now recorded
+in [UK_SAVED_RECOVERY_ACCEPTANCE.md](UK_SAVED_RECOVERY_ACCEPTANCE.md). The earlier
+local cache pass was not a committed-head CI pass. The reproduced planning failure
+is addressed by a bounded readiness wait while preserving the final guard.

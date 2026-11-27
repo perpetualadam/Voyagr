@@ -1074,6 +1074,18 @@ def test_real_chromium_full_uk_cache_selection_binding(matrix_manifest, tmp_path
 
 
 @pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_saved_outage_race_refusal(matrix_manifest, tmp_path):
+    evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-recovery-acceptance.cjs')
+    assert evidence['status'] == 'PASS_UK_SAVED_OUTAGE_RACES'
+    for field in ('saved_restrictions_retained','offline_inspection','outage_refused',
+                  'legacy_envelope_refused','stale_response_refused','newer_request_retained',
+                  'temporary_map_wait','cancelled_map_wait','unavailable_map_retained'):
+        assert evidence[field] is True
+    assert evidence['saved_records'] == 1 and not evidence['navigation_allowed']
+    assert evidence['external_requests_sent'] == 0 and evidence['phone_acceptance'] == 'UNVERIFIED'
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
 def test_real_chromium_http_fault_recovery(app, manifest, monkeypatch):
     import threading
     from flask import request, jsonify, g

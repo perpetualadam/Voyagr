@@ -34,12 +34,17 @@ def main():
     private_cache = isolated.extensions['gh11_private_cache']
     identities = {key: bridge.bridge.manifest[key]
                   for key in ('graph_version','source_version','policy_version')}
-    calls = {'engine': 0, 'validate': 0, 'route': 0, 'refused': 0, 'accepted': []}
+    calls = {'engine': 0, 'validate': 0, 'route': 0, 'refused': 0, 'engine_outages':0, 'accepted': []}
     execute = bridge.bridge._execute
 
     def counted(*args, **kwargs):
+        if request.headers.get('X-GH11-UK-Fault') == 'engine_outage':
+            calls['engine_outages'] += 1
+            raise Refused('transport_timeout')
         calls['engine'] += 1
         report = execute(*args, **kwargs)
+        if request.headers.get('X-GH11-UK-Fault') == 'legacy_version':
+            report['engine_version'] = '8.0'
         # Test-only negative control: actual Java output reaches the independent
         # validator with a broken third candidate. No fabricated success result.
         if request.headers.get('X-GH11-UK-Fault') == 'third_metrics' and request.headers.get('X-GH11-UK-Case') == 'matrix_3':
@@ -93,10 +98,10 @@ def main():
                     legs=[len(row['leg_geometry_ranges']) for row in result['app_preview']['routes']],
                     forbidden=[row['forbidden_traversals'] for row in result['candidates']]))
             return jsonify(result['app_preview'])
-        except Refused:
+        except Refused as error:
             calls['refused'] += 1
             return jsonify(success=False, error='Isolated registered request refused',
-                           navigation_allowed=False), 422
+                           navigation_allowed=False), (504 if str(error)=='transport_timeout' else 422)
 
     def dispatch():
         if request.path == '/__lab__/evidence':

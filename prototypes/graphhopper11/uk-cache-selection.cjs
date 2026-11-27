@@ -16,7 +16,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
     if(url.pathname==='/api/route')return route.continue({headers:{...route.request().headers(),'X-GH11-UK-Test':'synthetic-only','X-GH11-UK-Case':selectedCase,'X-GH11-UK-Fault':fault,'X-GH11-UK-Version':version}});
     return route.continue();
    });
-   const page=await context.newPage();page.setDefaultTimeout(15000);await page.goto(origin,{waitUntil:'domcontentloaded'});
+   const page=await context.newPage();page.setDefaultTimeout(15000);await page.goto(origin,{waitUntil:'load'});
+   const errors=[];page.on('console',message=>{if(message.type()==='error'&&message.text().startsWith('[calculateRoute]'))errors.push(message.text().slice(0,240));});
    await page.waitForFunction(()=>window.VoyagrJourneyModes&&window.VoyagrCalculateRouteOrchestration?.endpointIntentReady()&&window.VoyagrNavigationLifecycleOrchestration?.endpointIntentReady());
    await page.evaluate(()=>VoyagrLocalData.ready());
    if(await page.locator('#safetyNoticeOverlay').isVisible()){
@@ -41,7 +42,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
     };
     __labOrigin([0,0]);const end=document.getElementById('end');end.value='0,0.02';Object.assign(end.dataset,{lat:'0',lon:'0.02',displayName:end.value,journeySource:'coordinates'});
    },{detour,requirements});
-   return {page,context};
+   return {page,context,errors};
   }
   const stats=async client=>await (await client.page.request.get(origin+'/__lab__/evidence')).json();
   async function calculate(client,status=200){
@@ -51,7 +52,10 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
    await client.page.evaluate(()=>calculateRoute());const response=await pending;assert.equal(response.status(),status,phase);
    const data=await response.json();assert.equal(data.navigation_allowed,false);
    if(status===200){
-    await client.page.waitForFunction(()=>window.lastRouteApiResponse!==__labPreviousResponse&&!VoyagrJourneyModes.isJourneyCommitPending()).catch(()=>{throw Error('Calculate response did not commit');});
+    await client.page.waitForFunction(()=>window.lastRouteApiResponse!==__labPreviousResponse&&!VoyagrJourneyModes.isJourneyCommitPending()).catch(async()=>{
+     const diagnostic=await client.page.evaluate(()=>({state:VoyagrJourneyModes.getState(),pending:VoyagrJourneyModes.isJourneyCommitPending(),changed:window.lastRouteApiResponse!==__labPreviousResponse,style:map.isStyleLoaded(),loaded:map.loaded(),moving:map.isMoving(),status:document.getElementById('journeyModeStatus')?.textContent}));
+     throw Error('Calculate response did not commit '+JSON.stringify({diagnostic,errors:client.errors}));
+    });
     await client.page.waitForFunction(()=>map.loaded()&&!map.isMoving()&&__labMounted()).catch(()=>{throw Error('Committed map geometry did not settle');});
     const accepted=(await stats(client)).accepted.at(-1);
     assert.deepEqual(accepted.app_request,response.request().postDataJSON());assert.equal(accepted.cache_policy,'private_complete_request');
