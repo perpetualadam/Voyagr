@@ -577,6 +577,49 @@ public class ReadOnlyRouteRegression {
         return result;
     }
 
+    // Registered preview only: search complete journeys, never splice independent legs.
+    // Budget exhaustion can return fewer validated routes; it proves no route count.
+    static GHResponse wholeJourneyAlternatives(GraphHopper hopper,GHRequest request,
+            Set<Integer> mandatory,boolean noMotorways,Map<String,Object> result) {
+        ArrayDeque<Set<Integer>> pending=new ArrayDeque<>();pending.add(Set.copyOf(mandatory));
+        Set<Set<Integer>> queued=new HashSet<>();queued.add(Set.copyOf(mandatory));
+        Set<List<Integer>> seen=new HashSet<>();GHResponse combined=new GHResponse();
+        long deadline=System.nanoTime()+20_000_000_000L;int calls=0;
+        try {
+            while(!pending.isEmpty() && calls<16 && combined.getAll().size()<3) {
+                long remaining=(deadline-System.nanoTime())/1_000_000;
+                if(remaining<=0)break;
+                Set<Integer> exclusions=pending.remove();
+                request.putHint(BLOCKS,exclusions).putHint("timeout_ms",remaining);
+                GHResponse response=hopper.route(request);calls++;
+                if(response.hasErrors()) {
+                    boolean disconnected=response.getErrors().stream().allMatch(error ->
+                        error instanceof com.graphhopper.util.exceptions.ConnectionNotFoundException);
+                    if(calls>1 && disconnected)continue;
+                    throw new IllegalStateException("whole-journey search provider error: "+response.getErrors());
+                }
+                require(response.getAll().size()==1,"whole-journey search must calculate one complete path");
+                ResponsePath path=response.getBest();
+                List<Integer> keys=validate(hopper,path,noMotorways,exclusions,
+                    hopper.createWeighting(hopper.getProfile("car"),request.getHints()));
+                if(!seen.add(keys))continue;
+                combined.add(path);
+                // Hard queue and request limits bound both memory and engine work.
+                for(int key:keys) {
+                    if(queued.size()>=64)break;
+                    Set<Integer> next=new TreeSet<>(exclusions);next.add(key);
+                    var immutable=Set.copyOf(next);
+                    if(queued.add(immutable))pending.add(immutable);
+                }
+            }
+        } finally {request.putHint(BLOCKS,Set.copyOf(mandatory)).putHint("timeout_ms",20000);}
+        require(!combined.getAll().isEmpty(),"no validated complete journey within search budget");
+        result.put("alternative_generation","bounded_whole_journey_exclusion");
+        result.put("alternative_search",Map.of("calls",calls,"max_calls",16,"max_queued",64,
+            "timeout_ms",20000,"exhaustive",false,"independent_legs",false));
+        return combined;
+    }
+
     static Map<String,Object> runCase(GraphHopper hopper,JsonNode test,Map<String,List<Integer>> associations) {
         String name=test.path("id").asText();
         Map<String,Object> result=new LinkedHashMap<>();
@@ -650,10 +693,13 @@ public class ReadOnlyRouteRegression {
                 .putHint("way_point_max_distance",0).putHint("max_visited_nodes",nodeBudget)
                 .putHint("timeout_ms",20000);
             boolean alternatives=test.path("alternatives").asBoolean(false);
+            boolean wholeAlternatives=test.path("whole_journey_alternatives").asBoolean(false);
             boolean noMotorways=test.path("no_motorways").asBoolean(false);
             result.put("no_motorways",noMotorways);
             result.put("alternatives",alternatives);
-            if(alternatives) {
+            if(wholeAlternatives)require(alternatives && visits.size()>2 && anchorStart<0,
+                "whole-journey alternatives require unanchored ordered intermediate visits");
+            if(alternatives && !wholeAlternatives) {
                 require(visits.size()==2,"native alternatives support two points only");
                 request.setAlgorithm("alternative_route").putHint("alternative_route.max_paths",3);
             }
@@ -685,7 +731,8 @@ public class ReadOnlyRouteRegression {
                     require(anchorStart>=0 && !alternatives && visits.size()==2,"pinning requires two association-derived anchors");
                     result.put("endpoint_mode","request_scoped_exact_tower_nodes");
                     response=((ExclusionHopper)hopper).routeAnchored(request,anchorStart,anchorEnd);
-                } else response=hopper.route(request);
+                } else if(wholeAlternatives) response=wholeJourneyAlternatives(hopper,request,blocked,noMotorways,result);
+                else response=hopper.route(request);
             }
             finally { result.put("query_ms",(System.nanoTime()-start)/1e6); }
             if(response.hasErrors()) {

@@ -1081,6 +1081,14 @@ def test_real_chromium_full_uk_mixed_visit_preview(matrix_manifest, tmp_path):
 
 
 @pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_whole_journey_alternatives(whole_journey_manifest,tmp_path):
+    evidence=_run_full_uk_browser(whole_journey_manifest,tmp_path,'uk-whole-alternatives.cjs')
+    assert evidence['status']=='PASS_UK_WHOLE_JOURNEY_ALTERNATIVES'
+    assert evidence['saved_restored'] and evidence['durations']==[0,15]
+    assert not evidence['navigation_allowed'] and evidence['phone_acceptance']=='UNVERIFIED'
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
 def test_real_chromium_full_uk_cache_selection_binding(matrix_manifest, tmp_path):
     evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-cache-selection.cjs',tls=True)
     assert evidence['status'] == 'PASS_UK_PRIVATE_CACHE_SELECTION'
@@ -1401,6 +1409,99 @@ def test_mixed_visit_type_and_metadata_changes_cannot_alias_reference_or_private
     reference=copy.deepcopy(first.get_json()['plan_reference']);reference['app_request']=changed
     response=call('app-restore',reference)
     assert response.status_code==409 and response.get_json()['reason']=='app_reference_changed'
+
+
+@pytest.fixture(scope='module')
+def whole_journey_manifest(manifest,tmp_path_factory):
+    """Two diamonds around fixed visits; four complete routes before exclusions."""
+    root=tmp_path_factory.mktemp('gh11-whole-journey')
+    source,graph,config,registry=(root/name for name in ('fixture.osm','graph','config.yml','registry.json'))
+    points={1:(0,0),2:(.003,.006),3:(.003,.014),4:(0,.02),
+            5:(.004,.003),6:(0,.003),7:(.006,.01),8:(0,.01),9:(.0031,.006)}
+    ways={10:[1,5,2],11:[1,6,2],12:[2,7,3],13:[2,8,3],14:[3,4],15:[2,9]}
+    # Make bend points graph junctions so the graph's tower-node bounds include
+    # the complete curved geometry (the existing matrix uses the same guard).
+    for node in (5,6,7,8):
+        points[node+100]=(points[node][0]+.0001,points[node][1])
+        ways[node+100]=[node,node+100]
+    source.write_text('<osm version="0.6">'+''.join(f'<node id="{i}" lat="{p[0]}" lon="{p[1]}"/>' for i,p in points.items())+
+        ''.join(f'<way id="{i}">'+''.join(f'<nd ref="{n}"/>' for n in nodes)+'<tag k="highway" v="residential"/></way>' for i,nodes in ways.items())+'</osm>')
+    config.write_text(Path(manifest['paths']['config']).read_text().replace(manifest['paths']['source'],str(source)).replace(manifest['paths']['graph'],str(graph)))
+    subprocess.run(['java','-Xmx512m','-jar',manifest['paths']['jar'],'import',str(config)],cwd=root,check=True,capture_output=True,timeout=90)
+    associations=[dict(id=str(i),points=[list(points[n]) for n in nodes],expected_osm_way_ids=[i],max_snap_distance_m=1) for i,nodes in ways.items() if i in (10,11,12,15)]
+    common=dict(points=[list(points[n]) for n in (1,2,3,4)],alternatives=True,whole_journey_alternatives=True,no_motorways=True,
+                stop_preview_mode='continuous_no_turn_reset',block_both_directions=True,max_snap_distance_m=1)
+    cases=[dict(common,id=f'whole_{count}',blocked_associations=blocks) for count,blocks in (
+        (3,['15']),(2,['15','10']),(1,['15','10','12']),(0,['15','10','11']))]
+    registry.write_text(json.dumps(dict(associations=associations,cases=cases)))
+    return build_manifest(jar=manifest['paths']['jar'],graph=graph,config=config,registry=registry,source=source)
+
+
+@pytest.mark.parametrize('count',[3,2,1,0])
+def test_whole_journey_alternative_counts_validate_all_mixed_legs(whole_journey_manifest,count):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    from tests.test_gh11_app_request_bridge import mixed_app_body
+    app=create_app(whole_journey_manifest,password=PASSWORD)
+    adapter=RegisteredAppRequestBridge(app.extensions['gh11_bridge'])
+    identities={key:whole_journey_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    if count==0:
+        with pytest.raises(Refused):adapter.calculate('whole_0',mixed_app_body(),identities)
+        return
+    result=adapter.calculate(f'whole_{count}',mixed_app_body(),identities)
+    assert len(result['candidates'])==count
+    assert result['alternative_generation']=='bounded_whole_journey_exclusion'
+    assert result['alternative_search']['exhaustive'] is False
+    assert result['alternative_search']['independent_legs'] is False
+    assert result['alternative_search']['calls']<=16
+    for route in result['app_preview']['routes']:
+        assert len(route['leg_geometry_ranges'])==3
+        assert [v['type'] for v in route['journey_context']['ordered_visits']]==['via','stop']
+        assert route['dwell_duration_minutes']==15
+        assert route['duration_minutes']==pytest.approx(route['driving_duration_minutes']+15)
+        assert route['gh11_evidence']['forbidden_traversals']==0
+        assert route['routing_context']['alternative_search']['exhaustive'] is False
+        assert result['app_preview']['alternative_search']['independent_legs'] is False
+        assert not route['navigation_allowed'] and not route['automatic_selection_allowed']
+    assert len({route['id'] for route in result['app_preview']['routes']})==count
+
+
+@pytest.mark.parametrize('fault',['independent_legs','search_budget','last_candidate'])
+def test_whole_journey_alternatives_reject_unverified_search_or_partial_candidates(whole_journey_manifest,monkeypatch,fault):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    from tests.test_gh11_app_request_bridge import mixed_app_body
+    app=create_app(whole_journey_manifest,password=PASSWORD);bridge=app.extensions['gh11_bridge']
+    execute=bridge._execute
+    def corrupt(*args,**kwargs):
+        report=execute(*args,**kwargs);case=report['cases'][0]
+        if fault=='independent_legs':case['alternative_search']['independent_legs']=True
+        elif fault=='search_budget':case['alternative_search']['calls']=17
+        else:case['candidates'][-1]['waypoint_indices'][-2]=case['candidates'][-1]['waypoint_indices'][-1]
+        return report
+    monkeypatch.setattr(bridge,'_execute',corrupt)
+    identities={key:whole_journey_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    with pytest.raises(Refused):
+        RegisteredAppRequestBridge(bridge).calculate('whole_3',mixed_app_body(),identities)
+    assert not bridge.cache
+
+
+def test_whole_journey_private_cache_revalidates_search_provenance_without_fallback(whole_journey_manifest,monkeypatch):
+    from tests.test_gh11_app_request_bridge import mixed_app_body
+    app=create_app(whole_journey_manifest,password=PASSWORD);client=app.test_client()
+    bridge=app.extensions['gh11_bridge'];cache=app.extensions['gh11_private_cache'].store
+    payload=dict(case_id='whole_3',app_request=mixed_app_body(),
+        **{key:whole_journey_manifest[key] for key in ('graph_version','source_version','policy_version')})
+    def call():return client.post('/api/prototype/app-route',json=payload,headers=AUTH,base_url='https://localhost')
+    first=call();assert first.status_code==200 and len(first.get_json()['candidates'])==3
+    def forbidden(*args,**kwargs):pytest.fail('Cached evidence must revalidate or refuse without Java fallback')
+    monkeypatch.setattr(bridge,'_execute',forbidden)
+    second=call();assert second.status_code==200 and len(second.get_json()['candidates'])==3
+    for key,(expires,raw) in list(cache.cache.items()):
+        report=json.loads(raw);report['cases'][0]['alternative_search']['exhaustive']=True
+        changed=json.dumps(report,separators=(',',':')).encode()
+        cache.cache[key]=(expires,changed);cache.bytes+=len(changed)-len(raw)
+    response=call()
+    assert response.status_code==422 and response.get_json()['reason']=='cached_evidence_refused'
+    assert not cache.cache
 
 
 def test_registered_stop_preview_rejects_missing_continuity_and_changed_dwell_reference(app, manifest, monkeypatch):

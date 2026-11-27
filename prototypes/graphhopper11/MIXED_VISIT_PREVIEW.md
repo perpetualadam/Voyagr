@@ -77,6 +77,11 @@ npm run test:ci -- --maxWorkers=2
 
 ## Remaining original scope
 
+Registered multi-stop alternatives are now covered separately by
+[WHOLE_JOURNEY_ALTERNATIVES.md](WHOLE_JOURNEY_ALTERNATIVES.md). The limitations
+below describe the preceding mixed-preview increment; general execution remains
+unsupported.
+
 PASS applies only to registered via-then-stop previews. Arbitrary interleaving,
 general journey execution, stopping maneuvers, multi-stop alternatives, optimization
 and time-dependent routing remain unsupported. Trusted general road/hazard

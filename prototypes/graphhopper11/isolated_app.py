@@ -282,6 +282,15 @@ class LocalJavaBridge:
             raise Refused("case_refused")
         if any(result.get(name) is not bool(case.get(name, False)) for name in ("alternatives", "no_motorways")):
             raise Refused("settings_evidence_mismatch")
+        if case.get('whole_journey_alternatives') is True:
+            search=result.get('alternative_search')
+            if (case.get('alternatives') is not True or result.get('alternative_generation')!='bounded_whole_journey_exclusion'
+                    or result.get('pass_through') is not True or not isinstance(search,dict)
+                    or set(search)!={'calls','max_calls','max_queued','timeout_ms','exhaustive','independent_legs'}
+                    or type(search['calls']) is not int or not 1<=search['calls']<=16
+                    or search['max_calls']!=16 or search['max_queued']!=64 or search['timeout_ms']!=20000
+                    or search['exhaustive'] is not False or search['independent_legs'] is not False):
+                raise Refused('whole_journey_search_unverified')
         if case.get('stop_preview_mode') == 'continuous_no_turn_reset' and result.get('pass_through') is not True:
             raise Refused('stop_continuity_unverified')
         blocked = result.get("blocked_edge_keys")
@@ -385,6 +394,7 @@ class LocalJavaBridge:
                                 "query_graph_scope": "current_request_only",
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
+        search_report=copy.deepcopy(result['alternative_search']) if case.get('whole_journey_alternatives') is True else None
         result = {"success": True, "case_id": case["id"], "engine_version": "11.1",
                 "selected_settings": self.settings(case["id"]), "request_binding": self.binding(case["id"], selected),
                 "policy_report": policy,
@@ -392,6 +402,8 @@ class LocalJavaBridge:
                 **{key: m[key] for key in ("graph_version", "source_version", "policy_version")},
                 "scope": "selected_fixture_graph_checks_only", "navigation_allowed": False,
                 "production_migration": "NO_GO", "blocked_edge_keys": blocked, "candidates": public_rows}
+        if search_report is not None:
+            result.update(alternative_generation='bounded_whole_journey_exclusion',alternative_search=search_report)
         result["app_preview"] = app_preview(result)
         return result
 
@@ -520,7 +532,10 @@ def app_preview(result):
                                             for rule in result['policy_report']['selected']['requirements']],
                            "automatic_selection_allowed": False,
                            "claim": "selected_fixture_graph_checks_only"}})
-    return {"success": True, "routes": routes, "navigation_allowed": False,
+        if 'alternative_search' in result:
+            routes[-1]['routing_context']['alternative_search']=copy.deepcopy(result['alternative_search'])
+    return {**({'alternative_search':copy.deepcopy(result['alternative_search'])} if 'alternative_search' in result else {}),
+            "success": True, "routes": routes, "navigation_allowed": False,
             "scope": "selected_fixture_graph_checks_only", "production_migration": "NO_GO"}
 
 
@@ -698,6 +713,7 @@ def create_app(manifest, *, password, java="java", timeout=60, heap_mb=512):
                          'journey_not_registered','case_not_registered'}
             versions = {'version_changed','app_reference_changed','runtime_changed','graph_changed','input_changed'}
             safe = contracts | versions | {'engine_refused','transport_busy','transport_timeout',
+                    'cached_evidence_refused','whole_journey_search_unverified',
                     'stop_semantics_not_supported','journey_optimization_not_supported','time_sensitive_journey_not_supported'}
             return jsonify(success=False,reason=code if code in safe else 'routing_refused',navigation_allowed=False), (400 if code in contracts else 409 if code in versions else 503 if code=='transport_busy' else 504 if code=='transport_timeout' else 422)
         except Exception:

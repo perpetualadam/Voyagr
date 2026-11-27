@@ -6,10 +6,14 @@ Milestone 3 remains PARTIAL; production migration remains NO_GO.
 ## Implemented behavior
 
 An operator-owned registered case may explicitly declare
-`stop_preview_mode: continuous_no_turn_reset`, with alternatives disabled. This
-field belongs to the manifest-bound registry, never the client request. Existing
-registries are not rewritten or automatically opted in. Only the generated test
-registry's `via` case opts in in this change.
+`stop_preview_mode: continuous_no_turn_reset`. This field belongs to the
+manifest-bound registry, never the client request. Alternatives are disabled by
+default; the separately registered
+[whole-journey alternative mode](WHOLE_JOURNEY_ALTERNATIVES.md) extends that
+default without independently concatenating per-leg alternatives. Existing
+registries are not rewritten or automatically opted in. The initial stopping
+increment opted in the generated `via` case; mixed-visit and whole-journey test
+registries are documented in their separate follow-ups.
 
 For that case, the complete-request bridge accepts up to three fixed-order stops
 whose coordinates exactly match every intermediate registered visit. It retains

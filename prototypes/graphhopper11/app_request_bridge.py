@@ -175,7 +175,9 @@ def adapt_app_request(body, case):
     Successful normalization alone never authorizes an arbitrary journey. Keep
     this gate shared by preflight, execution, cache binding and restoration.
     """
-    continuous = isinstance(case,dict) and case.get('stop_preview_mode') == 'continuous_no_turn_reset' and case.get('alternatives',False) is False
+    continuous = (isinstance(case,dict) and case.get('stop_preview_mode') == 'continuous_no_turn_reset'
+                  and (case.get('alternatives',False) is False or
+                       case.get('alternatives') is True and case.get('whole_journey_alternatives') is True))
     adapted = _normalize_app_request(body,continuous_stops=continuous)
     if not isinstance(case,dict) or adapted['visits'] != case.get('points'):
         raise Refused('journey_not_registered')

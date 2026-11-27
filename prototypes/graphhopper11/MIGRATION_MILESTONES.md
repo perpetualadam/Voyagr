@@ -133,6 +133,18 @@ both types. Live continuation remains refused. This supersedes the mixed-visit
 limitation in the preceding checkpoint only within registered preview scope;
 general execution, arbitrary interleaving, stopping maneuvers, optimization and
 multi-stop alternatives remain unsupported. No new milestone or deployment is added.
+
+**Registered whole-journey alternatives — 27 November:**
+[WHOLE_JOURNEY_ALTERNATIVES.md](WHOLE_JOURNEY_ALTERNATIVES.md) adds an explicit
+operator opt-in for bounded searches of complete ordered journeys. Every returned
+candidate retains the full policy, stops/vias, dwell timing and independently
+validated legs; no independent-leg alternatives are spliced. Generated cases and
+the real UK page cover three/two/one returned alternatives and no-route refusal,
+last-candidate rejection, cache revalidation, selection and saved inspection.
+Search limits and non-exhaustiveness remain explicit. This supersedes only the
+registered multi-stop-alternative limitation above. General journeys, stopping
+maneuvers, optimization and real-scale/phone/deployment gates remain open; Milestone
+3 stays PARTIAL. Extra whole-journey work must be benchmarked in Milestone 5.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.

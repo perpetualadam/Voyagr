@@ -116,6 +116,7 @@ def test_registered_mixed_visits_preserve_types_canonical_order_and_complete_req
         normalize_app_request(body)
     with pytest.raises(Refused,match='stop_semantics_not_supported'):
         adapt_app_request(body,dict(case,alternatives=True))
+    assert adapt_app_request(body,dict(case,alternatives=True,whole_journey_alternatives=True))['visits']==case['points']
     body['via_points'][0]['original_index']=7
     body['stops'][0]['original_index']=2
     parsed=adapt_app_request(body,case)
@@ -128,6 +129,7 @@ def test_registered_mixed_visits_preserve_types_canonical_order_and_complete_req
     {'via_points':[dict(lat=.003,lon=.006,original_index=1)]},
     {'via_points':None}, {'optimize_stop_order':True}, {'preserve_stop_order':False},
     {'total_stop_time':0}, {'departure_time':'2026-11-27T00:00:00Z'},
+    {'whole_journey_alternatives':True},
 ])
 def test_mixed_visit_unsupported_or_ambiguous_requests_refuse(change):
     body=mixed_app_body();body.update(change)
