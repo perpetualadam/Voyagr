@@ -1,5 +1,10 @@
 # Milestone 3 stop semantics: execution remains blocked
 
+Subsequent implementation: [CONTINUOUS_STOP_PREVIEW.md](CONTINUOUS_STOP_PREVIEW.md)
+adds an explicitly opted-in registered continuous-stop preview. The investigation
+below records the preceding baseline and remaining general stopping requirements;
+its blanket stop refusals still apply to cases without that operator opt-in.
+
 27 November 2026. Read-only source investigation plus isolated regressions.
 No production code, endpoint, configuration, graph or service is changed.
 

@@ -334,6 +334,14 @@
      * @param {number} [o.now]
      * @returns {Object}
      */
+    function stopPreviewMetadata(route) {
+        if(!route || !route.stop_semantics || route.stop_semantics.mode!=='continuous_no_turn_reset')return {};
+        return {driving_duration_minutes:route.driving_duration_minutes,
+            dwell_duration_minutes:route.dwell_duration_minutes,
+            stop_semantics:Object.assign({},route.stop_semantics,{access_verification:'UNVERIFIED'}),
+            navigation_allowed:false,automatic_selection_allowed:false};
+    }
+
     function buildSaveCurrentRoutePlan(o) {
         o = o || {};
         if (!o.lastCalculatedRoute) {
@@ -349,6 +357,7 @@
             ok: true,
             savedRoute: {
                 ...inspectionRefusals(route),
+                ...stopPreviewMetadata(route),
                 id: now,
                 name: routeName,
                 start: o.startLabel,
@@ -473,11 +482,13 @@
             endLabel: route.end,
             lastCalculatedRoutePatch: {
                 ...inspectionRefusals(route),
+                ...stopPreviewMetadata(route),
                 id: route.id,
                 saved_origin_label: route.start,
                 navigation_resume_requires_fresh_gps: true,
                 distance_km: route.distance_km,
                 time: route.duration_minutes,
+                ...(route.stop_semantics && route.stop_semantics.mode==='continuous_no_turn_reset'?{duration_minutes:route.duration_minutes}:{}),
                 fuel_cost: route.fuel_cost,
                 fuel_pricing: route.fuel_pricing && JSON.parse(JSON.stringify(route.fuel_pricing)),
                 toll_cost: route.toll_cost,

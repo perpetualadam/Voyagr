@@ -660,6 +660,7 @@ public class ReadOnlyRouteRegression {
             if(noMotorways) request.setCustomModel(new CustomModel()
                 .addToPriority(If("road_class == MOTORWAY",MULTIPLY,"0")));
             if(visits.size()>2) request.putHint("pass_through",true);
+            result.put("pass_through",visits.size()>2);
             if(anchorStart>=0 && !blocked.isEmpty()) {
                 long baselineStart=System.nanoTime();
                 var baseline=hopper.route(request);

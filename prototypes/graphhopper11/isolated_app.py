@@ -282,6 +282,8 @@ class LocalJavaBridge:
             raise Refused("case_refused")
         if any(result.get(name) is not bool(case.get(name, False)) for name in ("alternatives", "no_motorways")):
             raise Refused("settings_evidence_mismatch")
+        if case.get('stop_preview_mode') == 'continuous_no_turn_reset' and result.get('pass_through') is not True:
+            raise Refused('stop_continuity_unverified')
         blocked = result.get("blocked_edge_keys")
         if not isinstance(blocked, list) or any(type(k) is not int or k < 0 for k in blocked):
             raise Refused("block_contract")

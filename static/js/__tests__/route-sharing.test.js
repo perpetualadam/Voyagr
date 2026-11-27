@@ -159,6 +159,26 @@ describe('route-sharing module', () => {
         expect(plan.lastCalculatedRoutePatch.destinationName).toBe('B');
     });
 
+    test.each([0,15])('saved stop preview retains driving/dwell timing and refusal (%s minutes)', (dwell) => {
+        const route={distance_km:1,duration_minutes:10+dwell,geometry:'abc',
+            driving_duration_minutes:10,dwell_duration_minutes:dwell,
+            stop_semantics:{mode:'continuous_no_turn_reset',access_verification:'UNVERIFIED'},
+            journey_context:{ordered_stops:[{coordinates:[0,.01],duration_minutes:dwell,kind:'coordinates'}]},
+            navigation_allowed:false,automatic_selection_allowed:false};
+        const saved=RS.buildSaveCurrentRoutePlan({lastCalculatedRoute:route,routeName:'Stop preview',startLabel:'A',endLabel:'B',now:1000}).savedRoute;
+        const restored=RS.buildUseSavedRoutePlan(1000,[saved]).lastCalculatedRoutePatch;
+        expect(saved.driving_duration_minutes).toBe(10);
+        expect(restored.dwell_duration_minutes).toBe(dwell);
+        expect(restored.duration_minutes).toBe(10+dwell);
+        expect(restored.time).toBe(10+dwell);
+        expect(restored.journey_context.ordered_stops[0].duration_minutes).toBe(dwell);
+        expect(restored.stop_semantics.access_verification).toBe('UNVERIFIED');
+        expect(restored.navigation_allowed).toBe(false);
+        expect(restored.automatic_selection_allowed).toBe(false);
+        restored.stop_semantics.mode='changed';
+        expect(saved.stop_semantics.mode).toBe('continuous_no_turn_reset');
+    });
+
     test('buildDeleteSavedRouteExecutePlan filters route list', () => {
         const execute = RS.buildDeleteSavedRouteExecutePlan(
             RS.buildDeleteSavedRoutePlan(2),

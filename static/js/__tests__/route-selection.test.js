@@ -18,6 +18,21 @@ describe('route-selection module', () => {
         expect(out.name).toBe('Fast');
     });
 
+    test('stop timing survives normalization and clears on an ordinary selection', () => {
+        const route={id:'stop',duration_minutes:25,driving_duration_minutes:10,dwell_duration_minutes:15,
+            stop_semantics:{mode:'continuous_no_turn_reset'},geometry:'abc',navigation_allowed:false};
+        const option=RS.normalizeRouteOption(route,{});
+        expect(option.driving_duration_minutes).toBe(10);
+        expect(option.dwell_duration_minutes).toBe(15);
+        expect(option.stop_semantics.mode).toBe('continuous_no_turn_reset');
+        const selected=RS.mergeLastCalculatedRouteFromSelection({},option);
+        expect(selected.duration_minutes).toBe(25);
+        const ordinary=RS.mergeLastCalculatedRouteFromSelection(selected,{id:'ordinary',duration_minutes:5,geometry:'def'});
+        expect(ordinary.driving_duration_minutes).toBeUndefined();
+        expect(ordinary.dwell_duration_minutes).toBeUndefined();
+        expect(ordinary.stop_semantics).toBeUndefined();
+    });
+
     test('mergeLastCalculatedRouteFromSelection preserves destination from prev', () => {
         const out = RS.mergeLastCalculatedRouteFromSelection(
             { destination: '51,0', destinationName: 'Home' },

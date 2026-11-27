@@ -29,7 +29,7 @@ def _pair(value):
     return _coordinate(*(float(part) for part in value.split(',')))
 
 
-def _planning_context(body, visits):
+def _planning_context(body, visits, stops=()):
     """Accept the normal Calculate metadata, never GPS/arrival authority.
 
     This bounded bridge supports coordinate endpoints and default place arrival.
@@ -46,9 +46,16 @@ def _planning_context(body, visits):
     if (not isinstance(context, dict) or set(context) != {
             'version','purpose','origin','destination','arrival_intent','stops'}
             or type(context['version']) is not int or context['version'] != 1
-            or context['purpose'] != 'planning' or context['stops'] != []):
+            or context['purpose'] != 'planning' or not isinstance(context['stops'],list)
+            or len(context['stops']) != len(stops)):
         raise Refused('planning_context_not_supported')
     kinds = {'gps','searched','map','coordinates','saved','unknown'}
+    for supplied, stop in zip(context['stops'],stops):
+        if (not isinstance(supplied,dict) or set(supplied) != {'kind','coordinates'}
+                or not isinstance(supplied['kind'],str) or supplied['kind'] not in kinds or supplied['coordinates'] != [stop['lat'],stop['lon']]
+                or not isinstance(supplied['coordinates'],list)
+                or not all(_number(value) for value in supplied['coordinates'])):
+            raise Refused('planning_context_not_supported')
     for name, point in (('origin', visits[0]), ('destination', visits[-1])):
         endpoint = context[name]
         if (not isinstance(endpoint,dict) or not {'kind','coordinates'} <= set(endpoint)
@@ -77,6 +84,10 @@ def normalize_app_request(body):
     This function performs no engine, cache, storage or network work. Registered
     eligibility and independent policy/evidence checks remain separate gates.
     """
+    return _normalize_app_request(body)
+
+
+def _normalize_app_request(body, *, continuous_stops=False):
     if not isinstance(body,dict) or not {'start','end'} <= set(body) or not set(body) <= FIELDS | JOURNEY_FIELDS | COST_FIELDS:
         raise Refused('app_request_contract')
     for field in ('optimize_stop_order','round_trip','force_refresh','is_reroute','preserve_stop_order'):
@@ -86,9 +97,28 @@ def normalize_app_request(body):
         raise Refused('journey_optimization_not_supported')
     if body.get('departure_time') is not None or body.get('time_windows') is not None:
         raise Refused('time_sensitive_journey_not_supported')
-    if body.get('stops',[]) != [] or type(body.get('stops',[])) is not list:
+    stops = body.get('stops',[])
+    if type(stops) is not list or (stops and not continuous_stops):
         raise Refused('stop_semantics_not_supported')
-    if 'total_stop_time' in body and (not _number(body['total_stop_time']) or body['total_stop_time'] != 0):
+    if len(stops)>3 or (stops and (body.get('via_points',[]) != [] or body.get('preserve_stop_order') is False)):
+        raise Refused('stop_semantics_not_supported')
+    stop_plan = []
+    for i, stop in enumerate(stops):
+        if (not isinstance(stop,dict) or not {'lat','lon'} <= set(stop)
+                or not set(stop) <= {'lat','lon','name','type','duration','provenance','source_kind','original_index'}
+                or stop.get('type','stop') != 'stop'):
+            raise Refused('stop_semantics_not_supported')
+        duration = stop.get('duration',15)
+        if not _number(duration) or not 0 <= duration <= 1440:
+            raise Refused('stop_semantics_not_supported')
+        stop_plan.append(dict(coordinates=_coordinate(stop['lat'],stop['lon']),
+                              duration_minutes=duration,original_index=stop.get('original_index',i),
+                              name=stop.get('name','Journey stop'),kind=stop.get('provenance','unknown'),
+                              **({'source_kind':stop['source_kind']} if 'source_kind' in stop else {})))
+    if len({stop['original_index'] for stop in stop_plan if type(stop['original_index']) is int}) != len(stop_plan):
+        raise Refused('stop_semantics_not_supported')
+    dwell = sum(stop['duration_minutes'] for stop in stop_plan)
+    if 'total_stop_time' in body and (not _number(body['total_stop_time']) or body['total_stop_time'] != dwell):
         raise Refused('stop_semantics_not_supported')
     for field in COST_NUMBERS & set(body):
         if field == 'fuel_price' and body[field] is None:
@@ -97,14 +127,17 @@ def normalize_app_request(body):
             raise Refused('cost_parameter_contract')
     if ('fuel_price_mode' in body and body['fuel_price_mode'] not in ('manual','automatic')) or ('fuel_category' in body and body['fuel_category'] not in ('','petrol','diesel')):
         raise Refused('cost_parameter_contract')
-    vias = body.get('via_points',[])
+    # Share coordinate/metadata validation without changing a stop into a via.
+    vias = stops if stops else body.get('via_points',[])
     if not isinstance(vias,list) or len(vias)>3:
         raise Refused('ordered_visits_contract')
     visits = [_pair(body['start'])]
     for via in vias:
-        if not isinstance(via,dict) or not {'lat','lon'} <= set(via) or not set(via) <= {'lat','lon','name','type','provenance','source_kind','original_index'}:
+        allowed = {'lat','lon','name','type','provenance','source_kind','original_index'} | ({'duration'} if stops else set())
+        if not isinstance(via,dict) or not {'lat','lon'} <= set(via) or not set(via) <= allowed:
             raise Refused('ordered_visits_contract')
-        if via.get('type','via') != 'via' or ('name' in via and (not isinstance(via['name'],str) or len(via['name'])>160)):
+        expected_type = 'stop' if stops else 'via'
+        if via.get('type',expected_type) != expected_type or ('name' in via and (not isinstance(via['name'],str) or len(via['name'])>160)):
             raise Refused('ordered_visits_contract')
         for field in ('provenance','source_kind'):
             if field in via and via[field] not in ('gps','searched','map','saved','coordinates','unknown'):
@@ -113,12 +146,13 @@ def normalize_app_request(body):
             raise Refused('ordered_visits_contract')
         visits.append(_coordinate(via['lat'],via['lon']))
     visits.append(_pair(body['end']))
-    _planning_context(body, visits)
+    _planning_context(body, visits, stops)
     try:
         settings = adapt_settings({key:copy.deepcopy(value) for key,value in body.items() if key in FIELDS})
     except ValueError as error:
         raise Refused(str(error)) from None
-    return {'app_request':copy.deepcopy(body),'visits':visits,
+    return {**({'stop_plan':stop_plan,'dwell_minutes':dwell,'stop_mode':'continuous_no_turn_reset'} if stops else {}),
+            'app_request':copy.deepcopy(body),'visits':visits,
             'policy_request':dict(settings['policy_request'],app_settings=settings['app_settings']),
             'is_reroute':body.get('is_reroute',False), 'force_refresh':body.get('force_refresh',False),
             'cost_warnings':[{'setting':key,'value':body[key],'state':'UNVERIFIED'} for key in sorted(COST_FIELDS & set(body))]}
@@ -130,7 +164,8 @@ def adapt_app_request(body, case):
     Successful normalization alone never authorizes an arbitrary journey. Keep
     this gate shared by preflight, execution, cache binding and restoration.
     """
-    adapted = normalize_app_request(body)
+    continuous = isinstance(case,dict) and case.get('stop_preview_mode') == 'continuous_no_turn_reset' and case.get('alternatives',False) is False
+    adapted = _normalize_app_request(body,continuous_stops=continuous)
     if not isinstance(case,dict) or adapted['visits'] != case.get('points'):
         raise Refused('journey_not_registered')
     return adapted
@@ -191,6 +226,28 @@ class RegisteredAppRequestBridge:
             result['app_preview']['journey_context'] = context
             for route in result['app_preview']['routes']:
                 route['journey_context'] = copy.deepcopy(context)
+        if adapted.get('stop_plan'):
+            # One continuous, independently checked route retains turn history.
+            # Dwell is scheduling metadata, never a road-access/parking claim.
+            context = copy.deepcopy(context) if context is not None else dict(
+                version=1,purpose='planning',authority='request_metadata_only',
+                origin=dict(kind='unknown',coordinates=adapted['visits'][0]),
+                destination=dict(kind='unknown',coordinates=adapted['visits'][-1]),
+                arrival_intent=dict(version=1,mode='place',target=adapted['visits'][-1],status='DEFAULT'))
+            context['ordered_stops'] = copy.deepcopy(adapted['stop_plan'])
+            result['app_preview']['journey_context'] = copy.deepcopy(context)
+            for route in result['app_preview']['routes']:
+                if len(route['leg_geometry_ranges']) != len(adapted['stop_plan'])+1:
+                    raise Refused('preview_leg_contract')
+                route['journey_context'] = copy.deepcopy(context)
+                route['driving_duration_minutes'] = route['duration_minutes']
+                route['dwell_duration_minutes'] = adapted['dwell_minutes']
+                route['duration_minutes'] += adapted['dwell_minutes']
+                route['stop_semantics'] = dict(mode=adapted['stop_mode'],access_verification='UNVERIFIED',
+                                               arrival_departure='continuous_route_no_direction_reset')
+                for leg,stop in zip(route['leg_geometry_ranges'],adapted['stop_plan']):
+                    leg['stop'] = copy.deepcopy(stop)
+                    leg['waypoint'] = dict(lat=stop['coordinates'][0],lon=stop['coordinates'][1])
         self.bridge.verify()
         return result
 

@@ -86,6 +86,30 @@ def test_missing_manual_price_is_retained_as_unverified_not_fabricated():
     assert {'setting':'fuel_price','value':None,'state':'UNVERIFIED'} in adapted['cost_warnings']
 
 
+@pytest.mark.parametrize('change',[
+    {'duration':True}, {'duration':-1}, {'duration':1441}, {'duration':float('nan')},
+    {'original_index':True}, {'type':'via'}, {'provenance':'invented'},
+])
+def test_registered_stop_contract_refuses_invalid_stop_metadata(change):
+    stop = dict(lat=.003,lon=.01,type='stop',duration=15,original_index=0)
+    stop.update(change)
+    with pytest.raises(Refused):
+        adapt_app_request(dict(start='0,0',end='0,0.02',stops=[stop]),
+                          dict(points=[[0,0],[.003,.01],[0,.02]],stop_preview_mode='continuous_no_turn_reset'))
+
+
+@pytest.mark.parametrize('change',[
+    {'total_stop_time':0}, {'preserve_stop_order':False},
+    {'via_points':[dict(lat=.001,lon=.01)]}, {'optimize_stop_order':True},
+    {'departure_time':'2026-11-27T12:00:00Z'},
+])
+def test_registered_stop_contract_does_not_ignore_changed_semantics(change):
+    body = dict(start='0,0',end='0,0.02',stops=[dict(lat=.003,lon=.01,duration=15)])
+    body.update(change)
+    with pytest.raises(Refused):
+        adapt_app_request(body,dict(points=[[0,0],[.003,.01],[0,.02]],stop_preview_mode='continuous_no_turn_reset'))
+
+
 def complete_calculate_body():
     """Include the final orchestration step omitted by the builder-only test."""
     body = app_bodies()['normal']

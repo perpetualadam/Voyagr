@@ -61,7 +61,7 @@ def manifest(tmp_path_factory):
     registry = root / "registry.json"
     registry.write_text(json.dumps({"associations": associations, "cases": [plain,
         dict(plain, id="alternatives", alternatives=True),
-        dict(plain, id="via", points=[[0, 0], [.003, .01], [0, .02]]),
+        dict(plain, id="via", points=[[0, 0], [.003, .01], [0, .02]], stop_preview_mode='continuous_no_turn_reset'),
         dict(plain, id="departure", points=[[.003, .01], [0, .02]]),
         # The close parallel road remains outside this registered source-road contract.
         dict(plain, id="no_route", blocked_associations=["main", "upper"], expected_osm_way_ids=[10]),
@@ -1064,6 +1064,14 @@ def test_real_chromium_full_uk_alternatives_and_legs(matrix_manifest, tmp_path):
 
 
 @pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_continuous_stop_preview(manifest, tmp_path):
+    evidence = _run_full_uk_browser(manifest,tmp_path,'uk-stop-preview.cjs')
+    assert evidence['status'] == 'PASS_UK_CONTINUOUS_STOP_PREVIEW'
+    assert evidence['durations'] == [0,15] and evidence['saved_restored']
+    assert not evidence['navigation_allowed'] and evidence['phone_acceptance'] == 'UNVERIFIED'
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
 def test_real_chromium_full_uk_cache_selection_binding(matrix_manifest, tmp_path):
     evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-cache-selection.cjs',tls=True)
     assert evidence['status'] == 'PASS_UK_PRIVATE_CACHE_SELECTION'
@@ -1289,6 +1297,66 @@ def test_stop_and_time_capability_refusals_cannot_reuse_valid_private_cache(app,
     assert response.status_code == 422
     assert response.get_json() == dict(success=False,reason=reason,navigation_allowed=False)
     assert boundary.store.cache == cached
+
+
+@pytest.mark.parametrize('duration',[None,0,15])
+def test_registered_continuous_stop_preview_preserves_context_timing_and_restore(app, manifest, duration):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    supplied = full_app_body('via')
+    script = '''
+const r=require('./static/js/modules/navigation/routing-request.js');
+const j=require('./static/js/modules/navigation/journey-plan.js');
+const body=JSON.parse(process.argv[1]);
+body.via_points=[];
+body.stops=r.mapStopsForApi([{lat:.003,lon:.01,name:'Synthetic stop',duration:JSON.parse(process.argv[2]),provenance:'coordinates',original_index:0}]);
+body.total_stop_time=body.stops[0].duration;
+body.journey_context=j.applyDrivingArrival(body,{dataset:{journeySource:'coordinates'}},{dataset:{journeySource:'coordinates'}},null);
+console.log(JSON.stringify(body));
+'''
+    supplied = json.loads(subprocess.check_output(['node','-e',script,json.dumps(supplied),json.dumps(duration)],text=True,timeout=10))
+    supplied['optimize_stop_order'] = False
+    adapter = RegisteredAppRequestBridge(app.extensions['gh11_bridge'])
+    identities = {key:manifest[key] for key in ('graph_version','source_version','policy_version')}
+    before = copy.deepcopy(supplied)
+    result = adapter.calculate('via',supplied,identities)
+    row = result['app_preview']['routes'][0]
+    dwell = 15 if duration is None else duration
+    assert row['dwell_duration_minutes'] == dwell
+    assert row['duration_minutes'] == pytest.approx(row['driving_duration_minutes']+dwell)
+    assert row['driving_duration_minutes'] == result['candidates'][0]['duration_minutes']
+    assert row['stop_semantics']['mode'] == 'continuous_no_turn_reset'
+    assert row['stop_semantics']['access_verification'] == 'UNVERIFIED'
+    stop = row['journey_context']['ordered_stops'][0]
+    assert stop == dict(coordinates=[.003,.01],duration_minutes=dwell,original_index=0,name='Synthetic stop',kind='coordinates')
+    assert len(row['leg_geometry_ranges']) == 2
+    assert row['leg_geometry_ranges'][0]['stop'] == stop
+    assert row['gh11_evidence']['forbidden_traversals'] == 0
+    assert not row['navigation_allowed'] and not row['automatic_selection_allowed']
+    restored = adapter.restore(result['plan_reference'])['app_preview']['routes'][0]
+    for key in ('geometry','maneuvers','journey_context','leg_geometry_ranges','duration_minutes','stop_semantics'):
+        assert restored[key] == row[key]
+    assert supplied == before
+
+
+def test_registered_stop_preview_rejects_missing_continuity_and_changed_dwell_reference(app, manifest, monkeypatch):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    bridge=app.extensions['gh11_bridge'];adapter=RegisteredAppRequestBridge(bridge)
+    identities={key:manifest[key] for key in ('graph_version','source_version','policy_version')}
+    supplied=full_app_body('via')
+    supplied.update(via_points=[],stops=[dict(lat=.003,lon=.01,type='stop',duration=15)],optimize_stop_order=False)
+    _,reference=adapter._prepare('via',supplied,identities)
+    changed=copy.deepcopy(reference);changed['app_request']['stops'][0]['duration']=30
+    with pytest.raises(Refused,match='app_reference_changed'):
+        adapter.restore(changed)
+    execute=bridge._execute
+    def no_continuity(*args,**kwargs):
+        report=execute(*args,**kwargs)
+        report['cases'][0]['pass_through']=False
+        return report
+    monkeypatch.setattr(bridge,'_execute',no_continuity)
+    with pytest.raises(Refused,match='stop_continuity_unverified'):
+        adapter.calculate('via',supplied,identities)
+    assert not bridge.cache
 
 
 def test_complete_app_request_engine_failure_never_falls_back_to_cached_route(app, manifest, monkeypatch):

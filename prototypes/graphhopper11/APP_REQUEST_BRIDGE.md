@@ -1,5 +1,10 @@
 # Complete app-request bridge — registered fixtures only
 
+Registered stopping extension: [CONTINUOUS_STOP_PREVIEW.md](CONTINUOUS_STOP_PREVIEW.md)
+defines the operator opt-in for fixed-order dwell previews without resetting
+continuous turn history. The default contract below still refuses stops when the
+selected case has no such capability. General routing and navigation stay blocked.
+
 ## General request contract boundary — 27 November 2026
 
 `normalize_app_request(body)` now parses the supported application contract

@@ -114,6 +114,16 @@ refuse before Java or cache validation without changing prior evidence. No
 production defect was confirmed or feature enabled. Stopping execution remains
 BLOCKED by missing arrival/departure/join/timing semantics; the document defines
 the coherent implementation task and its Milestone 4 association dependency.
+
+**Registered stopping implementation — 27 November:**
+[CONTINUOUS_STOP_PREVIEW.md](CONTINUOUS_STOP_PREVIEW.md) adds fixed-order dwell
+planning for explicitly opted-in continuous registered routes. Turn history is
+not reset, every existing route/leg validation still applies, and the actual UK
+Calculate/display/save/reload flow retains zero/15-minute dwell and separate driving
+time while refusing Start. Cases without opt-in retain their prior refusals.
+This is implemented preview functionality, not another refusal-only checkpoint.
+General stopping maneuvers, arbitrary visits, optimization, mixed visits and
+multi-stop alternatives remain unsupported. Milestone 3 remains PARTIAL.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.
