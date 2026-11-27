@@ -86,6 +86,55 @@ def test_missing_manual_price_is_retained_as_unverified_not_fabricated():
     assert {'setting':'fuel_price','value':None,'state':'UNVERIFIED'} in adapted['cost_warnings']
 
 
+def mixed_app_body(duration=15):
+    """The actual app's split arrays use via-then-stop fixed order."""
+    script = '''
+const r=require('./static/js/modules/navigation/routing-request.js');
+const j=require('./static/js/modules/navigation/journey-plan.js');
+const body=r.buildInitialRouteRequestBody({start:'0,0',end:'0,0.02',optimizeStopOrder:false,
+ viaPoints:[{lat:.003,lon:.006,name:'Synthetic via',provenance:'coordinates'}],
+ stops:[{lat:.003,lon:.014,name:'Synthetic stop',duration:JSON.parse(process.argv[1]),provenance:'coordinates'}],
+ sharedOptions:{routingMode:'auto',vehicleType:'petrol_diesel',avoidCaz:false}});
+body.total_stop_time=body.stops[0].duration;
+body.journey_context=j.applyDrivingArrival(body,{dataset:{journeySource:'coordinates'}},{dataset:{journeySource:'coordinates'}},null);
+console.log(JSON.stringify(body));
+'''
+    return json.loads(subprocess.check_output(['node','-e',script,json.dumps(duration)],text=True,timeout=10))
+
+
+def test_registered_mixed_visits_preserve_types_canonical_order_and_complete_request():
+    body=mixed_app_body(0);before=copy.deepcopy(body)
+    case=dict(points=[[0,0],[.003,.006],[.003,.014],[0,.02]],stop_preview_mode='continuous_no_turn_reset')
+    parsed=adapt_app_request(body,case)
+    assert parsed['app_request'] == body == before
+    assert [v['type'] for v in parsed['visit_plan']] == ['via','stop']
+    assert [v['original_index'] for v in parsed['visit_plan']] == [0,1]
+    assert parsed['stop_plan'][0]['original_index'] == 1
+    assert parsed['dwell_minutes'] == 0
+    assert parsed['visits'] == case['points']
+    with pytest.raises(Refused,match='stop_semantics_not_supported'):
+        normalize_app_request(body)
+    with pytest.raises(Refused,match='stop_semantics_not_supported'):
+        adapt_app_request(body,dict(case,alternatives=True))
+    body['via_points'][0]['original_index']=7
+    body['stops'][0]['original_index']=2
+    parsed=adapt_app_request(body,case)
+    assert [v['original_index'] for v in parsed['visit_plan']] == [7,2]
+    assert parsed['visits'] == case['points']  # IDs do not reorder the arrays.
+
+
+@pytest.mark.parametrize('change',[
+    {'via_points':[dict(lat=.003,lon=.006,type='via',duration=15)]},
+    {'via_points':[dict(lat=.003,lon=.006,original_index=1)]},
+    {'via_points':None}, {'optimize_stop_order':True}, {'preserve_stop_order':False},
+    {'total_stop_time':0}, {'departure_time':'2026-11-27T00:00:00Z'},
+])
+def test_mixed_visit_unsupported_or_ambiguous_requests_refuse(change):
+    body=mixed_app_body();body.update(change)
+    with pytest.raises(Refused):
+        adapt_app_request(body,dict(points=[[0,0],[.003,.006],[.003,.014],[0,.02]],stop_preview_mode='continuous_no_turn_reset'))
+
+
 @pytest.mark.parametrize('change',[
     {'duration':True}, {'duration':-1}, {'duration':1441}, {'duration':float('nan')},
     {'original_index':True}, {'type':'via'}, {'provenance':'invented'},

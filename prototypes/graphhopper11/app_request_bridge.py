@@ -98,9 +98,12 @@ def _normalize_app_request(body, *, continuous_stops=False):
     if body.get('departure_time') is not None or body.get('time_windows') is not None:
         raise Refused('time_sensitive_journey_not_supported')
     stops = body.get('stops',[])
+    via_points = body.get('via_points',[])
     if type(stops) is not list or (stops and not continuous_stops):
         raise Refused('stop_semantics_not_supported')
-    if len(stops)>3 or (stops and (body.get('via_points',[]) != [] or body.get('preserve_stop_order') is False)):
+    if not isinstance(via_points,list) or len(via_points)+len(stops)>3:
+        raise Refused('ordered_visits_contract')
+    if stops and body.get('preserve_stop_order') is False:
         raise Refused('stop_semantics_not_supported')
     stop_plan = []
     for i, stop in enumerate(stops):
@@ -112,7 +115,7 @@ def _normalize_app_request(body, *, continuous_stops=False):
         if not _number(duration) or not 0 <= duration <= 1440:
             raise Refused('stop_semantics_not_supported')
         stop_plan.append(dict(coordinates=_coordinate(stop['lat'],stop['lon']),
-                              duration_minutes=duration,original_index=stop.get('original_index',i),
+                              duration_minutes=duration,original_index=stop.get('original_index',len(via_points)+i),
                               name=stop.get('name','Journey stop'),kind=stop.get('provenance','unknown'),
                               **({'source_kind':stop['source_kind']} if 'source_kind' in stop else {})))
     if len({stop['original_index'] for stop in stop_plan if type(stop['original_index']) is int}) != len(stop_plan):
@@ -128,15 +131,15 @@ def _normalize_app_request(body, *, continuous_stops=False):
     if ('fuel_price_mode' in body and body['fuel_price_mode'] not in ('manual','automatic')) or ('fuel_category' in body and body['fuel_category'] not in ('','petrol','diesel')):
         raise Refused('cost_parameter_contract')
     # Share coordinate/metadata validation without changing a stop into a via.
-    vias = stops if stops else body.get('via_points',[])
-    if not isinstance(vias,list) or len(vias)>3:
-        raise Refused('ordered_visits_contract')
+    # Match the UK's fixed-order contract: via_points followed by stops. Indices
+    # identify visits; they do not silently reorder the two request arrays.
+    ordered = [(value,'via') for value in via_points]+[(value,'stop') for value in stops]
     visits = [_pair(body['start'])]
-    for via in vias:
-        allowed = {'lat','lon','name','type','provenance','source_kind','original_index'} | ({'duration'} if stops else set())
+    visit_plan = []
+    for index,(via,expected_type) in enumerate(ordered):
+        allowed = {'lat','lon','name','type','provenance','source_kind','original_index'} | ({'duration'} if expected_type=='stop' else set())
         if not isinstance(via,dict) or not {'lat','lon'} <= set(via) or not set(via) <= allowed:
             raise Refused('ordered_visits_contract')
-        expected_type = 'stop' if stops else 'via'
         if via.get('type',expected_type) != expected_type or ('name' in via and (not isinstance(via['name'],str) or len(via['name'])>160)):
             raise Refused('ordered_visits_contract')
         for field in ('provenance','source_kind'):
@@ -145,6 +148,13 @@ def _normalize_app_request(body, *, continuous_stops=False):
         if 'original_index' in via and (type(via['original_index']) is not int or not 0 <= via['original_index'] < 26):
             raise Refused('ordered_visits_contract')
         visits.append(_coordinate(via['lat'],via['lon']))
+        visit_plan.append(dict(type=expected_type,coordinates=visits[-1],original_index=via.get('original_index',index),
+                               duration_minutes=via.get('duration',15) if expected_type=='stop' else 0,
+                               name=via.get('name','Journey stop' if expected_type=='stop' else 'Pass-through via'),
+                               kind=via.get('provenance','unknown'),
+                               **({'source_kind':via['source_kind']} if 'source_kind' in via else {})))
+    if stops and len({visit['original_index'] for visit in visit_plan}) != len(visit_plan):
+        raise Refused('ordered_visits_contract')
     visits.append(_pair(body['end']))
     _planning_context(body, visits, stops)
     try:
@@ -152,6 +162,7 @@ def _normalize_app_request(body, *, continuous_stops=False):
     except ValueError as error:
         raise Refused(str(error)) from None
     return {**({'stop_plan':stop_plan,'dwell_minutes':dwell,'stop_mode':'continuous_no_turn_reset'} if stops else {}),
+            **({'visit_plan':visit_plan} if stops and via_points else {}),
             'app_request':copy.deepcopy(body),'visits':visits,
             'policy_request':dict(settings['policy_request'],app_settings=settings['app_settings']),
             'is_reroute':body.get('is_reroute',False), 'force_refresh':body.get('force_refresh',False),
@@ -235,9 +246,12 @@ class RegisteredAppRequestBridge:
                 destination=dict(kind='unknown',coordinates=adapted['visits'][-1]),
                 arrival_intent=dict(version=1,mode='place',target=adapted['visits'][-1],status='DEFAULT'))
             context['ordered_stops'] = copy.deepcopy(adapted['stop_plan'])
+            ordered = adapted.get('visit_plan',adapted['stop_plan'])
+            if adapted.get('visit_plan'):
+                context['ordered_visits'] = copy.deepcopy(ordered)
             result['app_preview']['journey_context'] = copy.deepcopy(context)
             for route in result['app_preview']['routes']:
-                if len(route['leg_geometry_ranges']) != len(adapted['stop_plan'])+1:
+                if len(route['leg_geometry_ranges']) != len(ordered)+1:
                     raise Refused('preview_leg_contract')
                 route['journey_context'] = copy.deepcopy(context)
                 route['driving_duration_minutes'] = route['duration_minutes']
@@ -245,9 +259,12 @@ class RegisteredAppRequestBridge:
                 route['duration_minutes'] += adapted['dwell_minutes']
                 route['stop_semantics'] = dict(mode=adapted['stop_mode'],access_verification='UNVERIFIED',
                                                arrival_departure='continuous_route_no_direction_reset')
-                for leg,stop in zip(route['leg_geometry_ranges'],adapted['stop_plan']):
-                    leg['stop'] = copy.deepcopy(stop)
-                    leg['waypoint'] = dict(lat=stop['coordinates'][0],lon=stop['coordinates'][1])
+                for leg,visit in zip(route['leg_geometry_ranges'],ordered):
+                    if adapted.get('visit_plan'):
+                        leg['visit'] = copy.deepcopy(visit)
+                    if visit.get('type','stop') == 'stop':
+                        leg['stop'] = copy.deepcopy(visit)
+                    leg['waypoint'] = dict(lat=visit['coordinates'][0],lon=visit['coordinates'][1])
         self.bridge.verify()
         return result
 

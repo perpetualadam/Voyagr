@@ -475,6 +475,7 @@
         if(restoredContext){
             ['origin','destination'].forEach(function(field){if(restoredContext[field])restoredContext[field]=Object.assign({},restoredContext[field],{source_kind:restoredContext[field].source_kind&&restoredContext[field].source_kind!=='unknown'?restoredContext[field].source_kind:restoredContext[field].kind,kind:restoredContext[field].kind==='unknown'?'unknown':'saved'});});
             if(Array.isArray(restoredContext.ordered_stops))restoredContext.ordered_stops=restoredContext.ordered_stops.map(function(stop){return Object.assign({},stop,{source_kind:stop.source_kind&&stop.source_kind!=='unknown'?stop.source_kind:stop.kind,kind:stop.kind==='unknown'?'unknown':'saved'});});
+            if(Array.isArray(restoredContext.ordered_visits))restoredContext.ordered_visits=restoredContext.ordered_visits.map(function(visit){return Object.assign({},visit,{source_kind:visit.source_kind&&visit.source_kind!=='unknown'?visit.source_kind:visit.kind,kind:visit.kind==='unknown'?'unknown':'saved'});});
         }
         return {
             ok: true,

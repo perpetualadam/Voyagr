@@ -15,7 +15,7 @@ For that case, the complete-request bridge accepts up to three fixed-order stops
 whose coordinates exactly match every intermediate registered visit. It retains
 names, provenance, original indices and dwell durations (default 15 minutes;
 explicit zero preserved; each duration finite and between 0 and 1,440 minutes).
-Duplicate indices, malformed stops, changed total dwell, mixed stop/via requests,
+Duplicate indices, malformed stops, changed total dwell,
 reordering, scheduled departures, time windows and round trips refuse. An explicit
 `preserve_stop_order: false` also refuses. Other cases still refuse nonempty stops;
 the general normalization API does not grant stopping execution authority.
@@ -83,7 +83,8 @@ npm run test:ci -- --maxWorkers=2
 ## Remaining original scope
 
 This supplies fixed-order dwell planning on explicitly registered continuous
-routes. Arbitrary stops, mixed visits, arrival/departure maneuver constraints,
+routes. Registered mixed visits are now covered by
+[MIXED_VISIT_PREVIEW.md](MIXED_VISIT_PREVIEW.md). Arbitrary stops, arrival/departure maneuver constraints,
 multi-stop alternatives, optimization and time-dependent routing remain unsupported.
 General trusted stop-to-road/hazard association is still a Milestone 4 dependency.
 Physical-phone behavior, VPS capacity and deployment remain unverified. No UK

@@ -124,6 +124,15 @@ time while refusing Start. Cases without opt-in retain their prior refusals.
 This is implemented preview functionality, not another refusal-only checkpoint.
 General stopping maneuvers, arbitrary visits, optimization, mixed visits and
 multi-stop alternatives remain unsupported. Milestone 3 remains PARTIAL.
+
+**Registered mixed-visit implementation — 27 November:**
+[MIXED_VISIT_PREVIEW.md](MIXED_VISIT_PREVIEW.md) extends the registered stopping
+contract to the existing UK via-then-stop fixed order. A typed list retains every
+visit, only actual stops carry dwell, and complete leg inspection/save/reload keep
+both types. Live continuation remains refused. This supersedes the mixed-visit
+limitation in the preceding checkpoint only within registered preview scope;
+general execution, arbitrary interleaving, stopping maneuvers, optimization and
+multi-stop alternatives remain unsupported. No new milestone or deployment is added.
 For each next task, name the original row, observable acceptance check and result
 (PASS within scope / PARTIAL / BLOCKED). If blocked, record the specific dependency
 and its milestone rather than reporting more diagnostics as delivery completion.

@@ -49,7 +49,7 @@ def main():
         # validator with a broken third candidate. No fabricated success result.
         if request.headers.get('X-GH11-UK-Fault') == 'third_metrics' and request.headers.get('X-GH11-UK-Case') == 'matrix_3':
             report['cases'][0]['candidates'][2]['distance_km'] = -1
-        if request.headers.get('X-GH11-UK-Fault') == 'last_leg' and request.headers.get('X-GH11-UK-Case') == 'matrix_via':
+        if request.headers.get('X-GH11-UK-Fault') == 'last_leg' and request.headers.get('X-GH11-UK-Case') in ('matrix_via','matrix_mixed'):
             indices = report['cases'][0]['candidates'][0]['waypoint_indices']
             indices[-2] = indices[-1]
         return report

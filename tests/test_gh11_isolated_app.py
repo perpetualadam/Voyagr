@@ -1035,6 +1035,7 @@ def matrix_manifest(manifest, tmp_path_factory):
     common = dict(points=[[0,0],[0,.02]],no_motorways=True,block_both_directions=True,max_snap_distance_m=1)
     cases = [dict(common,id=f'matrix_{count}',alternatives=True,blocked_associations=['spur']+[str(i) for i in (13,12,11)[:3-count]]) for count in (3,2,1,0)]
     cases.append(dict(common,id='matrix_via',points=[[0,0],list(points[4]),list(points[5]),[0,.02]],blocked_associations=['spur']))
+    cases.append(dict(common,id='matrix_mixed',points=[[0,0],list(points[4]),list(points[5]),[0,.02]],blocked_associations=['spur'],stop_preview_mode='continuous_no_turn_reset'))
     cases.append(dict(common,id='matrix_origin',points=[list(points[4]),[0,.02]],blocked_associations=['spur']))
     registry.write_text(json.dumps(dict(associations=associations,cases=cases)))
     return build_manifest(jar=manifest['paths']['jar'],graph=graph,config=config,registry=registry,source=source)
@@ -1067,6 +1068,14 @@ def test_real_chromium_full_uk_alternatives_and_legs(matrix_manifest, tmp_path):
 def test_real_chromium_full_uk_continuous_stop_preview(manifest, tmp_path):
     evidence = _run_full_uk_browser(manifest,tmp_path,'uk-stop-preview.cjs')
     assert evidence['status'] == 'PASS_UK_CONTINUOUS_STOP_PREVIEW'
+    assert evidence['durations'] == [0,15] and evidence['saved_restored']
+    assert not evidence['navigation_allowed'] and evidence['phone_acceptance'] == 'UNVERIFIED'
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_full_uk_mixed_visit_preview(matrix_manifest, tmp_path):
+    evidence = _run_full_uk_browser(matrix_manifest,tmp_path,'uk-mixed-preview.cjs')
+    assert evidence['status'] == 'PASS_UK_MIXED_VISIT_PREVIEW'
     assert evidence['durations'] == [0,15] and evidence['saved_restored']
     assert not evidence['navigation_allowed'] and evidence['phone_acceptance'] == 'UNVERIFIED'
 
@@ -1336,6 +1345,62 @@ console.log(JSON.stringify(body));
     for key in ('geometry','maneuvers','journey_context','leg_geometry_ranges','duration_minutes','stop_semantics'):
         assert restored[key] == row[key]
     assert supplied == before
+
+
+@pytest.mark.parametrize('duration',[0,15])
+def test_registered_mixed_visit_route_and_restore_keep_three_complete_legs(matrix_manifest,duration):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    from tests.test_gh11_app_request_bridge import mixed_app_body
+    app=create_app(matrix_manifest,password=PASSWORD)
+    adapter=RegisteredAppRequestBridge(app.extensions['gh11_bridge'])
+    identities={key:matrix_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    body=mixed_app_body(duration);body['avoid_motorways']=True
+    result=adapter.calculate('matrix_mixed',body,identities)
+    row=result['app_preview']['routes'][0];context=row['journey_context']
+    assert [v['type'] for v in context['ordered_visits']] == ['via','stop']
+    assert len(context['ordered_stops']) == 1 and context['ordered_stops'][0]['original_index'] == 1
+    assert row['dwell_duration_minutes'] == duration
+    assert row['duration_minutes'] == pytest.approx(row['driving_duration_minutes']+duration)
+    assert len(row['leg_geometry_ranges']) == 3
+    assert 'stop' not in row['leg_geometry_ranges'][0]
+    assert row['leg_geometry_ranges'][0]['visit']['type'] == 'via'
+    assert row['leg_geometry_ranges'][1]['stop']['type'] == 'stop'
+    assert row['gh11_evidence']['forbidden_traversals'] == 0 and not row['navigation_allowed']
+    restored=adapter.restore(result['plan_reference'])['app_preview']['routes'][0]
+    for key in ('geometry','maneuvers','journey_context','leg_geometry_ranges','duration_minutes'):
+        assert restored[key] == row[key]
+    changed=copy.deepcopy(result['plan_reference']);changed['app_request']['stops'][0]['duration']=30
+    changed['app_request']['total_stop_time']=30
+    with pytest.raises(Refused,match='app_reference_changed'):
+        adapter.restore(changed)
+
+
+def test_mixed_visit_type_and_metadata_changes_cannot_alias_reference_or_private_cache(matrix_manifest,monkeypatch):
+    from tests.test_gh11_app_request_bridge import mixed_app_body
+    app=create_app(matrix_manifest,password=PASSWORD);client=app.test_client()
+    bridge=app.extensions['gh11_bridge'];cache=app.extensions['gh11_private_cache'].store
+    identities={key:matrix_manifest[key] for key in ('graph_version','source_version','policy_version')}
+    supplied=mixed_app_body();payload=dict(case_id='matrix_mixed',app_request=supplied,**identities)
+    def call(path,body):
+        return client.post('/api/prototype/'+path,json=body,headers=AUTH,base_url='https://localhost')
+    first=call('app-route',payload);assert first.status_code==200
+    assert first.get_json()['cache_policy']=='private_complete_request'
+    cached=copy.deepcopy(cache.cache);assert cached
+    changed=copy.deepcopy(supplied)
+    via=changed['via_points'][0];changed['via_points']=[]
+    changed['stops'].insert(0,dict(via,type='stop',duration=0))
+    changed.pop('journey_context')  # Independently valid syntax, same points and dwell.
+    preflight=call('app-policy',dict(payload,app_request=changed));assert preflight.status_code==200
+    assert preflight.get_json()['request_binding'] != first.get_json()['request_binding']
+    def unavailable(*args,**kwargs):
+        raise Refused('transport_timeout')
+    monkeypatch.setattr(bridge,'_execute',unavailable)
+    response=call('app-route',dict(payload,app_request=changed))
+    assert response.status_code==504 and response.get_json()['navigation_allowed'] is False
+    assert cache.cache == cached  # Cannot borrow the original mixed route's raw evidence.
+    reference=copy.deepcopy(first.get_json()['plan_reference']);reference['app_request']=changed
+    response=call('app-restore',reference)
+    assert response.status_code==409 and response.get_json()['reason']=='app_reference_changed'
 
 
 def test_registered_stop_preview_rejects_missing_continuity_and_changed_dwell_reference(app, manifest, monkeypatch):
