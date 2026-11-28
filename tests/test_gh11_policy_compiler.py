@@ -92,3 +92,13 @@ def test_supported_category_vocabulary_matches_real_application_without_importin
     assignment = next(node for node in tree.body if isinstance(node,ast.Assign)
                       and any(isinstance(target,ast.Name) and target.id=='CATEGORIES' for target in node.targets))
     assert set(CATEGORIES) == set(ast.literal_eval(assignment.value))
+
+
+def test_mapped_toll_capability_requires_literal_operator_opt_in_and_preserves_other_rules():
+    for value in (False, None, 1, 'true'):
+        assert not compile_policy(selected('tolls'), registered_no_tolls=value)['route_preview_allowed']
+    result = compile_policy(selected('tolls'), registered_no_tolls=True)
+    assert result['rules'][0]['state'] == 'COMPILED'
+    assert result['navigation_allowed'] is False
+    assert result['legal_restrictions']['verification'] == 'UNVERIFIED'
+    assert not compile_policy(selected('ferries'), registered_no_tolls=True)['route_preview_allowed']

@@ -109,7 +109,7 @@ public class ReadOnlyRouteRegression {
         if(!ok) throw new IllegalStateException(reason);
     }
 
-    static List<Integer> validate(GraphHopper hopper,ResponsePath path,boolean noMotorways,Set<Integer> blocked,
+    static List<Integer> validate(GraphHopper hopper,ResponsePath path,boolean noMotorways,boolean noTolls,Set<Integer> blocked,
                                   com.graphhopper.routing.weighting.Weighting weighting) {
         var points=path.getPoints();
         require(path.getDistance()>0 && points.size()>=2,"invalid geometry");
@@ -133,6 +133,10 @@ public class ReadOnlyRouteRegression {
             var edge=hopper.getBaseGraph().getEdgeIteratorStateForKey(key);
             require(edge.get(access),"vehicle access conflict");
             require(!noMotorways || edge.get(roadClass)!=RoadClass.MOTORWAY,"mandatory motorway exclusion violated");
+            if(noTolls) {
+                var toll=hopper.getEncodingManager().getEnumEncodedValue("toll",Toll.class);
+                require(edge.get(toll)==Toll.NO,"mandatory mapped toll exclusion violated");
+            }
             // A via point can split one original directed edge into successive intervals.
             if(keys.isEmpty() || keys.get(keys.size()-1)!=key) {
                 if(!keys.isEmpty()) {
@@ -580,7 +584,7 @@ public class ReadOnlyRouteRegression {
     // Registered preview only: search complete journeys, never splice independent legs.
     // Budget exhaustion can return fewer validated routes; it proves no route count.
     static GHResponse wholeJourneyAlternatives(GraphHopper hopper,GHRequest request,
-            Set<Integer> mandatory,boolean noMotorways,Map<String,Object> result) {
+            Set<Integer> mandatory,boolean noMotorways,boolean noTolls,Map<String,Object> result) {
         ArrayDeque<Set<Integer>> pending=new ArrayDeque<>();pending.add(Set.copyOf(mandatory));
         Set<Set<Integer>> queued=new HashSet<>();queued.add(Set.copyOf(mandatory));
         Set<List<Integer>> seen=new HashSet<>();GHResponse combined=new GHResponse();
@@ -600,7 +604,7 @@ public class ReadOnlyRouteRegression {
                 }
                 require(response.getAll().size()==1,"whole-journey search must calculate one complete path");
                 ResponsePath path=response.getBest();
-                List<Integer> keys=validate(hopper,path,noMotorways,exclusions,
+                List<Integer> keys=validate(hopper,path,noMotorways,noTolls,exclusions,
                     hopper.createWeighting(hopper.getProfile("car"),request.getHints()));
                 if(!seen.add(keys))continue;
                 combined.add(path);
@@ -695,6 +699,9 @@ public class ReadOnlyRouteRegression {
             boolean alternatives=test.path("alternatives").asBoolean(false);
             boolean wholeAlternatives=test.path("whole_journey_alternatives").asBoolean(false);
             boolean noMotorways=test.path("no_motorways").asBoolean(false);
+            boolean noTolls=test.path("no_tolls").asBoolean(false);
+            require(!test.has("no_tolls") || test.get("no_tolls").isBoolean(),"invalid toll flag");
+            result.put("no_tolls",noTolls);
             result.put("no_motorways",noMotorways);
             result.put("alternatives",alternatives);
             if(wholeAlternatives)require(alternatives && visits.size()>2 && anchorStart<0,
@@ -703,8 +710,15 @@ public class ReadOnlyRouteRegression {
                 require(visits.size()==2,"native alternatives support two points only");
                 request.setAlgorithm("alternative_route").putHint("alternative_route.max_paths",3);
             }
-            if(noMotorways) request.setCustomModel(new CustomModel()
-                .addToPriority(If("road_class == MOTORWAY",MULTIPLY,"0")));
+            CustomModel exclusionsModel=new CustomModel();
+            if(noMotorways) exclusionsModel.addToPriority(If("road_class == MOTORWAY",MULTIPLY,"0"));
+            if(noTolls) {
+                // Conservative parity with Voyagr's existing ALL/HGV avoidance.
+                // NO is imported data, not proof of complete real-world toll coverage.
+                hopper.getEncodingManager().getEnumEncodedValue("toll",Toll.class);
+                exclusionsModel.addToPriority(If("toll != NO",MULTIPLY,"0"));
+            }
+            if(noMotorways || noTolls)request.setCustomModel(exclusionsModel);
             if(visits.size()>2) request.putHint("pass_through",true);
             result.put("pass_through",visits.size()>2);
             if(anchorStart>=0 && !blocked.isEmpty()) {
@@ -712,7 +726,7 @@ public class ReadOnlyRouteRegression {
                 var baseline=hopper.route(request);
                 result.put("baseline_query_ms",(System.nanoTime()-baselineStart)/1e6);
                 require(!baseline.hasErrors() && !baseline.getAll().isEmpty(),"anchor baseline unavailable");
-                var keys=validate(hopper,baseline.getBest(),noMotorways,Set.of(),
+                var keys=validate(hopper,baseline.getBest(),noMotorways,noTolls,Set.of(),
                     hopper.createWeighting(hopper.getProfile("car"),request.getHints()));
                 if(test.path("diagnose_anchors").asBoolean(false)) result.put("baseline_anchor_diagnostics",
                     anchorDiagnostic(hopper,request,baseline.getBest(),keys,anchorStart,anchorEnd,Set.of()));
@@ -721,7 +735,7 @@ public class ReadOnlyRouteRegression {
             }
             request.putHint(BLOCKS,Set.copyOf(blocked));
             if(test.path("diagnose_exact_nodes").asBoolean(false)) {
-                require(anchorStart>=0 && !noMotorways && !alternatives,"exact-node diagnostic requires plain anchored case");
+                require(anchorStart>=0 && !noMotorways && !noTolls && !alternatives,"exact-node diagnostic requires plain anchored case");
                 result.put("exact_node_diagnostic",exactNodeDiagnostic(hopper,request,anchorStart,anchorEnd,nodeBudget,blocked));
             }
             long start=System.nanoTime();
@@ -731,7 +745,7 @@ public class ReadOnlyRouteRegression {
                     require(anchorStart>=0 && !alternatives && visits.size()==2,"pinning requires two association-derived anchors");
                     result.put("endpoint_mode","request_scoped_exact_tower_nodes");
                     response=((ExclusionHopper)hopper).routeAnchored(request,anchorStart,anchorEnd);
-                } else if(wholeAlternatives) response=wholeJourneyAlternatives(hopper,request,blocked,noMotorways,result);
+                } else if(wholeAlternatives) response=wholeJourneyAlternatives(hopper,request,blocked,noMotorways,noTolls,result);
                 else response=hopper.route(request);
             }
             finally { result.put("query_ms",(System.nanoTime()-start)/1e6); }
@@ -743,7 +757,7 @@ public class ReadOnlyRouteRegression {
             require(!response.getAll().isEmpty() && response.getAll().size()<=(alternatives?3:1),"invalid candidate count");
             List<Map<String,Object>> candidates=new ArrayList<>(); Set<List<Integer>> seen=new HashSet<>();
             for(ResponsePath path:response.getAll()) {
-                List<Integer> keys=validate(hopper,path,noMotorways,blocked,
+                List<Integer> keys=validate(hopper,path,noMotorways,noTolls,blocked,
                     hopper.createWeighting(hopper.getProfile("car"),request.getHints()));
                 if(anchorStart>=0) {
                     if(test.path("diagnose_anchors").asBoolean(false)) result.put("anchor_diagnostics",
@@ -775,6 +789,13 @@ public class ReadOnlyRouteRegression {
                 Map<String,Object> candidate=new LinkedHashMap<>(Map.of("distance_km",path.getDistance()/1000,
                     "duration_minutes",path.getTime()/60000.0,"directed_edges",keys.size(),
                     "instructions",path.getInstructions().size()));
+                if(noTolls) {
+                    var toll=hopper.getEncodingManager().getEnumEncodedValue("toll",Toll.class);
+                    List<Map<String,Object>> observations=new ArrayList<>();
+                    for(int key:keys) observations.add(Map.of("edge_key",key,"toll",
+                        hopper.getBaseGraph().getEdgeIteratorStateForKey(key).get(toll).name()));
+                    candidate.put("toll_observations",observations);
+                }
                 if(test.path("include_path_data").asBoolean(false)) {
                     List<List<Double>> coordinates=new ArrayList<>();
                     for(int i=0;i<geometry.size();i++) coordinates.add(List.of(geometry.getLon(i),geometry.getLat(i)));

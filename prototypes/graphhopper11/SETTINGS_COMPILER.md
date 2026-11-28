@@ -33,7 +33,8 @@ not silently discard those fields: they are rejected if supplied to this schema.
 | --- | --- |
 | Disabled rule | DISABLED; retained unchanged, not a warning or a prohibition |
 | Motorways in a registered case with literal `no_motorways: true` | COMPILED: that existing case uses the custom model plus independent edge checks |
-| Motorways without that registered mechanism; toll/ferry/unpaved/CAZ/congestion | UNSUPPORTED in that case; imported attributes or GH11 features alone are not proof of an enabled implementation |
+| Tolls in a registered case with literal `no_tolls: true` | COMPILED for imported non-NO toll exclusions only; see [mapped toll scope](MAPPED_TOLL_PREVIEW.md) |
+| Motorways/tolls without their registered mechanism; ferry/unpaved/CAZ/congestion | UNSUPPORTED in that case; imported attributes or GH11 features alone are not proof of an enabled implementation |
 | Cameras, signals, crossings, other hazards and avoid points | UNVERIFIED for general association, coverage or freshness; selected directional fixture proof is not promoted to complete category coverage |
 | Non-car profile | Calculation refused; never silently substitute the registered car profile |
 

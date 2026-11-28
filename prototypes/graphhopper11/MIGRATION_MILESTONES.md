@@ -607,3 +607,12 @@ unknown. Actual synthetic files and manifest/code/graph bindings are checked. Se
 STORED_INDEX_MEMBERSHIP.md. Layout metadata, boundary/numeric semantics, construction
 integration, real artifacts/scale and all four UK acceptance streams remain open;
 no full coverage/route/legal claim is added, navigation is disabled and migration NO_GO.
+
+## 28 November: next existing-settings parity slice
+
+Registered mapped toll exclusion now has an isolated compiler/native validation
+path; see [MAPPED_TOLL_PREVIEW.md](MAPPED_TOLL_PREVIEW.md). This addresses the
+original Milestone 3 selected-settings requirement, not a new milestone. It does
+not close general mandatory avoidance: imported NO values can conceal missing
+OSM tagging, and unrelated rules remain unsupported/unverified. Milestones 4–7
+remain open; no deployment or phone acceptance is inferred.

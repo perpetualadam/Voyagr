@@ -45,7 +45,7 @@ def normalize_policy(value):
     return selected
 
 
-def compile_policy(value, *, registered_no_motorways=False):
+def compile_policy(value, *, registered_no_motorways=False, registered_no_tolls=False):
     selected = normalize_policy(value)
     rows, blocked, warnings = [], [], []
     profile_supported = selected['profile'] == 'car'
@@ -57,6 +57,8 @@ def compile_policy(value, *, registered_no_motorways=False):
             state, reason = 'UNSUPPORTED', 'profile_not_registered'
         elif category == 'motorways' and registered_no_motorways is True:
             state, reason = 'COMPILED', 'registered_motorway_model_and_edge_validation'
+        elif category == 'tolls' and registered_no_tolls is True:
+            state, reason = 'COMPILED', 'registered_mapped_toll_model_and_edge_validation'
         elif category in DATA_DEPENDENT:
             state, reason = 'UNVERIFIED', 'general_association_coverage_or_freshness_unproven'
         else:

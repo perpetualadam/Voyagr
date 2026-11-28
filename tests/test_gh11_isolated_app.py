@@ -142,7 +142,7 @@ public class TurnWeightAcceptance {
    throw new IllegalStateException("checker compilation failed");
   try(var loader=new URLClassLoader(new java.net.URL[]{new File(args[4]).toURI().toURL()},TurnWeightAcceptance.class.getClassLoader())) {
    var checker=Class.forName("ReadOnlyRouteRegression",true,loader);
-   var validate=checker.getDeclaredMethod("validate",GraphHopper.class,ResponsePath.class,boolean.class,Set.class,Weighting.class);
+   var validate=checker.getDeclaredMethod("validate",GraphHopper.class,ResponsePath.class,boolean.class,boolean.class,Set.class,Weighting.class);
    validate.setAccessible(true);
    var tree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
    var config=Jackson.newObjectMapper().treeToValue(tree.get("graphhopper"),GraphHopperConfig.class);
@@ -163,7 +163,7 @@ public class TurnWeightAcceptance {
      if(response.hasErrors()) throw new IllegalStateException("fixture routing failed");
      var weighting=hopper.createWeighting(hopper.getProfile("car"),request.getHints());
      for(var path:response.getAll()) {
-      var keys=(List<Integer>)validate.invoke(null,hopper,path,false,Set.of(),weighting);
+      var keys=(List<Integer>)validate.invoke(null,hopper,path,false,false,Set.of(),weighting);
       if(keys.size()<2) throw new IllegalStateException("turn not exercised");
       for(int i=1;i<keys.size();i++) if((keys.get(i-1)^1)==keys.get(i)) {
        var edge=hopper.getBaseGraph().getEdgeIteratorStateForKey(keys.get(i-1));
@@ -177,7 +177,7 @@ public class TurnWeightAcceptance {
         @Override public double calcTurnWeight(int incoming,int via,int outgoing) { return bad; }
         @Override public String getName() { return weighting.getName(); }
        };
-       try { validate.invoke(null,hopper,path,false,Set.of(),invalid); }
+       try { validate.invoke(null,hopper,path,false,false,Set.of(),invalid); }
        catch(InvocationTargetException error) {
         if(!(error.getCause() instanceof IllegalStateException)
            || !"invalid profile turn weight".equals(error.getCause().getMessage())) throw error;
@@ -2618,3 +2618,209 @@ def test_segment_grid_cut_math_keeps_corner_reverse_aligned_and_near_corner_inte
     assert [row['cuts'] for row in rows[:3]]==[[0,.5,1]]*3
     assert rows[3]['cuts']==[0,.5,.5000000000000001,1]
     assert rows[4]['cuts']==[0,1]
+
+
+@pytest.fixture(scope='module')
+def toll_manifest(tmp_path_factory):
+    """Public synthetic roads; ALL and HGV direct paths with a mapped NO bypass."""
+    root = tmp_path_factory.mktemp('gh11-mapped-tolls')
+    source = root / 'fixture.osm'
+    source.write_text('''<osm version="0.6">
+      <node id="1" lat="0" lon="0"/><node id="2" lat="0" lon="0.01"/>
+      <node id="3" lat="0" lon="0.02"/><node id="4" lat="0.004" lon="0.01"/>
+      <node id="5" lat="0.0041" lon="0.01"/>
+      <way id="10"><nd ref="1"/><nd ref="2"/><tag k="highway" v="primary"/><tag k="toll" v="yes"/></way>
+      <way id="11"><nd ref="2"/><nd ref="3"/><tag k="highway" v="primary"/><tag k="toll:hgv" v="yes"/></way>
+      <way id="12"><nd ref="1"/><nd ref="4"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="toll" v="no"/></way>
+      <way id="13"><nd ref="4"/><nd ref="5"/><tag k="highway" v="residential"/><tag k="toll" v="no"/></way>
+    </osm>''')
+    graph = root / 'graph'
+    config = root / 'config.yml'
+    config.write_text(f'''graphhopper:
+  datareader.file: {source}
+  graph.location: {graph}
+  graph.dataaccess.default_type: MMAP
+  prepare.min_network_size: 0
+  import.osm.ignored_highways: footway,construction,cycleway,path,steps
+  graph.encoded_values: car_access,car_average_speed,road_access,max_speed,road_class,osm_way_id,toll
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+      turn_costs:
+        vehicle_types: [motorcar, motor_vehicle]
+        u_turn_costs: 60
+  profiles_ch: []
+  profiles_lm: []
+''')
+    jar = Path(os.environ['GH11_PROTOTYPE_JAR']).resolve()
+    subprocess.run(['java', '-Xmx512m', '-jar', str(jar), 'import', str(config)],
+                   cwd=root, check=True, capture_output=True, timeout=90)
+    plain = {'id': 'toll_baseline', 'points': [[0,0],[0,.02]], 'max_snap_distance_m': 1}
+    registry = root / 'registry.json'
+    registry.write_text(json.dumps({'cases': [plain,
+        dict(plain, id='toll_excluded', no_tolls=True),
+        dict(plain, id='toll_alternatives', no_tolls=True, alternatives=True),
+        dict(plain, id='toll_via', no_tolls=True, points=[[0,0],[.004,.01],[0,.02]],
+             alternatives=True, whole_journey_alternatives=True, stop_preview_mode='continuous_no_turn_reset'),
+        dict(plain, id='toll_no_route', no_tolls=True, points=[[0,0],[0,.01]]),
+        dict(plain, id='hgv_no_route', no_tolls=True, points=[[0,.01],[0,.02]]),
+        dict(plain, id='toll_partial', no_tolls=True, points=[[.0008,.002],[.0008,.018]]),
+    ]}))
+    return build_manifest(jar=jar, graph=graph, config=config, registry=registry, source=source)
+
+
+@pytest.mark.parametrize('case', ['toll_excluded', 'toll_alternatives', 'toll_via', 'toll_partial'])
+def test_mapped_toll_exclusion_validates_every_alternative_and_complete_leg(toll_manifest, case):
+    bridge = LocalJavaBridge(toll_manifest)
+    result = bridge.route(case, policy_request('tolls'))
+    assert result['selected_settings']['no_tolls'] is True
+    for candidate in result['candidates']:
+        assert candidate['toll_observations'] == [
+            {'edge_key': key, 'toll': 'NO'} for key in candidate['directed_edge_keys']]
+    assert result['navigation_allowed'] is False
+    assert bridge.policy(case, policy_request('tolls'))['rules'][0]['state'] == 'COMPILED'
+    if case == 'toll_via':
+        assert all(len(c['waypoint_indices']) == 3 for c in result['candidates'])
+
+
+def test_mapped_toll_baseline_and_no_compliant_route_refusal(toll_manifest):
+    bridge = LocalJavaBridge(toll_manifest)
+    baseline = bridge.route('toll_baseline')
+    # Direct route visits the ALL and HGV ways; strict exclusion takes the bypass.
+    assert baseline['candidates'][0]['distance_km'] < bridge.route('toll_excluded')['candidates'][0]['distance_km']
+    for case in ('toll_no_route', 'hgv_no_route'):
+        with pytest.raises(Refused):
+            bridge.route(case, policy_request('tolls'))
+    assert not any(key for key in bridge.cache if 'toll_no_route' in str(key))
+    assert bridge.policy('toll_baseline', policy_request('tolls'))['route_preview_allowed'] is False
+
+
+def test_mapped_toll_cache_restore_and_corrupted_evidence_refuse(toll_manifest, monkeypatch):
+    app = create_app(toll_manifest, password=PASSWORD)
+    client = app.test_client()
+    payload = dict(body(toll_manifest, 'toll_excluded'), policy_request=policy_request('tolls'))
+    first = client.post('/api/prototype/route', json=payload, headers=AUTH)
+    assert first.status_code == 200, first.get_json()
+    saved = first.get_json()['plan_reference']
+    restored = client.post('/api/prototype/restore', json=saved, headers=AUTH)
+    assert restored.status_code == 200, restored.get_json()
+    bridge = LocalJavaBridge(toll_manifest)
+    original = bridge._execute
+    def corrupt(*args):
+        report = original(*args)
+        report['cases'][0]['candidates'][-1]['toll_observations'][-1]['toll'] = 'ALL'
+        return report
+    monkeypatch.setattr(bridge, '_execute', corrupt)
+    with pytest.raises(Refused, match='toll_evidence_mismatch'):
+        bridge.route('toll_excluded', policy_request('tolls'))
+
+
+def test_mapped_toll_missing_encoded_value_refuses_existing_graph(manifest):
+    bridge = LocalJavaBridge(manifest)
+    bridge.cases['motorway_rule']['no_tolls'] = True
+    # Operator opt-in alone is insufficient: the actual graph lacks the encoded value.
+    with pytest.raises(Refused):
+        bridge.route('motorway_rule', policy_request('tolls'))
+
+
+def test_mapped_toll_complete_app_request_preserves_mandatory_rule_and_reference(toll_manifest):
+    from prototypes.graphhopper11.app_request_bridge import RegisteredAppRequestBridge
+    bridge = LocalJavaBridge(toll_manifest)
+    adapter = RegisteredAppRequestBridge(bridge)
+    supplied = full_app_body()
+    supplied.update(avoid_tolls=True, avoidance_mode='mandatory')
+    identities = {k:toll_manifest[k] for k in ('graph_version','source_version','policy_version')}
+    result = adapter.calculate('toll_excluded', supplied, identities)
+    assert result['app_request_context']['app_request'] == supplied
+    rule = next(row for row in result['policy_report']['rules'] if row['category'] == 'tolls')
+    assert rule['enabled'] is True and rule['mode'] == 'mandatory' and rule['state'] == 'COMPILED'
+    assert result['navigation_allowed'] is False
+    assert adapter.restore(result['plan_reference'])['candidates'] == result['candidates']
+    changed = copy.deepcopy(result['plan_reference'])
+    changed['app_request']['avoid_tolls'] = False
+    with pytest.raises(Refused, match='app_reference_changed'):
+        adapter.restore(changed)
+
+
+@pytest.mark.skipif(os.environ.get('GH11_BROWSER_ACCEPTANCE') != '1', reason='Explicit isolated Chromium acceptance not requested')
+def test_real_chromium_mapped_toll_full_settings_and_restore(toll_manifest, monkeypatch):
+    app = create_app(toll_manifest, password=PASSWORD)
+    _run_real_browser(app, monkeypatch, 'browser-toll-acceptance.cjs',
+                      'PASS_ISOLATED_TOLL_HTTP', {'execute':2, 'validate':2})
+
+
+@pytest.mark.parametrize('fault', ['flag', 'missing', 'non_no_value'])
+def test_mapped_toll_warm_cache_revalidates_evidence_before_reuse(toll_manifest, monkeypatch, fault):
+    bridge = LocalJavaBridge(toll_manifest)
+    selected = policy_request('tolls')
+    bridge.route('toll_excluded', selected)
+    entry = bridge.cache[bridge.binding('toll_excluded', selected)][1]['cases'][0]
+    if fault == 'flag':
+        entry.pop('no_tolls')
+    elif fault == 'missing':
+        entry['candidates'][-1].pop('toll_observations')
+    else:
+        entry['candidates'][-1]['toll_observations'][-1]['toll'] = 'HGV'
+    def forbidden(*_):
+        pytest.fail('Corrupted cache must refuse, not silently recalculate or fall back')
+    monkeypatch.setattr(bridge, '_execute', forbidden)
+    with pytest.raises(Refused, match='cached_evidence_refused'):
+        bridge.route('toll_excluded', selected)
+    assert not bridge.cache
+
+
+def test_mapped_toll_native_validator_refuses_unsafe_actual_edges_without_model(toll_manifest, tmp_path):
+    """Independently exercise the native checker, bypassing the request's custom model."""
+    harness = tmp_path / 'TollValidatorAcceptance.java'
+    harness.write_text(r'''import com.graphhopper.*;
+import com.graphhopper.jackson.Jackson;
+import com.graphhopper.routing.weighting.Weighting;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import java.io.File;
+import java.net.URLClassLoader;
+import java.lang.reflect.*;
+import java.util.*;
+public class TollValidatorAcceptance {
+ public static void main(String[] args) throws Exception {
+  var compiler=javax.tools.ToolProvider.getSystemJavaCompiler();
+  if(compiler==null || compiler.run(null,null,null,"-classpath",args[0],"-d",args[4],args[3])!=0)
+   throw new IllegalStateException("checker compilation failed");
+  try(var loader=new URLClassLoader(new java.net.URL[]{new File(args[4]).toURI().toURL()},TollValidatorAcceptance.class.getClassLoader())) {
+   var checker=Class.forName("ReadOnlyRouteRegression",true,loader);
+   var validate=checker.getDeclaredMethod("validate",GraphHopper.class,ResponsePath.class,boolean.class,boolean.class,Set.class,Weighting.class);
+   validate.setAccessible(true);
+   var tree=new ObjectMapper(new YAMLFactory()).readTree(new File(args[1]));
+   var config=Jackson.newObjectMapper().treeToValue(tree.get("graphhopper"),GraphHopperConfig.class);
+   config.putObject("graph.location",args[2]).putObject("datareader.file","");
+   var hopper=new GraphHopper();
+   try {
+    hopper.init(config).setAllowWrites(false);
+    if(!hopper.load())throw new IllegalStateException("fixture required");
+    int refused=0;
+    for(double start:new double[]{0,.01}) {
+     var request=new GHRequest(0,start,0,start+.01).setProfile("car").setPathDetails(List.of("edge_key"))
+      .putHint("ch.disable",true).putHint("lm.disable",true).putHint("way_point_max_distance",0);
+     var response=hopper.route(request);
+     if(response.hasErrors())throw new IllegalStateException("baseline failed");
+     var path=response.getBest();var weighting=hopper.createWeighting(hopper.getProfile("car"),request.getHints());
+     validate.invoke(null,hopper,path,false,false,Set.of(),weighting);
+     try {validate.invoke(null,hopper,path,false,true,Set.of(),weighting);}
+     catch(InvocationTargetException error) {
+      if(!"mandatory mapped toll exclusion violated".equals(error.getCause().getMessage()))throw error;
+      refused++;continue;
+     }
+     throw new IllegalStateException("unsafe native path accepted");
+    }
+    if(refused!=2)throw new IllegalStateException("ALL/HGV proof incomplete");
+    System.out.println("PASS_INDEPENDENT_TOLL_VALIDATOR ALL_HGV=2 navigation=DISABLED");
+   }finally{hopper.close();}
+  }
+ }
+}''')
+    result = subprocess.run(['java','-Xmx512m','--class-path',toll_manifest['paths']['jar'],str(harness),
+        toll_manifest['paths']['jar'],toll_manifest['paths']['config'],toll_manifest['paths']['graph'],
+        str(Path(__file__).resolve().parents[1]/'prototypes/graphhopper11/ReadOnlyRouteRegression.java'),str(tmp_path)],
+        text=True,capture_output=True,timeout=90)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'PASS_INDEPENDENT_TOLL_VALIDATOR ALL_HGV=2 navigation=DISABLED' in result.stdout

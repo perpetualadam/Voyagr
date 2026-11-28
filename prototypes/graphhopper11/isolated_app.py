@@ -129,12 +129,14 @@ class LocalJavaBridge:
         case = self.cases[case_id]
         return {"profile": "car", "alternatives": bool(case.get("alternatives", False)),
                 "no_motorways": bool(case.get("no_motorways", False)),
+                **({"no_tolls": True} if case.get("no_tolls") is True else {}),
                 "mandatory_associations": sorted(case.get("blocked_associations", [])),
                 "both_directions": bool(case.get("block_both_directions", False))}
 
     def policy(self, case_id, selected=None):
         return compile_policy(selected if selected is not None else {'profile':'car','requirements':[]},
-                              registered_no_motorways=self.cases[case_id].get('no_motorways') is True)
+                              registered_no_motorways=self.cases[case_id].get('no_motorways') is True,
+                              registered_no_tolls=self.cases[case_id].get('no_tolls') is True)
 
     def plan_reference(self, case_id, selected=None):
         result = {"schema": 2 if selected is not None else 1, "case_id": case_id,
@@ -282,6 +284,8 @@ class LocalJavaBridge:
             raise Refused("case_refused")
         if any(result.get(name) is not bool(case.get(name, False)) for name in ("alternatives", "no_motorways")):
             raise Refused("settings_evidence_mismatch")
+        if result.get("no_tolls", False) is not (case.get("no_tolls") is True):
+            raise Refused("settings_evidence_mismatch")
         if case.get('whole_journey_alternatives') is True:
             search=result.get('alternative_search')
             if (case.get('alternatives') is not True or result.get('alternative_generation')!='bounded_whole_journey_exclusion'
@@ -351,6 +355,12 @@ class LocalJavaBridge:
                     keys.append(key)
             if cursor != len(coords)-1 or keys != row.get("directed_edge_keys") or len(keys) != row.get("directed_edges") or tuple(keys) in identities:
                 raise Refused("trace_contract")
+            if case.get("no_tolls") is True:
+                observations = row.get("toll_observations")
+                if (not isinstance(observations, list) or len(observations) != len(keys)
+                        or any(item != {"edge_key": key, "toll": "NO"}
+                               for item, key in zip(observations, keys))):
+                    raise Refused("toll_evidence_mismatch")
             validate_query_traversal(row.get("query_graph_intervals"), coords, intervals)
             identities.add(tuple(keys))
             instructions = row.get("instruction_details")
@@ -391,6 +401,8 @@ class LocalJavaBridge:
         for row, observations in zip(rows, visit_observations):
             public_rows.append({**{key: row[key] for key in fields}, "forbidden_traversals": 0,
                                 "registered_visit_observations": observations,
+                                **({"toll_observations": copy.deepcopy(row["toll_observations"]),
+                                    "toll_data_coverage": "UNVERIFIED"} if case.get("no_tolls") is True else {}),
                                 "query_graph_scope": "current_request_only",
                                 "navigation_allowed": False, "scope": "selected_fixture_graph_checks_only"})
         m = self.manifest
