@@ -18,7 +18,12 @@
         if (!integrity || typeof integrity.currentDecision!=='function') {
             return {allowed:false,outcome:'REFUSED',message:'Safety verification unavailable. Reload and recalculate before navigation.'};
         }
+        if(root.VOYAGR_STRICT_ROUTING===true){
+            var strict=typeof integrity.strictDecision==='function'&&integrity.strictDecision(candidate);
+            if(!strict||strict.allowed!==true)return strict||{allowed:false,outcome:'REFUSED',message:'Strict verification unavailable.'};
+        }
         var result = integrity.currentDecision(candidate,{offline:root.navigator.onLine===false},root.localStorage);
+        if (!result.allowed&&root.VOYAGR_STRICT_ROUTING===true)return result;
         if (!integrity.prepareGuidanceCandidate(candidate)) {
             return {allowed:false,outcome:'REFUSED',message:'Route geometry or instructions are incomplete. Recalculate before navigation.'};
         }

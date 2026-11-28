@@ -534,6 +534,13 @@
             try { if (runtime && runtime.call && runtime.call.showStatus) runtime.call.showStatus(message, 'warning'); } catch (_) { /* fail closed during partial startup */ }
             return false;
         };
+        // An incoming refusal cannot be replaced with another option's authority
+        // during selection merge, including an otherwise valid active-route redraw.
+        if (routeData && ((getRouteInProgress() && routeData.navigation_allowed===false) ||
+            (routeData.routing_context && routeData.routing_context.scope==='selected_fixture_graph_checks_only') ||
+            (routeData.avoidance_assessment && routeData.avoidance_assessment.claim==='selected_fixture_graph_checks_only'))) {
+            return refuse('This route is preview only. Navigation was not changed.');
+        }
         const manualGuidance=!!(intentOwner && intentOwner.userGuidanceStartPermitted && intentOwner.userGuidanceStartPermitted(routeData));
         // No persisted assessment establishes a fresh complete request context.
         // Refuse before selection can replace its geometry, destination or evidence.

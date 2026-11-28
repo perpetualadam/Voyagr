@@ -117,7 +117,25 @@
             return !r||!Number.isInteger(r.begin_shape_index)||!Number.isInteger(r.end_shape_index)||r.begin_shape_index<0||r.end_shape_index<=r.begin_shape_index||r.end_shape_index>=points.length||(i===0?r.begin_shape_index!==0:r.begin_shape_index!==ranges[i-1].end_shape_index);
         })||ranges[ranges.length-1].end_shape_index!==points.length-1))throw Error('Journey legs are incomplete or disconnected. Inspect the route and recalculate.');
         var stops=route.journey_context&&route.journey_context.ordered_stops;
-        if(Array.isArray(stops)&&stops.length&&(!ranges||ranges.length!==stops.length+1))throw Error('Complete stop geometry is unavailable. Recalculate without skipping visits.');
+        var visits=route.journey_context&&route.journey_context.ordered_visits;
+        if(visits!==undefined){
+            if(!route.stop_semantics||route.stop_semantics.mode!=='continuous_no_turn_reset'||route.navigation_allowed!==false||
+                !Array.isArray(visits)||!visits.length||visits.length>3||!ranges||ranges.length!==visits.length+1||
+                !Array.isArray(stops)||new Set(visits.map(function(v){return v&&v.original_index;})).size!==visits.length)
+                throw Error('Complete mixed-visit geometry is unavailable. Recalculate without skipping visits.');
+            visits.forEach(function(visit,i){
+                var leg=ranges[i],record=leg.visit,point=coordinate(visit&&visit.coordinates);
+                if(!point||['via','stop'].indexOf(visit.type)<0||!Number.isInteger(visit.original_index)||visit.original_index<0||visit.original_index>=26||
+                    typeof visit.duration_minutes!=='number'||!Number.isFinite(visit.duration_minutes)||visit.duration_minutes<0||visit.duration_minutes>1440||
+                    (visit.type==='via'&&visit.duration_minutes!==0)||!record||record.type!==visit.type||record.original_index!==visit.original_index||
+                    JSON.stringify(record.coordinates)!==JSON.stringify(visit.coordinates)||record.duration_minutes!==visit.duration_minutes||
+                    (visit.type==='via'&&leg.stop)||(visit.type==='stop'&&(!leg.stop||leg.stop.duration_minutes!==visit.duration_minutes)))
+                    throw Error('Mixed visit types and leg geometry disagree. Recalculate the complete journey.');
+            });
+            var actualStops=visits.filter(function(v){return v.type==='stop';});
+            if(actualStops.length!==stops.length||actualStops.some(function(v,i){return !stops[i]||JSON.stringify(v.coordinates)!==JSON.stringify(stops[i].coordinates)||v.original_index!==stops[i].original_index||v.duration_minutes!==stops[i].duration_minutes;}))
+                throw Error('Mixed visit order and stops disagree. Recalculate the complete journey.');
+        }else if(Array.isArray(stops)&&stops.length&&(!ranges||ranges.length!==stops.length+1))throw Error('Complete stop geometry is unavailable. Recalculate without skipping visits.');
         var lengths=[0];for(var i=1;i<points.length;i++)lengths.push(lengths[i-1]+distance(points[i-1],points[i]));
         var steps=Array.isArray(route.maneuvers)?route.maneuvers:[];
         function validInstructions(s){return integrity.validManeuverInstructions ? integrity.validManeuverInstructions(s) : !!s&&typeof s.instruction==='string'&&!!s.instruction.trim();}
@@ -168,6 +186,8 @@
         if(!route)throw Error('Select a planned journey first.');
         if(active&&(!Number.isInteger(index)||index<0))throw Error('Current journey progress is unavailable. Stop and replan before live navigation.');
         var context=route.journey_context;
+        if(context&&context.registered_stop_order_optimization!==undefined)throw Error('Optimized registered plans are inspection only. Live continuation is unavailable.');
+        if(context&&context.ordered_visits!==undefined)throw Error('Mixed stop/via plans are inspection only. Live continuation is unavailable.');
         var intent=context&&context.arrival_intent;
         if(intent&&(intent.version!==1||intent.mode!=='place'||intent.status==='UNSUPPORTED'||intent.status==='TARGET_MISMATCH'))throw Error('This arrival intent is preview only until its live validation is implemented.');
         if(route.navigation_resume_requires_fresh_gps&&(!context||!Array.isArray(context.ordered_stops)||!context.destination||!coordinate(context.destination.coordinates)))throw Error('This saved journey lacks endpoint and stop context. Replan it before live navigation.');

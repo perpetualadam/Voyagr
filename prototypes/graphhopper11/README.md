@@ -1,0 +1,421 @@
+# Isolated GraphHopper 11.1 prototype
+
+This is a local experiment, not a routing service or migration switch. Nothing
+in the UK Flask application imports it. It opens no listener and downloads no map
+data. `run.py` imports two tiny generated OSM fixtures in a fresh temporary
+directory; `ReadOnlyRouteRegression.java` instead loads an existing graph with
+writes disabled. The synthetic integration boundary has no provider URL and uses
+an injected test provider, not the real Flask/Java transport.
+
+Progress and exit criteria: [MIGRATION_MILESTONES.md](MIGRATION_MILESTONES.md).
+
+## Pinned runtime
+
+Official release: https://github.com/graphhopper/graphhopper/releases/tag/11.1
+
+Artifact: `graphhopper-web-11.1.jar`
+
+SHA-256: `8462f758d9ea49edaded557cec5c687a0a24f004ec371cd4daaeb0534824ea33`
+
+Use a full Java 17+ JDK with source-file launching. GH11.0 must not be substituted:
+https://github.com/graphhopper/graphhopper/security/advisories/GHSA-mg8w-mq9r-f9c6
+
+No binary is committed. Supply an independently downloaded official artifact:
+
+```sh
+.venv/bin/python prototypes/graphhopper11/run.py --jar /path/to/graphhopper-web-11.1.jar
+GH11_PROTOTYPE_JAR=/path/to/graphhopper-web-11.1.jar \
+  .venv/bin/python -m pytest -q tests/test_gh11_prototype.py
+```
+
+Without that environment variable the real-engine test is explicitly skipped;
+adapter tests remain offline. The separate prototype CI job downloads only the
+checksum-pinned runtime and uses Java 17. No production secret is required.
+
+## What is exercised
+
+`DirectedGraphProbe.java` imports three named bidirectional corridors between
+the same endpoints, enables the car profile and turn-cost machinery, and disables
+CH/LM. An isolated Java `WeightingFactory` decorator gives selected directed
+edge keys infinite cost. Each weighting owns an immutable request-specific set;
+the base graph is never mutated to change restrictions.
+
+This is a Java extension, **not** a claim that the stock REST custom-model DSL
+supports arbitrary edge-key exclusions. Virtual iterator wrappers must be
+detached to resolve their original directed edge keys before applying exclusions.
+The forward and reverse virtual-endpoint regressions guard that requirement.
+
+GH's native alternative search need not discover all three available corridors.
+A bounded exclusion search (32 routing calls maximum, three unique candidates)
+supplements it. This is not a k-shortest algorithm, exhaustive general search or
+proof of best alternatives. Search-budget exhaustion raises an error; it is not
+reported as an established absence of compliant routes.
+
+The fixture requires 3/2/1/0 candidates as its forward corridors are blocked.
+It also checks the opposite direction, virtual endpoints, a later unrestricted
+request, and 12 interleaved requests on two threads. `adapter.py` independently
+checks every returned path's complete directed trace, geometry and metric units.
+Incomplete evidence or any forbidden traversal rejects the response. Every
+adapted result has `navigation_allowed=False`: no production or legal claim is
+made from synthetic proof. No UI Start policy is changed.
+
+The second fixture imports an actual OSM `no_left_turn` relation. The Java probe
+checks that the relation exists in GH's turn storage. The complete route takes
+the legal detour, while the reverse journey remains possible. Two independently
+routed legs meet at the via node but form the forbidden turn when concatenated;
+`validate_journey` rejects that join. A fixture-specific continuation with the
+forbidden exit excluded passes the same validator. This demonstrates a validation
+gate, **not** a general multi-stop planning or turn-aware leg-repair algorithm.
+
+Journey validation checks every leg's directed trace, requested visit order,
+endpoint continuity, synthetic graph version, internal turns and turns across
+seams. The fixture's authoritative forbidden directed pairs are checked outside
+the Java weighting implementation. Missing legs, graph-version mismatches,
+missing turn evidence and partial coverage are refused. This assumes continuous
+travel through the synthetic via; parking, stopping and U-turn policy are unverified.
+
+The report records runtime, artifact, source and synthetic OSM checksums. Graph
+files and raw import logs remain temporary. This is not a performance benchmark.
+
+## Executed local evidence (21 November 2026)
+
+- Official checksum-pinned GH11.1, OpenJDK 21.0.12.1, 512 MiB heap cap.
+- Synthetic candidate counts: 3, 2, 1, 0 as exclusions increase.
+- Reverse-direction and virtual reverse routes retained; all-forward-blocked
+  virtual endpoint query returns no route. Every emitted trace is checked again
+  by the independent Python adapter.
+- Twelve interleaved restricted/unrestricted requests on two Java threads pass.
+- Prototype regression suite: 35 passed, including both actual import/routing fixtures.
+- Imported turn restriction, legal detour/reverse route and rejected illegal
+  independent-leg join pass; the legal fixture continuation has two validated legs.
+- Existing CI backend selection plus pure prototype tests: 2,582 passed,
+  two skips, 94 subtests passed. One skip is the intentionally opt-in real-engine
+  test, separately executed above; the other is the pre-existing selected-suite skip.
+- JavaScript: 198 suites / 3,829 tests passed; test lint passed.
+
+The initial directed-exclusion prototype passed Java 17 CI in PR #540. The
+expanded turn/journey fixture must pass that job again before its Java 17
+compatibility is claimed. Heap cap and tiny-fixture timing are
+not UK/US capacity measurements. No browser or physical-phone test was performed.
+
+## What remains blocked
+
+Production migration remains **NO-GO**. This experiment does not establish:
+
+- Real camera/signal/crossing association, coverage, freshness or licensing.
+- General turn-restriction coverage (via-way, conditional and vehicle exceptions).
+- General multi-stop planning/repair, stop optimization, reroutes or application cache binding.
+- Parallel carriageways, intersection approaches or graph-region boundaries.
+- Endpoint access/snap-gap acceptance, instruction/UI parity or physical-phone behavior.
+- CH/LM compatibility, UK/US imports, realistic latency or server capacity.
+
+Before any routing rollout: obtain sanitized GH8 deployment facts; add the
+missing fixtures; keep mandatory refusal through every UI path; version graph,
+hazards, compiler and validator together; and perform measured imports. Any
+future service, dataset download, production selection or infrastructure change
+requires separate approval. Preserve the GH8 service, JDK, graph and configuration
+as a complete rollback bundle. This prototype provides no production switch.
+
+## Existing-graph read-only regression
+
+`ReadOnlyRouteRegression.java` loads an **already imported** matching graph using
+`setAllowWrites(false)` and MMAP. It calls `load()`, never `importOrLoad()`, and
+clears the OSM input path. Mount the graph read-only as an independent filesystem
+barrier. No listener is created. Do not substitute a GH8 graph.
+
+Arguments are the import configuration, existing graph directory and fixture JSON:
+
+```sh
+java -Xmx4g --class-path /path/to/graphhopper-web-11.1.jar \
+  ReadOnlyRouteRegression.java /path/to/config.yml /path/to/graph uk-public-cases.json
+```
+
+`uk-public-cases.json` contains seven fixed public samples: forward/reverse
+Sheffield–Leeds, native alternatives, a motorway exclusion, a continuous journey
+via Barnsley, Birmingham–Coventry and Bristol–Bath. No personal location history
+is used. These UK cases have not been run locally; the real UK execution requires
+the separate VPS2 graph.
+
+The runner checks every returned candidate's directed trace, vehicle access,
+stored turn prohibitions, unique edge sequence and ordered visits (75m tolerance).
+The motorway-exclusion case uses priority zero and independently rejects every
+MOTORWAY edge. Native alternatives return up to three, not necessarily three.
+Native alternatives plus intermediate visits are refused rather than downgraded.
+Continuous-via tests do not establish general stop/parking semantics.
+
+Each request defaults to 250,000 visited nodes and a 20-second routing timeout.
+An explicit integer `max_visited_nodes` may select 1,000..1,000,000 nodes; values
+outside that range or of the wrong type are refused before routing. Limits and
+query timing are reported for provider errors as well as successes.
+Query wall time excludes source compilation and graph loading; graph loading is
+reported separately. These few sequential cases are not a capacity benchmark.
+Failed, unsupported or incomplete cases are reported and cause nonzero exit.
+Success is only `PASS_AVAILABLE_GRAPH_CHECKS`; production migration remains NO-GO.
+Real camera/crossing association, missing restrictions and general hazard coverage
+are still unverified. The directed-exclusion Java extension is not installed by
+this runner.
+
+The opt-in regression test imports a tiny synthetic graph, proves that motorway
+exclusion forces a longer route, exercises alternatives and a continuous via,
+and checks all graph file hashes are unchanged by the read-only run. It also
+requires an unsupported native multi-point alternative request to fail closed.
+
+Local validation for this addition: 36 prototype tests passed with the pinned
+GH11.1 artifact on Java 21, including the real read-only import/query test.
+The broader backend selection passed 2,582 tests and 94 subtests with three
+skips (two opt-in real-engine tests, separately run above); JavaScript passed
+3,829 tests across 198 suites, and test lint passed. Java 17 runs in the dedicated
+CI job; use its latest result rather than an earlier commit's result.
+
+VPS2's first seven public samples passed five cases; native alternatives and
+motorway exclusion both exhausted 250,000 nodes. `uk-retry-cases.json` retries
+only those two with 1,000,000 nodes and the unchanged 20-second timeout. Neither
+mandatory motorway exclusion nor candidate/turn/visit validation is relaxed.
+The operator-supplied VPS2 retry report shows both passed available-graph checks:
+three alternatives in 3.481 seconds and motorway exclusion in 1.635 seconds, with
+the same CPU/memory caps and unchanged validators. This is reported VPS2 evidence,
+not an independently repeated benchmark or capacity claim. The graph remained
+read-only; no rebuild, app switch or listening server was needed.
+
+## Selected public hazard source-way association
+
+`uk-association-cases.json` records five short traversals derived from public
+OSM records in the pinned PBF (checksum included in the fixture). These cases
+have not been executed against the UK graph locally. They test source-road
+association, not actual hazard avoidance or enforcement applicability:
+
+- Camera node 50032464 lies on one-way motorway link 1183050528. The test follows
+  the observed OSM node order through the camera; its direction tag is not used
+  to infer an enforcement direction.
+- Ecclesfield Road relation 15486512 identifies device 314037901 and from/to
+  road nodes on way 1146841914. Relation 15486513 reverses those road nodes for
+  device 9210340813. The device coordinate is not snapped to the nearest road.
+- Castleford and Red Lane use the observed road approaches and intermediate
+  level-crossing nodes. Adjacent tagged crossing nodes are not assumed to be
+  independent physical hazards or deduplicated using distance alone.
+
+These cases require endpoint and visit matching within **one metre**, and require
+every traversed edge to carry one of the explicit `osm_way_id` values. Where
+requested, every expected way must be encountered. A different snapped road,
+missing evidence or tolerance failure remains UNVERIFIED_OR_FAILED. No automatic
+tolerance increase or geographic polygon fallback is provided.
+
+Matching candidates report directed edge keys, scoped to the currently loaded
+graph only. Keys must never be reused on GH8 or a different graph build. They
+are evidence for the next exclusion experiment, not an application-ready hazard
+index. The fixture PBF checksum is source documentation, not automatic graph
+attestation. No physical camera activity, legal applicability, inventory completeness
+or freshness is established by matching these ways.
+
+OSM node 414693 is on a footway omitted by this car import; node 417484 had only
+railway parents in the inspected snapshot. Neither is silently promoted to a
+motor-vehicle road hazard. General crossing coverage remains unverified.
+
+GH11.1 stores `osm_way_id` as a 31-bit integer. This fixture is within range;
+future source IDs exceeding that range need explicit importer review rather
+than truncation. Opt-in tests verify exact way matching and reject wrong/empty
+way evidence and invalid snap tolerances without enabling navigation.
+
+The operator-supplied VPS2 association report passed all five traversals within
+one metre. The Ecclesfield relations matched opposite directions of the same
+loaded edge (keys 5375353 and 5375352). These observed IDs are not trusted as
+inputs to another run or graph build.
+
+## Controlled selected-record exclusion
+
+`uk-exclusion-cases.json` first repeats the five associations on the loaded graph.
+Only successful source-way/one-metre validations yield exclusion keys. Any missing
+association aborts before exclusion queries. The Java extension then installs an
+immutable per-request key set using the same virtual-edge-aware weighting technique
+as the synthetic prototype. The graph and other requests are not mutated; CH/LM
+must be unprepared. This does not add a stock GraphHopper REST exclusion parameter.
+
+Camera tests exclude the selected direction, including a native-alternatives case
+whose every returned candidate is validated. The Ecclesfield reverse control
+must still traverse the opposite associated direction. **Only one camera record
+is excluded in that control**: the opposing camera exists and is intentionally
+not selected, so this is not a claim of avoiding all cameras.
+
+Crossing trials exclude both directions of every associated edge and test both
+journey directions. Queries use original graph nodes bounding the associated
+edge spans, not points inside forbidden segments. An unrestricted baseline must
+actually encounter the selected exclusion. Returned routes must start/end at the
+exact graph-node anchors, stay within the one-metre coordinate tolerance, preserve
+turn restrictions and contain zero blocked directed keys. Whole-edge closure can
+be more conservative than the physical hazard extent.
+
+Each experiment keeps 1,000,000 visited nodes, a 20-second timeout and existing
+container resource limits. A provider error records its class and timing and stays
+UNVERIFIED_OR_FAILED. ConnectionNotFound, search exhaustion or displaced snapping
+are not promoted to proof that no compliant route exists; `route_absence_proven`
+is false on provider refusal. Refusal is fail-closed, not a passing detour result.
+
+These UK exclusions remain unverified until VPS2 executes the fixture. Opt-in
+synthetic tests exercise this actual loaded-graph wrapper for directional and
+bidirectional exclusion, opposite-direction control, native alternatives and
+virtual endpoints. Unknown references and displaced endpoint snapping are refused;
+graph file hashes remain unchanged. The application, GH8 and production selection
+remain untouched, and production migration remains NO-GO.
+
+## Red Lane anchor diagnostics (no acceptance change)
+
+The operator-supplied VPS2 exclusion report passed the selected Ecclesfield
+camera detour, its opposite-direction control and both Castleford detours with
+zero forbidden traversals. The slip-road query reported ConnectionNotFound;
+Red Lane returned routes rejected by the original-node anchor comparison.
+Neither refusal establishes an absence of compliant routes.
+
+`uk-red-lane-diagnostics.json` repeats only Red Lane and its source association.
+The one-metre tolerance, blocked keys, exact-node requirement and resource
+budgets are unchanged. `diagnose_anchors` records both unrestricted baseline
+and excluded-route evidence **before** applying the same anchor refusal:
+
+- Expected graph nodes and first/last original-edge nodes, including coordinates.
+- Route endpoint coordinate errors and distance to original-edge endpoints.
+- At most 12 incident edges per inspected node, including way IDs, encoded car
+  access, lengths and directional block flags.
+- An independent nearest eligible-edge snap using the same profile, model and
+  exclusion weighting. Its EDGE/PILLAR/TOWER position and pre-QueryGraph node
+  are diagnostic only, not an attestation of Router's actual QueryGraph choice.
+
+The subsequent operator report identifies coincident graph nodes 2350752 and
+2350753 at Red Lane, connected by a 0.001 m edge. Unrestricted routing uses the
+expected node; exclusion routing uses its neighbour in both directions. Endpoint
+coordinate errors are zero, but node identities differ. The existing refusal is
+preserved; coordinate equality alone cannot establish equivalent topology.
+
+`diagnose_exact_nodes` now additionally runs bounded **edge-based Dijkstra on the
+base graph** between the original association-derived node IDs. It bypasses
+coordinate snapping, uses the same request-scoped exclusion weighting and car
+turn costs, and independently checks all returned edges for continuity, access,
+forbidden keys, stored turn restrictions and finite turn weights. It verifies
+exact start/end IDs and accumulated distance. This is one path only, with no
+initial/final heading constraints, instructions, alternatives or browser wiring.
+Its status is separate from coordinate-route acceptance and cannot override a
+failed route case. A budget exhaustion or missing path never proves route absence.
+The same one-million-node maximum and 20-second timeout apply to this additional
+query; the container resource limits remain unchanged.
+
+Local real-engine synthetic controls verify a detour avoiding the selected keys,
+refusal when all corridors are closed, diagnostic fields, and unchanged graph
+hashes. Existing synthetic turn tests remain separate evidence; they do not prove
+general UK turn-restriction correctness. The exact-node UK result awaits VPS2
+execution. Application integration and production migration remain NO-GO.
+
+## Request-scoped exact endpoint prototype
+
+The operator's subsequent exact-node diagnostic reached the intended Red Lane
+anchors in both directions: 819.387 m, ten directed edges and zero forbidden
+traversals, including the tiny connecting edge (connector keys 5261444/5261445 on
+that specific graph). This is evidence for a selected detour, not general hazard
+coverage or production readiness. Coordinate requests still failed their anchor
+gate; no acceptance was overridden.
+
+`pin_exact_anchors` now opts an association-anchored, two-point, non-alternative
+case into a request-scoped tower-node location-index wrapper. It constructs snaps
+for the actual derived nodes, requiring an eligible incident edge under Router's
+supplied filter. It never selects a neighbour if the node is ineligible. Ordinary
+requests delegate to the original index. Thread-local context is cleared in a
+finally block, including failures; no graph or persistent index is modified.
+Coincident start and end request coordinates with different IDs are refused
+because the coordinate lookup cannot distinguish those endpoints. This feature
+is limited to the offline prototype; it does not resolve general user-coordinate
+association, heading constraints, alternatives or multi-stop endpoint handling.
+
+Existing independent trace, turn, endpoint-identity and one-metre checks remain
+unchanged. The exact-node diagnostic remains separate. A generated second graph
+contains distinct coincident tower nodes joined by a 0.001 m edge. Tests check
+both pinned directions include that connector, a blocked endpoint cannot fall
+back to its eligible twin, ordinary routing resumes after refusal, and graph
+hashes remain unchanged. The updated Red Lane fixture enables pinning; its UK
+result awaits VPS2 execution. The slip-road failure remains a separate issue.
+
+## Slip-road refusal investigation
+
+Operator execution of the pinned Red Lane fixture passed both directions with
+exact endpoint identities, ten edges, 819.387 m and zero forbidden traversals;
+the routed sequences matched the separate exact-node diagnostic. This resolves
+that selected prototype case only.
+
+`uk-slip-road-diagnostics.json` isolates camera 50032464 on source way 1183050528.
+It compares ordinary coordinate routing with exact association-derived tower
+anchors, while keeping the selected direction blocked, one-metre tolerance,
+one-million-node budget and 20-second per-query limit. Both cases also run the
+bounded exact-node diagnostic. Its source/destination incident edges are now
+reported even when no path is returned, including access and block flags. This
+can expose an endpoint trapped by a one-way camera segment without classifying
+a provider refusal as proof that no compliant journey exists. It does not widen
+endpoints, unblock the camera, or test a different upstream/downstream journey.
+UK slip-road results remain pending; graph IDs are always rederived and no live
+routing infrastructure is contacted. Production migration remains NO-GO.
+
+## Preserved UK outcome controls and next query modes
+
+`uk-slip-road-refusal-controls.json` preserves the original exit endpoint and
+its downstream one-way-chain endpoint as separate refusal controls. Both have
+operator-observed no-route responses under the selected camera block. Complete
+incident-edge evidence shows the original endpoint has only a blocked legal
+incoming edge, and the downstream endpoint can only be entered from that node.
+This local topology evidence is distinct from the bounded search, which exhausted
+one million visited nodes and cannot itself prove absence. The runner deliberately
+keeps UNVERIFIED_OR_FAILED and nonzero exit for these cases; do not turn arbitrary
+provider errors into expected-pass outcomes.
+
+`uk-a61-regression-cases.json` preserves the separate reachable A61 junction
+journey. Operator evidence for its pinned primary: 3.227355 km, 60 directed edges,
+14 instructions, zero forbidden traversals and the same directed sequence as the
+exact-node diagnostic. Its unrestricted source association spans all five known
+exit ways. This does not replace either refusal destination.
+
+The fixture adds three pending VPS2 queries under the same camera block:
+
+- Native alternatives: up to three, every returned trace independently validated;
+  fewer than three is not automatically a failure. Ordinary coordinate lookup is
+  used because this prototype still forbids pinned native alternatives. Exact
+  association-derived endpoint identity checks remain in place.
+- A continuous three-point route via public motorway node 1596707312, with
+  pass_through enabled. Whole-trace validation spans every leg and checks imported
+  turn restrictions across edge joins and visit order within one metre. It does
+  not establish general stop/heading semantics or a multi-stop alternatives planner.
+- A fresh provider request starting at that motorway point, as a deviation-style
+  routing input. This tests the provider exclusion only; browser deviation
+  detection, reroute orchestration, caching and UI integration remain unverified.
+
+Local synthetic blocked-via and departure queries exercise the same runner's
+continuous trace checks and zero forbidden-traversal checks. Existing synthetic
+alternative-count and illegal leg-join controls remain separate evidence. All
+UK additions beyond the primary await operator execution. No application code,
+production setting, budgets, exclusions or acceptance gates change.
+
+## Isolated application-boundary contract
+
+See [APPLICATION_INTEGRATION.md](APPLICATION_INTEGRATION.md) for the current
+application trace, confirmed explicit-Start migration blocker, cache freshness
+requirements and the synthetic-only coordinator/tests. This experiment reuses
+an independent instance of the existing bounded cache implementation; it is
+not wired into Flask, the browser or the Java prototype. All synthetic selections
+retain navigation_allowed=false. UK production remains unchanged and migration
+remains NO-GO.
+
+## Separate Flask-to-Java factory
+
+[ISOLATED_APP.md](ISOLATED_APP.md) describes the milestone-2 local connection:
+authenticated registered-case requests invoke the actual GH11 JAR on a read-only
+graph and return geometry, instructions and checked directed traces to a separate
+viewer. No listener or VPS service is started, and the UK app imports none of it.
+Actual Java/test-client evidence is distinct from synthetic boundary tests and
+from the subsequent operator VPS2/Pixel 6 acceptance recorded below.
+
+## Container package
+
+The separate [container package](container/README.md) is locally smoke-tested with
+the actual WSGI server, Python and Java runtimes. It uses an authenticated Unix
+socket and no container network. The original rendered plan is preserved as release evidence; the operator later
+approved and completed the isolated VPS2 startup. Production remains unchanged.
+
+## Strict-mode development
+
+[STRICT_MODE.md](STRICT_MODE.md) records opt-in changes to the shared Start,
+selection, candidate and request-ordering gates. Legacy mode remains the default;
+the running milestone-2 VPS2 service is unchanged. Its operator and Pixel 6
+acceptance evidence is in [VPS2_ACCEPTANCE_2026-11-22.md](VPS2_ACCEPTANCE_2026-11-22.md).

@@ -8,11 +8,30 @@
         'pref_railwayCrossingsAvoid','pref_avoid_tollRoads','pref_avoid_motorways','pref_avoid_ferries',
         'pref_police','pref_roadworks','pref_accidents','pref_avoidance_requirements'];
     function snapshot(storage) { return JSON.stringify(KEYS.map(function(k) { return [k,storage.getItem(k)]; })); }
+    function strictDecision(route) {
+        if(root.VOYAGR_STRICT_ROUTING!==true)return null;
+        try {
+            var policy=root.VoyagrStrictRoutePolicy;
+            var result=policy&&typeof policy.decision==='function'&&policy.decision(route);
+            if(result&&typeof result.allowed==='boolean')return result;
+        }catch(_){/* Missing/invalid strict context cannot authorize navigation. */}
+        return {allowed:false,outcome:'REFUSED',reasonCode:'STRICT_POLICY_UNAVAILABLE',message:'Strict route verification is unavailable. Recalculate before navigation.'};
+    }
+    function strictTicketCurrent(ticket) {
+        if(root.VOYAGR_STRICT_ROUTING!==true)return true;
+        var policy=root.VoyagrStrictRoutePolicy;
+        try{return !!policy&&typeof policy.isCurrent==='function'&&policy.isCurrent(ticket.strictTicket)===true;}
+        catch(_){return false;}
+    }
     function finish(ticket) { if (ticket && ticket.timer) { clearTimeout(ticket.timer); ticket.timer=null; } }
     function cancel(ticket) { finish(ticket); if (ticket && ticket.controller) ticket.controller.abort(); }
     function begin(storage) {
         cancel(activeTicket);
         activeTicket={id:++sequence,revision:revision,snapshot:snapshot(storage),intentToken:root.VoyagrJourneyModes&&root.VoyagrJourneyModes.captureIntent?root.VoyagrJourneyModes.captureIntent():null,controller:typeof AbortController!=='undefined' ? new AbortController() : null};
+        if(root.VOYAGR_STRICT_ROUTING===true){
+            var policy=root.VoyagrStrictRoutePolicy;
+            activeTicket.strictTicket=policy&&typeof policy.capture==='function'?policy.capture():null;
+        }
         return activeTicket;
     }
     function fetchOptions(ticket) {
@@ -20,7 +39,7 @@
         ticket.timer=setTimeout(function() { ticket.controller.abort(); },35000);
         return {signal:ticket.controller.signal};
     }
-    function current(ticket, storage) { return !!ticket && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage) && (ticket.intentToken==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(ticket.intentToken))); }
+    function current(ticket, storage) { return !!ticket && strictTicketCurrent(ticket) && ticket.id === sequence && ticket.revision===revision && ticket.snapshot === snapshot(storage) && (ticket.intentToken==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(ticket.intentToken))); }
     function invalidate() { revision++; cancel(activeTicket); }
     function augment(body, storage, fix) {
         var next = Object.assign({},body);
@@ -149,6 +168,11 @@
     function prepareRouteCandidate(route, diagnostics, guidanceOnly, planningOnly) {
         function reject(reason) { if (diagnostics) diagnostics.reason=reason; return null; }
         if (diagnostics) delete diagnostics.reason;
+        if(!planningOnly&&root.VOYAGR_STRICT_ROUTING===true){
+            try{if(currentDecision(route,{},root.localStorage).allowed!==true)return reject('strict_candidate_refused');}
+            catch(_){return reject('strict_policy_unavailable');}
+            guidanceOnly=false;
+        }
         if (!route || !guidanceOnly && (route.navigation_resume_requires_fresh_gps ||
             (route.avoidance_assessment && route.avoidance_assessment.resume_state))) return reject('missing_or_restore_only_candidate');
         var candidate=JSON.parse(JSON.stringify(route));
@@ -279,6 +303,8 @@
     }
     // Presentation derived from the existing gate evidence, never a new permission flag.
     function decision(route, options) {
+        var strict=strictDecision(route);
+        if(strict&&strict.allowed!==true)return strict;
         var result = evidenceDecision(route, options);
         var rows = route && route.avoidance_assessment && route.avoidance_assessment.requirements;
         var unresolved = (Array.isArray(rows) ? rows : []).filter(function(row) {
@@ -290,6 +316,8 @@
             }) : []});
     }
     function currentDecision(route, options, storage) {
+        var strict=strictDecision(route);
+        if(strict&&strict.allowed!==true)return strict;
         var mandatory = storage.getItem('pref_avoidance_mode')==='mandatory';
         var explicit = [], invalid = false;
         try {
@@ -382,7 +410,7 @@
     }
     function summary(route) { return planningSummary(route)+navigationSummary(route); }
     var api={snapshot:snapshot,begin:begin,current:current,invalidate:invalidate,augment:augment,isLatest:function(ticket) { return !!ticket && ticket.id===sequence; },
-        decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,planningSummary:planningSummary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,preparePlanningCandidate:preparePlanningCandidate,prepareGuidanceCandidate:prepareGuidanceCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
+        strictDecision:strictDecision,decision:decision,currentDecision:currentDecision,gate:gate,tag:tag,summary:summary,planningSummary:planningSummary,geometryPoints:geometryPoints,geometryBinding:geometryBinding,prepareNavigationCandidate:prepareNavigationCandidate,preparePlanningCandidate:preparePlanningCandidate,prepareGuidanceCandidate:prepareGuidanceCandidate,isEdgeMetadataManeuver:isEdgeMetadataManeuver,validManeuverInstructions:validManeuverInstructions,maneuverInstructionState:maneuverInstructionState,fetchOptions:fetchOptions,finish:finish,responseCurrent:function(data,storage) { return strictTicketCurrent(activeTicket||{}) && (data.avoidance_intent_token==null||!!(root.VoyagrJourneyModes&&root.VoyagrJourneyModes.intentCurrent&&root.VoyagrJourneyModes.intentCurrent(data.avoidance_intent_token))) && data.avoidance_request_sequence===sequence && data.avoidance_request_revision===revision && data.avoidance_preferences_snapshot===snapshot(storage); }};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     root.VoyagrAvoidanceIntegrity=api;
 })(typeof globalThis!=='undefined' ? globalThis : this);

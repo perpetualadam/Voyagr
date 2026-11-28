@@ -18,6 +18,21 @@ describe('route-selection module', () => {
         expect(out.name).toBe('Fast');
     });
 
+    test('stop timing survives normalization and clears on an ordinary selection', () => {
+        const route={id:'stop',duration_minutes:25,driving_duration_minutes:10,dwell_duration_minutes:15,
+            stop_semantics:{mode:'continuous_no_turn_reset'},geometry:'abc',navigation_allowed:false};
+        const option=RS.normalizeRouteOption(route,{});
+        expect(option.driving_duration_minutes).toBe(10);
+        expect(option.dwell_duration_minutes).toBe(15);
+        expect(option.stop_semantics.mode).toBe('continuous_no_turn_reset');
+        const selected=RS.mergeLastCalculatedRouteFromSelection({},option);
+        expect(selected.duration_minutes).toBe(25);
+        const ordinary=RS.mergeLastCalculatedRouteFromSelection(selected,{id:'ordinary',duration_minutes:5,geometry:'def'});
+        expect(ordinary.driving_duration_minutes).toBeUndefined();
+        expect(ordinary.dwell_duration_minutes).toBeUndefined();
+        expect(ordinary.stop_semantics).toBeUndefined();
+    });
+
     test('mergeLastCalculatedRouteFromSelection preserves destination from prev', () => {
         const out = RS.mergeLastCalculatedRouteFromSelection(
             { destination: '51,0', destinationName: 'Home' },
@@ -195,6 +210,26 @@ describe('route comparison and selection helpers', () => {
         expect(options[0].distance_km).toBe(8.5);
         expect(options[0].duration_minutes).toBe(22);
         expect(options[0].polyline).toBe(fallback);
+    });
+
+    test('API display and selection retain preview restrictions for every alternative', () => {
+        const context = {scope:'selected_fixture_graph_checks_only'};
+        const options = RS.buildRouteOptionsFromApiResponse({
+            navigation_allowed:false, automatic_selection_allowed:false,
+            routes:[{id:1,routing_context:context,navigation_allowed:false},
+                {id:2,routing_context:context,navigation_allowed:true,automatic_selection_allowed:true}],
+        }, () => [[1,2],[2,3]]);
+        for (const route of options) {
+            expect(route.navigation_allowed).toBe(false);
+            expect(route.automatic_selection_allowed).toBe(false);
+            expect(route.routing_context).toEqual(context);
+        }
+        const fallback = RS.buildRouteOptionsFromApiResponse({navigation_allowed:false,
+            automatic_selection_allowed:false,routing_context:context}, jest.fn(), [[1,2],[2,3]])[0];
+        expect(fallback.navigation_allowed).toBe(false);
+        expect(fallback.automatic_selection_allowed).toBe(false);
+        expect(fallback.routing_context).toEqual(context);
+        expect(RS.buildRouteOptionsFromApiResponse({routes:[{id:3}]},jest.fn())[0].navigation_allowed).toBeUndefined();
     });
 
     test('hydrateRouteOptionPolylines decodes missing polylines in place', () => {

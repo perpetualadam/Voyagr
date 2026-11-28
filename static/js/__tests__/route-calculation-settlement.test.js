@@ -40,7 +40,13 @@ afterEach(()=>{jest.restoreAllMocks();AI.invalidate();global.fetch=originalFetch
 
 test('map failure resolves false, retains the previous journey and retires only settled progress',async()=>{
  selected=RS.buildRouteOptionsFromApiResponse(body(),Codec.decodePolyline)[0];window.lastCalculatedRoute=selected;options=[selected];const previousOptions=options;
- const result=await Calculate.calculateRoute();
+ const epoch=Date.now(),started=jest.now();Date.now.mockImplementation(()=>epoch+jest.now()-started);
+ const readiness=jest.spyOn(map,'isStyleLoaded');
+ const work=Calculate.calculateRoute();await fetched(1);
+ for(let i=0;i<100&&!readiness.mock.calls.length;i++)await Promise.resolve();
+ expect(readiness).toHaveBeenCalled();expect(window.lastCalculatedRoute).toBe(selected);expect(options).toBe(previousOptions);
+ await jest.advanceTimersByTimeAsync(4000);
+ const result=await work;
  expect(result).toBe(false);expect(statuses).toContain('Map not ready; current journey retained.');
  expect(window.lastCalculatedRoute).toBe(selected);expect(options).toBe(previousOptions);expect(previewCalls).toBe(0);expect(visible()).toBe(false);expect(finish).toHaveBeenCalledTimes(1);
 });

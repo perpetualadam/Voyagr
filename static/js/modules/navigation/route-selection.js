@@ -1847,6 +1847,9 @@
             name: route.name,
             distance_km: route.distance_km,
             duration_minutes: route.duration_minutes,
+            driving_duration_minutes: route.driving_duration_minutes,
+            dwell_duration_minutes: route.dwell_duration_minutes,
+            stop_semantics: route.stop_semantics,
             fuel_cost: route.fuel_cost,
             fuel_litres: route.fuel_litres || 0,
             toll_cost: route.toll_cost,
@@ -1862,6 +1865,11 @@
             warning_coverage: route.warning_coverage,
             maneuvers: route.maneuvers || [],
             source: route.source || routeSource,
+            // Display normalization must not erase an explicit provider refusal
+            // or the scope that prevents preview evidence becoming guidance.
+            navigation_allowed: opts.navigationAllowed===false ? false : route.navigation_allowed,
+            automatic_selection_allowed: opts.automaticSelectionAllowed===false ? false : route.automatic_selection_allowed,
+            routing_context: route.routing_context,
             leg_geometry_ranges:route.leg_geometry_ranges,
             geometry_complete:route.geometry_complete,
             provider_limitations: route.provider_limitations,
@@ -1894,6 +1902,8 @@
                     decodePolyline: decodePolyline,
                     routeSource: routeSource,
                     defaultPrecision: defaultPrecision,
+                    navigationAllowed: data.navigation_allowed,
+                    automaticSelectionAllowed: data.automatic_selection_allowed,
                 });
             });
         }
@@ -1913,6 +1923,9 @@
             geometry: data.geometry,
             maneuvers: data.maneuvers || [],
             source: data.source || 'Unknown',
+            navigation_allowed:data.navigation_allowed,
+            automatic_selection_allowed:data.automatic_selection_allowed,
+            routing_context:data.routing_context,
             provider_limitations:data.provider_limitations,
             provider_capabilities:data.provider_capabilities,
             camera_evidence: data.camera_evidence,
@@ -2490,6 +2503,10 @@
             var prec = Number.isFinite(sel.geometry_precision) ? sel.geometry_precision : 6;
             return Object.assign({}, routeData, {
                 id: sel.id,
+                // Strict authority belongs to the selected candidate, including
+                // absence. Never inherit another route's context or permission.
+                routing_context: sel.routing_context,
+                navigation_allowed: sel.navigation_allowed,
                 destination: sel.destination || routeData.destination,
                 destinationName: sel.destinationName || routeData.destinationName,
                 end_lat: sel.end_lat != null ? sel.end_lat : routeData.end_lat,
@@ -2501,6 +2518,9 @@
                 name: sel.name || routeData.name,
                 distance_km: sel.distance_km != null ? sel.distance_km : routeData.distance_km,
                 duration_minutes: sel.duration_minutes != null ? sel.duration_minutes : routeData.duration_minutes,
+                driving_duration_minutes: sel.driving_duration_minutes,
+                dwell_duration_minutes: sel.dwell_duration_minutes,
+                stop_semantics: sel.stop_semantics,
                 fuel_cost: sel.fuel_cost != null ? sel.fuel_cost : routeData.fuel_cost,
                 fuel_litres: sel.fuel_litres != null ? sel.fuel_litres : routeData.fuel_litres,
                 toll_cost: sel.toll_cost != null ? sel.toll_cost : routeData.toll_cost,
@@ -2544,6 +2564,9 @@
         return {
             ...p,
             ...route,
+            // Clear old strict metadata when the new selection has none.
+            routing_context: route.routing_context,
+            navigation_allowed: route.navigation_allowed,
             warning_coverage: route.warning_coverage,
             provider_limitations: route.provider_limitations,
             provider_capabilities: route.provider_capabilities,
@@ -2554,6 +2577,9 @@
             endpoint_resolution: route.endpoint_resolution,
             avoidance_assessment: route.avoidance_assessment,
             geometry: route.geometry || p.geometry,
+            driving_duration_minutes: route.driving_duration_minutes,
+            dwell_duration_minutes: route.dwell_duration_minutes,
+            stop_semantics: route.stop_semantics,
             geometry_precision: Number.isFinite(route.geometry_precision)
                 ? route.geometry_precision
                 : (p.geometry_precision || 6),

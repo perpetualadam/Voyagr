@@ -1,0 +1,33 @@
+{
+  "scope": "REGISTERED_PUBLIC_FIXTURE_SETTINGS_AND_CACHE_ONLY",
+  "production_migration": "NO_GO",
+  "navigation_allowed": false,
+  "vps2_updated": false,
+  "local_tests": {
+    "gh11_real_engine_and_boundary": {
+      "passed": 88
+    },
+    "frontend": {
+      "suites": 200,
+      "passed": 3851
+    },
+    "backend_workflow_selection": {
+      "passed": 2548,
+      "skipped": 1,
+      "subtests": 94
+    },
+    "lint": "PASS"
+  },
+  "container": {
+    "final_local_image": "sha256:bd6014ec30deb6b2154dbce21b0da6dff28875946d14c876eeac04c55ec668e9",
+    "final_local_acceptance": "BLOCKED",
+    "observed_failure": "Temporary graph directory could not be created; workspace also reported ENOSPC. No local final-image routing acceptance claimed.",
+    "ci_acceptance": "Check current PR head container-package job separately."
+  },
+  "limitations": [
+    "registered settings only",
+    "historical source snapshot is not fresh hazard coverage",
+    "preview cache is not production RouteCache integration",
+    "no deployed or physical-phone check of this update"
+  ]
+}

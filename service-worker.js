@@ -161,7 +161,17 @@ async function verifiedAsset(asset) {
     return hash === asset.sha256;
   }
   const cached = await cache.match(asset.url);
-  if (await valid(cached)) return cached;
+  if (await valid(cached)) {
+    // Detach the verified body from the CacheStorage response stream before
+    // handing it to another document's script loader. Keep integrity checks;
+    // do not replay a partially consumed/cancelled cached response stream.
+    const bytes = await cached.arrayBuffer();
+    const headers = {};
+    cached.headers.forEach((value, name) => {
+      if (!['content-encoding', 'content-length'].includes(name.toLowerCase())) headers[name] = value;
+    });
+    return new Response(bytes, {status:cached.status, statusText:cached.statusText, headers});
+  }
   // Genuine hash identities may reuse HTTP/edge caches; verify every body.
   // A stale successful body gets one bypass retry, never an execution fallback.
   let response = await fetch(asset.url, {cache:'default', credentials:'same-origin', redirect:'error'});

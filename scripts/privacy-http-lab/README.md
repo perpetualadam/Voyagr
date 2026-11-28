@@ -118,3 +118,57 @@ Successful results are not a GDPR compliance certification or deployment approva
 The harness does not deploy runtime changes or run production migrations. Its
 browser follow-up includes the two coordinator fixes documented in the browser
 report; no production settings need reversing when stopping the harness.
+
+## Immutable-asset multi-tab probe
+
+For script-chain diagnosis without accounts or routing services, use the temporary
+loopback-only server and fresh Chromium context:
+
+```bash
+CHROMIUM_BINARY=/path/to/chromium PYTHONPATH=. .venv/bin/python scripts/privacy-http-lab/bootstrap-probe.py --tabs 20
+```
+
+It needs Flask/Jinja and Node's Playwright package. It renders the real template,
+serves real content-addressed assets and the real service worker, and stubs local
+API responses. External browser requests are blocked; no geolocation permission,
+existing profile, private database or credentials are used. Each tab must complete
+the entire release chain. `--block-worker` is a diagnostic comparison only and is
+never an acceptance substitute. Process groups, server and temporary assets are
+cleaned up on completion/timeout. This does not establish full-app authentication,
+GPS, navigation or physical-phone behavior.
+
+## Full UK page to GH11 host connection
+
+The browser lab also runs `uk-host-browser.cjs` against the complete disposable UK
+candidate. It loads the real page/modules and a preview iframe on the same loopback
+origin, then calls the explicit connector. Test-only routes in `gh11_fixture.py`
+serve an allowlist of public preview scripts/HTML; they are registered only by
+`full_app.py`, never the production entry point. No JAR, graph, manifest, database
+or credentials are exposed by these routes. The source-copy allowlist includes
+only six public prototype HTML/JS files.
+
+This test uses actual UK module state, not a mocked LIVE journey. It verifies the
+planning-mode connection refuses before any routing request, navigation/save stay
+disabled, an explicit synthetic owner-coordinator change propagates, and closing
+retains a synthetic host record/localStorage marker and does not replace host
+modules or alter the inactive runtime state. Registry/version GET responses are
+synthetic; route requests are blocked and must have a zero count. No GraphHopper
+execution, account login or physical location is claimed.
+
+A fresh browser context blocks service workers for this focused host/frame test;
+the earlier full privacy suite retains its real-worker assertions. The real safety
+notice is acknowledged before the test-only iframe is placed in the foreground.
+The lab waits the normal 60-second asset-rate window before this extra cold browser,
+without changing server limits. A local run against a temporary full-code copy with
+fresh SQLite/browser storage and denied backend network connections passed all
+eight checks. CI runs against the disposable candidate/internal account fixtures.
+Active guidance/rerouting, general planning-mode UK routing, physical GPS and phone
+acceptance remain pending. This test does not activate a production UK connector.
+
+The UK host scenario now has twelve checks: it also performs actual Start on a
+synthetic baseline, binds a fresh synthetic accepted fix to the real LIVE host,
+refuses preview takeover without selection merge and retains that journey when the
+preview closes. It never changes a mode getter or gate to obtain LIVE. The initial
+route/evidence is a test fixture, route requests remain blocked and no GH11 guidance,
+real-road compliance, physical GPS or warning acceptance is established. The test
+explicitly stops its synthetic journey before discarding the browser profile.

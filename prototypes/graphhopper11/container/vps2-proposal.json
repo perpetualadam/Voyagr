@@ -1,0 +1,24 @@
+{
+  "status": "PROPOSED_NOT_EXECUTED",
+  "host": "vmi3072171",
+  "image_id": "sha256:e36e4b293f7522d96820f19dd60e1d9c3a3752aeb4f7747397f637e6bcfa3773",
+  "preflight": [
+    "hostname",
+    "uname -m",
+    "free -h",
+    "df -h /opt",
+    "docker image inspect sha256:e36e4b293f7522d96820f19dd60e1d9c3a3752aeb4f7747397f637e6bcfa3773",
+    "docker inspect voyagr-gh11-app-preview # must report no such container"
+  ],
+  "staging": "Run stage_vps2.py only after approval; it refuses existing directories and wrong host/resources.",
+  "manifest_prepare": "docker run --rm --pull=never --network=none --read-only --user=10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --memory=1g --memory-swap=1g --cpus=1 --pids-limit=128 --tmpfs=/tmp:rw,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700 --mount type=bind,src=/opt/voyagr-gh11-app-preview/inputs,dst=/inputs,readonly --mount type=bind,src=/opt/voyagr-gh11-app-preview/prepared,dst=/prepared --entrypoint=python sha256:e36e4b293f7522d96820f19dd60e1d9c3a3752aeb4f7747397f637e6bcfa3773 -m prototypes.graphhopper11.prepare_app_manifest --jar /inputs/gh.jar --graph /inputs/graph --config /inputs/config.yml --registry /inputs/registry.json --source /inputs/source.osm.pbf --output /prepared/manifest.json",
+  "manifest_finalize": "test ! -e /opt/voyagr-gh11-app-preview/inputs/manifest.json && install -m 0400 -o 10001 -g 10001 /opt/voyagr-gh11-app-preview/prepared/manifest.json /opt/voyagr-gh11-app-preview/inputs/manifest.json",
+  "start": "docker run -d --pull=never --name voyagr-gh11-app-preview --init --network=none --read-only --user=10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --memory=6g --memory-swap=6g --cpus=1 --pids-limit=256 --stop-timeout=15 --tmpfs=/tmp:rw,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700 --env=GH11_HEAP_MB=4096 --log-opt=max-size=1m --log-opt=max-file=2 --mount type=bind,src=/opt/voyagr-gh11-app-preview/inputs,dst=/inputs,readonly --mount type=bind,src=/opt/voyagr-gh11-app-preview/run,dst=/run/gh11 --mount type=bind,src=/opt/voyagr-gh11-app-preview/secret,dst=/run/secrets/gh11-password,readonly sha256:e36e4b293f7522d96820f19dd60e1d9c3a3752aeb4f7747397f637e6bcfa3773",
+  "health": "docker exec voyagr-gh11-app-preview python -m prototypes.graphhopper11.container.healthcheck",
+  "inspect": "docker inspect voyagr-gh11-app-preview",
+  "tunnel": "ssh -N -L 127.0.0.1:18511:/opt/voyagr-gh11-app-preview/run/service.sock root@VPS2_HOST",
+  "browser": "http://127.0.0.1:18511/ on the SSH client; username prototype and the separate private secret",
+  "stop": "docker stop --time=15 voyagr-gh11-app-preview",
+  "remove_container": "docker rm voyagr-gh11-app-preview",
+  "rollback_note": "Close the tunnel. Keep staged files and original GH8/graph/source unchanged. No recursive deletion."
+}

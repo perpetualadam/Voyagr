@@ -1,0 +1,64 @@
+{
+  "scope": "Read-only Red Lane anchor diagnostics. Exact-node and one-metre checks unchanged. Independent snap lookup is diagnostic only.",
+  "source_pbf_sha256": "20d0e39cb555b457126d47903a084cc9b7b79d49345b601b3c4e1887fda385cf",
+  "associations": [
+    {
+      "id": "red_lane_418624_road_crossing",
+      "source_nodes": [
+        443775600,
+        418624,
+        2137274904
+      ],
+      "points": [
+        [
+          53.6763712,
+          -1.3958619
+        ],
+        [
+          53.6764136,
+          -1.3958476
+        ],
+        [
+          53.676438,
+          -1.3958452
+        ]
+      ],
+      "expected_osm_way_ids": [
+        37840714,
+        37840727
+      ],
+      "require_all_expected_ways": true,
+      "max_snap_distance_m": 1
+    }
+  ],
+  "cases": [
+    {
+      "id": "red_lane_forward_both_directions_excluded",
+      "anchors_from_association": "red_lane_418624_road_crossing",
+      "reverse_anchors": false,
+      "blocked_associations": [
+        "red_lane_418624_road_crossing"
+      ],
+      "block_both_directions": true,
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "diagnose_anchors": true,
+      "diagnose_exact_nodes": true,
+      "pin_exact_anchors": true
+    },
+    {
+      "id": "red_lane_reverse_both_directions_excluded",
+      "anchors_from_association": "red_lane_418624_road_crossing",
+      "reverse_anchors": true,
+      "blocked_associations": [
+        "red_lane_418624_road_crossing"
+      ],
+      "block_both_directions": true,
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "diagnose_anchors": true,
+      "diagnose_exact_nodes": true,
+      "pin_exact_anchors": true
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "scope": "Public city-centre samples; never personal journey history. Points are latitude, longitude.",
+  "cases": [
+    {"id": "sheffield_leeds", "points": [[53.3813, -1.4701], [53.8008, -1.5491]]},
+    {"id": "leeds_sheffield_reverse", "points": [[53.8008, -1.5491], [53.3813, -1.4701]]},
+    {"id": "sheffield_leeds_alternatives", "points": [[53.3813, -1.4701], [53.8008, -1.5491]], "alternatives": true},
+    {"id": "sheffield_leeds_no_motorways", "points": [[53.3813, -1.4701], [53.8008, -1.5491]], "no_motorways": true},
+    {"id": "sheffield_barnsley_leeds_continuous", "points": [[53.3813, -1.4701], [53.5526, -1.4797], [53.8008, -1.5491]]},
+    {"id": "birmingham_coventry", "points": [[52.4797, -1.9027], [52.4081, -1.5105]]},
+    {"id": "bristol_bath", "points": [[51.4545, -2.5879], [51.3811, -2.3590]]}
+  ]
+}

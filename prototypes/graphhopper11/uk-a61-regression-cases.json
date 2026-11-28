@@ -1,0 +1,128 @@
+{
+  "scope": "Selected-record regression only. Primary operator-tested; alternatives, continuous via and provider reroute queries await VPS2. No browser reroute claim.",
+  "source_pbf_sha256": "20d0e39cb555b457126d47903a084cc9b7b79d49345b601b3c4e1887fda385cf",
+  "associations": [
+    {
+      "id": "camera_50032464_oneway_source_order",
+      "source_nodes": [
+        61771714,
+        50032464,
+        50032466
+      ],
+      "points": [
+        [
+          53.778609,
+          -1.5377496
+        ],
+        [
+          53.7788901,
+          -1.5379451
+        ],
+        [
+          53.7794106,
+          -1.5383188
+        ]
+      ],
+      "expected_osm_way_ids": [
+        1183050528
+      ],
+      "require_all_expected_ways": true,
+      "max_snap_distance_m": 1
+    },
+    {
+      "id": "camera_exit_to_a61_junction",
+      "source_nodes": [
+        61771714,
+        1596698694,
+        1596698696
+      ],
+      "points": [
+        [
+          53.778609,
+          -1.5377496
+        ],
+        [
+          53.7798293,
+          -1.5389951
+        ],
+        [
+          53.7812238,
+          -1.5387861
+        ]
+      ],
+      "expected_osm_way_ids": [
+        1183050528,
+        32677952,
+        522279457,
+        27552645,
+        146398026
+      ],
+      "require_all_expected_ways": true,
+      "max_snap_distance_m": 1
+    }
+  ],
+  "cases": [
+    {
+      "id": "a61_primary",
+      "anchors_from_association": "camera_exit_to_a61_junction",
+      "blocked_associations": [
+        "camera_50032464_oneway_source_order"
+      ],
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "pin_exact_anchors": true,
+      "diagnose_exact_nodes": true,
+      "diagnose_anchors": true
+    },
+    {
+      "blocked_associations": [
+        "camera_50032464_oneway_source_order"
+      ],
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "id": "a61_alternatives",
+      "anchors_from_association": "camera_exit_to_a61_junction",
+      "alternatives": true
+    },
+    {
+      "blocked_associations": [
+        "camera_50032464_oneway_source_order"
+      ],
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "id": "a61_continuous_via_mainline",
+      "points": [
+        [
+          53.778609,
+          -1.5377496
+        ],
+        [
+          53.7810301,
+          -1.5394406
+        ],
+        [
+          53.7812238,
+          -1.5387861
+        ]
+      ]
+    },
+    {
+      "blocked_associations": [
+        "camera_50032464_oneway_source_order"
+      ],
+      "max_visited_nodes": 1000000,
+      "max_snap_distance_m": 1,
+      "id": "a61_provider_reroute_from_mainline",
+      "points": [
+        [
+          53.7810301,
+          -1.5394406
+        ],
+        [
+          53.7812238,
+          -1.5387861
+        ]
+      ]
+    }
+  ]
+}

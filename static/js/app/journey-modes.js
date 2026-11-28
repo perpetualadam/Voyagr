@@ -502,6 +502,8 @@
             if(hadJourney&&!(assessment.automatic_selection_allowed===true&&assessment.requires_acceptance===false&&origin&&origin.navigation_allowed===true&&origin.status==='CONTINUOUS_WITHIN_NUMERICAL_TOLERANCE'&&origin.transition_verified!==true&&assessment.requirements.every(function(row){return !row.enabled||row.mode!=='mandatory'||row.status==='SATISFIED';})))throw Error('This new plan has unresolved critical checks. Current journey retained; explicitly end it before inspecting another refused plan.');
             if(hadJourney&&(!rt().persistPreviousJourney||await bounded(rt().persistPreviousJourney(previous,continuation,current))!==true))throw Error('Previous continuation could not be saved. Current journey retained.');
             if(!current())throw Error('Planning intent changed');
+            if(operations.waitReady&&await bounded(operations.waitReady(current))!==true)throw Error('Map not ready; current journey retained.');
+            if(!current())throw Error('Planning intent changed');
             mapStage=operations.stage(current);if(!current())throw Error('Planning intent changed');
             if(hadJourney){
                 if(!rt().confirmPlanReplacement||rt().confirmPlanReplacement('Replace the previous journey with this validated new plan? Existing guidance will end; this does not start live navigation.')!==true)throw Error('New plan cancelled; previous journey retained.');

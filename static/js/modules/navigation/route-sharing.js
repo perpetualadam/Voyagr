@@ -307,6 +307,23 @@
 
     var SAVED_ROUTES_STORAGE_KEY = 'savedRoutes';
 
+    // Persist refusals, never permission. A saved inspection must not lose its
+    // source scope and become eligible for explicit guidance after restoration.
+    function inspectionRefusals(route) {
+        var result={};
+        var context=route && route.routing_context;
+        var preview=context && context.scope==='selected_fixture_graph_checks_only' ||
+            route && route.avoidance_assessment && route.avoidance_assessment.claim==='selected_fixture_graph_checks_only';
+        if(preview || route && route.navigation_allowed===false)result.navigation_allowed=false;
+        if(preview || route && route.automatic_selection_allowed===false)result.automatic_selection_allowed=false;
+        if(preview){
+            result.routing_context=JSON.parse(JSON.stringify(context || {scope:'selected_fixture_graph_checks_only'}));
+            result.routing_context.scope='selected_fixture_graph_checks_only';
+            if(typeof route.source==='string')result.source=route.source;
+        }
+        return result;
+    }
+
     /**
      * Plan for saving the current calculated route to local storage.
      * @param {Object} o
@@ -317,6 +334,14 @@
      * @param {number} [o.now]
      * @returns {Object}
      */
+    function stopPreviewMetadata(route) {
+        if(!route || !route.stop_semantics || route.stop_semantics.mode!=='continuous_no_turn_reset')return {};
+        return {driving_duration_minutes:route.driving_duration_minutes,
+            dwell_duration_minutes:route.dwell_duration_minutes,
+            stop_semantics:Object.assign({},route.stop_semantics,{access_verification:'UNVERIFIED'}),
+            navigation_allowed:false,automatic_selection_allowed:false};
+    }
+
     function buildSaveCurrentRoutePlan(o) {
         o = o || {};
         if (!o.lastCalculatedRoute) {
@@ -331,12 +356,14 @@
         return {
             ok: true,
             savedRoute: {
+                ...inspectionRefusals(route),
+                ...stopPreviewMetadata(route),
                 id: now,
                 name: routeName,
                 start: o.startLabel,
                 end: o.endLabel,
                 distance_km: route.distance_km,
-                duration_minutes: route.time,
+                duration_minutes: route.duration_minutes != null ? route.duration_minutes : route.time,
                 fuel_cost: route.fuel_cost,
                 fuel_pricing: route.fuel_pricing && JSON.parse(JSON.stringify(route.fuel_pricing)),
                 toll_cost: route.toll_cost,
@@ -448,17 +475,21 @@
         if(restoredContext){
             ['origin','destination'].forEach(function(field){if(restoredContext[field])restoredContext[field]=Object.assign({},restoredContext[field],{source_kind:restoredContext[field].source_kind&&restoredContext[field].source_kind!=='unknown'?restoredContext[field].source_kind:restoredContext[field].kind,kind:restoredContext[field].kind==='unknown'?'unknown':'saved'});});
             if(Array.isArray(restoredContext.ordered_stops))restoredContext.ordered_stops=restoredContext.ordered_stops.map(function(stop){return Object.assign({},stop,{source_kind:stop.source_kind&&stop.source_kind!=='unknown'?stop.source_kind:stop.kind,kind:stop.kind==='unknown'?'unknown':'saved'});});
+            if(Array.isArray(restoredContext.ordered_visits))restoredContext.ordered_visits=restoredContext.ordered_visits.map(function(visit){return Object.assign({},visit,{source_kind:visit.source_kind&&visit.source_kind!=='unknown'?visit.source_kind:visit.kind,kind:visit.kind==='unknown'?'unknown':'saved'});});
         }
         return {
             ok: true,
             startLabel: route.start,
             endLabel: route.end,
             lastCalculatedRoutePatch: {
+                ...inspectionRefusals(route),
+                ...stopPreviewMetadata(route),
                 id: route.id,
                 saved_origin_label: route.start,
                 navigation_resume_requires_fresh_gps: true,
                 distance_km: route.distance_km,
                 time: route.duration_minutes,
+                ...(route.stop_semantics && route.stop_semantics.mode==='continuous_no_turn_reset'?{duration_minutes:route.duration_minutes}:{}),
                 fuel_cost: route.fuel_cost,
                 fuel_pricing: route.fuel_pricing && JSON.parse(JSON.stringify(route.fuel_pricing)),
                 toll_cost: route.toll_cost,

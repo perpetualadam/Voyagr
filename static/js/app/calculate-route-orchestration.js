@@ -364,6 +364,21 @@
         applyCalculateRouteIdlePreviewPostMapFromPlan(postMap, data, orch.idleUiApplyPlan);
     }
 
+    function waitForPlanningMapReady(map,current){
+        return new Promise(function(resolve){
+            var deadline=Date.now()+4000;
+            function check(){
+                try{
+                    if(!current()||!map||Date.now()>=deadline){resolve(false);return;}
+                    if(map.isStyleLoaded()===true){resolve(true);return;}
+                }
+                catch(_){resolve(false);return;}
+                setTimeout(check,25);
+            }
+            check();
+        });
+    }
+
     function planningOperations(orch,data,candidate,options){
         var helpers=rt().getMapLibreHelpers(),map=rt().getMap();
         var snapshot={route:window.lastCalculatedRoute,api:window.lastRouteApiResponse,options:rt().getRouteOptions(),index:rt().getSelectedRouteIndex?rt().getSelectedRouteIndex():0,
@@ -377,6 +392,7 @@
         }
         return {
             requestCurrent:function(){return root.VoyagrAvoidanceIntegrity.responseCurrent(data,localStorage);},
+            waitReady:function(current){return waitForPlanningMapReady(map,current);},
             stage:function(current){
                 var staged={line:null,markers:[]};
                 try{
@@ -714,6 +730,7 @@
         decodePolyline: decodePolyline,
         setupMapClickHandler: setupMapClickHandler,
         calculateRoute: calculateRoute,
+        waitForPlanningMapReady: waitForPlanningMapReady,
         showRouteProgressBar: showRouteProgressBar,
         hideRouteProgressBar: hideRouteProgressBar,
     };

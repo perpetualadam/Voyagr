@@ -106,6 +106,27 @@ describe('route-sharing module', () => {
         expect(RS.computeSavedRouteTotalCost({ fuel_cost: 5, toll_cost: 1, caz_cost: 0.5 })).toBe(6.5);
     });
 
+    test.each([
+        {routing_context:{scope:'selected_fixture_graph_checks_only',request_binding:'a'.repeat(64)}},
+        {avoidance_assessment:{claim:'selected_fixture_graph_checks_only'}},
+        {routing_context:{scope:'other'},avoidance_assessment:{claim:'selected_fixture_graph_checks_only'}},
+    ])('saving and restoring a preview retain refusals without persisting permission (%j)', metadata => {
+        const route={id:'gh11',geometry:'abc',source:'GraphHopper 11.1 isolated preview',
+            duration_minutes:17,time:999,
+            navigation_allowed:false,automatic_selection_allowed:false,
+            ...metadata};
+        const saved=RS.buildSaveCurrentRoutePlan({lastCalculatedRoute:route,routeName:'Synthetic',now:123}).savedRoute;
+        if(route.routing_context)route.routing_context.request_binding='changed';
+        const restored=RS.buildUseSavedRoutePlan(saved.id,[saved]).lastCalculatedRoutePatch;
+        expect(saved.duration_minutes).toBe(17);
+        expect(restored.navigation_allowed).toBe(false);
+        expect(restored.automatic_selection_allowed).toBe(false);
+        expect(restored.routing_context.scope).toBe('selected_fixture_graph_checks_only');
+        if(metadata.routing_context?.scope==='selected_fixture_graph_checks_only')expect(restored.routing_context.request_binding).toBe('a'.repeat(64));
+        expect(restored.navigation_resume_requires_fresh_gps).toBe(true);
+        expect(RS.buildSaveCurrentRoutePlan({lastCalculatedRoute:{navigation_allowed:true,automatic_selection_allowed:true},routeName:'Ordinary'}).savedRoute.navigation_allowed).toBeUndefined();
+    });
+
     test('buildSaveCurrentRoutePlan validates inputs and builds payload', () => {
         expect(RS.buildSaveCurrentRoutePlan({}).ok).toBe(false);
         const plan = RS.buildSaveCurrentRoutePlan({
@@ -136,6 +157,26 @@ describe('route-sharing module', () => {
         expect(plan.ok).toBe(true);
         expect(plan.lastCalculatedRoutePatch.destination).toBe('B');
         expect(plan.lastCalculatedRoutePatch.destinationName).toBe('B');
+    });
+
+    test.each([0,15])('saved stop preview retains driving/dwell timing and refusal (%s minutes)', (dwell) => {
+        const route={distance_km:1,duration_minutes:10+dwell,geometry:'abc',
+            driving_duration_minutes:10,dwell_duration_minutes:dwell,
+            stop_semantics:{mode:'continuous_no_turn_reset',access_verification:'UNVERIFIED'},
+            journey_context:{ordered_stops:[{coordinates:[0,.01],duration_minutes:dwell,kind:'coordinates'}]},
+            navigation_allowed:false,automatic_selection_allowed:false};
+        const saved=RS.buildSaveCurrentRoutePlan({lastCalculatedRoute:route,routeName:'Stop preview',startLabel:'A',endLabel:'B',now:1000}).savedRoute;
+        const restored=RS.buildUseSavedRoutePlan(1000,[saved]).lastCalculatedRoutePatch;
+        expect(saved.driving_duration_minutes).toBe(10);
+        expect(restored.dwell_duration_minutes).toBe(dwell);
+        expect(restored.duration_minutes).toBe(10+dwell);
+        expect(restored.time).toBe(10+dwell);
+        expect(restored.journey_context.ordered_stops[0].duration_minutes).toBe(dwell);
+        expect(restored.stop_semantics.access_verification).toBe('UNVERIFIED');
+        expect(restored.navigation_allowed).toBe(false);
+        expect(restored.automatic_selection_allowed).toBe(false);
+        restored.stop_semantics.mode='changed';
+        expect(saved.stop_semantics.mode).toBe('continuous_no_turn_reset');
     });
 
     test('buildDeleteSavedRouteExecutePlan filters route list', () => {

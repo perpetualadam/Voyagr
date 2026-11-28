@@ -1,0 +1,2229 @@
+[
+  {
+    "categories": [
+      "speed_cameras",
+      "red_light_cameras",
+      "other_cameras",
+      "traffic_lights",
+      "railway_crossings",
+      "other_hazards",
+      "avoid_points",
+      "tolls",
+      "caz",
+      "congestion_charging",
+      "motorways",
+      "ferries",
+      "unpaved"
+    ],
+    "policy": {
+      "profile": "car",
+      "requirements": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "caz",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        }
+      ],
+      "app_settings": {}
+    },
+    "report": {
+      "schema": 1,
+      "selected": {
+        "profile": "car",
+        "requirements": [
+          {
+            "category": "avoid_points",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "caz",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "congestion_charging",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "ferries",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "motorways",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_hazards",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "railway_crossings",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "red_light_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "tolls",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "traffic_lights",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "unpaved",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          }
+        ],
+        "app_settings": {}
+      },
+      "fingerprint": "a74fb5f491cc7f1351e0ed63a1ba9d2e3df04b01224ffadb4eaf6658dc0a97ea",
+      "rules": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "caz",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        }
+      ],
+      "unresolved_mandatory": [],
+      "preference_warnings": [
+        {
+          "category": "caz",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        }
+      ],
+      "profile_supported": true,
+      "route_preview_allowed": true,
+      "app_settings": {},
+      "supplemental_settings": [],
+      "app_integration_allowed": false,
+      "navigation_allowed": false,
+      "automatic_selection_allowed": false,
+      "legal_restrictions": {
+        "required": true,
+        "verification": "UNVERIFIED"
+      },
+      "scope": "registered_case_compilation_only",
+      "route_absence_proven": false
+    }
+  },
+  {
+    "categories": [
+      "speed_cameras",
+      "red_light_cameras",
+      "other_cameras",
+      "traffic_lights",
+      "railway_crossings",
+      "other_hazards",
+      "avoid_points",
+      "tolls",
+      "caz",
+      "congestion_charging",
+      "motorways",
+      "ferries",
+      "unpaved"
+    ],
+    "policy": {
+      "profile": "car",
+      "requirements": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "caz",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_hazards",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        }
+      ],
+      "app_settings": {
+        "enable_hazard_avoidance": true,
+        "avoid_cameras": false,
+        "avoidance_mode": "preference"
+      }
+    },
+    "report": {
+      "schema": 1,
+      "selected": {
+        "profile": "car",
+        "requirements": [
+          {
+            "category": "avoid_points",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "caz",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "congestion_charging",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "ferries",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "motorways",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_hazards",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "railway_crossings",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "red_light_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "tolls",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "traffic_lights",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "unpaved",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          }
+        ],
+        "app_settings": {
+          "enable_hazard_avoidance": true,
+          "avoid_cameras": false,
+          "avoidance_mode": "preference"
+        }
+      },
+      "fingerprint": "1cff3ba3c781151b957cfcf58cfc9afd5defe38e19de5593f501aecbf026a286",
+      "rules": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "caz",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        }
+      ],
+      "unresolved_mandatory": [],
+      "preference_warnings": [
+        {
+          "category": "caz",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        }
+      ],
+      "profile_supported": true,
+      "route_preview_allowed": true,
+      "app_settings": {
+        "enable_hazard_avoidance": true,
+        "avoid_cameras": false,
+        "avoidance_mode": "preference"
+      },
+      "supplemental_settings": [],
+      "app_integration_allowed": false,
+      "navigation_allowed": false,
+      "automatic_selection_allowed": false,
+      "legal_restrictions": {
+        "required": true,
+        "verification": "UNVERIFIED"
+      },
+      "scope": "registered_case_compilation_only",
+      "route_absence_proven": false
+    }
+  },
+  {
+    "categories": [
+      "speed_cameras",
+      "red_light_cameras",
+      "other_cameras",
+      "traffic_lights",
+      "railway_crossings",
+      "other_hazards",
+      "avoid_points",
+      "tolls",
+      "caz",
+      "congestion_charging",
+      "motorways",
+      "ferries",
+      "unpaved"
+    ],
+    "policy": {
+      "profile": "car",
+      "requirements": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_hazards",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        }
+      ],
+      "app_settings": {
+        "vehicle_type": "electric",
+        "enable_hazard_avoidance": true,
+        "avoidance_mode": "preference"
+      }
+    },
+    "report": {
+      "schema": 1,
+      "selected": {
+        "profile": "car",
+        "requirements": [
+          {
+            "category": "avoid_points",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "caz",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "congestion_charging",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "ferries",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "motorways",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_cameras",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_hazards",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "railway_crossings",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "red_light_cameras",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "tolls",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "traffic_lights",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "unpaved",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          }
+        ],
+        "app_settings": {
+          "vehicle_type": "electric",
+          "enable_hazard_avoidance": true,
+          "avoidance_mode": "preference"
+        }
+      },
+      "fingerprint": "d5d39ba465dc22a218535f561907d502921277b00f0cdb7377ff116101b82147",
+      "rules": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        }
+      ],
+      "unresolved_mandatory": [],
+      "preference_warnings": [
+        {
+          "category": "other_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        }
+      ],
+      "profile_supported": true,
+      "route_preview_allowed": true,
+      "app_settings": {
+        "vehicle_type": "electric",
+        "enable_hazard_avoidance": true,
+        "avoidance_mode": "preference"
+      },
+      "supplemental_settings": [],
+      "app_integration_allowed": false,
+      "navigation_allowed": false,
+      "automatic_selection_allowed": false,
+      "legal_restrictions": {
+        "required": true,
+        "verification": "UNVERIFIED"
+      },
+      "scope": "registered_case_compilation_only",
+      "route_absence_proven": false
+    }
+  },
+  {
+    "categories": [
+      "speed_cameras",
+      "red_light_cameras",
+      "other_cameras",
+      "traffic_lights",
+      "railway_crossings",
+      "other_hazards",
+      "avoid_points",
+      "tolls",
+      "caz",
+      "congestion_charging",
+      "motorways",
+      "ferries",
+      "unpaved"
+    ],
+    "policy": {
+      "profile": "car",
+      "requirements": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "tolls",
+          "enabled": true,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        }
+      ],
+      "app_settings": {
+        "caz_exempt": true,
+        "avoid_tolls": true,
+        "avoidance_mode": "mandatory"
+      }
+    },
+    "report": {
+      "schema": 1,
+      "selected": {
+        "profile": "car",
+        "requirements": [
+          {
+            "category": "avoid_points",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "caz",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "congestion_charging",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "ferries",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "motorways",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "other_cameras",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "other_hazards",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "railway_crossings",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "red_light_cameras",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "tolls",
+            "enabled": true,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "traffic_lights",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "unpaved",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          }
+        ],
+        "app_settings": {
+          "caz_exempt": true,
+          "avoid_tolls": true,
+          "avoidance_mode": "mandatory"
+        }
+      },
+      "fingerprint": "2df150aaf544a030a80cef906215ddb5daed826d5ff3b5fdaee86bf74c8b0a6b",
+      "rules": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "tolls",
+          "enabled": true,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        }
+      ],
+      "unresolved_mandatory": [
+        {
+          "category": "tolls",
+          "enabled": true,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        }
+      ],
+      "preference_warnings": [],
+      "profile_supported": true,
+      "route_preview_allowed": false,
+      "app_settings": {
+        "caz_exempt": true,
+        "avoid_tolls": true,
+        "avoidance_mode": "mandatory"
+      },
+      "supplemental_settings": [],
+      "app_integration_allowed": false,
+      "navigation_allowed": false,
+      "automatic_selection_allowed": false,
+      "legal_restrictions": {
+        "required": true,
+        "verification": "UNVERIFIED"
+      },
+      "scope": "registered_case_compilation_only",
+      "route_absence_proven": false
+    }
+  },
+  {
+    "categories": [
+      "speed_cameras",
+      "red_light_cameras",
+      "other_cameras",
+      "traffic_lights",
+      "railway_crossings",
+      "other_hazards",
+      "avoid_points",
+      "tolls",
+      "caz",
+      "congestion_charging",
+      "motorways",
+      "ferries",
+      "unpaved"
+    ],
+    "policy": {
+      "profile": "car",
+      "requirements": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route"
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        }
+      ],
+      "app_settings": {
+        "avoid_caz": false,
+        "avoidance_requirements": [
+          {
+            "category": "traffic_lights",
+            "enabled": true,
+            "mode": "preference"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "mandatory"
+          }
+        ]
+      }
+    },
+    "report": {
+      "schema": 1,
+      "selected": {
+        "profile": "car",
+        "requirements": [
+          {
+            "category": "avoid_points",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "caz",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "congestion_charging",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "ferries",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "motorways",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_hazards",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "railway_crossings",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "red_light_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "mandatory",
+            "scope": "route"
+          },
+          {
+            "category": "tolls",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "traffic_lights",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "unpaved",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          }
+        ],
+        "app_settings": {
+          "avoid_caz": false,
+          "avoidance_requirements": [
+            {
+              "category": "traffic_lights",
+              "enabled": true,
+              "mode": "preference"
+            },
+            {
+              "category": "speed_cameras",
+              "enabled": false,
+              "mode": "mandatory"
+            }
+          ]
+        }
+      },
+      "fingerprint": "59f5cf6a67a4792104e1df4545e72ed2bee287898e09d2451d9c9272fd6a012a",
+      "rules": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "ferries",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "motorways",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "mandatory",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        },
+        {
+          "category": "unpaved",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        }
+      ],
+      "unresolved_mandatory": [],
+      "preference_warnings": [
+        {
+          "category": "traffic_lights",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNVERIFIED",
+          "reason": "general_association_coverage_or_freshness_unproven",
+          "message": "Available association, coverage or freshness evidence cannot establish this avoidance."
+        }
+      ],
+      "profile_supported": true,
+      "route_preview_allowed": true,
+      "app_settings": {
+        "avoid_caz": false,
+        "avoidance_requirements": [
+          {
+            "category": "traffic_lights",
+            "enabled": true,
+            "mode": "preference"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "mandatory"
+          }
+        ]
+      },
+      "supplemental_settings": [],
+      "app_integration_allowed": false,
+      "navigation_allowed": false,
+      "automatic_selection_allowed": false,
+      "legal_restrictions": {
+        "required": true,
+        "verification": "UNVERIFIED"
+      },
+      "scope": "registered_case_compilation_only",
+      "route_absence_proven": false
+    }
+  },
+  {
+    "categories": [
+      "speed_cameras",
+      "red_light_cameras",
+      "other_cameras",
+      "traffic_lights",
+      "railway_crossings",
+      "other_hazards",
+      "avoid_points",
+      "tolls",
+      "caz",
+      "congestion_charging",
+      "motorways",
+      "ferries",
+      "unpaved"
+    ],
+    "policy": {
+      "profile": "car",
+      "requirements": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "ferries",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "motorways",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route"
+        },
+        {
+          "category": "unpaved",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route"
+        }
+      ],
+      "app_settings": {
+        "avoid_caz": false,
+        "avoid_motorways": true,
+        "avoid_ferries": true,
+        "avoid_unpaved": true,
+        "route_optimization": "quiet",
+        "prefer_quiet": true,
+        "max_detour": 33
+      }
+    },
+    "report": {
+      "schema": 1,
+      "selected": {
+        "profile": "car",
+        "requirements": [
+          {
+            "category": "avoid_points",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "caz",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "congestion_charging",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "ferries",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "motorways",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "other_hazards",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "railway_crossings",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "red_light_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "speed_cameras",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "tolls",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "traffic_lights",
+            "enabled": false,
+            "mode": "preference",
+            "scope": "route"
+          },
+          {
+            "category": "unpaved",
+            "enabled": true,
+            "mode": "preference",
+            "scope": "route"
+          }
+        ],
+        "app_settings": {
+          "avoid_caz": false,
+          "avoid_motorways": true,
+          "avoid_ferries": true,
+          "avoid_unpaved": true,
+          "route_optimization": "quiet",
+          "prefer_quiet": true,
+          "max_detour": 33
+        }
+      },
+      "fingerprint": "fbd3fc7cdb370f2df605883876bac4bc2fce616ebe64a4c299ba8115351af2d6",
+      "rules": [
+        {
+          "category": "avoid_points",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "caz",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "congestion_charging",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "ferries",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "motorways",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "other_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "other_hazards",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "railway_crossings",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "red_light_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "speed_cameras",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "tolls",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "traffic_lights",
+          "enabled": false,
+          "mode": "preference",
+          "scope": "route",
+          "state": "DISABLED",
+          "reason": "not_selected",
+          "message": "Rule retained as disabled."
+        },
+        {
+          "category": "unpaved",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        }
+      ],
+      "unresolved_mandatory": [],
+      "preference_warnings": [
+        {
+          "category": "ferries",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "motorways",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        },
+        {
+          "category": "unpaved",
+          "enabled": true,
+          "mode": "preference",
+          "scope": "route",
+          "state": "UNSUPPORTED",
+          "reason": "exclusion_not_enabled_and_validated_in_registered_case",
+          "message": "This registered case cannot apply and validate this selected rule."
+        }
+      ],
+      "profile_supported": true,
+      "route_preview_allowed": true,
+      "app_settings": {
+        "avoid_caz": false,
+        "avoid_motorways": true,
+        "avoid_ferries": true,
+        "avoid_unpaved": true,
+        "route_optimization": "quiet",
+        "prefer_quiet": true,
+        "max_detour": 33
+      },
+      "supplemental_settings": [
+        {
+          "setting": "prefer_quiet",
+          "value": true,
+          "state": "UNVERIFIED",
+          "reason": "app_preference_not_integrated"
+        },
+        {
+          "setting": "route_optimization",
+          "value": "quiet",
+          "state": "UNVERIFIED",
+          "reason": "app_preference_not_integrated"
+        },
+        {
+          "setting": "max_detour",
+          "value": 33,
+          "state": "UNVERIFIED",
+          "reason": "app_preference_not_integrated"
+        }
+      ],
+      "app_integration_allowed": false,
+      "navigation_allowed": false,
+      "automatic_selection_allowed": false,
+      "legal_restrictions": {
+        "required": true,
+        "verification": "UNVERIFIED"
+      },
+      "scope": "registered_case_compilation_only",
+      "route_absence_proven": false
+    }
+  }
+]

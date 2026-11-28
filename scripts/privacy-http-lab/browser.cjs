@@ -46,6 +46,7 @@ async function main() {
   const configStatuses = [];
   const assetFailures = [];
   const pageErrorTypes = [];
+  const assetDiagnostics = [];
   let checks = 0;
   let phase = 'candidate startup';
   const check = (name, condition) => {
@@ -65,8 +66,14 @@ async function main() {
     const uploads = [];
     const external = [];
     const noteError = error => { errors.push(error.name); pageErrorTypes.push(error.name + ':' + error.message.slice(0, 160)); };
-    context.on('page', p => p.on('pageerror', noteError));
+    const noteConsole = message => {
+      if (message.type() !== 'error' || !/integrity|digest|subresource/i.test(message.text())) return;
+      const names = [...message.text().matchAll(/\/_voyagr\/assets\/[a-f0-9]+\/[a-f0-9]+\/(\d{3}-[A-Za-z0-9_.-]+)/g)].map(match => match[1]);
+      assetDiagnostics.push({kind:'integrity',assets:names});
+    };
+    context.on('page', p => {p.on('pageerror', noteError);p.on('console',noteConsole);});
     page.on('pageerror', noteError);
+    page.on('console',noteConsole);
     await context.addInitScript(() => {
       let release;
       Object.defineProperty(window, 'VoyagrAssetRelease', {configurable: true,
@@ -95,6 +102,12 @@ async function main() {
       if (new URL(response.url()).pathname === '/api/config') configStatuses.push(response.status());
       if (new URL(response.url()).pathname.startsWith('/_voyagr/assets/') && response.status() !== 200)
         assetFailures.push(new URL(response.url()).pathname.split('/').pop() + ':' + response.status());
+    });
+    context.on('requestfailed', request => {
+      const path = new URL(request.url()).pathname;
+      if (!path.startsWith('/_voyagr/assets/')) return;
+      const code = /net::[A-Z_]+/.exec(request.failure()?.errorText || '');
+      assetDiagnostics.push({kind:'request',asset:path.split('/').pop(),code:code ? code[0] : 'unclassified'});
     });
     const deadline = Date.now() + 90000;
     while (true) {
@@ -296,12 +309,16 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 60000));
     phase = 'full candidate route speed without Overpass';
     await require('./route-speed-browser.cjs')(origin, check);
+    phase = 'full UK page explicit GH11 host connection';
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    await require('./uk-host-browser.cjs')(origin, check);
     console.log(checks + ' full-candidate Chromium checks passed. Synthetic data; not phone or production verification.');
   } catch (error) {
     error.testPhase = phase;
     console.log('INFO: Failed assertion phase: ' + phase);
     console.log('INFO: Public config response statuses: ' + configStatuses.join(','));
     console.log('INFO: Asset failures: ' + assetFailures.join(','));
+    console.log('INFO: Asset diagnostics: ' + JSON.stringify(assetDiagnostics.slice(0,30)));
     console.log('INFO: First page exceptions: ' + pageErrorTypes.slice(0, 5).join(','));
     if (context) for (const tab of context.pages()) {
       console.log('INFO: Tab bootstrap state ' + JSON.stringify(await Promise.race([tab.evaluate(() => ({

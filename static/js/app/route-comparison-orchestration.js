@@ -739,8 +739,19 @@ function replaceActiveSelection(route, index) {
     return false;
 }
 
+function strictSelectionPermitted(candidate) {
+    if(root.VOYAGR_STRICT_ROUTING!==true)return true;
+    try{
+        const integrity=root.VoyagrAvoidanceIntegrity;
+        if(integrity&&integrity.currentDecision(candidate,{},root.localStorage).allowed===true)return true;
+        rt().call.showStatus('Strict route verification refused this selection; current route retained.','warning');
+    }catch(_){/* No verifier or broken context cannot replace the current selection. */}
+    return false;
+}
+
 function applySelectRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return false;
+    if(!strictSelectionPermitted(apply.selectedRoute||apply.route))return false;
     const active = replaceActiveSelection(apply.selectedRoute || apply.route, index);
     if (active!==null) return active;
 
@@ -904,6 +915,7 @@ function showAllRoutes() {
 
 function applyUseRouteFromPlan(apply, index) {
     if (!apply || !apply.shouldApply) return false;
+    if(!strictSelectionPermitted(apply.selectedRoute||apply.route))return false;
     const active = replaceActiveSelection(apply.selectedRoute || apply.route, index);
     if (active!==null) return active;
 
